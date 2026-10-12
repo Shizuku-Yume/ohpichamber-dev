@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/31",
+  "status": "observed-online-authoritative; reviewed and archived",
+  "m0Accepted": false,
+  "executionAuthorized": true,
+  "executed": true,
+  "providerCallsObserved": 1,
+  "runtime": { "platform": "linux-x64", "bunVersion": "1.4.2", "identityMethod": "Parent run/runtime report and reused task24 identity; no runtime identity rerun by worker" },
+  "applicationOrDependencyChanges": false,
+  "source": {
+    "path": "/tmp/ohpi-m0-evidence-consumer/task31-model-discovery.ts",
+    "sha256": "fa7179682d63a24841da32b1c5fbe9b8acdb0f64d3e5cfd86d7e4be70660ba8a",
+    "retainedForParentReview": false,
+    "disposition": "Deleted by parent after source/result review; no reuse or additional invocation",
+    "containsProviderValuesOrCredentials": false,
+    "parentOwnsReviewExecutionAuthorizationAndRemoval": true
+  },
+  "inputs": {
+    "sourceArtifact": "source-install.json",
+    "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+    "packageName": "@oh-my-pi/pi-coding-agent",
+    "packageVersion": "18.8.9",
+    "artifactSetSha256": "d4652edea9d0b09c76c793a2ef54efb0331a89b770def0cc42b9ae849d31da34",
+    "consumerManifestSha256": "f4e81b330a4d6a86f0c8ca0772ae1410e9d4a2f0df2f03b4cfcb8606430d3094",
+    "consumerLockSha256": "03981eeabb92a06eb59ebbacd0139abe92ce00854b396e461daf9c70f9df6847",
+    "sourceLockSha256": "fcd23297e0c05fb6fd9b6623a70823826fd99a6cc7ffca18201c95860fce66b3",
+    "identityMethod": "Copied existing immutable task24 identity; no rebuild, package write or identity-suite rerun. Linux-x64 native identity/limitations reused from source-install.json#native.",
+    "approvedVariables": ["OMP_M0_PROVIDER_API", "OMP_M0_PROVIDER_API_KEY", "OMP_M0_PROVIDER_BASE_URL", "OMP_M0_PROVIDER_MODEL"],
+    "approvedConfig": "~/.config/ohpichamber/omp-m0-provider.env",
+    "configReadOrValuesDisplayedByAssistant": false
+  },
+  "publicOwners": [
+    {
+      "export": "@oh-my-pi/pi-coding-agent#ModelRegistry",
+      "definition": "src/index.ts:12 -> config/model-registry.ts:482-513",
+      "plannedUse": "Public constructor with owned AuthStorage, explicit modelsPath, isolated Settings, cacheDbPath and real fetch observer. No factory, static registration or private API."
+    },
+    {
+      "export": "ModelRegistry.refreshDiscoverableProviders",
+      "definition": "config/model-registry.ts:707-720,1810-1825,2110-2125",
+      "plannedUse": "One invocation ([task31-approved-proxy], online); named-provider filtering avoids unrelated implicit/builtin discovery and static reload."
+    },
+    {
+      "export": "ModelRegistry.getProviderDiscoveryState / getProviderModels",
+      "definition": "config/model-registry.ts:3087-3089,3124-3129; model-provider-discovery.ts:82-90",
+      "plannedUse": "Cold idle/empty baseline; final sanitized status/stale/source/error-presence/count and actual registry models. IDs compared privately, never emitted."
+    },
+    {
+      "export": "AuthStorage.create / credentials.set / credentials.reload / close",
+      "definition": "src/index.ts:43 -> session/auth-storage.ts:23 -> pi-ai/src/auth-storage.ts:267-275; pi-ai/src/auth/types.ts:864",
+      "plannedUse": "Owned private SQLite API-key record, no config/runtime key override; public close result before worker receipt."
+    },
+    {
+      "export": "Settings.isolated",
+      "definition": "config/settings.ts:758-765",
+      "plannedUse": "Isolated registry settings; no legacy user settings read."
+    }
+  ],
+  "supportedConfiguration": {
+    "schemaOwner": "models-config-schema-bundle.ts:315-380; model-registry.ts:1757-1772",
+    "providerIdentity": "task31-approved-proxy",
+    "baseUrl": "exact unchanged approved value in private models.yml; value withheld",
+    "api": "exact approved input, required to equal openai-completions or fail before network",
+    "discovery": { "type": "openai-models-list", "injectV1": false, "timeoutMs": 10000 },
+    "staticModels": "omitted",
+    "apiKey": "omitted; public stored AuthStorage resolution",
+    "ownedPathsRelativeToPrivateRoot": { "authStorage": "agent/auth.db", "modelsConfig": "config/models.yml", "modelCache": "cache/models.db" },
+    "destinationOwner": "model-discovery.ts:854-869,1253-1264,1270-1278",
+    "destinationPolicy": "Only SDK-documented GET /models appended to approved base path; no /v1 injection, guessed endpoint, query/hash, URL credentials or non-HTTP(S) substitution. Unsupported approved input fails closed before network."
+  },
+  "actualInvocation": {
+    "executionOwner": "Main",
+    "parentAuthorization": "Exactly one discovery scenario after security PASS for source070C/SHAfa7179682d63a24841da32b1c5fbe9b8acdb0f64d3e5cfd86d7e4be70660ba8a; worker forbidden to execute/retry",
+    "outerExitCode": 0,
+    "outerWallSeconds": 1.21,
+    "outerResultSource": "Parent tool execution report; raw sanitized output artifact://457:raw:1-1",
+    "command": "/home/shizuku/.bun/bin/bun run task31-model-discovery.ts",
+    "cwd": "/tmp/ohpi-m0-evidence-consumer",
+    "outerToolTimeoutSeconds": 180,
+    "workerAndLauncherBoundSeconds": 150,
+    "discoveryTimeoutMs": 10000,
+    "safeFishLauncherOwner": "task31-model-discovery.ts#FISH",
+    "fishExecArgv": ["/usr/bin/fish", "--no-config", "-c", "<literal FISH source constant>", "<approved-config-path>", "<bun-executable>", "<private-root>", "<bun-dir>:/usr/bin:/bin", "<probe-source>"],
+    "credentialChannel": "fish builtin source with output discarded; builtin set -gx four variables; builtin remove all other exports; builtin private PATH/HOME/agent/TMPDIR/XDG/root; exec Bun directly without secret-bearing argv",
+    "workerInputs": "Transient private read followed by deletion of all four approved environment variables BEFORE dynamic SDK runtime import",
+    "workerOutput": "stdout/stderr discarded without capture; owned sanitized receipt.json only",
+    "launcherOutput": "sanitized receipt and numeric exit/timeout/cleanup/source-SHA fields only",
+    "processVisibilityLimit": "Inherited environment remains process-visible according to OS/privileged access policy; no immunity claimed."
+  },
+  "transportObservation": {
+    "realFetchOnly": true,
+    "publicOption": "ModelRegistry constructor options.fetch",
+    "acceptance": "Exact normalized approved /models destination and GET method; other destinations/methods rejected before real fetch",
+    "redirectPolicy": "error; no redirect destination receives credentials",
+    "observerReadsHeadersOrBody": false,
+    "responseHandling": "Return actual unmodified Response to SDK; only numeric status/call/error counts retained. No fake response, interception, static model echo or monkeypatch.",
+    "retryPolicy": "One public online refresh, no actor retry. Record actual fetch call count; do not infer one HTTP request solely from one SDK invocation.",
+    "bodyAndModelIdRetention": "No response/raw error/header/model-ID output or permanent artifact retention. SDK-owned ephemeral model SQLite may contain discovered records and is removed with private root after worker exit."
+  },
+  "classification": {
+    "pass": "Cold cache and idle zero-model initial state; exactly one real allowed fetch, no denied call/transport error, 2xx HTTP, final SDK status ok/stale false/error absent/fetchedAt present, nonempty actual registry publication with identical private ID sets, followed by successful public auth close, worker exit and root removal.",
+    "provenanceOwner": "Configured discovery state setter config/model-registry.ts:2049-2057 does not populate optional source. Public nullable source is observed without invention. Cold empty baseline, real successful transport and fresh matching publication establish measured provenance; internal result.source drives replacement at2069 but is not accessed by probe.",
+    "selectedApprovedModelPresent": "Boolean only; absence reported without fabricating or registering the approved model.",
+    "failure": "Empty, unavailable, unauthenticated, cached/static fallback, stale/error state, timeout, unsupported approved input, publication mismatch or cleanup failure remains nonzero. No endpoint bypass, extra discovery or fallback model echo."
+  },
+  "cleanupPlan": {
+    "privateRootMode": "0700; umask0077; files0600",
+    "auth": "Public AuthStorage.close for owned agent/auth.db attempted in finally; failure changes final classification/exit",
+    "nativeModelCache": "No established public close API; explicit worker process.exit releases native handles before launcher removes owned private root",
+    "root": "Launcher awaits worker exit, removes the entire private root including agent/auth.db, config/models.yml, cache/models.db, SQLite WAL/SHM and receipt.json, checks absence; removal failure forces nonzero",
+    "signalFinding": "TASK31-SIGNAL-CLEANUP: default SIGINT/SIGTERM/SIGHUP termination could bypass normal finally and leave owned root/worker.",
+    "signalFix": "Idempotent handlers installed before spawn mark interrupted/non-success and kill owned worker if present; launcher remains alive so existing child.exited await reaches the single existing finally. Success gates require no interruption; handlers are removed after finalization. Actual run had no interruption; signal path was not exercised.",
+    "limits": "Owned worker exit/private-root absence only; no global process/service cleanup guarantee. Disposable source deleted after review."
+  },
+  "review": {
+    "preRunSecurity": "PASS",
+    "sourceTag": "070C",
+    "sourceSha256": "fa7179682d63a24841da32b1c5fbe9b8acdb0f64d3e5cfd86d7e4be70660ba8a",
+    "finding": "TASK31-SIGNAL-CLEANUP",
+    "disposition": "Narrow correction accepted in pre-run security review before parent execution; actual run interruption false; signal path itself not executed",
+    "resultReview": "Requirements PASS; quality corrected-path recheck PASS. Nonblocking P2 durable-path finding was resolved and did not invalidate the observed receipt. The artifact records explicit owned AuthStorage/config/cache paths. Only task03 records gate acceptance."
+  },
+  "observationsSource": "artifact://457:raw:1-1",
+  "observations": {
+    "schemaVersion": 1,
+    "sourceSha256": "fa7179682d63a24841da32b1c5fbe9b8acdb0f64d3e5cfd86d7e4be70660ba8a",
+    "status": "observed-online-authoritative",
+    "childExited": true,
+    "workerTimedOut": false,
+    "interrupted": false,
+    "privateRootRemoved": true,
+    "workerExitCode": 0,
+    "receipt": {
+      "schemaVersion": 1,
+      "stage": "complete",
+      "status": "observed-online-authoritative",
+      "startedAt": "2026-10-12T05:16:01.265Z",
+      "request": {
+        "method": "GET",
+        "approvedDestinationOnly": true,
+        "redirects": "error",
+        "fetchCalls": 1,
+        "rejectedCalls": 0,
+        "httpStatuses": [
+          200
+        ],
+        "transportErrors": 0
+      },
+      "cleanup": {
+        "authClosed": true,
+        "nativeModelCacheClose": "no-public-close; worker-process-exit-then-root-removal"
+      },
+      "cacheColdBeforeConstructor": true,
+      "storedCredentialMatched": true,
+      "initial": {
+        "state": {
+          "status": "idle",
+          "stale": false,
+          "fetchedAtPresent": false,
+          "source": null,
+          "modelCount": 0,
+          "errorPresent": false
+        },
+        "registryModelCount": 0
+      },
+      "online": {
+        "state": {
+          "status": "ok",
+          "stale": false,
+          "fetchedAtPresent": true,
+          "source": null,
+          "modelCount": 8,
+          "errorPresent": false
+        },
+        "registryModelCount": 8,
+        "stateAndRegistryIdsMatch": true,
+        "selectedApprovedModelPresent": true,
+        "provenance": "cold-empty-to-real-http-to-fresh-registry-publication",
+        "authoritative": true
+      },
+      "finishedAt": "2026-10-12T05:16:02.416Z"
+    }
+  },
+  "limits": [
+    "One parent-authorized online discovery scenario observed; exact source matches reviewed070C. Worker did not execute/retry. Source/result reviews completed and disposable source deleted without reuse.",
+    "No completion rerun, OAuth/provider-format rerun, telemetry, application integration, dependency change, GitHub or push.",
+    "This archived investigation satisfies the measured online discovery requirement; m0Accepted remains false here because only gate03 releases M1. Later service and application gates remain unchanged."
+  ]
+}

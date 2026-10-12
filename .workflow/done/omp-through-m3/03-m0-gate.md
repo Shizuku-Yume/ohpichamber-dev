@@ -4,7 +4,7 @@
 **Task type:** feature
 **Base commit:** edfdf096316b92775b55410a532f61fa8aa62de9
 **Started:** 2026-10-11T20:17:55+00:00
-**Status:** blocked
+**Finished:** 2026-10-12
 **Dirty at start:** 3,242 pre-existing assembled application, workflow, skill and documentation paths; all are excluded from this task except the named gate documents.
 
 **Delivers:** A current M0 gate record states what is accepted for M1/M2, what remains explicitly deferred, and the exact source-backed handoff for implementation.
@@ -36,17 +36,17 @@
 - The maintainer accepted unavailable platform evidence outside the M0 release condition and accepted the remaining official-provider/OAuth limitation for entry into M1. The decisions are recorded under `2026-10-12 - Leave unavailable platform evidence outside the M0 release condition` and `2026-10-12 - Enter M1 with the observed provider path and explicit OAuth limitation`.
 - M1 handoff is Host-owned extraction and VS Code extension retirement. Keep inherited execution lifecycle/proxy/config/auth until coordinated task 17; no OMP-shaped adapter or early SDK credential import. Task 05 preflight reports an absent service honestly; actual handoff remains task 22.
 - M2 still needs service projector/cursor/CAS/queue/restart/Host Gatekeeper/resource and credential-handoff evidence. M3 still needs actual Canonical Client rendering, reconnect and old-owner retirement. No later gate is passed by this record.
-- Task 29 is archived after security/requirements re-review and quality disposition; its measured receipt remains valid and disposable source was deleted without reuse. Gate documentation/workflow validation passed (`696` pages, `58` links, `40` task files). Gate quality review passed after the task-29 pending wording was refreshed. Requirements review found one remaining blocker: online model discovery is unexercised and not covered by the provider/platform decisions. The maintainer selected a narrow task-31 verification before M1, not a waiver.
+- Task 29 is archived after security/requirements re-review and quality disposition; its measured receipt remains valid and disposable source was deleted without reuse. Earlier gate quality review passed. Its requirements review found one remaining blocker, online model discovery, and the maintainer selected task31 verification rather than a waiver.
+- Task31 then observed one installed public-SDK GET with HTTP200, a cold idle/empty catalog becoming eight fresh nonstale records with matching private IDs and the approved model present, public AuthStorage close, worker exit0 and private-root removal. Requirements review passed and resolved the sole discovery blocker. Quality review passed after a nonblocking durable owned-path finding was fixed; the measured receipt remained valid. Pre-run security passed after the signal-cleanup correction. The disposable source was deleted without reuse and task31 archived.
+- Unchanged earlier evidence/reviews remain reusable. The accepted provider/platform limits are release boundaries, not successful observations. M0 accepts the dedicated-worker handoff for M1; no M1 implementation, real service credential import, M2 gate or M3 client acceptance is claimed.
+- Check after: `bun run docs:validate && .workflow/bin/workflow validate --no-color` passed (696 pages,58 sidebar links,41 workflow task files). Parsed artifact checks confirm one HTTP200 GET, matching eight-record publication, public auth close, worker exit/root removal, reviewed-source disposal and separate gate acceptance. The existing validator's Python positional-argument deprecation warnings are unrelated; no validator changes or old SDK suite rerun.
 
 
 
 
-- [ ] Compare every M0 implementation-plan item and architecture risk probe with current artifacts, task-02 corrections and tasks 25-30 outcomes. Completed investigations do not turn failed/unavailable capabilities into accepted evidence.
-- [ ] Separate reachable M0 work from M5/platform or provider limits without silently dropping required M0 evidence.
-- [ ] Record the accepted worker architecture and its measured resource limitation.
-- [ ] Make M1 the next ready phase only after every M0 prerequisite is accepted, not merely documented.
-- [ ] Keep M0 blocked and do not release M1 until every required item is evidenced or explicitly decided by the maintainer.
+- [x] Compare every M0 implementation-plan item and architecture risk probe with current artifacts, task-02 corrections and tasks25-31 outcomes. Completed investigations do not turn failed/unavailable capabilities into accepted evidence.
+- [x] Separate reachable M0 work from M5/platform or provider limits without silently dropping required M0 evidence.
+- [x] Record the accepted worker architecture and its measured resource limitation.
+- [x] Make M1 the next ready phase only after every M0 prerequisite is accepted, not merely documented.
+- [x] Keep M0 blocked and do not release M1 until every required item is evidenced or explicitly decided by the maintainer.
 
-## Blocked
-
-The original implementation-plan M0 list includes model discovery. Tasks 24/25/29 did not exercise online discovery: task 24 denied discovery fetch attempts; tasks 25/29 disabled or did not run it. Task 31 must record a real public-SDK discovery result or an explicit unresolved outcome before this gate is reconsidered. All other reviewed evidence, accepted provider/platform limits and later service requirements remain unchanged. No M1 task has started.

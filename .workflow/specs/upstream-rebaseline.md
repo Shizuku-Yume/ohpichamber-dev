@@ -5,7 +5,7 @@
 
 ## What this is for
 
-The earlier selectively synchronized runtime made newer features difficult to integrate coherently. The maintainer chose a full pinned upstream baseline followed by restoration of OhPiChamber customization. The source and owning documents are now updated; task 02 closes at that source/document boundary and task 03's W5 audit is complete. W3 runtime certification remains a separate, explicitly incomplete acceptance boundary, and M0 remains open.
+The earlier selectively synchronized runtime made newer features difficult to integrate coherently. The maintainer chose a full pinned upstream baseline followed by restoration of OhPiChamber customization. The source and owning documents are now updated; task02 closes at that source/document boundary and task03's W5 audit is complete. W3 runtime certification remains a separate, explicitly incomplete acceptance boundary. The later M0 gate and migration implementation belong to the [OMP effort](omp-through-m3.md), with current evidence in [development.md](../development.md).
 
 The settled choice is recorded in [decisions.md](../decisions.md#2026-10-10---latest-upstream-first-then-restore-the-fork).
 

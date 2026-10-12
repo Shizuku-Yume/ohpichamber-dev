@@ -4,7 +4,7 @@
 
 OhPiChamber is an OpenChamber fork. The immediate goal is to adopt the latest upstream repository as the code baseline and preserve/restore the fork's customization. See the [rebaseline spec](specs/upstream-rebaseline.md) and recover its next task through the workflow.
 
-The pinned upstream application source has been adopted; assembled runtime acceptance and documentation adaptation are in progress. The code remains pre-M0. The later target is OMP-only across Web/PWA, Electron, mobile and Guest SDK surfaces. The Agent Service, Canonical API and client cutover are proposed. [development.md](development.md) owns current evidence; the [old upstream assessment](upstream-review.md) is historical research, not a selective-import policy.
+The pinned upstream application source has been adopted; unavailable runtime certification remains explicit. M0 SDK evidence and the recorded provider/platform limits are accepted for entry into M1 Host extraction and VS Code extension retirement. Application execution still uses the inherited OpenCode integration. The target is OMP-only across Web/PWA, Electron, mobile and Guest SDK surfaces; the Agent Service, Canonical API and client cutover remain proposed. [development.md](development.md) owns current evidence; the [old upstream assessment](upstream-review.md) is historical research, not a selective-import policy.
 
 ## Starting a conversation
 
