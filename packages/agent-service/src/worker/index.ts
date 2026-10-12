@@ -68,6 +68,8 @@ process.on('message', raw => {
   bootstrap = command;
   initialization = WorkerSession.open(command, inputs => {
     send({ type: 'events', workerGeneration: command.workerGeneration, inputs });
+  }, interaction => {
+    send({ type: 'interaction', workerGeneration: command.workerGeneration, request: interaction });
   }, () => { void stop(1); }).then(owned => {
     resources = owned;
     if (stopping) return;

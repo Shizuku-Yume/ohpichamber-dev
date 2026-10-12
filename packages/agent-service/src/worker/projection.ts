@@ -75,6 +75,7 @@ export class WorkerProjection {
 
   seed(): ProjectionSeed { return this.readHistory(); }
   activeRun(): Run | null { return this.run; }
+  currentTurn(): { turnId: string } | undefined { return this.turn?.open ? { turnId: this.turn.turnId } : undefined; }
 
   beginRun(runId: string, timestamp: number, attachments: PromptAttachment[] = []): ProjectionInput[] {
     if (this.run) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');

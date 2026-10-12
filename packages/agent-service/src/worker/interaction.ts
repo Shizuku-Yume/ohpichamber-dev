@@ -8,15 +8,16 @@ import type {
   ToolApprovalRequestedEvent,
   ToolCallEvent,
 } from '@oh-my-pi/pi-coding-agent/sdk';
+import type { Theme } from '@oh-my-pi/pi-tui/theme';
 import { JsonObjectSchema } from '@openchamber/agent-contract';
 import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
-import type { WorkerInteraction } from '../protocol.ts';
+import type { WorkerInteraction as WorkerInteractionMessage } from '../protocol.ts';
 
 type PendingApproval = { resolve: (choice: string | undefined) => void; approve: string; reject: string };
 type PendingQuestion = { questions: ExtensionAskDialogQuestion[]; resolve: (result: ExtensionAskDialogResult | undefined) => void };
 
 export interface WorkerInteractionCallbacks {
-  request: (interaction: WorkerInteraction) => void;
+  request: (interaction: WorkerInteractionMessage) => void;
   currentTurn: () => string | undefined;
 }
 
@@ -78,7 +79,7 @@ export class WorkerInteraction {
     editor: async () => { throw new Error('Terminal editor UI is unavailable in the Agent Service worker'); },
     addAutocompleteProvider: () => {},
     setEditorComponent: () => {},
-    get theme() { throw new Error('Terminal theme UI is unavailable in the Agent Service worker'); },
+    get theme(): Theme { throw new Error('Terminal theme UI is unavailable in the Agent Service worker'); },
     getAllThemes: async () => [],
     getTheme: async () => undefined,
     setTheme: async () => ({ success: false, error: 'Theme UI is unavailable in the Agent Service worker' }),
@@ -107,7 +108,7 @@ export class WorkerInteraction {
     const details = JsonObjectSchema.parse({
       reason: observer.reason ?? '', options: labels, approvalMode: observer.approvalMode, input,
     });
-    const interaction: WorkerInteraction = {
+    const interaction: WorkerInteractionMessage = {
       kind: 'approval', approvalId, toolCallId: observer.toolCallId, toolName: observer.toolName,
       actionType: actionType(observer.toolName), commandSummary: title, details,
       policyTarget: { toolName: observer.toolName, pattern: JSON.stringify(input) }, turnId,
