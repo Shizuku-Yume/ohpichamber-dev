@@ -1,4 +1,4 @@
-import { extname } from 'node:path';
+import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentService } from './supervisor/service.ts';
 
@@ -18,6 +18,7 @@ async function main(): Promise<void> {
     service = new AgentService({
       workerEntrypoint: fileURLToPath(new URL(workerFile, import.meta.url)),
       internalSecret: process.env.OHPICHAMBER_INTERNAL_SECRET ?? '',
+      stateDirectory: join(process.cwd(), 'agent-state'),
       port: requestedPort(process.argv.slice(2)),
     });
     const owned = service;

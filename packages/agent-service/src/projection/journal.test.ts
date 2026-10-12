@@ -1,0 +1,99 @@
+import { describe, expect, test } from 'bun:test';
+import type { CanonicalEvent, StreamInvalidated } from '@openchamber/agent-contract';
+import { ProjectionError, SessionJournal } from './journal.ts';
+import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from './protocol.ts';
+
+const session = { sessionId: 's', projectId: 'p', workspaceId: 'w', displayPath: '.', rootSessionId: 's' };
+const seed: ProjectionSeed = { createdAt: 1, updatedAt: 1, branch: { branchId: 'branch:opaque', branchVersion: '1', leafMessageId: null }, turns: [], messages: [] };
+const input = (event: ProjectionEvent, timestamp = 2): ProjectionInput => ({ timestamp, event });
+function cursorFailure(journal: SessionJournal, cursor?: string) {
+  try { journal.subscribe(cursor, () => {}); }
+  catch (error) { if (error instanceof ProjectionError) return { status: error.status, code: error.code }; throw error; }
+  throw new Error('Cursor was accepted');
+}
+function begin(journal: SessionJournal): void {
+  journal.append([
+    input({ type: 'run.started', runId: 'r', createdAt: 2 }),
+    input({ type: 'turn.started', turnId: 't', runId: 'r', userMessageId: 'u' }),
+    input({ type: 'message.created', messageId: 'u', turnId: 't', role: 'user' }),
+    input({ type: 'part.started', messageId: 'u', part: { type: 'text', partId: 'up', content: 'hello' } }),
+    input({ type: 'message.created', messageId: 'm', turnId: 't', role: 'assistant' }),
+    input({ type: 'part.started', messageId: 'm', part: { type: 'text', partId: 'mp', content: '' } }),
+  ]);
+}
+
+describe('SessionJournal consumer boundary', () => {
+  test('replay covers its exact ring boundary and distinguishes invalid from unavailable cursors', () => {
+    const journal = new SessionJournal(session, seed);
+    const events = journal.append(Array.from({ length: 1001 }, (_, index) => input({ type: 'tool.started', toolCallId: `tool${index}`, toolName: 'bash', input: {} })));
+    const epoch = journal.runtime().epoch;
+    const replay = journal.subscribe(`${epoch}:1`, () => {}).replay;
+    expect(replay.map(event => event.sequence)).toEqual(events.slice(1).map(event => event.sequence));
+    expect(cursorFailure(journal, `${epoch}:0`)).toEqual({ status: 410, code: 'RESYNC_REQUIRED' });
+    expect(cursorFailure(journal)).toEqual({ status: 410, code: 'RESYNC_REQUIRED' });
+    for (const cursor of [`${epoch}:01`, `${epoch}:18446744073709551616`, 'broken']) {
+      expect(cursorFailure(journal, cursor)).toEqual({ status: 400, code: 'INVALID_CURSOR' });
+    }
+    expect(cursorFailure(journal, `${epoch}:1002`)).toEqual({ status: 410, code: 'RESYNC_REQUIRED' });
+  });
+
+  test('snapshot is immutable and a failed tool does not terminate the outer run', () => {
+    const journal = new SessionJournal(session, seed);
+    begin(journal);
+    journal.append([
+      input({ type: 'part.started', messageId: 'm', part: { type: 'tool_call', partId: 'tp', toolCallId: 'call', toolName: 'bash', input: { arguments: ['first'] }, status: 'approved' } }),
+      input({ type: 'part.completed', part: { type: 'tool_call', partId: 'tp', toolCallId: 'call', toolName: 'bash', input: { arguments: ['first'] }, status: 'approved' } }),
+      input({ type: 'tool.started', toolCallId: 'call', toolName: 'bash', input: { arguments: ['first'] } }),
+      input({ type: 'part.delta', partId: 'mp', delta: 'partial' }),
+    ]);
+    const snapshot = journal.snapshot();
+    const argumentsPart = snapshot.messages.flatMap(message => message.parts).find(part => part.type === 'tool_call');
+    if (!argumentsPart || !Array.isArray(argumentsPart.input.arguments)) throw new Error('Tool arguments missing');
+    argumentsPart.input.arguments[0] = 'changed';
+    journal.append([input({ type: 'tool.completed', toolCallId: 'call', status: 'failed', isError: true, error: 'Command failed' })]);
+    const current = journal.snapshot();
+    expect(current.activeRun?.runId).toBe('r');
+    expect(current.messages.flatMap(message => message.parts).find(part => part.type === 'tool_call')).toMatchObject({ status: 'failed', input: { arguments: ['first'] } });
+    expect(snapshot.messages.flatMap(message => message.parts).find(part => part.type === 'tool_call')?.status).toBe('running');
+    journal.append([input({ type: 'run.failed', runId: 'r', finishedAt: 3, error: 'Provider request failed' }, 3)]);
+    expect(journal.snapshot()).toMatchObject({ activeRun: null, session: { runtimeStatus: 'idle' }, turns: [{ status: 'failed' }] });
+    expect(journal.snapshot().messages.flatMap(message => message.parts).find(part => part.type === 'text' && part.partId === 'mp')?.content).toBe('partial');
+  });
+
+  test('replay/live handoff is contiguous; restart retains partial output but expires old activity', () => {
+    const journal = new SessionJournal(session, seed);
+    begin(journal);
+    const captured = journal.snapshot();
+    const live: (CanonicalEvent | StreamInvalidated)[] = [];
+    const subscription = journal.subscribe(captured.cursor, event => live.push(event));
+    journal.append([input({ type: 'part.delta', partId: 'mp', delta: 'kept' })]);
+    expect(subscription.replay).toEqual([]);
+    expect(live).toMatchObject([{ type: 'part.delta', sequence: '7', delta: 'kept' }]);
+    journal.unavailable();
+    expect(live.at(-1)).toMatchObject({ type: 'stream.invalidated', epoch: captured.session.epoch, reason: 'EPOCH_CHANGED' });
+    expect(cursorFailure(journal, captured.cursor)).toEqual({ status: 410, code: 'RESYNC_REQUIRED' });
+    const interrupted = journal.snapshot();
+    expect(interrupted).toMatchObject({ session: { runtimeStatus: 'unavailable', activeRunId: null }, activeRun: null, turns: [{ status: 'failed' }] });
+    expect(interrupted.messages.flatMap(message => message.parts).find(part => part.type === 'text' && part.partId === 'mp')?.content).toBe('kept');
+    journal.replace({ ...seed, branch: interrupted.branch, turns: interrupted.turns, messages: interrupted.messages });
+    expect(journal.runtime()).toMatchObject({ runtimeStatus: 'idle', activeRunId: null, headSequence: '0' });
+  });
+
+  test('history cursors bind opaque branch identity and the selected leaf', () => {
+    const journal = new SessionJournal(session, seed);
+    begin(journal);
+    journal.append([
+      input({ type: 'turn.completed', turnId: 't', runId: 'r' }),
+      input({ type: 'turn.started', turnId: 't2', runId: 'r', userMessageId: 'u' }),
+      input({ type: 'message.created', messageId: 'm2', turnId: 't2', role: 'assistant' }),
+    ]);
+    const first = journal.history({ sessionId: 's', limit: 1 });
+    if (!first.nextCursor) throw new Error('History continuation missing');
+    const second = journal.history({ sessionId: 's', limit: 1, cursor: first.nextCursor });
+    expect(second.turns.map(turn => turn.turnId)).toEqual(['t2']);
+    expect(second.messages.map(message => message.messageId)).toEqual(['m2']);
+    expect(() => journal.history({ sessionId: 's', limit: 1, cursor: first.nextCursor, leafTurnId: 't' })).toThrow(ProjectionError);
+    journal.append([input({ type: 'message.created', messageId: 'm3', turnId: 't2', role: 'assistant' })]);
+    expect(() => journal.history({ sessionId: 's', cursor: first.nextCursor })).toThrow(ProjectionError);
+  });
+});

@@ -1,7 +1,20 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { WorkerBootstrapMessageSchema, WorkerReplySchema } from '../protocol.ts';
-import type { WorkerBootstrap, WorkerInfo } from '../protocol.ts';
+import { WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema } from '../protocol.ts';
+import type { WorkerBootstrap, WorkerInfo, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
+import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
+import type { ProblemCode } from '@openchamber/agent-contract';
+
+export class WorkerOperationError extends Error {
+  constructor(readonly status: number, readonly code: ProblemCode) { super('SDK worker operation failed'); }
+}
+
+interface WorkerLifecycleCallbacks {
+  onOpened?: (rootSessionId: string, generation: string, sessionFile: string, seed: ProjectionSeed) => void;
+  onEvents?: (rootSessionId: string, generation: string, inputs: ProjectionInput[]) => void;
+  onExit?: (rootSessionId: string, generation: string) => void;
+}
+
 
 interface WorkerEntry {
   input: WorkerBootstrap;
@@ -11,12 +24,14 @@ interface WorkerEntry {
   rejectReady: (error: Error) => void;
   exited: Promise<void>;
   stopping?: Promise<boolean>;
+  pending: Map<string, { resolve: (result: WorkerOperationResult) => void; reject: (error: Error) => void }>;
 }
 
 export interface WorkerRegistryOptions {
   workerEntrypoint: string;
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
+  callbacks?: WorkerLifecycleCallbacks;
 }
 
 async function waitWithin(operation: Promise<void>, milliseconds: number): Promise<void> {
@@ -42,6 +57,23 @@ export class WorkerRegistry {
 
   list(): WorkerInfo[] {
     return [...this.entries.values()].map(entry => ({ ...entry.info }));
+  }
+
+  async request(rootSessionId: string, operation: WorkerOperation): Promise<WorkerOperationResult> {
+    const parsed = WorkerOperationSchema.parse(operation);
+    const entry = this.entries.get(rootSessionId);
+    if (this.closing || !entry || entry.info.state !== 'ready' || !entry.child.connected) {
+      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    }
+    const commandId = randomUUID();
+    const result = new Promise<WorkerOperationResult>((resolve, reject) => entry.pending.set(commandId, { resolve, reject }));
+    entry.child.send({ type: 'operation', workerGeneration: entry.info.workerGeneration, commandId, operation: parsed }, error => {
+      if (!error) return;
+      const pending = entry.pending.get(commandId);
+      entry.pending.delete(commandId);
+      pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
+    });
+    return result;
   }
 
   async start(input: WorkerBootstrap, replace = false): Promise<WorkerInfo> {
@@ -100,17 +132,30 @@ export class WorkerRegistry {
       ready: ready.promise,
       rejectReady: ready.reject,
       exited: exited.promise,
+      pending: new Map(),
     };
     this.entries.set(input.rootSessionId, entry);
     child.on('message', raw => {
       const reply = WorkerReplySchema.safeParse(raw);
       if (!reply.success || reply.data.workerGeneration !== workerGeneration) return;
-      if (this.entries.get(input.rootSessionId) !== entry || entry.info.state !== 'starting') return;
+      if (this.entries.get(input.rootSessionId) !== entry) return;
+      if (entry.info.state !== 'starting' && entry.info.state !== 'ready') return;
       if (reply.data.type === 'ready') {
+        if (entry.info.state !== 'starting') return;
         entry.info.state = 'ready';
         ready.resolve();
       } else if (reply.data.type === 'error') {
-        ready.reject(new Error('SDK worker initialization failed'));
+        ready.reject(new WorkerOperationError(503, reply.data.code));
+      } else if (reply.data.type === 'operation.error') {
+        const pending = entry.pending.get(reply.data.commandId);
+        if (pending) { entry.pending.delete(reply.data.commandId); pending.reject(new WorkerOperationError(reply.data.status, reply.data.code)); }
+      } else if (reply.data.type === 'opened') {
+        this.options.callbacks?.onOpened?.(input.rootSessionId, workerGeneration, reply.data.sessionFile, reply.data.seed);
+      } else if (reply.data.type === 'events') {
+        this.options.callbacks?.onEvents?.(input.rootSessionId, workerGeneration, reply.data.inputs);
+      } else if (reply.data.type === 'result') {
+        const pending = entry.pending.get(reply.data.commandId);
+        if (pending) { entry.pending.delete(reply.data.commandId); pending.resolve(reply.data.result); }
       }
     });
     child.once('error', () => ready.reject(new Error('SDK worker could not start')));
@@ -118,12 +163,16 @@ export class WorkerRegistry {
       const wasStarting = entry.info.state === 'starting';
       if (entry.info.state !== 'stopping') entry.info.state = 'crashed';
       if (wasStarting) ready.reject(new Error('SDK worker exited before initialization'));
+      for (const pending of entry.pending.values()) pending.reject(new Error('SDK worker exited'));
+      entry.pending.clear();
+      this.options.callbacks?.onExit?.(input.rootSessionId, workerGeneration);
       exited.resolve();
     });
     const command = WorkerBootstrapMessageSchema.parse({
       type: 'bootstrap', rootSessionId: input.rootSessionId, workerGeneration,
+      projectId: input.projectId, workspaceId: input.workspaceId,
       cwd: input.cwd, agentDirectory: input.agentDirectory,
-      sessionsDirectory: input.sessionsDirectory,
+      sessionsDirectory: input.sessionsDirectory, sessionFile: input.sessionFile, options: input.options,
     });
     if (child.connected) child.send(command);
     try {
@@ -147,6 +196,8 @@ export class WorkerRegistry {
         if (entry.child.exitCode === null && entry.child.signalCode === null) entry.child.kill('SIGKILL');
         await waitWithin(entry.exited, 500);
       }
+      for (const pending of entry.pending.values()) pending.reject(new Error('SDK worker is stopping'));
+      entry.pending.clear();
       entry.info.state = 'stopped';
       if (this.entries.get(entry.info.rootSessionId) === entry) this.entries.delete(entry.info.rootSessionId);
       return entry.child.exitCode === 0;

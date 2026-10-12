@@ -84,6 +84,7 @@
     "packages/agent-service": {
       "entry": [
         "src/worker/index.ts",
+        "src/**/*.{test,spec}.ts",
         "scripts/*.mjs"
       ],
       "project": [

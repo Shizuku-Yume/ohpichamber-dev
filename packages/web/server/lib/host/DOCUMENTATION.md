@@ -15,6 +15,7 @@
 - `login-shell-env.js` provides the login-shell environment snapshot used when embedding the server in Electron and when starting host commands.
 - `server-startup-runtime.js`, `startup-pipeline-runtime.js`, and `static-routes-runtime.js` own Host HTTP startup, static assets, SPA fallback, and manifest wiring.
 - `managed-process-registry.js` and its declaration file track managed child processes and reap only verified orphaned processes. `startup-performance.js` records opt-in startup diagnostics shared by lifecycle, proxy, and startup callers.
+- `agent-service-supervisor.js` starts the separate Bun service, discovers its private endpoint, waits for authenticated SDK-factory readiness, and fences requests while stopping or unavailable. This task does not activate production execution; task22 composes it with the canonical gateway.
 - `session-state.js` owns the SQLite connection shared by session metadata, archive state, and session folders. `metadata-sqlite.js` supplies the schema, typed errors, transactions, and admitted-operation lifecycle; `metadata-conversion.js` converts only named operational sidecar sources.
 - `canonical-routes.js` owns minimal canonical Host status and authenticated credential intent/preflight. It has no legacy credential, OMP SDK, staging, or process dependency.
 
@@ -25,6 +26,8 @@ The Host modules do not own OpenCode lifecycle, proxying, SSE watching, snippets
 ## Retained behavior
 
 Settings are persisted atomically with profile/device/surface scope handling. Theme imports validate package identity, checksums, archive bounds, and authored palette data. Project and network routes preserve path validation and rebinding protections. Startup continues to publish the listener before managed lifecycle work, serves static/PWA routes, and records the same diagnostic phases. Managed-process cleanup remains asynchronous and verifies process identity before reaping.
+
+The agent-service registry records the actual Linux process birth identity when registering it. Reaping requires that identity and the recorded binary/entrypoint, checked again before signalling; an assigned ephemeral port is not compared with the literal `--port 0` command. Missing birth verification leaves the process untouched. Non-Linux agent orphan reaping remains unverified and refuses to guess identity. Legacy managed registrations remain until task17 retires their callers.
 
 ## Operational session state
 
