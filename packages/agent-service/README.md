@@ -23,7 +23,7 @@ Bootstrap data contains opaque root/project/workspace IDs, absolute private `cwd
 
 Both service and worker launches pass Bun's `--no-env-file`. Project dotenv files cannot add values to the Host-resolved environment.
 
-Only `src/worker/` imports the OMP SDK. Its session owns the supplied `SessionManager`; disposal closes that manager, then the worker closes its owned `AuthStorage`. Initial workers disable MCP, LSP and extension discovery; their retained configuration and apply behavior belong to task12, not a readiness claim. Interactive approvals and questions belong to task10.
+Only `src/worker/` imports the OMP SDK. Its session owns the supplied `SessionManager`; disposal closes that manager, then the worker closes its owned `AuthStorage`. Workers enable native approval/question hooks and concrete Promise-based interactive UI before admitting prompts. MCP, LSP and extension discovery remain disabled here; their configuration and apply behavior belong to task12.
 
 ## Sessions and recovery
 
@@ -36,6 +36,15 @@ OMP alone writes messages. The worker stores canonical identity and per-cycle li
 The service journal retains the newest 1,000 ordered events and a tail of 100 turns. Snapshot and cursor are captured together. SSE validates cursor syntax and replay coverage before headers: malformed cursors return 400 `INVALID_CURSOR`; stale epochs or missing coverage return 410 `RESYNC_REQUIRED`. Live epoch changes and delivery overflow invalidate and close the stream. Reopening a worker creates a new epoch; historical messages never imply live activity.
 
 History uses an opaque cursor bound to the selected branch version and leaf. It is not an SSE cursor. Session deletion uses the native SDK storage owner before removing its private service reference. Archive and operational metadata remain with Host SQLite.
+
+## Approvals and questions
+
+The public SDK factory receives `hasUI: true`, `interactivePrompts: true`, and an inline extension observing typed native tool-call/approval events. Native `initializeExtensions` wires the real session runner to the worker UI, and `setToolUIContext` gives builtin tools the same context. Approval choices retain native labels; policy targets use captured native execution input, never dialog titles. Multi-question choices, selections and freeform answers retain native question IDs and validate before consuming a handle. Native promises and session objects never leave the worker.
+
+The private session namespace exposes `GET approvals`, `POST approvals/:approvalId/respond`, `GET questions`, and `POST questions/:questionId/respond`. Replies require the current version, epoch and worker generation. The service atomically reserves CAS, publishes requested/resolved events through the existing journal cursor, and includes current pending requests in snapshots. A second competing reply returns a conflict. Cancellation and five-minute expiry are terminal; abort, shutdown, worker failure and replacement invalidate old requests without allowing them to revive on a late acknowledgement. Reconnect within an epoch preserves pending requests; a new epoch replaces the pending set.
+
+Always-allow commits a session policy, and always-deny commits a workspace policy, in the Node Host SQLite owner through private child IPC. Node authorizes the captured Host bootstrap scope before writing. A real committed policy ID/revision is required before the worker handle resolves. Failed persistence leaves the request pending with `APPROVAL_POLICY_WRITE_FAILED`; no missing Host handler can fabricate a commit. Policies load before reopening a session and apply to future exact native targets, with workspace denial taking precedence. Web and Electron use that Host; hosted mobile and Capacitor reach the same Host without starting local workers. Task22 still owns external authentication and production route activation.
+
 
 ## Package inputs
 
