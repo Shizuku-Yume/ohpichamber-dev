@@ -267,6 +267,33 @@ describe('registerManagedProcess', () => {
     expect(writeFileMock).not.toHaveBeenCalled();
   });
 });
+describe('agent-service orphan identity', () => {
+  const entry = { pid: 777, ownerPid: 12345, port: 49152, binary: '/usr/bin/bun', entrypoint: '/srv/index.js', kind: 'agent-service', birthIdentity: '1234' };
+  const configure = (birth) => {
+    setPlatform('linux');
+    readdirMock.mockResolvedValue(['777.json']);
+    readFileMock.mockImplementation((file) => Promise.resolve(file === '/proc/777/stat'
+      ? ['777 (bun) S', '1', ...Array(17).fill('0'), birth].join(' ')
+      : JSON.stringify(entry)));
+    killAliveFor([777]);
+    execFileYields((cmd, _args, _opts, cb) => cmd === 'ps'
+      ? cb(null, '1 /usr/bin/bun /srv/index.js --port 0\n', '')
+      : cb(new Error(`unexpected cmd: ${cmd}`)));
+    rmMock.mockResolvedValue();
+  };
+
+  it('reaps the matching orphan despite an ephemeral assigned port', async () => {
+    configure('1234');
+    expect(await reapOrphanedProcesses({ log: () => {} })).toEqual({ inspected: 1, reaped: 1 });
+    expect(killMock).toHaveBeenCalledWith(777, 'SIGTERM');
+  });
+
+  it('does not signal a recycled pid with a different birth identity', async () => {
+    configure('5678');
+    expect(await reapOrphanedProcesses({ log: () => {} })).toEqual({ inspected: 1, reaped: 0 });
+    expect(killMock.mock.calls.every(([, signal]) => signal === 0 || signal === undefined)).toBe(true);
+  });
+});
 
 describe('unregisterManagedProcess', () => {
   it('removes the entry file', async () => {

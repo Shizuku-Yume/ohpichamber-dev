@@ -1,0 +1,100 @@
+{
+  "sourceRevision": "c9de2b02b997f37cc89639282ed35dec86f139e8",
+  "artifactSetSha256": "d4652edea9d0b09c76c793a2ef54efb0331a89b770def0cc42b9ae849d31da34",
+  "files": [
+    {
+      "source": "tarballs/oh-my-pi-omp-stats-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-omp-stats-18.8.9.tgz",
+      "sha256": "39768f9d7f7c57c753a74831db71fc802215dbbcdd4155650a4199200f39c907",
+      "size": 225254
+    },
+    {
+      "source": "tarballs/oh-my-pi-omptype-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-omptype-18.8.9.tgz",
+      "sha256": "dc1aeb58fea77c8c8eb496c4568cc8854ef352ec3206f1f70efcc7f65d62d719",
+      "size": 94302
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-agent-core-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-agent-core-18.8.9.tgz",
+      "sha256": "e0c3f60b3ce4090f2c686e66e7b87a4a9e206777f8f506ac780ffc07694d0bf0",
+      "size": 261137
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-ai-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-ai-18.8.9.tgz",
+      "sha256": "ff45663e8d6d491e32889a54b44d74c66c30ec8c35153d5e01d4be161567e0d4",
+      "size": 1571330
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-catalog-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-catalog-18.8.9.tgz",
+      "sha256": "f0793ad9d6e2fe105066120fe9452ff27943c974d43c4570a6f009a30c82f4df",
+      "size": 884729
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-coding-agent-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-coding-agent-18.8.9.tgz",
+      "sha256": "dde740cca56c27cec0c946d3c67beb50d253c034965c063b5d0f4eea58555c6d",
+      "size": 13172340
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-mnemopi-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-mnemopi-18.8.9.tgz",
+      "sha256": "e16ddc3191b2e00b1182ee13ab568e04970522741aaed82b2b19461dd3cb7a42",
+      "size": 188947
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-natives-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-natives-18.8.9.tgz",
+      "sha256": "523d09347c800b31ee91460849627ece0fb954f773fc72642bb95f305f46e46e",
+      "size": 155706
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-natives-linux-x64-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-natives-linux-x64-18.8.9.tgz",
+      "sha256": "35effa44e183ac54621f8099d85a5f27f5a8a054a1e2293eb357bf8fe504e6c7",
+      "size": 91033175
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-tui-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-tui-18.8.9.tgz",
+      "sha256": "7f1a257e757cc5da995fd63e64e06490db272ab974d85c5708484bce7f9b51a2",
+      "size": 2063552
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-utils-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-utils-18.8.9.tgz",
+      "sha256": "d66fe4a1323eb07b8097545e1698e52e825e04b604b585c206a1d9ede40c2e06",
+      "size": 385669
+    },
+    {
+      "source": "tarballs/oh-my-pi-pi-wire-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-wire-18.8.9.tgz",
+      "sha256": "2e664bd14d84189759ba5972ca65d24620c17ac1ec09ad88605b671b3a725377",
+      "size": 24523
+    },
+    {
+      "source": "tarballs/oh-my-pi-snapcompact-18.8.9.tgz",
+      "destination": "vendor/omp/c9de2b02/tarballs/oh-my-pi-snapcompact-18.8.9.tgz",
+      "sha256": "ca74a9adc472baff7ff4bc742a4659dd9417864d92466de5bc94035820565da9",
+      "size": 39946
+    },
+    {
+      "source": "inputs/consumer/patches/@ark%2Fschema@0.56.2.patch",
+      "destination": "vendor/omp/c9de2b02/patches/@ark%2Fschema@0.56.2.patch",
+      "sha256": "5421df0afd80cba41063a8db9c841ac7ca0dea1635f716d5fe28c0de66f979b2",
+      "size": 1431
+    },
+    {
+      "source": "inputs/consumer/patches/puppeteer-core@25.3.0.patch",
+      "destination": "vendor/omp/c9de2b02/patches/puppeteer-core@25.3.0.patch",
+      "sha256": "6b1a58844185cd5096b7cff14012d171d01d344d4d3d2206d65975d67ed6c5d7",
+      "size": 37801
+    }
+  ],
+  "platform": "linux-x64",
+  "limits": [
+    "Only retained Linux x64 native package is installed; other native platforms and native source-build equivalence remain unverified."
+  ]
+}

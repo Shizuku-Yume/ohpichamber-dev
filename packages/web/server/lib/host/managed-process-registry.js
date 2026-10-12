@@ -74,9 +74,11 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const commandIdentifiesOurServer = (command, entry) => {
   if (typeof command !== 'string') return false;
   const lower = command.toLowerCase();
-  if (!lower.includes('opencode') || !lower.includes('serve')) return false;
-  // Tie to the exact server we registered when we know its port, so a recycled
-  // pid running a *different* opencode server is never mistaken for ours.
+  if ((entry.kind ?? 'opencode') === 'agent-service') {
+    if (!entry.entrypoint || !entry.binary) return false;
+    if (!lower.includes(String(entry.binary).toLowerCase()) || !lower.includes(String(entry.entrypoint).toLowerCase())) return false;
+    return true;
+  } else if (!lower.includes('opencode') || !lower.includes('serve')) return false;
   if (Number.isInteger(entry.port) && !command.includes(String(entry.port))) return false;
   return true;
 };
@@ -130,14 +132,27 @@ export const createManagedProcessRegistry = ({ fs = fsp, execFileAsync = default
     return out;
   };
 
-  /** Record an OpenCode process WE spawned so a future run can reap it if orphaned. */
-  const registerManagedProcess = async ({ pid, ownerPid, port, binary, runtime } = {}) => {
+  const readBirthIdentity = async (pid) => {
+    if (process.platform !== 'linux') return null;
+    try {
+      const stat = await fs.readFile(`/proc/${pid}/stat`, 'utf8');
+      return stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)[19] ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  /** Record a process WE spawned so a future run can reap it if orphaned. */
+  const registerManagedProcess = async ({ pid, ownerPid, port, binary, runtime, kind, entrypoint } = {}) => {
     if (!Number.isInteger(pid)) return;
     await writeEntryFile({
       pid,
       ownerPid: Number.isInteger(ownerPid) ? ownerPid : process.pid,
       port: Number.isInteger(port) ? port : null,
       binary: typeof binary === 'string' ? binary : null,
+      kind: kind ?? 'opencode',
+      entrypoint: entrypoint ?? null,
+      birthIdentity: kind === 'agent-service' ? await readBirthIdentity(pid) : null,
       runtime: typeof runtime === 'string' ? runtime : 'web',
       startedAt: new Date().toISOString(),
     });
@@ -226,18 +241,19 @@ export const createManagedProcessRegistry = ({ fs = fsp, execFileAsync = default
   const processEntry = async (entry, { log }) => {
     // Dead pid → nothing to do (caller drops the file).
     if (!isPidAlive(entry.pid)) return false;
-
     const ownerGone = Number.isInteger(entry.ownerPid) && !isPidAlive(entry.ownerPid);
+    if (entry.kind === 'agent-service') {
+      const birth = await readBirthIdentity(entry.pid);
+      if (!entry.birthIdentity || birth !== entry.birthIdentity) return false;
+    }
 
     if (process.platform === 'win32') {
       const image = await readWindowsImageName(entry.pid);
-      const looksLikeOpencode = typeof image === 'string' && image.toLowerCase().includes('opencode');
-      // Windows lacks reliable reparent-to-1 semantics (job objects usually kill
-      // children with the parent), so we reap only when the owner is provably dead
-      // AND the image still looks like opencode.
-      if (looksLikeOpencode && ownerGone) {
+      const expected = entry.kind === 'agent-service' ? entry.binary : 'opencode';
+      const looksLikeExpected = image?.toLowerCase().includes(path.basename(expected ?? 'opencode').toLowerCase()) ?? false;
+      if (looksLikeExpected && ownerGone) {
         await killOrphan(entry.pid);
-        log?.(`[lifecycle] reaped orphaned OpenCode pid ${entry.pid} (owner ${entry.ownerPid} gone)`);
+        log?.(`[lifecycle] reaped orphaned managed pid ${entry.pid} (owner ${entry.ownerPid} gone)`);
         return true;
       }
       return false;
@@ -249,9 +265,10 @@ export const createManagedProcessRegistry = ({ fs = fsp, execFileAsync = default
 
     const orphaned = info.ppid === 1 || ownerGone;
     if (!orphaned) return false; // still owned by a live instance
+    if (entry.kind === 'agent-service' && await readBirthIdentity(entry.pid) !== entry.birthIdentity) return false;
 
     await killOrphan(entry.pid);
-    log?.(`[lifecycle] reaped orphaned OpenCode pid ${entry.pid} (reparented/owner gone)`);
+    log?.(`[lifecycle] reaped orphaned managed pid ${entry.pid} (reparented/owner gone)`);
     return true;
   };
 

@@ -81,6 +81,16 @@
         "src/**/*.ts"
       ]
     },
+    "packages/agent-service": {
+      "entry": [
+        "src/worker/index.ts",
+        "scripts/*.mjs"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "scripts/*.mjs"
+      ]
+    },
     "packages/mobile": {
       "entry": [
         "scripts/**/*.{js,cjs,mjs,ts}"

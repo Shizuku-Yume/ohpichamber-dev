@@ -12,3 +12,4 @@ export * from './catalogs.ts';
 export * from './shell.ts';
 export * from './completion.ts';
 export * from './events.ts';
+export * from './runtime.ts';

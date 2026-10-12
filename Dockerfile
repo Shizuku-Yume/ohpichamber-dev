@@ -6,12 +6,14 @@ FROM base AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY bun-patches ./bun-patches
+COPY vendor/omp/c9de2b02 ./vendor/omp/c9de2b02
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/web/package.json ./packages/web/
 COPY packages/electron/package.json ./packages/electron/
 COPY packages/mobile/package.json ./packages/mobile/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/agent-contract/package.json ./packages/agent-contract/
+COPY packages/agent-service/package.json ./packages/agent-service/
 RUN bun install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
@@ -21,6 +23,8 @@ COPY . .
 # --ignore-scripts, so the root postinstall never built it. Build it here
 # so the runtime stage can copy the output.
 RUN bun run --cwd packages/sdk build
+RUN bun run --cwd packages/agent-contract build
+RUN bun run --cwd packages/agent-service build
 RUN bun run build:web
 
 FROM oven/bun:1.4.2 AS runtime
@@ -71,6 +75,10 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/packages/web/package.json ./packages/web/package.json
 COPY --from=builder /app/packages/sdk/package.json ./packages/sdk/package.json
 COPY --from=builder /app/packages/sdk/dist ./packages/sdk/dist
+COPY --from=builder /app/packages/agent-contract/package.json ./packages/agent-contract/package.json
+COPY --from=builder /app/packages/agent-contract/dist ./packages/agent-contract/dist
+COPY --from=builder /app/packages/agent-service/package.json ./packages/agent-service/package.json
+COPY --from=builder /app/packages/agent-service/dist ./packages/agent-service/dist
 COPY --from=builder /app/packages/web/bin ./packages/web/bin
 COPY --from=builder /app/packages/web/server ./packages/web/server
 COPY --from=builder /app/packages/web/dist ./packages/web/dist

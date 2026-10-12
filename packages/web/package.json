@@ -31,6 +31,7 @@
     "@clack/prompts": "^1.1.0",
     "@gitbeaker/rest": "43.8.0",
     "@octokit/rest": "^22.0.1",
+    "@openchamber/agent-contract": "workspace:*",
     "@openchamber/sdk": "workspace:*",
     "@opencode/client": "2.0.25",
     "@opencode/schema": "2.0.25",
