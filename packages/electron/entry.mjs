@@ -10,6 +10,7 @@
 
 import { app, protocol } from 'electron';
 import path from 'node:path';
+import { enableMainProcessCompileCache } from './compile-cache.mjs';
 import { shouldIgnoreLoopbackConnectionLimit } from './startup-url-selection.mjs';
 import {
   APP_USER_MODEL_ID,
@@ -42,17 +43,22 @@ const userDataOverride = String(process.env.OPENCHAMBER_DESKTOP_USER_DATA_DIR ||
 if (userDataOverride) {
   app.setPath('userData', userDataOverride);
 }
+// After the userData path is final, before main.mjs and the server load.
+enableMainProcessCompileCache({ packaged: app.isPackaged, userDataDir: app.getPath('userData') });
 app.setAppUserModelId(APP_USER_MODEL_ID);
-app.commandLine.appendSwitch('proxy-bypass-list', '<-loopback>');
+// Resolve preview names in Chromium, not through the configured proxy.
+app.commandLine.appendSwitch('proxy-bypass-list', '<-loopback>;openchamber-preview.localhost');
 // Lift Chromium's per-host cap only for bundled UI. Applying this to Vite HMR
 // lets the renderer request most of the module graph at once, overwhelming the
 // dev server's transform pipeline and leaving the HTML splash visible for up
 // to a minute before React mounts.
+// Keep localhost out: Electron also matches its subdomains, including the
+// browser panel's forwarded previews.
 if (shouldIgnoreLoopbackConnectionLimit({
   development: isDev,
   packagedUi: process.env.OPENCHAMBER_ELECTRON_USE_BUNDLED_UI === '1',
 })) {
-  app.commandLine.appendSwitch('ignore-connections-limit', '127.0.0.1,localhost');
+  app.commandLine.appendSwitch('ignore-connections-limit', '127.0.0.1');
 }
 protocol.registerSchemesAsPrivileged([
   {

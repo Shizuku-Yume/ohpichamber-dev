@@ -7,12 +7,14 @@ This module provides notification message preparation utilities for the web serv
 - `packages/web/server/lib/notifications/index.js`: public entrypoint imported by `packages/web/server/index.js`.
 - `packages/web/server/lib/notifications/routes.js`: route registration for push, visibility, and session status/attention endpoints.
 - `packages/web/server/lib/notifications/push-runtime.js`: push subscription persistence, VAPID initialization, and UI visibility runtime.
-- `packages/web/server/lib/notifications/apns-runtime.js`: native iOS APNs device-token persistence + delivery. Two modes: **relay** (default — sign + POST tokens + generic text to the central Cloudflare relay `https://api.openchamber.dev/v1/push/send`, which holds the single project APNs key) and **direct** (fallback — sign ES256 JWT with Node crypto + HTTP/2, when `OPENCHAMBER_PUSH_RELAY_DISABLED=true`). Each server has an auto-generated ECDSA P-256 keypair (`getOrCreateRelayKeypair`, persisted in settings); it binds tokens on the relay (`/v1/push/register-token`) and signs every relay request, so the relay only delivers to tokens bound to that server. APNs is the native app's sole notification channel (no local notifications) and is NOT gated on UI visibility — iOS suppresses the foreground banner instead. Mobile push carries only generic text (scenario title + session name) — see `APNS.md`.
+- `packages/web/server/lib/notifications/apns-runtime.js`: native APNs/FCM token persistence and delivery. Relay mode signs requests through the shared host `relayKeyStore`; it does not create a signing keypair in notification settings. Direct APNs delivery uses ES256 and HTTP/2 when `OPENCHAMBER_PUSH_RELAY_DISABLED=true`. Native delivery is not gated on UI visibility; iOS suppresses foreground banners. A registered device `pushKey` seals notification text, while legacy registrations receive generic text. See `APNS.md`.
 - `packages/web/server/lib/notifications/emitter-runtime.js`: desktop/stdout + UI SSE notification emission runtime.
 - `packages/web/server/lib/notifications/runtime.js`: trigger runtime for OpenCode event-driven notification fanout.
 - `packages/web/server/lib/notifications/template-runtime.js`: notification template variables and session text/title enrichment runtime. Zen-model helpers are retained as compatibility stubs only.
 - `packages/web/server/lib/notifications/message.js`: helper implementation module.
 - `packages/web/server/lib/notifications/message.test.js`: unit tests for notification message helpers.
+- `packages/web/server/lib/notifications/push-seal.js`: end-to-end sealing of native push text. A phone that registers with a `pushKey` (32 bytes, base64; made on device) gets each notification's title and body encrypted with AES-256-GCM; the push relay, Apple and Google carry only a generic title and the ciphertext in `data.enc`.
+- `packages/web/server/lib/notifications/session-key.js`: the key both push stores group registrations under, a `sha256:` hash of the UI session token, never the token itself. Older un-hashed files are migrated on first read.
 
 ## Public exports
 
@@ -65,9 +67,9 @@ This module provides notification message preparation utilities for the web serv
   - `isUiVisible(token)`
 
 ### APNs runtime API (apns-runtime.js)
-- `createApnsRuntime(dependencies)`: creates runtime for native iOS APNs push and device-token state. Dependencies: `fsPromises`, `path`, `crypto`, `http2`, `APNS_TOKENS_FILE_PATH`, `readSettingsFromDiskMigrated`, `writeSettingsToDisk` (persists the auto-generated relay signing keypair).
+- `createApnsRuntime(dependencies)` creates native APNs/device-token persistence and delivery. It receives `fsPromises`, `path`, `crypto`, `http2`, `APNS_TOKENS_FILE_PATH`, `readSettingsFromDiskMigrated`, and the host-owned `relayKeyStore`. Push and private relay share that signing store and server identity; do not create a separate key in notification settings.
 - Returned API:
-  - `addOrUpdateApnsToken(uiSessionToken, deviceToken, userAgent, platform, environment)` — also binds a newly-seen token on the relay (signed `/v1/push/register-token`). `environment` is the APNs environment the token was minted for (`sandbox` for Xcode/dev-signed installs, `production` otherwise — reported by the client at registration); delivery groups tokens by it.
+  - `addOrUpdateApnsToken(uiSessionToken, deviceToken, userAgent, platform, environment, pushKey?)` persists the registration and binds a newly seen token on the relay. `environment` is `sandbox` or `production`, defaulting to production for older registrations. A valid 32-byte base64 `pushKey` enables AES-256-GCM sealing; invalid keys are discarded, keeping legacy unsealed delivery.
   - `removeApnsToken(uiSessionToken, deviceToken)`
   - `removeApnsTokenFromAllSessions(deviceToken)`
   - `sendApnsToAllUiSessions(payload)` — signs + sends to all registered tokens (no UI-visibility gate; iOS suppresses the foreground banner). No-ops with a single warning when APNs is unconfigured. Drops tokens on `410` / `BadDeviceToken` / `Unregistered`.

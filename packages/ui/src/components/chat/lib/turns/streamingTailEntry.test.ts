@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, Part } from '@opencode-ai/sdk/v2';
+import type { Message, Part } from '@/lib/opencode/model';
 
 import { buildLiveStreamingEntry, type StreamingTailEntry } from './streamingTailEntry';
 import type { ChatMessageEntry, TurnRecord } from './types';
@@ -19,13 +19,6 @@ const textPart = (id: string, text: string): Part => ({
     id,
     type: 'text',
     text,
-} as Part);
-
-const syntheticTextPart = (id: string, text: string): Part => ({
-    id,
-    type: 'text',
-    text,
-    synthetic: true,
 } as Part);
 
 const reasoningPart = (id: string, text: string): Part => ({
@@ -115,10 +108,13 @@ describe('buildLiveStreamingEntry', () => {
         const stale = message('assistant_1', 'assistant', 'user_1', [textPart('part_1', 'old')]);
         const entry = turnEntry(stale);
         const visible = textPart('part_visible', 'visible');
-        const synthetic = syntheticTextPart('part_synthetic', 'hidden while streaming');
+        // v2 has no synthetic parts; a malformed record is what normalization
+        // drops. SAFETY: the double assertion is the point — this fixture
+        // stands for a part the server sent without a `type`.
+        const malformed = { id: 'part_broken' } as unknown as Part;
 
         const next = buildLiveStreamingEntry(entry, {
-            livePartsByMessageId: { assistant_1: [synthetic, visible] },
+            livePartsByMessageId: { assistant_1: [malformed, visible] },
             showTextJustificationActivity: true,
             showTurnChangedFiles: false,
         });
@@ -161,5 +157,26 @@ describe('buildLiveStreamingEntry', () => {
         });
 
         expect(next).toBe(entry);
+    });
+});
+
+describe('buildLiveStreamingEntry reuse across publishes', () => {
+    const options = (liveParts: Part[]) => ({
+        livePartsByMessageId: { asst_1: liveParts },
+        showTextJustificationActivity: false,
+        showTurnChangedFiles: false,
+    });
+
+    test('an unchanged record and live parts normalize to the same message object', () => {
+        const record = message('asst_1', 'assistant', 'user_1', [textPart('p1', 'old')]);
+        const entry: StreamingTailEntry = { kind: 'ungrouped', key: 'asst_1', message: record };
+        const liveParts = [textPart('p1', 'new text')];
+
+        const first = buildLiveStreamingEntry(entry, options(liveParts));
+        const second = buildLiveStreamingEntry(entry, options(liveParts));
+        expect(first.kind === 'ungrouped' && second.kind === 'ungrouped' && first.message === second.message).toBe(true);
+
+        const changed = buildLiveStreamingEntry(entry, options([textPart('p1', 'newer text')]));
+        expect(changed.kind === 'ungrouped' && first.kind === 'ungrouped' && changed.message !== first.message).toBe(true);
     });
 });

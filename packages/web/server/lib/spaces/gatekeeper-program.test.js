@@ -4,13 +4,14 @@
 // The corridor refuses every address that leads back to a machine, so a tunnel that really
 // carries bytes cannot be tested from here. The escape suite does that inside real containers.
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
-import { readFileSync } from 'node:fs';
+import fs, { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -268,13 +269,13 @@ describe('gatekeeper program', () => {
 
   describe('corridor, in allowlist mode', () => {
     beforeAll(async () => {
-      expect((await control('POST', '/network', { mode: 'allowlist', domains: ['example.com', 'blocked.test'] })).status).toBe(200);
+      expect((await control('POST', '/network', { mode: 'allowlist', domains: ['example.com', 'blocked.invalid'] })).status).toBe(200);
     });
 
     it('resolves a name itself, and refuses it when nothing comes back', async () => {
-      // `.test` never resolves. The list rules are covered directly, further down.
-      expect((await tunnelTo('blocked.test:443')).status).toMatch(/403/);
-      expect(await decisionFor('blocked.test')).toMatchObject({ listener: 'corridor', port: 443, decision: expect.stringMatching(/^deny:unresolved:/) });
+      // `.invalid` is reserved for negative resolution. `.test` may resolve locally.
+      expect((await tunnelTo('blocked.invalid:443')).status).toMatch(/403/);
+      expect(await decisionFor('blocked.invalid')).toMatchObject({ listener: 'corridor', port: 443, decision: expect.stringMatching(/^deny:unresolved:/) });
     });
 
     it('refuses a name that is not on the list, with no suffix or wildcard matching', async () => {
@@ -312,7 +313,7 @@ describe('gatekeeper program', () => {
       // the user's internal DNS from inside, and the mode it is in from the other reasons.
       const anAddress = await connectFully('CONNECT 203.0.113.7:443 HTTP/1.1');
       const notOnTheList = await connectFully('CONNECT some.example.org:443 HTTP/1.1');
-      const doesNotResolve = await connectFully('CONNECT blocked.test:443 HTTP/1.1');
+      const doesNotResolve = await connectFully('CONNECT blocked.invalid:443 HTTP/1.1');
 
       for (const answer of [anAddress, notOnTheList, doesNotResolve]) {
         expect(answer).toMatch(/^HTTP\/1\.1 403 /);
@@ -324,7 +325,7 @@ describe('gatekeeper program', () => {
         expect(anAddress + notOnTheList + doesNotResolve).not.toContain(leak);
       }
       // And the journal still holds the reason, which is where the user reads it.
-      expect((await decisionFor('blocked.test')).decision).toMatch(/^deny:unresolved:/);
+      expect((await decisionFor('blocked.invalid')).decision).toMatch(/^deny:unresolved:/);
     });
 
     it('resolves the name itself before it decides anything about the address', async () => {
@@ -333,21 +334,21 @@ describe('gatekeeper program', () => {
       // against the rules directly. The join, a public name that resolves to 127.0.0.1, needs a
       // resolver that answers, so it lives in the escape suite with `localtest.me`.
       const at = await journalMark();
-      await tunnelTo('blocked.test:443');
-      expect(await decisionFor('blocked.test', at)).toMatchObject({ decision: expect.stringMatching(/^deny:unresolved:/) });
+      await tunnelTo('blocked.invalid:443');
+      expect(await decisionFor('blocked.invalid', at)).toMatchObject({ decision: expect.stringMatching(/^deny:unresolved:/) });
     });
 
     it('allows port 443 only here too, so a space can attack nothing else from the user\'s address', async () => {
-      // `.test` never resolves, so 443 comes back as the decision after the name and port rules
+      // `.invalid` fails resolution after the name and port rules
       // have passed. Every other port is refused before any of that.
       const at = await journalMark();
-      await tunnelTo('blocked.test:443');
-      expect(await decisionFor('blocked.test', at)).toMatchObject({ port: 443, decision: expect.stringMatching(/^deny:unresolved:/) });
+      await tunnelTo('blocked.invalid:443');
+      expect(await decisionFor('blocked.invalid', at)).toMatchObject({ port: 443, decision: expect.stringMatching(/^deny:unresolved:/) });
 
       for (const port of [80, 22, 8443, 9418]) {
         const when = await journalMark();
-        expect((await tunnelTo(`blocked.test:${port}`)).status).toMatch(/403/);
-        expect(await decisionFor('blocked.test', when)).toMatchObject({ port, decision: 'deny:port' });
+        expect((await tunnelTo(`blocked.invalid:${port}`)).status).toMatch(/403/);
+        expect(await decisionFor('blocked.invalid', when)).toMatchObject({ port, decision: 'deny:port' });
       }
     });
 
@@ -748,6 +749,28 @@ describe('gatekeeper program', () => {
       expect(answer.body).not.toContain(SECRET);
     });
 
+    it('adds no header for a grant without a secret, and still takes away what the space sent', async () => {
+      expect((await control('POST', '/grants', { id: 'open-registry', upstream: `http://127.0.0.1:${upstreamPort}/npm` })).status).toBe(200);
+      const answer = await throughWindow('/model/open-registry/-/package/left-pad', {
+        authorization: 'Bearer sk-fake-inside',
+        'x-api-key': 'sk-fake-inside',
+        'x-keep-me': 'yes',
+      });
+      expect(answer.status).toBe(200);
+      const request = seen.at(-1);
+      expect(request.url).toBe('/npm/-/package/left-pad');
+      expect(request.headers.authorization).toBeUndefined();
+      expect(request.headers['x-api-key']).toBeUndefined();
+      expect(request.headers['x-keep-me']).toBe('yes');
+      expect(Object.keys(request.headers).some((name) => /key|auth|token/i.test(name))).toBe(false);
+    });
+
+    it('takes the grant\'s own header name away too, so a placeholder the space sends never reaches the upstream', async () => {
+      expect((await control('POST', '/grants', { id: 'google', upstream: `http://127.0.0.1:${upstreamPort}/v1`, header: 'X-Goog-Api-Key', secret: SECRET })).status).toBe(200);
+      await throughWindow('/model/google/models', { 'X-Goog-Api-Key': 'space-window' });
+      expect(seen.at(-1).headers['x-goog-api-key']).toBe(SECRET);
+    });
+
     it('sends a bearer token for an OpenAI-style grant', async () => {
       await throughWindow('/model/openai/responses');
       expect(seen.at(-1).headers.authorization).toBe(`Bearer ${SECRET}`);
@@ -873,7 +896,9 @@ describe('gatekeeper program', () => {
       ['a numeric last label on the allowlist', '/network', { mode: 'allowlist', domains: ['1.1.1'] }],
       ['a hex last label on the allowlist', '/network', { mode: 'allowlist', domains: ['a.com.0x2'] }],
       ['a single-label name on the allowlist', '/network', { mode: 'allowlist', domains: ['localhost'] }],
-      ['a grant without a secret', '/grants', { id: 'x', upstream: 'https://api.example.com', header: 'authorization' }],
+      ['a grant with a header and no secret', '/grants', { id: 'x', upstream: 'https://api.example.com', header: 'authorization' }],
+      ['a grant with a secret and no header', '/grants', { id: 'x', upstream: 'https://api.example.com', secret: SECRET }],
+      ['a grant with an empty secret', '/grants', { id: 'x', upstream: 'https://api.example.com', header: 'authorization', secret: '' }],
       ['a grant with an id that is not one', '/grants', { id: '../../etc', upstream: 'https://api.example.com', header: 'authorization', secret: SECRET }],
       ['a grant with a header name that is not one', '/grants', { id: 'x', upstream: 'https://api.example.com', header: 'a: b', secret: SECRET }],
       ['a grant whose upstream is not a URL', '/grants', { id: 'x', upstream: 'not a url', header: 'authorization', secret: SECRET }],
@@ -883,24 +908,20 @@ describe('gatekeeper program', () => {
       expect(answer.status).toBe(400);
     });
 
+    it('says what it holds: the mode, the names and the grant ids, and never a secret', async () => {
+      expect((await control('POST', '/network', { mode: 'allowlist', domains: ['Example.com.', 'example.org'] })).status).toBe(200);
+      const policy = JSON.parse((await control('GET', '/policy')).body);
+      expect(policy).toMatchObject({ mode: 'allowlist', domains: ['example.com', 'example.org'] });
+      expect(policy.grants).toEqual(expect.arrayContaining(['anthropic', 'openai']));
+      expect(JSON.stringify(policy)).not.toContain(SECRET);
+    });
+
     it('answers 404 for anything else and 400 for a body that is not JSON', async () => {
       expect((await control('GET', '/grants')).status).toBe(404);
       expect((await control('POST', '/anything')).status).toBe(404);
       expect((await control('POST', '/network')).status).toBe(400);
       expect((await control('GET', '/health')).status).toBe(200);
     });
-
-    it('records a connection that was allowed and did not happen, apart from a refusal', async () => {
-      // 198.51.100.0/24 is documentation space: allowed by every rule here, and nothing answers.
-      // The corridor's own connect timeout ends it, so this waits for the record, not the socket.
-      await control('POST', '/network', { mode: 'open', domains: [] });
-      const at = await journalMark();
-      connect('CONNECT one.example.test:443 HTTP/1.1', { keepOpen: true, wait: 500 });
-      const decision = await decisionFor('one.example.test', at);
-      // It never resolves here, so what is recorded is the refusal that follows the name rules.
-      // The failure record is covered where a host does resolve: the escape suite.
-      expect(decision.decision).toMatch(/^deny:unresolved:/);
-    }, 30_000);
 
     it('keeps the journal readable however long the space makes its request targets', async () => {
       // A plain proxy request carries its target in the request line, up to the 16 KiB header cap.
@@ -958,6 +979,9 @@ describe('gatekeeper program', () => {
       const after = await journal();
       expect(after.records).toHaveLength(500);
       expect(after.dropped).toBeGreaterThan(before.dropped);
+      // Since when it records: its own start, as an instant, so the host can say that nothing older exists.
+      expect(after.since).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      expect(after.since).toBe(before.since);
       // The oldest records went, the newest stayed.
       expect(after.records.at(-1).host).toBe('blocked.test');
     }, 60_000);
@@ -1337,6 +1361,85 @@ describe('the rules of the gatekeeper program', () => {
         expect(rules.splitTarget(target)).toBe(null);
       },
     );
+  });
+});
+
+describe('the gatekeeper program and its bind address', () => {
+  const folders = [];
+  afterAll(() => { for (const folder of folders) fs.rmSync(folder, { recursive: true, force: true }); });
+
+  /** Starts the program with `bind` as its first argument and waits for it to listen or to leave. */
+  const startWith = (bind, ports = ['0', '0', '0']) => new Promise((resolve) => {
+    const child = spawn(process.execPath, [PROGRAM, bind, ...ports.map(String)], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    const finish = (outcome) => { resolve({ ...outcome, output, stop: () => child.kill() }); };
+    child.stdout.on('data', (chunk) => { output += chunk; if (output.includes('gatekeeper: corridor')) finish({ exited: null }); });
+    child.stderr.on('data', (chunk) => { output += chunk; });
+    child.on('exit', (code) => finish({ exited: code }));
+  });
+
+  /** One TCP connect: `connected` or the error code. */
+  const tryConnect = (host, port) => new Promise((resolve) => {
+    const socket = net.connect({ host, port });
+    socket.setTimeout(3000, () => { socket.destroy(); resolve('timeout'); });
+    socket.on('connect', () => { socket.destroy(); resolve('connected'); });
+    socket.on('error', (error) => resolve(error.code));
+  });
+
+  it('listens on the address the file beside it holds, and on nothing else', async () => {
+    const other = ownAddress();
+    // Without a second address of this machine there is nothing to be refused on.
+    expect(other, 'this machine has no address but loopback').not.toBe('127.0.0.1');
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-gatekeeper-bind-'));
+    folders.push(folder);
+    const file = path.join(folder, 'bind');
+    fs.writeFileSync(file, '127.0.0.1\n');
+    const ports = [await freePort(), await freePort(), await freePort()];
+    const started = await startWith(file, ports);
+    try {
+      expect(started.exited).toBeNull();
+      // Positive control: the address in the file answers on both listeners the space uses.
+      expect(await tryConnect('127.0.0.1', ports[0])).toBe('connected');
+      expect(await tryConnect('127.0.0.1', ports[1])).toBe('connected');
+      // Another address of the same machine does not: the program did not listen everywhere.
+      expect(await tryConnect(other, ports[0])).toBe('ECONNREFUSED');
+      expect(await tryConnect(other, ports[1])).toBe('ECONNREFUSED');
+    } finally {
+      started.stop();
+    }
+  });
+
+  it('reads no bind file when it is required rather than run, whatever the runner\'s arguments are', () => {
+    // `node -e` puts its own arguments from argv[1], so the path lands where the program reads its bind argument.
+    // A runner whose first argument is a path would otherwise have its file read, and a
+    // missing one would end the test process.
+    const required = spawnSync(process.execPath, ['-e', `require(${JSON.stringify(PROGRAM)}); console.log('still here')`, 'runner', '/no/such/bind/file'], { encoding: 'utf8' });
+    expect(required.status).toBe(0);
+    expect(required.stdout).toContain('still here');
+  });
+
+  // A gatekeeper made before stage 5b has `0.0.0.0` in its command rather than the file.
+  it.each(['0.0.0.0', '::', 'gatekeeper'])('does not start when it is told to listen on %j directly', async (bind) => {
+    const started = await startWith(bind);
+    expect(started.exited).toBe(2);
+    expect(started.output).not.toContain('gatekeeper: corridor');
+  });
+
+  it.each([
+    ['is missing', null],
+    ['is empty', ''],
+    ['names every interface', '0.0.0.0'],
+    ['names every IPv6 interface', '::'],
+    ['is not an address', 'gatekeeper'],
+  ])('does not start when the bind file %s', async (title, content) => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-gatekeeper-bind-'));
+    folders.push(folder);
+    const file = path.join(folder, 'bind');
+    if (content !== null) fs.writeFileSync(file, content);
+    const started = await startWith(file);
+    expect(started.exited).toBe(2);
+    expect(started.output).toContain('gatekeeper:');
+    expect(started.output).not.toContain('gatekeeper: corridor');
   });
 });
 

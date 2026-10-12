@@ -122,8 +122,6 @@ Shared contracts must define intentional behavior for every retained surface lis
 
 You and the maintainer are two people solving a problem together — talk like a trusted colleague, not a report generator. Plain words, short sentences, mechanisms explained through what the user experiences. Warm and direct, never familiar. A reply is something read in minutes, not a separate reading task: put the conclusion first and stand behind it. Answer in the language the maintainer addressed you in; code, comments, and docs stay in English.
 
-When writing or editing user-facing text — docs, UI copy, PR/issue comments, READMEs — load `.agents/skills/communication-style/SKILL.md` and apply its checklist.
-
 ## Documentation Discovery
 
 Before changing a module, search for the nearest `DOCUMENTATION.md`; before package-level work, read its `README.md`. Discover docs dynamically under `packages/**/DOCUMENTATION.md` rather than relying on a static exhaustive map.
@@ -138,6 +136,21 @@ High-value anchors:
 - Electron: `packages/electron/README.md`
 - Mobile: `packages/mobile/README.md`
 - SDK: `packages/sdk/DOCUMENTATION.md`
+
+### On-demand references
+
+These are ordinary documents, not skills. Read only the section or topic reference
+for the affected branch; do not bulk-load the six guides or their reference packs.
+
+| Affected branch | Document entrypoint |
+|---|---|
+| Styling, tokens, shared buttons, keyboard navigation or animation; icons or theme authoring use the linked topic | [UI styling](packages/ui/src/lib/theme/STYLING.md) |
+| Settings composition or save feedback; layout, controls and search use the linked topic | [Settings patterns](packages/ui/src/components/sections/PATTERNS.md) |
+| iOS Simulator build/launch, preview, accessibility or interaction | [Mobile simulator workflow](packages/mobile/README.md#ios-simulator-control-and-streaming) |
+| Explicit maintainer request to update release notes; the changelog write gate above still applies | [Release notes authoring](.workflow/references/release-notes.md) |
+| Optional help structuring/pruning skills, agent guidance or context pointers | [Writing for agents](.workflow/references/writing-for-agents.md) |
+| Diagnosing, preserving or retiring inherited OpenCode integration; not new OMP functionality | [Inherited runtime notes](packages/web/server/lib/opencode/RUNTIME_NOTES.md) |
+
 
 ## Project Skills
 
@@ -158,13 +171,9 @@ workflows and checklists, subject to the fork migration precedence above.
 | Isolated-space trust boundaries: hardening, networks and gatekeeper policy, exec and lifecycle, grants and credentials, code transfer and apply, dispatcher isolation, preview content, or protection tests | `isolated-space-boundary` |
 | Render/store/event hot paths, large lists, caches/indexes, or reported lag, freezes, CPU/memory, startup, or performance regressions | `performance-engineering` |
 | WebSocket, SSE, streaming transport, runtime transport internals, or private relay | `relay-transport` |
-| UI components, styling, colors, buttons, or icons | `theme-system` |
+| External conversation-data transfer, non-loopback listeners/tunnels/relay/pairing/share links, provider keys/endpoints, usage reporting, or enterprise policy / `enterprise-mode.js` | `enterprise-boundary` |
 | User-facing or accessible UI text, labels, aria, toasts, dialogs, or navigation copy | `locale-ui-patterns` |
-| Settings UI, settings dialogs, configuration surfaces, or settings search | `settings-ui-patterns` |
 | Sortable or drag-to-reorder behavior, especially `@dnd-kit` and touch/wrapping layouts | `drag-to-reorder` |
-| iOS Simulator build, launch, preview, gestures, or `serve-sim` control | `serve-sim` |
-| The maintainer explicitly asks to update the changelog (main app or VS Code extension) — the only time `changelog/unreleased.md` is edited | `update-changelog` |
-| Creating or editing skills, `AGENTS.md`, or docs reached through agent instructions/context pointers | `writing-for-agents` |
 
 Pure code-reading or explanation does not require implementation skills unless needed to interpret a specialized subsystem.
 
@@ -181,12 +190,12 @@ Keep each cross-cutting rule with one canonical owner; companion skills add only
 | Shared UI API and runtime boundaries | `ui-api-decoupling` |
 | WebSocket/SSE and private relay mechanics | `relay-transport` |
 | Electron native ownership and privilege boundary | `desktop-shell` |
-| UI tokens, primitives, icons, and animation styling | `theme-system` |
-| Settings composition and search behavior | `settings-ui-patterns` |
+| Enterprise egress, exposure, provider entry and telemetry policy | `enterprise-boundary` |
 | User-facing text and localization | `locale-ui-patterns` |
-| Agent-facing document structure and context pointers | `writing-for-agents` |
 
 Before adding guidance to a skill, identify its canonical owner. If another skill owns the rule, add a precise companion pointer and only the local consequence; do not copy the rule.
+
+Module documents own styling and Settings composition/search; the optional authoring reference owns document-structure advice. Route affected branches through the on-demand table rather than restoring skill wrappers or copying their contracts into skills.
 
 ## Validation
 

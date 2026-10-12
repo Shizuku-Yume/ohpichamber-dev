@@ -2,10 +2,12 @@ import React from 'react';
 import { cn, truncatePathMiddle } from '@/lib/utils';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { filterVisibleAgents } from '@/stores/useAgentsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { ProjectFileSearchHit } from '@/lib/opencode/client';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from "@/components/icon/Icon";
@@ -14,13 +16,22 @@ import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
-import { mentionServerQuery, rankFileMentionResults } from './fileMentionResults';
+import { isFileMissingError } from '@/lib/api/files-errors';
+import {
+  filterStaleRecentFiles,
+  mentionServerQuery,
+  rankFileMentionResults,
+} from './fileMentionResults';
 import { matchesRankQuery, rankByQuery } from '@/lib/search/fuzzySearch';
 import { AutocompleteRowTooltip } from './composer/ui/AutocompleteRowTooltip';
+
+/** Subagents listed before the user types; the rest are a keystroke away. */
+const AGENTS_SHOWN_WITHOUT_QUERY = 6;
 
 type FileInfo = ProjectFileSearchHit;
 type AgentInfo = {
   name: string;
+  displayName: string;
   description?: string;
   mode?: string | null;
 };
@@ -63,21 +74,40 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       [projectRoot],
     ),
   );
-  const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
+  const { files: filesApi } = useRuntimeAPIs();
+  const removeUnselectedOpenPath = useFilesViewTabsStore((state) => state.removeUnselectedOpenPath);
+  const [staleRecentPaths, setStaleRecentPaths] = React.useState<ReadonlySet<string>>(() => new Set());
+  const verifiedPathsRef = React.useRef<Set<string>>(new Set());
+  // Subscribed, not read once: the session's directory may still be loading its agents.
+  const configAgents = useConfigStore((state) => state.agents);
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
   const debouncedQuery = useDebouncedValue(searchQuery, 180);
   const showHidden = useDirectoryShowHidden();
   const showGitignored = useFilesViewShowGitignored();
   const [files, setFiles] = React.useState<FileInfo[]>([]);
   const [directories, setDirectories] = React.useState<FileInfo[]>([]);
-  const [agents, setAgents] = React.useState<AgentInfo[]>([]);
+  // Derived, not stored: the subagent list follows the registry, and only the
+  // ranking follows the query, in the same render as the keystroke.
+  const subagents = React.useMemo<AgentInfo[]>(() => filterVisibleAgents(configAgents)
+    .filter((agent) => agent.mode && agent.mode !== 'primary')
+    .map((agent) => ({
+      name: agent.name,
+      displayName: agent.displayName,
+      description: agent.description,
+      mode: agent.mode,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name)), [configAgents]);
+  const agents = React.useMemo(
+    () => rankByQuery(subagents, searchQuery ?? '', (agent) => [agent.name, agent.displayName, agent.description]),
+    [searchQuery, subagents],
+  );
   const [loading, setLoading] = React.useState(false);
   const pendingSearchRef = React.useRef(0);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const selectedIndexRef = React.useRef(0);
   const [marqueeWidth, setMarqueeWidth] = React.useState(360);
-  const [overflowMap, setOverflowMap] = React.useState<Record<number, boolean>>({});
-  const [marqueeDurations, setMarqueeDurations] = React.useState<Record<number, number>>({});
+  // Only the selected row scrolls an overflowing path, so only it is measured.
+  const [selectedOverflow, setSelectedOverflow] = React.useState<{ index: number; duration: number } | null>(null);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const labelRefs = React.useRef<(HTMLSpanElement | null)[]>([]);
   const measureRefs = React.useRef<(HTMLSpanElement | null)[]>([]);
@@ -85,6 +115,18 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const isMobile = useUIStore((state) => state.isMobile);
   const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, true);
   const normalizedSearchQuery = (searchQuery ?? '').trim();
+
+  React.useEffect(() => {
+    setStaleRecentPaths(new Set());
+    verifiedPathsRef.current.clear();
+  }, [projectRoot]);
+
+  React.useEffect(() => {
+    if (currentDirectory) {
+      useFileSearchStore.getState().invalidateDirectory(currentDirectory);
+    }
+  }, [currentDirectory]);
+
   const recentFiles = React.useMemo(() => {
     if (!projectRoot || !projectTabs) {
       return [] as FileInfo[];
@@ -120,11 +162,69 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
 
     return mapped;
   }, [normalizedSearchQuery, projectRoot, projectTabs]);
+
+  const recentCandidatePathsKey = React.useMemo(
+    () => recentFiles.map((file) => file.path).join('\n'),
+    [recentFiles],
+  );
+
+  React.useEffect(() => {
+    if (!projectRoot || !filesApi?.statFile || recentCandidatePathsKey.length === 0) {
+      return;
+    }
+
+    const candidatePaths = recentCandidatePathsKey.split('\n').filter(Boolean);
+    const unverifiedCandidates = candidatePaths.filter((path) => !verifiedPathsRef.current.has(path));
+    if (unverifiedCandidates.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void Promise.all(
+      unverifiedCandidates.map(async (filePath) => {
+        try {
+          const stat = await filesApi.statFile?.(filePath, { directory: projectRoot });
+          if (cancelled) return;
+          verifiedPathsRef.current.add(filePath);
+          if (stat && !stat.isFile) {
+            setStaleRecentPaths((prev) => {
+              if (prev.has(filePath)) return prev;
+              const next = new Set(prev);
+              next.add(filePath);
+              return next;
+            });
+            removeUnselectedOpenPath(projectRoot, filePath);
+          }
+        } catch (error) {
+          if (cancelled) return;
+          verifiedPathsRef.current.add(filePath);
+          if (isFileMissingError(error)) {
+            setStaleRecentPaths((prev) => {
+              if (prev.has(filePath)) return prev;
+              const next = new Set(prev);
+              next.add(filePath);
+              return next;
+            });
+            removeUnselectedOpenPath(projectRoot, filePath);
+          }
+        }
+      }),
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filesApi, projectRoot, recentCandidatePathsKey, removeUnselectedOpenPath]);
+
   const visibleAgents = React.useMemo(
-    () => normalizedSearchQuery.length > 0 ? agents : agents.slice(0, 2),
+    () => normalizedSearchQuery.length > 0 ? agents : agents.slice(0, AGENTS_SHOWN_WITHOUT_QUERY),
     [agents, normalizedSearchQuery.length],
   );
-  const visibleRecentFiles = recentFiles;
+  const visibleRecentFiles = React.useMemo(
+    () => filterStaleRecentFiles(recentFiles, staleRecentPaths),
+    [recentFiles, staleRecentPaths],
+  );
   const visibleResults = React.useMemo(
     () => rankFileMentionResults(files, directories, normalizedSearchQuery, 20),
     [files, directories, normalizedSearchQuery],
@@ -175,7 +275,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           return;
         }
 
-        const recentSet = new Set(recentFiles.map((file) => file.path));
+        const recentSet = new Set(visibleRecentFiles.map((file) => file.path));
         setFiles(hits.filter((hit) => !recentSet.has(hit.path)));
       })
       .catch(() => {
@@ -200,7 +300,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         setLoading(false);
       }
     };
-  }, [currentDirectory, debouncedQuery, recentFiles, searchFiles, showHidden, showGitignored]);
+  }, [currentDirectory, debouncedQuery, visibleRecentFiles, searchFiles, showHidden, showGitignored]);
 
   React.useEffect(() => {
     if (!currentDirectory) {
@@ -254,23 +354,9 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   }, [currentDirectory, debouncedQuery, searchFiles, showHidden, showGitignored]);
 
   React.useEffect(() => {
-    const visibleAgents = getVisibleAgents();
-    const subagents = visibleAgents
-      .filter((agent) => agent.mode && agent.mode !== 'primary')
-      .map((agent) => ({
-        name: agent.name,
-        description: agent.description,
-        mode: agent.mode,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    setAgents(rankByQuery(subagents, searchQuery ?? '', (agent) => [agent.name, agent.description]));
-  }, [getVisibleAgents, searchQuery]);
-
-  React.useEffect(() => {
     setSelectedIndex(0);
-    setOverflowMap({});
-    setMarqueeDurations({});
-  }, [visibleResults, visibleRecentFiles.length, visibleAgents.length]);
+    setSelectedOverflow(null);
+  }, [visibleResults, visibleRecentFiles, visibleAgents.length]);
 
   React.useEffect(() => {
     selectedIndexRef.current = selectedIndex;
@@ -290,24 +376,21 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         cancelAnimationFrame(frameId);
       }
       frameId = requestAnimationFrame(() => {
-        const next: Record<number, boolean> = {};
-        const durations: Record<number, number> = {};
-        labelRefs.current.forEach((node, index) => {
-          if (!node) {
-            return;
-          }
-          const measureNode = measureRefs.current[index];
-          const fullWidth = measureNode?.offsetWidth ?? node.scrollWidth;
-          const overflowPx = Math.max(0, fullWidth - node.clientWidth);
-          const isOverflowing = overflowPx > 8;
-          next[index] = isOverflowing;
-          if (isOverflowing) {
-            const duration = Math.max(0.6, overflowPx / 110);
-            durations[index] = duration;
-          }
+        const node = labelRefs.current[selectedIndex];
+        if (!node) {
+          setSelectedOverflow(null);
+          return;
+        }
+        const measureNode = measureRefs.current[selectedIndex];
+        const fullWidth = measureNode?.offsetWidth ?? node.scrollWidth;
+        const overflowPx = Math.max(0, fullWidth - node.clientWidth);
+        const duration = Math.max(0.6, overflowPx / 110);
+        setSelectedOverflow((current) => {
+          if (overflowPx <= 8) return null;
+          return current?.index === selectedIndex && current.duration === duration
+            ? current
+            : { index: selectedIndex, duration };
         });
-        setOverflowMap(next);
-        setMarqueeDurations(durations);
       });
     };
 
@@ -320,7 +403,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       }
       window.removeEventListener('resize', updateOverflow);
     };
-  }, [visibleResults]);
+  }, [selectedIndex, visibleAgents, visibleRecentFiles, visibleResults]);
 
   React.useEffect(() => {
     const labelNode = labelRefs.current[selectedIndex];
@@ -457,7 +540,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                 </AutocompleteRowTooltip>
               );
             })}
-            {visibleAgents.length === 2 && normalizedSearchQuery.length === 0 && agents.length > 2 && (
+            {visibleAgents.length < agents.length && (
               <div className="px-3 py-1 typography-meta text-muted-foreground">
                 {t('chat.fileMentionAutocomplete.searchMoreAgents')}
               </div>
@@ -470,8 +553,8 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
               const relativePath = file.relativePath || file.name;
               const displayPath = truncatePathMiddle(relativePath, { maxLength: 60 });
               const isSelected = selectedIndex === rowIndex;
-              const isOverflowing = overflowMap[rowIndex] ?? false;
-              const marqueeDuration = marqueeDurations[rowIndex] ?? 2.6;
+              const isOverflowing = selectedOverflow?.index === rowIndex;
+              const marqueeDuration = selectedOverflow?.index === rowIndex ? selectedOverflow.duration : 2.6;
 
               return (
                 <div
@@ -522,8 +605,8 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
               const relativePath = file.relativePath || file.name;
               const displayPath = truncatePathMiddle(relativePath, { maxLength: 60 });
               const isSelected = selectedIndex === rowIndex;
-              const isOverflowing = overflowMap[rowIndex] ?? false;
-              const marqueeDuration = marqueeDurations[rowIndex] ?? 2.6;
+              const isOverflowing = selectedOverflow?.index === rowIndex;
+              const marqueeDuration = selectedOverflow?.index === rowIndex ? selectedOverflow.duration : 2.6;
 
               const item = (
                 <div

@@ -1,6 +1,10 @@
 # Built-in extensions
 
-App-owned extensions live here and use the public `@openchamber/sdk` contract. This directory is not a Bun workspace and adds no runtime dependencies. The build resolves SDK entrypoints from the SDK workspace.
+App-owned extensions live here and use the public `@openchamber/sdk` contract. This directory owns built-in extension manifests and bundles staged to `@openchamber/web/server/built-in-extensions/`. This directory is not a Bun workspace and adds no runtime dependencies. The build resolves SDK entrypoints from the SDK workspace.
+
+### Migration status
+
+Built-in extension packages are retained under the Guest Extension contract (`SCOPE-16.0` in `.workflow/omp-migration/scope.md`). In the pre-M0 baseline, extensions run on Web and Electron surfaces. VS Code extension support is retired scope (`SCOPE-2.3`), and mobile sandboxed iframe support is scheduled for milestone M5.
 
 From the repository root:
 

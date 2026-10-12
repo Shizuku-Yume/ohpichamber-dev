@@ -182,9 +182,9 @@ Stage 0 proved the window and the corridor with fake keys and a fake model serve
 - Activity dots, unread marks, and notifications work for space sessions because their events feed the same watcher. At startup the host asks spaces for their state.
 - The idle timer lives inside the space, so it works while OpenChamber is closed.
 
-### Skills to load
+### Scoped guidance
 
-`openchamber-change-discipline` always. `isolated-space-boundary` for trust-boundary changes in hardening, networks and gatekeeper policy, exec and lifecycle, grants and credentials, code transfer and apply, dispatcher isolation, preview content, or protection tests. `ui-api-decoupling`, `relay-transport`, and `sync-state-invariants` for the dispatcher, sessions, and events. `desktop-shell` for every child process. `theme-system`, `locale-ui-patterns`, and `settings-ui-patterns` for UI. All user-facing text goes through the locale system in every supported language.
+`openchamber-change-discipline` for changes. `isolated-space-boundary` for trust-boundary changes in hardening, networks and gatekeeper policy, exec and lifecycle, grants and credentials, code transfer and apply, dispatcher isolation, preview content, or protection tests. `ui-api-decoupling`, `relay-transport`, and `sync-state-invariants` for the dispatcher, sessions, and events. `desktop-shell` for native child processes. UI styling belongs to [STYLING.md](../../packages/ui/src/lib/theme/STYLING.md); Settings composition/search belongs to [PATTERNS.md](../../packages/ui/src/components/sections/PATTERNS.md). Consult only their affected topic sections. User-facing text follows `locale-ui-patterns` in every supported language; egress/exposure or enterprise-policy changes use `enterprise-boundary`.
 
 ## Later
 

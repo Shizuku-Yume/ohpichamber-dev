@@ -15,7 +15,7 @@ Before editing behavior a user can reach, write the surface list from `ui-api-de
 
 ## Runtime Boundary
 
-- Electron boots `@openchamber/web` in the same Node process and loads the UI over loopback. Do not introduce a sidecar server process.
+- Electron boots `@openchamber/web` in the same Node process and loads the UI over loopback. Do not introduce a sidecar server process for the host (the target Bun Agent Service runs as a separate service process; the sidecar prohibition applies to the host gateway).
 - Keep renderer contracts and domain logic in `packages/ui`, server behavior in `packages/web`, and Electron focused on inherently native behavior: windows, menus, dialogs, notifications, updater, deep links, runtime host switching, privileged IPC, SSH, and tunnel lifecycle.
 - Electron is the desktop release target.
 

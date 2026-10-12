@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { Message, Part, SessionStatus } from "@opencode-ai/sdk/v2/client"
-import type { Session } from "@opencode-ai/sdk/v2"
+import type { Message, Part, Session, SessionStatus } from "@/lib/opencode/model"
 import { getReconnectCandidateSessionIds, mergeBootstrapSessions } from "./reconnect-recovery"
 
 function createSession(id: string, overrides: Partial<Session> = {}): Session {
@@ -48,12 +47,25 @@ describe("getReconnectCandidateSessionIds", () => {
   test("closed historical children do not trigger parent recovery or a history scan", () => {
     let parentReads = 0
     const session: Session[] = Array.from({ length: 15_000 }, (_, index) => ({
-      id: `session-${index}`, slug: `session-${index}`, projectID: "project", directory: "/repo",
-      title: "Historical session", version: "1", time: { created: 1, updated: 1 },
+      id: `session-${index}`, projectID: "project", directory: "/repo",
+      title: "Historical session", time: { created: 1, updated: 1 }, cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
       get parentID() { parentReads += 1; return `parent-${index}` },
     }))
     expect(getReconnectCandidateSessionIds({ session, session_status: {}, message: {} })).toEqual([])
     expect(parentReads).toBe(0)
+  })
+
+  test("still recovers an incomplete turn when a plumbing message trails it", () => {
+    const synthetic = { id: "s-1", sessionID: "incomplete", role: "synthetic", time: { created: 2 }, text: "plugin prompt" } as unknown as Message
+
+    expect(getReconnectCandidateSessionIds({
+      session: [createSession("incomplete")],
+      session_status: { incomplete: { type: "idle" } as SessionStatus },
+      message: {
+        incomplete: [createAssistantMessage("m-1", "incomplete"), synthetic],
+      },
+    })).toContain("incomplete")
   })
 
   test("includes the currently viewed session even when it looks idle and complete", () => {
@@ -166,5 +178,42 @@ describe("mergeBootstrapSessions", () => {
       sessions: [],
       rootCount: 0,
     })
+  })
+})
+
+describe("mergeBootstrapSessions over a persisted list", () => {
+  test("drops sessions deleted elsewhere and keeps references of unchanged ones", () => {
+    const kept = createSession("a-kept")
+    const renamed = createSession("b-renamed")
+    const deleted = createSession("c-deleted")
+    const persisted = [kept, renamed, deleted]
+    const fetchedKept = createSession("a-kept")
+    const fetchedRenamed = createSession("b-renamed", { title: "New title", time: { created: 1, updated: 2 } })
+    const created = createSession("d-created")
+
+    const { sessions, rootCount } = mergeBootstrapSessions(
+      [fetchedKept, fetchedRenamed, created],
+      [fetchedKept, fetchedRenamed, created],
+      persisted,
+    )
+
+    expect(sessions.map((session) => session.id)).toEqual(["a-kept", "b-renamed", "d-created"])
+    expect(sessions[0]).toBe(kept)
+    expect(sessions[1]).toBe(fetchedRenamed)
+    expect(rootCount).toBe(3)
+  })
+
+  test("returns the cached list itself when nothing changed", () => {
+    const persisted = [createSession("a"), createSession("b")]
+    const fetched = [createSession("a"), createSession("b")]
+
+    expect(mergeBootstrapSessions(fetched, fetched, persisted).sessions).toBe(persisted)
+  })
+
+  test("a field change under the same update time still replaces the record", () => {
+    const persisted = [createSession("a")]
+    const fetched = [createSession("a", { title: "Renamed elsewhere" })]
+
+    expect(mergeBootstrapSessions(fetched, fetched, persisted).sessions[0]).toBe(fetched[0])
   })
 })

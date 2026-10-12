@@ -5,11 +5,11 @@ description: "Use when changing isolated-space trust boundaries: container harde
 
 # Isolated Space Boundary
 
-Treat the agent inside a space as hostile. A restriction must hold even when the agent changes its own files, environment, tools and server responses. The agreed guarantees belong to `docs/isolated-spaces/DESIGN.md`; this skill guides changes to their enforcement and evidence.
+Treat the agent inside a space as hostile. A restriction must hold even when the agent changes its own files, environment, tools and server responses. Read the inherited guarantees in `.workflow/isolated-spaces/DESIGN.md` under the OMP scope hierarchy; the local module documentation owns implemented enforcement and limits. This skill guides their evidence.
 
 ## Read The Owning Contract
 
-Read *The boundary rule* in `docs/isolated-spaces/DESIGN.md`, the relevant stage and carried obligations in `docs/isolated-spaces/STAGES.md`, and the evidence rule and applicable escape checks in `docs/isolated-spaces/TESTING.md`.
+Read *The boundary rule* in `.workflow/isolated-spaces/DESIGN.md`, the relevant stage and carried obligations in `.workflow/isolated-spaces/STAGES.md`, and the evidence rule and applicable escape checks in `.workflow/isolated-spaces/TESTING.md`.
 
 Then load the branch-specific context before editing:
 
@@ -19,7 +19,7 @@ Then load the branch-specific context before editing:
 | Corridor, window, control or journal | The matching section under *The gatekeeper* in the module documentation, including *Known limits* |
 | Exec requests, server token or responses from inside | The module documentation, *Token*, *The exec channel* and *Process rules* |
 | Grants or credentials | DESIGN.md, *Words* and *Gatekeeper*; the module documentation, *Window* and *Control*; STAGES.md's obligation on the first real credential |
-| Code transfer or apply | DESIGN.md, *Code in and out*, and `docs/isolated-spaces/stage-0/e4-git-over-exec.md` |
+| Code transfer or apply | DESIGN.md, *Code in and out*, and `.workflow/isolated-spaces/stage-0/e4-git-over-exec.md` |
 | Dispatcher, session identity or preview content | DESIGN.md, *Dispatcher, sessions, events*, and the nearest documentation for the changed route, transport or state owner |
 
 `openchamber-change-discipline` owns change scope and validation risk. Follow `desktop-shell` for child processes. Dispatcher and event changes also use `ui-api-decoupling`, `relay-transport` and `sync-state-invariants` for their respective contracts.

@@ -1,5 +1,5 @@
-import type { SessionStatus, Message, Part } from "@opencode-ai/sdk/v2/client"
-import type { Session } from "@opencode-ai/sdk/v2"
+import type { Message, Part, Session, SessionStatus } from "@/lib/opencode/model"
+import { getLastConversationMessage, isIncompleteAssistantTurn } from "@/lib/opencode/model"
 import { getSessionMaterializationStatus } from "./materialization"
 
 type ReconnectMaterializationState = {
@@ -25,8 +25,11 @@ type BootstrapSessionRevisionOptions = {
   deletedRevision?: Record<string, number>
 }
 
-const getParentId = (session: Session): string | null | undefined => (
-  (session as Session & { parentID?: string | null }).parentID
+const getParentId = (session: Session): string | undefined => session.parentID
+
+const isSameSession = (left: Session, right: Session): boolean => (
+  left === right
+  || (left.time?.updated === right.time?.updated && JSON.stringify(left) === JSON.stringify(right))
 )
 
 const includeAncestorSessions = (
@@ -87,10 +90,21 @@ export function mergeBootstrapSessions(
     includeAncestorSessions(pendingParentIds, includedIds, sessionsById, deletedIds)
   }
 
-  const sessions = [...includedIds]
+  const existingById = new Map(existingSessions.map((session) => [session.id, session]))
+  const merged = [...includedIds]
     .map((id) => sessionsById.get(id))
     .filter((session): session is Session => Boolean(session))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    // An unchanged record keeps its reference, so rows that did not change
+    // do not re-render when the authoritative list replaces the cached one.
+    .map((session) => {
+      const existing = existingById.get(session.id)
+      return existing && isSameSession(existing, session) ? existing : session
+    })
+  const sessions = merged.length === existingSessions.length
+    && merged.every((session, index) => session === existingSessions[index])
+    ? existingSessions
+    : merged
   const rootCount = sessions.reduce((count, session) => (
     getParentId(session) ? count : count + 1
   ), 0)
@@ -106,12 +120,11 @@ export function getReconnectCandidateSessionIds(state: ReconnectMaterializationS
   }
 
   for (const [sessionId, messages] of Object.entries(state.message ?? {})) {
-    const lastMessage = messages[messages.length - 1]
-    if (
-      lastMessage
-      && lastMessage.role === "assistant"
-      && lastMessage.time.completed == null
-    ) {
+    // Plumbing roles (synthetic, skill, shell, switches) can trail a still
+    // streaming assistant message, so recovery looks at the last
+    // conversation message rather than the last record.
+    const lastMessage = getLastConversationMessage(messages)
+    if (isIncompleteAssistantTurn(lastMessage)) {
       ids.add(sessionId)
     } else if (!getSessionMaterializationStatus({ message: state.message ?? {}, part: state.part ?? {} }, sessionId).renderable) {
       ids.add(sessionId)

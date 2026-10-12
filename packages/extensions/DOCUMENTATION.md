@@ -16,7 +16,7 @@
 - User installs cannot use the reserved namespace, even with `replace`. Built-ins cannot be removed, Git-updated or have their grants edited through the public API.
 - `disabledGuests` persists the user's decision independently of code paths and versions. Provider credentials and extension storage stay in the instance data directory. Disable stops services and API access while retaining data and credentials.
 - Settings puts enabled built-in token/OAuth cards inside Built-in integrations. Other extension accounts stay in their existing section.
-- Current renderer support remains web and Electron, direct or relay. VS Code and mobile keep the existing explicit unsupported behavior. Migrate an existing core feature only after deciding its behavior on every surface where it already exists.
+- Current renderer support in the pre-M0 baseline is Web and Electron, direct or relay. VS Code (retired scope in OhPiChamber) and mobile keep the existing explicit unsupported behavior. Migrate an existing core feature only after deciding its behavior on every surface where it already exists.
 
 ## Adding a package
 

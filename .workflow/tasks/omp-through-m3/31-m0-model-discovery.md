@@ -2,7 +2,10 @@
 
 **Effort:** omp-through-m3
 **Task type:** spike
-**Base commit:** <commit-sha>
+**Base commit:** 981d05f03
+**Started:** 2026-10-12
+**Status:** active
+**Dirty at start:** 3,235 pre-existing assembled-source, workflow, skill and documentation paths; preserved and excluded except this task and its new sanitized artifact.
 **Question:** Does the pinned-source installed SDK perform real online model discovery and publish its result through the public registry rather than static registration or a cached fallback?
 **Time box:** One bounded public-SDK discovery scenario against the operator-approved custom test provider; no completion, permission, MCP, platform or broad capability-suite rerun.
 

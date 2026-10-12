@@ -84,14 +84,27 @@ describe('space server channel: token', () => {
   });
 });
 
+describe('space server channel: idle stop setting', () => {
+  it('writes the setting on stdin through a temporary name, beside the token', async () => {
+    const { channel, calls } = channelWith(ok());
+    await channel.writeIdleStop(ID, { enabled: true, hours: 6 });
+
+    expect(calls).toEqual([{
+      spaceId: ID,
+      argv: ['/bin/sh', '-c', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; umask 077; mkdir -p /home/space/.openchamber-space && chmod 700 /home/space/.openchamber-space && cat > /home/space/.openchamber-space/idle-stop.json.new && mv /home/space/.openchamber-space/idle-stop.json.new /home/space/.openchamber-space/idle-stop.json'],
+      options: { stdin: '{"enabled":true,"hours":6}' },
+    }]);
+  });
+});
+
 describe('space server channel: plugin link', () => {
   it('links only the plugin package, above every project of the space', async () => {
     const { channel, calls } = channelWith(ok());
     await channel.linkPlugin(ID);
 
     expect(calls[0].argv).toEqual([
-      '/bin/sh', '-c', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; mkdir -p "$1/node_modules/@opencode-ai" && ln -sfn "$2" "$1/node_modules/@opencode-ai/plugin"',
-      'sh', `/spaces/${ID}`, '/opt/openchamber-tools/node_modules/@opencode-ai/plugin',
+      '/bin/sh', '-c', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; mkdir -p "$1/node_modules/@opencode" && ln -sfn "$2" "$1/node_modules/@opencode/plugin"',
+      'sh', `/spaces/${ID}`, '/opt/openchamber-tools/node_modules/@opencode/plugin',
     ]);
   });
 });

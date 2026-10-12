@@ -67,6 +67,14 @@ directory (outside the workspace when the file is) and swapped for object
 URLs that are revoked with the preview; relative links open the target file
 through `useUIStore.openContextFile`, which the context panel and the mobile
 files surface both consume.
+An HTML file's preview is untrusted content. `useHtmlPreviewUrl` asks the
+server for a grant (`POST /api/fs/preview`) and loads the page from
+`/api/fs/preview/<grant>/<path>`; the frame's `sandbox` has no
+`allow-same-origin`, so the page runs as an opaque origin with no session and
+cannot reach the app's API, DOM or terminal. Its neighbouring images, styles
+and scripts load through the grant in the path. VS Code renders `srcDoc` in
+its own Webview with a `<base>` tag instead.
+
 
 An agent can ask for a file to be shown (`file.open` on the managed
 `openchamber` tool). The server broadcasts `openchamber:file-open-request`;

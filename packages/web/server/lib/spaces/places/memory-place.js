@@ -5,11 +5,23 @@
 // one container would pass nothing here.
 
 import crypto from 'node:crypto';
+import http from 'node:http';
+import net from 'node:net';
 
 import { SpaceError } from '../errors.js';
 import { ROLE_GATEKEEPER, ROLE_SPACE, requireSpaceId } from '../labels.js';
 
 const TARGETS = [ROLE_SPACE, ROLE_GATEKEEPER];
+
+// What `execArgv` hands out: a one-line Node program that answers for one container, the way
+// `exec` below does. The container's hostname is its first argument and the command follows.
+// One line, because the argv may go into a git `ext::` URL, which cannot carry a newline.
+const CONTAINER_PROGRAM = [
+  'const [hostname, ...command] = process.argv.slice(1);',
+  'const line = command.join(" ");',
+  'if (line === "cat /etc/hostname") process.stdout.write(hostname + "\\n");',
+  'else process.exitCode = 127;',
+].join(' ');
 
 export function createMemoryPlace({ id = 'memory' } = {}) {
   const spaces = new Map();
@@ -38,15 +50,26 @@ export function createMemoryPlace({ id = 'memory' } = {}) {
   return {
     id,
     check: async () => ({ available: true, version: 'memory', os: 'none', arch: 'none', hostIsolation: true }),
+    // Memory has no image to download: a pull ends at once and none is ever under way.
+    pullImage: async () => {},
+    imagePulling: () => false,
     create: async ({ id: spaceId, name, project, created }) => {
       if (spaces.has(requireSpaceId(spaceId))) {
         throw new SpaceError('space_name_taken', `Space ${spaceId} already exists`);
       }
-      spaces.set(spaceId, { id: spaceId, name, project, created, state: 'running', orphans: [], damaged: false, missing: [] });
+      spaces.set(spaceId, { id: spaceId, name, project, created, state: 'running', stoppedIdle: false, gatekeeperRunning: true, orphans: [], damaged: false, missing: [] });
       for (const target of TARGETS) {
         // A container has a hostname of its own, as a real one does, so a caller can tell them apart.
         containers.set(`${spaceId}:${target}`, { hostname: crypto.randomBytes(6).toString('hex') });
       }
+      // The server inside, for `connect`: a loopback listener of this space's own that answers
+      // `/health` the way the real one does, with the space id so a caller can tell spaces apart.
+      const server = http.createServer((request, response) => {
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ status: 'ok', isOpenCodeReady: true, spaceId, path: request.url }));
+      });
+      await new Promise((resolve) => { server.listen(0, '127.0.0.1', resolve); });
+      containers.get(`${spaceId}:${ROLE_SPACE}`).server = server;
     },
     list: async () => Array.from(spaces.values(), (space) => ({ ...space })),
     exec: async (spaceId, argv, options = {}) => {
@@ -66,12 +89,33 @@ export function createMemoryPlace({ id = 'memory' } = {}) {
       }
       return { code: 127, stdout: '', stderr: 'not found' };
     },
-    stop: async (spaceId) => { requireSpace(spaceId).state = 'exited'; },
-    start: async (spaceId) => { requireSpace(spaceId).state = 'running'; },
+    // Added in stage 3a. The space container only, and refused like `exec` when it is gone.
+    execArgv: async (spaceId) => {
+      const { hostname } = requireContainer(spaceId);
+      if (requireSpace(spaceId).state !== 'running') {
+        throw new SpaceError('space_not_running', `Space ${spaceId} is stopped`);
+      }
+      return [process.execPath, '-e', CONTAINER_PROGRAM, hostname];
+    },
+    // Added in stage 4a. A channel to the server inside, refused like `execArgv` when the space
+    // is stopped or gone: a plain socket to this space's own listener.
+    connect: async (spaceId) => {
+      const { server } = requireContainer(spaceId);
+      if (requireSpace(spaceId).state !== 'running') {
+        throw new SpaceError('space_not_running', `Space ${spaceId} is stopped`);
+      }
+      return net.connect({ host: '127.0.0.1', port: server.address().port });
+    },
+    stop: async (spaceId) => { Object.assign(requireSpace(spaceId), { state: 'exited', gatekeeperRunning: false }); },
+    start: async (spaceId) => { Object.assign(requireSpace(spaceId), { state: 'running', stoppedIdle: false, gatekeeperRunning: true }); },
     remove: async (spaceId) => {
       const removed = [];
       for (const target of TARGETS) {
-        if (containers.delete(`${requireSpaceId(spaceId)}:${target}`)) removed.push({ kind: 'container', name: `${spaceId}-${target}` });
+        const container = containers.get(`${requireSpaceId(spaceId)}:${target}`);
+        if (!container) continue;
+        container.server?.close();
+        containers.delete(`${spaceId}:${target}`);
+        removed.push({ kind: 'container', name: `${spaceId}-${target}` });
       }
       if (spaces.delete(spaceId)) removed.push({ kind: 'space', name: spaceId });
       return { removed, failed: [] };

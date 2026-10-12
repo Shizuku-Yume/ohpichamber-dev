@@ -222,6 +222,7 @@ async function main() {
 
   ensureElectronInstalled();
   const bundledOpenCodeCliEnv = resolveBundledOpenCodeCliEnv();
+  await runProcess('bun', ['run', '--cwd', 'packages/electron', 'bundle:main']);
 
   if (useBundledUi) {
     await runProcess('bun', ['run', '--cwd', 'packages/electron', 'build:web-assets']);
@@ -240,7 +241,7 @@ async function main() {
     });
   }
 
-  const electron = spawnProcess('bun', ['x', 'electron', './entry.mjs'], {
+  const electron = spawnProcess('bun', ['x', 'electron', '.'], {
     cwd: electronDir,
     env: {
       ...process.env,

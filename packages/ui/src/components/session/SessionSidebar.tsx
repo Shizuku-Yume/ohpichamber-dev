@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
 import { useGitStore, useGitAllBranches, useGitRepoStatusMap } from '@/stores/useGitStore';
@@ -20,6 +21,7 @@ import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
 import { UpdateDialog } from '@/components/ui/UpdateDialog';
 import { SidebarHeader } from './sidebar/shell/SidebarHeader';
 import { SidebarFooter } from './sidebar/shell/SidebarFooter';
+import { SidebarSearchEmptyState } from './sidebar/shell/SidebarSearchEmptyState';
 import { SessionProjectCollection } from './sidebar/list/SessionProjectCollection';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -29,7 +31,7 @@ import {
   worktreeMapsEqual,
   type ProjectRef,
 } from '@/lib/worktrees/worktreeManager';
-import { resolveProjectsForWorktreeChange } from '@/lib/worktrees/worktreeTopologyRefresh';
+import { resolveProjectForCreatedSession, resolveProjectsForWorktreeChange } from '@/lib/worktrees/worktreeTopologyRefresh';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
@@ -54,7 +56,6 @@ import {
 import { resolveProjectRef } from '@/lib/worktreeSessionCreator';
 
 const PROJECT_ACTIVE_SESSION_STORAGE_KEY = 'oc.sessions.activeSessionByProject';
-const EMPTY_STRING_ARRAY: string[] = [];
 const activeSessionByProjectSchema = z.record(z.string(), z.string().min(1).catch(''));
 
 interface SessionSidebarProps {
@@ -81,6 +82,9 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   const { t } = useI18n();
   const [isSessionSearchOpen, setIsSessionSearchOpen] = React.useState(false);
   const [sessionSearchQuery, setSessionSearchQuery] = React.useState('');
+  const openSessionSearch = React.useCallback(() => setIsSessionSearchOpen(true), []);
+  // The field and its query go together: once the field is hidden, a query
+  // still filtering the list would have no place to be cleared from.
   const resetSessionSearch = React.useCallback(() => {
     setSessionSearchQuery('');
     setIsSessionSearchOpen(false);
@@ -133,10 +137,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   const toggleHelpDialog = useUIStore((state) => state.toggleHelpDialog);
   const setAboutDialogOpen = useUIStore((state) => state.setAboutDialogOpen);
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
-  const setScheduledTasksDialogOpen = useUIStore((state) => state.setScheduledTasksDialogOpen);
-  const setArchivePageOpen = useUIStore((state) => state.setArchivePageOpen);
   const setWorktreesPageProjectId = useUIStore((state) => state.setWorktreesPageProjectId);
-  const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
   const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
 
   const normalizedSessionSearchQuery = React.useMemo(
@@ -150,7 +151,8 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   useSessionSearchEffects({
     enabled: isVisible,
     isSessionSearchOpen,
-    setIsSessionSearchOpen,
+    openSessionSearch,
+    closeSessionSearch: resetSessionSearch,
     sessionSearchInputRef,
     sessionSearchContainerRef,
   });
@@ -158,7 +160,6 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   const gitBranches = useGitAllBranches(isVisible);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-  const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   // sessionAttentionStates removed — now using notification-store directly in SessionNodeItem
   const worktreeMetadata = useSessionUIStore((state) => state.worktreeMetadata);
   const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
@@ -187,6 +188,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
     info: s.info,
     downloading: s.downloading,
     downloaded: s.downloaded,
+    installing: s.installing,
     progress: s.progress,
     error: s.error,
     downloadUpdate: s.downloadUpdate,
@@ -206,6 +208,9 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   const [worktreeDiscoveryRevision, requestWorktreeDiscovery] = React.useReducer((revision) => revision + 1, 0);
   const isWorktreeTopologyLoading = !isVSCode && resolvedWorktreeTopologyKey !== projectWorktreeDiscoveryKey;
   const [unresolvedWorktreeProjectPaths, setUnresolvedWorktreeProjectPaths] = React.useState<ReadonlySet<string>>(new Set());
+  const unresolvedWorktreeProjectPathsRef = React.useRef(unresolvedWorktreeProjectPaths);
+  unresolvedWorktreeProjectPathsRef.current = unresolvedWorktreeProjectPaths;
+  const isConnected = useConfigStore((state) => state.isConnected);
   const rawWorktreesByProjectRef = React.useRef<RawWorktreesByProjectScope>({
     runtimeKey: null,
     revision: 0,
@@ -217,6 +222,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
 
     const discoverWorktrees = async () => {
       const discoveryRuntimeKey = runtimeKey;
+      const connectedAtStart = useConfigStore.getState().isConnected;
       const projectEntries = useProjectsStore.getState().projects;
       useSessionUIStore.setState({ worktreeDiscoveryByProject: new Map(projectEntries.map((project) => [normalizePath(project.path) ?? project.path, 'loading'])) });
       if (projectEntries.length === 0 || isVSCode) {
@@ -319,6 +325,12 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
         return [path, unresolvedProjectPaths.has(path) ? 'error' : 'ready'];
       })) });
       setResolvedWorktreeTopologyKey(projectWorktreeDiscoveryKey);
+      // Projects come from the local cache right after an instance switch, so
+      // discovery can run before the instance answers. Failures from before the
+      // connection was up say nothing about the instance: ask once more.
+      if (unresolvedProjectPaths.size > 0 && !connectedAtStart && useConfigStore.getState().isConnected) {
+        requestWorktreeDiscovery();
+      }
     };
 
     void discoverWorktrees();
@@ -327,6 +339,15 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
       cancelled = true;
     };
   }, [isVSCode, projectWorktreeDiscoveryKey, runtimeKey, worktreeDiscoveryRevision]);
+
+  // A discovery that failed while the instance was unreachable (switch,
+  // reconnect) is retried when the connection comes up; a discovery still in
+  // flight at that moment retries itself above.
+  React.useEffect(() => {
+    if (isConnected && unresolvedWorktreeProjectPathsRef.current.size > 0) {
+      requestWorktreeDiscovery();
+    }
+  }, [isConnected]);
 
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
 
@@ -435,7 +456,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
     [normalizedProjects],
   );
 
-  const gitRepoStatus = useGitRepoStatusMap(isVisible ? normalizedProjectPaths : EMPTY_STRING_ARRAY);
+  const gitRepoStatus = useGitRepoStatusMap(normalizedProjectPaths, isVisible);
   useProjectRepoStatus({
     enabled: isVisible,
     normalizedProjects,
@@ -507,12 +528,10 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   );
   const projectView = useSessionProjectViewState({ isVSCode, projects: sortedProjects });
 
+  // VS Code has no Archive page: its archived sessions sit inline behind the header toggle.
   const searchEmptyState = React.useMemo(() => (
-    <div className="py-6 text-center text-muted-foreground">
-      <p className="typography-ui-label font-semibold">{t('sessions.sidebar.empty.noMatches.title')}</p>
-      <p className="typography-meta mt-1">{t('sessions.sidebar.empty.noMatches.description')}</p>
-    </div>
-  ), [t]);
+    <SidebarSearchEmptyState query={sessionSearchQuery} showArchive={!isVSCode} resetSessionSearch={resetSessionSearch} />
+  ), [isVSCode, resetSessionSearch, sessionSearchQuery]);
 
   // Web/desktop route archived sessions to the Archive page; only the VS Code
   // compact webview keeps inline archived buckets behind its toggle.
@@ -531,13 +550,6 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
     'inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md leading-none text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed';
   const headerActionButtonClass = mobileVariant ? mobileHeaderActionButtonClass : desktopHeaderActionButtonClass;
   const headerActionIconClass = 'h-4.5 w-4.5';
-
-  const handleOpenMultiRunFromHeader = React.useCallback(() => {
-    if (mobileVariant) {
-      setSessionSwitcherOpen(false);
-    }
-    openMultiRunLauncher();
-  }, [mobileVariant, openMultiRunLauncher, setSessionSwitcherOpen]);
 
   const worktreeRefreshDependencies = React.useMemo(() => ({
     projects,
@@ -572,16 +584,8 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
 
   React.useEffect(() => {
     if (isVSCode) return;
-    return subscribeOpenchamberEvents((event) => {
-      if (event.type === 'session-created') {
-        requestWorktreeDiscovery();
-        return;
-      }
-      if (event.type !== 'worktree-changed') return;
-
-      // One event names every directory of the changed repository the server
-      // has seen; refresh each registered project among them exactly once.
-      for (const project of resolveProjectsForWorktreeChange(event.directories)) {
+    const refreshProjects = (projects: ProjectRef[]) => {
+      for (const project of projects) {
         const projectPath = normalizePath(project.path);
         const refreshRuntime = getRuntimeKey();
         const publishDiscovery = (status: 'loading' | 'ready' | 'error') => {
@@ -606,6 +610,25 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
             setUnresolvedWorktreeProjectPaths((current) => new Set(current).add(projectPath));
           });
       }
+    };
+
+    return subscribeOpenchamberEvents((event) => {
+      if (event.type === 'session-created') {
+        // A new session can only have changed its own project's worktrees.
+        // When its project is not certain, every project is discovered.
+        const project = resolveProjectForCreatedSession(event.directory, useProjectsStore.getState().projects);
+        if (!project) {
+          requestWorktreeDiscovery();
+          return;
+        }
+        refreshProjects([project]);
+        return;
+      }
+      if (event.type !== 'worktree-changed') return;
+
+      // One event names every directory of the changed repository the server
+      // has seen; refresh each registered project among them exactly once.
+      refreshProjects(resolveProjectsForWorktreeChange(event.directories));
     });
   }, [isVSCode, worktreeRefreshDependencies]);
 
@@ -628,27 +651,20 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
         showProjectDisplayControls={!isVSCode}
         showRecentControls={!isVSCode}
         handleOpenDirectoryDialog={handleOpenDirectoryDialog}
-        onOpenScheduled={() => {
-          if (mobileVariant) setSessionSwitcherOpen(false);
-          setScheduledTasksDialogOpen(true);
-        }}
-        onOpenMultiRun={handleOpenMultiRunFromHeader}
-        canOpenMultiRun={projects.length > 0}
-        onOpenArchive={() => {
-          if (mobileVariant) setSessionSwitcherOpen(false);
-          setArchivePageOpen(true);
-        }}
+        // A desktop page: phones have their own shell, VS Code no source pickers.
+        showSourceBoard={!mobileVariant && !isVSCode}
         headerActionIconClass={headerActionIconClass}
         headerActionButtonClass={headerActionButtonClass}
         isSessionSearchOpen={isSessionSearchOpen}
-        setIsSessionSearchOpen={setIsSessionSearchOpen}
+        openSessionSearch={openSessionSearch}
+        closeSessionSearch={resetSessionSearch}
         sessionSearchInputRef={sessionSearchInputRef}
         sessionSearchQuery={sessionSearchQuery}
         setSessionSearchQuery={setSessionSearchQuery}
         hasSessionSearchQuery={hasSessionSearchQuery}
         searchMatchCount={searchMatchCount}
-        collapseAllProjects={projectView.actions.collapseAllProjects}
-        expandAllProjects={projectView.actions.expandAllProjects}
+        collapseAll={projectView.actions.collapseAll}
+        expandAll={projectView.actions.expandAll}
       />
 
       <SessionProjectCollection
@@ -727,6 +743,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
         info={updateStore.info}
         downloading={updateStore.downloading}
         downloaded={updateStore.downloaded}
+        installing={updateStore.installing}
         progress={updateStore.progress}
         error={updateStore.error}
         onDownload={updateStore.downloadUpdate}
@@ -748,14 +765,10 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
       <NewWorktreeDialog
         open={newWorktreeDialogOpen}
         onOpenChange={setNewWorktreeDialogOpen}
-        onWorktreeCreated={(worktreePath, options) => {
+        onWorktreeCreated={(worktreePath) => {
           useUIStore.getState().closeMainSurfaces();
           if (mobileVariant) {
             setSessionSwitcherOpen(false);
-          }
-          if (options?.sessionId) {
-            setCurrentSession(options.sessionId, worktreePath);
-            return;
           }
           openNewSessionDraft({ directoryOverride: worktreePath, preserveDirectoryOverride: true });
         }}
