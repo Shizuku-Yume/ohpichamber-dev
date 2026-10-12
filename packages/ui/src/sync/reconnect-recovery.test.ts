@@ -203,6 +203,20 @@ describe("mergeBootstrapSessions over a persisted list", () => {
     expect(rootCount).toBe(3)
   })
 
+  test("retains known Host fields during partial reconnect while applying execution updates", () => {
+    const cached = createSession("a", {
+      title: "Host title", directory: "/host", projectID: "host-project", metadata: { openchamber: { context: { key: "known" } } },
+      time: { created: 1, updated: 1, archived: 10 },
+    })
+    const fetched = createSession("a", {
+      title: "Execution title", directory: "/execution", projectID: "execution-project", metadata: undefined,
+      hostMetadataError: "METADATA_READ_FAILED", hostArchiveError: "METADATA_CORRUPT", time: { created: 1, updated: 2 },
+    })
+    const result = mergeBootstrapSessions([fetched], [fetched], [cached])
+    expect(result.sessions[0]).toMatchObject({ title: "Host title", directory: "/host", projectID: "host-project", time: { updated: 2, archived: 10 } })
+    expect(result.sessions[0].metadata).toBe(cached.metadata)
+  })
+
   test("returns the cached list itself when nothing changed", () => {
     const persisted = [createSession("a"), createSession("b")]
     const fetched = [createSession("a"), createSession("b")]

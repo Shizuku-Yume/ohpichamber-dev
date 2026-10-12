@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import express from 'express';
 import request from 'supertest';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createProjectDirectoryRuntime } from '../host/project-directory-runtime.js';
 
 const createWorktreeMock = vi.fn(async () => ({
   head: 'abc123',
@@ -80,7 +82,6 @@ globalThis.__openchamberGetWorktreeBootstrapStatusMock = getWorktreeBootstrapSta
 
 let registerOpenChamberSessionRoutes;
 let createSessionMetadataStore;
-let createOpenCodeSessionMetadata;
 
 // Every `OpenCode.make` call is recorded so tests can assert on the scoping
 // headers the routes build.
@@ -125,6 +126,7 @@ vi.mock('../git/index.js', () => ({
  */
 const createMemorySessionMetadataStore = () => {
   const entries = new Map();
+  const revisions = new Map();
   const merge = (current, patch) => {
     const base = { ...(current ?? {}) };
     for (const [key, value] of Object.entries(patch)) {
@@ -136,15 +138,16 @@ const createMemorySessionMetadataStore = () => {
   };
   return {
     entries,
-    failFor: null,
-    get: async (id) => entries.get(id) ?? {},
-    has: async (id) => entries.has(id),
-    getAll: async () => Object.fromEntries(entries),
+    get: async (id) => entries.get(id) ?? null,
+    getState: async (id) => entries.has(id) ? { metadata: entries.get(id), revision: String(revisions.get(id) ?? 1) } : null,
     setSessionMetadata: async (id, patch) => {
-      const merged = merge(entries.get(id), patch);
-      if (Object.keys(merged).length === 0) entries.delete(id);
-      else entries.set(id, merged);
-      return merged;
+      const current = entries.get(id);
+      const merged = merge(current, patch);
+      const changed = JSON.stringify(current) !== JSON.stringify(merged);
+      const revision = (revisions.get(id) ?? (entries.has(id) ? 1 : 0)) + (changed ? 1 : 0);
+      entries.set(id, merged);
+      revisions.set(id, revision);
+      return { metadata: merged, revision: String(revision), changed };
     },
   };
 };
@@ -156,9 +159,6 @@ const createMemoryArchiveStore = () => {
     failIds: (ids) => { failFor = new Set(ids); },
     entries,
     getAll: async () => Object.fromEntries(entries),
-    list: async () => Object.fromEntries(entries),
-    isArchived: async (id) => entries.has(id),
-    archivedAt: async (id) => entries.get(id) ?? null,
     archive: async (ids, archivedAt) => {
       const stamp = Number.isSafeInteger(archivedAt) && archivedAt > 0 ? archivedAt : 1;
       const archived = [];
@@ -196,6 +196,7 @@ const createApp = (overrides = {}, options = {}) => {
     archiveStore,
     sessionMetadataStore,
     broadcastGlobalUiEvent,
+    isRequestOriginAllowed: overrides.isRequestOriginAllowed ?? vi.fn(async () => true),
     readSettingsFromDiskMigrated: async () => ({ projects: [{ id: 'proj_1', path: '/repo/app' }] }),
     sanitizeProjects: (projects) => projects,
     validateDirectoryPath: async (directory) => ({ ok: true, directory }),
@@ -212,7 +213,7 @@ const createApp = (overrides = {}, options = {}) => {
 describe('openchamber session routes', () => {
   beforeAll(async () => {
     ({ registerOpenChamberSessionRoutes } = await import('./routes.js'));
-    ({ createSessionMetadataStore, createOpenCodeSessionMetadata } = await import('./session-metadata-store.js'));
+    ({ createSessionMetadataStore } = await import('./session-metadata-store.js'));
   });
 
   beforeEach(() => {
@@ -345,113 +346,201 @@ describe('openchamber session routes', () => {
   });
 
   describe('session metadata OpenChamber owns', () => {
-    it('merges a patch onto the OpenCode record and writes it back with PATCH', async () => {
-      sessionGetMock.mockImplementationOnce(async ({ sessionID }) => ({
-        id: sessionID,
-        location: { directory: '/repo/app' },
-        metadata: { openchamber: { kind: 'review', assist: { recap: 'from v1' } } },
-      }));
-      // The real store over the same mocked client the routes use.
+    it('persists a Host metadata patch in real SQLite with current state response', async () => {
       const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-routes-metadata-'));
-      const { app } = createApp({
-        sessionMetadataStore: createSessionMetadataStore({
-          dataDir,
-          openCode: createOpenCodeSessionMetadata({
-            buildOpenCodeUrl: (route) => `http://opencode.test${route}`,
-            getOpenCodeAuthHeaders: () => ({ Authorization: 'Bearer test' }),
-          }),
-        }),
-      });
-
-      const response = await request(app)
-        .post('/api/openchamber/sessions/ses_v1/metadata')
-        .send({ patch: { openchamber: { goal: { status: 'active' } } } })
-        .expect(200);
-
-      const merged = { openchamber: { kind: 'review', assist: { recap: 'from v1' }, goal: { status: 'active' } } };
-      expect(response.body.metadata).toEqual(merged);
-      expect(sessionUpdateMock).toHaveBeenCalledWith({ sessionID: 'ses_v1', metadata: merged });
-      fs.rmSync(dataDir, { recursive: true, force: true });
+      const store = createSessionMetadataStore({ dataDir });
+      try {
+        const { app } = createApp({ sessionMetadataStore: store });
+        const response = await request(app).post('/api/openchamber/sessions/ses_v1/metadata')
+          .send({ patch: { openchamber: { goal: { status: 'active' } } } }).expect(200);
+        expect(response.body).toEqual({ metadata: { openchamber: { goal: { status: 'active' } } }, revision: '1', changed: true });
+        expect(sessionUpdateMock).not.toHaveBeenCalled();
+      } finally { await store.close(); fs.rmSync(dataDir, { recursive: true, force: true }); }
     });
 
     it('merge-patches metadata, returns the merged object, and announces it', async () => {
       const { app, sessionMetadataStore, broadcastGlobalUiEvent } = createApp();
-
-      await request(app)
-        .post('/api/openchamber/sessions/ses_a/metadata')
-        .send({ patch: { openchamber: { assist: { recap: 'first' } } } })
-        .expect(200);
-
-      const response = await request(app)
-        .post('/api/openchamber/sessions/ses_a/metadata')
-        .send({ patch: { openchamber: { goal: { status: 'active' } } } })
-        .expect(200);
-
-      // The second write must not erase the first: OpenCode's PATCH merged, so
-      // this does too.
-      expect(response.body).toEqual({
-        metadata: { openchamber: { assist: { recap: 'first' }, goal: { status: 'active' } } },
-      });
-      await expect(sessionMetadataStore.get('ses_a')).resolves.toEqual(response.body.metadata);
-      expect(broadcastGlobalUiEvent).toHaveBeenLastCalledWith({
-        type: 'openchamber:session-metadata',
-        properties: { sessionID: 'ses_a', metadata: response.body.metadata },
-      });
+      await request(app).post('/api/openchamber/sessions/ses_a/metadata').send({ patch: { openchamber: { assist: { recap: 'first' } } } }).expect(200);
+      const response = await request(app).post('/api/openchamber/sessions/ses_a/metadata').send({ patch: { openchamber: { goal: { status: 'active' } } } }).expect(200);
+      expect(response.body).toEqual({ metadata: { openchamber: { assist: { recap: 'first' }, goal: { status: 'active' } } }, revision: '2', changed: true });
+      await expect(sessionMetadataStore.getState('ses_a')).resolves.toMatchObject({ metadata: response.body.metadata, revision: '2' });
+      expect(broadcastGlobalUiEvent).toHaveBeenLastCalledWith({ type: 'openchamber:session-metadata', properties: { sessionID: 'ses_a', metadata: response.body.metadata, revision: '2' } });
     });
 
     it('deletes a key when the patch value is null', async () => {
       const { app } = createApp();
-      await request(app)
-        .post('/api/openchamber/sessions/ses_a/metadata')
-        .send({ patch: { openchamber: { goal: { id: 'g1' }, assist: { recap: 'r' } } } })
-        .expect(200);
-
-      const response = await request(app)
-        .post('/api/openchamber/sessions/ses_a/metadata')
-        .send({ patch: { openchamber: { assist: null } } })
-        .expect(200);
-
-      expect(response.body).toEqual({ metadata: { openchamber: { goal: { id: 'g1' } } } });
+      await request(app).post('/api/openchamber/sessions/ses_a/metadata').send({ patch: { openchamber: { goal: { id: 'g1' }, assist: { recap: 'r' } } } }).expect(200);
+      const response = await request(app).post('/api/openchamber/sessions/ses_a/metadata').send({ patch: { openchamber: { assist: null } } }).expect(200);
+      expect(response.body).toMatchObject({ metadata: { openchamber: { goal: { id: 'g1' } } }, changed: true });
     });
 
-    it('reads back what it stored, per session', async () => {
+    it('reads missing metadata as null revision zero', async () => {
       const { app } = createApp();
-      await request(app).post('/api/openchamber/sessions/ses_a/metadata').send({ patch: { a: 1 } }).expect(200);
-
-      await expect(request(app).get('/api/openchamber/sessions/ses_a/metadata').expect(200))
-        .resolves.toMatchObject({ body: { metadata: { a: 1 } } });
-      await expect(request(app).get('/api/openchamber/sessions/ses_b/metadata').expect(200))
-        .resolves.toMatchObject({ body: { metadata: {} } });
+      await expect(request(app).get('/api/openchamber/sessions/ses_missing/metadata').expect(200)).resolves.toEqual(expect.objectContaining({ body: { metadata: null, revision: '0' } }));
     });
+  });
 
-    it('rejects a missing or non-object patch', async () => {
-      const { app, broadcastGlobalUiEvent } = createApp();
+  it('rejects metadata import without origin before conversion', async () => {
+    const readLegacySessionProjection = vi.fn();
+    const { app } = createApp({ isRequestOriginAllowed: vi.fn(async () => false), readLegacySessionProjection });
+    await request(app).post('/api/openchamber/sessions/metadata/import').send({ intent: 'operational-metadata-conversion', consent: true, source: 'legacy', sessions: [{ id: 'old_1' }] }).expect(403);
+    expect(readLegacySessionProjection).not.toHaveBeenCalled();
+  });
 
-      await request(app).post('/api/openchamber/sessions/ses_a/metadata').send({}).expect(400);
-      await request(app).post('/api/openchamber/sessions/ses_a/metadata').send({ patch: 'nope' }).expect(400);
-      await request(app).post('/api/openchamber/sessions/ses_a/metadata').send({ patch: ['a'] }).expect(400);
+  it('requires the origin gate before wiring any session route', () => {
+    const app = express();
+    const post = vi.spyOn(app, 'post');
+    expect(() => registerOpenChamberSessionRoutes(app, { sessionService: {}, isRequestOriginAllowed: undefined }))
+      .toThrow('Session routes require isRequestOriginAllowed');
+    expect(post).not.toHaveBeenCalled();
+  });
 
-      expect(broadcastGlobalUiEvent).not.toHaveBeenCalled();
+  it('refuses unauthorized or absent selected directories before reading and imports an unrelated sibling', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-import-scope-'));
+    const sibling = path.join(root, 'sibling');
+    const refused = path.join(root, 'refused');
+    fs.mkdirSync(sibling); fs.mkdirSync(refused);
+    const dataDir = path.join(root, 'data');
+    fs.mkdirSync(dataDir);
+    const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+    const store = createSessionMetadataStore({ dataDir, database: db, closeDatabase: true });
+    const readLegacySessionProjection = vi.fn(async (id, { directory }) => ({
+      id, location: { directory }, metadata: { openchamber: { assist: { recap: id } } },
+    }));
+    const { validateDirectoryPath } = createProjectDirectoryRuntime({
+      fsPromises: fs.promises, path, normalizeDirectoryPath: (value) => value,
+      refuseDirectory: (candidate) => candidate === refused ? 'Directory belongs to an isolated space' : null,
     });
+    try {
+      const { app } = createApp({ sessionMetadataStore: store, readLegacySessionProjection, validateDirectoryPath });
+      const response = await request(app).post('/api/openchamber/sessions/metadata/import').send({
+        intent: 'operational-metadata-conversion', consent: true, source: 'scope',
+        sessions: [{ id: 'refused', directory: refused }, { id: 'nonexistent', directory: path.join(root, 'missing') }, { id: 'unscoped' }, { id: 'valid', directory: sibling }, { id: 'valid', directory: refused }],
+      }).expect(200);
+      expect(response.body).toEqual({
+        complete: false, errors: { refused: 'METADATA_READ_FAILED', nonexistent: 'METADATA_READ_FAILED', unscoped: 'METADATA_READ_FAILED' },
+        results: [{ id: 'valid', status: 'imported' }],
+      });
+      expect(readLegacySessionProjection).toHaveBeenCalledTimes(1);
+      expect(readLegacySessionProjection).toHaveBeenCalledWith('valid', { directory: fs.realpathSync(sibling) });
+      for (const id of ['refused', 'nonexistent', 'unscoped']) {
+        expect(db.prepare('SELECT session_id FROM session_metadata WHERE session_id = ?').get(id)).toBeUndefined();
+        expect(db.prepare('SELECT completed FROM metadata_conversion WHERE source = ?').get(JSON.stringify(['selected', 'scope', id]))).toBeUndefined();
+      }
+      await expect(store.get('valid')).resolves.toEqual({ directory: fs.realpathSync(sibling), openchamber: { assist: { recap: 'valid' } } });
+    } finally { await store.close(); fs.rmSync(root, { recursive: true, force: true }); }
+  });
 
-    it('routes every write through the server-owned writer when one is injected', async () => {
-      const persistSessionMetadata = vi.fn(async () => ({ openchamber: { goal: { status: 'active' } } }));
-      const { app, sessionMetadataStore } = createApp({ persistSessionMetadata });
-
-      const response = await request(app)
-        .post('/api/openchamber/sessions/ses_a/metadata')
-        .send({ patch: { openchamber: { goal: { status: 'active' } } }, directory: '/repo/app' })
-        .expect(200);
-
-      expect(persistSessionMetadata).toHaveBeenCalledWith(
-        'ses_a',
-        { openchamber: { goal: { status: 'active' } } },
-        { directory: '/repo/app' },
-      );
-      expect(response.body.metadata).toEqual({ openchamber: { goal: { status: 'active' } } });
-      // The injected writer owns the store; the route must not write twice.
-      await expect(sessionMetadataStore.get('ses_a')).resolves.toEqual({});
+  it('rechecks canonical selected aliases against Host refusal before reading', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-import-refused-alias-'));
+    const refusedTarget = path.join(root, 'refused-target');
+    const refusedAlias = path.join(root, 'refused-alias');
+    const sibling = path.join(root, 'sibling');
+    fs.mkdirSync(refusedTarget); fs.symlinkSync(refusedTarget, refusedAlias, 'dir'); fs.mkdirSync(sibling);
+    const dataDir = path.join(root, 'data'); fs.mkdirSync(dataDir);
+    const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+    const store = createSessionMetadataStore({ dataDir, database: db, closeDatabase: true });
+    const readLegacySessionProjection = vi.fn(async (id, { directory }) => ({ id, location: { directory }, metadata: { openchamber: { assist: { recap: id } } } }));
+    const { validateDirectoryPath } = createProjectDirectoryRuntime({
+      fsPromises: fs.promises, path, normalizeDirectoryPath: (value) => value,
+      refuseDirectory: (candidate) => candidate === refusedTarget ? 'Directory belongs to an isolated space' : null,
     });
+    try {
+      const { app } = createApp({ sessionMetadataStore: store, readLegacySessionProjection, validateDirectoryPath });
+      const response = await request(app).post('/api/openchamber/sessions/metadata/import').send({
+        intent: 'operational-metadata-conversion', consent: true, source: 'refused-alias',
+        sessions: [{ id: 'refused', directory: refusedAlias }, { id: 'sibling', directory: sibling }],
+      }).expect(200);
+      expect(response.body).toEqual({ complete: false, errors: { refused: 'METADATA_READ_FAILED' }, results: [{ id: 'sibling', status: 'imported' }] });
+      expect(readLegacySessionProjection).toHaveBeenCalledTimes(1);
+      expect(readLegacySessionProjection).toHaveBeenCalledWith('sibling', { directory: fs.realpathSync(sibling) });
+      expect(db.prepare('SELECT session_id FROM session_metadata WHERE session_id = ?').get('refused')).toBeUndefined();
+      expect(db.prepare('SELECT completed FROM metadata_conversion WHERE source = ?').get(JSON.stringify(['selected', 'refused-alias', 'refused']))).toBeUndefined();
+    } finally { await store.close(); fs.rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it('forwards and imports only the canonical selected directory when the request uses a symlink', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-import-realpath-'));
+    const selected = path.join(root, 'selected');
+    const alias = path.join(root, 'alias');
+    fs.mkdirSync(selected); fs.symlinkSync(selected, alias, 'dir');
+    const store = createSessionMetadataStore({ dataDir: path.join(root, 'data') });
+    const readLegacySessionProjection = vi.fn(async (id) => ({
+      id, location: { directory: alias }, directory: alias,
+      metadata: { directory: alias, openchamber: { assist: { recap: 'canonical' }, unsupported: 'not retained' } },
+    }));
+    const { validateDirectoryPath } = createProjectDirectoryRuntime({ fsPromises: fs.promises, path, normalizeDirectoryPath: (value) => value });
+    try {
+      const { app } = createApp({ sessionMetadataStore: store, readLegacySessionProjection, validateDirectoryPath });
+      const body = { intent: 'operational-metadata-conversion', consent: true, source: 'realpath', sessions: [{ id: 'canonical', directory: alias }] };
+      await request(app).post('/api/openchamber/sessions/metadata/import').send(body)
+        .expect(200, { complete: true, errors: {}, results: [{ id: 'canonical', status: 'imported' }] });
+      expect(readLegacySessionProjection).toHaveBeenCalledWith('canonical', { directory: fs.realpathSync(selected) });
+      await expect(store.getState('canonical')).resolves.toEqual({
+        metadata: { directory: fs.realpathSync(selected), openchamber: { assist: { recap: 'canonical' } } }, revision: '1',
+      });
+      await request(app).post('/api/openchamber/sessions/metadata/import').send(body)
+        .expect(200, { complete: true, errors: {}, results: [{ id: 'canonical', status: 'already-converted' }] });
+    } finally { await store.close(); fs.rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it.each([
+    ['native sibling scope', (_selected, escaping) => ({ location: { directory: escaping } })],
+    ['owning projected sibling scope', (_selected, escaping) => ({ directory: escaping })],
+    ['conflicting projected scope', (selected, escaping) => ({ location: { directory: selected }, directory: escaping })],
+    ['metadata override scope', (selected, escaping) => ({ location: { directory: selected }, metadata: { directory: escaping } })],
+    ['symlink escape', (_selected, _escaping, escapeLink) => ({ location: { directory: escapeLink } })],
+    ['missing owning scope', () => ({})],
+    ['missing native directory', () => ({ location: {} })],
+    ['malformed native directory', () => ({ location: { directory: null } })],
+    ['malformed native location with owning directory', (selected) => ({ location: null, directory: selected })],
+  ])('rejects %s before import or receipt while a valid sibling succeeds', async (_name, projectionFor) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-import-escape-'));
+    const selected = path.join(root, 'selected');
+    const escaping = path.join(root, 'selected-sibling');
+    const escapeLink = path.join(selected, 'outside');
+    fs.mkdirSync(selected); fs.mkdirSync(escaping); fs.symlinkSync(escaping, escapeLink, 'dir');
+    const dataDir = path.join(root, 'data');
+    fs.mkdirSync(dataDir);
+    const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+    const store = createSessionMetadataStore({ dataDir, database: db, closeDatabase: true });
+    const readLegacySessionProjection = vi.fn(async (id, { directory }) => id === 'escape'
+      ? { id, ...projectionFor(selected, escaping, escapeLink) }
+      : { id, location: { directory }, metadata: { openchamber: { assist: { recap: id } } } });
+    const { validateDirectoryPath } = createProjectDirectoryRuntime({ fsPromises: fs.promises, path, normalizeDirectoryPath: (value) => value });
+    try {
+      const { app } = createApp({ sessionMetadataStore: store, readLegacySessionProjection, validateDirectoryPath });
+      const body = { intent: 'operational-metadata-conversion', consent: true, source: 'escape', sessions: [{ id: 'escape', directory: selected }, { id: 'sibling', directory: escaping }] };
+      const response = await request(app).post('/api/openchamber/sessions/metadata/import').send(body).expect(200);
+      expect(response.body).toEqual({ complete: false, errors: { escape: 'METADATA_READ_FAILED' }, results: [{ id: 'sibling', status: 'imported' }] });
+      expect(db.prepare('SELECT session_id FROM session_metadata WHERE session_id = ?').get('escape')).toBeUndefined();
+      expect(db.prepare('SELECT completed FROM metadata_conversion WHERE source = ?').get(JSON.stringify(['selected', 'escape', 'escape']))).toBeUndefined();
+      await expect(store.get('sibling')).resolves.toEqual({ directory: fs.realpathSync(escaping), openchamber: { assist: { recap: 'sibling' } } });
+      expect(readLegacySessionProjection).toHaveBeenNthCalledWith(1, 'escape', { directory: fs.realpathSync(selected) });
+      expect(readLegacySessionProjection).toHaveBeenNthCalledWith(2, 'sibling', { directory: fs.realpathSync(escaping) });
+      readLegacySessionProjection.mockImplementation(async (id, { directory }) => ({ id, location: { directory } }));
+      await request(app).post('/api/openchamber/sessions/metadata/import').send({ ...body, sessions: [{ id: 'escape', directory: selected }] })
+        .expect(200, { complete: true, errors: {}, results: [{ id: 'escape', status: 'imported' }] });
+    } finally { await store.close(); fs.rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it('requires explicit import intent and consent', async () => {
+    const { app } = createApp({ readLegacySessionProjection: vi.fn() });
+    await request(app).post('/api/openchamber/sessions/metadata/import').send({ source: 'legacy', sessions: [{ id: 'old_1' }] }).expect(400);
+  });
+
+  it('returns per-session import errors without transcript access', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-import-partial-'));
+    const store = createSessionMetadataStore({ dataDir });
+    const readLegacySessionProjection = vi.fn(async (id, { directory }) => id === 'bad' ? null : { id, directory, metadata: { openchamber: { assist: { recap: id } } } });
+    try {
+      const { app } = createApp({ sessionMetadataStore: store, readLegacySessionProjection });
+      const response = await request(app).post('/api/openchamber/sessions/metadata/import').send({ intent: 'operational-metadata-conversion', consent: true, source: 'legacy', sessions: [{ id: 'good', directory: '/repo/app' }, { id: 'bad', directory: '/repo/app' }, { id: 'good_2', directory: '/repo/app' }] }).expect(200);
+      expect(response.body).toEqual({ complete: false, errors: { bad: 'METADATA_READ_FAILED' }, results: [{ id: 'good', status: 'imported' }, { id: 'good_2', status: 'imported' }] });
+      await expect(store.get('good_2')).resolves.toEqual({ directory: '/repo/app', openchamber: { assist: { recap: 'good_2' } } });
+      expect(readLegacySessionProjection).toHaveBeenCalledTimes(3);
+      expect(sessionMessagesMock).not.toHaveBeenCalled();
+    } finally { await store.close(); fs.rmSync(dataDir, { recursive: true, force: true }); }
   });
 
   it('creates a session for a directory', async () => {
@@ -468,6 +557,83 @@ describe('openchamber session routes', () => {
       location: { directory: '/repo/app' },
       title: 'Side task',
     });
+  });
+  it('persists create title, directory, and projectID in the real Host SQLite store before prompt work', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-create-host-'));
+    const store = createSessionMetadataStore({ dataDir });
+    try {
+      const { app } = createApp({ sessionMetadataStore: store });
+      await request(app).post('/api/openchamber/sessions').send({ projectId: 'proj_1', directory: '/repo/app', title: 'Durable title' }).expect(200);
+      await expect(store.getState('ses_123')).resolves.toEqual({
+        metadata: { title: 'Durable title', directory: '/repo/app', projectID: 'proj_1' }, revision: '1',
+      });
+    } finally { await store.close(); fs.rmSync(dataDir, { recursive: true, force: true }); }
+  });
+
+  it('returns a partial session-created response when real Host persistence fails', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-create-failure-'));
+    const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+    const store = createSessionMetadataStore({ dataDir, database: db, closeDatabase: true });
+    await store.convertLegacy();
+    db.exec('PRAGMA query_only = ON');
+    try {
+      const { app } = createApp({ sessionMetadataStore: store });
+      const response = await request(app).post('/api/openchamber/sessions').send({ directory: '/repo/app', title: 'Partial' }).expect(500);
+      expect(response.body).toMatchObject({ partial: true, partialAction: 'session-created', sessionId: 'ses_123', code: 'METADATA_WRITE_FAILED' });
+      expect(sessionCreateMock).toHaveBeenCalledTimes(1);
+    } finally { await store.close(); fs.rmSync(dataDir, { recursive: true, force: true }); }
+  });
+
+  it('lets an injected persistence callback own exactly one broadcast', async () => {
+    const broadcastGlobalUiEvent = vi.fn();
+    const persistSessionMetadata = vi.fn(async () => ({ metadata: { title: 'owned' }, revision: '7', changed: true }));
+    const { app, sessionMetadataStore } = createApp({ persistSessionMetadata, broadcastGlobalUiEvent });
+    await request(app).post('/api/openchamber/sessions/ses_a/metadata').send({ patch: { title: 'owned' } }).expect(200);
+    expect(persistSessionMetadata).toHaveBeenCalledTimes(1);
+    expect(broadcastGlobalUiEvent).not.toHaveBeenCalled();
+    await expect(sessionMetadataStore.get('ses_a')).resolves.toBeNull();
+  });
+
+  it('broadcasts exactly once for changed local SQLite writes and not for no-op writes', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-local-broadcast-'));
+    const store = createSessionMetadataStore({ dataDir });
+    try {
+      const { app, broadcastGlobalUiEvent } = createApp({ sessionMetadataStore: store });
+      await request(app).post('/api/openchamber/sessions/ses_a/metadata').send({ patch: { title: 'local' } }).expect(200);
+      await request(app).post('/api/openchamber/sessions/ses_a/metadata').send({ patch: { title: 'local' } }).expect(200);
+      expect(broadcastGlobalUiEvent).toHaveBeenCalledTimes(1);
+      await expect(store.getState('ses_a')).resolves.toEqual({ metadata: { title: 'local' }, revision: '1' });
+    } finally { await store.close(); fs.rmSync(dataDir, { recursive: true, force: true }); }
+  });
+
+  it('preserves revisions and broadcasts for semantically equal nested metadata with reordered object keys', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-semantic-noop-'));
+    const store = createSessionMetadataStore({ dataDir });
+    try {
+      const { app, broadcastGlobalUiEvent } = createApp({ sessionMetadataStore: store });
+      const first = await request(app).post('/api/openchamber/sessions/ses_a/metadata')
+        .send({ patch: { openchamber: { goal: { id: 'g1' }, assist: { recap: 'known', tags: ['one', 'two'] } } } }).expect(200);
+      const second = await request(app).post('/api/openchamber/sessions/ses_a/metadata')
+        .send({ patch: { openchamber: { assist: { tags: ['one', 'two'], recap: 'known' }, goal: { id: 'g1' } } } }).expect(200);
+      expect(second.body).toEqual({ metadata: first.body.metadata, revision: '1', changed: false });
+      expect(broadcastGlobalUiEvent).toHaveBeenCalledTimes(1);
+      await expect(store.getState('ses_a')).resolves.toEqual({ metadata: first.body.metadata, revision: '1' });
+    } finally { await store.close(); fs.rmSync(dataDir, { recursive: true, force: true }); }
+  });
+
+  it('imports selected projections with durable per-ID receipts, including a new ID from the same source', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-import-host-'));
+    const store = createSessionMetadataStore({ dataDir });
+    const readLegacySessionProjection = vi.fn(async (id, options) => ({ id, directory: options.directory, title: `Title ${id}`, metadata: { openchamber: { assist: { recap: id } } } }));
+    try {
+      const { app } = createApp({ sessionMetadataStore: store, readLegacySessionProjection });
+      const body = { intent: 'operational-metadata-conversion', consent: true, source: 'legacy-v1', sessions: [{ id: 'old_a', directory: '/a' }] };
+      await request(app).post('/api/openchamber/sessions/metadata/import').send(body).expect(200, { results: [{ id: 'old_a', status: 'imported' }], errors: {}, complete: true });
+      await request(app).post('/api/openchamber/sessions/metadata/import').send(body).expect(200, { results: [{ id: 'old_a', status: 'already-converted' }], errors: {}, complete: true });
+      await request(app).post('/api/openchamber/sessions/metadata/import').send({ ...body, sessions: [{ id: 'old_b', directory: '/b' }] }).expect(200, { results: [{ id: 'old_b', status: 'imported' }], errors: {}, complete: true });
+      await expect(store.get('old_b')).resolves.toMatchObject({ title: 'Title old_b', directory: '/b' });
+      expect(readLegacySessionProjection).toHaveBeenNthCalledWith(1, 'old_a', { directory: '/a' });
+    } finally { await store.close(); fs.rmSync(dataDir, { recursive: true, force: true }); }
   });
 
   it('percent-encodes the directory header for non-ASCII checkout paths', async () => {
@@ -1127,6 +1293,21 @@ describe('openchamber session routes', () => {
       promptDispatched: true,
     }));
   });
+  it('forks Host metadata, ignores execution fork.metadata, strips source links, and pauses active goals', async () => {
+    sessionForkMock.mockImplementationOnce(async () => ({ id: 'ses_fork', title: 'Execution title', metadata: { openchamber: { executionOnly: true } } }));
+    const { app, sessionMetadataStore } = createApp();
+    sessionMetadataStore.entries.set('ses_source', {
+      title: 'Host source title', directory: '/repo/source', projectID: 'project-source',
+      openchamber: { btwSessionID: 'ses_btw', reviewSessionID: 'ses_review', goal: { id: 'g1', objective: 'Ship', status: 'active' }, custom: 'keep' },
+    });
+    await request(app).post('/api/openchamber/sessions/ses_source/fork').send({ directory: '/repo/app', prompt: 'Carry on', model: 'openai/gpt-5.5', agent: 'build' }).expect(200);
+    expect(sessionMetadataStore.entries.get('ses_fork')).toEqual({
+      title: 'Host source title', directory: '/repo/app', projectID: 'project-source',
+      openchamber: { goal: { id: 'g1', objective: 'Ship', status: 'paused', statusReason: 'paused in fork' }, custom: 'keep' },
+    });
+    expect(sessionMetadataStore.entries.get('ses_fork').openchamber.executionOnly).toBeUndefined();
+  });
+
 
   it('strips source-owned links from a fork before dispatching', async () => {
     sessionForkMock.mockImplementationOnce(async () => ({
@@ -1135,7 +1316,7 @@ describe('openchamber session routes', () => {
       metadata: { openchamber: { btwSessionID: 'ses_btw', reviewSessionID: 'ses_review', assist: { recap: 'kept' } } },
     }));
     const { app, sessionMetadataStore } = createApp();
-    sessionMetadataStore.entries.set('ses_fork', {
+    sessionMetadataStore.entries.set('ses_source', {
       openchamber: { btwSessionID: 'ses_btw', reviewSessionID: 'ses_review', assist: { recap: 'kept' } },
     });
     await request(app)
@@ -1143,7 +1324,7 @@ describe('openchamber session routes', () => {
       .send({ directory: '/repo/app', prompt: 'Carry on', model: 'openai/gpt-5.5', agent: 'build' })
       .expect(200);
 
-    expect(sessionMetadataStore.entries.get('ses_fork')).toEqual({ openchamber: { assist: { recap: 'kept' } } });
+    expect(sessionMetadataStore.entries.get('ses_fork')).toEqual({ directory: '/repo/app', openchamber: { assist: { recap: 'kept' } } });
   });
 
   it('rejects send and fork requests without a prompt before calling OpenCode', async () => {

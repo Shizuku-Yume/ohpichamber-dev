@@ -1,7 +1,9 @@
 import http from 'node:http';
 import https from 'node:https';
 
+import { Location } from '@opencode/schema/location';
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import { z } from 'zod';
 
 import {
   applyForwardProxyResponseHeaders,
@@ -211,75 +213,50 @@ export const createSseBoundaryTracker = () => {
   };
 };
 
-/**
- * Fields a session list is allowed to carry to the browser.
- *
- * The list is an allowlist, not a blocklist: OpenCode keeps adding to
- * `SessionInfo`, and a session list is fetched constantly, so anything heavy
- * that appears later must not silently start crossing the wire. `revert.files`
- * and `revert.snapshot` are the expensive parts and are dropped below;
- * `permissions` is a per-session ruleset the list view never reads.
- */
 const SESSION_LIST_ALLOWED_FIELDS = [
-  'id',
-  'parentID',
-  'projectID',
-  'location',
-  'subpath',
-  'title',
-  'agent',
-  'model',
-  'cost',
-  'tokens',
-  'outcome',
-  'time',
-  'metadata',
-  'fork',
+  'id', 'parentID', 'projectID', 'location', 'subpath', 'agent', 'model',
+  'cost', 'tokens', 'outcome', 'time', 'fork', 'revert',
 ];
 
-export const sanitizeSessionListItem = (session) => {
-  if (!session || typeof session !== 'object' || Array.isArray(session)) {
-    return session;
-  }
+const sessionListItemSchema = z.object({
+  id: z.string().optional(),
+  parentID: z.string().nullable().optional(),
+  projectID: z.string().nullable().optional(),
+  location: z.object({ directory: z.string() }).optional(),
+  subpath: z.string().optional(),
+  agent: z.string().optional(),
+  model: z.unknown().optional(),
+  cost: z.number().optional(),
+  tokens: z.unknown().optional(),
+  outcome: z.unknown().optional(),
+  time: z.record(z.string(), z.unknown()).optional(),
+  fork: z.unknown().optional(),
+  revert: z.object({ messageID: z.string().optional(), partID: z.string().optional() }).optional(),
+}).passthrough();
 
+const sessionResponseEnvelopeSchema = z.object({
+  data: sessionListItemSchema.extend({ id: z.string().min(1) }),
+}).passthrough();
+const sessionResponseSchema = z.union([
+  sessionListItemSchema.extend({ id: z.string().min(1) }),
+  sessionResponseEnvelopeSchema.transform((response) => response.data),
+]);
+const hostMetadataPatchSchema = z.object({
+  title: z.string().nullable().optional(),
+  directory: z.string().nullable().optional(),
+  projectID: z.string().nullable().optional(),
+});
+const hostRevisionSchema = z.string().regex(/^(0|[1-9][0-9]*)$/);
+
+export const sanitizeSessionListItem = (session) => {
+  const parsed = z.record(z.string(), z.unknown()).parse(session);
   const sanitized = {};
   for (const key of SESSION_LIST_ALLOWED_FIELDS) {
-    if (key in session) {
-      sanitized[key] = session[key];
-    }
+    if (key in parsed) sanitized[key] = parsed[key];
   }
-
-  // Only the revert marker: the staged file list and its snapshot are what make
-  // a reverted session's record large.
-  const revert = session.revert;
-  if (revert && typeof revert === 'object' && !Array.isArray(revert)) {
-    const revertMarker = {};
-    if (typeof revert.messageID === 'string') {
-      revertMarker.messageID = revert.messageID;
-    }
-    if (typeof revert.partID === 'string') {
-      revertMarker.partID = revert.partID;
-    }
-    if (Object.keys(revertMarker).length > 0) {
-      sanitized.revert = revertMarker;
-    }
-  }
-
   return sanitized;
 };
 
-/**
- * Preserve the V2 pagination envelope while sanitizing session records.
- */
-const sanitizeSessionListPayload = (payload) => {
-  if (Array.isArray(payload)) {
-    return payload.map((session) => sanitizeSessionListItem(session));
-  }
-  if (payload && typeof payload === 'object' && Array.isArray(payload.data)) {
-    return { ...payload, data: payload.data.map((session) => sanitizeSessionListItem(session)) };
-  }
-  return payload;
-};
 
 const sessionListRecords = (payload) => {
   if (Array.isArray(payload)) return payload;
@@ -289,107 +266,67 @@ const sessionListRecords = (payload) => {
 
 export const registerOpenCodeProxy = (app, deps) => {
   const {
-    fs,
-    OPEN_CODE_READY_GRACE_MS,
-    LONG_REQUEST_TIMEOUT_MS,
-    getRuntime,
-    getOpenCodeAuthHeaders,
-    buildOpenCodeUrl,
-    ensureOpenCodeApiPrefix,
+    fs, OPEN_CODE_READY_GRACE_MS, LONG_REQUEST_TIMEOUT_MS, getRuntime,
+    getOpenCodeAuthHeaders, buildOpenCodeUrl, ensureOpenCodeApiPrefix,
     SSE_HEARTBEAT_INTERVAL_MS = DEFAULT_SSE_HEARTBEAT_INTERVAL_MS,
     SSE_UPSTREAM_STALL_TIMEOUT_MS = DEFAULT_UPSTREAM_STALL_TIMEOUT_MS,
     getSseUpstreamStallTimeoutMs = () => SSE_UPSTREAM_STALL_TIMEOUT_MS,
     readWorktreeBootstrapStatus = getWorktreeBootstrapStatus,
     WORKTREE_READY_TIMEOUT_MS = 5 * 60 * 1000,
-    // OpenCode 2.x has no archive route, so archive state is OpenChamber's own
-    // and the proxy folds it onto the sessions it serves (`time.archived`).
-    // Session metadata lives on OpenCode's record; the proxy lays over only
-    // the entries an older OpenChamber left in the legacy file until they are
-    // migrated.
-    getArchivedSessions = null,
-    getStoredSessionMetadata = null,
-    // Isolated spaces, when the feature's switch is on: the merged session list, and the hub
-    // whose space events the global SSE stream carries beside the host's. Both absent means
-    // the host's own answers go out exactly as before spaces.
+    listSessionMetadata,
+    listArchivedSessions,
+    persistSessionMetadata,
+    inheritForkMetadata,
     mergeSpaceSessionList = null,
     spaceEventHub = null,
   } = deps;
 
-  /**
-   * `{ [sessionID]: archivedAt }` for the current instance, or `null` when the
-   * store cannot answer. `null` means "unknown", and an unknown answer leaves
-   * the upstream record untouched — never rewrites a session as un-archived.
-   */
-  const readArchivedSessions = async () => {
-    if (typeof getArchivedSessions !== 'function') return null;
-    try {
-      const archived = await getArchivedSessions();
-      return archived && typeof archived === 'object' ? archived : null;
-    } catch (error) {
-      console.warn('[proxy] archive state unavailable:', error?.message ?? error);
-      return null;
+  const readHostProjection = async () => {
+    const [metadata, archive] = await Promise.all([
+      listSessionMetadata(),
+      listArchivedSessions(),
+    ]);
+    return { metadata, archive };
+  };
+  const projectSession = (session, projection) => {
+    const parsed = sessionListItemSchema.safeParse(session);
+    if (!parsed.success || !parsed.data.id) return null;
+    const metadataEntry = projection.metadata?.entries?.[session.id];
+    const archiveEntry = projection.archive?.entries?.[session.id];
+    const metadataErrors = projection.metadata?.errors || {};
+    const archiveErrors = projection.archive?.errors || {};
+    const next = sanitizeSessionListItem(parsed.data);
+    delete next.projectID;
+    if (metadataEntry?.metadata) {
+      Object.assign(next, metadataEntry.metadata);
+      next.metadataRevision = hostRevisionSchema.parse(metadataEntry.revision);
+    } else if (metadataErrors[session.id] || projection.metadata?.conversion?.code) {
+      next.hostMetadataError = metadataErrors[session.id] || projection.metadata.conversion.code;
+    } else {
+      next.metadataRevision = '0';
     }
-  };
-
-  /**
-   * `{ [sessionID]: metadata }` still waiting to be migrated to OpenCode, or
-   * `null` when the store cannot answer. `null` means "unknown", and an
-   * unknown answer leaves the upstream record untouched.
-   */
-  const readStoredSessionMetadata = async () => {
-    if (typeof getStoredSessionMetadata !== 'function') return null;
-    try {
-      const stored = await getStoredSessionMetadata();
-      // Nothing left to migrate is the normal state: skip the rewrite entirely.
-      return stored && typeof stored === 'object' && Object.keys(stored).length > 0 ? stored : null;
-    } catch (error) {
-      console.warn('[proxy] session metadata unavailable:', error?.message ?? error);
-      return null;
+    next.location = Location.PublicRef.make({ directory: next.directory ?? '' });
+    const time = next.time || {};
+    if ('archived' in time) {
+      next.time = Object.fromEntries(Object.entries(time).filter(([key]) => key !== 'archived'));
     }
-  };
-
-  // A number archives, `null` is an explicit unarchive (drops the stamp OpenCode
-  // still carries for a session migrated from v1), and a session the file does
-  // not mention keeps whatever OpenCode says.
-  const withArchivedAt = (session, archived) => {
-    if (!session || typeof session !== 'object' || typeof session.id !== 'string') return session;
-    if (!Object.prototype.hasOwnProperty.call(archived, session.id)) return session;
-    const archivedAt = archived[session.id];
-    const time = session.time && typeof session.time === 'object' ? session.time : {};
-    if (typeof archivedAt === 'number') {
-      return { ...session, time: { ...time, archived: archivedAt } };
+    if (archiveEntry) {
+      if (archiveEntry.archivedAt !== null) next.time = { ...next.time, archived: archiveEntry.archivedAt };
+      next.archiveRevision = hostRevisionSchema.parse(archiveEntry.revision);
+    } else if (archiveErrors[session.id] || projection.archive?.conversion?.code) {
+      next.hostArchiveError = archiveErrors[session.id] || projection.archive.conversion.code;
     }
-    if (!('archived' in time)) return session;
-    const { archived: _dropped, ...rest } = time;
-    return { ...session, time: rest };
+    return next;
   };
-
-  /**
-   * A legacy entry is the newest metadata its session has, including {}, so it
-   * replaces the upstream record until migration pushes it there.
-   */
-  const withStoredMetadata = (session, stored) => {
-    if (!session || typeof session !== 'object' || typeof session.id !== 'string') return session;
-    const ours = stored[session.id];
-    if (!ours || typeof ours !== 'object' || Array.isArray(ours)) return session;
-    return { ...session, metadata: ours };
-  };
-
-  const overlaySession = (session, archived, stored) => {
-    let result = session;
-    if (archived) result = withArchivedAt(result, archived);
-    if (stored) result = withStoredMetadata(result, stored);
-    return result;
-  };
-
   const overlayOwnedStateOnList = async (payload) => {
     const records = sessionListRecords(payload);
     if (!records) return payload;
-    const [archived, stored] = await Promise.all([readArchivedSessions(), readStoredSessionMetadata()]);
-    if (!archived && !stored) return payload;
-    const overlaid = records.map((session) => overlaySession(session, archived, stored));
-    return Array.isArray(payload) ? overlaid : { ...payload, data: overlaid };
+    const projected = await readHostProjection();
+    const data = records.map((session) => projectSession(session, projected)).filter((session) => session !== null);
+    if (records.length > 0 && data.length === 0) throw new Error('Invalid upstream session records');
+    return Array.isArray(payload) ? data : { ...payload, data };
   };
+
 
   if (app.get('opencodeProxyConfigured')) {
     return;
@@ -807,7 +744,7 @@ export const registerOpenCodeProxy = (app, deps) => {
       }
 
       res.setHeader('content-type', result.contentType);
-      const hostList = await overlayOwnedStateOnList(sanitizeSessionListPayload(result.payload));
+      const hostList = await overlayOwnedStateOnList(result.payload);
       // The first page of the global list carries every space's sessions after the host's; a
       // later page, and a list scoped to one directory, are the host's alone.
       const listQuery = new URL(upstreamPath, 'http://localhost').searchParams;
@@ -942,49 +879,115 @@ export const registerOpenCodeProxy = (app, deps) => {
       next(error);
     }
   });
-
   // V2 lists sessions across directories on every platform and owns pagination.
+  const hostMutationBody = (req) => {
+    const body = z.record(z.string(), z.unknown()).parse(req.body ?? {});
+    const patch = hostMetadataPatchSchema.parse(body);
+    const executionBody = { ...body };
+    delete executionBody.metadata;
+    delete executionBody.title;
+    delete executionBody.directory;
+    delete executionBody.projectID;
+    delete executionBody.openchamber;
+    return { body: executionBody, patch };
+  };
+  const persistMutation = async (req, mutation, id) => {
+    const forkSource = /^\/api\/session\/([^/]+)\/fork\/?$/.exec(req.path);
+    if (forkSource) {
+      await inheritForkMetadata(decodeURIComponent(forkSource[1]), { id, ...mutation.patch }, mutation.patch.directory ?? '');
+    } else if (Object.keys(mutation.patch).length > 0) {
+      await persistSessionMetadata(id, mutation.patch, { directory: mutation.patch.directory });
+    }
+  };
+  const forwardSessionMutation = async (req, res, next) => {
+    const abortController = new AbortController();
+    const abortUpstream = () => abortController.abort();
+    const onResponseClose = () => {
+      if (!res.writableEnded) abortUpstream();
+    };
+    // IncomingMessage.signal aborts on normal close after body parsing in Node
+    // 24. Use client disconnects, not completion of the incoming body, to cancel.
+    req.once('aborted', abortUpstream);
+    res.once('close', onResponseClose);
+    if (req.aborted || res.destroyed) abortUpstream();
+    try {
+      const mutation = hostMutationBody(req);
+      const upstreamPath = await getRequestUpstreamPath(req);
+      const hostOnly = (req.method === 'PATCH' || req.method === 'PUT')
+        && Object.keys(mutation.body).length === 0 && Object.keys(mutation.patch).length > 0;
+      if (hostOnly) {
+        try {
+          await persistMutation(req, mutation, req.params.sessionID);
+        } catch (error) {
+          return res.status(500).json({ error: 'Host metadata write failed', code: 'METADATA_WRITE_FAILED' });
+        }
+      }
+      // The original framing describes the pre-strip body. The header collector
+      // removes Content-Length/Transfer-Encoding; Fetch frames the new JSON bytes.
+      const headers = normalizeForwardedDirectoryHeaders(collectForwardProxyHeaders(req.headers, getOpenCodeAuthHeaders()));
+      headers['accept-encoding'] = 'identity';
+      if (!hostOnly) headers['content-type'] = 'application/json';
+      const upstream = await fetch(buildOpenCodeUrl(upstreamPath, ''), {
+        method: hostOnly ? 'GET' : req.method,
+        headers,
+        body: hostOnly ? undefined : JSON.stringify(mutation.body),
+        signal: abortController.signal,
+      });
+      const text = await upstream.text();
+      if (!upstream.ok) {
+        res.status(upstream.status);
+        applyForwardProxyResponseHeaders(upstream.headers, res);
+        return res.end(text);
+      }
+      const session = sessionResponseSchema.parse(JSON.parse(text));
+      if (!hostOnly) {
+        try {
+          await persistMutation(req, mutation, session.id);
+        } catch (error) {
+          const partialAction = req.route.path === '/api/session/:sessionID/fork' ? 'fork-created'
+            : (req.method === 'POST' ? 'session-created' : 'session-moved');
+          return res.status(500).json({ error: 'Host metadata write failed', code: 'METADATA_WRITE_FAILED', partial: true, partialAction, sessionId: session.id });
+        }
+      }
+      res.status(upstream.status);
+      applyForwardProxyResponseHeaders(upstream.headers, res);
+      return res.json(projectSession(session, await readHostProjection()));
+    } catch (error) {
+      if (abortController.signal.aborted && isAbortError(error)) return;
+      return next(error);
+    } finally {
+      req.off('aborted', abortUpstream);
+      res.off('close', onResponseClose);
+    }
+  };
+
+  app.post('/api/session', forwardSessionMutation);
+  app.patch('/api/session/:sessionID', forwardSessionMutation);
+  app.put('/api/session/:sessionID', forwardSessionMutation);
+  app.post('/api/session/:sessionID/fork', forwardSessionMutation);
+
   app.get('/api/session', (req, res, next) => {
     return forwardSanitizedSessionListRequest(req, res, next, 'session.list');
   });
 
-  // One session: the same overlay, so a detail read agrees with the list it
-  // came from. Everything else about the record is forwarded untouched.
+  // Detail responses are composed with the same partial Host projection as lists.
   app.get('/api/session/:sessionID', async (req, res, next) => {
-    if (typeof getArchivedSessions !== 'function' && typeof getStoredSessionMetadata !== 'function') return next();
     try {
       const upstreamPath = await getRequestUpstreamPath(req);
       const result = await fetchSessionListPayload(upstreamPath, { req });
-
       res.status(result.upstream.status);
       applyForwardProxyResponseHeaders(result.upstream.headers, res);
       res.setHeader('content-type', result.contentType);
-
-      const record = result.isJson && !result.parseError ? result.payload : null;
-      const session = record && typeof record === 'object' && !Array.isArray(record)
-        ? (record.data && typeof record.data === 'object' ? record.data : record)
-        : null;
-      if (!session || typeof session.id !== 'string') {
-        res.end(result.bodyText);
-        return;
-      }
-
-      const [archived, stored] = await Promise.all([readArchivedSessions(), readStoredSessionMetadata()]);
-      if (!archived && !stored) {
-        res.end(result.bodyText);
-        return;
-      }
-
-      const overlaid = overlaySession(session, archived, stored);
-      res.json(record.data && typeof record.data === 'object' ? { ...record, data: overlaid } : overlaid);
+      if (!result.upstream.ok || !result.isJson || result.parseError) return res.end(result.bodyText);
+      const session = sessionResponseSchema.parse(result.payload);
+      const projected = projectSession(session, await readHostProjection());
+      const envelope = sessionResponseEnvelopeSchema.safeParse(result.payload);
+      return res.json(envelope.success ? { ...envelope.data, data: projected } : projected);
     } catch (error) {
       if (isAbortError(error)) return;
       console.error('[proxy] OpenCode session.get proxy error:', error?.message ?? error);
-      if (!res.headersSent) {
-        res.status(503).json({ error: 'OpenCode service unavailable' });
-        return;
-      }
-      next(error);
+      if (!res.headersSent) return res.status(503).json({ error: 'OpenCode service unavailable' });
+      return next(error);
     }
   });
 
@@ -1007,6 +1010,7 @@ export const registerOpenCodeProxy = (app, deps) => {
   // `apiProxy`.
   const resolveOpenCodeProxyAgent = createOpenCodeProxyAgentResolver(resolveProxyTarget);
 
+
   const createApiProxy = (timeoutMs) => createProxyMiddleware({
     target: resolveProxyTarget(),
     get agent() {
@@ -1021,6 +1025,7 @@ export const registerOpenCodeProxy = (app, deps) => {
     pathRewrite: (proxiedPath) => `/api${proxiedPath === '/' ? '' : proxiedPath}`,
     // Dynamic target — port can change after restart
     router: () => resolveProxyTarget(),
+
     on: {
       proxyReq: (proxyReq, req) => {
         // Inject OpenCode auth headers

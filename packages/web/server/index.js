@@ -149,7 +149,7 @@ import { createDevTunnelRuntime } from './lib/dev-tunnel/runtime.js';
 import { registerBrowserControlRoutes } from './lib/browser-control/routes.js';
 import { createManagedConfigRuntime } from './lib/opencode/managed-config-file.js';
 import { createOpenChamberSessionService } from './lib/openchamber-sessions/routes.js';
-import { createSessionMetadataStore, createOpenCodeSessionMetadata } from './lib/openchamber-sessions/session-metadata-store.js';
+import { createHostSessionState } from './lib/host/session-state.js';
 import { createOpenCodeClient } from './lib/openchamber-sessions/opencode-client.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
@@ -551,40 +551,28 @@ const broadcastOpenChamberUiEvent = createGlobalUiEventBroadcaster({
   writeSseEvent,
 });
 
-/**
- * Per-session OpenChamber state (goal progress, the assist recap, the
- * obligatory-context cursor, pinned notes) lives in OpenCode's session
- * metadata. The store merge-patches it there and migrates what older
- * OpenChamber versions kept in `sessions-metadata.json`.
- */
-const sessionMetadataStore = createSessionMetadataStore({
-  dataDir: OPENCHAMBER_DATA_DIR,
-  // Called, not captured: the OpenCode URL and auth helpers are declared
-  // further down and only ever used once a request arrives.
-  openCode: {
-    read: (...args) => createOpenCodeSessionMetadata({ buildOpenCodeUrl, getOpenCodeAuthHeaders }).read(...args),
-    write: (...args) => createOpenCodeSessionMetadata({ buildOpenCodeUrl, getOpenCodeAuthHeaders }).write(...args),
-  },
-});
+// Operational session state remains Host-owned when agent execution is unavailable.
+const hostSessionState = createHostSessionState({ dataDir: OPENCHAMBER_DATA_DIR });
+const { sessionMetadataStore, archiveStore, sessionFoldersStore } = hostSessionState;
 
 const readStoredSessionMetadata = (sessionID) => sessionMetadataStore.get(sessionID);
 
 const persistSessionMetadataPatch = async (sessionID, patch, { directory = '' } = {}) => {
-  const metadata = await sessionMetadataStore.setSessionMetadata(sessionID, patch, { directory });
-  // The full merged object, so a client that missed an earlier patch does not
-  // have to reconstruct it.
-  broadcastOpenChamberUiEvent({
-    type: 'openchamber:session-metadata',
-    properties: { sessionID, metadata },
-  });
+  const result = await sessionMetadataStore.setSessionMetadata(sessionID, patch);
+  if (result.changed) {
+    broadcastOpenChamberUiEvent({
+      type: 'openchamber:session-metadata',
+      properties: { sessionID, metadata: result.metadata, revision: result.revision },
+    });
+  }
   // The write itself arms the goal loop: it is the authoritative signal and
   // does not depend on the event stream being connected.
   // Called, not captured: the runtime is declared further down.
-  if (patch?.openchamber && 'goal' in patch.openchamber) {
-    void Promise.resolve(sessionGoalRuntime.notifyGoalChanged(sessionID, directory, metadata))
+  if (result.changed && patch?.openchamber && 'goal' in patch.openchamber) {
+    void Promise.resolve(sessionGoalRuntime.notifyGoalChanged(sessionID, directory, result.metadata))
       .catch((error) => console.warn('[session-goal] could not arm after a goal change:', error?.message ?? error));
   }
-  return metadata;
+  return result;
 };
 
 /** A metadata change decided against the record at write time; broadcast only when it changed. */
@@ -593,7 +581,7 @@ const updateSessionMetadataWith = async (sessionID, decide, { directory = '' } =
   if (result.changed) {
     broadcastOpenChamberUiEvent({
       type: 'openchamber:session-metadata',
-      properties: { sessionID, metadata: result.metadata },
+      properties: { sessionID, metadata: result.metadata, revision: result.revision },
     });
   }
   return result;
@@ -921,6 +909,7 @@ notificationTemplateRuntime = createNotificationTemplateRuntime({
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
   resolveGitBinaryForSpawn,
+  readSessionMetadata: readStoredSessionMetadata,
 });
 
 const notificationTriggerRuntime = createNotificationTriggerRuntime({
@@ -1236,10 +1225,11 @@ const processForwardedServerEvent = (payload, emitSyntheticEvent) => {
 
 
 const serverUtilsRuntime = createServerUtilsRuntime({
-  // Read lazily: the archive store is created with the session service further
-  // down, while the proxy is registered later still.
-  getArchivedSessions: () => openChamberSessionService.archiveStore.getAll(),
-  getStoredSessionMetadata: () => sessionMetadataStore.listUnmigrated(),
+  // Read lazily: session service composition completes before proxy registration.
+  listArchivedSessions: () => openChamberSessionService.archiveStore.listAll(),
+  listSessionMetadata: () => sessionMetadataStore.listAll(),
+  persistSessionMetadata: persistSessionMetadataPatch,
+  inheritForkMetadata: (...args) => openChamberSessionService.inheritForkMetadata(...args),
   // Isolated spaces: with the switch on, the session list carries every space's sessions and
   // the global SSE stream their events. Called, not captured: the host is made in `main`.
   getMergeSpaceSessionList: () => (spacesHost ? (payload) => spacesHost.mergeSessionList(payload) : null),
@@ -1670,10 +1660,22 @@ const openChamberSessionService = createOpenChamberSessionService({
   worktreeBootstrapStore,
   hydrateWorktreeCheckout: featureRoutesRuntime.hydrateBoundCheckout,
   createChangeRequestWorktree: featureRoutesRuntime.createChangeRequestWorktree,
-  // OpenCode 2.x has no archive route, so the state is OpenChamber's own and
-  // lives beside the instance it describes.
-  dataDir: OPENCHAMBER_DATA_DIR,
   sessionMetadataStore,
+  archiveStore,
+  readLegacySessionProjection: async (sessionID, { directory = '' } = {}) => {
+    const session = await createOpenCodeClient({
+      baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''),
+      headers: getOpenCodeAuthHeaders(),
+      directory,
+    }).session.get({ sessionID });
+    return {
+      id: session.id,
+      title: session.title,
+      directory: session.location.directory,
+      projectID: session.projectID,
+      metadata: session.metadata,
+    };
+  },
   persistSessionMetadata: persistSessionMetadataPatch,
   broadcastGlobalUiEvent: broadcastOpenChamberUiEvent,
   resolveAutoSelection: (input) => routingRuntime.resolveAutoSelection(input),
@@ -1825,11 +1827,6 @@ const bootstrapOpenCodeAtStartup = async (...args) => {
   void ensureGlobalWatcherStarted().catch((error) => {
     console.warn(`Global event watcher startup failed: ${error?.message || error}`);
   });
-  // Entries the sweep cannot push now stay in the legacy file and are pushed on
-  // the session's next write or the next start.
-  void waitForOpenCodeReady()
-    .then(() => sessionMetadataStore.migrateLegacy())
-    .catch((error) => console.warn('[openchamber-sessions] session metadata migration failed:', error?.message ?? error));
 };
 const killProcessOnPort = (...args) => openCodeLifecycleRuntime.killProcessOnPort(...args);
 const waitForPortRelease = (...args) => openCodeLifecycleRuntime.waitForPortRelease(...args);
@@ -1882,6 +1879,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   },
   tunnelAuthController,
   scheduledTasksRuntime,
+  hostSessionState,
   beginGuestServiceShutdown,
   stopAllGuestServices,
   getGuestSurfaceRuntime: () => guestSurfaceRuntime,
@@ -1895,6 +1893,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
 const gracefulShutdown = (...args) => gracefulShutdownRuntime.gracefulShutdown(...args);
 
 async function main(options = {}) {
+  await hostSessionState.initialize();
   beginGuestServiceHost();
   // Again at start: the desktop shell merges the login shell's environment,
   // where proxy variables often live, after this module first loaded.
@@ -2321,6 +2320,7 @@ async function main(options = {}) {
     agentToolRuntime,
     desktopUpdater,
     skipBodyParsing: (req) => spacesHost?.skipsBodyParsing(req) === true,
+    isRequestOriginAllowed,
   });
   uiAuthController = bootstrapResult.uiAuthController;
   // After the API auth gate, before every route that reads a directory, before the OpenCode proxy.
@@ -2435,6 +2435,8 @@ async function main(options = {}) {
     environmentRuntime,
     listConfiguredProjects,
     messageSearchRuntime,
+    sessionFoldersStore,
+    isRequestOriginAllowed,
     crypto,
     fs,
     os,

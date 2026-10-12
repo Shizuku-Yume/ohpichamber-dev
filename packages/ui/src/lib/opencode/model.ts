@@ -107,6 +107,9 @@ export type SessionStatus = SessionStatusWire
 
 export type SessionOutcome = "succeeded" | "failed" | "interrupted"
 
+export type HostMetadataErrorCode = "METADATA_CORRUPT" | "METADATA_READ_FAILED" | "METADATA_WRITE_FAILED"
+export type HostArchiveErrorCode = HostMetadataErrorCode
+
 export type Session = {
   id: string
   parentID?: string
@@ -129,6 +132,10 @@ export type Session = {
     archived?: number
   }
   metadata?: Metadata
+  /** Decimal revision of this exact Host-owned metadata projection. */
+  metadataRevision?: string
+  hostMetadataError?: HostMetadataErrorCode
+  hostArchiveError?: HostArchiveErrorCode
   permissions?: PermissionRuleset
   revert?: SessionRevert
   fork?: {

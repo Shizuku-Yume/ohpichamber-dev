@@ -1,4 +1,5 @@
 import { registerNotificationEmitRoutes } from '../notifications/emit-route.js';
+import { registerCanonicalHostRoutes } from '../host/canonical-routes.js';
 
 export const createBootstrapRuntime = (dependencies) => {
   const {
@@ -68,6 +69,7 @@ export const createBootstrapRuntime = (dependencies) => {
       pluginNotificationEmitter,
       desktopUpdater,
       skipBodyParsing,
+      isRequestOriginAllowed,
     } = options;
 
     const uiAuthController = createUiAuth({
@@ -95,6 +97,13 @@ export const createBootstrapRuntime = (dependencies) => {
     });
 
     registerCommonRequestMiddleware(app, { express, verboseRequestLogs, skipBodyParsing });
+
+    registerCanonicalHostRoutes(app, {
+      express,
+      uiAuthController,
+      tunnelAuthController,
+      isRequestOriginAllowed,
+    });
 
     registerAgentToolRoutes(app, { express, agentToolRuntime });
 

@@ -85,6 +85,7 @@ This module provides notification message preparation utilities for the web serv
 
 ### Template runtime API (template-runtime.js)
 - `createNotificationTemplateRuntime(dependencies)`: creates shared notification/template runtime. Model-backed summarization was retired after the Zen provider became unavailable.
+- Requires `readSessionMetadata(sessionId) -> Promise<metadata|null>`, bound to the Host SQLite metadata store. Each template build reads the current Host custom title before considering a payload or execution-native default title. A strict Host read failure propagates to the trigger runtime's existing generic notification fallback; it must not substitute an execution title for an unreadable Host override. The title-ownership regressions use real SQLite, including renames and corrupt rows; this task has not executed them.
 - Returned API:
   - `resolveNotificationTemplate(template, variables)`
   - `shouldApplyResolvedTemplateMessage(template, resolved, variables)`

@@ -4,7 +4,19 @@
  */
 
 import type { ContextPartMetadata } from "@/lib/messages/contextParts"
-import type { Metadata } from "./model"
+import type { JsonValue, Metadata } from "./model"
+import { z } from "zod"
+
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(z.string(), jsonValueSchema)]),
+)
+
+export const metadataRevisionSchema = z.string().regex(/^(0|[1-9]\d*)$/)
+
+export const sessionMetadataStateSchema = z.object({
+  metadata: z.record(z.string(), jsonValueSchema),
+  revision: metadataRevisionSchema,
+})
 
 /**
  * Metadata crosses the wire as JSON. Round-tripping drops what JSON cannot

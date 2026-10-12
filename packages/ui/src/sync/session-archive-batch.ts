@@ -4,17 +4,18 @@
  * Archiving the sessions linked to a worktree one request at a time is what
  * made removing a worktree with many sessions take tens of seconds: every
  * session cost its own round trip and its own store reconciliation. This asks
- * the OpenChamber server to archive the whole batch next to OpenCode, so the
+ * the Host server to archive the whole batch, so the
  * browser spends one request and reconciles once.
  *
  * OpenCode 2.x has no HTTP route that sets `time.archived` or rewrites a
- * session's metadata after creation, so OpenChamber keeps both itself, next to
- * OpenCode, per data directory. These routes are an OpenChamber capability, not
- * an OpenCode one. Every retained runtime serves them through its OpenChamber
- * host; failed or malformed responses leave the caller's sessions unchanged.
+ * session's metadata after creation. Host SQLite owns both independently of
+ * the execution runtime. Every retained runtime serves these OpenChamber
+ * routes through its Host; failed or malformed responses leave the caller's
+ * sessions unchanged.
  */
 
-import type { JsonValue, Metadata } from "@/lib/opencode/model"
+import type { Metadata } from "@/lib/opencode/model"
+import { sessionMetadataStateSchema } from "@/lib/opencode/json"
 import { z } from 'zod';
 
 import { runtimeFetch } from '@/lib/runtime-fetch';
@@ -124,16 +125,9 @@ export async function requestSessionUnarchiveBatch(ids: string[], directory?: st
   };
 }
 
-const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(z.string(), jsonValueSchema)]),
-);
-
-const metadataResponseSchema = z.object({
-  metadata: z.record(z.string(), jsonValueSchema),
-});
 
 export type SessionMetadataUpdateResult =
-  | { outcome: 'updated'; metadata: Metadata }
+  | { outcome: 'updated'; metadata: Metadata; revision: string }
   | { outcome: 'unavailable'; reason: string };
 
 /**
@@ -171,10 +165,10 @@ export async function requestSessionMetadataUpdate(
     return { outcome: 'unavailable', reason: error instanceof Error ? error.message : 'metadata response was not JSON' };
   }
 
-  const parsed = metadataResponseSchema.safeParse(body);
+  const parsed = sessionMetadataStateSchema.safeParse(body);
   if (!parsed.success) {
     return { outcome: 'unavailable', reason: `malformed metadata response: ${parsed.error.issues[0]?.message ?? 'unknown shape'}` };
   }
 
-  return { outcome: 'updated', metadata: parsed.data.metadata };
+  return { outcome: 'updated', metadata: parsed.data.metadata, revision: parsed.data.revision };
 }

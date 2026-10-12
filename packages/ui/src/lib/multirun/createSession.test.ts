@@ -62,7 +62,7 @@ mock.module('@/sync/session-archive-batch', () => ({
     calls.push('metadata');
     if (options.rejectUpdate) return { outcome: 'unavailable' as const, reason: 'write failed' };
     stored = options.omitSavedMarker ? {} : mergePatch(stored, patch);
-    return { outcome: 'updated' as const, metadata: stored };
+    return { outcome: 'updated' as const, metadata: stored, revision: '1' };
   },
 }));
 

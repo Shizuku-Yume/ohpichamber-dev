@@ -427,17 +427,17 @@ function getOrCreateJwtSecret() {
     if (fs.existsSync(JWT_SECRET_FILE)) {
       return new TextEncoder().encode(fs.readFileSync(JWT_SECRET_FILE, 'utf8').trim());
     }
-  } catch (e) {
-    console.warn('[JWT] Failed to read secret file:', e.message);
+  } catch {
+    console.warn('[JWT] Failed to read the Host session signing secret');
   }
 
   const secret = crypto.randomBytes(32).toString('hex');
   try {
     fs.mkdirSync(OPENCHAMBER_DATA_DIR, { recursive: true });
     fs.writeFileSync(JWT_SECRET_FILE, secret, { mode: 0o600 });
-    console.log('[JWT] Generated and persisted new secret to', JWT_SECRET_FILE);
-  } catch (e) {
-    console.warn('[JWT] Failed to persist secret:', e.message);
+    console.log('[JWT] Generated and persisted the Host session signing secret');
+  } catch {
+    console.warn('[JWT] Failed to persist the Host session signing secret');
   }
 
   return new TextEncoder().encode(secret);
@@ -538,28 +538,62 @@ export const createUiAuth = ({
     client: clientAuth?.client || null,
   });
 
-  if (!normalizedPassword) {
-    const setSessionCookie = (req, res, token, ttlMs = sessionTtlMs) => {
-      const secure = isSecureRequest(req);
-      const maxAgeSeconds = Math.floor(ttlMs / 1000);
-      const header = buildCookie({
-        name: sessionCookieNameForRequest(req, cookieName),
-        value: encodeURIComponent(token),
-        maxAge: maxAgeSeconds,
-        secure,
-      });
-      res.setHeader('Set-Cookie', header);
-    };
+  let jwtSecret = getOrCreateJwtSecret();
+  const resolveSessionTtlMs = (trustDevice) => (trustDevice ? trustedSessionTtlMs : sessionTtlMs);
+  const getTokenFromRequest = (req) => {
+    const cookies = parseCookies(req.headers.cookie);
+    const name = sessionCookieNameForRequest(req, cookieName);
+    if (cookies[name]) {
+      return cookies[name];
+    }
+    return null;
+  };
 
+  const setSessionCookie = (req, res, token, ttlMs) => {
+    const secure = isSecureRequest(req);
+    const maxAgeSeconds = Math.floor(ttlMs / 1000);
+    const header = buildCookie({
+      name: sessionCookieNameForRequest(req, cookieName),
+      value: encodeURIComponent(token),
+      maxAge: maxAgeSeconds,
+      secure,
+    });
+    res.setHeader('Set-Cookie', header);
+  };
+
+  const isSessionValid = async (token) => {
+    if (!token) {
+      return false;
+    }
+    try {
+      const { jwtVerify } = await loadJose();
+      const { payload } = await jwtVerify(token, jwtSecret);
+      return payload.type === (normalizedPassword ? 'ui-session' : 'ui-passwordless');
+    } catch {
+      return false;
+    }
+  };
+
+  const issueSession = async (req, res, { trustDevice = false } = {}) => {
+    const ttlMs = resolveSessionTtlMs(trustDevice);
+    const { SignJWT } = await loadJose();
+    const token = await new SignJWT({ type: normalizedPassword ? 'ui-session' : 'ui-passwordless' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime(ttlMs / 1000 + 's')
+      .sign(jwtSecret);
+    setSessionCookie(req, res, token, ttlMs);
+    return token;
+  };
+
+  if (!normalizedPassword) {
     const ensureSessionToken = async (req, res) => {
       const cookies = parseCookies(req.headers.cookie);
       const name = sessionCookieNameForRequest(req, cookieName);
-      if (cookies[name]) {
+      if (await isSessionValid(cookies[name])) {
         return cookies[name];
       }
-      const token = crypto.randomBytes(32).toString('base64url');
-      setSessionCookie(req, res, token, sessionTtlMs);
-      return token;
+      return issueSession(req, res);
     };
 
     const requireAuth = async (req, res, next) => {
@@ -586,17 +620,17 @@ export const createUiAuth = ({
       return res.status(401).json({ error: 'UI session authentication required', locked: true });
     };
 
-    const resolveAuthContext = async (req, res, { allowClientAuth = true, allowUrlToken = true } = {}) => {
+    const resolveAuthContext = async (req, res, { allowClientAuth = true, allowUrlToken = true, allowAnonymousSession = true } = {}) => {
       const cookies = parseCookies(req.headers.cookie);
       const name = sessionCookieNameForRequest(req, cookieName);
-      if (cookies[name]) {
+      if (!requireClientAuth && await isSessionValid(cookies[name])) {
         return { type: 'session', token: cookies[name] };
       }
       if (allowClientAuth) {
         const clientAuth = await authenticateClientRequest(req, { allowUrlToken });
         if (clientAuth) return clientAuthContext(clientAuth);
       }
-      if (!requireClientAuth) {
+      if (allowAnonymousSession && !requireClientAuth) {
         const token = await ensureSessionToken(req, res);
         return { type: 'session', token };
       }
@@ -616,6 +650,7 @@ export const createUiAuth = ({
           }
           return res.status(401).json({ authenticated: false, locked: true, clientAuthRequired: true });
         }
+        await ensureSessionToken(req, res);
         res.json({ authenticated: true, disabled: true });
       },
       handleSessionCreate: (_req, res) => {
@@ -675,9 +710,7 @@ export const createUiAuth = ({
 
   const salt = crypto.randomBytes(16);
   const expectedHash = crypto.scryptSync(normalizedPassword, salt, 64);
-  let jwtSecret = getOrCreateJwtSecret();
   let passwordBinding = crypto.createHmac('sha256', jwtSecret).update(normalizedPassword).digest('hex');
-  const resolveSessionTtlMs = (trustDevice) => (trustDevice ? trustedSessionTtlMs : sessionTtlMs);
   let passkeyController = createUiPasskeys({
     passwordBinding,
     readSettingsFromDiskMigrated,
@@ -697,27 +730,6 @@ export const createUiAuth = ({
     jwtSecret = persistJwtSecret(nextSecret);
     urlAuthTokens.clear();
     rebuildPasskeyController();
-  };
-
-  const getTokenFromRequest = (req) => {
-    const cookies = parseCookies(req.headers.cookie);
-    const name = sessionCookieNameForRequest(req, cookieName);
-    if (cookies[name]) {
-      return cookies[name];
-    }
-    return null;
-  };
-
-  const setSessionCookie = (req, res, token, ttlMs) => {
-    const secure = isSecureRequest(req);
-    const maxAgeSeconds = Math.floor(ttlMs / 1000);
-    const header = buildCookie({
-      name: sessionCookieNameForRequest(req, cookieName),
-      value: encodeURIComponent(token),
-      maxAge: maxAgeSeconds,
-      secure,
-    });
-    res.setHeader('Set-Cookie', header);
   };
 
   const clearSessionCookie = (req, res) => {
@@ -745,31 +757,6 @@ export const createUiAuth = ({
     } catch {
       return false;
     }
-  };
-
-  const isSessionValid = async (token) => {
-    if (!token) {
-      return false;
-    }
-    try {
-      const { jwtVerify } = await loadJose();
-      await jwtVerify(token, jwtSecret);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const issueSession = async (req, res, { trustDevice = false } = {}) => {
-    const ttlMs = resolveSessionTtlMs(trustDevice);
-    const { SignJWT } = await loadJose();
-    const token = await new SignJWT({ type: 'ui-session' })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime(ttlMs / 1000 + 's')
-      .sign(jwtSecret);
-    setSessionCookie(req, res, token, ttlMs);
-    return token;
   };
 
   startRateLimitCleanup();

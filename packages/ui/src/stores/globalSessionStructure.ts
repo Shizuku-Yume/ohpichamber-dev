@@ -65,7 +65,25 @@ export const mergeSessionDirectoryMetadata = (incoming: Session, existing?: Sess
   );
   let changed = false;
   const next: typeof incomingRecord = { ...incomingRecord };
+  const preserveHostMetadata = existing.metadataRevision !== undefined && (
+    incoming.metadataRevision === undefined
+    || incoming.metadataRevision.length < existing.metadataRevision.length
+    || (incoming.metadataRevision.length === existing.metadataRevision.length && incoming.metadataRevision < existing.metadataRevision)
+  );
 
+  if (incoming.hostMetadataError || preserveHostMetadata) {
+    next.title = existing.title;
+    next.metadata = existing.metadata;
+    next.metadataRevision = existing.metadataRevision;
+    next.directory = existingRecord.directory;
+    next.projectID = existingRecord.projectID;
+    next.project = existingRecord.project;
+    changed = true;
+  }
+  if (incoming.hostArchiveError) {
+    next.time = { ...incoming.time, archived: existing.time?.archived };
+    changed = true;
+  }
   if (!incomingDirectory && existingDirectory) {
     next.directory = existingRecord.directory;
     changed = true;

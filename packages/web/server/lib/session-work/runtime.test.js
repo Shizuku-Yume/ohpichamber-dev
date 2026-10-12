@@ -142,7 +142,7 @@ describe('session work runtime: a message was sent', () => {
       { runtime: { settings: { autoOpen: false } } },
       { runtime: { endpoint: null } },
       { session: { parentID: 'ses_parent' } },
-      { session: { metadata: { openchamber: { kind: 'review', originalSessionID: 'ses_0' } } } },
+      { runtime: { metadata: { openchamber: { kind: 'review', originalSessionID: 'ses_0' } } } },
       { session: { location: { directory: '/home/me/.config/openchamber/chats/2026-09-27/hello' } } },
     ]) {
       stubOpenCode({ session: setup.session });

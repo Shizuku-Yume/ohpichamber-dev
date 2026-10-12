@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import type { OpenCodeClient, OpenCodeEvent } from "@opencode/client"
 import type { SyncEvent } from "@/lib/opencode/events"
+import type { Metadata } from '@/lib/opencode/model'
+import { applyDirectoryEvent } from './event-reducer'
+import { INITIAL_STATE, type State } from './types'
 import { adoptRelayTunnel, deactivateRelayTunnel } from "@/lib/relay/runtime-tunnel"
 import type { RelayTunnelClient, RelayTunnelWebSocket } from "@/lib/relay/tunnel-client"
 import { clearRuntimeUrlAuthToken, setRuntimeUrlAuthToken } from "@/lib/runtime-auth"
@@ -35,6 +38,7 @@ function statusEvent(type: "busy" | "retry"): OpenCodeEvent {
 
 /** A raw stream payload: wire events, or OpenChamber's own bridge events. */
 type StreamPayload = OpenCodeEvent | { type: string; properties: Record<string, string> }
+  | { type: 'openchamber:session-metadata'; properties: { sessionID: string; metadata: Metadata; revision: string } }
 
 /** `keepalives` counts SSE comments sent before the events. They are activity without an event. */
 function createSdk(events: StreamPayload[], streamFinished: () => void, keepalives = 0): OpenCodeClient {
@@ -135,7 +139,7 @@ describe("createEventPipeline", () => {
       1,
     )
     expect(events).toHaveLength(1)
-    expect(events[0]).toMatchObject({ type: "session.patched", properties: { patch: { title: "New", cost: 1, time: { updated: 1000 } } } })
+    expect(events[0]).toMatchObject({ type: "session.patched", properties: { patch: { cost: 1, time: { updated: 1000 } } } })
   })
 
   test("bridges openchamber session status events into session.status", async () => {
@@ -157,10 +161,31 @@ describe("createEventPipeline", () => {
 
   test("bridges openchamber metadata announcements into session patches", async () => {
     const { events } = await collect(
-      [{ type: "openchamber:session-metadata", properties: { sessionID: "ses_1", metadata: { pinned: true } } as never }],
+      [{ type: "openchamber:session-metadata", properties: { sessionID: "ses_1", metadata: { pinned: true }, revision: '1' } }],
       1,
     )
-    expect(events[0]).toEqual({ type: "session.patched", properties: { sessionID: "ses_1", patch: { metadata: { pinned: true } } } })
+    expect(events[0]).toEqual({ type: "session.patched", properties: { sessionID: "ses_1", patch: { metadata: { pinned: true }, metadataRevision: '1' } } })
+  })
+
+  test('does not let a delayed older Host frame replace an HTTP write or a newer queued frame', async () => {
+    const { events } = await collect([
+      { type: 'openchamber:session-metadata', properties: { sessionID: 'ses_1', metadata: { value: 'second' }, revision: '2' } },
+      { type: 'openchamber:session-metadata', properties: { sessionID: 'ses_1', metadata: { value: 'first' }, revision: '1' } },
+    ], 2)
+    for (const revision of ['0', '3']) {
+      const draft: State = {
+        ...INITIAL_STATE, sessionEventRevision: {}, sessionDeletedRevision: {},
+        session: [{
+          id: 'ses_1', projectID: '', directory: '', title: '', cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          time: { created: 1, updated: 1 }, metadata: {}, metadataRevision: revision,
+        }],
+      }
+      if (revision === '3') draft.session[0].metadata = { value: 'http' }
+      for (const event of events) applyDirectoryEvent(draft, event)
+      expect(draft.session[0].metadataRevision).toBe(revision === '0' ? '2' : '3')
+      expect(draft.session[0].metadata?.value).toBe(revision === '0' ? 'second' : 'http')
+    }
   })
 
   test("passes OpenChamber notification and auto-accept frames through typed", async () => {

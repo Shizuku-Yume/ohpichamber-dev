@@ -12,6 +12,8 @@ This package owns the browser UI build, the Host Gateway HTTP and WebSocket serv
 
 OpenChamber's retained Host Gateway infrastructure is split between the dedicated `server/lib/host/` modules and the OpenCode integration directory; the extracted Host owner is documented in [`server/lib/host/DOCUMENTATION.md`](server/lib/host/DOCUMENTATION.md). OpenCode proxy routes and process lifecycle management remain scheduled for retirement in favor of the OMP Agent Service and Canonical API (`/api/agent/v1`).
 
+M1 adds Host-composed canonical health, readiness, capabilities, and explicit credential preflight. The absent Agent Service stays unavailable regardless of inherited OpenCode readiness. Preflight reads/imports/stages no credentials, and actual SDK handoff remains required in task22; the exact request/result and retained-surface behavior are documented in the Host module guide above. Private Node Host verification covered status, authentication, origin validation and use-time enterprise refusal without legacy credential calls.
+
 Full project overview, screenshots, and architecture documents live in the repository root and `.workflow/omp-migration/`.
 
 ## Install

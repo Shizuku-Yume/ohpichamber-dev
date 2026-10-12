@@ -8,6 +8,7 @@ import {
   type SessionStatus,
   type ToolPart,
 } from "@/lib/opencode/model"
+import { mergeSessionDirectoryMetadata } from "@/stores/globalSessionStructure"
 import { Binary } from "./binary"
 import type { State } from "./types"
 import { dropSessionCaches } from "./session-cache"
@@ -194,12 +195,17 @@ function applySessionPatch(session: Session, patch: SessionPatch): Session {
   if (patch.revert === null) delete next.revert
   else if (patch.revert !== undefined) next.revert = patch.revert
   if (patch.outcome !== undefined) next.outcome = patch.outcome
-  if (patch.metadata !== undefined) next.metadata = patch.metadata
+  if (patch.metadata !== undefined) {
+    next.metadata = patch.metadata
+    delete next.hostMetadataError
+  }
+  if (patch.metadataRevision !== undefined) next.metadataRevision = patch.metadataRevision
   if (patch.time) {
     const { archived, ...rest } = patch.time
+    if (archived !== undefined) delete next.hostArchiveError
     next.time = compact({ ...session.time, ...rest, archived: archived === null ? undefined : (archived ?? session.time.archived) })
   }
-  return next
+  return mergeSessionDirectoryMetadata(next, session)
 }
 
 function applyMessagePatch(message: Message, patch: MessagePatch): Message {

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 
 import type { SyncEvent } from "@/lib/opencode/events"
+import { translateWireEvent } from '@/lib/opencode/events'
+import type { OpenCodeEvent } from '@opencode/client'
 import type { Message, Part, PermissionRequest, Session } from "@/lib/opencode/model"
 import { applyDirectoryEvent, reduceGlobalEvent } from "./event-reducer"
 import { INITIAL_STATE, type State } from "./types"
@@ -61,6 +63,78 @@ describe("session events", () => {
     expect(changed).toBe(true)
     expect(draft.session[0]).toMatchObject({ title: "Renamed", time: { created: 1, updated: 5 } })
     expect(draft.sessionEventRevision?.ses_1).toBe(1)
+  })
+
+  test('rejects older Host metadata but still applies the runtime fields in its patch', () => {
+    const draft = state({ session: [session({ metadata: { value: 'new' }, metadataRevision: '2' })] })
+    expect(apply(draft, {
+      type: 'session.patched',
+      properties: { sessionID: 'ses_1', patch: { metadata: { value: 'old' }, metadataRevision: '1', cost: 7, time: { updated: 8 } } },
+    })).toBe(true)
+    expect(draft.session[0]).toMatchObject({ metadata: { value: 'new' }, metadataRevision: '2', cost: 7, time: { updated: 8 } })
+  })
+
+  test('a successful newer Host patch clears a previous metadata read failure', () => {
+    const draft = state({ session: [session({ metadata: { value: 'cached' }, metadataRevision: '2', hostMetadataError: 'METADATA_READ_FAILED' })] })
+    expect(apply(draft, {
+      type: 'session.patched',
+      properties: { sessionID: 'ses_1', patch: { metadata: { value: 'new' }, metadataRevision: '3' } },
+    })).toBe(true)
+    expect(draft.session[0]).toMatchObject({ metadata: { value: 'new' }, metadataRevision: '3' })
+    expect(draft.session[0].hostMetadataError).toBeUndefined()
+  })
+
+  test('an older metadata projection cannot block an independent archive patch', () => {
+    const draft = state({ session: [session({ metadata: { value: 'new' }, metadataRevision: '2' })], sessionTotal: 1 })
+    expect(apply(draft, {
+      type: 'session.patched',
+      properties: { sessionID: 'ses_1', patch: { metadata: { value: 'old' }, metadataRevision: '1', time: { archived: 9 } } },
+    })).toBe(true)
+    expect(draft.session).toEqual([])
+    expect(draft.sessionTotal).toBe(0)
+  })
+
+  test('native session events cannot overwrite committed Host metadata, including confirmed missing state', () => {
+    const nativeEvents: OpenCodeEvent[] = [
+      {
+        id: 'evt_created', created: 1000, location: { directory: '/engine' }, type: 'session.created',
+        durable: { aggregateID: 'ses_1', seq: 1, version: 1 },
+        data: { sessionID: 'ses_1', projectID: 'engine-project', location: { directory: '/engine' }, slug: 'engine', title: 'Engine title', metadata: { value: 'engine' }, version: '2.0.2' },
+      },
+      {
+        id: 'evt_renamed', created: 2000, location: { directory: '/engine' }, type: 'session.renamed',
+        durable: { aggregateID: 'ses_1', seq: 2, version: 1 }, data: { sessionID: 'ses_1', title: 'Engine renamed' },
+      },
+      {
+        id: 'evt_metadata', created: 2500, location: { directory: '/engine' }, type: 'session.metadata.updated',
+        durable: { aggregateID: 'ses_1', seq: 3, version: 1 }, data: { sessionID: 'ses_1', metadata: { value: 'engine-updated' } },
+      },
+      {
+        id: 'evt_moved', created: 3000, location: { directory: '/engine' }, type: 'session.moved',
+        durable: { aggregateID: 'ses_1', seq: 4, version: 1 },
+        data: { sessionID: 'ses_1', projectID: 'engine-project', location: { directory: '/engine-other' }, subpath: 'nested' },
+      },
+      {
+        id: 'evt_usage', created: 4000, location: { directory: '/engine' }, type: 'session.usage.updated',
+        data: { sessionID: 'ses_1', cost: 7, tokens: { input: 1, output: 1, reasoning: 0, cache: { read: 0, write: 0 } } },
+      },
+    ]
+    for (const metadataRevision of ['0', '2']) {
+      const committed = session({ metadataRevision, title: '', directory: '', projectID: '' })
+      if (metadataRevision === '2') {
+        committed.title = 'Host title'
+        committed.directory = '/host'
+        committed.projectID = 'host-project'
+        committed.metadata = { value: 'host' }
+      }
+      const draft = state({ session: [committed] })
+      for (const native of nativeEvents) for (const event of translateWireEvent(native)) apply(draft, event)
+      expect(draft.session[0]).toMatchObject({
+        metadataRevision, title: committed.title, directory: committed.directory, projectID: committed.projectID,
+        cost: 7, time: { updated: 4000 },
+      })
+      expect(draft.session[0].metadata).toEqual(committed.metadata)
+    }
   })
 
   test("a patch for an unknown session is ignored", () => {

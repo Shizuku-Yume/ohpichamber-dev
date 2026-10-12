@@ -329,6 +329,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       getOpenCodeAuthHeaders,
       waitForOpenCodeReady,
       emitSessionCreatedEvent,
+      isRequestOriginAllowed: routeDependencies.isRequestOriginAllowed,
       sessionService: openChamberSessionService,
     });
 
@@ -702,9 +703,9 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerSessionKnowledgeRoutes(app, { sessionKnowledgeRuntime });
     registerMessageSearchRoutes(app, { messageSearchRuntime });
 
+    if (!routeDependencies.sessionFoldersStore) throw new Error('Feature routes require the Host session folder store');
     registerSessionFoldersRoutes(app, {
-      fsPromises,
-      path,
+      sessionFoldersStore: routeDependencies.sessionFoldersStore,
       openchamberDataDir,
     });
     registerFsRoutes(app, {

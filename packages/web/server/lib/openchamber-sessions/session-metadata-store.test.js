@@ -1,277 +1,197 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DatabaseSync } from 'node:sqlite';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  createSessionMetadataStore,
+  mergeMetadataPatch,
+  MetadataCorruptError,
+  MetadataWriteError,
+} from './session-metadata-store.js';
 
-import { createSessionMetadataStore, mergeMetadataPatch } from './session-metadata-store.js';
+const roots = [];
+const makeDataDir = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-host-metadata-')); roots.push(dir); return dir; };
+afterEach(() => { while (roots.length > 0) fs.rmSync(roots.pop(), { recursive: true, force: true }); });
 
-const tempDirs = [];
-
-const makeDataDir = () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-metadata-'));
-  tempDirs.push(dir);
-  return dir;
-};
-
-
-afterEach(() => {
-  while (tempDirs.length > 0) {
-    fs.rmSync(tempDirs.pop(), { recursive: true, force: true });
-  }
-  vi.restoreAllMocks();
-});
+const writeJson = (dir, name, value) => fs.writeFileSync(path.join(dir, name), JSON.stringify(value));
 
 describe('mergeMetadataPatch', () => {
-  it('merges nested objects key by key instead of replacing them', () => {
-    const current = { openchamber: { goal: { id: 'g1', status: 'active' }, assist: { recap: 'r' } } };
-    const merged = mergeMetadataPatch(current, { openchamber: { goal: { status: 'complete' } } });
-
-    expect(merged).toEqual({
-      openchamber: { goal: { id: 'g1', status: 'complete' }, assist: { recap: 'r' } },
-    });
-    // The input is untouched: callers keep whatever they already held.
-    expect(current.openchamber.goal.status).toBe('active');
-  });
-
-  it('deletes a key when its patch value is null', () => {
-    expect(mergeMetadataPatch({ a: 1, b: 2 }, { b: null })).toEqual({ a: 1 });
-    expect(mergeMetadataPatch({ openchamber: { goal: {}, assist: {} } }, { openchamber: { assist: null } }))
-      .toEqual({ openchamber: { goal: {} } });
-  });
-
-  it('replaces arrays and scalars rather than merging into them', () => {
-    expect(mergeMetadataPatch({ pins: ['a', 'b'] }, { pins: ['c'] })).toEqual({ pins: ['c'] });
-    expect(mergeMetadataPatch({ a: { nested: true } }, { a: 'flat' })).toEqual({ a: 'flat' });
-  });
-
-  it('treats a missing or non-object base as empty', () => {
-    expect(mergeMetadataPatch(undefined, { a: 1 })).toEqual({ a: 1 });
-    expect(mergeMetadataPatch('nope', { a: 1 })).toEqual({ a: 1 });
-    expect(mergeMetadataPatch({ a: 1 }, 'nope')).toEqual({ a: 1 });
+  it('preserves unrelated nested values, replaces arrays, and deletes null keys', () => {
+    expect(mergeMetadataPatch(
+      { openchamber: { goal: { id: 'g1', status: 'active' }, assist: { recap: 'r' } }, pins: ['a'] },
+      { openchamber: { goal: { status: 'done' }, assist: null }, pins: ['b'] },
+    )).toEqual({ openchamber: { goal: { id: 'g1', status: 'done' } }, pins: ['b'] });
   });
 });
 
-const legacyFile = (dataDir) => path.join(dataDir, 'sessions-metadata.json');
-const writeLegacy = (dataDir, content) => {
-  fs.writeFileSync(legacyFile(dataDir), typeof content === 'string' ? content : JSON.stringify(content));
-};
+describe('createSessionMetadataStore Host SQLite persistence', () => {
+  it('persists operational metadata across a real close and reopen with independent revisions', async () => {
+    const dataDir = makeDataDir();
+    const first = createSessionMetadataStore({ dataDir });
+    await expect(first.get('missing')).resolves.toBeNull();
+    await expect(first.setSessionMetadata('ses_a', { openchamber: { goal: { status: 'active' }, assist: { recap: 'r' } } }))
+      .resolves.toMatchObject({ revision: '1' });
+    await expect(first.setSessionMetadata('ses_a', { openchamber: { goal: { turnCount: 2 } } }))
+      .resolves.toMatchObject({ revision: '2' });
+    await expect(first.setSessionMetadata('ses_b', { openchamber: { linked_issues: [{ id: 'i1' }] } }))
+      .resolves.toMatchObject({ revision: '1' });
+    await first.close();
 
-const notFound = () => Object.assign(new Error('Session not found'), { _tag: 'SessionNotFoundError' });
-
-/**
- * OpenCode's side: records by session id. A `write` replaces the whole object,
- * which is what `PATCH /api/session/{id}` does with `metadata`.
- */
-const createFakeOpenCode = (records = {}) => {
-  const sessions = new Map(Object.entries(records));
-  const fake = {
-    sessions,
-    writes: [],
-    failRead: null,
-    failWrite: null,
-    read: vi.fn(async (id) => {
-      if (fake.failRead) throw fake.failRead;
-      return sessions.has(id) ? structuredClone(sessions.get(id)) : null;
-    }),
-    write: vi.fn(async (id, metadata) => {
-      // Yield first so concurrent writers really overlap.
-      await Promise.resolve();
-      if (fake.failWrite) throw fake.failWrite;
-      if (!sessions.has(id)) throw notFound();
-      fake.writes.push([id, metadata]);
-      sessions.set(id, structuredClone(metadata));
-    }),
-  };
-  return fake;
-};
-
-const makeStore = (openCode, dataDir = makeDataDir()) => ({
-  dataDir,
-  store: createSessionMetadataStore({ dataDir, openCode }),
-});
-
-describe('createSessionMetadataStore', () => {
-  it('reads metadata from OpenCode, and a session OpenCode does not know as empty', async () => {
-    const openCode = createFakeOpenCode({ ses_1: { openchamber: { goal: { id: 'g1' } } } });
-    const { store } = makeStore(openCode);
-
-    await expect(store.get('ses_1')).resolves.toEqual({ openchamber: { goal: { id: 'g1' } } });
-    await expect(store.get('ses_missing')).resolves.toEqual({});
-  });
-
-  it('surfaces a failed read instead of answering empty', async () => {
-    const openCode = createFakeOpenCode({ ses_1: { a: 1 } });
-    openCode.failRead = new Error('connection refused');
-    const { store } = makeStore(openCode);
-
-    await expect(store.get('ses_1')).rejects.toThrow('connection refused');
-  });
-
-  it('merges a patch onto the OpenCode record and writes the whole result back', async () => {
-    const openCode = createFakeOpenCode({
-      ses_1: { openchamber: { kind: 'review', assist: { recap: 'r' } } },
+    const reopened = createSessionMetadataStore({ dataDir });
+    await expect(reopened.getState('ses_a')).resolves.toEqual({
+      metadata: { openchamber: { goal: { status: 'active', turnCount: 2 }, assist: { recap: 'r' } } },
+      revision: '2',
     });
-    const { store } = makeStore(openCode);
-
-    const merged = await store.setSessionMetadata('ses_1', { openchamber: { goal: { status: 'active' } } });
-
-    expect(merged).toEqual({ openchamber: { kind: 'review', assist: { recap: 'r' }, goal: { status: 'active' } } });
-    expect(openCode.sessions.get('ses_1')).toEqual(merged);
-    await store.setSessionMetadata('ses_1', { openchamber: { assist: null } });
-    expect(openCode.sessions.get('ses_1')).toEqual({ openchamber: { kind: 'review', goal: { status: 'active' } } });
+    await expect(reopened.get('ses_b')).resolves.toEqual({ openchamber: { linked_issues: [{ id: 'i1' }] } });
+    await reopened.close();
   });
 
-  it('keeps both of two concurrent patches to the same session', async () => {
-    const openCode = createFakeOpenCode({ ses_1: {} });
-    const { store } = makeStore(openCode);
-
-    await Promise.all([
-      store.setSessionMetadata('ses_1', { openchamber: { goal: { status: 'active' } } }),
-      store.setSessionMetadata('ses_1', { openchamber: { assist: { recap: 'r' } } }),
-    ]);
-
-    expect(openCode.sessions.get('ses_1')).toEqual({
-      openchamber: { goal: { status: 'active' }, assist: { recap: 'r' } },
-    });
-  });
-
-  it('writes nothing when the current record cannot be read or the session is gone', async () => {
-    const openCode = createFakeOpenCode({ ses_1: { keep: true } });
-    const { store } = makeStore(openCode);
-
-    openCode.failRead = new Error('timeout');
-    await expect(store.setSessionMetadata('ses_1', { a: 1 })).rejects.toThrow('timeout');
-    openCode.failRead = null;
-    await expect(store.setSessionMetadata('ses_missing', { a: 1 })).rejects.toThrow('not found');
-
-    expect(openCode.write).not.toHaveBeenCalled();
-    expect(openCode.sessions.get('ses_1')).toEqual({ keep: true });
-  });
-
-  it('decides a conditional patch against the record as it is at write time', async () => {
-    const openCode = createFakeOpenCode({ ses_1: { openchamber: { work: { state: 'open' } } } });
-    const { store } = makeStore(openCode);
-    const closeUnlessDone = (current) => (current.openchamber?.work?.state === 'done'
-      ? null
-      : { openchamber: { work: { state: 'done' } } });
-
-    // Queued behind the first write, the second decision sees its result.
+  it('serializes same-session merge patches without losing either ordered write', async () => {
+    const store = createSessionMetadataStore({ dataDir: makeDataDir() });
     const [first, second] = await Promise.all([
-      store.updateSessionMetadata('ses_1', closeUnlessDone),
-      store.updateSessionMetadata('ses_1', closeUnlessDone),
+      store.setSessionMetadata('ses_a', { openchamber: { goal: { status: 'active' } } }),
+      store.setSessionMetadata('ses_a', { openchamber: { assist: { recap: 'r' } } }),
     ]);
-
-    expect(first).toEqual({ metadata: { openchamber: { work: { state: 'done' } } }, changed: true });
-    expect(second.changed).toBe(false);
-    expect(openCode.write).toHaveBeenCalledTimes(1);
+    expect(new Set([first.revision, second.revision])).toEqual(new Set(['1', '2']));
+    await expect(store.get('ses_a')).resolves.toEqual({ openchamber: { goal: { status: 'active' }, assist: { recap: 'r' } } });
+    await store.close();
   });
 
-  it('rejects a missing id or a non-object patch', async () => {
-    const { store } = makeStore(createFakeOpenCode());
-    await expect(store.setSessionMetadata('', { a: 1 })).rejects.toThrow();
-    await expect(store.setSessionMetadata('ses_1', ['a'])).rejects.toThrow();
+  it('keeps previous and unrelated rows after a real SQLite failed write', async () => {
+    const dataDir = makeDataDir();
+    const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+    const store = createSessionMetadataStore({ dataDir, database: db });
+    await store.setSessionMetadata('ses_a', { openchamber: { assist: { recap: 'valid' } } });
+    await store.setSessionMetadata('ses_b', { openchamber: { goal: { id: 'g1' } } });
+    db.exec('PRAGMA query_only = ON');
+    await expect(store.setSessionMetadata('ses_a', { openchamber: { assist: { recap: 'unwritten' } } }))
+      .rejects.toBeInstanceOf(MetadataWriteError);
+    await expect(store.get('ses_a')).resolves.toEqual({ openchamber: { assist: { recap: 'valid' } } });
+    await expect(store.get('ses_b')).resolves.toEqual({ openchamber: { goal: { id: 'g1' } } });
+    await store.close();
+    db.close();
   });
 
-  describe('legacy sessions-metadata.json', () => {
-    it('serves a legacy entry over the OpenCode record until it is migrated', async () => {
-      const openCode = createFakeOpenCode({ ses_1: { openchamber: { kind: 'review' } } });
-      const dataDir = makeDataDir();
-      writeLegacy(dataDir, { ses_1: { openchamber: { kind: 'review', goal: { id: 'g1' } } } });
-      const { store } = makeStore(openCode, dataDir);
+  it('distinguishes a corrupt row from unrelated usable rows', async () => {
+    const dataDir = makeDataDir();
+    const store = createSessionMetadataStore({ dataDir });
+    await store.setSessionMetadata('ses_good', { openchamber: { goal: { id: 'g1' } } });
+    await store.close();
+    const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+    db.prepare('INSERT INTO session_metadata (session_id, revision, payload) VALUES (?, ?, ?)').run('ses_bad', 1, '{broken');
+    db.close();
 
-      await expect(store.get('ses_1')).resolves.toEqual({ openchamber: { kind: 'review', goal: { id: 'g1' } } });
-      await expect(store.listUnmigrated()).resolves.toEqual({
-        ses_1: { openchamber: { kind: 'review', goal: { id: 'g1' } } },
-      });
-      expect(openCode.read).not.toHaveBeenCalled();
+    const reopened = createSessionMetadataStore({ dataDir });
+    await expect(reopened.get('ses_bad')).rejects.toBeInstanceOf(MetadataCorruptError);
+    await expect(reopened.get('ses_good')).resolves.toEqual({ openchamber: { goal: { id: 'g1' } } });
+    await reopened.close();
+  });
+
+  it('converts valid legacy records once without overwriting newer SQLite rows', async () => {
+    const dataDir = makeDataDir();
+    writeJson(dataDir, 'sessions-metadata.json', {
+      ses_a: { openchamber: { goal: { id: 'legacy' } } },
+      ses_b: { openchamber: { assist: { recap: 'legacy' } } },
     });
+    const first = createSessionMetadataStore({ dataDir });
+    await expect(first.get('ses_a')).resolves.toEqual({ openchamber: { goal: { id: 'legacy' } } });
+    await first.close();
+    expect(fs.existsSync(path.join(dataDir, 'sessions-metadata.json'))).toBe(true);
+    const receipts = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+    expect(receipts.prepare('SELECT completed FROM metadata_conversion WHERE source = ?').get('sessions-metadata.json')).toEqual({ completed: 1 });
+    receipts.close();
 
-    it('migrates a legacy entry on its first write, merged with the patch', async () => {
-      const openCode = createFakeOpenCode({ ses_1: { stale: true }, ses_2: {} });
-      const dataDir = makeDataDir();
-      writeLegacy(dataDir, { ses_1: { openchamber: { goal: { id: 'g1' } } }, ses_2: { notes: ['n'] } });
-      const { store } = makeStore(openCode, dataDir);
+    writeJson(dataDir, 'sessions-metadata.json', { ses_a: { openchamber: { goal: { id: 'stale' } } } });
+    const second = createSessionMetadataStore({ dataDir });
+    await expect(second.get('ses_a')).resolves.toEqual({ openchamber: { goal: { id: 'legacy' } } });
+    await second.close();
+  });
 
-      await store.setSessionMetadata('ses_1', { openchamber: { assist: { recap: 'r' } } });
-
-      // The legacy record is the newer one: it wins over what OpenCode held.
-      expect(openCode.sessions.get('ses_1')).toEqual({ openchamber: { goal: { id: 'g1' }, assist: { recap: 'r' } } });
-      expect(JSON.parse(fs.readFileSync(legacyFile(dataDir), 'utf8'))).toEqual({ ses_2: { notes: ['n'] } });
-      await expect(store.listUnmigrated()).resolves.toEqual({ ses_2: { notes: ['n'] } });
+  it('keeps a partially corrupt legacy source while importing unrelated valid records', async () => {
+    const dataDir = makeDataDir();
+    writeJson(dataDir, 'sessions-metadata.json', {
+      ses_good: { openchamber: { goal: { id: 'g1' } } },
+      ses_bad: 'not-an-object',
     });
+    const store = createSessionMetadataStore({ dataDir });
+    await expect(store.get('ses_good')).resolves.toEqual({ openchamber: { goal: { id: 'g1' } } });
+    await expect(store.get('ses_bad')).rejects.toBeInstanceOf(MetadataCorruptError);
+    expect(fs.existsSync(path.join(dataDir, 'sessions-metadata.json'))).toBe(true);
+    await store.close();
+  });
+});
 
-    it('pushes every entry, drops sessions OpenCode no longer has, and retires the file', async () => {
-      const openCode = createFakeOpenCode({ ses_1: { stale: true }, ses_2: { stale: true } });
-      const dataDir = makeDataDir();
-      // `{}` is a cleared record: it must clear OpenCode's copy too.
-      writeLegacy(dataDir, { ses_1: { openchamber: { goal: { id: 'g1' } } }, ses_2: {}, ses_gone: { a: 1 } });
-      const { store } = makeStore(openCode, dataDir);
-
-      await expect(store.migrateLegacy()).resolves.toBe(0);
-
-      expect(openCode.sessions.get('ses_1')).toEqual({ openchamber: { goal: { id: 'g1' } } });
-      expect(openCode.sessions.get('ses_2')).toEqual({});
-      expect(fs.existsSync(legacyFile(dataDir))).toBe(false);
-      expect(JSON.parse(fs.readFileSync(`${legacyFile(dataDir)}.migrated`, 'utf8'))).toMatchObject({ ses_gone: { a: 1 } });
-      await expect(store.get('ses_1')).resolves.toEqual({ openchamber: { goal: { id: 'g1' } } });
+describe('Host metadata conversion and admission boundaries', () => {
+  it('keeps valid SQL usable when the entire legacy source is corrupt', async () => {
+    const dataDir = makeDataDir();
+    const first = createSessionMetadataStore({ dataDir });
+    await first.setSessionMetadata('good', { title: 'Host title' });
+    await first.close();
+    fs.writeFileSync(path.join(dataDir, 'sessions-metadata.json'), '{broken');
+    const reopened = createSessionMetadataStore({ dataDir });
+    await expect(reopened.get('good')).resolves.toEqual({ title: 'Host title' });
+    await expect(reopened.get('unknown')).rejects.toBeInstanceOf(MetadataCorruptError);
+    await expect(reopened.listAll()).resolves.toMatchObject({
+      entries: { good: { metadata: { title: 'Host title' }, revision: '1' } },
+      conversion: { status: 'corrupt', code: 'METADATA_CORRUPT' },
     });
+    await reopened.close();
+  });
 
-    it('keeps an entry OpenCode could not take for the next sweep', async () => {
-      const openCode = createFakeOpenCode({ ses_1: {} });
-      const dataDir = makeDataDir();
-      writeLegacy(dataDir, { ses_1: { a: 1 } });
-      const { store } = makeStore(openCode, dataDir);
+  it('commits conversion rows and receipt together, retaining original bytes on failed writes', async () => {
+    const dataDir = makeDataDir();
+    const source = '{"good":{"openchamber":{"goal":{"id":"g"}}}}';
+    fs.writeFileSync(path.join(dataDir, 'sessions-metadata.json'), source);
+    const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+    const store = createSessionMetadataStore({ dataDir, database: db });
+    db.exec('PRAGMA query_only = ON');
+    await expect(store.convertLegacy()).resolves.toMatchObject({ status: 'failed', error: { code: 'METADATA_WRITE_FAILED' } });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM session_metadata').get().count).toBe(0);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM metadata_conversion').get().count).toBe(0);
+    expect(fs.readFileSync(path.join(dataDir, 'sessions-metadata.json'), 'utf8')).toBe(source);
+    await store.close();
+    db.close();
+    const reopened = createSessionMetadataStore({ dataDir });
+    await expect(reopened.get('good')).resolves.toEqual({ openchamber: { goal: { id: 'g' } } });
+    await reopened.close();
+  });
 
-      openCode.failWrite = new Error('connection refused');
-      await expect(store.migrateLegacy()).resolves.toBe(1);
-      expect(JSON.parse(fs.readFileSync(legacyFile(dataDir), 'utf8'))).toEqual({ ses_1: { a: 1 } });
-      await expect(store.get('ses_1')).resolves.toEqual({ a: 1 });
+  it('keeps per-selected-ID receipts and copies only operational projections', async () => {
+    const dataDir = makeDataDir();
+    const store = createSessionMetadataStore({ dataDir });
+    const operational = {
+      goal: { id: 'g', status: 'paused' }, assist: { recap: 'r' },
+      knowledge_context_delivered: ['k'], context_obligatory_last_compaction_message_id: 'm',
+      project_context_pins: ['p'], context_obligatory_messages: ['c'], linked_issues: [{ id: 'i' }],
+      work: { id: 'w', sourceSessionID: 'parent' }, reviewOffer: { offered: true },
+      btwSessionID: 'btw', reviewSessionID: 'review', kind: 'btw', originalSessionID: 'original',
+      btwBoundaryMessageID: 'boundary', multirun: { groupId: 'multi' },
+    };
+    await expect(store.importOperationalSessions([{ id: 'a', title: 'Custom', directory: '/workspace',
+      metadata: { openchamber: { ...operational, transcript: 'must not copy' }, notes: 'note', messages: ['never'] },
+      messages: [{ role: 'user', text: 'never' }], }], 'selected')).resolves.toMatchObject({ results: { a: 'imported' }, complete: true });
+    await expect(store.get('a')).resolves.toEqual({ title: 'Custom', directory: '/workspace', notes: 'note', openchamber: operational });
+    await store.close();
+    const reopened = createSessionMetadataStore({ dataDir });
+    await expect(reopened.importOperationalSessions([
+      { id: 'a', title: 'Stale' }, { id: 'b', metadata: { openchamber: { assist: { recap: 'new' } } } },
+      { id: 'bad', metadata: { openchamber: 'corrupt' } },
+    ], 'selected')).resolves.toMatchObject({ results: { a: 'already-converted', b: 'imported' }, errors: { bad: 'METADATA_CORRUPT' }, complete: false });
+    await expect(reopened.get('a')).resolves.toMatchObject({ title: 'Custom' });
+    await expect(reopened.get('b')).resolves.toEqual({ openchamber: { assist: { recap: 'new' } } });
+    await reopened.close();
+  });
 
-      openCode.failWrite = null;
-      await expect(store.migrateLegacy()).resolves.toBe(0);
-      expect(openCode.sessions.get('ses_1')).toEqual({ a: 1 });
-    });
-
-    it('does not push a legacy entry over a write that migrated it first', async () => {
-      const openCode = createFakeOpenCode({ ses_1: {} });
-      const dataDir = makeDataDir();
-      writeLegacy(dataDir, { ses_1: { a: 1 } });
-      const { store } = makeStore(openCode, dataDir);
-
-      await Promise.all([store.setSessionMetadata('ses_1', { b: 2 }), store.migrateLegacy()]);
-
-      expect(openCode.sessions.get('ses_1')).toEqual({ a: 1, b: 2 });
-    });
-
-    it('moves a malformed file aside and has nothing to migrate', async () => {
-      const openCode = createFakeOpenCode({ ses_1: { a: 1 } });
-      const dataDir = makeDataDir();
-      writeLegacy(dataDir, '{ not json');
-      const { store } = makeStore(openCode, dataDir);
-
-      await expect(store.get('ses_1')).resolves.toEqual({ a: 1 });
-      expect(fs.readdirSync(dataDir).some((name) => name.startsWith('sessions-metadata.json.corrupt-'))).toBe(true);
-    });
-
-    it('refuses to write while the file cannot be read, then recovers', async () => {
-      const openCode = createFakeOpenCode({ ses_1: {} });
-      const dataDir = makeDataDir();
-      const readFile = vi.fn(async () => {
-        throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
-      });
-      const store = createSessionMetadataStore({
-        dataDir,
-        openCode,
-        fsPromises: { ...fs.promises, readFile },
-      });
-
-      await expect(store.setSessionMetadata('ses_1', { a: 1 })).rejects.toThrow('permission denied');
-      expect(openCode.write).not.toHaveBeenCalled();
-
-      readFile.mockImplementation(async () => {
-        throw Object.assign(new Error('missing'), { code: 'ENOENT' });
-      });
-      await expect(store.setSessionMetadata('ses_1', { a: 1 })).resolves.toEqual({ a: 1 });
-    });
+  it('serializes conditional decisions against the current committed metadata', async () => {
+    const store = createSessionMetadataStore({ dataDir: makeDataDir() });
+    const [first, second] = await Promise.all([
+      store.updateSessionMetadata('a', () => ({ count: 1 })),
+      store.updateSessionMetadata('a', (metadata) => ({ count: metadata.count + 1 })),
+    ]);
+    expect(first.revision).toBe('1');
+    expect(second).toEqual({ metadata: { count: 2 }, revision: '2', changed: true });
+    await expect(store.updateSessionMetadata('a', () => null)).resolves.toEqual({ metadata: { count: 2 }, revision: '2', changed: false });
+    await store.close();
   });
 });

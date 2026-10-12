@@ -421,6 +421,7 @@ ConPTY or Console Window Host behavior.
 - `createBootstrapRuntime(dependencies)`: creates runtime for base app route bootstrap and UI auth controller initialization.
 - Returned API:
   - `setupBaseRoutes(app, options)`
+- `setupBaseRoutes` now requires the existing `isRequestOriginAllowed` operation in `options`. It composes Host-owned canonical status/preflight after common middleware and before the legacy `/api` guard. No extra registrar dependency or Agent Service stand-in is needed; see [`../host/DOCUMENTATION.md`](../host/DOCUMENTATION.md#canonical-status-and-credential-preflight).
 
 ## Public exports (network-runtime.js)
 - `createOpenCodeNetworkRuntime(dependencies)`: creates runtime for OpenCode network and URL concerns.
@@ -754,6 +755,7 @@ headers }` or v1 `{ npm, options }`. The stored entry is always a
 - `registerCommonRequestMiddleware(app, dependencies)`: registers shared request middleware stack:
   - conditional JSON body parser behavior for `/api/*` vs non-API requests
   - URL-encoded parser setup
+  - the canonical `/api/agent/v1` namespace is left untouched by the urlencoded parser; its Host routes own the bounded JSON parser and sanitized RFC 7807 body errors
   - request logging middleware
   - `dependencies.skipBodyParsing(req)` names a request both parsers leave alone, so its body reaches its route untouched; the isolated-spaces dispatcher uses it for `/api/spaces/<id>/...`, which it streams into a space
 
@@ -768,6 +770,7 @@ headers }` or v1 `{ npm, options }`. The stored entry is always a
 
 ## Public exports (server-utils-runtime.js)
 - `createServerUtilsRuntime(dependencies)`: creates server utility runtime for OpenCode orchestration helpers.
+- `setupProxy` passes the four required Host callbacks (`listSessionMetadata`, `listArchivedSessions`, `persistSessionMetadata`, `inheritForkMetadata`) directly to the proxy; none has an optional empty-state or no-op fallback.
 - Returned API:
   - `setOpenCodePort(port)`
   - `waitForOpenCodePort(timeoutMs?)`
@@ -779,6 +782,7 @@ headers }` or v1 `{ npm, options }`. The stored entry is always a
 - `createGracefulShutdownRuntime(dependencies)`: creates graceful shutdown runtime for managed OpenCode and web server teardown sequencing.
 - Daemon signals, `POST /api/system/shutdown`, and embedded `stop()` share one shutdown promise. Guest admission closes synchronously before any await. Cleanup stops the relay reconciliation timer, guest viewers, realtime proxy, relay host, dictation worker and session runtimes before draining guest services, including pending starts. Each cleanup is best-effort and runs once per shutdown, including after partial startup. A hard kill still requires the separate crash/SIGKILL recovery work; no persistent registry or boot reaper is provided here.
 - Register TCP connection tracking before the HTTP server starts listening. After stopping owned runtimes and OpenCode, HTTP shutdown closes the listener and all remaining sockets, including WebSocket upgrades and unanswered upgrade requests accepted during cleanup. This prevents client reconnects from holding Desktop open until the HTTP close deadline. Each runtime still owns its protocol cleanup; socket teardown runs afterwards and preserves the existing terminal and process grace periods.
+- The required `hostSessionState` dependency closes only after producers stop and HTTP admission and sockets close. Its sole SQLite owner fences new metadata admissions and drains accepted reads, conversion and writes before closing the connection; a metadata close failure is not reported as successful graceful shutdown.
 - Returned API:
   - `gracefulShutdown(options?)`
   - `trackServerConnections(server)`: call once before listening; closed sockets leave the tracking set, and the server close event removes the connection listener.
@@ -894,14 +898,26 @@ within a ten-minute overall deadline.
   - SSE forwarders: `GET /api/global/event`, `GET /api/event`
     - Downstream heartbeats keep clients and intermediaries alive, while a separate upstream-only stall watchdog closes the downstream response when OpenCode stops producing bytes so clients reconnect instead of trusting synthetic heartbeats indefinitely. Each watchdog reset uses the current load-aware timeout, matching the shared event transport.
   - Session message forwarder: `POST /api/session/:sessionId/message`
+  - Session mutations: `POST /api/session`, `PATCH` / `PUT /api/session/:sessionID`, `POST /api/session/:sessionID/fork`
+    - Strip Host-owned title, directory, project association, and metadata fields before forwarding execution requests. Pure Host-field updates commit to Host and fetch execution detail without forwarding an execution mutation. Create/mixed-update writes use the parsed response ID; fork inheritance derives its source from the fork URL and its target from the parsed response ID, never from execution title or request parent/fork fields.
+    - Host write failures after execution success return `500 { error: 'Host metadata write failed', code: 'METADATA_WRITE_FAILED', partial: true, partialAction: 'session-created' | 'fork-created' | 'session-moved', sessionId }`, without retrying execution creation.
+    - Forwarding retains method, URL/query, caller headers, upstream authentication, and real disconnect cancellation. Cancellation uses an aborted incoming request or an unfinished response closing, not `IncomingMessage.signal`, which aborts when a normally parsed request body closes in Node 24. The existing header collector excludes Content-Length/Transfer-Encoding, leaving Fetch to frame the stripped JSON body.
   - Session list and detail: `GET /api/session`, `GET /api/session/:sessionID`
-    - Both are sanitized to an allowlist of `SessionInfo` fields, then get archive state folded in from `lib/openchamber-sessions/archive-store.js`, because OpenCode 2.x has no archive route, plus any `metadata` entry `lib/openchamber-sessions/session-metadata-store.js` has not migrated from the legacy file yet. An unknown answer from either store leaves the upstream record untouched rather than reporting a session as un-archived or dropping its metadata.
+    - Sanitize execution records and reread committed Host metadata/archive projections. The allowlist never returns raw records when a field is malformed: malformed list rows are omitted while valid siblings and pagination remain; an entirely malformed nonempty list and malformed detail responses fail the request. Preserve valid siblings and scoped read/conversion errors. Never use execution title, workspace, operational metadata, or archive stamps as fallbacks, including when a Host scope fails. The installed `@opencode/schema` `Location.PublicRef` requires object-wire `location: { directory: string }`; every projected record uses this constructor with the Host directory or `''`, which its branded-string `AbsolutePath` accepts. A failed Host scope retains `hostMetadataError` so UI reconciliation preserves cached workspace state; confirmed missing Host state has an empty directory without that failure marker. Thrown bulk reads fail the request rather than becoming empty Host state. Revisions remain canonical decimal strings, including values above `Number.MAX_SAFE_INTEGER`.
   - Upstream paths are the request paths. OpenCode 2.x serves everything under `/api/*` itself, so the mount prefix Express strips is put back instead of being rewritten away.
   - There is no interactive OAuth forwarder any more: v2 connects providers through `/api/integration/*`, whose OAuth steps return immediately and are polled, so no route needs a longer deadline than the ordinary one.
   - Generic `/api/*` forwarding with hop-by-hop header filtering
   - Session list forwarding on every platform, preserving V2 query filters and pagination cursors. Global reads use OpenCode's cross-directory list rather than merging per-project pages on Windows.
   - OpenCode readiness gate for proxied `/api` requests
   - Worktree checkout gate before directory-scoped upstream reads and writes
+
+
+Required Host callback contract:
+
+- `listSessionMetadata() -> { entries: { [id]: { metadata, revision: string } }, errors, conversion }`
+- `listArchivedSessions() -> { entries: { [id]: { archivedAt: number | null, revision: string } }, errors, conversion }`
+- `persistSessionMetadata(id, patch, { directory? }) -> { metadata, revision: string, changed }`
+- `inheritForkMetadata(sourceId, fork, directory = '') -> committed target state` (persists `fork.id`)
 
 Git bootstrap must reach `git-ready` before OpenCode can cache a new worktree's
 project identity or config. Setup scripts may still be running; the optional UI
@@ -929,7 +945,7 @@ This server gate covers web, Electron, hosted mobile, and Capacitor connections.
 ## Storage and configuration
 - Provider auth: read from the running OpenCode over `GET /api/credential` (2.0.20+); OpenCode 2.x owns credentials.
 - Session archive state: `sessions-archive.json` under the OpenChamber data dir.
-- Session metadata (goal progress, the assist recap, the obligatory-context cursor, pinned notes) lives on the OpenCode session record, written with `PATCH /api/session/{id}` (OpenCode 2.0.15+, the minimum `compatibility.js` enforces). OpenCode replaces the whole object, so `sessionMetadataStore.setSessionMetadata` reads the record, applies the JSON Merge Patch and writes the result, one write per session at a time; a record that cannot be read stops the write. Every reader and writer (routes, goal loop, session assist, session knowledge, obligatory context, notifications) goes through `sessionMetadataStore.get` / `setSessionMetadata`. Older OpenChamber versions kept this state in `sessions-metadata.json` under the data dir. Its entries are the newest metadata their sessions have: the proxy lays them over OpenCode's records, a session's next write pushes its entry, and a sweep after OpenCode starts pushes the rest (a session OpenCode no longer knows is dropped, any other failure waits for the next write or start). The emptied file is renamed to `sessions-metadata.json.migrated`. Archive mutations still run one transaction at a time in the archive store.
+- Session title, workspace association, and operational metadata (goal progress, the assist recap, the obligatory-context cursor, pinned notes) are Host-owned. Proxy reads and mutations use the required Host callbacks documented above; execution session metadata is not a fallback or a durable write target. Archive ownership remains Host-only.
 - User config: `<config dir>/opencode.json(c)` where the config dir is `OPENCODE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`. The v1 `config.json` is not read.
 - Project config: `<workingDirectory>/.opencode/opencode.json(c)` first, else `<workingDirectory>/opencode.json(c)`.
 - Custom config: `OPENCODE_CONFIG` env var path.

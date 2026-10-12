@@ -107,7 +107,7 @@ mock.module('@/sync/session-archive-batch', () => ({
     }
     const metadata = mergePatch(storedMetadata.get(sessionID) ?? {}, patch);
     storedMetadata.set(sessionID, metadata);
-    return { outcome: 'updated' as const, metadata };
+    return { outcome: 'updated' as const, metadata, revision: '1' };
   },
 }));
 

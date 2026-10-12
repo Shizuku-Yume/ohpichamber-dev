@@ -15,6 +15,7 @@ import {
   projectUserParts,
   readIntegrationPolicies,
 } from "./projection"
+import { sessionMetadataStateSchema } from './json'
 
 const sessionInfo: SessionInfo = {
   id: "ses_1",
@@ -41,6 +42,28 @@ describe("projectSession", () => {
     const session = projectSession({ ...sessionInfo, title: undefined })
     expect(session.title).toBe("")
   })
+})
+
+test("projects host hydration error markers", () => {
+  const info = {
+    ...sessionInfo,
+    hostMetadataError: "METADATA_READ_FAILED",
+    hostArchiveError: "METADATA_CORRUPT",
+  }
+  const projected = projectSession(info)
+
+  expect(projected.hostMetadataError).toBe("METADATA_READ_FAILED")
+  expect(projected.hostArchiveError).toBe("METADATA_CORRUPT")
+})
+
+test('rejects metadata revision encodings that cannot order Host updates', () => {
+  for (const revision of [undefined, 2, '', '01', '-1', '1.5']) {
+    expect(sessionMetadataStateSchema.safeParse({ metadata: {}, revision }).success).toBe(false)
+  }
+  const info = { ...sessionInfo, metadataRevision: '9007199254740993' }
+  expect(projectSession(info).metadataRevision).toBe('9007199254740993')
+  const invalidInfo = { ...info, metadataRevision: '01' }
+  expect(() => projectSession(invalidInfo)).toThrow()
 })
 
 const assistant: SessionMessageAssistant = {

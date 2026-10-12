@@ -38,6 +38,44 @@ So:
 - Use the **global sessions store** for cold/global session coverage (especially archived pages and unopened directories)
 - Use **aggregated child-store sessions and the global live status index** for live truth across initialized directories
 
+## Host operational metadata authority
+
+The Host owns session operational metadata, custom titles, workspace associations,
+archive state, and folder membership in `host-metadata.sqlite`. Execution session
+records and persisted UI caches are not metadata fallbacks. Metadata responses and
+change events carry decimal-string revisions; the metadata merge-patch route
+returns `{ metadata, revision, changed }`.
+
+Host metadata revisions stay attached to projected sessions, HTTP write responses,
+and committed events. Both session scopes reject older Host metadata without
+dropping independent runtime or archive changes. Native execution events do not
+supply Host title, workspace, metadata or archive authority; unversioned native
+records cannot replace committed Host metadata, including revision `"0"`.
+
+Session list reads retain valid siblings when a Host entity cannot be read. A
+failed metadata projection carries `hostMetadataError`; a failed archive
+projection carries `hostArchiveError`. These are code-only markers, not successful
+empty metadata or active archive state. The shared session projection parses the
+markers, and `mergeSessionDirectoryMetadata` preserves cached Host title,
+metadata, workspace identity and archive state for the marked owner. Global list
+loads reconcile before splitting active and archived records; directory detail
+and bootstrap paths use the same merger. A failed detail read remains an explicit
+request failure.
+
+Folder hydration parses the Host snapshot, per-scope `errors`, and conversion
+status. Valid scopes hydrate independently; failed scopes preserve their cached
+folders and collapse state. A source-wide conversion error also preserves cached
+scopes missing from the readable SQL projection. Valid known SQL scopes can still
+hydrate, and explicit deletion tombstones continue to win. Failed or malformed
+responses never become authoritative empty snapshots.
+Saving an empty scope does not erase unknown corrupt data. A nonempty explicit
+replacement or a deletion tombstone is required to repair or remove that scope.
+
+Web/PWA and Electron use the retained Host owner; hosted mobile and Capacitor use
+the active Host through shared runtime transport. VS Code is retired and gains no
+new support. These source contracts require the integration owner's combined
+runtime proof; no checks are implied by this documentation update.
+
 ## OpenCode compatibility before bootstrap
 
 The desktop/web App entry and MobileApp entry wrap the application in
@@ -670,9 +708,9 @@ operations. Manual title saves cancel generation before sending their write.
 Runtime changes abort pending generation, including a switch away and back.
 After generation, a fresh session read rejects changed titles, directories,
 archive state and revert markers before the normal title action saves. Failure
-retains the old title and always releases pending state. The current OpenCode
-title endpoint has no compare-and-set operation, so another client's write
-after this final read cannot be guarded atomically.
+retains the old title and always releases pending state. Host title persistence
+does not expose a compare-and-set operation, so another client's write after this
+final read cannot be guarded atomically.
 
 `lib/messages/messageMarkdown.ts` formats attached quotes and user comments for
 both title context and Markdown export. Export keeps full text; title input
@@ -722,22 +760,14 @@ Sending a message while forms are open cancels them through `dismissOpenFormsFor
 
 ### Restore (unarchive) contract
 
-The OpenCode server cannot clear `time.archived` over HTTP: `session.update`
-only applies the field when the payload carries a finite number, so an omitted
-key is a no-op and `null` is silently ignored. Restore therefore writes
-`time.archived = 0` (`UNARCHIVED_TIMESTAMP` in `session-actions.ts`). Every
-client-side reader classifies archive state by truthiness of `time.archived`,
-so `0` reads as active in the UI, the event reducer, and the OpenCode app/TUI.
-
-The server's `time_archived IS NULL` list filter still excludes such rows, so
-any query that wants a truthful active list must fetch inclusively
-(`archived: true`) and split client-side (`splitGlobalSessionsByArchived`).
-The global sessions store does this for its full and per-directory loads;
-directory bootstrap keeps using the server filter because live child stores
-must not hold archived sessions. A restored session re-enters its live
-directory store through the authoritative `session.updated` event the server
-publishes for the update; until then it remains fully visible through the
-global store (sidebar, switcher) and addressable by ID (message loading).
+Archive and restore use the Host batch routes, not execution `session.update`.
+The SQLite archive owner stores a positive timestamp for archive and `null` as a
+durable restore tombstone. Only confirmed IDs reconcile in the UI; failed IDs
+retain their previous state. Client-side active/archived classification still
+uses the projected `time.archived` truthiness and the existing local active
+sentinel. Host list projection and `hostArchiveError` distinguish successful
+restore from an unreadable archive owner; partial list hydration preserves cached
+classification before splitting active and archived records.
 
 The full-app collection retains active records whose directory is absent from
 the current topology. Display grouping first resolves exact configured

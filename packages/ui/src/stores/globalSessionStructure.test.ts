@@ -40,3 +40,60 @@ describe('mergeSessionDirectoryMetadata', () => {
     });
   });
 });
+
+test("preserves cached host fields and archive classification on marked records", () => {
+  const existing = {
+    ...sessionWithProjectMetadata("opencode-project", { id: "opencode-project", worktree: "/workspace" }),
+    title: "Cached title",
+    metadata: { source: "cached" },
+    time: { created: 1, updated: 1, archived: 2 },
+  }
+  const incoming: Session = {
+    ...existing,
+    title: "",
+    metadata: undefined,
+    directory: "",
+    projectID: "",
+    time: { created: 1, updated: 2 },
+    hostMetadataError: "METADATA_READ_FAILED",
+    hostArchiveError: "METADATA_CORRUPT",
+  }
+
+  expect(mergeSessionDirectoryMetadata(incoming, existing)).toMatchObject({
+    title: "Cached title",
+    metadata: { source: "cached" },
+    directory: "/workspace",
+    projectID: "opencode-project",
+    time: { archived: 2 },
+    hostMetadataError: "METADATA_READ_FAILED",
+    hostArchiveError: "METADATA_CORRUPT",
+  })
+})
+
+test('keeps newer Host metadata without dropping independent runtime or archive state', () => {
+  const existing = {
+    ...sessionWithProjectMetadata('project-new', { id: 'project-new', worktree: '/new' }),
+    directory: '/new', title: 'New title', metadata: { value: 'new' }, metadataRevision: '9007199254740993',
+  };
+  const incoming = {
+    ...existing, directory: '/old', projectID: 'project-old', title: 'Old title',
+    metadata: { value: 'old' }, metadataRevision: '9007199254740992', cost: 7,
+    time: { created: 1, updated: 8, archived: 9 },
+  };
+  expect(mergeSessionDirectoryMetadata(incoming, existing)).toMatchObject({
+    directory: '/new', projectID: 'project-new', title: 'New title', metadata: { value: 'new' },
+    metadataRevision: '9007199254740993', cost: 7, time: { updated: 8, archived: 9 },
+  });
+});
+
+test('accepts a higher decimal revision across a digit boundary', () => {
+  const existing = { ...sessionWithProjectMetadata('project', null), metadata: { value: 'old' }, metadataRevision: '9' };
+  const incoming = { ...existing, metadata: { value: 'new' }, metadataRevision: '10' };
+  expect(mergeSessionDirectoryMetadata(incoming, existing)).toBe(incoming);
+});
+
+test('does not deduplicate unrelated runtime changes at the same metadata revision', () => {
+  const existing = { ...sessionWithProjectMetadata('project', null), metadata: { value: 'same' }, metadataRevision: '2' };
+  const incoming = { ...existing, cost: 7, time: { created: 1, updated: 8 } };
+  expect(mergeSessionDirectoryMetadata(incoming, existing)).toBe(incoming);
+});

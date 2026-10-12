@@ -35,6 +35,26 @@ describe("upsertSessionRecord", () => {
     expect(upsertSessionRecord(current, incoming)).not.toBe(current)
   })
 
+  test("preserves cached Host metadata and archive state when directory hydration marks failures", () => {
+    const cached = session("a", {
+      title: "Host title", directory: "/host", projectID: "host-project",
+      metadata: { openchamber: { assist: { recap: "known" } } }, time: { created: 1, updated: 1, archived: 10 },
+    })
+    const result = upsertSessionRecord([cached], session("a", {
+      hostMetadataError: "METADATA_CORRUPT", hostArchiveError: "METADATA_READ_FAILED",
+      metadata: undefined, cost: 2, time: { created: 1, updated: 2 },
+    }))
+    expect(result[0]).toMatchObject({ title: "Host title", directory: "/host", projectID: "host-project", cost: 2, time: { updated: 2, archived: 10 } })
+    expect(result[0].metadata).toBe(cached.metadata)
+  })
+
+  test("confirmed empty Host metadata and restored archive state replace cached values", () => {
+    const cached = session("a", { metadata: { title: "Old" }, time: { created: 1, updated: 1, archived: 10 } })
+    const result = upsertSessionRecord([cached], session("a", { metadata: {}, time: { created: 1, updated: 2 } }))
+    expect(result[0].metadata).toEqual({})
+    expect(result[0].time.archived).toBeUndefined()
+  })
+
   const changes: Array<[string, Partial<Session>, Partial<Session>]> = [
     ["scalars", { title: "one", subpath: "a", parentID: "p", cost: 1, agent: "a" }, { title: "two", subpath: "b", parentID: "q", cost: 2, agent: "b" }],
     ["tokens", { tokens: { input: 1, output: 2, reasoning: 3, cache: { read: 4, write: 5 } } }, { tokens: { input: 1, output: 2, reasoning: 3, cache: { read: 4, write: 6 } } }],

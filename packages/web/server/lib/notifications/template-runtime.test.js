@@ -1,11 +1,17 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createNotificationTemplateRuntime } from './template-runtime.js';
+import { createSessionMetadataStore } from '../openchamber-sessions/session-metadata-store.js';
 
 const originalFetch = globalThis.fetch;
 
-const createRuntime = (settings = {}) => createNotificationTemplateRuntime({
+const createRuntime = (settings = {}, readSessionMetadata = async () => null) => createNotificationTemplateRuntime({
   readSettingsFromDisk: async () => settings,
+  readSessionMetadata,
   persistSettings: vi.fn(async () => {}),
   buildOpenCodeUrl: (path) => path,
   getOpenCodeAuthHeaders: () => ({}),
@@ -103,6 +109,7 @@ describe('notification template session info', () => {
     });
     const runtime = createNotificationTemplateRuntime({
       readSettingsFromDisk: async () => ({}),
+      readSessionMetadata: async () => null,
       buildOpenCodeUrl: (path) => path,
       getOpenCodeAuthHeaders: () => ({ Authorization: 'Basic dGVzdDp0ZXN0' }),
       resolveGitBinaryForSpawn: () => 'git',
@@ -112,5 +119,33 @@ describe('notification template session info', () => {
 
     expect(seenHeaders[0]).toMatchObject({ Authorization: 'Basic dGVzdDp0ZXN0' });
     expect(variables.session_name).toBe('Nightly cleanup');
+  });
+
+  it('reads renamed Host titles instead of stale payload and execution cache titles', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-notification-title-'));
+    const store = createSessionMetadataStore({ dataDir });
+    try {
+      const runtime = createRuntime({}, store.get);
+      runtime.maybeCacheSessionInfoFromEvent({ type: 'session.updated', properties: { info: { id: 'ses_host', title: 'Native default' } } });
+      await store.setSessionMetadata('ses_host', { title: 'Host title' });
+      const payload = { properties: { sessionTitle: 'Stale event title', info: {} } };
+      expect((await runtime.buildTemplateVariables(payload, 'ses_host')).session_name).toBe('Host title');
+      await store.setSessionMetadata('ses_host', { title: 'Renamed Host title' });
+      expect((await runtime.buildTemplateVariables(payload, 'ses_host')).session_name).toBe('Renamed Host title');
+      await store.setSessionMetadata('ses_host', { title: null });
+      expect((await runtime.buildTemplateVariables({ properties: { info: {} } }, 'ses_host')).session_name).toBe('Native default');
+    } finally { await store.close(); fs.rmSync(dataDir, { recursive: true, force: true }); }
+  });
+
+  it('does not replace unreadable Host title with an execution title', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-notification-corrupt-title-'));
+    const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite'));
+    const store = createSessionMetadataStore({ dataDir, database: db, closeDatabase: true });
+    try {
+      await store.setSessionMetadata('ses_host', { title: 'Host title' });
+      db.prepare('UPDATE session_metadata SET payload = ? WHERE session_id = ?').run('[]', 'ses_host');
+      const runtime = createRuntime({}, store.get);
+      await expect(runtime.buildTemplateVariables({ properties: { sessionTitle: 'Native default', info: {} } }, 'ses_host')).rejects.toMatchObject({ code: 'METADATA_CORRUPT' });
+    } finally { await store.close(); fs.rmSync(dataDir, { recursive: true, force: true }); }
   });
 });

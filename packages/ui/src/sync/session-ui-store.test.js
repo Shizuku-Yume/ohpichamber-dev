@@ -1783,7 +1783,7 @@ describe('goal objective directory scoping', () => {
       if (!match || init?.method !== 'POST') return new Response('', { status: 500 });
       const { patch } = JSON.parse(init.body);
       metadataWrites.push({ sessionId: decodeURIComponent(match[1]), patch, directory: '/repo/worktree' });
-      return Response.json({ metadata: patch });
+      return Response.json({ metadata: patch, revision: String(metadataWrites.length) });
     };
   });
 

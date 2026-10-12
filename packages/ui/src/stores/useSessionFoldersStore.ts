@@ -113,6 +113,21 @@ const claimLegacyStorage = (runtimeKey: string): void => {
 // back on the next hydration; a deletion has to travel as a tombstone. Kept in
 // storage so a reload before the debounced write does not lose it.
 const folderTombstonesSchema = z.record(z.string(), z.number().finite());
+const hostMetadataCodeSchema = z.enum(['METADATA_CORRUPT', 'METADATA_READ_FAILED', 'METADATA_WRITE_FAILED']);
+const sessionFolderSchema = z.object({
+  id: z.string(), name: z.string(), sessionIds: z.array(z.string()), createdAt: z.number(),
+  parentId: z.string().nullable().optional(),
+});
+const folderResponseSchema = z.discriminatedUnion('exists', [
+  z.object({ exists: z.literal(false) }),
+  z.object({
+    version: z.literal(1), exists: z.literal(true),
+    foldersMap: z.record(z.string(), z.array(sessionFolderSchema)), collapsedFolderIds: z.array(z.string()),
+    deletedFolderIds: folderTombstonesSchema.optional(), updatedAt: z.number().positive().optional(),
+    errors: z.record(z.string(), hostMetadataCodeSchema).default({}),
+    conversion: z.object({ status: z.enum(['missing', 'complete', 'partial', 'failed', 'corrupt']), code: hostMetadataCodeSchema.optional() }).optional(),
+  }),
+]);
 type FolderTombstones = z.infer<typeof folderTombstonesSchema>;
 
 // Malformed tombstones are treated as none: they can only ever remove folders.
@@ -680,47 +695,46 @@ const hydrateSessionFoldersFromDisk = async (): Promise<void> => {
       return;
     }
 
-    const parsed = await response.json().catch(() => null) as {
-      exists?: boolean;
-      foldersMap?: SessionFoldersMap;
-      collapsedFolderIds?: string[];
-      deletedFolderIds?: unknown;
-      updatedAt?: number;
-    } | null;
-
-    if (!parsed) {
-      return;
-    }
+    const parsedResult = folderResponseSchema.safeParse(await response.json().catch(() => null));
+    if (!parsedResult.success) return;
+    const parsed = parsedResult.data;
 
     if (parsed.exists === false) {
       completed = true;
       return;
     }
 
-    const diskFolders = parsed.foldersMap && typeof parsed.foldersMap === 'object'
-      ? parsed.foldersMap
-      : {};
-    const diskCollapsed = Array.isArray(parsed.collapsedFolderIds)
-      ? new Set(parsed.collapsedFolderIds.filter((value): value is string => typeof value === 'string'))
-      : new Set<string>();
+    const currentFolders = useSessionFoldersStore.getState().foldersMap;
+    const diskFolders = parsed.foldersMap;
+    const sourceWideFailure = parsed.conversion?.code !== undefined;
+    const failedScopes = new Set(Object.keys(parsed.errors));
+    const knownScopes = new Set(Object.keys(diskFolders));
+    const preservedScopes = new Set(Object.keys(currentFolders).filter((scope) =>
+      failedScopes.has(scope) || (sourceWideFailure && !knownScopes.has(scope))));
+    const mergedFolders = { ...diskFolders };
+    for (const scope of preservedScopes) mergedFolders[scope] = currentFolders[scope];
+    const diskCollapsed = new Set(parsed.collapsedFolderIds);
 
     if (generation !== folderRuntimeGeneration || runtimeKey !== getRuntimeKey()) return;
     const browserUpdatedAt = readStorageIndex().runtimes.find((entry) => entry.runtimeKey === runtimeKey)?.updatedAt ?? 0;
-    const diskUpdatedAt = typeof parsed.updatedAt === 'number' && Number.isFinite(parsed.updatedAt) ? parsed.updatedAt : 0;
+    const diskUpdatedAt = parsed.updatedAt ?? 0;
     if (diskUpdatedAt > 0) {
       lastDiskUpdatedAtByRuntime.set(runtimeKey, Math.max(lastDiskUpdatedAtByRuntime.get(runtimeKey) ?? 0, diskUpdatedAt));
     }
-    const hasDiskAuthority = parsed.exists === true || diskUpdatedAt > 0;
     // Deletions from other devices (the server's tombstones) and this device's
     // own not-yet-stored ones both win over any copy that still holds the folder.
-    const remoteDeletions = folderTombstonesSchema.safeParse(parsed.deletedFolderIds ?? {});
-    const deleted = readPendingDeletions(runtimeKey);
-    if (remoteDeletions.success) Object.assign(deleted, remoteDeletions.data);
-    if (hasDiskAuthority && folderMutationRevision === baselineMutationRevision && diskUpdatedAt >= browserUpdatedAt) {
-      const nextFolders = withoutDeletedFolders(diskFolders, deleted) ?? diskFolders;
-      useSessionFoldersStore.setState({ foldersMap: nextFolders, collapsedFolderIds: diskCollapsed });
+    const deleted = { ...readPendingDeletions(runtimeKey), ...parsed.deletedFolderIds };
+    if (folderMutationRevision === baselineMutationRevision && diskUpdatedAt >= browserUpdatedAt) {
+      const nextFolders = withoutDeletedFolders(mergedFolders, deleted) ?? mergedFolders;
+      const currentCollapsed = useSessionFoldersStore.getState().collapsedFolderIds;
+      const preservedIds = new Set([...preservedScopes].flatMap((scope) => (currentFolders[scope] ?? []).map((folder) => folder.id)));
+      const nextCollapsed = new Set([
+        ...[...diskCollapsed].filter((id) => !preservedIds.has(id)),
+        ...[...currentCollapsed].filter((id) => preservedIds.has(id)),
+      ].filter((id) => deleted[id] === undefined));
+      useSessionFoldersStore.setState({ foldersMap: nextFolders, collapsedFolderIds: nextCollapsed });
       persistFolders(nextFolders);
-      persistCollapsed(diskCollapsed);
+      persistCollapsed(nextCollapsed);
     } else {
       const localFolders = useSessionFoldersStore.getState().foldersMap;
       const pruned = withoutDeletedFolders(localFolders, deleted);

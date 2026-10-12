@@ -1,3 +1,4 @@
+import { mergeSessionDirectoryMetadata } from "@/stores/globalSessionStructure"
 import type { Message, Part, Session, SessionStatus } from "@/lib/opencode/model"
 import { getLastConversationMessage, isIncompleteAssistantTurn } from "@/lib/opencode/model"
 import { getSessionMaterializationStatus } from "./materialization"
@@ -60,9 +61,14 @@ export function mergeBootstrapSessions(
   )
   const rootIds = new Set(rootSessions.map((session) => session.id))
   const sessionsById = new Map(existingSessions.map((session) => [session.id, session]))
-  for (const session of completeSessions) sessionsById.set(session.id, session)
-  for (const session of rootSessions) sessionsById.set(session.id, session)
-
+  for (const session of completeSessions) {
+    const existing = sessionsById.get(session.id)
+    sessionsById.set(session.id, existing ? mergeSessionDirectoryMetadata(session, existing) : session)
+  }
+  for (const session of rootSessions) {
+    const existing = sessionsById.get(session.id)
+    sessionsById.set(session.id, existing ? mergeSessionDirectoryMetadata(session, existing) : session)
+  }
   const includedIds = new Set(rootIds)
   const pendingParentIds: string[] = []
   for (const session of completeSessions) {

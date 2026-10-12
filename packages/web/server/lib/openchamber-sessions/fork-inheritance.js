@@ -1,20 +1,10 @@
 import { z } from 'zod';
+import { mergeMetadataPatch } from './session-metadata-store.js';
 
 /**
- * What a fork made through the OpenChamber sessions API (CLI, scheduled tasks)
- * keeps from its source session's OpenChamber metadata. Server twin of the UI's
- * `packages/ui/src/lib/sessionForkInheritance.ts`: UI forks call OpenCode
- * directly and repair themselves; forks made here are repaired here.
- *
- * OpenCode 2.x copies the source's `metadata` wholesale into the fork, so the
- * goal already arrives. Two repairs remain:
- *
- * - Source-owned links: the source's btw fork (`btwSessionID`), its review
- *   session (`reviewSessionID`), and the btw marker when the source is itself a
- *   btw side thread.
- * - A file-backed goal objective: the text lives in a file keyed by the session
- *   id, so the fork needs its own copy. When the copy cannot be written the
- *   fork's goal carries the text inline instead.
+ * Forks inherit Host operational metadata, never execution-record metadata.
+ * Source-owned side-thread/review links are removed, active goals are paused,
+ * and file-backed objectives are copied to the fork before its prompt runs.
  */
 
 const NamespaceSchema = z.looseObject({
@@ -57,19 +47,8 @@ const fileBackedGoal = (metadata) => {
   return parsed.success ? parsed.data : null;
 };
 
-/**
- * Repair a freshly created fork. Best-effort: the fork already exists and is
- * usable, so every failure is logged and swallowed.
- *
- * @param {object} options
- * @param {string} options.sourceSessionID
- * @param {{ id: string, metadata?: object }} options.fork The fork record OpenCode returned.
- * @param {(sessionID: string) => Promise<string | null>} options.readObjective
- * @param {(sessionID: string, content: string) => Promise<unknown>} options.writeObjective Throws on failure.
- * @param {(sessionID: string, patch: object) => Promise<unknown>} options.writeMetadata
- */
-export const applyForkInheritance = async ({ sourceSessionID, fork, readObjective, writeObjective, writeMetadata }) => {
-  const metadata = fork?.metadata;
+/** Copy operational source state into a new fork. Persistence failures propagate. */
+export const applyForkInheritance = async ({ sourceSessionID, fork, metadata, readObjective, writeObjective, writeMetadata }) => {
   const goal = fileBackedGoal(metadata);
   let inlineObjective = null;
   if (goal) {
@@ -94,10 +73,6 @@ export const applyForkInheritance = async ({ sourceSessionID, fork, readObjectiv
   if (inlineObjective !== null) {
     namespacePatch.goal = { ...namespacePatch.goal, objective: inlineObjective, objectiveFile: false };
   }
-  if (Object.keys(namespacePatch).length === 0) return;
-  try {
-    await writeMetadata(fork.id, { openchamber: namespacePatch });
-  } catch (error) {
-    console.warn('[fork] failed to update the fork metadata', error?.message ?? error);
-  }
+  const inherited = Object.keys(namespacePatch).length > 0 ? mergeMetadataPatch(metadata, { openchamber: namespacePatch }) : metadata ?? {};
+  return writeMetadata(fork.id, inherited);
 };

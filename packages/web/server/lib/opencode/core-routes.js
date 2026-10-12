@@ -1178,7 +1178,8 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
 
   const urlencoded = express.urlencoded({ extended: true, limit: '50mb' });
   app.use((req, res, next) => {
-    if (skipBodyParsing(req)) {
+    // Canonical routes own their strict bounded parser and Problem Details failures.
+    if (req.path === '/api/agent/v1' || req.path.startsWith('/api/agent/v1/') || skipBodyParsing(req)) {
       next();
       return;
     }

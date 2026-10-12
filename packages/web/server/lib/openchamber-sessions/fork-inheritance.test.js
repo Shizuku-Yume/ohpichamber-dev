@@ -10,7 +10,12 @@ const harness = (metadata, overrides = {}) => {
     writeMetadata: vi.fn(async () => undefined),
     ...overrides,
   };
-  const run = () => applyForkInheritance({ sourceSessionID: 'ses_source', fork: { id: 'ses_fork', metadata }, ...deps });
+  const run = () => applyForkInheritance({
+    sourceSessionID: 'ses_source',
+    fork: { id: 'ses_fork', execution: { metadata: { ignored: true } } },
+    metadata,
+    ...deps,
+  });
   return { deps, run };
 };
 
@@ -21,9 +26,9 @@ describe('sourceOwnedLinksPatch', () => {
     expect(sourceOwnedLinksPatch({ openchamber: { goal: { id: 'g', status: 'complete' } } })).toBeNull();
   });
 
-  it('removes the btw and review links but keeps the goal', () => {
-    expect(sourceOwnedLinksPatch({ openchamber: { goal: goal(false), btwSessionID: 'b', reviewSessionID: 'r' } }))
-      .toEqual({ btwSessionID: null, reviewSessionID: null });
+  it('removes source links and pauses an active goal while preserving other Host fields', () => {
+    expect(sourceOwnedLinksPatch({ openchamber: { goal: { id: 'g', status: 'active' }, btwSessionID: 'b', reviewSessionID: 'r', custom: 'keep' } }))
+      .toEqual({ btwSessionID: null, reviewSessionID: null, goal: { status: 'paused', statusReason: 'paused in fork' } });
   });
 
   it('removes the btw marker of a btw source, keeps a review marker', () => {
@@ -35,19 +40,24 @@ describe('sourceOwnedLinksPatch', () => {
 });
 
 describe('applyForkInheritance', () => {
-  it('does nothing for an inline goal without source links', async () => {
+  it('copies an inline Host goal without reading an objective file', async () => {
     const h = harness({ openchamber: { goal: goal(false) } });
     await h.run();
     expect(h.deps.readObjective).not.toHaveBeenCalled();
-    expect(h.deps.writeMetadata).not.toHaveBeenCalled();
+    expect(h.deps.writeMetadata).toHaveBeenCalledWith('ses_fork', { openchamber: { goal: goal(false) } });
   });
 
-  it('copies a file-backed objective and strips source links', async () => {
-    const h = harness({ openchamber: { goal: goal(true), btwSessionID: 'b' } });
+  it('copies complete explicit Host metadata and strips source links', async () => {
+    const metadata = { directory: '/tmp/project', openchamber: { goal: goal(true), btwSessionID: 'b', custom: 'kept' }, unrelated: { value: 1 } };
+    const h = harness(metadata);
     await h.run();
     expect(h.deps.readObjective).toHaveBeenCalledWith('ses_source');
     expect(h.deps.writeObjective).toHaveBeenCalledWith('ses_fork', 'Objective from file');
-    expect(h.deps.writeMetadata).toHaveBeenCalledWith('ses_fork', { openchamber: { btwSessionID: null } });
+    expect(h.deps.writeMetadata).toHaveBeenCalledWith('ses_fork', {
+      directory: '/tmp/project',
+      openchamber: { goal: goal(true), custom: 'kept' },
+      unrelated: { value: 1 },
+    });
   });
 
   it('inlines the objective when the file copy fails', async () => {
@@ -56,14 +66,14 @@ describe('applyForkInheritance', () => {
     });
     await h.run();
     expect(h.deps.writeMetadata).toHaveBeenCalledWith('ses_fork', {
-      openchamber: { goal: { objective: 'Objective from file', objectiveFile: false } },
+      openchamber: { goal: { ...goal(true), objective: 'Objective from file', objectiveFile: false } },
     });
   });
 
-  it('swallows a metadata write failure', async () => {
+  it('propagates metadata write failures', async () => {
     const h = harness({ openchamber: { reviewSessionID: 'r' } }, {
       writeMetadata: vi.fn(async () => { throw new Error('offline'); }),
     });
-    await expect(h.run()).resolves.toBeUndefined();
+    await expect(h.run()).rejects.toThrow('offline');
   });
 });

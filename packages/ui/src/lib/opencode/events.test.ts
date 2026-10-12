@@ -28,9 +28,9 @@ describe("translateWireEvent", () => {
       properties: {
         info: {
           id: "ses_1",
-          projectID: "proj_1",
-          directory: "/repo",
-          title: "One",
+          projectID: "",
+          directory: "",
+          title: "",
           agent: "build",
           cost: 0,
           tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
@@ -57,10 +57,10 @@ describe("translateWireEvent", () => {
 
   test("session lifecycle events patch the session and emit switch messages", () => {
     const renamed = translateWireEvent({ ...base, type: "session.renamed", durable, data: { sessionID: "ses_1", title: "New" } })
-    expect(renamed).toEqual([{ type: "session.patched", properties: { sessionID: "ses_1", patch: { title: "New", time: { updated: 1000 } } } }])
+    expect(renamed).toEqual([{ type: "session.patched", properties: { sessionID: "ses_1", patch: { time: { updated: 1000 } } } }])
 
     const metadata = translateWireEvent({ ...base, type: "session.metadata.updated", durable, data: { sessionID: "ses_1", metadata: { openchamber: { goal: { id: "g1" } } } } })
-    expect(metadata).toEqual([{ type: "session.patched", properties: { sessionID: "ses_1", patch: { metadata: { openchamber: { goal: { id: "g1" } } } } } }])
+    expect(metadata).toEqual([])
 
     const agent = translateWireEvent({ ...base, type: "session.agent.selected", durable, data: { sessionID: "ses_1", agent: "plan", previous: "build" } })
     expect(agent[0]).toEqual({ type: "session.patched", properties: { sessionID: "ses_1", patch: { agent: "plan", time: { updated: 1000 } } } })

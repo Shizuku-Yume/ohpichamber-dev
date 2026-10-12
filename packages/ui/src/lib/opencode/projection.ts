@@ -21,6 +21,7 @@ import type {
   ToolContent,
   AgentInfo,
 } from "@opencode/client"
+import { z } from "zod"
 import {
   compact,
   partIds,
@@ -39,6 +40,7 @@ import {
   type Vcs,
 } from "./model"
 import { formatModelSelection, parseModelSelection } from "../modelIdentifier"
+import { metadataRevisionSchema } from "./json"
 
 /** One item of an assistant message's ordered content. */
 export type AssistantContentItem = SessionMessageAssistant["content"][number]
@@ -48,7 +50,14 @@ export type AssistantToolItem = Extract<AssistantContentItem, { type: "tool" }>
 // Sessions
 // ---------------------------------------------------------------------------
 
+const hostSessionMarkersSchema = z.object({
+  metadataRevision: metadataRevisionSchema.optional(),
+  hostMetadataError: z.enum(["METADATA_CORRUPT", "METADATA_READ_FAILED", "METADATA_WRITE_FAILED"]).optional(),
+  hostArchiveError: z.enum(["METADATA_CORRUPT", "METADATA_READ_FAILED", "METADATA_WRITE_FAILED"]).optional(),
+})
+
 export function projectSession(info: SessionInfo): Session {
+  const markers = hostSessionMarkersSchema.parse(info)
   return compact({
     id: info.id,
     parentID: info.parentID,
@@ -63,6 +72,9 @@ export function projectSession(info: SessionInfo): Session {
     outcome: info.outcome,
     time: compact({ ...info.time }),
     metadata: info.metadata,
+    metadataRevision: markers.metadataRevision,
+    hostMetadataError: markers.hostMetadataError,
+    hostArchiveError: markers.hostArchiveError,
     permissions: info.permissions,
     revert: info.revert,
     fork: info.fork,

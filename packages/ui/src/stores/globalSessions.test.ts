@@ -160,6 +160,13 @@ describe('splitGlobalSessionsByArchived', () => {
   })
 })
 
+test('requires cached archive restoration before splitting marked records', () => {
+  const cached = makeSession({ id: 'ses_archived', time: { created: 1, updated: 1, archived: 15 } })
+  const marked = makeSession({ id: 'ses_archived', time: { created: 1, updated: 2 }, hostArchiveError: 'METADATA_READ_FAILED' })
+  const restored = { ...marked, time: { ...marked.time, archived: cached.time.archived } }
+  expect(splitGlobalSessionsByArchived([restored]).archived.map((session) => session.id)).toEqual(['ses_archived'])
+})
+
 const originalHomeInfo = opencodeClient.getFilesystemHomeInfo;
 opencodeClient.getFilesystemHomeInfo = async () => ({ home: '/home/user' });
 await ensureChatsRootDirectory();

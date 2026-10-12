@@ -18,7 +18,7 @@ import type { OpenCodeClient, OpenCodeEvent } from "@opencode/client"
 import { z } from "zod"
 import { opencodeClient } from "@/lib/opencode/client"
 import { GLOBAL_EVENT_DIRECTORY, routeWireEvent, syncEventSessionID, type SyncEvent } from "@/lib/opencode/events"
-import type { Metadata } from "@/lib/opencode/model"
+import { sessionMetadataStateSchema } from "@/lib/opencode/json"
 import { getRuntimeUrlResolver } from "@/lib/runtime-url"
 import { clearRuntimeUrlAuthToken, refreshRuntimeUrlAuthToken } from "@/lib/runtime-auth"
 import { useAuthSessionStore, waitForAuthSession } from "@/lib/runtime-auth-expiry"
@@ -130,7 +130,7 @@ const openchamberArchivedSchema = z.object({
 
 const openchamberMetadataSchema = z.object({
   type: z.literal("openchamber:session-metadata"),
-  properties: z.object({ sessionID: z.string().min(1), metadata: z.record(z.string(), z.unknown()) }),
+  properties: sessionMetadataStateSchema.extend({ sessionID: z.string().min(1) }),
 })
 
 const openchamberNotificationSchema = z.object({
@@ -246,10 +246,8 @@ function translateOpenchamberEvent(type: string, payload: unknown): SyncEvent | 
     case "openchamber:session-metadata": {
       const parsed = openchamberMetadataSchema.safeParse(payload)
       if (!parsed.success) return null
-      const { sessionID } = parsed.data.properties
-      // SAFETY: the server serialises this object from JSON, so every value is a JsonValue.
-      const value = parsed.data.properties.metadata as Metadata
-      return { type: "session.patched", properties: { sessionID, patch: { metadata: value } } }
+      const { sessionID, metadata, revision } = parsed.data.properties
+      return { type: "session.patched", properties: { sessionID, patch: { metadata, metadataRevision: revision } } }
     }
     case "openchamber:notification": {
       const parsed = openchamberNotificationSchema.safeParse(payload)
@@ -367,6 +365,8 @@ function coalesceKey(event: SyncEvent): string | undefined {
     case "session.status":
       return `session.status:${event.properties.sessionID}`
     case "session.patched":
+      // Host writes must reach the owner separately; last-arrival coalescing can discard a newer revision.
+      if (event.properties.patch.metadataRevision !== undefined) return undefined
       return `session.patched:${event.properties.sessionID}`
     case "message.patched":
       return `message.patched:${event.properties.sessionID}:${event.properties.messageID}`

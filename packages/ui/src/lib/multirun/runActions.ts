@@ -35,7 +35,9 @@ export async function renameRun(run: MultiRunSummary, title: string, sessionById
       failed.push(sessionId);
       return;
     }
-    registerMultiRunSession({ ...session, metadata: result.metadata }, session.directory);
+    const updated: Session = { ...session, metadata: result.metadata, metadataRevision: result.revision };
+    delete updated.hostMetadataError;
+    registerMultiRunSession(updated, session.directory);
   }));
   return failed;
 }
@@ -49,7 +51,9 @@ export async function renameRun(run: MultiRunSummary, title: string, sessionById
 export async function detachFromRun(session: Session, runTitle: string): Promise<void> {
   const result = await requestSessionMetadataUpdate(session.id, { openchamber: { multirun: null } }, session.directory);
   if (result.outcome !== 'updated') throw new Error(`Multi-run membership was not removed: ${result.reason}`);
-  registerMultiRunSession({ ...session, metadata: result.metadata }, session.directory);
+  const updated: Session = { ...session, metadata: result.metadata, metadataRevision: result.revision };
+  delete updated.hostMetadataError;
+  registerMultiRunSession(updated, session.directory);
   // Renaming also keeps an old slash-style lane title from reading as a legacy run.
   const title = runTitle.trim();
   if (title && title !== session.title) await useSessionUIStore.getState().updateSessionTitle(session.id, title);
@@ -98,7 +102,8 @@ export async function askOtherModels(input: {
   };
   const result = await requestSessionMetadataUpdate(session.id, multiRunMembershipPatch(membership), session.directory);
   if (result.outcome !== 'updated') throw new Error(`Multi-run membership was not saved: ${result.reason}`);
-  const bound: Session = { ...session, metadata: result.metadata };
+  const bound: Session = { ...session, metadata: result.metadata, metadataRevision: result.revision };
+  delete bound.hostMetadataError;
   registerMultiRunSession(bound, session.directory);
 
   const identity = readMultiRunIdentity(bound, session.directory);

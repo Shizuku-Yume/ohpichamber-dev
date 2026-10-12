@@ -738,7 +738,9 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           onPage: (page) => {
             if (firstPageMerged || generation !== loadGeneration) return;
             firstPageMerged = true;
-            const firstPage = splitGlobalSessionsByArchived(page);
+            const firstPage = splitGlobalSessionsByArchived(page.map((session) => (
+              mergeSessionDirectoryMetadata(session, get().entityById.get(session.id))
+            )));
             mergingSessionPage = true;
             try {
               set((state) => mergeSessionPage(state, firstPage.active, firstPage.archived, baselineRevision));
@@ -753,7 +755,9 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           // instance — drop it.
           return { activeSessions: [], archivedSessions: [] };
         }
-        const { active, archived } = splitGlobalSessionsByArchived(allSessions);
+        const { active, archived } = splitGlobalSessionsByArchived(allSessions.map((session) => (
+          mergeSessionDirectoryMetadata(session, get().entityById.get(session.id))
+        )));
         // The marks first: a reader of the snapshot that asks which space a record belongs to
         // must find the space that listed it.
         useSpacesStore.getState().applyMarks(spaceMarks);
@@ -837,7 +841,9 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       if (spaceId !== null) useSpacesStore.getState().noteReachable(spaceId);
     }
 
-    const { active, archived } = splitGlobalSessionsByArchived(fetched.sessions);
+    const { active, archived } = splitGlobalSessionsByArchived(fetched.sessions.map((session) => (
+      mergeSessionDirectoryMetadata(session, get().entityById.get(session.id))
+    )));
     const refreshedActiveIds = active.map((session) => session.id);
 
     set((state) => {

@@ -16,6 +16,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     dispatchResultsRuntime,
     messageSearchRuntime,
     scheduledTasksRuntime,
+    hostSessionState,
     getHealthCheckInterval,
     clearHealthCheckInterval,
     getTerminalRuntime,
@@ -180,6 +181,10 @@ export const createGracefulShutdownRuntime = (dependencies) => {
         }
       }
     }
+
+    // No producer or HTTP admission remains; drain accepted metadata operations
+    // before the sole owner closes its shared SQLite connection.
+    await hostSessionState.close();
 
     const uiAuthController = getUiAuthController();
     if (uiAuthController) {

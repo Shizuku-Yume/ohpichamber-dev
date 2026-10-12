@@ -54,6 +54,7 @@ export type SessionPatch = {
   outcome?: Session["outcome"]
   /** Full replacement of the session's metadata. */
   metadata?: Metadata
+  metadataRevision?: string
   /** `archived: null` restores an archived session. */
   time?: Partial<Omit<Session["time"], "archived">> & { archived?: number | null }
 }
@@ -233,16 +234,16 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
       const info: Session = compact({
         id: event.data.sessionID,
         parentID: event.data.parentID,
-        projectID: event.data.projectID,
-        directory: event.data.location.directory,
+        // Host fields arrive through composed reads and revisioned metadata events, never the engine transcript.
+        projectID: "",
+        directory: "",
         subpath: event.data.subpath,
-        title: event.data.title ?? "",
+        title: "",
         agent: event.data.agent,
         model: event.data.model,
         cost: 0,
         tokens: ZERO_TOKENS,
         time: { created: event.created, updated: event.created },
-        metadata: event.data.metadata,
         permissions: event.data.permissions,
       })
       return [{ type: "session.created", properties: { info } }]
@@ -253,15 +254,12 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
     case "session.forked":
       return [{ type: "session.forked", properties: { sessionID: event.data.sessionID, parentID: event.data.parentID } }]
     case "session.renamed":
-      return [sessionEvent(event.data.sessionID, { title: event.data.title, time: { updated: event.created } })]
-    // OpenCode's record holds the full metadata, so this replaces it.
+      return [sessionEvent(event.data.sessionID, { time: { updated: event.created } })]
     case "session.metadata.updated":
-      return [sessionEvent(event.data.sessionID, { metadata: event.data.metadata })]
+      return []
     case "session.moved":
       return [
         sessionEvent(event.data.sessionID, {
-          directory: event.data.location.directory,
-          projectID: event.data.projectID,
           subpath: event.data.subpath ?? null,
           time: { updated: event.created },
         }),

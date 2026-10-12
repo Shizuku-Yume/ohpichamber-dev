@@ -1088,9 +1088,12 @@ export async function patchSessionMetadata(
   // silently drops.
   const result = await requestSessionMetadataUpdate(sessionId, buildMetadataMergePatch(currentMetadata, nextMetadata), targetDirectory)
   if (result.outcome !== "updated") throw new Error(`session metadata update failed: ${result.reason}`)
-  const updated: Session = { ...current, metadata: result.metadata }
+  const candidate: Session = { ...current, metadata: result.metadata, metadataRevision: result.revision }
+  delete candidate.hostMetadataError
   if (isStaleRuntime(expectedRuntimeKey)) throw new Error("runtime changed")
-  useGlobalSessionsStore.getState().upsertSession(updated)
+  const globalStore = useGlobalSessionsStore.getState()
+  const updated = mergeSessionDirectoryMetadata(candidate, globalStore.entityById.get(sessionId))
+  globalStore.upsertSession(updated)
   const sessionDirectory = updated.directory || targetDirectory
   if (sessionDirectory) registerSessionDirectory(updated.id, sessionDirectory)
   mirrorSessionIntoLiveStores(updated, sessionDirectory ?? undefined)

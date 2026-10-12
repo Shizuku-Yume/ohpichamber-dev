@@ -34,7 +34,8 @@ export async function createMultiRunSession(
     );
     assertCurrent();
     if (result.outcome !== 'updated') throw new Error(`Multi-run membership was not saved: ${result.reason}`);
-    const bound: Session = { ...session, metadata: result.metadata };
+    const bound: Session = { ...session, metadata: result.metadata, metadataRevision: result.revision };
+    delete bound.hostMetadataError;
     if (!getMultiRunMembership(bound)) throw new Error('Multi-run membership was not saved');
     return bound;
   } catch (error) {

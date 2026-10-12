@@ -33,8 +33,9 @@ handed over changes the user could look over. It lives outside `work` so it
 needs neither the In work block nor a session in work.
 
 The UI parser is `packages/ui/src/lib/sessionWorkMetadata.ts`; the user's own
-Track / Done go through the generic metadata route
-(`setSessionWorkState` in `packages/ui/src/sync/session-actions.ts`), which
+Track / Done go through the Host metadata route
+(`setSessionWorkState` in `packages/ui/src/sync/session-actions.ts`). Host SQLite
+is the metadata authority; execution session metadata is never a fallback.
 
 ## Invariants
 
@@ -56,6 +57,8 @@ Track / Done go through the generic metadata route
 - Only top-level, unarchived project sessions that are not review sessions
   (`openchamber.kind === 'review'`) are asked about. Managed Chats (under the
   `chatRoots` the server passes in) are plain conversations and never in work.
+  Review eligibility reads the injected Host `readMetadata` dependency, not the
+  execution session record. An unreadable Host record keeps the gate unknown.
 - A known subsession costs nothing: `../session-lineage.js` remembers which
   sessions have a parent (from `session.created` events and from any record
   read anyway), and a known one is skipped before any read or Jev call.

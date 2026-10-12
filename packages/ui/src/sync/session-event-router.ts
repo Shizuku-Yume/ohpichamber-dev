@@ -45,7 +45,11 @@ const applyPatch = (session: Session, patch: SessionPatch): Session => {
   if (patch.permissions !== undefined) next.permissions = patch.permissions
   // OpenChamber's metadata broadcasts (in work, recap, goal) replace the whole
   // object; without this the sidebar saw them only on its next full reload.
-  if (patch.metadata !== undefined) next.metadata = patch.metadata
+  if (patch.metadata !== undefined) {
+    next.metadata = patch.metadata
+    delete next.hostMetadataError
+  }
+  if (patch.metadataRevision !== undefined) next.metadataRevision = patch.metadataRevision
   if (patch.outcome !== undefined) next.outcome = patch.outcome
   if (patch.subpath === null) delete next.subpath
   else if (patch.subpath !== undefined) next.subpath = patch.subpath
@@ -53,6 +57,7 @@ const applyPatch = (session: Session, patch: SessionPatch): Session => {
   else if (patch.revert !== undefined) next.revert = patch.revert
   if (patch.time) {
     const { archived, ...rest } = patch.time
+    if (archived !== undefined) delete next.hostArchiveError
     next.time = compact({ ...session.time, ...rest, archived: archived ?? session.time.archived })
   }
   return next
@@ -91,8 +96,11 @@ export const applySessionEventsToGlobalSessions = (payloads: readonly SyncEvent[
     }
 
     if (payload.type === "session.created") {
-      const session = stripSessionDiffSnapshots(payload.properties.info)
+      let session = stripSessionDiffSnapshots(payload.properties.info)
       const currentSession = overlay.get(session.id) ?? null
+      if (session.metadataRevision === undefined && !session.hostMetadataError) {
+        session = { ...session, time: { ...session.time, archived: currentSession?.time.archived } }
+      }
       if (!shouldSkipStaleSessionEvent(currentSession, session)) appendUpsert(session)
       continue
     }

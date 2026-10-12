@@ -1,5 +1,6 @@
 import { asNonEmptyString } from '../shared/guards.js';
 import express from 'express';
+import { z } from 'zod';
 import {
   createWorktree as createWorktreeDefault,
   getWorktreeBootstrapStatus as getWorktreeBootstrapStatusDefault,
@@ -12,12 +13,24 @@ import { parseScheduledCommandPrompt } from '../scheduled-tasks/runtime.js';
 import { buildGoalIntroText, createSessionGoal } from '../session-goal/create.js';
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
 import { readObjective, writeObjective } from '../session-goal/objectives.js';
-import { createArchiveStore } from './archive-store.js';
 import { applyForkInheritance } from './fork-inheritance.js';
 import { createOpenCodeClient as defaultCreateOpenCodeClient } from './opencode-client.js';
-import { createSessionMetadataStore, createOpenCodeSessionMetadata } from './session-metadata-store.js';
+import { MetadataReadError } from './session-metadata-store.js';
 
 const asList = (value) => (Array.isArray(value) ? value : []);
+
+const MetadataPatchRequestSchema = z.object({ patch: z.record(z.string(), z.unknown()), directory: z.string().optional() });
+const MetadataImportRequestSchema = z.object({
+  intent: z.literal('operational-metadata-conversion'), consent: z.literal(true),
+  source: z.string().trim().min(1).max(200),
+  sessions: z.array(z.object({ id: z.string().trim().min(1), directory: z.string().optional() })).min(1).max(200),
+});
+const SelectedProjectionIdentitySchema = z.looseObject({
+  id: z.string().min(1),
+  location: z.looseObject({ directory: z.string().trim().min(1) }).optional(),
+  directory: z.string().trim().min(1).optional(),
+  metadata: z.looseObject({ directory: z.string().trim().min(1).optional() }).optional(),
+}).refine((projection) => projection.location !== undefined || projection.directory !== undefined);
 
 const splitModel = (value) => {
   const model = asNonEmptyString(value);
@@ -436,13 +449,11 @@ export const createOpenChamberSessionService = (dependencies) => {
     // Creates a worktree from a pull or merge request through the Git routes'
     // contributor pipeline. Absent where contributor worktrees are not served.
     createChangeRequestWorktree = null,
-    dataDir = null,
     archiveStore: injectedArchiveStore = null,
     sessionMetadataStore: injectedSessionMetadataStore = null,
-    // Injected by the server so every metadata write takes the same path:
-    // store, broadcast, and tell the goal loop. Falls back to store+broadcast
-    // when it is absent, which is what module tests use.
+    // The injected writer owns persistence, its broadcast and goal notification.
     persistSessionMetadata = null,
+    readLegacySessionProjection = null,
     createOpenCodeClient = defaultCreateOpenCodeClient,
     createWorktree = createWorktreeDefault,
     getWorktreeBootstrapStatus = getWorktreeBootstrapStatusDefault,
@@ -456,18 +467,11 @@ export const createOpenChamberSessionService = (dependencies) => {
     isAutoReady = null,
   } = dependencies;
 
-  if ((!injectedArchiveStore || !injectedSessionMetadataStore) && !dataDir) {
-    throw new Error('openchamber session routes need either both stores or a dataDir');
+  if (!injectedArchiveStore || !injectedSessionMetadataStore) {
+    throw new Error('openchamber session routes require Host-owned archive and metadata stores');
   }
-  const archiveStore = injectedArchiveStore || createArchiveStore({ dataDir });
-  const sessionMetadataStore = injectedSessionMetadataStore || createSessionMetadataStore({
-    dataDir,
-    openCode: createOpenCodeSessionMetadata({
-      buildOpenCodeUrl,
-      getOpenCodeAuthHeaders,
-      createOpenCodeClient,
-    }),
-  });
+  const archiveStore = injectedArchiveStore;
+  const sessionMetadataStore = injectedSessionMetadataStore;
 
   const openCodeBaseUrl = () => buildOpenCodeUrl('/', '').replace(/\/$/, '');
   const clientFor = (directory) => createOpenCodeClient({
@@ -733,43 +737,87 @@ export const createOpenChamberSessionService = (dependencies) => {
     return { model, agent, variant, promptDispatched: true, dispatchedAsCommand: Boolean(resolvedCommand) };
   };
 
-  const broadcastMetadata = (sessionID, metadata) => {
+  const broadcastMetadata = (sessionID, state) => {
     broadcastGlobalUiEvent?.({
       type: 'openchamber:session-metadata',
-      properties: { sessionID, metadata },
+      properties: { sessionID, metadata: state.metadata, revision: state.revision },
     });
   };
 
-  /**
-   * Merge-patch a session's OpenChamber metadata on its OpenCode record: the
-   * per-session state of goal mode, session assist, obligatory context and
-   * pinned notes. The broadcast carries the full merged object, because a
-   * client that missed an earlier patch must not have to reconstruct it.
-   */
+  /** Merge-patch Host-owned operational metadata without consulting OpenCode. */
   const writeMetadata = async (sessionID, patch, directory = '') => {
-    if (typeof persistSessionMetadata === 'function') {
-      return persistSessionMetadata(sessionID, patch, { directory });
-    }
-    const metadata = await sessionMetadataStore.setSessionMetadata(sessionID, patch, { directory });
-    broadcastMetadata(sessionID, metadata);
-    return metadata;
+    if (persistSessionMetadata) return persistSessionMetadata(sessionID, patch, { directory });
+    const state = await sessionMetadataStore.setSessionMetadata(sessionID, patch);
+    if (state.changed) broadcastMetadata(sessionID, state);
+    return state;
   };
 
   const setMetadata = async (sessionID, payload = {}) => {
     const id = asNonEmptyString(sessionID);
     if (!id) throw new OpenChamberControlError('a session id is required', 400);
-    const patch = payload?.patch;
-    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-      throw new OpenChamberControlError('patch must be an object', 400);
-    }
-
-    return { metadata: await writeMetadata(id, patch, asNonEmptyString(payload?.directory) || '') };
+    const request = MetadataPatchRequestSchema.safeParse(payload);
+    if (!request.success) throw new OpenChamberControlError('patch must be an object and directory must be a string', 400);
+    return writeMetadata(id, request.data.patch, request.data.directory ?? '');
   };
 
-  const getMetadata = async (sessionID, directory = '') => {
+  const getMetadata = async (sessionID) => {
     const id = asNonEmptyString(sessionID);
     if (!id) throw new OpenChamberControlError('a session id is required', 400);
-    return { metadata: await sessionMetadataStore.get(id, { directory }) };
+    return await sessionMetadataStore.getState(id) ?? { metadata: null, revision: '0' };
+  };
+
+  const inheritForkMetadata = async (sourceSessionID, fork, directory = '') => {
+    const metadata = await sessionMetadataStore.get(sourceSessionID);
+    const inheritedMetadata = { ...metadata };
+    if (directory) inheritedMetadata.directory = directory;
+    return applyForkInheritance({
+      sourceSessionID, fork, metadata: inheritedMetadata,
+      readObjective, writeObjective,
+      writeMetadata: (id, patch) => writeMetadata(id, patch, directory),
+    });
+  };
+
+  const importMetadata = async (payload) => {
+    const request = MetadataImportRequestSchema.safeParse(payload);
+    if (!request.success) throw new OpenChamberControlError('Explicit consent, conversion intent, source and 1–200 selected sessions are required', 400);
+    if (!readLegacySessionProjection) throw new OpenChamberControlError('Operational metadata conversion is unavailable', 501);
+    const selected = [];
+    const seen = new Set();
+    for (const { id, directory = '' } of request.data.sessions) {
+      if (!seen.has(id)) { seen.add(id); selected.push({ id, directory }); }
+    }
+    const results = [];
+    const errors = {};
+    for (const { id, directory } of selected) {
+      try {
+        const requestedDirectory = await validateDirectoryPath(asNonEmptyString(directory));
+        if (!requestedDirectory.ok) throw new MetadataReadError('Selected operational directory unavailable');
+        const canonicalDirectoryCheck = await validateDirectoryPath(requestedDirectory.directory);
+        if (!canonicalDirectoryCheck.ok || canonicalDirectoryCheck.directory !== requestedDirectory.directory) {
+          throw new MetadataReadError('Selected operational directory unavailable');
+        }
+        const authorizedDirectory = canonicalDirectoryCheck.directory;
+        const projection = SelectedProjectionIdentitySchema.safeParse(await readLegacySessionProjection(id, { directory: authorizedDirectory }));
+        if (!projection.success || projection.data.id !== id) throw new MetadataReadError('Selected operational projection unavailable');
+        // Metadata can override the projection's directory in the Host importer.
+        // Every declared source scope must agree before any row or receipt commits.
+        for (const declaredDirectory of [projection.data.location?.directory, projection.data.directory, projection.data.metadata?.directory]) {
+          if (declaredDirectory === undefined) continue;
+          const returnedDirectory = await validateDirectoryPath(declaredDirectory);
+          if (!returnedDirectory.ok || returnedDirectory.directory !== authorizedDirectory) {
+            throw new MetadataReadError('Selected operational projection is outside the authorized directory');
+          }
+        }
+        const canonicalProjection = { ...projection.data, directory: authorizedDirectory };
+        if (projection.data.metadata?.directory !== undefined) {
+          canonicalProjection.metadata = { ...projection.data.metadata, directory: authorizedDirectory };
+        }
+        const imported = await sessionMetadataStore.importOperationalSessions([canonicalProjection], request.data.source);
+        if (imported.errors[id]) { errors[id] = imported.errors[id]; continue; }
+        results.push({ id, status: imported.results[id] });
+      } catch (error) { errors[id] = error?.code === 'METADATA_CORRUPT' || error?.code === 'METADATA_WRITE_FAILED' ? error.code : 'METADATA_READ_FAILED'; }
+    }
+    return { results, errors, complete: Object.keys(errors).length === 0 };
   };
 
   const broadcastArchived = (sessionID, archivedAt) => {
@@ -783,7 +831,7 @@ export const createOpenChamberSessionService = (dependencies) => {
    * Archive a batch of sessions in one request.
    *
    * OpenCode 2.x has no route that sets `time.archived`, so the state is
-   * OpenChamber's own: a JSON file beside the OpenCode instance, folded back
+   * OpenChamber's own SQLite sidecar state, folded back
    * onto the session records the proxy serves. Batching matters for the same
    * reason it did before — the UI archives every session linked to a worktree
    * before removing it, and doing that one request at a time is what made
@@ -902,6 +950,17 @@ export const createOpenChamberSessionService = (dependencies) => {
       directory: sessionDirectory,
       ...(title ? { title } : {}),
     });
+    const metadataPatch = { directory: sessionDirectory };
+    if (title) metadataPatch.title = title;
+    if (resolvedDirectory.projectId) metadataPatch.projectID = resolvedDirectory.projectId;
+    try {
+      await writeMetadata(sessionID, metadataPatch, sessionDirectory);
+    } catch (error) {
+      const partial = new OpenChamberControlError('Session created but Host metadata could not be persisted', 500,
+        { partial: true, partialAction: 'session-created', sessionId: sessionID, directory: sessionDirectory });
+      partial.code = error?.code;
+      throw partial;
+    }
 
     let dispatch = { model, agent, variant, promptDispatched: false, dispatchedAsCommand: false };
     if (prompt) {
@@ -1002,13 +1061,7 @@ export const createOpenChamberSessionService = (dependencies) => {
         targetSessionID = targetSession.id;
         // Before the prompt goes out, so a goal armed by this dispatch writes
         // over the copied objective rather than the other way round.
-        await applyForkInheritance({
-          sourceSessionID,
-          fork: targetSession,
-          readObjective,
-          writeObjective,
-          writeMetadata: (sessionID, patch) => writeMetadata(sessionID, patch, directory),
-        });
+        await inheritForkMetadata(sourceSessionID, targetSession, directory);
       }
 
       const baselineAssistantMessageId = await latestCompletedAssistantMessageID({
@@ -1113,6 +1166,8 @@ export const createOpenChamberSessionService = (dependencies) => {
     sessionMetadataStore,
     setMetadata,
     getMetadata,
+    inheritForkMetadata,
+    importMetadata,
     send: (sessionID, payload) => runExisting('send', sessionID, payload),
     fork: (sessionID, payload) => runExisting('fork', sessionID, payload),
   };
@@ -1120,7 +1175,7 @@ export const createOpenChamberSessionService = (dependencies) => {
 
 const sendServiceError = (res, error, fallback) => {
   const controlError = asControlError(error, fallback);
-  return res.status(controlError.statusCode).json({
+  const body = {
     error: controlError.message,
     ...(controlError.partial === true ? {
       partial: true,
@@ -1128,11 +1183,21 @@ const sendServiceError = (res, error, fallback) => {
       sessionId: controlError.sessionId,
       directory: controlError.directory,
     } : {}),
-  });
+  };
+  if (error?.code) body.code = error.code;
+  return res.status(controlError.statusCode).json(body);
 };
 
 export const registerOpenChamberSessionRoutes = (app, dependencies) => {
+  if (!dependencies.isRequestOriginAllowed) throw new Error('Session routes require isRequestOriginAllowed');
   const service = dependencies.sessionService || createOpenChamberSessionService(dependencies);
+
+  app.post('/api/openchamber/sessions/metadata/import', express.json({ limit: '1mb' }), async (req, res) => {
+    try {
+      if (!await dependencies.isRequestOriginAllowed(req)) return res.status(403).json({ error: 'Invalid origin' });
+      return res.json(await service.importMetadata(req.body));
+    } catch (error) { return sendServiceError(res, error, 'Failed to convert selected operational metadata'); }
+  });
 
   app.post('/api/openchamber/sessions', express.json({ limit: '1mb' }), async (req, res) => {
     try {

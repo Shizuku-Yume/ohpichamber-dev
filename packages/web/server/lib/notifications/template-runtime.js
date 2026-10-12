@@ -1,9 +1,14 @@
+import { z } from 'zod';
 import { summarizeText as summarizeSharedText } from '../text/summarization.js';
 import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
+
+const HostTitleSchema = z.object({ title: z.string().optional() }).passthrough().nullable();
+const EventTitleSchema = z.string();
 
 export const createNotificationTemplateRuntime = (deps) => {
   const {
     readSettingsFromDisk,
+    readSessionMetadata,
     buildOpenCodeUrl,
     getOpenCodeAuthHeaders,
     resolveGitBinaryForSpawn,
@@ -227,7 +232,9 @@ export const createNotificationTemplateRuntime = (deps) => {
   const buildTemplateVariables = async (payload, sessionId) => {
     const info = payload?.properties?.info || {};
 
-    let sessionTitle = payload?.properties?.sessionTitle || payload?.properties?.session?.title || (typeof info.sessionTitle === 'string' ? info.sessionTitle : '') || '';
+    const metadata = sessionId ? HostTitleSchema.parse(await readSessionMetadata(sessionId)) : null;
+    const eventTitle = EventTitleSchema.safeParse(info.sessionTitle);
+    let sessionTitle = metadata?.title ?? (payload?.properties?.sessionTitle || payload?.properties?.session?.title || (eventTitle.success ? eventTitle.data : '') || '');
 
     if (!sessionTitle && sessionId) {
       const cached = getCachedSessionTitle(sessionId);

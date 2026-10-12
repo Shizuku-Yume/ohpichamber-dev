@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, mock, test } from 'bun:test';
 
 const storage = new Map<string, string>();
 let storageSetCount = 0;
 let runtimeKey = 'runtime-a';
-let diskResponseBody: Record<string, unknown> = { version: 1, exists: false };
+let diskResponseBody = JSON.stringify({ version: 1, exists: false });
 
 const safeStorage = {
   getItem: (key: string) => storage.get(key) ?? null,
@@ -29,31 +29,48 @@ mock.module('./utils/safeStorage', () => ({
 }));
 
 const postedBodies: string[] = [];
+// The workspace's TypeScript lib does not include Promise.withResolvers.
+const createHydrationRead = () => {
+  let resolve: () => void;
+  const promise = new Promise<void>((complete) => { resolve = complete; });
+  return { promise, resolve: () => resolve() };
+};
+let hydrationRead = createHydrationRead();
 
 mock.module('@/lib/runtime-fetch', () => ({
   runtimeFetch: mock(async (_path: string, init?: RequestInit) => {
     if (init?.method === 'POST') postedBodies.push(String(init.body));
-    return new Response(JSON.stringify(diskResponseBody), { headers: { 'Content-Type': 'application/json' } });
+    const body = JSON.parse(diskResponseBody);
+    const response = new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
+    response.json = async () => {
+      queueMicrotask(() => hydrationRead.resolve());
+      return body;
+    };
+    return response;
   }),
 }));
 mock.module('@/lib/runtime-switch', () => ({ getRuntimeKey: () => runtimeKey }));
 
 const { useSessionFoldersStore } = await import('./useSessionFoldersStore');
 
-const waitForPersist = () => new Promise((resolve) => setTimeout(resolve, 350));
+const waitForPersist = async () => { jest.advanceTimersByTime(350); await Promise.resolve(); };
+const waitForHydration = async () => { await hydrationRead.promise; await Promise.resolve(); };
 
 describe('useSessionFoldersStore folder assignments', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
+    hydrationRead = createHydrationRead();
     storage.clear();
     storageSetCount = 0;
     runtimeKey = 'runtime-a';
-    diskResponseBody = { version: 1, exists: false };
+    diskResponseBody = JSON.stringify({ version: 1, exists: false });
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
     useSessionFoldersStore.setState({
       foldersMap: {},
       collapsedFolderIds: new Set<string>(),
     });
   });
+  afterEach(() => jest.useRealTimers());
 
   test('repeated addSessionToFolder to the same folder preserves foldersMap reference', async () => {
     const store = useSessionFoldersStore.getState();
@@ -131,7 +148,7 @@ describe('useSessionFoldersStore folder assignments', () => {
     runtimeKey = 'runtime-a';
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
 
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project').map((folder) => folder.name)).toEqual(['Browser folder']);
   });
@@ -163,22 +180,81 @@ describe('useSessionFoldersStore folder assignments', () => {
   test('drops a folder another device deleted even when the browser copy is newer', withWindow(async () => {
     const folder = useSessionFoldersStore.getState().createFolder('/workspace/project', 'Deleted elsewhere');
     useSessionFoldersStore.getState().createFolder('/workspace/project', 'Kept');
-    diskResponseBody = {
+    diskResponseBody = JSON.stringify({
       version: 1,
       exists: true,
       foldersMap: {},
       collapsedFolderIds: [],
       deletedFolderIds: { [folder.id]: Date.now() },
       updatedAt: 1,
-    };
+    });
 
     runtimeKey = 'runtime-b';
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
     runtimeKey = 'runtime-a';
     useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForHydration();
 
     expect(useSessionFoldersStore.getState().getFoldersForScope('/workspace/project').map((entry) => entry.name)).toEqual(['Kept']);
+  }));
+
+  test('preserves failed scope folders and collapse state while applying valid scopes', withWindow(async () => {
+    const failed = useSessionFoldersStore.getState().createFolder('/failed', 'Cached');
+    const valid = useSessionFoldersStore.getState().createFolder('/valid', 'Old');
+    useSessionFoldersStore.getState().toggleFolderCollapse(failed.id);
+    diskResponseBody = JSON.stringify({
+      version: 1, exists: true,
+      foldersMap: { '/valid': [{ ...valid, name: 'Fresh' }] },
+      collapsedFolderIds: [], errors: { '/failed': 'METADATA_CORRUPT' }, updatedAt: Date.now() + 1,
+    });
+    runtimeKey = 'runtime-b';
+    useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
+    runtimeKey = 'runtime-a';
+    useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
+    await waitForHydration();
+    expect(useSessionFoldersStore.getState().foldersMap['/failed']?.[0]?.name).toBe('Cached');
+    expect(useSessionFoldersStore.getState().foldersMap['/valid']?.[0]?.name).toBe('Fresh');
+    expect(useSessionFoldersStore.getState().collapsedFolderIds.has(failed.id)).toBe(true);
+  }));
+
+  test('preserves cache on source-wide conversion failure', withWindow(async () => {
+    const folder = useSessionFoldersStore.getState().createFolder('/workspace/project', 'Cached');
+    diskResponseBody = JSON.stringify({ version: 1, exists: true, foldersMap: {}, collapsedFolderIds: [], conversion: { status: 'failed', code: 'METADATA_READ_FAILED' }, updatedAt: Date.now() + 1 });
+    runtimeKey = 'runtime-b';
+    useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
+    runtimeKey = 'runtime-a';
+    useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
+    await waitForHydration();
+    expect(useSessionFoldersStore.getState().foldersMap['/workspace/project']?.[0]?.id).toBe(folder.id);
+  }));
+
+  test('applies known SQLite scopes when a corrupt legacy source leaves other scopes unknown', withWindow(async () => {
+    const cached = useSessionFoldersStore.getState().createFolder('/unknown', 'Cached');
+    const valid = useSessionFoldersStore.getState().createFolder('/valid', 'Old');
+    useSessionFoldersStore.getState().toggleFolderCollapse(cached.id);
+    diskResponseBody = JSON.stringify({
+      version: 1, exists: true, foldersMap: { '/valid': [{ ...valid, name: 'Confirmed' }] },
+      collapsedFolderIds: [], conversion: { status: 'corrupt', code: 'METADATA_CORRUPT' }, updatedAt: Date.now() + 1,
+    });
+    runtimeKey = 'runtime-b';
+    useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
+    runtimeKey = 'runtime-a';
+    useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
+    await waitForHydration();
+    expect(useSessionFoldersStore.getState().foldersMap['/unknown']?.[0]?.id).toBe(cached.id);
+    expect(useSessionFoldersStore.getState().foldersMap['/valid']?.[0]?.name).toBe('Confirmed');
+    expect(useSessionFoldersStore.getState().collapsedFolderIds.has(cached.id)).toBe(true);
+  }));
+
+  test('rejects malformed disk responses without clearing cached folders', withWindow(async () => {
+    const cached = useSessionFoldersStore.getState().createFolder('/workspace/project', 'Cached');
+    diskResponseBody = JSON.stringify({ version: 1, exists: true, foldersMap: { '/workspace/project': [{ id: 'invalid', name: 'Broken' }] }, collapsedFolderIds: [], updatedAt: Date.now() + 1 });
+    runtimeKey = 'runtime-b';
+    useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
+    runtimeKey = 'runtime-a';
+    useSessionFoldersStore.getState().resetForRuntimeSwitch(runtimeKey);
+    await waitForHydration();
+    expect(useSessionFoldersStore.getState().foldersMap['/workspace/project']?.[0]?.id).toBe(cached.id);
   }));
 
   test('does not silently evict folder state from older runtimes', () => {

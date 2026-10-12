@@ -64,12 +64,13 @@ can identify the triggering requests and stacks when this diagnostic branch appl
 These describe gaps in the inherited integration. Check the installed pin and
 matching source before relying on a gap or retiring its workaround.
 
-- **Archive**: 2.x has no archive route. `openchamber-sessions/archive-store.js`
-  keeps it per data dir and the proxy folds it into session reads.
-  Session metadata is not a workaround since 2.0.15: it lives on the OpenCode
-  record, written by merge-then-PATCH in `session-metadata-store.js`, which
-  also migrates the old `sessions-metadata.json`. Provider credentials are
-  not one either since 2.0.20: `opencode/auth.js` reads `GET /api/credential`.
+- **Operational session state**: Host SQLite owns archive state, custom titles,
+  workspace associations, folders, and operational metadata. The retained
+  execution runtime is not a metadata accessor or fallback. Named legacy JSON
+  sidecars convert transactionally; selected execution projections require
+  explicit conversion intent and consent through the Host route. Neither path
+  imports transcripts. Provider credentials remain execution-owned:
+  `opencode/auth.js` reads `GET /api/credential`.
 - **1.x sessions created after the one-shot migration**:
   `v1-migration-topup.js` rewinds the migration cursor before a managed start,
   only when no revisited session has 2.x activity.
