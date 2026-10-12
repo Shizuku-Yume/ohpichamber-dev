@@ -45,6 +45,12 @@ The private session namespace exposes `GET approvals`, `POST approvals/:approval
 
 Always-allow commits a session policy, and always-deny commits a workspace policy, in the Node Host SQLite owner through private child IPC. Node authorizes the captured Host bootstrap scope before writing. A real committed policy ID/revision is required before the worker handle resolves. Failed persistence leaves the request pending with `APPROVAL_POLICY_WRITE_FAILED`; no missing Host handler can fabricate a commit. Policies load before reopening a session and apply to future exact native targets, with workspace denial taking precedence. Web and Electron use that Host; hosted mobile and Capacitor reach the same Host without starting local workers. Task22 still owns external authentication and production route activation.
 
+## Shell projection
+
+`WorkerShell` owns native `AsyncJobManager` jobs backed by `executeBash`. Guest-started jobs suppress native agent delivery, so observing command output does not append it to the transcript. Streaming chunks, not cumulative previews, advance UTF-8 byte cursors. Each job retains at most 65,536 bytes; reads report skipped bytes and preserve complete code points. The newest 200 terminal observations remain available independently of native job eviction.
+
+Output checks session, epoch and worker generation for running and ended jobs. Stop waits for the native job promise and returns success only for an observed stopped termination. Native timeout, nonzero exit and missing exit status remain distinct. Settled jobs release their private native shell-session keys; close cancels and waits for owned jobs. Task12's central service routing and task22's Host scope authorization are separate integration work.
+
 
 ## Package inputs
 

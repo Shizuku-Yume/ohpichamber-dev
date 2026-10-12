@@ -1,18 +1,27 @@
-import type { ShellJob, ShellJobIdentity, ShellOutput, ShellSnapshot, ShellStartRequest, ShellStopRequest } from '@openchamber/agent-contract';
+import type {
+  ShellJob, ShellJobIdentity, ShellOutput, ShellSnapshot, ShellStartRequest,
+  ShellStopRequest, ShellTermination,
+} from '@openchamber/agent-contract';
 import { AsyncJobManager, type AsyncJob } from '@oh-my-pi/pi-coding-agent/async/job-manager';
-import { executeBash } from '@oh-my-pi/pi-coding-agent/exec/bash-executor';
-import type { ToolSession } from '@oh-my-pi/pi-coding-agent/tools';
+import { executeBash, releaseShellSessions, type BashResult } from '@oh-my-pi/pi-coding-agent/exec/bash-executor';
+import { ProjectionError } from '../projection/journal.ts';
 import { ShellOperationSchema, type ShellOperation, type ShellResult } from '../shell/protocol.ts';
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+const decoder = new TextDecoder('utf-8', { fatal: true });
+const MAX_OUTPUT_BYTES = 65_536;
 type Running = Extract<ShellJob, { status: 'running' }>;
 type Ended = Extract<ShellJob, { status: 'ended' }>;
-type ShellResultState = { exitCode: number | undefined; timedOut?: boolean; cancelled: boolean };
-type Job = { identity: Running; native: AsyncJob; output: Uint8Array; result?: ShellResultState; stopped: boolean };
+type Job = {
+  identity: Running;
+  native?: AsyncJob;
+  output: Uint8Array;
+  totalBytes: bigint;
+  result?: BashResult;
+  stopped: boolean;
+};
 
 export interface WorkerShellContext {
-  session: ToolSession;
   manager: AsyncJobManager;
   workspaceId: string;
   projectId: string;
@@ -25,13 +34,13 @@ export interface WorkerShellContext {
 export class WorkerShell {
   private readonly jobs = new Map<string, Job>();
   private readonly ended = new Map<string, { job: Ended; output: Uint8Array }>();
-  private revision = 0;
+  private revision = 0n;
   private closed = false;
 
   constructor(private readonly context: WorkerShellContext) {}
 
   async operation(operation: ShellOperation): Promise<ShellResult> {
-    if (this.closed) throw new Error('Shell worker is closed');
+    if (this.closed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Shell worker is closed');
     const parsed = ShellOperationSchema.parse(operation);
     if (parsed.type === 'start') return this.start(parsed.request);
     if (parsed.type === 'output') return this.output(parsed.request.job, parsed.request.cursor, parsed.request.tailBytes);
@@ -47,7 +56,7 @@ export class WorkerShell {
       projectId: this.context.projectId, command: request.command, background: request.background,
       startedAt: Date.now(), outputCursor: '0', status: 'running',
     };
-    const job: Job = { identity, native: undefined as unknown as AsyncJob, output: new Uint8Array(), stopped: false };
+    const job: Job = { identity, output: new Uint8Array(), totalBytes: 0n, stopped: false };
     const nativeId = this.context.manager.register('bash', request.command, async ({ signal, reportProgress }) => {
       const result = await executeBash(request.command, {
         cwd: this.context.cwd,
@@ -55,78 +64,111 @@ export class WorkerShell {
         signal,
         sessionKey: `${this.context.sessionId}:shell:${jobId}`,
         onChunk: chunk => this.append(job, chunk),
-        onPreview: preview => { this.replace(job, preview); void reportProgress(preview); },
+        onPreview: preview => { void reportProgress(preview); },
       });
       job.result = result;
-      if (result.output) this.replace(job, result.output);
+      // The final preview is cumulative and may elide bytes. Only onChunk advances cursors.
       if (result.cancelled) throw new Error(result.timedOut ? 'Command timed out' : 'Command stopped');
       return result.output;
-    }, { id: jobId, ownerId: this.context.sessionId });
+    }, { id: jobId, ownerId: this.context.sessionId, foreground: true });
     const native = this.context.manager.getJob(nativeId);
-    if (!native) throw new Error('Native shell job was not registered');
+    if (!native) throw new ProjectionError(503, 'SHELL_OUTPUT_UNAVAILABLE', 'Native shell job was not registered');
     job.native = native;
     this.jobs.set(jobId, job);
+    this.revision++;
     void native.promise.then(() => this.finish(jobId));
     return { type: 'start', job: identity };
   }
 
   private append(job: Job, text: string): void {
-    const bytes = encoder.encode(text);
-    const output = new Uint8Array(job.output.length + bytes.length);
-    output.set(job.output);
-    output.set(bytes, job.output.length);
-    job.output = output;
+    const chunk = encoder.encode(text);
+    if (chunk.length === 0) return;
+    job.totalBytes += BigInt(chunk.length);
+    if (chunk.length >= MAX_OUTPUT_BYTES) {
+      job.output = chunk.slice(chunk.length - MAX_OUTPUT_BYTES);
+    } else {
+      const retained = Math.min(job.output.length, MAX_OUTPUT_BYTES - chunk.length);
+      const output = new Uint8Array(retained + chunk.length);
+      output.set(job.output.subarray(job.output.length - retained));
+      output.set(chunk, retained);
+      job.output = output;
+    }
+    this.revision++;
   }
-
-  private replace(job: Job, text: string): void { job.output = encoder.encode(text); }
 
   private finish(jobId: string): void {
     const item = this.jobs.get(jobId);
-    if (!item || item.native.status === 'running') return;
+    if (!item?.native || item.native.status === 'running') return;
     const result = item.result;
-    const termination = result?.timedOut
-      ? { reason: 'timeout' as const, exitCode: null }
-      : item.stopped || item.native.status === 'cancelled'
-        ? { reason: 'stopped' as const, exitCode: result?.exitCode ?? null }
-        : { reason: 'exit' as const, exitCode: result?.exitCode ?? -1 };
-    const job: Ended = { ...item.identity, status: 'ended', endedAt: Date.now(), termination };
+    let termination: ShellTermination;
+    if (result?.timedOut) termination = { reason: 'timeout', exitCode: null };
+    else if (item.stopped && (result?.cancelled || item.native.status === 'cancelled')) {
+      termination = { reason: 'stopped', exitCode: result?.exitCode ?? null };
+    } else if (result?.exitCode !== undefined) termination = { reason: 'exit', exitCode: result.exitCode };
+    else termination = { reason: 'signal', exitCode: null };
+    const job: Ended = {
+      ...item.identity, status: 'ended', endedAt: Date.now(),
+      outputCursor: item.totalBytes.toString(), termination,
+    };
     this.jobs.delete(jobId);
     this.ended.set(jobId, { job, output: item.output });
-    while (this.ended.size > 200) this.ended.delete(this.ended.keys().next().value!);
+    releaseShellSessions(`${this.context.sessionId}:shell:${jobId}`);
+    while (this.ended.size > 200) {
+      const oldest = this.ended.keys().next().value;
+      if (oldest === undefined) break;
+      this.ended.delete(oldest);
+    }
     this.revision++;
+  }
+
+  private assertIdentity(expected: ShellJobIdentity, requested: ShellJobIdentity): void {
+    if (expected.sessionId !== requested.sessionId || expected.jobId !== requested.jobId) {
+      throw new ProjectionError(404, 'SHELL_NOT_FOUND', 'Shell job was not found');
+    }
+    if (expected.epoch !== requested.epoch || expected.workerGeneration !== requested.workerGeneration) {
+      throw new ProjectionError(410, 'RESYNC_REQUIRED', 'Shell observation is no longer current');
+    }
   }
 
   private owner(identity: ShellJobIdentity): Job {
     const job = this.jobs.get(identity.jobId);
-    if (!job || job.identity.sessionId !== identity.sessionId || job.identity.epoch !== identity.epoch || job.identity.workerGeneration !== identity.workerGeneration) throw new Error('Shell job not found');
+    if (!job) throw new ProjectionError(404, 'SHELL_NOT_FOUND', 'Running shell job was not found');
+    this.assertIdentity(job.identity, identity);
     return job;
   }
 
   private output(identity: ShellJobIdentity, cursor: string, tailBytes: number): ShellResult {
     const running = this.jobs.get(identity.jobId);
     const ended = this.ended.get(identity.jobId);
-    if (!running && !ended) throw new Error('Shell job not found');
-    if (running) this.owner(identity);
-    if (ended && (ended.job.sessionId !== identity.sessionId || ended.job.epoch !== identity.epoch || ended.job.workerGeneration !== identity.workerGeneration)) throw new Error('Shell job not found');
-    const bytes = running?.output ?? ended!.output;
+    const stored = running?.output ?? ended?.output;
+    if (!stored) throw new ProjectionError(404, 'SHELL_NOT_FOUND', 'Shell output was not found');
+    this.assertIdentity(running?.identity ?? ended!.job, identity);
+    const total = running?.totalBytes ?? BigInt(ended!.job.outputCursor);
     const requested = BigInt(cursor);
-    const minimum = BigInt(Math.max(0, bytes.length - tailBytes));
-    let start = requested < minimum ? minimum : requested;
-    while (start < BigInt(bytes.length) && (bytes[Number(start)]! & 0xc0) === 0x80) start++;
-    const text = decoder.decode(bytes.slice(Number(start)));
-    const end = start + BigInt(encoder.encode(text).length);
+    if (requested > total) throw new ProjectionError(400, 'INVALID_CURSOR', 'Shell cursor exceeds current output');
+    const retainedStart = total - BigInt(stored.length);
+    let start = Number((requested < retainedStart ? retainedStart : requested) - retainedStart);
+    // A retained byte window may start inside a UTF-8 code point.
+    while (start < stored.length && (stored[start]! & 0xc0) === 0x80) start++;
+    let end = Math.min(stored.length, start + tailBytes);
+    if (end < stored.length) {
+      while (end > start && (stored[end]! & 0xc0) === 0x80) end--;
+    }
+    const text = decoder.decode(stored.subarray(start, end));
+    const startCursor = retainedStart + BigInt(start);
     const output: ShellOutput = {
-      job: identity, requestedCursor: cursor, startCursor: start.toString(), cursor: end.toString(),
-      skippedBytes: (start - requested).toString(), output: text, ended: Boolean(ended),
+      job: identity, requestedCursor: cursor, startCursor: startCursor.toString(),
+      cursor: (retainedStart + BigInt(end)).toString(), skippedBytes: (startCursor - requested).toString(),
+      output: text, ended: Boolean(ended),
     };
     return { type: 'output', output };
   }
+
   private snapshot(): ShellSnapshot {
     return {
       scope: { kind: 'session', sessionId: this.context.sessionId },
-      epoch: this.context.epoch,
-      revision: String(this.revision),
-      running: [...this.jobs.values()].map(item => item.identity),
+      epoch: this.context.epoch, revision: this.revision.toString(),
+      running: [...this.jobs.values()].map(item => ({ ...item.identity, outputCursor: item.totalBytes.toString() })),
       ended: [...this.ended.values()].map(item => item.job),
       recovery: { priorEpochs: 'invalidated' },
     };
@@ -134,18 +176,23 @@ export class WorkerShell {
 
   private async stop(request: ShellStopRequest) {
     const item = this.owner(request.job);
-    if (!this.context.manager.cancel(item.native.id, { ownerId: this.context.sessionId })) throw new Error('Shell job is no longer running');
+    if (!item.native || !this.context.manager.cancel(item.native.id, { ownerId: this.context.sessionId })) {
+      throw new ProjectionError(409, 'SHELL_NOT_FOUND', 'Shell job is no longer running');
+    }
     item.stopped = true;
     await item.native.promise;
     this.finish(request.job.jobId);
     const ended = this.ended.get(request.job.jobId)?.job;
-    if (!ended || ended.termination.reason !== 'stopped') throw new Error('Shell job did not stop');
-    return { job: ended } as const;
+    if (!ended || ended.termination.reason !== 'stopped') {
+      throw new ProjectionError(503, 'SHELL_STOP_TIMEOUT', 'Shell execution did not end with a stopped termination');
+    }
+    return { job: ended };
   }
 
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    for (const item of this.jobs.values()) item.stopped = true;
     this.context.manager.cancelAll({ ownerId: this.context.sessionId });
     await this.context.manager.waitForOwnerJobs(this.context.sessionId);
     for (const jobId of [...this.jobs.keys()]) this.finish(jobId);
