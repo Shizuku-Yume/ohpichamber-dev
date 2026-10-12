@@ -5,7 +5,7 @@
 
 ## What this is for
 
-The adopted upstream application still executes through OpenCode. The Agent Service, canonical contract package and `/api/agent/v1` are absent. The maintainer requested a planned migration through M3 acceptance, using concurrent OMP sessions where task boundaries permit it and avoiding repeated checks or speculative defensive code.
+The adopted application still executes through OpenCode. M1 Host boundaries and the compiled Canonical contract package are implemented; the real Bun Agent Service and coordinated execution cutover remain. The maintainer requested migration through M3 acceptance, using concurrent OMP sessions where task boundaries permit and avoiding repeated checks or speculative defensive code.
 
 Existing M0 reports prove some SDK behavior, not an implemented service or client cutover. [Development progress](../development.md) remains the owner of observed evidence. This effort continues that work rather than acquiring upstream source or repeating accepted probes.
 

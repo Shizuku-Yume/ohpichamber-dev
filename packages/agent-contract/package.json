@@ -1,0 +1,25 @@
+{
+  "name": "@openchamber/agent-contract",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JSON-safe Canonical Agent API records and wire validation.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint \"./src/**/*.ts\" --config ../../eslint.config.js",
+    "test": "bun test src"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}

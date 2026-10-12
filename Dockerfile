@@ -11,6 +11,7 @@ COPY packages/web/package.json ./packages/web/
 COPY packages/electron/package.json ./packages/electron/
 COPY packages/mobile/package.json ./packages/mobile/
 COPY packages/sdk/package.json ./packages/sdk/
+COPY packages/agent-contract/package.json ./packages/agent-contract/
 RUN bun install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
