@@ -1,19 +1,8 @@
 import type { CompletionRequest, CompletionResult } from '@openchamber/agent-contract';
 import { CompletionRequestSchema, JsonValueSchema } from '@openchamber/agent-contract';
-import { completeSimple } from '@oh-my-pi/pi-ai';
-import type { Context, Effort, SimpleStreamOptions, Tool } from '@oh-my-pi/pi-ai';
+import { completeSimple, THINKING_EFFORTS, validateToolArguments } from '@oh-my-pi/pi-ai';
+import type { Context, SimpleStreamOptions, Tool } from '@oh-my-pi/pi-ai';
 import type { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
-function toEffort(value: string): Effort | undefined {
-  switch (value) {
-    case 'minimal': return 'minimal' as Effort;
-    case 'low': return 'low' as Effort;
-    case 'medium': return 'medium' as Effort;
-    case 'high': return 'high' as Effort;
-    case 'xhigh': return 'xhigh' as Effort;
-    case 'max': return 'max' as Effort;
-    default: return undefined;
-  }
-}
 
 export type CompletionModelRegistry = ModelRegistry;
 
@@ -29,7 +18,7 @@ export async function executeCompletion(request: CompletionRequest, registry: Co
   if (!model) return failed('MODEL_UNAVAILABLE', 'Selected model is unavailable');
   if (parsed.variant !== null && parsed.reasoningEffort !== null && parsed.variant !== parsed.reasoningEffort) return failed('UNSUPPORTED_CAPABILITY', 'Variant and reasoning effort disagree');
   const requestedEffort = parsed.reasoningEffort ?? parsed.variant;
-  const effort = requestedEffort === null ? undefined : toEffort(requestedEffort);
+  const effort = requestedEffort === null ? undefined : THINKING_EFFORTS.find(candidate => candidate === requestedEffort);
   if (requestedEffort !== null && effort === undefined) return failed('UNSUPPORTED_CAPABILITY', 'Requested reasoning effort is unsupported');
   const controller = new AbortController();
   let timedOut = false;
@@ -51,6 +40,8 @@ export async function executeCompletion(request: CompletionRequest, registry: Co
     const message = await completeSimple(model, context, parsed.format.kind === 'json' ? { ...requestOptions, toolChoice: { type: 'function', name: 'respond' } } : requestOptions);
     if (timedOut) return cancelled('timeout');
     if (signal.aborted) return cancelled('requested');
+    if (message.stopReason === 'aborted') return cancelled(timedOut ? 'timeout' : 'requested');
+    if (message.stopReason === 'error') return failed('PROVIDER_FAILURE', 'Selected provider could not complete the request', true);
     const usage = message.usage;
     const inputTokens = usage?.input ?? 0;
     const outputTokens = usage?.output ?? 0;
@@ -62,18 +53,18 @@ export async function executeCompletion(request: CompletionRequest, registry: Co
     }
     const tool = message.content.find(part => part.type === 'toolCall' && part.name === 'respond');
     if (!tool || tool.type !== 'toolCall') return failed('STRUCTURED_OUTPUT_INVALID', 'Structured completion did not return respond output');
-    let value: unknown;
-    try { value = typeof tool.arguments === 'string' ? JSON.parse(tool.arguments) : tool.arguments; } catch { return failed('STRUCTURED_OUTPUT_INVALID', 'Structured completion returned invalid JSON'); }
-    const checked = JsonValueSchema.safeParse(value);
-    if (!checked.success) return failed('STRUCTURED_OUTPUT_INVALID', 'Structured completion returned a non-JSON value');
-    return { ...identity, status: 'completed', output: { kind: 'json', value: checked.data }, finishReason, usage: canonicalUsage };
+    let value;
+    try { value = JsonValueSchema.parse(validateToolArguments(structuredTool, tool)); }
+    catch { return failed('STRUCTURED_OUTPUT_INVALID', 'Structured completion does not conform to its schema'); }
+    return { ...identity, status: 'completed', output: { kind: 'json', value }, finishReason, usage: canonicalUsage };
   } catch (error) {
     if (timedOut) return cancelled('timeout');
     if (signal.aborted) return cancelled('requested');
     const detail = error instanceof Error ? error.message : 'Provider failed';
-    return failed(/context|token limit|too many tokens/i.test(detail) && parsed.overflow === 'reject' ? 'CONTEXT_LIMIT' : 'PROVIDER_FAILURE', detail, true);
+    const code = /context|token limit|too many tokens/i.test(detail) ? 'CONTEXT_LIMIT' : 'PROVIDER_FAILURE';
+    return failed(code, code === 'CONTEXT_LIMIT' ? 'Completion exceeds the selected model context limit' : 'Selected provider could not complete the request', true);
   } finally {
-    if (timeout !== undefined) clearTimeout(timeout);
+    clearTimeout(timeout);
     signal.removeEventListener('abort', abort);
   }
 }
