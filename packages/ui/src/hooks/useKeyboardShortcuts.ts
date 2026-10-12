@@ -12,7 +12,7 @@ import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { useKeybinds } from '@/hooks/useKeybind';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { canUseElectronDesktopIPC, invokeDesktop, isVSCodeRuntime } from '@/lib/desktop';
+import { canUseElectronDesktopIPC, invokeDesktop } from '@/lib/desktop';
 import {
   eventMatchesShortcut,
   eventMatchesShortcutPrefix,
@@ -131,9 +131,9 @@ export const useKeyboardShortcuts = () => {
       useUIStore.getState().setTimelineDialogOpen(true);
     },
     toggle_source_board: () => {
-      // A desktop and web page: the phone shell and VS Code have no board.
+      // A desktop and web page: the phone shell has no board.
       const state = useUIStore.getState();
-      if (state.isMobile || isVSCodeRuntime()) return false;
+      if (state.isMobile) return false;
       state.setSourceBoardOpen(!state.isSourceBoardOpen);
     },
     open_session_list: () => {
@@ -183,17 +183,17 @@ export const useKeyboardShortcuts = () => {
       });
     },
     switch_session_previous: () => {
-      if (!isVSCodeRuntime() && useUIStore.getState().sessionTabsEnabled && activateAdjacentSessionTab(-1)) return;
+      if (useUIStore.getState().sessionTabsEnabled && activateAdjacentSessionTab(-1)) return;
       return navigateSessionHistory(-1) ? undefined : false;
     },
     switch_session_next: () => {
-      if (!isVSCodeRuntime() && useUIStore.getState().sessionTabsEnabled && activateAdjacentSessionTab(1)) return;
+      if (useUIStore.getState().sessionTabsEnabled && activateAdjacentSessionTab(1)) return;
       return navigateSessionHistory(1) ? undefined : false;
     },
     session_history_back: (event) => navigateSessionHistoryByShortcut(event, -1),
     session_history_forward: (event) => navigateSessionHistoryByShortcut(event, 1),
     close_session_tab: () => {
-      if (isVSCodeRuntime() || !useUIStore.getState().sessionTabsEnabled) return false;
+      if (!useUIStore.getState().sessionTabsEnabled) return false;
       if (currentSessionId) {
         closeSessionTabAndActivateNeighbour(currentSessionId);
       }
@@ -206,11 +206,7 @@ export const useKeyboardShortcuts = () => {
     },
     new_chat_worktree: () => {
       useUIStore.getState().setSessionSwitcherOpen(false);
-      if (!isVSCodeRuntime()) {
-        createWorktreeSession();
-        return;
-      }
-      openNewSessionDraft();
+      createWorktreeSession();
     },
     cycle_theme: () => {
       const modes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
@@ -540,7 +536,6 @@ export const useKeyboardShortcuts = () => {
             railOrder: state.contextRailOrder,
             hiddenSurfaces: state.contextRailHiddenSurfaces,
             planModeEnabled: useFeatureFlagsStore.getState().planModeEnabled,
-            isVSCode: isVSCodeRuntime(),
             screenWidth: window.innerWidth,
             tabs: panel?.tabs ?? [],
             sourceControlConnected: Object.values(useSourceControlAuthStore.getState().entries).some((entry) => entry.status?.status === 'connected'),
@@ -559,7 +554,6 @@ export const useKeyboardShortcuts = () => {
       if (
         sessionTabDigit !== null
         && !event.repeat
-        && !isVSCodeRuntime()
         && canUseDigitShortcut(event)
         && useUIStore.getState().sessionTabsEnabled
         && eventMatchesShortcutPrefix(

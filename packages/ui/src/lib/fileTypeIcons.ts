@@ -8,8 +8,7 @@ const FILE_TYPE_SPRITE_ROOT_ID = 'oc-file-type-icon-sprite-root';
 // The sprite holds every file-type icon (about 1 MB of SVG markup), so it
 // loads the first time an icon is asked for instead of with the app. Icons
 // reference symbols by in-document id (`#name`), which keeps them working in
-// every runtime, including VS Code webviews where an external sprite URL would
-// be cross-origin. A `<use>` rendered before the sprite arrives shows its icon
+// every retained runtime. A `<use>` rendered before the sprite arrives shows its icon
 // as soon as the symbol with that id enters the document.
 let spriteRequested = false;
 

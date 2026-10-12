@@ -60,88 +60,36 @@ const session = (id: string, directory: string | null): Session => {
 };
 
 describe('projectSidebarActiveSessions', () => {
-  test('keeps case-insensitive membership local to projection without rewriting request paths', () => {
-    const knownDirectories = new Set(['/Users/Developer/Project']);
-    const input = {
-      globalActiveSessions: [session('known', '/users/developer/project'), session('unknown', '/other')],
-      liveSessions: [],
-      knownDirectories,
-      isVSCode: true,
-    };
-    expect(projectSidebarActiveSessions(input).map((entry) => entry.id)).toEqual(['known']);
-    expect(buildSidebarSessionProjection({
-      ...input,
-      pinnedSessionIds: new Set(),
-      sessionOrderRanks: new Map(),
-    }).projectSessions.map((entry) => entry.id)).toEqual(['known']);
-    expect([...knownDirectories]).toEqual(['/Users/Developer/Project']);
-  });
-
   test('keeps global precedence and order, then appends missing live sessions', () => {
     const global = [session('global-b', '/workspace/b'), session('global-a', '/workspace/a')];
     const live = [session('global-a', '/workspace/a'), session('live-c', '/workspace/c')];
 
-    expect(projectSidebarActiveSessions({
+    const projected = projectSidebarActiveSessions({
       globalActiveSessions: global,
       liveSessions: live,
-      knownDirectories: new Set(['/workspace/a', '/workspace/b', '/workspace/c']),
-      isVSCode: false,
-    }).map((entry) => entry.id)).toEqual(['global-b', 'global-a', 'live-c']);
+    });
+    expect(projected.map((entry) => entry.id)).toEqual(['global-b', 'global-a', 'live-c']);
+    expect(projected[1]).toBe(global[1]);
   });
 
-  test('filters unknown VS Code directories', () => {
-    const sessions = [session('known', '/workspace/known'), session('unknown', '/workspace/unknown')];
-
-    expect(projectSidebarActiveSessions({
-      globalActiveSessions: sessions,
-      liveSessions: [],
-      knownDirectories: new Set(['/workspace/known']),
-      isVSCode: true,
-    }).map((entry) => entry.id)).toEqual(['known']);
-  });
-
-  test('allows missing or unknown directories for web when no directories are known', () => {
+  test('retains global records with missing or unknown directories', () => {
     const sessions = [session('unknown', '/workspace/unknown'), session('empty', null)];
 
     expect(projectSidebarActiveSessions({
       globalActiveSessions: sessions,
       liveSessions: [],
-      knownDirectories: new Set(),
-      isVSCode: false,
     }).map((entry) => entry.id)).toEqual(['unknown', 'empty']);
   });
 
-  test('retains unknown active full-app records when topology directories are known', () => {
+  test('retains active global records from deleted worktrees', () => {
     const restored = { ...session('restored', '/deleted/worktrees/feature'), time: { created: 1, updated: 1 } };
 
     expect(projectSidebarActiveSessions({
       globalActiveSessions: [restored],
       liveSessions: [],
-      knownDirectories: new Set(['/workspace/known']),
-      isVSCode: false,
     }).map((entry) => entry.id)).toEqual(['restored']);
   });
 
-  test('keeps archived sessions despite directory filtering', () => {
-    const archived = session('archived', '/workspace/unknown');
-    archived.time.archived = 1;
-
-    expect(projectSidebarActiveSessions({
-      globalActiveSessions: [archived],
-      liveSessions: [],
-      knownDirectories: new Set(['/workspace/known']),
-      isVSCode: true,
-    }).map((entry) => entry.id)).toEqual(['archived']);
-  });
-
-  test('does not replace a filtered global record with a live duplicate', () => {
-    expect(projectSidebarActiveSessions({
-      globalActiveSessions: [session('same', '/workspace/unknown')],
-      liveSessions: [session('same', '/workspace/known')],
-      knownDirectories: new Set(['/workspace/known']),
-      isVSCode: true,
-    })).toEqual([]);
-  });
 });
 
 describe('projectSidebarCollection', () => {
@@ -150,8 +98,6 @@ describe('projectSidebarCollection', () => {
     const input = {
       globalActiveSessions,
       liveSessions: [],
-      knownDirectories: new Set(['/workspace/a', '/workspace/b']),
-      isVSCode: false,
     };
 
     const beforeSelection = projectSidebarCollection(input);
@@ -164,8 +110,6 @@ describe('projectSidebarCollection', () => {
     const input = {
       globalActiveSessions: [session('a', '/workspace/a')],
       liveSessions: [],
-      knownDirectories: new Set(['/workspace/a']),
-      isVSCode: false,
     };
 
     const before = projectSidebarCollection(input);
@@ -182,8 +126,6 @@ describe('projectSidebarCollection', () => {
     const input = {
       globalActiveSessions: [session('old-root', '/workspace/a')],
       liveSessions: [],
-      knownDirectories: new Set(['/workspace/a']),
-      isVSCode: false,
     };
     const projectBefore = projectSidebarCollection(input);
     const recentBefore = deriveRecentSessions(projectBefore, new Set(), 200_000_000);
@@ -201,26 +143,12 @@ describe('projectSidebarCollection', () => {
     const projects = projectSidebarCollection({
       globalActiveSessions: [managed, project],
       liveSessions: [],
-      knownDirectories: new Set(['/workspace/a']),
-      isVSCode: false,
     });
 
     expect(projects.map((entry) => entry.id)).toEqual(['project']);
-    expect(partitionSidebarSessions([managed, project], false).chatSessions.map((entry) => entry.id)).toEqual(['managed']);
+    expect(partitionSidebarSessions([managed, project]).chatSessions.map((entry) => entry.id)).toEqual(['managed']);
     expect(deriveRecentSessions(projects, new Set(['managed', 'project']), 200_000_000)
       .map((entry) => entry.id)).toEqual(['project']);
-  });
-
-  test('keeps managed Chats out of the VS Code sidebar', () => {
-    const managed = session('managed', '/home/.config/openchamber/chats/2026-08-24/session-managed');
-
-    expect(partitionSidebarSessions([managed], true)).toEqual({ projectSessions: [], chatSessions: [] });
-    expect(projectSidebarCollection({
-      globalActiveSessions: [managed],
-      liveSessions: [],
-      knownDirectories: new Set(),
-      isVSCode: true,
-    })).toEqual([]);
   });
 
   test('keeps a canonical managed chat visible when the server root uses different home casing', () => {
@@ -228,7 +156,6 @@ describe('projectSidebarCollection', () => {
     const project = session('project', '/workspace/a');
     const projection = buildSidebarSessionProjection({
       globalActiveSessions: [managed, project], liveSessions: [],
-      knownDirectories: new Set(['/workspace/a']), isVSCode: false,
       pinnedSessionIds: new Set(), sessionOrderRanks: new Map(),
     });
     expect(projection.chatSessions.map(entry => entry.id)).toEqual(['canonical-chat']);
@@ -244,18 +171,16 @@ describe('projectSidebarCollection', () => {
     const project = session('project', '/workspace/a');
     const input = {
       liveSessions: [],
-      knownDirectories: new Set(['/workspace/a']),
-      isVSCode: false,
     };
 
     expect(projectSidebarCollection({ ...input, globalActiveSessions: [fork, project] }).map((entry) => entry.id)).toEqual(['project']);
-    expect(partitionSidebarSessions([fork], false).chatSessions).toEqual([]);
+    expect(partitionSidebarSessions([fork]).chatSessions).toEqual([]);
 
     const promoted = {
       ...fork,
       metadata: { openchamber: {} },
     };
-    expect(partitionSidebarSessions([promoted], false).chatSessions.map((entry) => entry.id)).toEqual(['fork']);
+    expect(partitionSidebarSessions([promoted]).chatSessions.map((entry) => entry.id)).toEqual(['fork']);
   });
 
   test('keeps a ranked managed root and its active child in the Chats hierarchy', () => {
@@ -270,8 +195,6 @@ describe('projectSidebarCollection', () => {
     const projection = buildSidebarSessionProjection({
       globalActiveSessions: [projectRoot, managedRoot, managedChild],
       liveSessions: [],
-      knownDirectories: new Set(['/workspace/a']),
-      isVSCode: false,
       pinnedSessionIds: new Set(),
       sessionOrderRanks: new Map([['managed-root', 10]]),
     });
@@ -303,7 +226,6 @@ describe('useRecentSessionCollection', () => {
       renderCount += 1;
       const recent = useRecentSessionCollection({
         enabled: true,
-        isVSCode: false,
         pinnedSessionIds: new Set(),
         sessionOrderRanks: new Map(),
         sessions: [oldSession],

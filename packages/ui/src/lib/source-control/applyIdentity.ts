@@ -141,8 +141,7 @@ export const applyIdentityToRepository = async (
   { git, sourceControl, runtimeKey }: ApplyIdentityAPIs,
 ): Promise<ApplyIdentityOutcome> => {
   const requireRuntime = runtimeGuard(runtimeKey);
-  // The transfer half needs a remote to answer for and a runtime that holds
-  // bindings — VS Code holds none.
+  // The transfer half needs a remote to answer for and a runtime binding API.
   let outcome: ApplyIdentityOutcome = remoteName && git.configureTransportBinding
     ? await applyBinding(
       { directory, identity, remoteName },

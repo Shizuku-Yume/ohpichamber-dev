@@ -141,7 +141,7 @@ describe('HTTP LAN recovery fingerprints', () => {
       const changed: GitNetworkOperation[] = [
         { ...plan, state: 'succeeded', operationId: 'another-operation' },
         { ...plan, state: 'succeeded', runtimeIdentity: { ...plan.runtimeIdentity, id: 'another-server' } },
-        { ...plan, state: 'succeeded', runtimeIdentity: { ...plan.runtimeIdentity, platform: 'vscode' } },
+        { ...plan, state: 'succeeded', runtimeIdentity: { ...plan.runtimeIdentity, platform: 'desktop' } },
         { ...plan, state: 'succeeded', target: { ...target, repositoryId: 'another-repository' } },
         { ...plan, state: 'succeeded', target: { ...target, destinationRef: 'refs/heads/another-target' } },
       ];

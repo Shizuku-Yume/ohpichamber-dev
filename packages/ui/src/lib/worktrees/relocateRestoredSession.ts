@@ -35,7 +35,6 @@ const resolveProjectRootFromStores = (session: Session): string | null => {
     [session],
     projects,
     useSessionUIStore.getState().availableWorktreesByProject,
-    false,
     [],
     useGlobalSyncStore.getState().projects,
   );

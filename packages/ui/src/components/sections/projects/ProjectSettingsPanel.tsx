@@ -10,7 +10,6 @@ import {
 } from '@/components/sections/projects/useProjectIdentityForm';
 import { useProjectIdentityAutoSave } from '@/components/sections/projects/useProjectIdentityAutoSave';
 import type { ProjectEntry } from '@/lib/api/types';
-import { isVSCodeRuntime } from '@/lib/desktop';
 
 type ProjectSettingsPanelProps = {
   project: ProjectEntry | null;
@@ -51,8 +50,7 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
     <div className="space-y-0">
       <ProjectIdentityFields form={form} />
       <ProjectActionsSection projectRef={projectRef} />
-      {/* VS Code runs no OpenChamber server that could apply these. */}
-      {!isVSCodeRuntime() ? <ProjectEnvironmentSection projectRef={projectRef} /> : null}
+      <ProjectEnvironmentSection projectRef={projectRef} />
       {showWorktrees ? <WorktreeSectionContent projectRef={projectRef} /> : null}
       <SharedProjectConfigSection projectRef={projectRef} />
     </div>

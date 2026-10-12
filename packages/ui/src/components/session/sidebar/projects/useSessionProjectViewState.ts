@@ -13,7 +13,6 @@ const GROUP_COLLAPSE_STORAGE_KEY = 'oc.sessions.groupCollapse';
 type Project = { id: string };
 
 type SessionProjectViewStateArgs = {
-  isVSCode: boolean;
   projects: readonly Project[];
 };
 
@@ -43,7 +42,6 @@ const parseGroupOrder = (raw: string | null): Map<string, string[]> => {
 };
 
 export const useSessionProjectViewState = ({
-  isVSCode,
   projects,
 }: SessionProjectViewStateArgs) => {
   const safeStorage = React.useMemo(() => getDeferredSafeStorage(), []);
@@ -65,7 +63,6 @@ export const useSessionProjectViewState = ({
   const pendingCollapsedProjects = React.useRef<Set<string> | null>(null);
 
   const flushCollapsedProjectsPersist = React.useCallback(() => {
-    if (isVSCode) return;
     const collapsed = pendingCollapsedProjects.current;
     pendingCollapsedProjects.current = null;
     persistCollapsedProjectsTimer.current = null;
@@ -77,10 +74,10 @@ export const useSessionProjectViewState = ({
       sidebarCollapsed: collapsed.has(project.id),
     }));
     void updateDesktopSettings({ projects: updatedProjects }).catch(() => {});
-  }, [isVSCode]);
+  }, []);
 
   const scheduleCollapsedProjectsPersist = React.useCallback((collapsed: Set<string>) => {
-    if (!globalThis.window || isVSCode) return;
+    if (!globalThis.window) return;
     pendingCollapsedProjects.current = collapsed;
     if (persistCollapsedProjectsTimer.current !== null) {
       window.clearTimeout(persistCollapsedProjectsTimer.current);
@@ -88,7 +85,7 @@ export const useSessionProjectViewState = ({
     persistCollapsedProjectsTimer.current = window.setTimeout(() => {
       flushCollapsedProjectsPersist();
     }, 700);
-  }, [flushCollapsedProjectsPersist, isVSCode]);
+  }, [flushCollapsedProjectsPersist]);
 
   React.useEffect(() => {
     return () => {

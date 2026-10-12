@@ -126,10 +126,10 @@ const deferred = <T>() => {
 
 const registerSettingsApi = (
   save: (changes: Partial<SettingsPayload>) => Promise<SettingsPayload>,
-  load: () => Promise<{ settings: SettingsPayload; source: 'web' | 'vscode' }> = async () => ({ settings: {}, source: 'web' }),
+  load: () => Promise<{ settings: SettingsPayload; source: 'web' }> = async () => ({ settings: {}, source: 'web' }),
 ): void => {
   registerRuntimeAPIs({
-    runtime: { platform: 'web', isDesktop: false, isVSCode: false },
+    runtime: { platform: 'web', isDesktop: false },
     settings: {
       load,
       save,
@@ -387,7 +387,7 @@ describe('updateDesktopSettings', () => {
   });
 
   test('rejects stale loads by generation across an A to B to A switch', async () => {
-    const originalLoad = deferred<{ settings: SettingsPayload; source: 'web' | 'vscode' }>();
+    const originalLoad = deferred<{ settings: SettingsPayload; source: 'web' }>();
     switchRuntimeEndpoint({ apiBaseUrl: 'https://load-a.example', runtimeKey: 'load-a' });
     registerSettingsApi(async () => ({}), () => originalLoad.promise);
     const firstSync = syncDesktopSettings();
@@ -711,7 +711,7 @@ describe('updateDesktopSettings', () => {
   });
 
   test('does not broadcast a stale loaded project selection over a newer pending update', async () => {
-    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' | 'vscode' }>();
+    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' }>();
     registerSettingsApi(async (changes) => changes as SettingsPayload, () => loadedSettings.promise);
     invalidateSettingsCache();
     const syncedSettings: SettingsPayload[] = [];
@@ -743,7 +743,7 @@ describe('updateDesktopSettings', () => {
   });
 
   test('does not broadcast a stale load after a newer project update has saved', async () => {
-    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' | 'vscode' }>();
+    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' }>();
     registerSettingsApi(async (changes) => changes as SettingsPayload, () => loadedSettings.promise);
     invalidateSettingsCache();
     const syncedSettings: SettingsPayload[] = [];
@@ -774,7 +774,7 @@ describe('updateDesktopSettings', () => {
   });
 
   test('preserves only the latest settings values across repeated pending updates', async () => {
-    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' | 'vscode' }>();
+    const loadedSettings = deferred<{ settings: SettingsPayload; source: 'web' }>();
     registerSettingsApi(async (changes) => changes as SettingsPayload, () => loadedSettings.promise);
     invalidateSettingsCache();
     const syncedSettings: SettingsPayload[] = [];

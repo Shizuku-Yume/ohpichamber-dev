@@ -91,16 +91,13 @@ export type BlockingBadgeSessionScope = {
 export const canShowSessionWorktreeMenu = ({
   isSubtaskSession,
   archivedBucket,
-  isVSCode,
   sessionDirectory,
 }: {
   isSubtaskSession: boolean;
   archivedBucket: boolean;
-  isVSCode: boolean;
   sessionDirectory: string | null;
 }): boolean => !isSubtaskSession
   && !archivedBucket
-  && !isVSCode
   && !isChatDirectoryPath(sessionDirectory);
 
 export const getSessionWorktreeMenuDisabled = ({
@@ -379,13 +376,11 @@ export const resolveTooltipBranchLabel = (
 
 /**
  * The worktree directory and branch whose change request a row shows. The
- * row's worktree is the only source of the pair; VS Code renders no PR badges.
+ * row's worktree is the only source of the pair.
  */
 export const resolveSessionPrLookup = (
   worktree: WorktreeMetadata | null | undefined,
-  isVSCode: boolean,
 ): { directory: string; branch: string } | null => {
-  if (isVSCode) return null;
   const branch = worktree?.branch?.trim();
   const directory = normalizePath(worktree?.path ?? null);
   return branch && directory ? { directory, branch } : null;

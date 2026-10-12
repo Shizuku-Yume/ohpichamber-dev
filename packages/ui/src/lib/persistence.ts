@@ -204,9 +204,7 @@ export interface SettingsSyncedDetail {
       not filtered; listeners gate their adoption on this flag and keep their
       live state for the fields they own. */
   bootstrap: boolean;
-  /** Whether this sync may replace this window's theme preferences. VS Code
-      settings broadcasts remain bootstrap-grade for shared workspace pointers,
-      but must not copy one webview's theme into another webview. */
+  /** Whether this sync may replace this window's theme preferences. */
   adoptTheme: boolean;
 }
 

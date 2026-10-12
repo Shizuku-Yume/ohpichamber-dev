@@ -11,7 +11,7 @@ import { seedGlobalBlockingRequests } from './global-blocking-requests';
 // Directory bootstrap only runs for the directory the user is working in, so a
 // turn that was already running in another project when this client started
 // is invisible to the event stream until its next status event. The OpenChamber
-// host (web server, or the VS Code extension host) has been listening to the
+// host has been listening to the
 // single upstream stream the whole time and answers `/api/sessions/status` in
 // one request without creating OpenCode instances.
 //

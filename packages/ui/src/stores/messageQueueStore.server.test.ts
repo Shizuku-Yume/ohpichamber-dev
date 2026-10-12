@@ -19,8 +19,6 @@ mock.module("@/lib/runtime-fetch", () => ({
     return respond(call)
   },
 }))
-const desktop = await import("@/lib/desktop")
-mock.module("@/lib/desktop", () => ({ ...desktop, isVSCodeRuntime: () => false }))
 mock.module("@/lib/runtime-switch", () => ({ getRuntimeKey: () => activeRuntimeKey }))
 mock.module("@/lib/persistence", () => ({ updateDesktopSettings: async () => undefined }))
 

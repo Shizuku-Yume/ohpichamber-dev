@@ -4,9 +4,7 @@
  * OpenChamber reads user-authored OpenCode config, so it must accept the v1
  * spellings OpenCode 2 still decodes (section key `agent`, permission maps,
  * `npm`/`api` providers, plugin tuples, ...). Everything OpenChamber WRITES is
- * native v2. These conversions are pure so the web server and the VS Code
- * extension host cannot drift: `packages/vscode/src/opencode-config-v2.ts`
- * re-exports this module.
+ * native v2. These conversions are pure.
  *
  * Reference: OpenCode `packages/core/src/config/normalize.ts`,
  * `packages/core/src/v1/config/migrate.ts`, and `services/www` migrate-v1 docs.

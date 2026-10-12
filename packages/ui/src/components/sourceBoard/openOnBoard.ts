@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import type { GitHubReferenceKind } from '@/lib/api/types';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { parseChangeRequestReference } from '@/lib/source-control/changeRequestReference';
 import { parseIssueReference } from '@/lib/source-control/issueReference';
@@ -33,8 +32,8 @@ export const boardTargetOfUrl = (url: string): BoardTarget | null => {
 /**
  * Opens an issue, PR or Linear issue a session is linked to on the issues and
  * PRs board, in the session's project, selected. Cmd or Ctrl opens the link
- * itself, as links do; so does anything the board cannot show here (VS Code,
- * a project the session is not in, Linear while it is not connected).
+ * itself, as links do; so does anything the board cannot show here (a project
+ * the session is not in, Linear while it is not connected).
  */
 export function useOpenOnBoard() {
     const mobile = useMobileAppActions();
@@ -44,7 +43,7 @@ export function useOpenOnBoard() {
 
     return React.useCallback((url: string, directory: string | null | undefined, event?: { metaKey: boolean; ctrlKey: boolean }) => {
         const openLink = () => { void openExternalUrl(url); };
-        if (event?.metaKey || event?.ctrlKey || isVSCodeRuntime()) return openLink();
+        if (event?.metaKey || event?.ctrlKey) return openLink();
         const target = boardTargetOfUrl(url);
         if (!target) return openLink();
 

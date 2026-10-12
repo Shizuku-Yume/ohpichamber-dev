@@ -63,11 +63,9 @@ import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { useI18n } from '@/lib/i18n';
 import {
     extractFirstChangedLineFromDiff,
-    getApplyPatchFilePath,
     getDiffPatchEntries,
     getFirstChangedLineFromMetadata,
     getPatchText,
-    getPrimaryDiffFromMetadata,
     getPrimaryToolPath,
     getToolFallbackDiff,
     resolveToolQuickOpenTarget,
@@ -886,7 +884,6 @@ const OpenSubtaskButton: React.FC<{
     const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
     const column = useChatColumnActions();
     const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
-    const runtime = React.useContext(RuntimeAPIContext);
 
     const agentType = agent ?? 'subagent';
     const agentLabel = agentType.charAt(0).toUpperCase() + agentType.slice(1);
@@ -900,9 +897,8 @@ const OpenSubtaskButton: React.FC<{
             column.openSession(sessionId, currentDirectory);
             return;
         }
-        // Single-surface layouts (mobile, VS Code) navigate in place.
-        // Otherwise open a new side-panel tab.
-        if (isMobile || runtime?.runtime.isVSCode) {
+        // Mobile navigates in place; other layouts open a side-panel tab.
+        if (isMobile) {
             setCurrentSession(sessionId, currentDirectory);
             return;
         }
@@ -1064,7 +1060,6 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     presentation,
 }) => {
     const { t } = useI18n();
-    const runtime = React.useContext(RuntimeAPIContext);
     const mobileActions = useMobileAppActions();
     const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('unified');
     const stateWithData = state as ToolStateWithMetadata;
@@ -1169,10 +1164,6 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
             event.stopPropagation();
             const line = extractFirstChangedLineFromDiff(entry.patch);
             const absolutePath = getEntryAbsolutePath(entry);
-            if (runtime?.editor && runtime.runtime.isVSCode) {
-                void runtime.editor.openFile(absolutePath, line);
-                return;
-            }
             useUIStore.getState().openContextFileAtLine(currentDirectory, absolutePath, line ?? 1, 1);
             // Dedicated mobile app: the pending file navigation is consumed by
             // the FilesView pane — surface it (workspace drawer Files tab).
@@ -1180,12 +1171,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         };
         const openEntryDiff = (entry: DiffPatchEntry, event: React.MouseEvent<HTMLButtonElement>) => {
             event.stopPropagation();
-            const line = extractFirstChangedLineFromDiff(entry.patch);
             const absolutePath = getEntryAbsolutePath(entry);
-            if (runtime?.editor && runtime.runtime.isVSCode) {
-                void runtime.editor.openDiff('', absolutePath, `${getRelativePath(absolutePath, currentDirectory)} (changes)`, { line, patch: entry.patch });
-                return;
-            }
             const store = useUIStore.getState();
             const relativePath = getRelativePath(absolutePath, currentDirectory);
             if (store.isMobile) {
@@ -1754,14 +1740,10 @@ const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader; subage
         }
 
         event.stopPropagation();
-        const rawPath = getApplyPatchFilePath(file);
-        const displayPath = rawPath ? getRelativePath(rawPath, currentDirectory) : '';
         openApplyPatchFileInEditor({
             currentDirectory,
-            diffLabel: `${displayPath} (changes)`,
             editor: runtime.editor,
             file,
-            isVSCode: runtime.runtime.isVSCode,
         });
     };
 
@@ -1773,17 +1755,14 @@ const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader; subage
 
         let filePath: unknown;
         let targetLine: number | undefined;
-        let toolDiff: string | undefined;
         if (isEditTool(normalizedPartTool)) {
             filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
             if (typeof filePath === 'string') {
-                toolDiff = getPrimaryDiffFromMetadata(normalizedPartTool, metadata, filePath);
                 targetLine = getFirstChangedLineFromMetadata(normalizedPartTool, metadata, filePath);
             }
         } else if (isPatchTool(normalizedPartTool)) {
             filePath = getPrimaryToolPath(normalizedPartTool, input, metadata);
             if (typeof filePath === 'string') {
-                toolDiff = getPrimaryDiffFromMetadata(normalizedPartTool, metadata, filePath);
                 targetLine = getFirstChangedLineFromMetadata(normalizedPartTool, metadata, filePath);
             }
         } else if (isWriteTool(normalizedPartTool)) {
@@ -1793,11 +1772,6 @@ const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader; subage
         if (typeof filePath === 'string') {
             e.stopPropagation();
             const absolutePath = toAbsoluteFilePath(currentDirectory, filePath);
-            if (runtime.runtime.isVSCode && toolDiff && (isEditTool(normalizedPartTool) || isPatchTool(normalizedPartTool))) {
-                const label = `${getRelativePath(absolutePath, currentDirectory)} (changes)`;
-                void runtime.editor.openDiff('', absolutePath, label, { line: targetLine, patch: toolDiff });
-                return;
-            }
             runtime.editor.openFile(absolutePath, targetLine);
         } else {
             onToggle(part.id);
@@ -1815,14 +1789,10 @@ const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader; subage
         handleMainClick(event);
     };
 
-    // Quick-open target for the file-link icon in the tool header. Resolves the
-    // primary file path (and, for diff tools, the first changed line + diff) so
-    // the user can open the file in the side panel (web/desktop) or editor
-    // (VS Code) without expanding the tool card. Reuses the same path helpers as
-    // handleMainClick above; the difference is the web fallback — handleMainClick
-    // only opens when runtime.editor is available, this icon also falls back to
-    // useUIStore.openContextFile{AtLine} so the file opens in the right pane.
-    const quickOpenTarget = React.useMemo<{ absolutePath: string; line?: number; toolDiff?: string; toolName: string } | null>(() => {
+    // Quick-open resolves the primary path and first changed line without
+    // expanding the tool card. The icon uses the retained runtime editor when
+    // available, otherwise the file opens in the right pane.
+    const quickOpenTarget = React.useMemo<{ absolutePath: string; line?: number } | null>(() => {
         if (isTaskTool) return null;
         const toolName = normalizedPartTool || part.tool;
         const target = resolveToolQuickOpenTarget(toolName, input, metadata);
@@ -1830,20 +1800,13 @@ const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader; subage
         return {
             absolutePath: toAbsoluteFilePath(currentDirectory, target.filePath),
             line: target.line,
-            toolDiff: target.patch,
-            toolName,
         };
     }, [isTaskTool, normalizedPartTool, part.tool, input, metadata, currentDirectory]);
 
     const openQuickTarget = () => {
         if (!quickOpenTarget) return;
-        const { absolutePath, line, toolDiff, toolName } = quickOpenTarget;
+        const { absolutePath, line } = quickOpenTarget;
         if (runtime?.editor) {
-            if (runtime.runtime.isVSCode && toolDiff && (isEditTool(toolName) || isPatchTool(toolName))) {
-                const label = `${getRelativePath(absolutePath, currentDirectory)} (changes)`;
-                void runtime.editor.openDiff('', absolutePath, label, { line, patch: toolDiff });
-                return;
-            }
             runtime.editor.openFile(absolutePath, line);
             return;
         }
@@ -1873,7 +1836,6 @@ const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader; subage
 
     return (
         <div>
-            {}
             <div
                 className={cn(
                     'group/tool flex gap-1.5 pr-2 pl-px py-1.5 rounded-xl',

@@ -9,7 +9,6 @@ import {
   subscribeRuntimeUrlAuthToken,
 } from '@/lib/runtime-auth';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import type { ToolPopupContent } from './message/types';
 import {
   extractMarkdownImageCandidates,
@@ -22,7 +21,6 @@ import {
   isLocalMarkdownImageSource,
   prepareLocalMarkdownImages,
   resolveMarkdownImageSource,
-  resolveWorkspaceMarkdownImageSource,
   type PreparedMarkdownImage,
 } from './markdown/markdownImageAssets';
 
@@ -69,7 +67,6 @@ const MarkdownImageThumbnail: React.FC<{
   directory: string;
   assetAuthReady: boolean;
   assetAuthNonce: number;
-  useWorkspaceFsBridge: boolean;
   onShowPopup?: (content: ToolPopupContent) => void;
 }> = ({
   candidate,
@@ -77,7 +74,6 @@ const MarkdownImageThumbnail: React.FC<{
   directory,
   assetAuthReady,
   assetAuthNonce,
-  useWorkspaceFsBridge,
   onShowPopup,
 }) => {
   const { t } = useI18n();
@@ -106,19 +102,7 @@ const MarkdownImageThumbnail: React.FC<{
   }, [shouldLoad]);
 
   React.useEffect(() => {
-    if (!shouldLoad || (local && !useWorkspaceFsBridge && !preparation)) return;
-    if (local && useWorkspaceFsBridge) {
-      const controller = new AbortController();
-      setImage({ url: '', status: 'loading' });
-      void resolveWorkspaceMarkdownImageSource(candidate.source, directory, controller.signal).then((url) => {
-        if (controller.signal.aborted) return;
-        setImage({ url, status: 'loading' });
-      }).catch(() => {
-        if (controller.signal.aborted) return;
-        setImage({ url: '', status: 'error' });
-      });
-      return () => controller.abort();
-    }
+    if (!shouldLoad || (local && !preparation)) return;
     if (local) {
       if (preparation?.status !== 'ready') {
         setImage({ url: '', status: 'error' });
@@ -138,7 +122,7 @@ const MarkdownImageThumbnail: React.FC<{
       setImage({ url: '', status: 'error' });
     });
     return () => controller.abort();
-  }, [assetAuthNonce, assetAuthReady, candidate.source, directory, local, preparation, shouldLoad, useWorkspaceFsBridge]);
+  }, [assetAuthNonce, assetAuthReady, candidate.source, directory, local, preparation, shouldLoad]);
 
   const openPreview = React.useCallback(() => {
     if (image.status === 'error') {
@@ -209,7 +193,6 @@ export const MarkdownImageGallery: React.FC<{
   const [shouldPrepare, setShouldPrepare] = React.useState(false);
   const [prepared, setPrepared] = React.useState<Map<string, PreparedMarkdownImage> | null>(null);
   const [prepareEpoch, setPrepareEpoch] = React.useState(0);
-  const useWorkspaceFsBridge = isVSCodeRuntime();
   // Only images on this machine or inside the message. A remote image would
   // load by itself as the thumbnail scrolls into view and tell its server what
   // the user is reading; in the text it is a link to open on purpose.
@@ -219,12 +202,10 @@ export const MarkdownImageGallery: React.FC<{
     [contents],
   );
   const serverPreparationSources = React.useMemo(
-    () => useWorkspaceFsBridge
-      ? []
-      : candidates
-        .filter((candidate) => isLocalMarkdownImageSource(candidate.source))
-        .map((candidate) => candidate.source),
-    [candidates, useWorkspaceFsBridge],
+    () => candidates
+      .filter((candidate) => isLocalMarkdownImageSource(candidate.source))
+      .map((candidate) => candidate.source),
+    [candidates],
   );
   React.useEffect(() => {
     if (serverPreparationSources.length === 0 || shouldPrepare) return;
@@ -290,7 +271,6 @@ export const MarkdownImageGallery: React.FC<{
           directory={directory}
           assetAuthReady={assetAuth.ready}
           assetAuthNonce={assetAuth.nonce}
-          useWorkspaceFsBridge={useWorkspaceFsBridge}
           onShowPopup={onShowPopup}
         />
       ))}

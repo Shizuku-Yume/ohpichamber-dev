@@ -24,7 +24,7 @@ const resolveLocations = (
   gitBranches: ReadonlyMap<string, string | null> = new Map(),
   hideBranchMatchingProjectLabel = true,
 ) => {
-  const ownership = createSessionOwnershipIndex(records, projects, availableWorktreesByProject, false);
+  const ownership = createSessionOwnershipIndex(records, projects, availableWorktreesByProject);
   return resolveSidebarSessionLocations({
     sessions: records, projects, ownerBySessionId: ownership.bySessionId,
     availableWorktreesByProject, gitBranches, homeDirectory: null,
@@ -36,7 +36,7 @@ describe('resolveSidebarSessionLocations', () => {
   test('keeps a restored missing-worktree session in Timeline with its actual request directory', () => {
     const restored = session('restored', '/worktrees/deleted');
     const ownership = createSessionOwnershipIndex(
-      [restored], projects, new Map(), false, [], [{ id: 'opencode-repo', worktree: '/repo' }],
+      [restored], projects, new Map(), [], [{ id: 'opencode-repo', worktree: '/repo' }],
     );
     for (const hideBranchMatchingProjectLabel of [true, false]) {
       const locations = resolveSidebarSessionLocations({
@@ -64,7 +64,7 @@ describe('resolveSidebarSessionLocations', () => {
       path: record.directory, projectDirectory: '/repo', branch: 'Repo', label: 'feature',
     };
     const availableWorktreesByProject = new Map([['/repo', [worktree]]]);
-    const ownership = createSessionOwnershipIndex([record], projects, availableWorktreesByProject, false);
+    const ownership = createSessionOwnershipIndex([record], projects, availableWorktreesByProject);
     for (const hideBranchMatchingProjectLabel of [true, false]) {
       const locations = resolveSidebarSessionLocations({
         sessions: [record], projects, ownerBySessionId: ownership.bySessionId,
@@ -78,7 +78,7 @@ describe('resolveSidebarSessionLocations', () => {
 
   test('leaves unrelated sessions unassigned and hides detached HEAD', () => {
     const records = [session('unowned', '/elsewhere'), session('detached', '/repo')];
-    const ownership = createSessionOwnershipIndex(records, projects, new Map(), false);
+    const ownership = createSessionOwnershipIndex(records, projects, new Map());
     const locations = resolveSidebarSessionLocations({
       sessions: records, projects, ownerBySessionId: ownership.bySessionId,
       availableWorktreesByProject: new Map(), gitBranches: new Map([['/repo', 'HEAD']]),
@@ -168,7 +168,7 @@ describe('resolveSidebarSessionLocations', () => {
   test('labels a session of an isolated space with the space name and groups it by the space directory', () => {
     const SPACE = 'a1b2c3d4e5f6';
     const records = [session('in-space', `/spaces/${SPACE}/repo/src`), session('at-root', '/repo')];
-    const ownership = createSessionOwnershipIndex(records, projects, new Map(), false, [], [], [
+    const ownership = createSessionOwnershipIndex(records, projects, new Map(), [], [], [
       { id: SPACE, name: 'Fix login', state: 'complete', projectDirectory: '/repo', directory: `/spaces/${SPACE}/repo` },
     ]);
     const locations = resolveSidebarSessionLocations({

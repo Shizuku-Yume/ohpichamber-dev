@@ -150,7 +150,7 @@ export const ProvidersPage: React.FC = () => {
   const [catalog, setCatalog] = React.useState<IntegrationCatalog | null>(() => peekIntegrationCatalog());
   const [integrationsLoadFailed, setIntegrationsLoadFailed] = React.useState(false);
   const integrations = catalog?.integrations ?? null;
-  // Null until read, and where the runtime has no OpenChamber server (VS Code).
+  // Null until read.
   const [disabledProviders, setDisabledProviders] = React.useState<string[] | null>(null);
   React.useEffect(() => {
     let active = true;

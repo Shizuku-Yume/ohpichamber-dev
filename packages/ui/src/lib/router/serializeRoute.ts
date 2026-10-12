@@ -83,20 +83,13 @@ function routeMatchesURL(state: AppRouteState): boolean {
 
 /**
  * Update the browser URL using pushState or replaceState.
- * Does nothing if URL already matches or in VS Code context.
+ * Does nothing if URL already matches.
  */
 export function updateBrowserURL(
   state: AppRouteState,
   options: { replace?: boolean; force?: boolean } = {}
 ): void {
   if (typeof window === 'undefined') {
-    return;
-  }
-
-  // VS Code webviews carry session identity outside the route params
-  // (`__VSCODE_CONFIG__`). Rebuilding the URL here would strip it, so skip
-  // entirely.
-  if (isVSCodeContext()) {
     return;
   }
 
@@ -119,15 +112,3 @@ export function updateBrowserURL(
   }
 }
 
-/**
- * Check if running in VS Code webview context.
- */
-function isVSCodeContext(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  // Check for VS Code config object
-  const win = window as { __VSCODE_CONFIG__?: unknown };
-  return win.__VSCODE_CONFIG__ !== undefined;
-}

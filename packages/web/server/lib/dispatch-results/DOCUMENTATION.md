@@ -97,6 +97,6 @@ A failed read retries with backoff (2 s doubling to 60 s).
 ## Runtime parity
 
 Web and desktop with a managed OpenCode: active (the agent tool exists only
-there). VS Code and external OpenCode: the agent tool is not injected, so no
-entry is ever registered. Mobile clients see the delivered message through the
-server they are connected to.
+there). External OpenCode: the agent tool is not injected, so no entry is ever
+registered. Mobile clients see the delivered message through the server they
+are connected to.

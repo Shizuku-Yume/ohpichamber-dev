@@ -973,7 +973,7 @@ export const useChatTimelineScroll = ({
         // maintainScrollAtEnd. The list's animated maintain is single-flight:
         // growth that lands while a glide is still in flight is dropped until
         // the next trigger, and its re-pin threshold is a tenth of the
-        // viewport. In a narrow viewport (the VS Code sidebar) one revealed
+        // viewport. In a narrow viewport one revealed
         // block is several viewports tall, so every block left the reader a
         // second behind and multiple screens above the live edge — measured
         // at 45% of the stream time spent 500-1600px behind at 420x640.

@@ -1,4 +1,4 @@
-import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
+import { isDesktopShell } from '@/lib/desktop';
 import { isCapacitorApp } from '@/lib/platform';
 
 export type HostedSurface = 'desktop' | 'mobile';
@@ -54,7 +54,7 @@ const detectHostedSurface = (): HostedSurface => {
   }
 
   if (isCapacitorApp()) return 'mobile';
-  if (isDesktopShell() || isVSCodeRuntime()) return 'desktop';
+  if (isDesktopShell()) return 'desktop';
 
   return isPhoneViewport() ? 'mobile' : 'desktop';
 };
@@ -81,12 +81,12 @@ export const isMobileSurfaceRuntime = (): boolean => detectHostedSurface() === '
  * safe). Watch for the viewport heuristic disagreeing with the stamp and
  * reload — the same mechanism a surface change has always used — once the
  * resize settles. Fixed shells never switch: Capacitor is always mobile,
- * desktop/VS Code shells are always desktop, and an explicit ?surface=
+ * desktop shells are always desktop, and an explicit ?surface=
  * override wins over the heuristic.
  */
 export const watchHostedSurfaceViewport = (): (() => void) => {
   if (typeof window === 'undefined') return () => {};
-  if (isCapacitorApp() || isDesktopShell() || isVSCodeRuntime()) return () => {};
+  if (isCapacitorApp() || isDesktopShell()) return () => {};
   if (hasSurfaceUrlOverride()) return () => {};
 
   let timeout: ReturnType<typeof setTimeout> | null = null;

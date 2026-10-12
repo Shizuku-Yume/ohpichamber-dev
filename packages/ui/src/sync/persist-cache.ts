@@ -13,7 +13,6 @@ import type { ProjectMeta } from "./types"
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from "@/lib/runtime-switch"
 import { countSyncPersistenceSerialization, countSyncPersistenceStorageWrite } from "./performance-diagnostics"
 import { isChatDirectoryPath } from "@/lib/chatDirectories"
-import { isVSCodeRuntime } from "@/lib/desktop"
 import { z } from "zod"
 
 /** Cap persisted session lists so localStorage stays bounded per directory. */
@@ -357,7 +356,6 @@ export function persistSessions(directory: string, sessions: Session[] | undefin
 }
 
 export function readManagedChatSessions(expectedRuntimeKey = getRuntimeKey()): Session[] {
-  if (isVSCodeRuntime()) return []
   if (expectedRuntimeKey !== getRuntimeKey()) return []
   return readDirCache(MANAGED_CHATS_CACHE_SCOPE).sessions?.filter((session) => (
     isChatDirectoryPath(session.directory)
@@ -365,7 +363,6 @@ export function readManagedChatSessions(expectedRuntimeKey = getRuntimeKey()): S
 }
 
 export function persistManagedChatSessions(sessions: Session[]): void {
-  if (isVSCodeRuntime()) return
   persistSessions(MANAGED_CHATS_CACHE_SCOPE, sessions.filter((session) => (
     isChatDirectoryPath(session.directory)
   )))
@@ -428,7 +425,6 @@ function writeGlobalSessionSnapshot(key: string, runtimeKey: string, sessions: S
  * as no seed; corrupt data is removed.
  */
 export function readGlobalSessionSnapshot(): Session[] {
-  if (isVSCodeRuntime()) return []
   const runtimeKey = getRuntimeKey() || "local"
   const key = globalSnapshotKey(runtimeKey)
   const pending = pendingSessionWrites.get(key)
@@ -461,12 +457,9 @@ export function readGlobalSessionSnapshot(): Session[] {
 
 /**
  * Persist the most recent active sessions (with their ancestors) for the next
- * cold start. Throttled with the directory snapshots; VS Code keeps none,
- * since its sidebar covers the open workspace, which its directory snapshot
- * already seeds.
+ * cold start. Throttled with the directory snapshots.
  */
 export function persistGlobalSessionSnapshot(sessions: Session[]): void {
-  if (isVSCodeRuntime()) return
   const runtimeKey = getRuntimeKey() || "local"
   const key = globalSnapshotKey(runtimeKey)
   scheduleSessionWrite({ runtimeKey, key, sessions, write: () => writeGlobalSessionSnapshot(key, runtimeKey, sessions) })

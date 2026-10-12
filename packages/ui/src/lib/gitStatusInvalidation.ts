@@ -10,7 +10,7 @@
  *
  * Runtime parity: this is about the store's in-flight status request, not about
  * adapter caching, so it applies to every runtime. HTTP mutations emit from
- * `gitApiHttp.ts`; runtime adapters such as the VS Code bridge emit from the
+ * `gitApiHttp.ts`; runtime adapters emit from the
  * dispatch layer in `gitApi.ts`. Tool and editor mutations emit through the
  * shared Git refresh hint. Each path announces a mutation exactly once.
  */

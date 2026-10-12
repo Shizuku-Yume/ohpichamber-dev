@@ -41,11 +41,10 @@ function transcript(sessionID: string, turns = 8, steps = 12) {
   return records
 }
 
-function setup(surface: "desktop" | "mobile" | "vscode" = "desktop", recordsFor = transcript, idleTtlMs = COUNT_ONLY_TTL_MS) {
+function setup(surface: "desktop" | "mobile" = "desktop", recordsFor = transcript, idleTtlMs = COUNT_ONLY_TTL_MS) {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window")
   Object.defineProperty(globalThis, "window", { configurable: true, value: {
     __OPENCHAMBER_SURFACE__: surface === "mobile" ? "mobile" : "desktop",
-    __VSCODE_CONFIG__: surface === "vscode" ? {} : undefined,
   } })
   cleanups.push(() => {
     if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow)
@@ -120,7 +119,7 @@ function setup(surface: "desktop" | "mobile" | "vscode" = "desktop", recordsFor 
 }
 
 describe("session cache retention", () => {
-  for (const surface of ["desktop", "mobile", "vscode"] as const) {
+  for (const surface of ["desktop", "mobile"] as const) {
     test(`${surface}: keeps a left session whole and returns to it without a request`, async () => {
       const env = setup(surface)
       await env.select("a")

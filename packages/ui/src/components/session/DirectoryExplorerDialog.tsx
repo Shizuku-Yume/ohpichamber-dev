@@ -183,7 +183,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   onOpenChange,
 }) => {
   const { t } = useI18n();
-  const { git, sourceControl, runtime } = useRuntimeAPIs();
+  const { git, sourceControl } = useRuntimeAPIs();
   const runtimeKey = getRuntimeKey();
   const openContextSurface = useUIStore((s) => s.openContextSurface);
   const mobileActions = useMobileAppActions();
@@ -267,8 +267,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   }, [homeDirectory, open, runtimeKey]);
 
   React.useEffect(() => {
-    if (open && isCloneMode && !runtime.isVSCode) void refreshAccounts(sourceControl);
-  }, [open, isCloneMode, runtime.isVSCode, refreshAccounts, sourceControl, runtimeKey]);
+    if (open && isCloneMode) void refreshAccounts(sourceControl);
+  }, [open, isCloneMode, refreshAccounts, sourceControl, runtimeKey]);
 
 
   React.useEffect(() => {
@@ -433,10 +433,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   // closed dialog adds nothing: its path is the home, which it would read on
   // every launch.
   const existingRepository = useExistingRepositorySummary(targetPath, { sourceControl, git },
-    open && !isCloneMode && !runtime.isVSCode && !isAlreadyAdded && !shouldCreateTarget && selectionPaths.length === 0);
+    open && !isCloneMode && !isAlreadyAdded && !shouldCreateTarget && selectionPaths.length === 0);
   React.useEffect(() => {
-    if (existingRepository && !runtime.isVSCode) void refreshAccounts(sourceControl);
-  }, [existingRepository, refreshAccounts, runtime.isVSCode, runtimeKey, sourceControl]);
+    if (existingRepository) void refreshAccounts(sourceControl);
+  }, [existingRepository, refreshAccounts, runtimeKey, sourceControl]);
 
   /**
    * The identity this screen is about to apply.
@@ -504,7 +504,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     return null;
   }, [cloneRemoteUrl, selectedGitIdentity]);
 
-  const canSubmitClone = canAddProject && !runtime.isVSCode && !cloneRecovery.blocked && cloneRemoteUrl.trim().length > 0
+  const canSubmitClone = canAddProject && !cloneRecovery.blocked && cloneRemoteUrl.trim().length > 0
     && Boolean(cloneSelection);
   const highlightedRow = rows[highlightedIndex] ?? null;
   const hasHighlightedBrowseItem = Boolean(
@@ -839,7 +839,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
             />
           </div>
           {identityPicker}
-          {runtime.isVSCode ? <p className="typography-micro text-muted-foreground">{t('directoryExplorerDialog.clone.unsupported')}</p> : null}
         </div>
       ) : null}
       <div className="relative">

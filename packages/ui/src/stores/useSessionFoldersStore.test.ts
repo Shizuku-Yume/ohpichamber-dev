@@ -28,10 +28,6 @@ mock.module('./utils/safeStorage', () => ({
   getSafeStorage: () => safeStorage,
 }));
 
-mock.module('@/lib/desktop', () => ({
-  isVSCodeRuntime: () => false,
-}));
-
 const postedBodies: string[] = [];
 
 mock.module('@/lib/runtime-fetch', () => ({

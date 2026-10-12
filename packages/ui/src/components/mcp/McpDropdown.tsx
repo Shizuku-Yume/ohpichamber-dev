@@ -262,8 +262,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
 
   // No mount-level status read: reading MCP status boots the directory's
   // whole stdio server fleet as an OpenCode side effect, and this component
-  // can stay mounted (the VS Code header mounts it at startup). The read
-  // waits for the dropdown to open.
+  // can stay mounted. The read waits for the dropdown to open.
   React.useEffect(() => {
     if (!open) return;
     void Promise.all([

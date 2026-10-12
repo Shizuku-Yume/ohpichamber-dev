@@ -18,7 +18,7 @@ import { dropdownMenuItemClass, dropdownMenuPopupClass, dropdownMenuSeparatorCla
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getPrStatusLabel } from '../prStatusLabel';
 import { cn, formatDirectoryName } from '@/lib/utils';
-import { canUseElectronDesktopIPC, invokeDesktop, isVSCodeRuntime } from '@/lib/desktop';
+import { canUseElectronDesktopIPC, invokeDesktop } from '@/lib/desktop';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -56,7 +56,7 @@ import { useTrackedIssueStates, useTrackedLinearStates, useTrackedPullVisualSumm
 import { githubThread, gitlabThread, linearIssue } from '@/lib/trackedItems/fromLinks';
 import { formatChangeRequestReference } from '@/lib/source-control/identity';
 import { refTintStyle } from '@/lib/source-control/prVisualState';
-import { getLinkedGitHubPullRequests, getLinkedSidebarChanges, getLinkedSidebarIssues, type LinkedGitHubPullRequest, type LinkedSidebarChange, type LinkedSidebarIssue } from '@/lib/linkedIssues';
+import { getLinkedGitHubPullRequests, getLinkedSidebarChanges, getLinkedSidebarIssues } from '@/lib/linkedIssues';
 import { buildSessionIssueItems, combineSessionPrSummaries, findLinkedPrsWithoutState } from './sessionPrSummaries';
 import { useSessionUnseenCount } from '@/sync/notification-store';
 import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
@@ -74,7 +74,6 @@ import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { getChatsRootFromDirectory, isChatDirectoryPath } from '@/lib/chatDirectories';
 import { getMultiRunIdentity, sameMultiRunIdentity } from '@/lib/multirun/identity';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
-import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import {
   buildSessionTreeMoveMessages,
   requestSessionTreeMove,
@@ -184,9 +183,6 @@ const areNodeWorktreeRenderSemanticsEqual = (prev: SessionNode, next: SessionNod
 // (px-1.5 = 6px), the marker slot is icon-wide (14px) with a 6px gap, so row
 // text starts exactly where the zone-header label starts. Nested children
 // shift by one gutter step per depth level.
-const EMPTY_LINKED_PULL_REQUESTS: readonly LinkedGitHubPullRequest[] = [];
-const EMPTY_LINKED_SIDEBAR_ISSUES: readonly LinkedSidebarIssue[] = [];
-const EMPTY_LINKED_SIDEBAR_CHANGES: readonly LinkedSidebarChange[] = [];
 
 /** One PR or issue a session row lists in its badge and tooltips. */
 type SessionRefLine = SidebarRefLink & {
@@ -355,16 +351,9 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   const addSessionToFolder = useSessionFoldersStore((state) => state.addSessionToFolder);
   const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
 
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   const isElectron = React.useMemo(() => canUseElectronDesktopIPC(), []);
-  const runtimeApis = React.useContext(RuntimeAPIContext);
-  const revealOnHoverClass = isVSCode
-    ? 'group-hover:opacity-100 group-hover:pointer-events-auto'
-    : 'group-hover:opacity-100 group-hover:pointer-events-auto group-has-[:focus-visible]:opacity-100 group-has-[:focus-visible]:pointer-events-auto';
-  const hideOnHoverClass = isVSCode
-    ? 'group-hover:opacity-0'
-    : 'group-hover:opacity-0 group-has-[:focus-visible]:opacity-0';
-  const showOpenInEditorAction = isVSCode;
+  const revealOnHoverClass = 'group-hover:opacity-100 group-hover:pointer-events-auto group-has-[:focus-visible]:opacity-100 group-has-[:focus-visible]:pointer-events-auto';
+  const hideOnHoverClass = 'group-hover:opacity-0 group-has-[:focus-visible]:opacity-0';
   const showQuickArchiveAction = !archivedBucket && !mobileVariant;
   const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
   const sessionRecapEnabled = useUIStore((state) => state.sessionRecapEnabled);
@@ -374,12 +363,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   // session menu only.
   const canTrackWork = sessionWorkEnabled && !archivedBucket && !node.session.parentID && !isChatDirectoryPath(node.session.directory);
   const showWorkAction = canTrackWork && !alwaysShowActions;
-  // Hover-revealed actions besides the menu: work, quick archive, and in VS
-  // Code open-in-editor.
-  const extraHoverActions = (showWorkAction ? 1 : 0) + (showQuickArchiveAction ? 1 : 0) + (showOpenInEditorAction ? 1 : 0);
-  // VS Code reveals its permanent-size actions on hover, so the title makes
-  // room for them there.
-  const vscodeAlwaysActionPaddingClass = ['group-hover:pr-8', 'group-hover:pr-14', 'group-hover:pr-18', 'group-hover:pr-22'][extraHoverActions];
+  const extraHoverActions = (showWorkAction ? 1 : 0) + (showQuickArchiveAction ? 1 : 0);
   const alwaysActionPaddingClass = showQuickArchiveAction ? 'pr-13' : 'pr-7';
   const suppressNextSelectRef = React.useRef(false);
   const [isTouchPressed, setIsTouchPressed] = React.useState(false);
@@ -430,13 +414,13 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   // A space's name stands where a branch would; the mark beside it is the space's, as on its group.
   const branchInSpace = secondaryMeta?.inSpace === true;
   const prLookup = React.useMemo(
-    () => resolveSessionPrLookup(node.worktree, isVSCode),
-    [isVSCode, node.worktree],
+    () => resolveSessionPrLookup(node.worktree),
+    [node.worktree],
   );
   const branchPrSummary = useFreshestSourceControlVisualSummaryForBranch(prLookup?.directory ?? null, prLookup?.branch ?? null);
   const linkedPullRequests = React.useMemo(
-    () => (isVSCode ? EMPTY_LINKED_PULL_REQUESTS : getLinkedGitHubPullRequests(session)),
-    [isVSCode, session],
+    () => getLinkedGitHubPullRequests(session),
+    [session],
   );
   const linkedPullLinks = React.useMemo(
     () => linkedPullRequests.map((link) => ({ item: githubThread('pull', link), url: link.url, title: link.title })),
@@ -451,8 +435,8 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   // merge requests carry live state once it arrives; the rest show by
   // identifier, uncoloured.
   const linkedChanges = React.useMemo(
-    () => (isVSCode ? EMPTY_LINKED_SIDEBAR_CHANGES : getLinkedSidebarChanges(session)),
-    [isVSCode, session],
+    () => getLinkedSidebarChanges(session),
+    [session],
   );
   const linkedGitLabChanges = React.useMemo(
     () => linkedChanges.flatMap((change) => (change.gitlab ? [{ item: gitlabThread('pull', change.gitlab), url: change.url, title: change.title }] : [])),
@@ -490,8 +474,8 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   // Linked issues show only while the session has no PR: once a PR exists it
   // is the thing to follow, and it usually closes the issue anyway.
   const linkedIssues = React.useMemo(
-    () => (isVSCode ? EMPTY_LINKED_SIDEBAR_ISSUES : getLinkedSidebarIssues(session)),
-    [isVSCode, session],
+    () => getLinkedSidebarIssues(session),
+    [session],
   );
   const linkedGitHubIssueItems = React.useMemo(
     () => linkedIssues.flatMap((issue) => (issue.source === 'github' ? [githubThread('issue', issue)] : [])),
@@ -567,9 +551,6 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     : projectId ?? sessionDirectory ?? null;
   const loadExportRecords = useSessionMessageRecordsForExport();
   const prefetchSessionMessages = usePrefetchSessionMessages();
-  // Same gate as the sidebar's neighbor prefetch: the VS Code webview keeps
-  // its message traffic to what is actually opened.
-  const prefetchOnPressDisabled = isVSCode;
   const hoverPrefetch = useSessionHoverPrefetch();
 
   const selectionModeEnabled = useSessionMultiSelectStore((state) => state.enabled);
@@ -962,11 +943,9 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   const pendingFormLabel = pendingFormCount === 1
     ? t('sessions.sidebar.session.status.questionPendingSingle')
     : t('sessions.sidebar.session.status.questionPendingMany', { count: pendingFormCount });
-  // Actions are permanently visible (with matching permanent padding) only in
-  // the non-VSCode alwaysShowActions layout; every other layout hover-reveals
-  // them over the row's right edge, where the badges live (#2284).
+  // Permanent actions reserve padding; hover actions overlay the row's badges.
   const badgeVisibilityClass = selectRowBadgeVisibilityClass({
-    actionsAlwaysVisible: alwaysShowActions && !isVSCode,
+    actionsAlwaysVisible: alwaysShowActions,
     menuOpen: isSessionMenuOpen,
     hideOnHoverClass,
   });
@@ -993,9 +972,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     ? undefined
     : isSessionMenuOpen
       ? 'oc-actions-mask'
-      : isVSCode
-        ? 'group-hover:oc-actions-mask'
-        : 'group-hover:oc-actions-mask group-has-[:focus-visible]:oc-actions-mask';
+      : 'group-hover:oc-actions-mask group-has-[:focus-visible]:oc-actions-mask';
   const coveredMetaFadeClass = isSessionMenuOpen ? 'opacity-0' : hideOnHoverClass;
   const hideLeadingIndicatorOnHover = !alwaysShowActions && hasChildren && (isSessionActionPending || showStatusMarker || isPinnedSession);
   const showPinnedMarker = isPinnedSession && !isSessionActionPending && !showStatusMarker;
@@ -1102,22 +1079,6 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     handleDeleteSession(session, { archivedBucket, hardDelete: true, skipConfirm: true });
   };
 
-  const handleOpenInEditorPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
-  const handleOpenInEditorMouseDown = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
-  const handleOpenInEditorClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    void runtimeApis?.vscode?.executeCommand('openchamber.openSessionInEditor', session.id, sessionTitle);
-  };
-
   const handleRowSelect = (event?: React.MouseEvent<HTMLElement>) => {
     if (suppressNextSelectRef.current) {
       suppressNextSelectRef.current = false;
@@ -1179,7 +1140,6 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       event.button === 0
       && !isActive
       && !selectionModeEnabled
-      && !prefetchOnPressDisabled
       && sessionDirectory
       && !getSyncSessionMaterializationStatus(session.id, sessionDirectory).renderable
     ) {
@@ -1311,7 +1271,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
           {t('sessions.sidebar.project.actions.edit')}
         </Item>
       ) : null}
-      {canShowSessionWorktreeMenu({ isSubtaskSession, archivedBucket: Boolean(archivedBucket), isVSCode, sessionDirectory }) ? (() => {
+      {canShowSessionWorktreeMenu({ isSubtaskSession, archivedBucket: Boolean(archivedBucket), sessionDirectory }) ? (() => {
         const isWorktreeMenuDisabled = getSessionWorktreeMenuDisabled({
           sessionDirectory,
           isStreaming,
@@ -1434,7 +1394,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
           const normalized = normalizePath(candidate ?? null);
           if (normalized && !scopes.includes(normalized)) scopes.push(normalized);
         };
-        if (projectId && !isVSCode) {
+        if (projectId) {
           const project = useProjectsStore.getState().projects.find((entry) => entry.id === projectId);
           const projectRoot = normalizePath(project?.path ?? null);
           pushScope(projectRoot);
@@ -1505,7 +1465,6 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
         );
       })() : null}
 
-      {!isVSCode ? (
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.openInSidePanel')}>
         <Item
           disabled={!sessionDirectory}
@@ -1530,7 +1489,6 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
           <span className="shrink-0 typography-micro px-1 rounded leading-none pb-px text-[var(--status-warning)] bg-[var(--status-warning)]/10">{t('sessions.sidebar.session.menu.betaBadge')}</span>
         </Item>
         </SessionMenuItemHint>
-      ) : null}
 
       {isElectron ? (
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.openMiniChatWindow')}>
@@ -1678,7 +1636,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       metaPaddingClass={alwaysShowActions
         ? (showQuickArchiveAction ? 'pr-13' : 'pr-7')
         : undefined}
-      hideMetaOnHoverClass={alwaysShowActions && !isVSCode ? '' : coveredMetaFadeClass}
+      hideMetaOnHoverClass={alwaysShowActions ? '' : coveredMetaFadeClass}
       actionsReserveClass={actionsReserveClass}
       actionsMaskClass={actionsMaskClass}
     />
@@ -1793,7 +1751,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
               <Tooltip actionsRef={rowTooltip.actionsRef} onOpenChange={rowTooltip.onOpenChange}>
                 {/* Rows without a tooltip keep the trigger inert: an open
                     but empty row tooltip would block the PR badge's own. */}
-                <TooltipTrigger asChild closeDelay={SIDEBAR_REF_TOOLTIP_CLOSE_DELAY_MS} disabled={isVSCode || isTimelineRow}>
+                <TooltipTrigger asChild closeDelay={SIDEBAR_REF_TOOLTIP_CLOSE_DELAY_MS} disabled={isTimelineRow}>
                   <button
                     type="button"
 	                    aria-pressed={selectionModeEnabled ? isRowSelected : undefined}
@@ -1817,7 +1775,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                       // its width; only permanent actions take room.
                       isTimelineRow || !alwaysShowActions
                         ? undefined
-                        : (isVSCode ? vscodeAlwaysActionPaddingClass : alwaysActionPaddingClass),
+                        : alwaysActionPaddingClass,
                     )}
                   >
                     {isTimelineRow ? timelineRowBody : (
@@ -1915,9 +1873,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                     )}
                   </button>
                 </TooltipTrigger>
-                {/* VS Code already shows project context via workspace headers, so
-                    the per-row metadata tooltip is redundant noise there. */}
-                {!isVSCode && !isTimelineRow ? (
+                {!isTimelineRow ? (
                 <TooltipContent side="right" sideOffset={8} className="max-w-xs text-left">
                   <div className="flex min-w-44 flex-col gap-1.5 text-left text-xs">
                     <div className="flex items-center justify-between gap-3">
@@ -1964,7 +1920,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
             isTimelineRow && !isTimelineChatRow ? 'top-1.5 h-5' : 'top-1/2 -translate-y-1/2',
             isSessionMenuOpen
               ? 'opacity-100'
-              : (alwaysShowActions && !isVSCode)
+              : alwaysShowActions
                 ? 'opacity-100'
                 : cn('opacity-0', revealOnHoverClass),
           )}>
@@ -2009,29 +1965,6 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                 onArchive={handleQuickArchiveClick}
                 onDelete={handleQuickDeleteClick}
               />
-            ) : null}
-            {showOpenInEditorAction ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      'inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-opacity',
-                      actionButtonSizeClass,
-                    )}
-                    aria-label={t('sessions.sidebar.session.actions.openInEditor')}
-                    onPointerDown={handleOpenInEditorPointerDown}
-                    onMouseDown={handleOpenInEditorMouseDown}
-                    onClick={handleOpenInEditorClick}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  >
-                    <Icon name="external-link" className={actionIconSizeClass} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left" sideOffset={8}>
-                  {t('sessions.sidebar.session.actions.openInEditor')}
-                </TooltipContent>
-              </Tooltip>
             ) : null}
             <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange} onOpenChangeComplete={handleMenuOpenChangeComplete}>
               <DropdownMenuTrigger asChild>

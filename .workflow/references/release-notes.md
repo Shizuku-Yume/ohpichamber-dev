@@ -2,18 +2,18 @@
 
 License: MIT (retained from the original authoring reference).
 
-This is an on-demand release-time reference, not a skill. The [root changelog write gate](../../AGENTS.md#always-on-constraints) controls when it may be used; the protected [format owner](../../changelog/README.md) defines the inherited source/output shape.
+This is an on-demand release-time reference, not a skill. The [root changelog write gate](../../AGENTS.md#always-on-constraints) controls when it may be used. The protected [historical format reference](../../changelog/README.md) retains inherited examples; its `packages/vscode/CHANGELOG.md` output and old skill path are obsolete. The generation rules below apply to this fork.
 
 ## Gate
 
 The changelog is written once per release, by the maintainer, as one story. `changelog/` stays untouched by every other task; a fix or a merged PR lands without a changelog line. Proceed only when the current message asks to update the changelog.
 
-When explicitly asked, write `changelog/unreleased.md` and nothing else. Generation is the maintainer's release step: `oc-dev create-release` turns it into `changelog/<version>.md` with the date and renders `packages/vscode/CHANGELOG.md` and `changelog/index.json`. Never run the generator or edit released/generated files or the legacy root `CHANGELOG.md`. `bun run changelog:check` validates without writing.
+When explicitly asked, write `changelog/unreleased.md` and nothing else. Generation is the maintainer's release step: `oc-dev create-release` turns it into `changelog/<version>.md` with the date and renders `changelog/index.json`, refreshing the legacy root `CHANGELOG.md` only while it exists. Never run the generator or edit released/generated files or the legacy root `CHANGELOG.md`. `bun run changelog:check` validates without writing.
 
 The inherited format opens `unreleased.md` with a `title:` front matter line and supports:
 
 - `## App` — Web, Desktop, Mobile/PWA, shared UI and Guest SDK.
-- `## VS Code` — only observed effects on the inherited extension, written separately. This output format is not a requirement to extend VS Code support; OMP migration scope takes precedence.
+- `## VS Code` — retained only when parsing historical releases. Do not write a new extension section; the extension form is retired.
 
 ## The shape of a release
 
@@ -59,7 +59,7 @@ Every release carries a one-line `title:` in its front matter. The website lists
 
 ```markdown
 ---
-title: Comments on code in VS Code
+title: Project actions from worktrees
 ---
 
 ## App
@@ -73,7 +73,7 @@ The reader is an app user who has not opened the code. Write bullets they can un
 - **Name what they see or do.** The screen, the button, the gesture, the outcome. When a fix removed a symptom, name the symptom in plain words ("froze the page", "sent the comment by accident", "stopped at the first page").
 - **Plain words only.** Anything a user would have to look up is out: store, cache, route, payload, reconcile, authoritative, lifecycle, runtime, listing, revision, PTY, bridge. Internal component names are out unless the user sees them on screen.
 - **State the new behaviour directly.** Say what happens now. Framing it against the old way ("X, not Y", "instead of Y", "rather than Y") is the tell of machine-written notes; drop the second half and let the sentence stand.
-- **Area prefix, then the fact.** `Chat:`, `Settings/Providers:`, `Git:`, `Mobile:`, `Server:`, `CLI:`, `VS Code:` in the main file. A highlight bolds its prefix: `- **Project actions:** ...`.
+- **Area prefix, then the fact.** `Chat:`, `Settings/Providers:`, `Git:`, `Mobile:`, `Server:`, `CLI:` in the main file. A highlight bolds its prefix: `- **Project actions:** ...`.
 - **Keep implementation detail out.** No commit hashes, file paths, numbers that do not change what the user does, or mechanism. One concrete number is fine when it is the whole point ("more than 200 sessions").
 
 Worked example, same change:
@@ -99,11 +99,10 @@ Gathering is complete when every included user-visible or SDK change has factual
 - Inside each group, sort by user impact: breaking changes, then what most users meet daily, then the rest, visual polish last.
 - Bold the prefix of the strongest one to three bullets in the whole release and put each at the top of its group. A highlight introduces a capability, changes a common workflow, or fixes something severe. Size of the diff and effort spent are not reasons to bold.
 - A change that is both a feature and a fix (a reworked area) gets one bullet in the group that describes what the user gains most; a second bullet only when the two halves are things a user would look for separately.
-- Rank each changelog on its own; a main-app highlight is not automatically a VS Code highlight.
 
-## VS Code section
+## Historical VS Code section
 
-An entry belongs here only when the inherited extension actually mounts the affected surface: trace from `packages/vscode/webview/main.tsx` through `VSCodeApp` and `VSCodeLayout`, and consult its [surface/removal inventory](../../packages/vscode/src/DOCUMENTATION.md). Server-side changes have no entry here; the extension runs no OpenChamber server. Prefixes drop `VS Code:`. Write this section separately from App and omit uncertain reach. This is format/reach guidance for current inherited output, not a support-expansion instruction.
+Released sources and their `## VS Code` sections remain historical inputs to the parser and release index. There is no extension changelog output or current extension surface to trace. Preserve those released records; the protected `changelog/README.md` describes inherited output and does not restore extension support.
 
 ## Credit
 

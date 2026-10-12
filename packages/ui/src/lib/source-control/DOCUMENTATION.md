@@ -59,9 +59,9 @@ performs its own fresh safety reads through RuntimeAPIs, outside this UI owner.
 
 The owner consumes the existing `SourceControlAPI.repositoryBinding`, provider
 mutation and confirmed reset, plus `GitAPI.configureTransportBinding`,
-`GitAPI.removeTransportBinding`, and `GitAPI.configureAuxiliaryBinding` results. Web, Electron, VS Code,
-hosted mobile and Capacitor keep their existing adapters and unsupported/error
-behavior. UI sharing does not replace server authorization or CAS enforcement.
+`GitAPI.removeTransportBinding`, and `GitAPI.configureAuxiliaryBinding` results.
+Web, Electron, hosted mobile and Capacitor keep their existing adapters and
+unsupported/error behavior. UI sharing does not replace server authorization or CAS enforcement.
 
 Shared account removal requires an exact credential account ID; the web adapter
 rejects omitted or padded IDs before transport. Provider mutation receipts expose the
@@ -86,7 +86,7 @@ Anonymous HTTPS is a transport an identity may carry; identity pickers label it 
 
 Reads distinguish failure from empty success. Failed operations retain data but disable stale inventory selection; explicit buttons remain available for retry. Typed expiry, source-change, mismatch, unavailable, and capacity rejections tell the user to rediscover or repair host state. Runtime-will-change and unmount invalidate pending inventory, discovery, and import results. Runtime changes clear candidates, confirmation, and selection without loading the new host automatically.
 
-The connected OpenChamber server owns discovery and imported copies for web, Electron and both mobile clients. The UI explains that discovery is limited to immediate private-key files in the server user's approved `~/.ssh`, with no recursion, symlink, SSH config, or agent inspection. It points passphrase-protected and agent-only users to explicit unverified System transport. VS Code omits the server inventory capability; its transport is always the user's system Git. All onboarding and error copy is translated in all 11 locales. The [Git module](../../../../web/server/lib/git/DOCUMENTATION.md#exact-ref-transport-authority) owns candidate lifetime, verification, storage, protocol enforcement, rollback, and provisioning constraints.
+The connected OpenChamber server owns discovery and imported copies for web, Electron and both mobile clients. The UI explains that discovery is limited to immediate private-key files in the server user's approved `~/.ssh`, with no recursion, symlink, SSH config, or agent inspection. It points passphrase-protected and agent-only users to explicit unverified System transport. All onboarding and error copy is translated in all 11 locales. The [Git module](../../../../web/server/lib/git/DOCUMENTATION.md#exact-ref-transport-authority) owns candidate lifetime, verification, storage, protocol enforcement, rollback, and provisioning constraints.
 
 ## Repository identity
 
@@ -95,8 +95,8 @@ One repository works as one identity. `applyIdentity.ts` turns a chosen
 provider association through the exact-target mutation, writes the primary
 remote's transport grant from the identity's transport (`account`, `ssh`,
 `system`, or `anonymous`), and applies the author with
-`setGitIdentity(directory, profileId)`. A repository with no remote, and a
-runtime that holds no bindings (VS Code), receive the signature alone. The `global` profile is the System
+`setGitIdentity(directory, profileId)`. A repository with no remote receives the
+signature alone. The `global` profile is the System
 identity — it removes the provider association and clears the repository-local
 author so the person's own Git configuration answers, and OpenChamber never
 writes the machine's own (global or system) configuration. No choice asks for
@@ -147,8 +147,7 @@ never from an unsaved choice.
 Managed HTTPS presentation comes only from the exact revision-pinned credential
 projection in the binding read; account IDs, credential IDs, key paths and tokens
 are never labels. Failed reads retain explicitly stale context, not an
-authoritative empty binding. VS Code offers no identity switching; the webview
-projects repository remotes as a ready System binding.
+authoritative empty binding.
 
 `RepositoryConfigurationDialog` in `SourceControlBindingSettings.tsx` is reached
 from the identity menu and holds what an identity does not decide: the other

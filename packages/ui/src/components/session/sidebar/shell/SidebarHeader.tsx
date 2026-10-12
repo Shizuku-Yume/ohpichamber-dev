@@ -23,9 +23,6 @@ import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { useUIStore } from '@/stores/useUIStore';
 
 type Props = {
-  hideDirectoryControls: boolean;
-  showProjectDisplayControls: boolean;
-  showRecentControls: boolean;
   handleOpenDirectoryDialog: () => void;
   /** Whether the issues and pull requests board is offered. */
   showSourceBoard: boolean;
@@ -119,9 +116,6 @@ export function SidebarHeader(props: Props): React.ReactNode {
   const { t } = useI18n();
   const guestPages = useGuestPages();
   const {
-    hideDirectoryControls,
-    showProjectDisplayControls,
-    showRecentControls,
     handleOpenDirectoryDialog,
     showSourceBoard,
     headerActionIconClass,
@@ -163,33 +157,9 @@ export function SidebarHeader(props: Props): React.ReactNode {
   const setSidebarViewMode = useSessionDisplayStore((state) => state.setSidebarViewMode);
   const projectDisplayMode = useSessionDisplayStore((state) => state.projectDisplayMode);
   const setProjectDisplayMode = useSessionDisplayStore((state) => state.setProjectDisplayMode);
-  const isSingleProjectMode = showProjectDisplayControls && projectDisplayMode === 'single';
-  // VS Code has no mode switch and always renders the projects view.
-  const timelineView = showProjectDisplayControls && sidebarViewMode === 'timeline';
+  const isSingleProjectMode = projectDisplayMode === 'single';
+  const timelineView = sidebarViewMode === 'timeline';
 
-  if (hideDirectoryControls) {
-    // VS Code: the sidebar is always a single workspace, so project/directory
-    // controls stay hidden, but session search is still useful. Show a compact,
-    // always-visible search input at the top of the sessions list.
-    return (
-      <div className="select-none flex-shrink-0 px-2.5 py-1.5">
-        <SessionSearchInput
-          inputRef={sessionSearchInputRef}
-          value={sessionSearchQuery}
-          onSearch={setSessionSearchQuery}
-          onClose={closeSessionSearch}
-          placeholder={t('sessions.sidebar.header.search.placeholder')}
-          clearLabel={t('sessions.sidebar.header.search.clear')}
-          leadingHint={hasSessionSearchQuery
-            ? (searchMatchCount === 1
-              ? t('sessions.sidebar.header.search.matchCountSingle', { count: searchMatchCount })
-              : t('sessions.sidebar.header.search.matchCountPlural', { count: searchMatchCount }))
-            : undefined}
-          trailingHint={t('sessions.sidebar.header.search.escapeHint')}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="select-none flex-shrink-0 px-2.5 py-1">
@@ -310,8 +280,6 @@ export function SidebarHeader(props: Props): React.ReactNode {
                 <TooltipContent side="bottom" sideOffset={4}><p>{t('sessions.sidebar.header.displayMode.label')}</p></TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="end" className="min-w-[180px]">
-                {showProjectDisplayControls ? (
-                  <>
                     <DropdownMenuLabel>{t('sessions.sidebar.header.viewMode.label')}</DropdownMenuLabel>
                     {([
                       ['projects', 'sessions.sidebar.header.viewMode.projects'],
@@ -330,8 +298,6 @@ export function SidebarHeader(props: Props): React.ReactNode {
                       </DropdownMenuItem>
                     ))}
                     {timelineView ? null : <DropdownMenuSeparator />}
-                  </>
-                ) : null}
                 {timelineView ? null : <>
                 <DropdownMenuLabel>{t('sessions.sidebar.header.actions.sortProjects')}</DropdownMenuLabel>
                 {([
@@ -354,8 +320,6 @@ export function SidebarHeader(props: Props): React.ReactNode {
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                {/* VS Code groups by workspace only; it has no worktree groups to sort. */}
-                {showProjectDisplayControls ? <>
                 <DropdownMenuLabel>{t('sessions.sidebar.header.actions.sortWorktrees')}</DropdownMenuLabel>
                 {([
                   ['recent', 'sessions.sidebar.header.worktreeSort.recent'],
@@ -375,9 +339,6 @@ export function SidebarHeader(props: Props): React.ReactNode {
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                </> : null}
-                {showProjectDisplayControls ? (
-                  <>
                     <DropdownMenuLabel>{t('sessions.sidebar.header.projectDisplay.label')}</DropdownMenuLabel>
                     {([
                       ['all', 'sessions.sidebar.header.projectDisplay.all'],
@@ -396,10 +357,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
                       </DropdownMenuItem>
                     ))}
                     <DropdownMenuSeparator />
-                  </>
-                ) : null}
                 </>}
-                {showRecentControls ? (
                   <DropdownMenuItem
                     onClick={() => {
                       setShowChatsSection(!showChatsSection);
@@ -410,8 +368,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
                     <span>{t('sessions.sidebar.header.displayMode.showChats')}</span>
                     {showChatsSection ? <Icon name="check" className="h-4 w-4 text-primary" /> : null}
                   </DropdownMenuItem>
-                ) : null}
-                {!timelineView && showRecentControls && !isSingleProjectMode ? (
+                {!timelineView && !isSingleProjectMode ? (
                   <DropdownMenuItem
                     onClick={() => {
                       toggleRecentSection();

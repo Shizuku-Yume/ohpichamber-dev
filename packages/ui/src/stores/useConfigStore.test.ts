@@ -2862,9 +2862,8 @@ describe('useConfigStore provider persistence', () => {
     expect(useConfigStore.getState().currentAgentName).toBe('custom-agent');
   });
 
-  // VS Code gives every OpenChamber webview one origin, so each config-store
-  // write reaches every webview in every window as a StorageEvent carrying the
-  // old and the new value. Persisting the catalogs made each write ~27 MB.
+  // Persisting only selections keeps localStorage writes bounded; the live
+  // catalogs remain available in memory and the separate IndexedDB cache.
   test('persisted config keeps selections but no provider or agent catalogs', () => {
     useConfigStore.setState({
       activeDirectoryKey: DIRECTORY,

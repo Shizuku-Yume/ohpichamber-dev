@@ -2,7 +2,7 @@ import type { Theme } from '@/types/theme';
 import type { VSCodeThemePalette } from './adapter';
 import { colorHue, contrastRatio, mixColor, onColor, readableText, withOpacity } from '../color';
 
-// Both file imports and live VS Code palettes pass through this policy once.
+// File and catalog imports pass through this policy once.
 export function adaptVSCodeRoles(theme: Theme, authored: Readonly<VSCodeThemePalette['colors']>, highContrast = false): void {
   if (highContrast) return;
   const { surface, primary, status, interactive, markdown, chat, tools, syntax } = theme.colors;

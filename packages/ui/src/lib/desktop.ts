@@ -3,7 +3,6 @@ import type { RuntimeAPIs } from '@/lib/api/types';
 import { getInjectedBootOutcome } from '@/lib/desktopBoot';
 import { getRuntimeApiBaseUrl, getRuntimeKey } from '@/lib/runtime-switch';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { isVSCodeBootstrapPresent } from '@/lib/vscodeBootstrap';
 
 export type UpdateInfo = {
   available: boolean;
@@ -584,28 +583,17 @@ export const startDesktopWindowDrag = async (): Promise<boolean> => {
   }
 };
 
-export const isVSCodeRuntime = (): boolean => {
-  // Prefer extension-host bootstrap config: it is injected in webview HTML
-  // before any store module evaluates, so startup does not depend on
-  // RuntimeAPIs registration order (see #2359).
-  if (isVSCodeBootstrapPresent()) {
-    return true;
-  }
-  const apis = getRegisteredRuntimeAPIs();
-  return apis?.runtime?.isVSCode === true;
-};
-
 export const isWebRuntime = (): boolean => {
   const apis = getRegisteredRuntimeAPIs();
   const platform = apis?.runtime?.platform;
   if (platform === 'web') {
     return true;
   }
-  if (platform === 'desktop' || platform === 'vscode') {
+  if (platform === 'desktop') {
     return false;
   }
-  // Default: anything that's not VSCode behaves like web (HTTP UI).
-  return !isVSCodeRuntime();
+  // Unregistered HTTP clients behave like web.
+  return true;
 };
 
 /**

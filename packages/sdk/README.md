@@ -4,7 +4,7 @@ Build extensions for [OpenChamber](https://openchamber.dev). An extension can sh
 
 Full guide: [Build an extension](https://openchamber.dev/docs/sdk/). Reference: [Host API](https://openchamber.dev/docs/sdk/host/) and [UI kit](https://openchamber.dev/docs/sdk/ui/). Extensions with a local process: [GUEST_SERVICES.md](./GUEST_SERVICES.md).
 
-Extensions load in the inherited Web and Electron baseline. OhPiChamber retires the VS Code extension in M1 and plans mobile sandboxed iframes in M5, without local service processes. See [migration scope](../../.workflow/omp-migration/scope.md).
+Extensions load on Web and Electron. OhPiChamber has removed the VS Code extension form and plans mobile sandboxed iframes in M5, without local service processes. External editor launch and VS Code theme import remain separate retained capabilities. See [migration scope](../../.workflow/omp-migration/scope.md).
 
 Device-scoped extension storage is local browser preference data. It stays partitioned by the host's runtime identity and the extension installation. URL aliases are not guaranteed to share preferences; saved host and relay connections follow the host's existing runtime identity rules.
 

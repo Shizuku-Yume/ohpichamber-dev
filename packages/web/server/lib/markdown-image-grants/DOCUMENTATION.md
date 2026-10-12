@@ -30,10 +30,8 @@ different machine.
 
 The routes are OpenChamber-owned and must be registered before the generic
 OpenCode proxy. Web, Electron, hosted mobile, and Capacitor use the shared
-server implementation. VS Code does not call this route for workspace images;
-those use its local filesystem bridge. If called, the grant route returns an
-explicit unsupported response because OpenCode temporary images are not
-supported there.
+server implementation. OpenCode temporary images are not supported outside
+the shared server boundary.
 
 Requests to OpenCode carry the directory in a percent-encoded
 `x-opencode-directory` header, matching the SDK wire format; OpenCode rejects

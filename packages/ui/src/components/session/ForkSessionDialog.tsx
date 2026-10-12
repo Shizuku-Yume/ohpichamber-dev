@@ -16,7 +16,6 @@ import { useAgentsStore } from '@/stores/useAgentsStore';
 import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { EXECUTION_FORK_DEFAULT_INSTRUCTIONS, EXECUTION_FORK_GOAL_INSTRUCTIONS } from '@/lib/messages/executionMeta';
 import { useI18n } from '@/lib/i18n';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -69,9 +68,7 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   const [instructions, setInstructions] = React.useState(EXECUTION_FORK_DEFAULT_INSTRUCTIONS);
   const [createWorktree, setCreateWorktree] = React.useState(false);
   const [runAsGoal, setRunAsGoal] = React.useState(false);
-  const showCreateWorktree = !isVSCodeRuntime() && isGitRepository === true;
-  // The goal loop lives in the web server; VS Code only renders goal state.
-  const showRunAsGoal = React.useMemo(() => !isVSCodeRuntime(), []);
+  const showCreateWorktree = isGitRepository === true;
 
   // Toggling goal mode swaps the prefilled instructions between the
   // report-back default and the assertive execute-to-completion variant —
@@ -154,9 +151,9 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
       agent,
       instructions,
       createWorktree: showCreateWorktree && createWorktree,
-      runAsGoal: showRunAsGoal && runAsGoal,
+      runAsGoal,
     });
-  }, [canConfirm, submitting, onConfirm, providerID, modelID, variant, agent, instructions, showCreateWorktree, createWorktree, showRunAsGoal, runAsGoal]);
+  }, [canConfirm, submitting, onConfirm, providerID, modelID, variant, agent, instructions, showCreateWorktree, createWorktree, runAsGoal]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -222,7 +219,7 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
           </div>
         </div>
 
-        <div className={`flex items-center gap-3 ${showCreateWorktree || showRunAsGoal ? 'justify-between' : 'justify-end'}`}>
+        <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
             {showCreateWorktree ? (
               <div className="flex min-w-0 items-center gap-2">
@@ -242,7 +239,6 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
                 </button>
               </div>
             ) : null}
-            {showRunAsGoal ? (
               <div className="flex min-w-0 items-center gap-2">
                 <Checkbox
                   checked={runAsGoal}
@@ -259,7 +255,6 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
                   {t('sessions.scheduledTasks.editor.goal.label')}
                 </button>
               </div>
-            ) : null}
           </div>
           <div className="flex items-center justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>

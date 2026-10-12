@@ -121,6 +121,7 @@ spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     return Response.json({ directory: '/workspace', project: { id: 'project', directory: '/workspace', canonical: '/workspace' } });
   }
   if (path.endsWith('/session')) return Response.json({ data: [] });
+  if (path.endsWith('/config')) return Response.json([]);
   return Response.json({});
 });
 
@@ -169,7 +170,7 @@ const sdk = OpenCode.make({
 
 // SAFETY: Mounting and typing read only the runtime descriptor and the
 // source-control object's identity; no runtime API method is invoked.
-const runtimeAPIs = { runtime: { platform: 'web', isDesktop: false, isVSCode: false }, sourceControl: {} } as RuntimeAPIs;
+const runtimeAPIs = { runtime: { platform: 'web', isDesktop: false }, sourceControl: {} } as RuntimeAPIs;
 
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
 

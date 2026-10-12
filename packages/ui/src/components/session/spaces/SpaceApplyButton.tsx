@@ -9,7 +9,6 @@ import React from 'react';
 
 import { Icon } from '@/components/icon/Icon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { isSpaceApplicable } from '@/lib/spaces/space-repair';
 import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
@@ -23,7 +22,7 @@ export const SpaceApplyButton: React.FC<{ directory: string | null | undefined; 
   const applicable = useSpacesStore((state) => isSpaceApplicable(spaceId ? state.journey?.get(spaceId) : undefined));
   // As the group's menu: nothing new starts while another action on the space runs.
   const busy = useSpacesStore((state) => (spaceId ? state.actions.get(spaceId)?.kind === 'running' : false));
-  if (!enabled || !spaceId || !applicable || isVSCodeRuntime()) return null;
+  if (!enabled || !spaceId || !applicable) return null;
   const label = t('spaces.header.apply');
   return (
     <Tooltip>

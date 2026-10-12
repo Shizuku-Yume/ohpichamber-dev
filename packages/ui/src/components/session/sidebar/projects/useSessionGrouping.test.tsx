@@ -72,7 +72,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds,
         sessionOrderRanks,
         gitBranches,
-        isVSCode: false,
         worktreeSortOrder: 'recent' as const,
       }).buildGroupedSessions;
       return null;
@@ -107,7 +106,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds: new Set(),
         sessionOrderRanks: new Map(),
         gitBranches: new Map(),
-        isVSCode: false,
         worktreeSortOrder: 'recent' as const,
       }).buildGroupedSessions;
       return null;
@@ -145,7 +143,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
           pinnedSessionIds: new Set(),
           sessionOrderRanks: new Map(),
           gitBranches: new Map(),
-          isVSCode: false,
           worktreeSortOrder,
         }).buildGroupedSessions;
         return null;
@@ -200,7 +197,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
       [restored],
       [{ id: 'configured-workspace', normalizedPath: '/workspace' }],
       new Map(),
-      false,
       [],
       [{ id: 'project', worktree: '/workspace' }],
     );
@@ -211,7 +207,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds: new Set(),
         sessionOrderRanks: new Map(),
         gitBranches: new Map(),
-        isVSCode: false,
         worktreeSortOrder: 'recent' as const,
         sessionOwners: ownership.bySessionId,
       }).buildGroupedSessions;
@@ -238,7 +233,6 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         pinnedSessionIds: new Set(),
         sessionOrderRanks: new Map(),
         gitBranches: new Map(),
-        isVSCode: false,
         worktreeSortOrder: 'recent' as const,
       }).buildGroupedSessions;
       return null;

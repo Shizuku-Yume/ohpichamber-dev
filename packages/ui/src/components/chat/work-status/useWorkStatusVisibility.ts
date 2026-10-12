@@ -26,7 +26,6 @@ export const WORK_STATUS_REQUIRED_ROW_WIDTH = WORK_STATUS_COLUMN_WIDTH + WORK_ST
 
 type Options = {
   isMobile: boolean;
-  isVSCode: boolean;
 };
 
 type Result = {
@@ -59,7 +58,7 @@ type Result = {
  * panel, oscillating forever. The row width is independent of the panel, so it
  * is the only stable input.
  */
-export const useWorkStatusVisibility = ({ isMobile, isVSCode }: Options): Result => {
+export const useWorkStatusVisibility = ({ isMobile }: Options): Result => {
   const [rowNode, setRowNode] = React.useState<HTMLDivElement | null>(null);
   // Only the threshold decision is state: the chat area's width changes on
   // every frame of a sidebar animation, and storing the width itself
@@ -99,7 +98,7 @@ export const useWorkStatusVisibility = ({ isMobile, isVSCode }: Options): Result
 
   // Split from the switch: a narrow chat is a layout fact, and the header needs
   // it to offer the panel as an overlay instead of pretending it is off.
-  const layoutAllows = !isMobile && !isVSCode && !contextPanelOpen;
+  const layoutAllows = !isMobile && !contextPanelOpen;
 
   // Measures the chat AREA — the container holding the chat and the context
   // panel together — not the chat row inside it.
@@ -127,7 +126,7 @@ export const useWorkStatusVisibility = ({ isMobile, isVSCode }: Options): Result
     return () => observer.disconnect();
   }, [rowNode]);
 
-  const roomy = !isMobile && !isVSCode && wideEnough === true;
+  const roomy = !isMobile && wideEnough === true;
   const fits = layoutAllows && roomy;
   const visible = panelEnabled && fits;
 

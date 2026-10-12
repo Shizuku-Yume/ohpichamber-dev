@@ -111,7 +111,6 @@ const createProps = (): SessionGroupSectionProps => ({
   normalizedSessionSearchQuery: '',
   groupSearchDataByGroup: new WeakMap(),
   collapsedGroups: new Set(),
-  hideDirectoryControls: false,
   showMoreGroupSessions: () => undefined,
   resetGroupSessionLimit: () => undefined,
   mobileVariant: false,

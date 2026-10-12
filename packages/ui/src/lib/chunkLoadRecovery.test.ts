@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { importWithChunkRecovery } from './chunkLoadRecovery';
 
 describe('importWithChunkRecovery', () => {
-  test('preserves the import error without navigating the VS Code webview', async () => {
+  test('preserves the import error after retrying and scheduling browser recovery', async () => {
     const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
     let reloadCount = 0;
     let markerWrites = 0;
@@ -11,7 +11,6 @@ describe('importWithChunkRecovery', () => {
       configurable: true,
       writable: true,
       value: {
-        __VSCODE_CONFIG__: { workspaceFolder: 'C:/repo', workspaceFolders: [] },
         sessionStorage: {
           getItem: () => null,
           setItem: () => { markerWrites += 1; },
@@ -30,8 +29,8 @@ describe('importWithChunkRecovery', () => {
       }).catch((error: Error) => error);
       expect(caught).toBe(failure);
       expect(attempts).toBe(2);
-      expect(reloadCount).toBe(0);
-      expect(markerWrites).toBe(0);
+      expect(reloadCount).toBe(1);
+      expect(markerWrites).toBe(1);
     } finally {
       if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
       else Reflect.deleteProperty(globalThis, 'window');

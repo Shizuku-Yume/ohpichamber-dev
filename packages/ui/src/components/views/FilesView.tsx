@@ -3716,10 +3716,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     : '';
 
   const htmlPreviewRequest = React.useMemo(
-    () => (selectedFile?.path && isHtml && htmlViewMode === 'preview' && !runtime.isVSCode
+    () => (selectedFile?.path && isHtml && htmlViewMode === 'preview'
       ? { path: selectedFile.path, directory: root || '', revision: String(fileContentRevision) }
       : null),
-    [selectedFile?.path, isHtml, htmlViewMode, runtime.isVSCode, root, fileContentRevision],
+    [selectedFile?.path, isHtml, htmlViewMode, root, fileContentRevision],
   );
 
   const assetAuthErrorFallback = t('filesView.error.readFileFailed');
@@ -4935,7 +4935,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
               )}
             </div>
           ) : selectedFile && isHtml && htmlViewMode === 'preview' ? (
-            !runtime.isVSCode && htmlPreview.status === 'loading' ? (
+            htmlPreview.status === 'loading' ? (
               <div className="flex h-full items-center justify-center text-muted-foreground typography-ui-label">
                 {t('common.loading')}
               </div>
@@ -4944,11 +4944,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
               {/* No allow-same-origin: the page is untrusted and must not run as the app. */}
               <iframe
                 src={htmlPreview.status === 'ready' ? htmlPreview.url : undefined}
-                srcDoc={runtime.isVSCode ? (() => {
-                  const basePath = selectedFile.path.substring(0, selectedFile.path.lastIndexOf('/') + 1);
-                  if (!basePath) return fileContent;
-                  return fileContent.replace(/<head([^>]*)>/i, `<head$1><base href="${basePath}">`);
-                })() : undefined}
                 className="w-full h-full border-none"
                 sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"
                 title={t('filesView.editor.htmlPreviewTitle')}

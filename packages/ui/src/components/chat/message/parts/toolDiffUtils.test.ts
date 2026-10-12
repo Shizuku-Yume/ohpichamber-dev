@@ -207,7 +207,7 @@ describe('toolDiffUtils', () => {
         expect(entries).toHaveLength(1);
         expect(entries[0]?.renderMode).toBe('text');
         expect(entries[0]?.patch).toBe(patch);
-        expect(resolveToolQuickOpenTarget('patch', undefined, metadata)?.patch).toBe(patch);
+        expect(resolveToolQuickOpenTarget('patch', undefined, metadata)?.line).toBe(extractFirstChangedLineFromDiff(patch));
 
         const preview = getToolDiffPreviewText(entries[0]?.patch ?? '');
         expect(preview.endsWith('\n…')).toBe(true);
@@ -276,7 +276,6 @@ describe('toolDiffUtils', () => {
         expect(resolveToolQuickOpenTarget('patch', undefined, metadata)).toEqual({
             filePath: '/workspace/project/src/file.ts',
             line: extractFirstChangedLineFromDiff(entries[0]?.patch ?? ''),
-            patch: entries[0]?.patch,
         });
     });
 
@@ -297,7 +296,7 @@ describe('toolDiffUtils', () => {
 
     test('reports no line when the tool has no diff entry', () => {
         expect(resolveToolQuickOpenTarget('write', { filePath: '/workspace/project/src/new.ts' }, undefined))
-            .toEqual({ filePath: '/workspace/project/src/new.ts', line: undefined, patch: undefined });
+            .toEqual({ filePath: '/workspace/project/src/new.ts', line: undefined });
     });
 
     test('returns no quick-open target without a primary path', () => {

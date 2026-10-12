@@ -76,13 +76,13 @@ const { useSessionListSync } = await import('./useSessionListSync');
 const projects = [{ id: 'project', path: '/project' }];
 const worktree: WorktreeMetadata = { path: '/worktree', projectDirectory: '/project', branch: 'feature', label: 'feature' };
 
-const LifecycleProbe: React.FC<{ isVSCode: boolean }> = ({ isVSCode }) => {
-  useSessionListSync({ isVSCode });
+const LifecycleProbe: React.FC = () => {
+  useSessionListSync();
   return null;
 };
 
-const LifecycleHarness: React.FC<{ isVSCode: boolean; branch: 'hidden' | 'visible' | 'compact-sessions' | 'compact-chat' | 'expanded' }> = ({ isVSCode, branch }) => <>
-  <LifecycleProbe isVSCode={isVSCode} />
+const LifecycleHarness: React.FC<{ branch: 'hidden' | 'visible' | 'expanded' }> = ({ branch }) => <>
+  <LifecycleProbe />
   <span>{branch}</span>
 </>;
 
@@ -113,7 +113,7 @@ describe('useSessionListSync', () => {
 
   test('leaves initial global refresh to the root poller and demands only the current directory', () => {
     act(() => useSessionUIStore.setState({ availableWorktreesByProject: new Map([['/project', [worktree]]]) }));
-    act(() => root.render(<LifecycleProbe isVSCode={false} />));
+    act(() => root.render(<LifecycleProbe />));
 
     expect(state.globalRefreshes).toBe(0);
     expect(state.demands).toHaveLength(1);
@@ -124,15 +124,19 @@ describe('useSessionListSync', () => {
     expect(state.cleanupInputs.at(-1)).toEqual({ enabled: true, hasAuthoritativeGlobalSessions: true, sessionCount: 0, sessions: [] });
   });
 
-  test('refreshes every VS Code directory on first mount and only topology additions afterward', () => {
-    act(() => root.render(<LifecycleProbe isVSCode />));
-    act(() => useProjectsStore.setState({ projects: [...projects, { id: 'added', path: '/added' }] }));
+  test('refreshes newly discovered topology without bootstrapping unselected directories', () => {
+    act(() => root.render(<LifecycleProbe />));
+    act(() => useSessionUIStore.setState({ availableWorktreesByProject: new Map([['/project', [worktree]]]) }));
 
-    expect(state.directoryRefreshes).toEqual([['/project'], ['/added']]);
+    expect(state.directoryRefreshes).toEqual([['/worktree']]);
+    expect(state.demands).toHaveLength(1);
+    expect(state.demands[0]?.directories).toEqual(['/project']);
+    expect(state.globalRefreshes).toBe(0);
   });
 
+
   test('coalesces control events and clears the listener, timeout, and demand on unmount', async () => {
-    act(() => root.render(<LifecycleProbe isVSCode={false} />));
+    act(() => root.render(<LifecycleProbe />));
     state.listener?.({ type: 'session-created', directory: '/created-a' });
     state.listener?.({ type: 'session-created', directory: '/created-b' });
     state.listener?.({ type: 'scheduled-task-ran' });
@@ -147,10 +151,10 @@ describe('useSessionListSync', () => {
     expect(state.clearedOwners).toEqual([owner]);
   });
 
-  test('does not duplicate lifecycle ownership when a hidden MainLayout or compact VS Code view rerenders', () => {
-    act(() => root.render(<LifecycleProbe isVSCode={false} />));
+  test('does not duplicate lifecycle ownership when MainLayout rerenders', () => {
+    act(() => root.render(<LifecycleProbe />));
     const cleanupSessions = state.cleanupInputs.at(-1)?.sessions;
-    act(() => root.render(<LifecycleProbe isVSCode={false} />));
+    act(() => root.render(<LifecycleProbe />));
     expect(state.globalRefreshes).toBe(0);
     expect(state.subscriptions).toBe(1);
     expect(state.demands).toHaveLength(1);
@@ -158,14 +162,14 @@ describe('useSessionListSync', () => {
 
     act(() => root.unmount());
     root = createRoot(dom.container);
-    act(() => root.render(<LifecycleProbe isVSCode />));
+    act(() => root.render(<LifecycleProbe />));
     expect(state.globalRefreshes).toBe(0);
     expect(state.subscriptions).toBe(2);
     expect(state.unsubscriptions).toBe(1);
   });
 
   test('cancels a pending control-event refresh before a layout remount', async () => {
-    act(() => root.render(<LifecycleProbe isVSCode={false} />));
+    act(() => root.render(<LifecycleProbe />));
     state.listener?.({ type: 'session-created', directory: '/created' });
     act(() => root.unmount());
 
@@ -185,9 +189,9 @@ describe('useSessionListSync', () => {
       availableWorktreesByProject: new Map([['/project', [worktree]]]),
     });
 
-    act(() => root.render(<LifecycleHarness isVSCode={false} branch="hidden" />));
-    act(() => root.render(<LifecycleHarness isVSCode={false} branch="visible" />));
-    act(() => root.render(<LifecycleHarness isVSCode={false} branch="expanded" />));
+    act(() => root.render(<LifecycleHarness branch="hidden" />));
+    act(() => root.render(<LifecycleHarness branch="visible" />));
+    act(() => root.render(<LifecycleHarness branch="expanded" />));
 
     expect(state.demands).toHaveLength(1);
     expect(state.demands[0]?.directories).toEqual(['/project', '/worktree']);
@@ -195,54 +199,4 @@ describe('useSessionListSync', () => {
     expect(state.subscriptions).toBe(1);
   });
 
-  test('binds VS Code ownership to Store projects without worktrees and refreshes its first directories once', () => {
-    useProjectsStore.setState({
-      projects: [{ id: 'project', path: '/project' }],
-      activeProjectId: 'project',
-    });
-    useDirectoryStore.setState({ currentDirectory: '/project' });
-    useSessionUIStore.setState({
-      currentSessionDirectory: '/project',
-      availableWorktreesByProject: new Map([['/project', [worktree]]]),
-    });
-
-    act(() => root.render(<LifecycleHarness isVSCode branch="compact-sessions" />));
-    act(() => root.render(<LifecycleHarness isVSCode branch="compact-chat" />));
-    act(() => root.unmount());
-    root = createRoot(dom.container);
-    act(() => root.render(<LifecycleHarness isVSCode branch="compact-sessions" />));
-
-    expect(state.demands.map((demand) => demand.directories)).toEqual([['/project'], ['/project']]);
-    expect(state.directoryRefreshes).toEqual([['/project'], ['/project']]);
-    expect(state.globalRefreshes).toBe(0);
-    expect(state.subscriptions).toBe(2);
-    expect(state.unsubscriptions).toBe(1);
-  });
-
-  test('does not rerender VS Code lifecycle ownership for worktree-map-only changes', () => {
-    useProjectsStore.setState({
-      projects: [{ id: 'project', path: '/project' }],
-      activeProjectId: 'project',
-    });
-    useDirectoryStore.setState({ currentDirectory: '/project' });
-    useSessionUIStore.setState({
-      currentSessionDirectory: '/project',
-      availableWorktreesByProject: new Map([['/project', [worktree]]]),
-    });
-
-    act(() => root.render(<LifecycleHarness isVSCode branch="compact-sessions" />));
-    const cleanupInputCount = state.cleanupInputs.length;
-    const demandCount = state.demands.length;
-    const directoryRefreshCount = state.directoryRefreshes.length;
-    const subscriptionCount = state.subscriptions;
-
-    act(() => useSessionUIStore.setState({
-      availableWorktreesByProject: new Map([['/project', [{ ...worktree, path: '/other-worktree' }]]]),
-    }));
-
-    expect(state.cleanupInputs).toHaveLength(cleanupInputCount);
-    expect(state.demands).toHaveLength(demandCount);
-    expect(state.directoryRefreshes).toHaveLength(directoryRefreshCount);
-    expect(state.subscriptions).toBe(subscriptionCount);
-  });
 });

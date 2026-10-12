@@ -1,8 +1,8 @@
 # OhPiChamber
 
-OhPiChamber is an OpenChamber fork. The [active rebaseline effort](.workflow/specs/upstream-rebaseline.md) has adopted the pinned upstream application source and is restoring and verifying OhPiChamber-specific customization.
+OhPiChamber is an OpenChamber fork. The pinned upstream application source and source-aware documentation audit have been adopted. The [active effort](.workflow/specs/omp-through-m3.md) migrates the application to Oh My Pi (OMP) through M3 acceptance.
 
-The checkout still uses inherited OpenCode integration. Assembled runtime acceptance remains in progress, while the source-aware migration documentation audit is complete. Oh My Pi (OMP) is the subsequent sole agent-runtime target, retaining Web/PWA, Electron, mobile and the Guest SDK, not OpenCode compatibility or the VS Code extension.
+The checkout still executes through inherited OpenCode integration. M0 evidence is accepted for M1 Host extraction and VS Code extension retirement; unavailable provider/platform and rebaseline runtime evidence remain explicit. OMP is the sole target agent runtime, retaining Web/PWA, Electron, mobile and the Guest SDK, not OpenCode compatibility or the VS Code extension.
 
 ## Development documents
 
@@ -12,7 +12,7 @@ The checkout still uses inherited OpenCode integration. Assembled runtime accept
 - [OMP migration](.workflow/omp-migration/README.md): scope, architecture, proposed contracts, and implementation gates.
 - [Historical upstream assessment](.workflow/upstream-review.md): retained selective-sync research; its pick/exclude/defer decisions no longer govern the baseline update.
 - [Inherited isolated-space design](.workflow/isolated-spaces/DESIGN.md): sandbox reference and historical experiments, not local product wiring.
-- [Latest-upstream rebaseline](.workflow/specs/upstream-rebaseline.md): current main goal, acceptance criteria, and next tasks.
+- [Latest-upstream rebaseline](.workflow/specs/upstream-rebaseline.md): closed source/document prerequisite and unverified runtime certification.
 
 Start conversations through the workflow and recover tasks with `.workflow/bin/workflow next --no-color`. Keep current evidence and detailed decisions with their owning records rather than copying them into reports.
 
@@ -44,7 +44,7 @@ These commands start the inherited development environment, not a completed OMP 
 | Shared UI type check | `bun run type-check:ui` |
 | Shared UI lint | `bun run lint:ui` |
 
-See the [Electron README](packages/electron/README.md) for desktop requirements and the [mobile README](packages/mobile/README.md) for native builds. Legacy VS Code scripts remain in `package.json` until their planned removal; they are not part of the target support matrix.
+See the [Electron README](packages/electron/README.md) for desktop requirements and the [mobile README](packages/mobile/README.md) for native builds. The VS Code extension workspace and its commands are removed; external editor launching and VS Code theme import remain.
 
 ## Verification
 

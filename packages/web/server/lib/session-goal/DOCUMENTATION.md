@@ -64,8 +64,6 @@ before touching the filesystem). Rationale: metadata rides every
   is live-editable mid-goal) and falls back to the inline `objective` when
   the file is unreadable — a goal never dies because a file went away.
 - UI display fetches content via the GET route
-  (`useGoalObjectiveContent`); in VS Code the route is unavailable, so the
-  strip degrades to the audit note (display-only fallback by design).
 - Server-created goals write the file through `create.js`, which also owns
   objective fitting, inline fallback, metadata creation, and the synthetic
   first-turn reminder shared by scheduled tasks and CLI-created sessions.
@@ -217,8 +215,7 @@ ordering used by create and scheduled goals.
 
 ## Limitations
 
-- Web-server feature: VS Code (extension-only) renders goal state via
-  `session.updated` but does not run the loop.
+- Web-server feature: the server renders goal state via `session.updated` but does not run the loop.
 - A goal on a session with no assistant reply yet starts after the first
   user exchange completes (no provider/model to continue with before that).
 - `tokensUsed` only counts completed assistant messages seen within the

@@ -70,7 +70,6 @@ export const createSessionOwnershipIndex = (
   sessions: SessionOwnershipRecord[],
   projects: Project[],
   availableWorktreesByProject: Map<string, Worktree[]>,
-  isVSCode: boolean,
   archivedSessions: SessionOwnershipRecord[] = [],
   authoritativeProjects: readonly AuthoritativeOpenCodeProject[] = [],
   spaces: readonly SpaceMark[] = [],
@@ -93,42 +92,36 @@ export const createSessionOwnershipIndex = (
     });
   }
 
-  if (!isVSCode) {
-    for (const [projectPath, worktrees] of availableWorktreesByProject) {
-      const projectRoot = normalizePath(projectPath);
-      const project = projectRoot ? projectByRoot.get(projectRoot) : undefined;
-      if (!project || !projectRoot) continue;
-      for (const worktree of worktrees) {
-        const directory = normalizePath(worktree.path);
-        if (!directory) continue;
-        setOwner(ownerByDirectory, directory, {
-          projectId: project.id,
-          projectRoot,
-          scopeDirectory: directory,
-          kind: 'worktree',
-        });
-      }
-    }
-  }
-
-  // An isolated space belongs to the registered project it was made for, as the host resolved
-  // it from the space's label; a space whose project is not registered here owns nothing, so
-  // its sessions stay out of every project, as any session without an owner does. VS Code never
-  // has spaces (decision 16 of the design).
-  if (!isVSCode) {
-    for (const space of spaces) {
-      const projectRoot = normalizePath(space.projectDirectory);
-      const directory = normalizePath(space.directory);
-      const project = projectRoot ? projectByRoot.get(projectRoot) : undefined;
-      if (!project || !projectRoot || !directory) continue;
+  for (const [projectPath, worktrees] of availableWorktreesByProject) {
+    const projectRoot = normalizePath(projectPath);
+    const project = projectRoot ? projectByRoot.get(projectRoot) : undefined;
+    if (!project || !projectRoot) continue;
+    for (const worktree of worktrees) {
+      const directory = normalizePath(worktree.path);
+      if (!directory) continue;
       setOwner(ownerByDirectory, directory, {
         projectId: project.id,
         projectRoot,
         scopeDirectory: directory,
-        kind: 'space',
-        spaceId: space.id,
+        kind: 'worktree',
       });
     }
+  }
+
+  // An isolated space belongs to the registered project the host resolved for
+  // it; sessions without a registered owner stay out of every project.
+  for (const space of spaces) {
+    const projectRoot = normalizePath(space.projectDirectory);
+    const directory = normalizePath(space.directory);
+    const project = projectRoot ? projectByRoot.get(projectRoot) : undefined;
+    if (!project || !projectRoot || !directory) continue;
+    setOwner(ownerByDirectory, directory, {
+      projectId: project.id,
+      projectRoot,
+      scopeDirectory: directory,
+      kind: 'space',
+      spaceId: space.id,
+    });
   }
 
   // OpenCode project IDs are not OpenChamber's path-derived project IDs. Only
@@ -180,12 +173,6 @@ export const createSessionOwnershipIndex = (
       return resolvedOwners.get(directory) ?? null;
     }
 
-    if (isVSCode) {
-      const owner = ownerByDirectory.get(directory) ?? null;
-      resolvedOwners.set(directory, owner);
-      return owner;
-    }
-
     const visited: string[] = [];
     let current: string | null = directory;
     let owner: DirectoryOwner | null = null;
@@ -212,9 +199,7 @@ export const createSessionOwnershipIndex = (
   ): void => {
     for (const session of input) {
       const exactOwner = resolveOwner(resolveSessionDirectory(session));
-      const owner = exactOwner ?? (!isVSCode
-        ? canonicalOwnerByOpenCodeProjectId.get(getOpenCodeProjectId(session) ?? '') ?? null
-        : null);
+      const owner = exactOwner ?? canonicalOwnerByOpenCodeProjectId.get(getOpenCodeProjectId(session) ?? '') ?? null;
       if (!owner) continue;
       bySessionId.set(session.id, owner);
       const projectSessions = target.get(owner.projectId);

@@ -63,8 +63,7 @@ block it. Existing inline comment controls still attach selected code to chat.
 Changes hands its PR source to walkthrough; walkthrough's Changes action opens
 PR mode with the shared selection. Picking a PR never generates a walkthrough.
 
-Web, Electron, hosted mobile and Capacitor use the server route. VS Code keeps
-PR comparison unavailable, like the other server-backed comparison modes.
+Web, Electron, hosted mobile and Capacitor use the server route for PR comparisons.
 
 Most focused tests use Bun. `MultiFileDiffEntry.vitest.tsx` exercises the real
 diff component through the web workspace's Vitest runner because its transitive

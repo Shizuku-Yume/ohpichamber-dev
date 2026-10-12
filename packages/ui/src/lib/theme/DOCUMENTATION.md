@@ -14,7 +14,7 @@ as a reference. Their background-to-background contrast stays at or below 1.10;
 this is a surface distinction budget, not a text contrast target. Custom themes
 retain their exact authored background. Bodies and gutters use the same fill.
 
-`color.ts` owns alpha composition and readable text selection. A solid status foreground is not the text for a tinted alert. `readableColors.ts` computes the palette used by both `cssGenerator.ts` and the extension host snapshot, including the corrected selection foreground. The SDK receives the computed text colors as required fields and applies them directly, without a second color algorithm. Color calculations run when the theme changes, not on each button render or session update.
+`color.ts` owns alpha composition and readable text selection. A solid status foreground is not the text for a tinted alert. `readableColors.ts` computes the palette used by `cssGenerator.ts` and Guest SDK theme snapshots, including the corrected selection foreground. The SDK receives the computed text colors as required fields and applies them directly, without a second color algorithm. Color calculations run when the theme changes, not on each button render or session update.
 
 For component styling, shared buttons, keyboard navigation and animation rules, see [STYLING.md](STYLING.md). Topic references cover [surface/token semantics](references/tokens-and-examples.md), [icons and sprite generation](references/icons.md), and [theme authoring](references/adding-themes.md). The [custom theme format](../../../../../docs/CUSTOM_THEMES.md) owns supported fields.
 
@@ -75,11 +75,11 @@ and an app alert have different background needs. Focus rings retain the authore
 focus color and alpha rather than replacing its opacity with a fixed percentage.
 
 `vscode/adapt.ts` applies the shared UI policy once, at the end of
-`buildVSCodeThemeFromPalette`. File imports and live VS Code theme changes both
-use it. The adapter also owns missing-role fallbacks, so the same source colors
-produce the same UI palette through either route. High-contrast light and dark
-palettes retain their authored contrasts; the live reader recognizes VS Code's
-high-contrast body classes. Existing saved custom files are not rewritten.
+`buildVSCodeThemeFromPalette`. File and catalog imports use it. The adapter also
+owns missing-role fallbacks, so the same source colors produce the same UI palette
+through either import route. High-contrast light and dark palettes retain their
+authored contrasts. Existing saved custom files are not rewritten. There is no
+live editor-host theme reader or editor body-class integration.
 
 Ordinary palettes retain their canvas and hue, but sidebar and elevated layers
 follow the built-in hierarchy. Surface contrast stays within 1.04–1.10 where
@@ -119,8 +119,7 @@ The provider persists imports through `POST /api/config/themes` before adding th
 to its runtime-scoped library. A successful save invalidates older reloads. Runtime
 switches reject late application, and newer theme choices/imports win over an
 upload in flight. The server assigns content-based IDs and atomically publishes
-new files without overwrite; identical retries reuse the file. VS Code keeps the
-import action unavailable because its active theme belongs to VS Code.
+new files without overwrite; identical retries reuse the file.
 
 `vscode/catalog.ts` parses server catalog/package responses and runs resolved
 package sources through the same converter. Manifest labels remain authoritative;
@@ -140,7 +139,6 @@ prevent old mutations applying even after switching away and back.
 
 `RuntimeAPIs.themeFiles` is an optional local native picker. The web adapter exposes
 it only to trusted desktop pages; browser/hosted-mobile/Capacitor use file inputs.
-VS Code returns 501 for theme management routes and exposes no import controls.
 
 On mobile, theme import uses `MobileOverlayPanel`, with actions in its footer and
 the catalog body in its single shared scroller. The panel owns keyboard insets and

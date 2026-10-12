@@ -122,7 +122,7 @@ describe('deriveRecentActivitySections', () => {
 
     const node = sections[0].items[0]?.node;
     expect(node?.worktree).toBe(worktree);
-    expect(resolveSessionPrLookup(node?.worktree, false))
+    expect(resolveSessionPrLookup(node?.worktree))
       .toEqual({ directory: '/worktrees/feature', branch: 'feature-1' });
   });
 
@@ -174,9 +174,9 @@ describe('deriveRecentActivitySections', () => {
     });
     const projected = sections[0].items[0].node;
     expect(projected.worktree).toBeNull();
-    expect(resolveSessionPrLookup(projected.children[0].worktree, false))
+    expect(resolveSessionPrLookup(projected.children[0].worktree))
       .toEqual({ directory: '/worktrees/feature', branch: 'feature' });
-    expect(resolveSessionPrLookup(projected.children[0].children[0].worktree, false))
+    expect(resolveSessionPrLookup(projected.children[0].children[0].worktree))
       .toEqual({ directory: '/worktrees/other', branch: 'other' });
     expect(projected.children[1]).toBe(missingNode);
     expect(projected.children.map((node) => node.session.id)).toEqual(['child', 'missing']);

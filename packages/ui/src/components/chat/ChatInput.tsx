@@ -5,7 +5,7 @@ import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { filterVisibleAgents } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { isServerOwnedMessageQueue, createMessageQueueTarget, getMessageQueueKey, useMessageQueueStore, type QueuedContextPart, type QueuedMessage } from '@/stores/messageQueueStore';
+import { createMessageQueueTarget, getMessageQueueKey, useMessageQueueStore, type QueuedContextPart, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -16,7 +16,6 @@ import { openParallelComposer } from '@/lib/multirun/openParallelComposer';
 import { useParallelComposer } from './composer/parallel/useParallelComposer';
 import { ParallelComposerStrip } from './composer/parallel/ParallelComposerStrip';
 import {
-    ACCEPTED_ATTACHMENT_EXTENSIONS,
     ATTACHMENT_ACCEPT,
     getUnsupportedAttachmentInputs,
     isDocumentAttachmentFilename,
@@ -24,8 +23,8 @@ import {
 } from '@/sync/attachment-files';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import * as sessionActions from '@/sync/session-actions';
-// Guest surfaces load on demand: VS Code and mobile never mount them, and the
-// composer must not pay for the guest bridge before an extension is installed.
+// Guest surfaces load on demand: mobile never mounts them, and the composer
+// must not pay for the guest bridge before an extension is installed.
 const GuestAttachDialog = React.lazy(() => import('@/components/layout/GuestAttachDialog').then((module) => ({ default: module.GuestAttachDialog })));
 import type { AttachIssueRequest } from '@openchamber/sdk';
 import { getInlineCommentDraftKey, useInlineCommentDraftStore, type InlineCommentDraft, type InlineCommentDraftTarget } from '@/stores/useInlineCommentDraftStore';
@@ -48,7 +47,7 @@ import { BtwPanel } from './btw/BtwPanel';
 import { useBtwPanelState } from './btw/useBtwPanelState';
 import { btwModelAvailability, resolveBtwSelection, useBtwStore } from '@/stores/useBtwStore';
 import { buildBtwSyntheticTexts, preparePendingBtwSend, startBtwSession } from '@/lib/btw';
-import { AttachedFilesList, AttachedVSCodeFileChips, ActiveEditorFileSuggestion } from './FileAttachment';
+import { AttachedFilesList } from './FileAttachment';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { ToolPopupContent } from './message/types';
 import { QueuedMessagesStrip } from './QueuedMessagesStrip';
@@ -71,7 +70,6 @@ import { MobileModelButton } from './MobileModelButton';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
 // useMessageStore removed — messages now come from sync system
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useTabletLayout } from '@/lib/device';
 import { useHardwareKeyboard } from '@/lib/hardwareKeyboard';
 import { isCapacitorApp } from '@/lib/platform';
@@ -171,12 +169,10 @@ import {
     withInlineInsertionBoundaries,
 } from './composer/text';
 import {
-    collectDroppedFileUris,
     collectDroppedFiles,
     hasDraggedFiles,
 } from './composer/attachments/dataTransfer';
 import {
-    normalizeDroppedPath,
     normalizePath,
     toProjectRelativeMentionPath,
     toServerFileUrl,
@@ -449,12 +445,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const cursorPosRef = React.useRef(0);
     const dropZoneRef = React.useRef<HTMLDivElement>(null);
     const dragEnterCountRef = React.useRef(0);
-    const suppressNextFileDropTextInsertRef = React.useRef(false);
-    const suppressNextFileDropTextInsertTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const suppressNextFileMentionPasteRef = React.useRef(false);
     const suppressNextFileMentionPasteTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const shellTriggerNormalizationRef = React.useRef(false);
-    const pendingDroppedAbsolutePathsRef = React.useRef<string[]>([]);
     const canAcceptDropRef = React.useRef(false);
     const mentionRef = React.useRef<FileMentionHandle>(null);
     const commandRef = React.useRef<CommandAutocompleteHandle>(null);
@@ -557,7 +550,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const consumePendingBtwComposerRequest = useInputStore((s) => s.consumePendingBtwComposerRequest);
     const pendingBtwComposerRequest = useInputStore((s) => s.pendingBtwComposerRequest);
     const pendingPresetSubmit = useInputStore((s) => s.pendingPresetSubmit);
-    const setPendingInputText = useInputStore((s) => s.setPendingInputText);
     const pendingGuestIssue = useInputStore((s) => s.pendingGuestIssue);
     const consumePendingGuestIssue = useInputStore((s) => s.consumePendingGuestIssue);
     const pendingComposerReferenceCount = usePendingComposerReferences((s) => s.references.length);
@@ -683,7 +675,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     }, [getLargeTextPasteScope]);
     const { expanded: persistedExpandedInput, setExpanded: setExpandedInput } = useChatColumnExpandedInput();
     const isExpandedInput = !isBtwActive && persistedExpandedInput;
-    const { git: runtimeGit, vscode: vscodeApi, linear: runtimeLinear } = useRuntimeAPIs();
+    const { git: runtimeGit, linear: runtimeLinear } = useRuntimeAPIs();
     const cycleAgentShortcutOverride = useUIStore((state) => state.shortcutOverrides.cycle_agent);
     const cycleAgentShortcut = React.useMemo(() => (
         getEffectiveShortcutCombo('cycle_agent', cycleAgentShortcutOverride ? { cycle_agent: cycleAgentShortcutOverride } : undefined)
@@ -866,7 +858,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const names = new Set<string>([
             'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'fork', 'btw', 'summary', 'workspace-review', 'plan-feature', 'craft-goal', 'schedule-task', 'catch-up', 'debug', 'weigh', 'explore',
         ]);
-        if (!isMobile && !isVSCodeRuntime()) names.add('handoff-review');
+        if (!isMobile) names.add('handoff-review');
         for (const command of availableCommands) names.add(command.name.toLowerCase());
         return names;
     }, [availableCommands, isMobile]);
@@ -1395,7 +1387,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             selectSkillsForDirectory(useSkillsStore.getState(), currentDirectory).map((skill) => skill.name),
         );
         const skillInstruction = buildSkillMentionInstruction(collectInlineSkillMentions(sanitizedText, availableSkillNames));
-        // The server and the VS Code auto-send deliver `text` as is, so its
+        // The server delivers `text` as is, so its
         // snippets expand now; `content` keeps them for editing.
         const textToQueue = await useSnippetsStore.getState().expandText(sanitizedText).catch((error) => {
             console.warn('[queue] Failed to expand snippets, queueing original text:', error);
@@ -1568,7 +1560,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         setReferencePicker({ source: 'github' });
     }, []);
     const referencePickerDirectory = currentSessionDirectoryForSync ?? currentDirectory ?? null;
-    const repositoryProvider = useRepositoryReferenceProvider(isVSCodeRuntime() ? null : referencePickerDirectory);
+    const repositoryProvider = useRepositoryReferenceProvider(referencePickerDirectory);
     const addLinkedReferences = React.useCallback((references: ComposerReference[]) => {
         setLinkedReferences((current) => withComposerReferences(current, references));
     }, []);
@@ -1637,7 +1629,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 });
             if (!commandIsAvailable) commandPlan = null;
         }
-        if (commandPlan?.command.name === 'handoff-review' && (isMobile || isVSCodeRuntime())) commandPlan = null;
+        if (commandPlan?.command.name === 'handoff-review' && isMobile) commandPlan = null;
 
         // Enter BTW before sending so the question uses its isolated selections.
         // A bare command waits for input; an argument requests one immediate send.
@@ -1896,10 +1888,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
         const preparedDocumentMentions = documentMentions.prepared;
 
-        // The composer delivers these itself, so they leave the queue now — the
-        // queue's own delivery (server-side, or the auto-send hook in VS Code)
-        // skips anything already in flight, and a message already being
-        // delivered stays out of this send so it cannot go out twice.
+        // The composer delivers these itself, so they leave the queue now. The
+        // server skips anything already in flight so it cannot go out twice.
         let queuedMessagesToSend: QueuedMessage[] = [];
         if (capturedTarget && hasQueuedMessages && !commandPlan) {
             try {
@@ -1914,9 +1904,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
         const historySubmissions = buildChatInputHistorySubmissions({
             inputMode,
-            // Server-owned items were recorded on acceptance. VS Code records
-            // the full items actually taken, never the metadata projection.
-            queuedMessages: isServerOwnedMessageQueue() ? [] : queuedMessagesToSend,
+            // Server-owned items were recorded on acceptance.
+            queuedMessages: [],
             composerText: inputSnapshot.message,
             composerAttachments: attachedFiles,
             includeComposer: !queuedOnly && inputSnapshot.hasContent,
@@ -2644,24 +2633,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         updateAutocompleteState(nextValue, cursorPosition, inputSource, text);
     }, [updateAutocompleteState]);
 
-    const clearDropTextSuppression = React.useCallback(() => {
-        suppressNextFileDropTextInsertRef.current = false;
-        pendingDroppedAbsolutePathsRef.current = [];
-        if (suppressNextFileDropTextInsertTimeoutRef.current) {
-            clearTimeout(suppressNextFileDropTextInsertTimeoutRef.current);
-            suppressNextFileDropTextInsertTimeoutRef.current = null;
-        }
-    }, []);
-
-    const scheduleDropTextSuppressionExpiry = React.useCallback(() => {
-        if (suppressNextFileDropTextInsertTimeoutRef.current) {
-            clearTimeout(suppressNextFileDropTextInsertTimeoutRef.current);
-        }
-        suppressNextFileDropTextInsertTimeoutRef.current = setTimeout(() => {
-            clearDropTextSuppression();
-        }, 700);
-    }, [clearDropTextSuppression]);
-
     const clearFileMentionPasteSuppression = React.useCallback(() => {
         suppressNextFileMentionPasteRef.current = false;
         if (suppressNextFileMentionPasteTimeoutRef.current) {
@@ -2692,16 +2663,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             shellTriggerNormalizationRef.current = false;
             setMessage(value);
             return;
-        }
-
-        // VS Code drops the dragged path as text as well as firing the drop
-        // handler; swallow that duplicate insertion.
-        if (isVSCodeRuntime() && suppressNextFileDropTextInsertRef.current) {
-            const candidateAbsolutePaths = pendingDroppedAbsolutePathsRef.current;
-            if (candidateAbsolutePaths.some((path) => path.length > 0 && value.includes(path))) {
-                clearDropTextSuppression();
-                return;
-            }
         }
 
         const pastedInsertedText = fromPaste ? insertedText : '';
@@ -2742,10 +2703,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
     React.useEffect(() => {
         return () => {
-            clearDropTextSuppression();
             clearFileMentionPasteSuppression();
         };
-    }, [clearDropTextSuppression, clearFileMentionPasteSuppression]);
+    }, [clearFileMentionPasteSuppression]);
 
     /**
      * Attach files that arrived by paste or drop and cite each one in the
@@ -3291,29 +3251,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         [chatSearchDirectory],
     );
 
-    const addVSCodeDroppedUrisAsMentions = React.useCallback((uris: string[]) => {
-        if (uris.length === 0) return;
-
-        const paths = uris
-            .map((entry) => normalizeDroppedPath(entry))
-            .map((entry) => toMentionPath(entry))
-            .map((entry) => entry.trim().replace(/^\.\//, ''))
-            .filter((entry) => entry.length > 0);
-
-        for (const p of paths) {
-            confirmedMentionsRef.current.add(p);
-        }
-
-        const mentions = Array.from(new Set(paths.map((entry) => `@${entry}`)));
-
-        if (mentions.length === 0) {
-            return;
-        }
-
-        setPendingInputText(mentions.join(' '), 'append-inline', mailboxTarget);
-        toast.success(t('chat.chatInput.toast.addedFileMentions', { count: mentions.length }));
-    }, [mailboxTarget, setPendingInputText, t, toMentionPath]);
-
     const handleDragEnter = (e: React.DragEvent) => {
         if (!hasDraggedFiles(e.dataTransfer)) {
             return;
@@ -3350,7 +3287,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             dragEnterCountRef.current = 0;
             setIsDragging(false);
             setIsInternalDrag(false);
-            clearDropTextSuppression();
         }
     };
 
@@ -3358,14 +3294,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         dragEnterCountRef.current = 0;
         setIsDragging(false);
         setIsInternalDrag(false);
-        clearDropTextSuppression();
     };
 
     const handleDrop = async (e: React.DragEvent) => {
         dragEnterCountRef.current = 0;
         const draggedFiles = hasDraggedFiles(e.dataTransfer);
         if (!draggedFiles) {
-            clearDropTextSuppression();
             return;
         }
         e.preventDefault();
@@ -3398,30 +3332,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             } else {
                 setMessage((prev) => appendInlineText(prev, mention));
             }
-            clearDropTextSuppression();
             return;
         }
 
         const files = collectDroppedFiles(e.dataTransfer);
 
-        if (files.length === 0 && isVSCodeRuntime()) {
-            const droppedUris = collectDroppedFileUris(e.dataTransfer);
-            if (droppedUris.length > 0) {
-                pendingDroppedAbsolutePathsRef.current = droppedUris
-                    .map((entry) => normalizeDroppedPath(entry))
-                    .map((entry) => entry.trim())
-                    .filter((entry) => entry.length > 0);
-                addVSCodeDroppedUrisAsMentions(droppedUris);
-            } else {
-                clearDropTextSuppression();
-            }
-            return;
-        }
-
         if (files.length > 0) {
             await attachFilesWithCitation(files);
         }
-        clearDropTextSuppression();
     };
 
     const handleDropCapture = (e: React.DragEvent) => {
@@ -3430,10 +3348,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
         // Prevent native textarea drop text insertion for all runtimes
         e.preventDefault();
-        if (isVSCodeRuntime()) {
-            suppressNextFileDropTextInsertRef.current = true;
-            scheduleDropTextSuppressionExpiry();
-        }
     };
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -3456,59 +3370,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
     }, [addAttachedFile, t]);
 
-    const handleVSCodePickFiles = React.useCallback(async () => {
-        try {
-            const data = (await vscodeApi?.pickFiles?.({ extensions: ACCEPTED_ATTACHMENT_EXTENSIONS })) as {
-                files?: Array<{ name: string; mimeType?: string; dataUrl?: string }>;
-                skipped?: Array<{ name?: string; reason?: string }>;
-            } | undefined;
-            const picked = Array.isArray(data?.files) ? data.files : [];
-            const skipped = Array.isArray(data?.skipped) ? data.skipped : [];
-
-            if (skipped.length > 0) {
-                const summary = skipped
-                    .map((s: { name?: string; reason?: string }) => `${s?.name || 'file'}: ${s?.reason || 'skipped'}`)
-                    .join('\n');
-                toast.error(t('chat.chatInput.toast.someFilesSkipped', { summary }));
-            }
-
-            const asFiles = picked
-                .map((file: { name: string; mimeType?: string; dataUrl?: string }) => {
-                    if (!file?.dataUrl) return null;
-                    try {
-                        const [meta, base64] = file.dataUrl.split(',');
-                        const mime = file.mimeType || (meta?.match(/data:(.*);base64/)?.[1] || 'application/octet-stream');
-                        if (!base64) return null;
-                        const binary = atob(base64);
-                        const bytes = new Uint8Array(binary.length);
-                        for (let i = 0; i < binary.length; i++) {
-                            bytes[i] = binary.charCodeAt(i);
-                        }
-                        const blob = new Blob([bytes], { type: mime });
-                        return new File([blob], file.name || 'file', { type: mime });
-                    } catch (err) {
-                        console.error('Failed to decode VS Code picked file', err);
-                        return null;
-                    }
-                })
-                .filter(Boolean) as File[];
-
-            if (asFiles.length > 0) {
-                await attachFiles(asFiles);
-            }
-        } catch (error) {
-            console.error('VS Code file pick failed', error);
-            toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.vscodePickFailed'));
-        }
-    }, [attachFiles, t, vscodeApi]);
-
     const handlePickLocalFiles = React.useCallback(() => {
-        if (isVSCodeRuntime()) {
-            void handleVSCodePickFiles();
-            return;
-        }
         fileInputRef.current?.click();
-    }, [handleVSCodePickFiles]);
+    }, []);
 
     const handleLocalFileSelect = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
@@ -3518,7 +3382,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     }, [attachFiles]);
 
     const footerGapClass = 'gap-x-1.5 gap-y-0';
-    const isVSCode = isVSCodeRuntime();
     const guestAttachItems = useGuestAttachItems();
     const openGuestAttach = React.useCallback((guestId: string) => {
         const item = guestAttachItems.find((guest) => guest.id === guestId);
@@ -3547,7 +3410,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
         if (reference.data !== undefined) issue.data = reference.data;
         // A chip can outlive the place it was attached in: the session may be
-        // open on mobile or VS Code, where extensions never load, or the
+        // open on mobile, where extensions never load, or the
         // extension may be paused or removed here. Say so instead of opening
         // an empty surface.
         const installed = useGuestsStore.getState().guests.find((entry) => entry.id === issue.providerId);
@@ -3609,8 +3472,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             setLinkedReferences((current) => withComposerReferences(current, references));
         }
     }, [columnPinned, pendingComposerReferenceCount]);
-    const showLinearPicker = Boolean(runtimeLinear) && !isVSCode;
-    const showDraftTargetSelectors = newSessionDraftOpen && !isVSCode;
+    const showLinearPicker = Boolean(runtimeLinear);
+    const showDraftTargetSelectors = newSessionDraftOpen;
 
     // Which project and directory a new session will target.
     const {
@@ -3630,8 +3493,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     } = useDraftTarget(showDraftTargetSelectors);
 
     // The one entry to an isolated space: while the feature's switch is on, for a project the
-    // branch selector serves, never in VS Code (decision 16). The dialog keeps the project it
-    // was opened for, whatever the draft picks after.
+    // branch selector serves. The dialog keeps the project it was opened for,
+    // whatever the draft picks after.
     const isolatedSpacesEnabled = useUIStore((state) => state.isolatedSpacesEnabled);
     const [newSpaceProject, setNewSpaceProject] = React.useState<{ id: string; path: string } | null>(null);
     const draftRequestId = newSessionDraft?.pendingWorktreeRequestId ?? null;
@@ -3640,10 +3503,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         () => isDraftSendWaiting(draftRequestId) && isSpaceCreationRequest(draftRequestId),
     );
     const handleCreateSpace = React.useMemo(() => {
-        if (!isolatedSpacesEnabled || isVSCode || !selectedDraftProject || selectedDraftProject.kind === 'chat') return undefined;
+        if (!isolatedSpacesEnabled || !selectedDraftProject || selectedDraftProject.kind === 'chat') return undefined;
         const project = { id: selectedDraftProject.id, path: selectedDraftProject.path };
         return () => setNewSpaceProject(project);
-    }, [isVSCode, isolatedSpacesEnabled, selectedDraftProject]);
+    }, [isolatedSpacesEnabled, selectedDraftProject]);
 
     // The full New Worktree dialog for the draft's project, so a named worktree, an existing
     // branch or a PR branch can be made where the sidebar has no project headers (Timeline).
@@ -3683,7 +3546,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const showDesktopDraftPresentation = (newSessionDraftOpen || draftPresentationExiting)
         && !isDesktopExpanded
         && !isMobile
-        && !isVSCode
         && !isMiniChatSurface;
     const draftPresentationClassName = cn(
         'transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
@@ -3755,7 +3617,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
     // Linked references render as chips beside the attached files, inside the
     // composer box and inside the mobile pill.
-    const linkedReferenceChips = !isVSCode && hasLinkedReferences ? (
+    const linkedReferenceChips = hasLinkedReferences ? (
         <div className="flex flex-wrap items-center gap-2 pt-2">
             {linkedReferences.map((reference) => {
                 const key = composerReferenceKey(reference);
@@ -3977,11 +3839,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const goalObjectiveLength = goalArmed ? message.length : 0;
     const waitingForOpenCode = useOpenCodeStartupStore((state) => state.waitingSends > 0);
 
-    const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : (isVSCode ? 'px-1.5 py-1' : 'px-2.5 py-1.5');
-    const buttonSizeClass = isMobile ? 'h-8 w-8' : (isVSCode ? 'h-5 w-5' : 'h-6 w-6');
-    const sendIconSizeClass = isMobile ? 'h-4 w-4' : (isVSCode ? 'h-3.5 w-3.5' : 'h-4 w-4');
-    const stopIconSizeClass = isMobile ? 'h-6 w-6' : (isVSCode ? 'h-4 w-4' : 'h-5 w-5');
-    const iconSizeClass = isMobile ? 'h-[18px] w-[18px]' : (isVSCode ? 'h-4 w-4' : 'h-[18px] w-[18px]');
+    const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : 'px-2.5 py-1.5';
+    const buttonSizeClass = isMobile ? 'h-8 w-8' : 'h-6 w-6';
+    const sendIconSizeClass = 'h-4 w-4';
+    const stopIconSizeClass = isMobile ? 'h-6 w-6' : 'h-5 w-5';
+    const iconSizeClass = 'h-[18px] w-[18px]';
 
     const iconButtonBaseClass = 'flex cursor-pointer items-center justify-center text-foreground transition-none outline-none focus:outline-none flex-shrink-0 disabled:cursor-not-allowed';
     const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
@@ -3989,8 +3851,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const safetyNetAvailable = useRoutingStore(selectSafetyNetAvailable);
     // A session not created yet (a draft, an unsent btw fork) shows its own
     // choice, else the mode the server will give it: the Settings default.
-    // VS Code has no server to apply one.
-    const defaultPermissionMode = useUIStore((state) => (isVSCode ? 'ask' : state.permissionDefaultMode));
+    const defaultPermissionMode = useUIStore((state) => state.permissionDefaultMode);
     const permissionMode = usePermissionStore((state) => {
         if (isBtwActive && !btwSessionId) return pendingBtwPermissionMode ?? defaultPermissionMode;
         if (!permissionScopeSessionId) {
@@ -4160,7 +4021,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         sessionId={currentSessionId}
                         newSessionDraftOpen={newSessionDraftOpen}
                         hasContent={Boolean(hasContent)}
-                        isVSCode={isVSCode}
                         canAbort={canAbort}
                         footerIconButtonClass={footerIconButtonClass}
                         iconSizeClass={iconSizeClass}
@@ -4287,8 +4147,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                             <AttachedFilesList draftIdentity={chatDraftIdentity} onShowPopup={handleShowAttachmentPreview} className="pt-2" />
                             {!isBtwActive ? linkedReferenceChips : null}
                             {contextChips}
-                            <AttachedVSCodeFileChips draftIdentity={chatDraftIdentity} onShowPopup={handleShowAttachmentPreview} />
-                            {!isBtwActive ? <ActiveEditorFileSuggestion /> : null}
                         </div>
                         <div
                             ref={dictationHeightHostRef}
@@ -4366,7 +4224,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     </div>
                     <ComposerFooter
                         isMobile={isMobile}
-                        isVSCode={isVSCode}
                         sessionId={currentSessionId}
                         directory={currentSessionDirectoryForSync ?? currentDirectory}
                         newSessionDraftOpen={newSessionDraftOpen}

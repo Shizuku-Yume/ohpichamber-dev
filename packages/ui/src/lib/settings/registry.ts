@@ -6,8 +6,8 @@
  * Everything else about settings derives from this table: the `DesktopSettings`
  * type, the boundary sanitizer, the per-runtime mirror, the store apply step,
  * the store-subscribing auto-save, and — through the generated JSON snapshot
- * (`settings-registry.json`, see `registry-snapshot.ts`) — the server's and the
- * VS Code bridge's key lists. A key that is not here does not persist.
+ * (`settings-registry.json`, see `registry-snapshot.ts`) — the server's key list.
+ * A key that is not here does not persist.
  *
  * Scopes (see `.opencode/plans/settings-scopes.md`):
  * - `instance`: a fact about the machine the server runs on. Never synced.
@@ -82,7 +82,7 @@ import {
 } from './parsers';
 
 type SettingsScope = 'instance' | 'profile' | 'device';
-export type SettingsSurface = 'web' | 'desktop' | 'vscode' | 'mobile';
+export type SettingsSurface = 'web' | 'desktop' | 'mobile';
 
 /**
  * The siblings a field's `write` may consult in the same parsed snapshot. Named
@@ -264,16 +264,14 @@ export const SETTINGS_REGISTRY = {
       revision: z.number().int().nonnegative().catch(0),
     })),
   }),
-  // The mode the server writes onto each new top-level session. VS Code has no
-  // OpenChamber server to write it.
+  // The mode the server writes onto each new top-level session.
   permissionDefaultMode: field({
     scope: 'instance',
     surfaces: ['web', 'desktop', 'mobile'],
     parse: fromSchema(z.enum(['ask', 'safety', 'auto'])),
     ui: uiStore('permissionDefaultMode', (v) => useUIStore.getState().setPermissionDefaultMode(v)),
   }),
-  // The server keeps the message search index only while this is on; VS Code
-  // has no OpenChamber server to keep one.
+  // The server keeps the message search index only while this is on.
   messageSearchEnabled: field({
     scope: 'instance',
     surfaces: ['web', 'desktop', 'mobile'],
@@ -295,7 +293,7 @@ export const SETTINGS_REGISTRY = {
   agentToolsCodeMode: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('agentToolsCodeMode', (v) => useUIStore.getState().setAgentToolsCodeMode(v)) }),
   agentMemoryToolEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('agentMemoryToolEnabled', (v) => useUIStore.getState().setAgentMemoryToolEnabled(v)) }),
   // The isolated-spaces switch. The server reads it once at start; a change takes effect at the
-  // next start, which the settings row says. Never shown in VS Code (decision 16 of the design).
+  // next start, which the settings row says.
   isolatedSpacesEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('isolatedSpacesEnabled', (v) => useUIStore.getState().setIsolatedSpacesEnabled(v)) }),
   // The idle stop of isolated spaces (decision 11). Written and read through the spaces route,
   // which also tells the running spaces, so no store keeps a copy.
@@ -439,7 +437,7 @@ export const SETTINGS_REGISTRY = {
   autoSaveEnabled: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('autoSaveEnabled', (v) => useUIStore.getState().setAutoSaveEnabled(v)) }),
   confirmFileTreeMove: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('confirmFileTreeMove', (v) => useUIStore.getState().setConfirmFileTreeMove(v)) }),
   autoCreateWorktree: field({ scope: 'profile', parse: parseBoolean }),
-  sessionTabsEnabled: field({ scope: 'profile', surfaces: ['web', 'desktop', 'vscode'], parse: parseBoolean, ui: uiStore('sessionTabsEnabled', (v) => useUIStore.getState().setSessionTabsEnabled(v)) }),
+  sessionTabsEnabled: field({ scope: 'profile', surfaces: ['web', 'desktop'], parse: parseBoolean, ui: uiStore('sessionTabsEnabled', (v) => useUIStore.getState().setSessionTabsEnabled(v)) }),
   allowPromptingSubagentSessions: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('allowPromptingSubagentSessions', (v) => useUIStore.getState().setAllowPromptingSubagentSessions(v)) }),
 
   // ── Composer (profile) ──
@@ -523,13 +521,11 @@ export const SETTINGS_REGISTRY = {
   sessionRecapEnabled: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('sessionRecapEnabled', (v) => useUIStore.getState().setSessionRecapEnabled(v)) }),
   sessionSuggestionEnabled: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('sessionSuggestionEnabled', (v) => useUIStore.getState().setSessionSuggestionEnabled(v)) }),
   sessionWorkEnabled: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('sessionWorkEnabled', (v) => useUIStore.getState().setSessionWorkEnabled(v)) }),
-  // Jev runs on the OpenChamber server, which VS Code does not have.
   sessionWorkAutoOpen: field({ scope: 'profile', surfaces: ['web', 'desktop', 'mobile'], parse: parseBoolean, ui: uiStore('sessionWorkAutoOpen', (v) => useUIStore.getState().setSessionWorkAutoOpen(v)) }),
   sessionReviewOfferEnabled: field({ scope: 'profile', surfaces: ['web', 'desktop', 'mobile'], parse: parseBoolean, ui: uiStore('sessionReviewOfferEnabled', (v) => useUIStore.getState().setSessionReviewOfferEnabled(v)) }),
   sessionWorkKeepInGroup: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('sessionWorkKeepInGroup', (v) => useUIStore.getState().setSessionWorkKeepInGroup(v)) }),
   sessionGoalEnabled: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('sessionGoalEnabled', (v) => useUIStore.getState().setSessionGoalEnabled(v)) }),
   // Who checks goal progress. The goal loop runs on the OpenChamber server,
-  // which VS Code does not have.
   sessionGoalChecker: field({
     scope: 'profile',
     surfaces: ['web', 'desktop', 'mobile'],
@@ -754,7 +750,7 @@ export const MIRRORED_KEYS = SETTINGS_KEYS.filter((key) => {
   return spec.scope !== 'device' && !spec.secret && !spec.computed;
 });
 
-/** Shape of one field in the generated JSON snapshot the server and the VS Code bridge consume. */
+/** Shape of one field in the generated JSON snapshot the server consumes. */
 type SettingsRegistrySnapshotField = {
   scope: SettingsScope;
   perSurface?: true;

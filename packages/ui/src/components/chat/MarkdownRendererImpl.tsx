@@ -15,9 +15,7 @@ import type { ToolPopupContent } from './message/types';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import { useUIStore } from '@/stores/useUIStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import type { EditorAPI } from '@/lib/api/types';
-import { isDesktopLocalOriginActive, isVSCodeRuntime, openDesktopPath } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, openDesktopPath } from '@/lib/desktop';
 import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
@@ -103,15 +101,11 @@ const useLinkInteractions = ({
       return;
     }
 
-    // VS Code keeps session links inert: its sessions live on its own OpenCode.
-    const opensSessionLinks = !isVSCodeRuntime();
     return attachAppLinkInteractions(container, {
       allowExternalHttp: enabled !== false,
       openAppLink: (href) => void openAppLinkWithConfirmation(href),
       openExternalHttp: (href) => void openExternalUrl(href),
-      openSessionLink: opensSessionLinks
-        ? (target) => void openSessionLink(target.sessionId, target.messageId)
-        : undefined,
+      openSessionLink: (target) => void openSessionLink(target.sessionId, target.messageId),
       ownOrigins: resolveOwnOrigins(),
     });
   }, [containerRef, enabled]);
@@ -160,12 +154,8 @@ const CODE_BLOCK_PATH_SCANNED_ATTR = 'data-openchamber-block-paths-scanned';
 // pipeline reads full text content rather than using this regex.
 const MAX_BLOCK_CODE_SCAN_LENGTH = 200_000;
 const FILE_REFERENCE_LINK_LIMIT = 80;
-const VSCODE_FILE_REFERENCE_LINK_LIMIT = 40;
 const FILE_REFERENCE_ANNOTATION_DELAY_MS = 160;
 
-const getFileReferenceLinkLimit = (): number => (
-  isVSCodeRuntime() ? VSCODE_FILE_REFERENCE_LINK_LIMIT : FILE_REFERENCE_LINK_LIMIT
-);
 
 const KNOWN_FILE_BASENAMES = new Set([
   'dockerfile',
@@ -387,14 +377,10 @@ const getContextDirectory = (effectiveDirectory: string, resolvedPath: string): 
 const useFileReferenceInteractions = ({
   containerRef,
   effectiveDirectory,
-  editor,
-  preferRuntimeEditor,
   enabled,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
   effectiveDirectory: string;
-  editor?: EditorAPI;
-  preferRuntimeEditor?: boolean;
   enabled: boolean;
 }) => {
   const annotationDebounceRef = React.useRef<number | null>(null);
@@ -412,7 +398,6 @@ const useFileReferenceInteractions = ({
       return;
     }
     let cancelled = false;
-    const fileReferenceLinkLimit = getFileReferenceLinkLimit();
     // On mobile surfaces, file-reference highlighting is disabled entirely — not
     // just visually. The annotation pass is what issues the filesystem `stat`
     // probes (fileReferenceExists → /api/fs/stat), so skipping it here guarantees
@@ -458,19 +443,6 @@ const useFileReferenceInteractions = ({
       }
 
       const contextDirectory = getContextDirectory(effectiveDirectory, resolved.resolvedPath);
-      if (preferRuntimeEditor && editor) {
-        void editor.openFile(
-          resolved.resolvedPath,
-          Number.isFinite(resolved.line ?? Number.NaN)
-            ? Math.max(1, Math.trunc(resolved.line as number))
-            : undefined,
-          Number.isFinite(resolved.column ?? Number.NaN)
-            ? Math.max(1, Math.trunc(resolved.column as number))
-            : undefined,
-        );
-        return;
-      }
-
       const uiStore = useUIStore.getState();
       if (Number.isFinite(resolved.line ?? Number.NaN)) {
         uiStore.openContextFileAtLine(
@@ -552,7 +524,7 @@ const useFileReferenceInteractions = ({
           continue;
         }
 
-        if (linkedCount >= fileReferenceLinkLimit) {
+        if (linkedCount >= FILE_REFERENCE_LINK_LIMIT) {
           continue;
         }
 
@@ -635,7 +607,7 @@ const useFileReferenceInteractions = ({
       removeClickGuard();
       container.removeEventListener('keydown', handleKeyDown);
     };
-  }, [containerRef, editor, effectiveDirectory, preferRuntimeEditor, enabled]);
+  }, [containerRef, effectiveDirectory, enabled]);
 };
 
 const useMermaidInlineInteractions = ({
@@ -1399,7 +1371,6 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
   if (isStreaming) streamPerfCount('ui.markdown_renderer.render.streaming');
   streamPerfObserve('ui.markdown_renderer.content_len', content.length);
   const currentTheme = useCurrentMermaidTheme();
-  const { editor, runtime } = useRuntimeAPIs();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const effectiveDirectory = useEffectiveDirectory() ?? '';
   const openContextPreview = useUIStore((state) => state.openContextPreview);
@@ -1420,8 +1391,6 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
   useFileReferenceInteractions({
     containerRef,
     effectiveDirectory,
-    editor,
-    preferRuntimeEditor: runtime.isVSCode,
     enabled: enableFileReferences && !isStreaming,
   });
   useLinkInteractions({ containerRef });
@@ -1528,7 +1497,6 @@ const SimpleMarkdownRendererImpl: React.FC<{
   enableFileReferences = true,
   allowRawHtml = false,
 }) => {
-  const { editor, runtime } = useRuntimeAPIs();
   const currentTheme = useCurrentMermaidTheme();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const effectiveDirectory = useEffectiveDirectory() ?? '';
@@ -1548,8 +1516,6 @@ const SimpleMarkdownRendererImpl: React.FC<{
   useFileReferenceInteractions({
     containerRef,
     effectiveDirectory,
-    editor,
-    preferRuntimeEditor: runtime.isVSCode,
     enabled: enableFileReferences,
   });
   useLinkInteractions({ containerRef, enabled: !disableLinkSafety });

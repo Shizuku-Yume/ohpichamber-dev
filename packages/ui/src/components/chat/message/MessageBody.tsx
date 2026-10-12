@@ -40,8 +40,6 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { TextSelectionMenu } from './TextSelectionMenu';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useChatSurfaceMode } from '@/components/chat/useChatSurfaceMode';
-import { isVSCodeRuntime } from '@/lib/desktop';
-import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { toast } from '@/components/ui';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Icon } from "@/components/icon/Icon";
@@ -1286,13 +1284,12 @@ const AssistantMessageBody = React.memo(({
     const assistantPlanText = React.useMemo(() => flattenAssistantTextParts(assistantTextParts), [assistantTextParts]);
 
     const openContextPreview = useUIStore((state) => state.openContextPreview);
-    const isVSCode = isVSCodeRuntime();
     const isMiniChatSurface = chatSurfaceMode === 'mini-chat';
-    const canUseProjectPlanActions = !isVSCode && !isMiniChatSurface && !isMobile;
-    const canShowMultiRunAction = !isVSCode && !isMiniChatSurface && !isMobile;
+    const canUseProjectPlanActions = !isMiniChatSurface && !isMobile;
+    const canShowMultiRunAction = !isMiniChatSurface && !isMobile;
 
     const messagePreviewUrl = React.useMemo(() => {
-        if (isVSCode || isMobile || isMiniChatSurface) {
+        if (isMobile || isMiniChatSurface) {
             return null;
         }
 
@@ -1321,7 +1318,7 @@ const AssistantMessageBody = React.memo(({
             return url.includes('0.0.0.0') ? url.replace('0.0.0.0', '127.0.0.1') : url;
         }
         return null;
-    }, [assistantTextParts, isMobile, isMiniChatSurface, isVSCode, toolParts]);
+    }, [assistantTextParts, isMobile, isMiniChatSurface, toolParts]);
 
     const createSessionFromAssistantMessage = useSessionUIStore((state) => state.createSessionFromAssistantMessage);
     const currentSessionId = useChatSessionSelection().sessionId;
@@ -1329,7 +1326,7 @@ const AssistantMessageBody = React.memo(({
     const projects = useProjectsStore((state) => state.projects);
     const effectiveDirectory = useEffectiveDirectory();
     const isReviewSessionView = reviewTransferDirection === 'review-to-original';
-    const effectiveReviewTransferDirection = (!isMobile && !isVSCode) ? reviewTransferDirection : null;
+    const effectiveReviewTransferDirection = !isMobile ? reviewTransferDirection : null;
     const reviewTransferAction = React.useMemo(() => {
         const transferText = assistantPlanText.trim();
         if (!sessionId || !effectiveDirectory || !transferText || !effectiveReviewTransferDirection) return undefined;
@@ -1373,7 +1370,6 @@ const AssistantMessageBody = React.memo(({
     const collapsibleThinkingBlocks = useUIStore((state) => state.collapsibleThinkingBlocks);
     const showSplitAssistantMessageActions = useUIStore((state) => state.showSplitAssistantMessageActions);
     const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
-    const vscodeApi = useRuntimeAPIs().vscode;
     const isSortedRenderMode = chatRenderMode === 'sorted';
     const liveFinalActivity = React.useContext(LiveFinalActivityContext);
     const collapsedPreviewCount = 7;
@@ -1622,18 +1618,7 @@ const AssistantMessageBody = React.memo(({
 
                 const fileName = `message-${messageId}.png`;
 
-                if (isVSCodeRuntime()) {
-                    const payload = await vscodeApi?.saveImage?.({ fileName, dataUrl }) as { saved?: boolean; canceled?: boolean; error?: string } | undefined;
-                    if (!payload) {
-                        throw new Error('Failed to save image in VS Code');
-                    }
-                    if (payload.saved !== true) {
-                        if (payload.canceled) {
-                            return;
-                        }
-                        throw new Error(payload.error || 'Failed to save image in VS Code');
-                    }
-                } else if (isCapacitorMobileApp()) {
+                if (isCapacitorMobileApp()) {
                     const blob = await fetch(dataUrl).then((response) => response.blob());
                     await shareFileFromNativeApp(new File([blob], fileName, { type: blob.type || 'image/png' }));
                 } else {
@@ -1655,7 +1640,7 @@ const AssistantMessageBody = React.memo(({
                 }
             }
         },
-        [messageId, t, vscodeApi]
+        [messageId, t]
     );
 
     const activityPartsForTurn = React.useMemo(() => {
@@ -2152,7 +2137,7 @@ const AssistantMessageBody = React.memo(({
     useFactsFit(footerFactsRef);
     const { isPlaying: isFooterTTSPlaying, play: playFooterTTS, stop: stopFooterTTS } = useMessageTTS(messageId);
     const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
-    const canOpenMessagePreview = !isMiniChatSurface && !isMobile && !isVSCode;
+    const canOpenMessagePreview = !isMiniChatSurface && !isMobile;
 
     const footerSheetActions = React.useMemo(() => {
         const actions: Array<{ id: string; label: string; icon: React.ReactNode; disabled?: boolean; onSelect: () => void }> = [];

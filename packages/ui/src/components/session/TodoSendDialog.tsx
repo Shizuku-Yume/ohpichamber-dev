@@ -7,7 +7,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
@@ -33,7 +32,7 @@ type TodoSendDialogProps = {
   target: TodoSendTarget;
   projectDirectory: string | null;
   submitting?: boolean;
-  /** Offer a "Run as goal" checkbox (hidden in VS Code, where the loop does not run). */
+  /** Offer a "Run as goal" checkbox. */
   allowRunAsGoal?: boolean;
   onConfirm: (execution: TodoSendExecution) => Promise<void> | void;
 };
@@ -53,7 +52,7 @@ const getInitialExecution = (params: {
 export function TodoSendDialog(props: TodoSendDialogProps) {
   const { t } = useI18n();
   const { open, onOpenChange, target, projectDirectory, submitting = false, allowRunAsGoal = false, onConfirm } = props;
-  const showRunAsGoal = allowRunAsGoal && !isVSCodeRuntime();
+  const showRunAsGoal = allowRunAsGoal;
 
   const loadProviders = useConfigStore((state) => state.loadProviders);
   const loadConfigAgents = useConfigStore((state) => state.loadAgents);

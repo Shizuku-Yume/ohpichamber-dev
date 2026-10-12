@@ -21,6 +21,7 @@ describe('terminal context drafts', () => {
     useInlineCommentDraftStore.getState().addDraft(target, selection);
     const drafts = useInlineCommentDraftStore.getState().getDrafts(target);
     expect(drafts).toHaveLength(1);
+    expect(/^icd-\d+-\w+$/.test(drafts[0].id)).toBe(true);
     expect({ ...drafts[0], id: undefined, createdAt: undefined }).toEqual({ ...selection, sessionKey: 'session-1', id: undefined, createdAt: undefined });
   });
 

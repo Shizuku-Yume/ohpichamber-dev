@@ -40,7 +40,7 @@ describe('useSessionDisplayStore project sorting', () => {
     });
   }
 
-  test('v3→v4 drops the removed displayMode key and keeps the rest', () => {
+  test('drops removed display keys while preserving retained preferences', () => {
     const migrated = migrateSessionDisplayState(
       { displayMode: 'default', projectSortOrder: 'a-z', showRecentSection: false, showArchivedSessions: true },
       3,
@@ -49,7 +49,13 @@ describe('useSessionDisplayStore project sorting', () => {
     expect('displayMode' in migrated).toBe(false);
     expect(migrated.projectSortOrder).toBe('a-z');
     expect(migrated.showRecentSection).toBe(false);
-    expect(migrated.showArchivedSessions).toBe(true);
+    expect('showArchivedSessions' in migrated).toBe(false);
+  });
+
+  test('v9→v10 drops the inline archive preference without changing sort order', () => {
+    const migrated = migrateSessionDisplayState({ showArchivedSessions: true, worktreeSortOrder: 'a-z' }, 9);
+    expect('showArchivedSessions' in migrated).toBe(false);
+    expect(migrated.worktreeSortOrder).toBe('a-z');
   });
 });
 
@@ -105,7 +111,7 @@ describe('useSessionDisplayStore animated activity', () => {
   test('hydrates existing v8 data with motion off and retains saved choices', async () => {
     const initialState = useSessionDisplayStore.getState();
     const originalStorage = useSessionDisplayStore.persist.getOptions().storage;
-    let stored = JSON.stringify({ version: 8, state: { sidebarViewMode: 'timeline', showRecentSection: false } });
+    let stored = JSON.stringify({ version: 8, state: { sidebarViewMode: 'timeline', showRecentSection: false, showArchivedSessions: true } });
     const storage = createJSONStorage<Partial<ReturnType<typeof useSessionDisplayStore.getState>>>(() => ({
       getItem: () => stored,
       setItem: (_name, value) => { stored = value; },
@@ -116,9 +122,15 @@ describe('useSessionDisplayStore animated activity', () => {
       await useSessionDisplayStore.persist.rehydrate();
       expect(useSessionDisplayStore.getState().animatedActivityIndicators).toBe(false);
       expect(useSessionDisplayStore.getState().sidebarViewMode).toBe('timeline');
-      expect(useSessionDisplayStore.persist.getOptions().version).toBe(9);
+      expect(useSessionDisplayStore.persist.getOptions().version).toBe(10);
+      expect('showArchivedSessions' in useSessionDisplayStore.getState()).toBe(false);
       useSessionDisplayStore.getState().setAnimatedActivityIndicators(true);
       const enabledSnapshot = stored;
+      expect(JSON.parse(enabledSnapshot)).toMatchObject({
+        version: 10,
+        state: { animatedActivityIndicators: true, sidebarViewMode: 'timeline', showRecentSection: false },
+      });
+      expect('showArchivedSessions' in JSON.parse(enabledSnapshot).state).toBe(false);
       useSessionDisplayStore.setState({ animatedActivityIndicators: false });
       stored = enabledSnapshot;
       await useSessionDisplayStore.persist.rehydrate();

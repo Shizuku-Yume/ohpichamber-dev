@@ -16,7 +16,6 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -75,7 +74,6 @@ export const DefaultsSettings: React.FC = () => {
   const chatHasOwnAgent = Boolean(
     agentIsPicked && currentSessionId && getSessionAgentSelection(currentSessionId),
   );
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   const showChatsSection = useSessionDisplayStore((state) => state.showChatsSection);
   const setShowChatsSection = useSessionDisplayStore((state) => state.setShowChatsSection);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
@@ -365,7 +363,7 @@ export const DefaultsSettings: React.FC = () => {
               />
             </SettingsFieldRow>
 
-            {isVSCode ? null : <PermissionDefaultModeField agentName={defaultAgent} />}
+            <PermissionDefaultModeField agentName={defaultAgent} />
           </div>
 
           <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
@@ -377,8 +375,7 @@ export const DefaultsSettings: React.FC = () => {
               ariaLabel={t('settings.openchamber.defaults.field.showDeletionDialogAria')}
             />
             <SessionWarmingCheckbox />
-            {isVSCode ? null : (
-              <SettingsCheckboxRow
+            <SettingsCheckboxRow
                 settingsItem="sessions.show-chats"
                 checked={showChatsSection}
                 onChange={(checked) => {
@@ -388,7 +385,6 @@ export const DefaultsSettings: React.FC = () => {
                 label={t('settings.openchamber.defaults.field.showChats')}
                 ariaLabel={t('settings.openchamber.defaults.field.showChats')}
               />
-            )}
           </SettingsInset>
 
           <div className="space-y-3 pt-6">

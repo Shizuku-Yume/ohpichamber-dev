@@ -18,7 +18,6 @@ import { useWalkthroughStore } from '@/stores/useWalkthroughStore';
 import { WALKTHROUGH_ACTION_CLASS } from '@/components/views/walkthrough/walkthroughAction';
 import { GitHubAccountControl } from '@/components/github/GitHubAccountControl';
 import { useRepositoryHost } from '@/components/references/referenceSources';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import * as sessionActions from '@/sync/session-actions';
 import { buildLinkedIssue } from '@/lib/linkedIssues';
@@ -259,9 +258,8 @@ export const PullRequestSection: React.FC<{
   const { isMobile, hasTouchInput, screenWidth } = useDeviceInfo();
   const openContextSurface = useUIStore((state) => state.openContextSurface);
   const requestWalkthroughTarget = useWalkthroughStore((state) => state.requestTarget);
-  // Mirrors the rail's gating: the surface is not available on mobile widths or
-  // in VS Code, so neither is its entry point.
-  const showWalkthroughAction = !isMobile && screenWidth >= 768 && !isVSCodeRuntime();
+  // Mirrors the rail's minimum-width gating.
+  const showWalkthroughAction = !isMobile && screenWidth >= 768;
 
   const snapshotKey = React.useMemo(() => getPullRequestSnapshotKey(directory, branch), [directory, branch]);
   const initialSnapshot = React.useMemo(

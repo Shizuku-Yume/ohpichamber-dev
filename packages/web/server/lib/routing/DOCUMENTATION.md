@@ -10,9 +10,8 @@ thinking variant and agent. In a session whose permission mode is `safety`
 (`../permission-auto-accept/DOCUMENTATION.md`), the same kind of call decides
 whether a permission is accepted or stays on screen for the user.
 
-Routing needs the OpenChamber server, so it is present wherever that server is
-and absent everywhere else: VS Code talks to OpenCode directly and never offers
-Auto. There is no env gate — the feature shipped dark behind
+Routing needs the OpenChamber server, so it is present wherever that server is.
+There is no env gate — the feature shipped dark behind
 `OPENCHAMBER_ROUTING_ENABLE` until Jev stopped needing a key of the user's own
 (see "Where a Jev request goes"), which was the reason to hide it.
 

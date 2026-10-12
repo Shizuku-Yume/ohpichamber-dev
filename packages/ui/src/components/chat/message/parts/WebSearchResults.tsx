@@ -50,8 +50,8 @@ const ResultCard: React.FC<{ result: WebSearchResult }> = ({ result }) => {
     const published = result.published ? formatPublished(result.published) : null;
     const snippet = result.snippet?.replace(/\s+/g, ' ').trim() ?? '';
 
-    // Plain primary clicks open the page the same way chat links do (system
-    // browser on desktop and VS Code); modified clicks keep the browser default.
+    // Plain primary clicks use the retained runtime's external URL opener;
+    // modified clicks keep the browser default.
     const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
         event.preventDefault();

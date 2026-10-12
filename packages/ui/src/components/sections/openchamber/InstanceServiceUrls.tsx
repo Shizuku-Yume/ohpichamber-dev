@@ -24,7 +24,7 @@ type InstanceService = {
  * distinguishable in the UI without reading terminal output.
  *
  * The section stays hidden when the endpoint is unavailable or reports no
- * port/tunnel (e.g. VS Code runtime), so a failed fetch never renders stale
+ * port/tunnel, so a failed fetch never renders stale
  * or wrong URLs.
  */
 export const InstanceServiceUrls: React.FC = () => {

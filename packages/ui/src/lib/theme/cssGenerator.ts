@@ -1,6 +1,5 @@
 import type { Theme } from '@/types/theme';
-import { SEMANTIC_TYPOGRAPHY, VSCODE_TYPOGRAPHY } from '@/lib/typography';
-import { isVSCodeRuntime } from '@/lib/desktop';
+import { SEMANTIC_TYPOGRAPHY } from '@/lib/typography';
 import { resolveSyntaxTokens } from './syntax';
 import { withOpacity } from './color';
 import { getReadableThemeColors } from './readableColors';
@@ -363,7 +362,7 @@ const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
 
   private generateTypographyVariables(): string[] {
     const vars: string[] = [];
-    const typography = isVSCodeRuntime() ? VSCODE_TYPOGRAPHY : SEMANTIC_TYPOGRAPHY;
+    const typography = SEMANTIC_TYPOGRAPHY;
 
     vars.push('  /* Semantic Typography Variables */');
     vars.push('  --ui-regular-font-weight: 400;');

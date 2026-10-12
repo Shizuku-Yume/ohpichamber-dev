@@ -252,7 +252,7 @@ type GitViewProps = {
 
 export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const { t } = useI18n();
-  const { git, sourceControl, runtime } = useRuntimeAPIs();
+  const { git, sourceControl } = useRuntimeAPIs();
   const currentDirectory = useEffectiveDirectory();
   const contributorDestination = useContributorDestinationChooser();
   const [worktreeBootstrapSnapshot, setWorktreeBootstrapSnapshot] = React.useState<{
@@ -2469,7 +2469,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         isApplyingIdentity={isSettingIdentity}
         identityAttention={identityAttention}
         identityApplicability={identityApplicabilityOf}
-        onConfigureRepository={runtime.isVSCode ? undefined : () => setRepositoryConfigurationOpen(true)}
+        onConfigureRepository={() => setRepositoryConfigurationOpen(true)}
         onIdentityMenuOpen={() => void refreshIdentityAccounts(sourceControl, profiles.map((profile) => profile.account))}
             isWorktreeMode={!!worktreeMetadata}
             onOpenHistory={() => setGitLogDialogMode('history')}
@@ -2495,12 +2495,11 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
             repositoryRoot={gitDirectory !== currentDirectory ? currentDirectory : undefined}
           />
 
-      {/* VS Code manages Git hosting itself; the webview projects remotes as a system binding without a settings surface. */}
-      {!runtime.isVSCode ? <RepositoryConfigurationDialog
+      <RepositoryConfigurationDialog
         open={isRepositoryConfigurationOpen}
         onOpenChange={setRepositoryConfigurationOpen}
         directory={isActive ? gitDirectory ?? '' : ''}
-      /> : null}
+      />
       <GitOperationStatus className="mx-4 mt-3" entry={operationRecovery.entry} onRefresh={() => void operationRecovery.refresh()} onCancel={() => void operationRecovery.cancel()} />
 
       {/* In-progress operation banner */}

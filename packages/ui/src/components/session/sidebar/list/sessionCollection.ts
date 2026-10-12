@@ -9,9 +9,7 @@ import {
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { deriveRecentSessions } from '../recent/activitySections';
-import { normalizePath } from '../utils';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 import { isBtwSession } from '@/lib/sessionBtwMetadata';
 import type { GlobalSessionStructure } from '@/stores/globalSessionStructure';
@@ -21,8 +19,6 @@ import type { SessionNode } from '../types';
 type ProjectSidebarActiveSessionsArgs = {
   globalActiveSessions: Session[];
   liveSessions: Session[];
-  knownDirectories: Set<string>;
-  isVSCode: boolean;
 };
 
 type SidebarSessionPartitions = {
@@ -39,14 +35,12 @@ const parentIdOf = (session: Session): string | null => {
 // ownership. Temporary /btw forks never leak into any sidebar projection.
 export const partitionSidebarSessions = (
   sessions: readonly Session[],
-  isVSCode: boolean,
 ): SidebarSessionPartitions => {
   const projectSessions: Session[] = [];
   const chatSessions: Session[] = [];
   for (const session of sessions) {
     if (isBtwSession(session)) continue;
     if (isChatDirectoryPath(session.directory)) {
-      if (isVSCode) continue;
       chatSessions.push(session);
       continue;
     }
@@ -57,41 +51,22 @@ export const partitionSidebarSessions = (
 
 const EMPTY_ACTIVE_SESSION_IDS: ReadonlySet<string> = new Set();
 
-const isKnownActiveSessionDirectory = (
-  session: Session,
-  knownDirectories: Set<string>,
-  isVSCode: boolean,
-): boolean => {
-  // The full app's global cache is authoritative for active-session retention.
-  // A deleted worktree is not a deletion event, so its record must reach the
-  // ownership resolver even when no current topology directory matches it.
-  if (!isVSCode) return true;
-  if (session.time?.archived) return true;
-  const directory = normalizePath(resolveGlobalSessionDirectory(session))?.toLowerCase();
-  if (!directory) return false;
-  if (knownDirectories.size === 0) return false;
-  return knownDirectories.has(directory);
-};
 
 // Global sessions provide complete sidebar coverage; initialized directory
 // stores only fill gaps until the global cache catches up.
 export const projectSidebarActiveSessions = ({
   globalActiveSessions,
   liveSessions,
-  knownDirectories,
-  isVSCode,
 }: ProjectSidebarActiveSessionsArgs): Session[] => {
   const sessions = [...globalActiveSessions];
   const knownIds = new Set(globalActiveSessions.map((session) => session.id));
-  const knownDirectoryKeys = new Set([...knownDirectories].map((directory) => directory.toLowerCase()));
 
   for (const session of liveSessions) {
     if (knownIds.has(session.id)) continue;
     sessions.push(session);
   }
 
-  return partitionSidebarSessions(sessions, isVSCode).projectSessions
-    .filter((session) => isKnownActiveSessionDirectory(session, knownDirectoryKeys, isVSCode));
+  return partitionSidebarSessions(sessions).projectSessions;
 };
 
 export const projectSidebarCollection = (args: ProjectSidebarActiveSessionsArgs): Session[] => {
@@ -168,17 +143,13 @@ type SidebarSessionStructureArgs = Omit<ProjectSidebarActiveSessionsArgs, 'globa
 const buildSidebarSessionStructure = ({
   globalActiveSessions,
   liveSessions,
-  knownDirectories,
-  isVSCode,
   globalStructure,
 }: SidebarSessionStructureArgs) => {
   countSyncPerformance('sidebarStructureBuilds');
   const indexedGlobalSessions = globalActiveSessions ?? [];
   const visibleSessions = mergeSidebarSessionSources(indexedGlobalSessions, liveSessions);
-  const partition = partitionSidebarSessions(visibleSessions, isVSCode);
-  const knownDirectoryKeys = new Set([...knownDirectories].map((directory) => directory.toLowerCase()));
-  const projectSessions = partition.projectSessions
-    .filter((session) => isKnownActiveSessionDirectory(session, knownDirectoryKeys, isVSCode));
+  const partition = partitionSidebarSessions(visibleSessions);
+  const projectSessions = partition.projectSessions;
   const sessions = [...projectSessions, ...partition.chatSessions];
   const sessionById = new Map(sessions.map((session) => [session.id, session]));
   const projectSessionIds = new Set(projectSessions.map((session) => session.id));
@@ -236,16 +207,12 @@ const orderSidebarSessionStructure = (
 export const buildSidebarSessionProjection = ({
   globalActiveSessions,
   liveSessions,
-  knownDirectories,
-  isVSCode,
   pinnedSessionIds,
   sessionOrderRanks,
 }: SidebarSessionProjectionArgs) => {
   const structure = buildSidebarSessionStructure({
     globalActiveSessions,
     liveSessions,
-    knownDirectories,
-    isVSCode,
   });
   const ordering = orderSidebarSessionStructure(structure, pinnedSessionIds, sessionOrderRanks);
   return {
@@ -256,8 +223,6 @@ export const buildSidebarSessionProjection = ({
 };
 
 type UseSessionProjectCollectionArgs = {
-  knownDirectories: Set<string>;
-  isVSCode: boolean;
   isVisible: boolean;
 };
 
@@ -265,8 +230,6 @@ type UseSessionProjectCollectionArgs = {
 // Selection state intentionally never enters this boundary: rows subscribe to
 // active state themselves, leaving this projection referentially stable.
 export const useSessionProjectCollection = ({
-  knownDirectories,
-  isVSCode,
   isVisible,
 }: UseSessionProjectCollectionArgs) => {
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
@@ -290,9 +253,7 @@ export const useSessionProjectCollection = ({
     globalActiveSessions,
     globalStructure,
     liveSessions: liveGapSessions,
-    knownDirectories,
-    isVSCode,
-  }), [globalActiveSessions, globalStructure, isVSCode, knownDirectories, liveGapSessions]);
+  }), [globalActiveSessions, globalStructure, liveGapSessions]);
   const ordering = React.useMemo(
     () => orderSidebarSessionStructure(structure, pinnedSessionIds, sessionOrderRanks),
     [pinnedSessionIds, sessionOrderRanks, structure],
@@ -337,7 +298,6 @@ export const useSessionProjectCollection = ({
 
 type UseRecentSessionCollectionArgs = {
   enabled: boolean;
-  isVSCode: boolean;
   pinnedSessionIds: Set<string>;
   sessionOrderRanks: ReadonlyMap<string, number>;
   sessions: Session[];
@@ -347,25 +307,24 @@ type UseRecentSessionCollectionArgs = {
 // never participates in project ownership or project section projection.
 export const useRecentSessionCollection = ({
   enabled,
-  isVSCode,
   pinnedSessionIds,
   sessionOrderRanks,
   sessions,
 }: UseRecentSessionCollectionArgs): Session[] => {
   const activeSessionIdSet = useGlobalSessionStatusStore(
     React.useCallback(
-      (state) => enabled && !isVSCode ? state.activeSessionIds : EMPTY_ACTIVE_SESSION_IDS,
-      [enabled, isVSCode],
+      (state) => enabled ? state.activeSessionIds : EMPTY_ACTIVE_SESSION_IDS,
+      [enabled],
     ),
   );
 
   return React.useMemo(() => {
-    if (!enabled || isVSCode) return [];
+    if (!enabled) return [];
     countSyncPerformance('recentCandidatesVisited', sessions.length);
     return orderSessionsByLifecycleScopes(
       deriveRecentSessions(sessions, activeSessionIdSet),
       pinnedSessionIds,
       sessionOrderRanks,
     );
-  }, [activeSessionIdSet, enabled, isVSCode, pinnedSessionIds, sessionOrderRanks, sessions]);
+  }, [activeSessionIdSet, enabled, pinnedSessionIds, sessionOrderRanks, sessions]);
 };

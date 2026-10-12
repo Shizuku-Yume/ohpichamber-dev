@@ -11,8 +11,8 @@ export type WorkStatusExtensionSections = {
 };
 
 /**
- * Extension sections the panel and the sections dialog may place. Empty on
- * VS Code and mobile, where no guest is loaded (`useGuestStatusSections`).
+ * Guest sections the panel and the sections dialog may place. Empty on
+ * mobile surfaces, where no guest is loaded (`useGuestStatusSections`).
  */
 export const useWorkStatusExtensionSections = (): WorkStatusExtensionSections => {
   const guests = useGuestStatusSections();

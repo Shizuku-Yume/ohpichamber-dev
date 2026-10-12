@@ -183,8 +183,6 @@ export function createRoutingRuntime({
     const jevAvailable = access.endpoint !== null;
     const autoReady = jevAvailable && config.enabled && Boolean(config.fallback) && enabledCategories(config).length >= 2;
     // Built-in text travels with the config so "Reset" in Settings restores the shipped wording.
-    // `available` stays in the payload for the client: a runtime without an
-    // OpenChamber server (VS Code) answers 404 and reads it as false.
     // `jevSource` is the two-value field clients from before the classifier
     // pick parse, `classifier` what v2.0.2 clients parse, and `classification`
     // the full picture.

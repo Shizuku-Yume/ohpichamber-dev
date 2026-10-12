@@ -12,7 +12,6 @@ import {
 } from "./utils/permissionAutoAccept";
 import { getAllSyncSessionMap } from "@/sync/sync-refs";
 import { runtimeFetch } from "@/lib/runtime-fetch";
-import { isVSCodeRuntime } from "@/lib/desktop";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
 import { useSessionUIStore } from "@/sync/session-ui-store";
 import { opencodeClient } from "@/lib/opencode/client";
@@ -41,8 +40,7 @@ const readSnapshot = async (response: Response): Promise<PermissionPolicySnapsho
 
 const requestSnapshot = async (path: string, init?: RequestInit) => readSnapshot(await runtimeFetch(path, init));
 
-// `enabled` rides along for servers from before the modes and for VS Code's
-// bridge, which know only on/off.
+// `enabled` rides along for servers from before the modes, which know only on/off.
 const putSessionMode = (sessionId: string, mode: PermissionMode, directory?: string) => requestSnapshot(
     `/api/permission-auto-accept/sessions/${encodeURIComponent(sessionId)}`,
     {
@@ -159,12 +157,6 @@ export const usePermissionStore = create<PermissionStore>()(persist((set, get) =
             if (!isCurrentOperation(operation)) return;
             if (snapshot.revision === undefined && operation.sequence !== latestStartedSequence) return;
             get().applySnapshot(snapshot, operation.runtimeKey);
-            if (isCurrentOperation(operation) && isVSCodeRuntime() && mode !== "ask") {
-                const { reconcileVSCodePendingPermissions } = await import("@/sync/vscode-permission-auto-accept");
-                if (isCurrentOperation(operation)) {
-                    void reconcileVSCodePendingPermissions(directory).catch(() => undefined);
-                }
-            }
         } finally {
             if (isCurrentOperation(operation)) {
                 pendingSavingOperations.delete(operation.sequence);

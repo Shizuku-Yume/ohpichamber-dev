@@ -45,7 +45,7 @@ exactly as it already does when the context panel opens.
 `useWorkStatusVisibility` hides the panel when any of these hold:
 
 - the user switched it off;
-- the runtime is mobile or VS Code;
+- the layout is mobile (including hosted mobile and Capacitor phone shells);
 - the context panel is open for the directory the app is effectively on —
   looked up through `useEffectiveDirectory` and `normalizeContextPanelDirectoryKey`,
   the same key the rail and the panel use. It is deliberately **not** the
@@ -172,8 +172,8 @@ subscribes to `currentProviderId` / `currentModelId` for the limits.
 reporting assistant turn is the answer, not a sum across turns.
 
 Which message is "latest" is decided by `findLatestContextFill` in
-`stores/utils/tokenUtils.ts`, shared with the header, VS Code header, mini chat,
-mobile metadata and context sidebar. A finished compaction's own record
+`stores/utils/tokenUtils.ts`, shared with the retained web/Electron header,
+mini chat, mobile metadata and context sidebar. A finished compaction's own record
 (`summary: true`) is not a reading: its tokens describe the summarizing request,
 whose input is the pre-compaction history. Until a later response reports
 tokens, the fill is `compacted` and every surface shows a dash, never the older
@@ -257,6 +257,10 @@ profile preference persisted through the settings registry and the local UI
 store. Missing or empty order uses the default; duplicate and obsolete ids are
 discarded, and newly introduced sections append in default order. Visibility
 changes never alter positions.
+
+Guest SDK status sections remain available through the existing guest catalog
+on web/PWA and Electron. Only mobile surfaces keep the catalog unsupported;
+the panel and section dialog do not add a separate mobile guest path.
 
 `WorkStatusPrimaryGroup` supplies Session and Project through a composition
 callback so the panel can place them independently while retaining one set of
@@ -389,9 +393,11 @@ cross-component jump the chat exposes; there is no store action or ref
 registry. An unchanged hash fires no event, so the panel clears it first to make
 a repeat press work.
 
-Opening a subagent takes the same branch as the transcript's Task tool: an
-embedded panel, mobile, or VS Code navigates to the session instead of nesting
-a tab.
+Work-status subagent rows open the child's read-only context-panel chat on
+web/PWA and Electron. The retained mobile navigation branch selects the child
+session in place, matching the transcript's subagent action. Transcript actions
+inside a pinned or embedded chat column reuse that column's navigation instead
+of nesting another panel. The work-status card itself stays hidden on mobile.
 
 ## Context sources
 
@@ -416,8 +422,8 @@ comments and state belong to GitHub, and mirroring them would mean owning their
 staleness. The stored title can drift; that is the price of a store that never
 needs refreshing. A GitHub row opens github.com. A Linear row opens the
 right-hand Linear panel when Linear is connected on desktop/web; otherwise it
-opens the Linear URL (no rail in VS Code or the phone shell, and none while
-disconnected).
+opens the Linear URL. Hosted mobile and Capacitor phone shells have no Linear
+rail, and disconnected runtimes also keep the URL destination.
 
 Writes happen **after** the send promise resolves and are deliberately
 swallowed on failure: the message went out, and a missing bookkeeping entry

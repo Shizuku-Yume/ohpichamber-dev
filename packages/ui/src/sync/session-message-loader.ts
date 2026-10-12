@@ -12,7 +12,6 @@ import {
   getSessionPrefetch,
   setSessionPrefetch,
 } from "./session-prefetch-cache"
-import { isVSCodeRuntime } from "@/lib/desktop"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { normalizePath } from "@/lib/pathNormalization"
 import { startSessionLoadPerformanceEvent } from "./session-load-performance"
@@ -132,11 +131,10 @@ const NO_OPENCODE_STARTUP: OpenCodeStartupSignal = {
   waitForConnection: () => Promise.resolve(),
 }
 
-const isConstrainedRuntime = () => isVSCodeRuntime() || isMobileSurfaceRuntime()
-const getInitialPageSize = () => isConstrainedRuntime()
+const getInitialPageSize = () => isMobileSurfaceRuntime()
   ? CONSTRAINED_INITIAL_MESSAGE_PAGE_SIZE
   : INITIAL_MESSAGE_PAGE_SIZE
-const getInitialWindowMaxRecords = () => isConstrainedRuntime()
+const getInitialWindowMaxRecords = () => isMobileSurfaceRuntime()
   ? CONSTRAINED_INITIAL_WINDOW_MAX_RECORDS
   : INITIAL_WINDOW_MAX_RECORDS
 
@@ -291,7 +289,7 @@ export class SessionMessageLoader {
     this.retention?.dispose()
     this.releaseDerivedCache = options.releaseDerivedCache
     const retention = new SessionCacheRetention(this.childStores, {
-      limit: isConstrainedRuntime() ? CONSTRAINED_SESSION_CACHE_LIMIT : SESSION_CACHE_LIMIT,
+      limit: isMobileSurfaceRuntime() ? CONSTRAINED_SESSION_CACHE_LIMIT : SESSION_CACHE_LIMIT,
       idleTtlMs: options.idleTtlMs,
       isCurrent: options.isCurrent,
       isViewed: options.isViewed,

@@ -76,8 +76,6 @@ const args = (sections: ProjectSection[]): SessionSidebarRowModelArgs => ({
   activeProjectId: 'project-a',
   singleProjectMode: false,
   singleProjectId: null,
-  showOnlyMainWorkspace: false,
-  hideDirectoryControls: false,
 });
 
 describe('buildSessionSidebarRowModel', () => {

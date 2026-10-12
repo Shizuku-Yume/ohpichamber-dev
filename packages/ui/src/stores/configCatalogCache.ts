@@ -8,9 +8,8 @@ import type { Agent, Model, Provider } from '@/lib/opencode/model';
  * only: the live load always revalidates it, and nothing destructive ever
  * reads it.
  *
- * IndexedDB rather than localStorage: VS Code gives every OpenChamber webview
- * one origin, and a localStorage write reaches every webview in every window
- * as a StorageEvent carrying the old and new value. IndexedDB fires none.
+ * IndexedDB avoids broadcasting catalog payloads to other windows through
+ * localStorage StorageEvents carrying the old and new value.
  *
  * Only what the pickers and the composer show is stored. Provider, model and
  * variant `settings`/`headers`/`body` and an agent's request carry API keys and
@@ -60,7 +59,7 @@ const openDatabase = (): Promise<IDBDatabase | null> => {
       request.result.createObjectStore(STORE, { keyPath: 'key' }).createIndex(SAVED_AT_INDEX, 'savedAt');
     };
     request.onsuccess = () => resolve(request.result);
-    // Private modes and locked-down webviews refuse IndexedDB; the cache is
+    // Private modes and restricted browser storage can refuse IndexedDB; the cache is
     // then simply absent and the pickers wait for the live load as before.
     request.onerror = () => resolve(null);
     request.onblocked = () => resolve(null);

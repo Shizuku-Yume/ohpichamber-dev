@@ -1,5 +1,4 @@
 import MarkdownShikiWorkerUrl from './markdown-shiki.worker.ts?worker&url';
-import { isVSCodeRuntime } from '@/stores/utils/vscodeRuntime';
 import {
   contentFingerprint,
   estimateTokenRunsBytes,
@@ -81,7 +80,6 @@ const inflight = new Map<string, Promise<CachedHighlight | null>>();
 
 let worker: Worker | undefined;
 let workerCreation: Promise<Worker | undefined> | undefined;
-let workerObjectUrl: string | undefined;
 let nextId = 0;
 const pending = new Map<number, PendingEntry>();
 // Theme names whose full definition we've already shipped to the live worker, so
@@ -109,10 +107,6 @@ const disposeWorker = (): void => {
   worker?.terminate();
   worker = undefined;
   workerCreation = undefined;
-  if (workerObjectUrl) {
-    URL.revokeObjectURL(workerObjectUrl);
-    workerObjectUrl = undefined;
-  }
 };
 
 /** Worker crash / message error: nothing in flight can still be answered. */
@@ -128,15 +122,7 @@ const failAll = (): void => {
 const createWorker = async (): Promise<Worker | undefined> => {
   if (typeof window === 'undefined' || typeof Worker === 'undefined') return undefined;
   try {
-    let workerUrl = MarkdownShikiWorkerUrl;
-    if (isVSCodeRuntime(null)) {
-      const response = await fetch(workerUrl);
-      if (!response.ok) throw new Error(`Shiki worker request failed with ${response.status}`);
-      workerObjectUrl = URL.createObjectURL(await response.blob());
-      workerUrl = workerObjectUrl;
-    }
-
-    const instance = new Worker(workerUrl, { type: 'module' });
+    const instance = new Worker(MarkdownShikiWorkerUrl, { type: 'module' });
     worker = instance;
     instance.onmessage = (event: MessageEvent<MarkdownWorkerResponse>) => {
       const entry = pending.get(event.data.id);
@@ -150,10 +136,6 @@ const createWorker = async (): Promise<Worker | undefined> => {
     instance.postMessage({ type: 'init' } satisfies MarkdownWorkerRequest);
     return instance;
   } catch (err) {
-    if (workerObjectUrl) {
-      URL.revokeObjectURL(workerObjectUrl);
-      workerObjectUrl = undefined;
-    }
     console.error('Failed to create Shiki worker:', err);
     return undefined;
   }

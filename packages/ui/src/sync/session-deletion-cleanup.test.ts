@@ -24,7 +24,7 @@ describe('cleanupPersistedSessionState', () => {
     const runtimeKey = getRuntimeKey();
     const deleted = createMessageQueueTarget('session-1', '/repo-a', runtimeKey)!;
     const retained = createMessageQueueTarget('session-1', '/repo-b', runtimeKey)!;
-    // Outside VS Code the queue is a projection of the server's; seed it the
+    // The queue is a projection of the server's; seed it the
     // way a server snapshot would, and expect only the projection to go.
     useMessageQueueStore.setState({
       queuedMessages: {

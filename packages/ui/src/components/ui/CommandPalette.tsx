@@ -41,7 +41,7 @@ import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo, shortcutRegistry } from '@/lib/shortcuts';
 import { showOpenCodeStatus } from '@/lib/openCodeStatus';
 import { restartOpenCodeWithFeedback } from '@/lib/restartOpenCode';
-import { canUseElectronDesktopIPC, invokeDesktop, isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
+import { canUseElectronDesktopIPC, invokeDesktop, isDesktopShell, isWebRuntime } from '@/lib/desktop';
 import { SETTINGS_PAGE_METADATA, type SettingsRuntimeContext } from '@/lib/settings/metadata';
 
 const EMPTY_PINNED_SESSION_IDS = new Set<string>();
@@ -330,7 +330,6 @@ export const CommandPalette: React.FC = () => {
     ];
     // Reloading the window restarts only the interface: sessions and the
     // agents running in them live in the server and continue.
-    if (!isVSCodeRuntime()) {
       list.push({
         id: 'open-source-board',
         secondary: true,
@@ -348,7 +347,6 @@ export const CommandPalette: React.FC = () => {
         searchText: t('commandPalette.item.reloadUi'),
         onSelect: run(() => window.location.reload()),
       });
-    }
     list.push(
       {
         id: 'pin-session',
@@ -430,7 +428,6 @@ export const CommandPalette: React.FC = () => {
         }),
       },
     );
-    if (!isVSCodeRuntime()) {
       list.push({
         id: 'restart-opencode',
         secondary: true,
@@ -441,7 +438,6 @@ export const CommandPalette: React.FC = () => {
           void restartOpenCodeWithFeedback(t);
         }),
       });
-    }
     list.push({
       id: 'toggle-memory-debug',
       secondary: true,
@@ -497,7 +493,7 @@ export const CommandPalette: React.FC = () => {
   const jevBlockedByEnterprise = useJevBlockedByEnterprise();
   const settingsRuntimeCtx = React.useMemo<SettingsRuntimeContext>(() => {
     const isDesktop = isDesktopShell();
-    return { isVSCode: isVSCodeRuntime(), isWeb: !isDesktop && isWebRuntime(), isDesktop, isMobile, routingAvailable, enterpriseMode, jevBlockedByEnterprise };
+    return { isWeb: !isDesktop && isWebRuntime(), isDesktop, isMobile, routingAvailable, enterpriseMode, jevBlockedByEnterprise };
   }, [isMobile, routingAvailable, enterpriseMode, jevBlockedByEnterprise]);
 
   const settingsEntries = React.useMemo<CommandEntry[]>(() => {
@@ -569,10 +565,10 @@ export const CommandPalette: React.FC = () => {
   nestedWorktreePrefixesRef.current = nestedWorktreePrefixes;
 
   // ---------------------------------------------------------------------------
-  // Message search (server index, opt-in; VS Code has no OpenChamber server)
+  // Message search (server index, opt-in).
   // ---------------------------------------------------------------------------
   const messageSearchEnabled = useUIStore((state) => state.messageSearchEnabled);
-  const messageSearchSupported = messageSearchEnabled && !isVSCodeRuntime();
+  const messageSearchSupported = messageSearchEnabled;
   // Reasoning hits only while it is indexed and shown in the chat: a hit in
   // hidden reasoning would lead nowhere visible.
   const reasoningIndexed = useUIStore((state) => state.messageSearchReasoningEnabled);

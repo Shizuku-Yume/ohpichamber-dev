@@ -122,7 +122,7 @@ export const ProjectActionsButton = ({
 }: ProjectActionsButtonProps) => {
   const { t } = useI18n();
   const { currentTheme } = useThemeSystem();
-  const { terminal, runtime, git } = useRuntimeAPIs();
+  const { terminal, git } = useRuntimeAPIs();
   const effectiveDirectory = useEffectiveDirectory();
   const { isMobile } = useDeviceInfo();
   const isDesktopShellApp = React.useMemo(() => isDesktopShell(), []);
@@ -730,7 +730,7 @@ export const ProjectActionsButton = ({
   ]);
 
   const runAction = React.useCallback(async (action: OpenChamberProjectAction) => {
-    if (runtime.isVSCode || (!allowMobile && isMobile)) {
+    if (!allowMobile && isMobile) {
       return;
     }
 
@@ -1001,7 +1001,6 @@ export const ProjectActionsButton = ({
     openContextPreview,
     projectActionRuns,
     revealProjectActionTerminal,
-    runtime.isVSCode,
     executionDirectoryFor,
     matchesActionExecution,
     clearExecutionUi,
@@ -1115,7 +1114,7 @@ export const ProjectActionsButton = ({
     return state.getDirectoryState(previewRun.directory)?.tabs.find((tab) => tab.id === previewRun.tabId)?.previewUrl ?? null;
   });
 
-  if (runtime.isVSCode || (!allowMobile && isMobile) || !stableProjectRef || !normalizedDirectory) {
+  if ((!allowMobile && isMobile) || !stableProjectRef || !normalizedDirectory) {
     return null;
   }
 

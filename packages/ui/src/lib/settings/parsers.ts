@@ -1,7 +1,7 @@
 /**
  * Boundary parsers for settings values. Every value that arrives from the
- * server, the VS Code bridge, or browser storage passes through one of these
- * before it is trusted; `undefined` means "reject", never "default".
+ * server or browser storage passes through one of these before it is trusted;
+ * `undefined` means "reject", never "default".
  *
  * These are the value-level rules the registry (`./registry.ts`) attaches to
  * each key. They are zod schemas wrapped into one function shape so the

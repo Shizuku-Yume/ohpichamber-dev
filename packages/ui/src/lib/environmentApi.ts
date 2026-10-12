@@ -5,8 +5,7 @@ import { runtimeFetch } from '@/lib/runtime-fetch';
  * Environment variables for what the server starts: the managed OpenCode,
  * Git, the terminal and command execution (`/api/environment`). Values can
  * be API tokens, so they stay on the server; the UI learns only the names
- * and can set or remove a value, never read it back. Not available in VS Code,
- * which runs no OpenChamber server.
+ * and can set or remove a value, never read it back.
  */
 
 /** Same rule as the server: an environment identifier. */

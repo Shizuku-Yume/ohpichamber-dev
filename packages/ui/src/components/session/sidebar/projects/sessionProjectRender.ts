@@ -43,26 +43,17 @@ type GroupRenderDescriptor = {
 
 export const buildGroupRenderDescriptors = (
   section: ProjectSection,
-  options: { mainWorkspaceOnly: boolean },
 ): GroupRenderDescriptor[] => {
-  const primaryGroup = section.groups.find((group) => group.isMain && group.sessions.length > 0)
-    ?? section.groups.find((group) => group.sessions.length > 0)
-    ?? section.groups.find((group) => group.isMain)
-    ?? section.groups[0];
-  if (!primaryGroup) return [];
-
-  const archivedGroup = section.groups.find((group) => group.isArchivedBucket && group.id !== primaryGroup.id);
-  const groups = options.mainWorkspaceOnly
-    ? [primaryGroup, ...(archivedGroup ? [archivedGroup] : [])]
-    : [
-      ...(section.groups.find((group) => group.isMain) ? [section.groups.find((group) => group.isMain)!] : []),
-      ...section.groups.filter((group) => !group.isMain),
-    ];
+  const primaryGroup = section.groups.find((group) => group.isMain);
+  const groups = [
+    ...(primaryGroup ? [primaryGroup] : []),
+    ...section.groups.filter((group) => !group.isMain),
+  ];
 
   return groups.map((group) => ({
     group,
     groupKey: `${section.project.id}:${group.id}`,
     projectId: section.project.id,
-    hideGroupLabel: options.mainWorkspaceOnly ? group.id === primaryGroup.id : group.isMain,
+    hideGroupLabel: group.isMain,
   }));
 };

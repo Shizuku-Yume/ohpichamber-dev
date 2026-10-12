@@ -24,7 +24,6 @@ import { clearRuntimeUrlAuthToken, refreshRuntimeUrlAuthToken } from "@/lib/runt
 import { useAuthSessionStore, waitForAuthSession } from "@/lib/runtime-auth-expiry"
 import { type RelayTunnelWebSocket } from "@/lib/relay/tunnel-client"
 import { openRuntimeWebSocket } from "@/lib/relay/runtime-socket"
-import { isVSCodeRuntime } from "@/lib/desktop"
 import { spaceCreationStepSchema } from "@/lib/spaces/spaces-api"
 import { syncDebug } from "./debug"
 import { countSyncPerformance } from "./performance-diagnostics"
@@ -899,8 +898,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
   }
 
   const resolveTransport = (): "ws" | "sse" => {
-    // The VS Code webview bridges only HTTP/SSE; there is no WebSocket bridge.
-    if (typeof WebSocket !== "function" || isVSCodeRuntime()) {
+    if (!globalThis.WebSocket) {
       return "sse"
     }
     if (transport === "ws") {

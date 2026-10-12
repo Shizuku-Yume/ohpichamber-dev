@@ -41,9 +41,9 @@ runtime. A pending record left behind is not an eligible member.
   the project root and requires an authoritative empty inclusive session list.
 
 The global session cache already preserves metadata across reload, archive and
-runtime switching. No separate persistence or polling is added. Web, Electron
-and VS Code share the SDK contract. Hosted mobile and Capacitor retain their
-existing controls; this change adds no mobile launcher or fusion menu.
+runtime switching. No separate persistence or polling is added. Web and Electron
+share the SDK contract. Hosted mobile and Capacitor retain their existing
+controls; this change adds no mobile launcher or fusion menu.
 
 ## Legacy sessions
 

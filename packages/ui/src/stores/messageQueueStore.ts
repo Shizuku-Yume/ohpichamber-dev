@@ -8,7 +8,6 @@ import type { AttachedFile } from './types/sessionTypes';
 import { contextPartMetadataSchema, type ContextPartMetadata } from '@/lib/messages/contextParts';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { normalizePath } from '@/lib/pathNormalization';
 import { getQueuedMessagePreview } from '@/lib/messages/queuedMessagePreview';
@@ -47,14 +46,6 @@ const normalizeFollowUpBehavior = (
     return DEFAULT_FOLLOW_UP_BEHAVIOR;
 };
 
-/**
- * Who delivers the queue. Web, desktop, and mobile talk to an OpenChamber
- * server that owns the queue and sends it whether or not any UI is open. VS
- * Code has no server of its own, so the extension UI keeps the local queue
- * and the foreground auto-send hook.
- */
-export const isServerOwnedMessageQueue = (): boolean => !isVSCodeRuntime();
-
 export interface QueuedMessageSendConfig {
     providerID: string;
     modelID: string;
@@ -65,8 +56,7 @@ export interface QueuedMessageSendConfig {
 /**
  * Context captured with a queued message: whatever the composer had attached
  * when the message was queued. It leaves the composer with the message, so
- * delivery (by the server, or by the auto-send hook in VS Code) carries it and
- * editing the message brings it back.
+ * delivery by the server carries it and editing the message brings it back.
  */
 export type QueuedContextPart =
     | {
@@ -164,7 +154,7 @@ const serverAttachmentSchema = z.object({
     filename: z.string(),
     mimeType: z.string(),
     size: z.number(),
-    source: z.enum(['local', 'server', 'vscode']),
+    source: z.enum(['local', 'server']),
     serverPath: z.string().optional(),
     /** Present only on a taken item; broadcasts and snapshots omit payloads. */
     dataUrl: z.string().optional(),
@@ -398,9 +388,6 @@ interface MessageQueueActions {
     /** Drops the local projection only (the session is gone); never a server call. */
     forgetQueue: (target: MessageQueueTarget) => void;
     clearAllQueues: () => void;
-    markSending: (target: MessageQueueTarget, messageId: string) => void;
-    clearSending: (target: MessageQueueTarget, messageId: string) => void;
-    getSendableQueue: (target: MessageQueueTarget) => QueuedMessage[];
     setFollowUpBehavior: (behavior: FollowUpBehavior) => void;
     getQueueForTarget: (target: MessageQueueTarget) => QueuedMessage[];
     /** Server-owned queue: load the authoritative queue for the active runtime. */
@@ -579,7 +566,6 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                             };
                         });
 
-                        if (!isServerOwnedMessageQueue()) return;
                         if (!message.sendConfig) {
                             set((state) => removeMessageLocally(state, key, id));
                             throw new Error('A queued message needs a provider and model to be delivered later.');
@@ -606,9 +592,7 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                     removeFromQueue: (target, messageId) => {
                         const key = getMessageQueueKey(target);
                         set((state) => removeMessageLocally(state, key, messageId));
-                        if (isServerOwnedMessageQueue()) {
-                            void serverMutation(target, `${sessionPath(target.sessionId)}/items/${encodeURIComponent(messageId)}`, jsonInit('DELETE'));
-                        }
+                        void serverMutation(target, `${sessionPath(target.sessionId)}/items/${encodeURIComponent(messageId)}`, jsonInit('DELETE'));
                     },
 
                     reorderQueue: (target, fromId, toId) => {
@@ -630,10 +614,8 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                                 [key]: newQueue,
                             },
                         }));
-                        if (isServerOwnedMessageQueue()) {
-                            const itemIds = newQueue.map((message) => message.id);
-                            void serverMutation(target, `${sessionPath(target.sessionId)}/order`, jsonInit('PUT', { itemIds }));
-                        }
+                        const itemIds = newQueue.map((message) => message.id);
+                        void serverMutation(target, `${sessionPath(target.sessionId)}/order`, jsonInit('PUT', { itemIds }));
                     },
 
                     popToInput: async (target, messageId) => {
@@ -642,40 +624,23 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                     },
 
                     takeForSend: async (target, messageId) => {
-                        const key = getMessageQueueKey(target);
-                        if (isServerOwnedMessageQueue()) {
-                            try {
-                                if (messageId) {
-                                    const result = await requestJson(
-                                        serverTakeResponseSchema,
-                                        `${sessionPath(target.sessionId)}/items/${encodeURIComponent(messageId)}/take`,
-                                        jsonInit('POST'),
-                                    );
-                                    applyServerSession(result.session, result.revision, target.runtimeKey);
-                                    return [toQueuedMessage(result.item)];
-                                }
-                                const result = await requestJson(serverTakeAllResponseSchema, `${sessionPath(target.sessionId)}/take`, jsonInit('POST'));
+                        try {
+                            if (messageId) {
+                                const result = await requestJson(
+                                    serverTakeResponseSchema,
+                                    `${sessionPath(target.sessionId)}/items/${encodeURIComponent(messageId)}/take`,
+                                    jsonInit('POST'),
+                                );
                                 applyServerSession(result.session, result.revision, target.runtimeKey);
-                                return result.items.map(toQueuedMessage);
-                            } catch (error) {
-                                await refreshSession(target);
-                                throw error;
+                                return [toQueuedMessage(result.item)];
                             }
+                            const result = await requestJson(serverTakeAllResponseSchema, `${sessionPath(target.sessionId)}/take`, jsonInit('POST'));
+                            applyServerSession(result.session, result.revision, target.runtimeKey);
+                            return result.items.map(toQueuedMessage);
+                        } catch (error) {
+                            await refreshSession(target);
+                            throw error;
                         }
-
-                        const state = get();
-                        const sending = state.sendingIds[key] ?? [];
-                        const taken = (state.queuedMessages[key] ?? []).filter((message) => (
-                            (messageId ? message.id === messageId : true) && !sending.includes(message.id)
-                        ));
-                        if (taken.length === 0) return [];
-                        const takenIds = new Set(taken.map((message) => message.id));
-                        set((prevState) => {
-                            const remaining = (prevState.queuedMessages[key] ?? []).filter((message) => !takenIds.has(message.id));
-                            if (remaining.length === 0) return { queuedMessages: withoutKey(prevState.queuedMessages, key) };
-                            return { queuedMessages: { ...prevState.queuedMessages, [key]: remaining } };
-                        });
-                        return taken;
                     },
 
                     clearQueue: (target) => {
@@ -691,9 +656,7 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                             }
                             return { queuedMessages: withoutKey(state.queuedMessages, key) };
                         });
-                        if (isServerOwnedMessageQueue()) {
-                            void serverMutation(target, sessionPath(target.sessionId), jsonInit('DELETE'));
-                        }
+                        void serverMutation(target, sessionPath(target.sessionId), jsonInit('DELETE'));
                     },
 
                     forgetQueue: (target) => {
@@ -709,35 +672,6 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                         set({ queuedMessages: {}, sendingIds: {} });
                     },
 
-                    markSending: (target, messageId) => {
-                        const key = getMessageQueueKey(target);
-                        set((state) => {
-                            const current = state.sendingIds[key] ?? [];
-                            if (current.includes(messageId)) return state;
-                            return { sendingIds: { ...state.sendingIds, [key]: [...current, messageId] } };
-                        });
-                    },
-
-                    clearSending: (target, messageId) => {
-                        const key = getMessageQueueKey(target);
-                        set((state) => {
-                            const current = state.sendingIds[key];
-                            if (!current || !current.includes(messageId)) return state;
-                            const next = current.filter((id) => id !== messageId);
-                            if (next.length === 0) return { sendingIds: withoutKey(state.sendingIds, key) };
-                            return { sendingIds: { ...state.sendingIds, [key]: next } };
-                        });
-                    },
-
-                    getSendableQueue: (target) => {
-                        const key = getMessageQueueKey(target);
-                        const state = get();
-                        const queue = state.queuedMessages[key] ?? [];
-                        const sending = state.sendingIds[key];
-                        if (!sending || sending.length === 0) return queue;
-                        return queue.filter((message) => !sending.includes(message.id));
-                    },
-
                     setFollowUpBehavior: (behavior) => {
                         set({ followUpBehavior: behavior });
                         void updateDesktopSettings({ followUpBehavior: behavior });
@@ -748,7 +682,6 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                     },
 
                     hydrate: () => {
-                        if (!isServerOwnedMessageQueue()) return Promise.resolve();
                         const runtimeKey = getRuntimeKey();
                         if (hydration?.runtimeKey === runtimeKey) return hydration.promise;
                         const generation = ++hydrationGeneration;
@@ -844,7 +777,6 @@ export const useMessageQueueStore = create<MessageQueueStore>()(
                     applyServerSession,
 
                     setServerHold: async (sessionId, held) => {
-                        if (!isServerOwnedMessageQueue()) return;
                         const response = await runtimeFetch(`${sessionPath(sessionId)}/hold`, jsonInit('PUT', { held }));
                         if (!response.ok) throw new Error(`Message queue hold request failed (${response.status})`);
                     },
@@ -909,7 +841,6 @@ export type MessageQueueUpdatedEvent = z.infer<typeof messageQueueUpdatedEventSc
 
 /** `openchamber:message-queue.updated` broadcast → projection. */
 export const applyMessageQueueUpdatedEvent = (payload: SyncEvent | MessageQueueUpdatedEvent, expectedRuntimeKey: string): void => {
-    if (!isServerOwnedMessageQueue()) return;
     const parsed = messageQueueUpdatedEventSchema.safeParse(payload);
     if (!parsed.success) return;
     const { session, revision } = parsed.data.properties;

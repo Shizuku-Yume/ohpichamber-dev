@@ -67,8 +67,7 @@ export interface DraftTargetProps {
     onProjectChange: (projectId: string) => void;
     onDirectoryChange: (directory: string) => void;
     /**
-     * Opens the create dialog of an isolated space; absent where the entry is not offered: while
-     * the feature's switch is off, and always in VS Code (decision 16 of the design).
+     * Opens the create dialog of an isolated space; absent while the feature's switch is off.
      */
     onCreateSpace?: () => void;
     /** Opens the New Worktree dialog (name, branch, PR or issue) for the draft's project. */

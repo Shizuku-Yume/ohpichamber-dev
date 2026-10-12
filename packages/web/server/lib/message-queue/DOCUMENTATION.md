@@ -5,9 +5,8 @@
 Owns the messages a user queued while a session was busy, and sends them the
 moment the session goes idle. The queue lives in the web server so a closed
 tab, a locked phone, or a dropped connection no longer strands it. Structural
-template: `permission-auto-accept` — the server is authoritative, the shared UI
-renders a projection, and VS Code (which has no server of its own) keeps its
-UI-side queue and foreground auto-send hook.
+template: `permission-auto-accept` — the server is authoritative and the shared UI
+renders a projection.
 
 ## Files
 
@@ -172,6 +171,3 @@ by the route family's 50 MB JSON limit.
 ## UI ownership
 
 `packages/ui/src/stores/messageQueueStore.ts` is the projection: see its
-section in `packages/ui/src/stores/DOCUMENTATION.md`. VS Code intentionally
-does not use this module; with all OpenChamber webviews closed, queued
-messages there are not delivered.

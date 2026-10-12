@@ -51,7 +51,7 @@ import {
   SETTINGS_SECTION_TITLE_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { useDeviceInfo } from '@/lib/device';
-import { isDesktopLocalOriginActive, isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell, isWebRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { Icon } from "@/components/icon/Icon";
 import { McpIcon } from '@/components/icons/McpIcon';
@@ -141,9 +141,8 @@ const pageOrder: SettingsPageSlug[] = [
 const NAV_GROUP_ORDER = ['general', 'projects', 'opencode', 'content'] as const;
 
 function buildRuntimeContext(isDesktop: boolean, isMobile: boolean, routingAvailable: boolean, enterpriseMode: boolean, jevBlockedByEnterprise: boolean): SettingsRuntimeContext {
-  const isVSCode = isVSCodeRuntime();
   const isWeb = !isDesktop && isWebRuntime();
-  return { isVSCode, isWeb, isDesktop, isMobile, routingAvailable, enterpriseMode, jevBlockedByEnterprise };
+  return { isWeb, isDesktop, isMobile, routingAvailable, enterpriseMode, jevBlockedByEnterprise };
 }
 
 function isPageAvailable(page: SettingsPageMeta, ctx: SettingsRuntimeContext): boolean {
@@ -247,7 +246,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       .filter((page) => page.slug !== 'home')
       .filter((page) => !allowedPages || allowedPages.has(page.slug))
       .filter((page) => isPageAvailable(page, runtimeCtx))
-      .filter((page) => !(runtimeCtx.isVSCode && page.slug === 'projects'))
       .filter((page) => !(isMobile && page.slug === 'shortcuts'));
   }, [runtimeCtx, isMobile, visiblePageSlugs]);
 
@@ -263,7 +261,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
   // Load stores when the settings project changes or a page becomes active.
   React.useEffect(() => {
-    if (!isSettingsDialogOpen && !runtimeCtx.isVSCode && !isWindowed) {
+    if (!isSettingsDialogOpen && !isWindowed) {
       return;
     }
 
@@ -292,7 +290,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     }
     // `activeProjectId` still matters: the settings directory follows the active
     // project until the user picks another one in the Settings selector.
-  }, [activeProjectId, isSettingsDialogOpen, isWindowed, runtimeCtx.isVSCode, settingsDirectory, settingsSlug]);
+  }, [activeProjectId, isSettingsDialogOpen, isWindowed, settingsDirectory, settingsSlug]);
 
   const openPage = React.useCallback((slug: SettingsPageSlug) => {
     setSettingsPage(slug);
@@ -764,9 +762,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     : t('settings.view.actions.closeSettings');
 
   const pushMobileSplitDetailHistory = React.useCallback((slug: SettingsPageSlug) => {
-    if (runtimeCtx.isVSCode) {
-      return;
-    }
 
     const currentDetail = getSettingsDetailHistoryEntry(window.history.state);
     if (currentDetail?.page === slug && currentDetail.stage === 'page-content') {
@@ -781,7 +776,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       '',
       window.location.href,
     );
-  }, [runtimeCtx.isVSCode]);
+  }, []);
 
   const handleMobilePageSidebarItemSelect = React.useCallback(() => {
     shouldFocusMobilePageContentRef.current = true;
@@ -809,7 +804,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const handleBack = React.useCallback(() => {
     if (backButtonTargetsPageSidebar) {
       const currentDetail = getSettingsDetailHistoryEntry(window.history.state);
-      if (currentDetail?.page === settingsSlug && !runtimeCtx.isVSCode) {
+      if (currentDetail?.page === settingsSlug) {
         window.history.back();
         return;
       }
@@ -818,7 +813,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     }
 
     setMobileStage('nav');
-  }, [backButtonTargetsPageSidebar, runtimeCtx.isVSCode, settingsSlug]);
+  }, [backButtonTargetsPageSidebar, settingsSlug]);
 
   // The Android hardware back button belongs to the same ladder as the header's
   // back arrow: one level up per press, and only the press at the root falls
@@ -838,7 +833,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   }, [handleBack, isMobile, mobileStage, registerBackHandler]);
 
   React.useEffect(() => {
-    if (!isMobile || runtimeCtx.isVSCode) {
+    if (!isMobile) {
       return;
     }
 
@@ -860,7 +855,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [isMobile, runtimeCtx.isVSCode, settingsSlug]);
+  }, [isMobile, settingsSlug]);
 
   const renderSettingsNav = () => {
     const hasSearchQuery = settingsSearchQuery.trim().length > 0;
@@ -1073,7 +1068,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (activePageMeta.kind === 'split') {
       return (
         <div className="flex h-full min-h-0 overflow-hidden">
-          <div className={cn('border-r', runtimeCtx.isVSCode ? 'bg-background' : 'bg-sidebar')} style={{ width: SETTINGS_SPLIT_SIDEBAR_WIDTH, minWidth: SETTINGS_SPLIT_SIDEBAR_WIDTH, borderColor: 'var(--interactive-border)' }}>
+          <div className="border-r bg-sidebar" style={{ width: SETTINGS_SPLIT_SIDEBAR_WIDTH, minWidth: SETTINGS_SPLIT_SIDEBAR_WIDTH, borderColor: 'var(--interactive-border)' }}>
             <ErrorBoundary>{renderPageSidebar(settingsSlug, {})}</ErrorBoundary>
           </div>
           <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background" disableHorizontal verticalTrackStart={scrollbarTopClearance}>
@@ -1170,14 +1165,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         ) : (
           <>
             <div
-              className={cn(
-                'relative flex h-full min-h-0 w-36 min-w-36 flex-col overflow-hidden border-r sm:w-64 sm:min-w-64',
-                isDesktopApp
-                  ? 'bg-sidebar'
-                  : runtimeCtx.isVSCode
-                    ? 'bg-background'
-                    : 'bg-sidebar',
-              )}
+              className="relative flex h-full min-h-0 w-36 min-w-36 flex-col overflow-hidden border-r bg-sidebar sm:w-64 sm:min-w-64"
               style={{
                 borderColor: 'var(--interactive-border)',
               }}

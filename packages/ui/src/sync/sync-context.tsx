@@ -15,7 +15,6 @@ import type {
   StructuredError,
 } from "@/lib/opencode/model"
 import { createEventPipeline } from "./event-pipeline"
-import { isVSCodeRuntime } from "@/lib/desktop"
 import { isSurfaceAttended } from "@/lib/surfaceAttention"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { reduceGlobalEvent, applyDirectoryEvent, type SessionMaterializationReason } from "./event-reducer"
@@ -70,10 +69,6 @@ import { policySnapshotFromWire } from "@/stores/utils/permissionAutoAccept"
 import { selectSafetyNetAvailable, useRoutingStore } from "@/stores/useRoutingStore"
 import { useMessageQueueStore } from "@/stores/messageQueueStore"
 import { subscribeMessageQueueSync } from "./message-queue-sync"
-import {
-  processVSCodePermissionAutoAccept,
-  processVSCodeReconciledPermissionAutoAccept,
-} from "./vscode-permission-auto-accept"
 import { markConfigCatalogStale, useConfigStore } from "@/stores/useConfigStore"
 import { refreshStoresForCatalogKind } from "@/stores/catalogRefresh"
 import { useMcpStore } from "@/stores/useMcpStore"
@@ -559,17 +554,6 @@ export const LOCATION_SCOPED_FORM_SESSION_ID = "global"
 
 const pendingFormToastIds = new Set<string>()
 const pendingPermissionToastIds = new Set<string>()
-const pendingVSCodePermissionEvents = new Map<string, symbol>()
-
-const getVSCodePermissionEventKey = (
-  runtimeKey: string,
-  directory: string,
-  sessionID?: string,
-  requestID?: string,
-): string | null => {
-  const requestKey = getPermissionToastKey(sessionID, requestID)
-  return requestKey ? JSON.stringify([runtimeKey, directory, requestKey]) : null
-}
 
 const getFormToastKey = (sessionID?: string, requestID?: string) => {
   if (!sessionID || !requestID) return null
@@ -618,7 +602,7 @@ const isUiFocused = (): boolean => (
 
 /**
  * OpenChamber's own notification frame: the agent-completion notice for
- * desktop, VS Code and mobile (the web surface has its own stream), plus the
+ * desktop and mobile (the web surface has its own stream), plus the
  * toast raised when a managed OpenCode restart interrupted a turn.
  */
 const handleUiNotificationEvent = (notification: OpenchamberNotification, fallbackDirectory: string): void => {
@@ -716,9 +700,8 @@ function isViewedInCurrentSession(directory: string, sessionId?: string): boolea
     _activeDirectory && _activeSession
     && directory === _activeDirectory && sessionId === _activeSession
     // The user must actually see the surface for the active session to count
-    // as "seen": if the app is minimized, in the background, or (in VS Code)
-    // the chat view is hidden, a turn finishing in the selected session still
-    // raises an unseen marker.
+    // as "seen": if the app is minimized or in the background, a turn
+    // finishing in the selected session still raises an unseen marker.
     && isSurfaceAttended()
   ) return true
   pruneExternallyViewedSessions()
@@ -946,14 +929,6 @@ type EventRoutingIndex = {
   sessionMessageIdsById: Map<string, Set<string>>
 }
 
-const SHOULD_DISPATCH_VSCODE_NOTIFICATIONS = isVSCodeRuntime()
-
-const dispatchVSCodeRuntimeNotificationEvent = (directory: string, payload: SyncEvent) => {
-  if (!SHOULD_DISPATCH_VSCODE_NOTIFICATIONS || typeof window === "undefined") return
-  window.dispatchEvent(new CustomEvent("openchamber:vscode-notification-event", {
-    detail: { directory, payload },
-  }))
-}
 
 export const createEventRoutingIndex = (): EventRoutingIndex => ({
   sessionDirectoryById: new Map(),
@@ -1438,25 +1413,6 @@ export async function resyncBlockingRequestsForDirectory(
       grouped[sessionId].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     }
 
-    if (isVSCodeRuntime()) {
-      const acceptedIdsBySession = new Map<string, Set<string>>()
-      await Promise.all(Object.entries(grouped).flatMap(([sessionId, permissions]) =>
-        permissions.map(async (permission) => {
-          if (!(await processVSCodeReconciledPermissionAutoAccept(permission, directory))) return
-          const accepted = acceptedIdsBySession.get(sessionId) ?? new Set<string>()
-          accepted.add(permission.id)
-          acceptedIdsBySession.set(sessionId, accepted)
-        }),
-      ))
-
-      for (const sessionId of Object.keys(grouped)) {
-        const acceptedIds = acceptedIdsBySession.get(sessionId)
-        if (!acceptedIds) continue
-        const remaining = (grouped[sessionId] ?? []).filter((permission) => !acceptedIds.has(permission.id))
-        if (remaining.length > 0) grouped[sessionId] = remaining
-        else delete grouped[sessionId]
-      }
-    }
 
     for (const [sessionId, permissions] of Object.entries(grouped)) {
       const knownIds = new Set((before.permission[sessionId] ?? []).map((item) => item.id))
@@ -1740,7 +1696,7 @@ const leftForUserBeforeAsked = new Set<string>()
 
 /** Whether a fresh `permission.asked` will be held back until the server rules on it. */
 const isHeldUntilAutoAnswered = (permission: PermissionRequest): boolean =>
-  !leftForUserBeforeAsked.has(permission.id) && !isVSCodeRuntime() && isAnsweredWithoutUser(permission.sessionID)
+  !leftForUserBeforeAsked.has(permission.id) && isAnsweredWithoutUser(permission.sessionID)
 
 /** Hold `permission.asked` back until the server rules on it, when it may answer it. */
 const holdBackUntilAutoAnswered = (permission: PermissionRequest, replayAsAsk: () => void): boolean => {
@@ -1799,10 +1755,8 @@ const notifyFormCreated = (form: FormRequest, directory: string): void => {
 
 // Blocking requests in a directory without a store still deserve the in-app
 // toast: the sidebar row and tray approvals need the directory store, but the
-// toast only needs the request and where to open it. VS Code keeps its
-// extension-host auto-accept path, which runs on the store branch only.
+// toast only needs the request and where to open it.
 const notifyBlockingRequestWithoutStore = (payload: SyncEvent, directory: string, replayAsAsk: (() => void) | null): void => {
-  if (isVSCodeRuntime()) return
   if (payload.type === "permission.asked") {
     const permission = payload.properties
     if (replayAsAsk && holdBackUntilAutoAnswered(permission, replayAsAsk)) return
@@ -1845,8 +1799,7 @@ export function handleEvent(
   childStores: ChildStoreManager,
   routingIndex: EventRoutingIndex,
   expectedRuntimeKey: string,
-  // A `permission.asked` replayed because nothing answered it automatically:
-  // VS Code's extension host declined it, or the server left it for the user.
+  // A `permission.asked` replayed because the server left it for the user.
   autoAnswerDeclined = false,
   streamingDirectory?: string,
   batch?: DirectoryEventBatch,
@@ -2043,33 +1996,6 @@ export function handleEvent(
 
   if (payload.type === "permission.asked") {
     const permission: PermissionRequest = payload.properties
-    if (isVSCodeRuntime() && !autoAnswerDeclined) {
-      const eventKey = getVSCodePermissionEventKey(expectedRuntimeKey, resolvedDirectory, permission.sessionID, permission.id)
-      const eventToken = Symbol(eventKey ?? permission.id)
-      if (eventKey) pendingVSCodePermissionEvents.set(eventKey, eventToken)
-      updateRoutingIndexFromEvent(routingIndex, resolvedDirectory, payload)
-      const completePermissionCheck = (accepted: boolean) => {
-        if (eventKey && pendingVSCodePermissionEvents.get(eventKey) !== eventToken) return
-        if (eventKey) pendingVSCodePermissionEvents.delete(eventKey)
-        if (expectedRuntimeKey !== getRuntimeKey()) return
-        if (!accepted) handleEvent(
-          rawDirectory,
-          payload,
-          childStores,
-          routingIndex,
-          expectedRuntimeKey,
-          true,
-          streamingDirectory,
-          undefined,
-          true,
-        )
-      }
-      void processVSCodePermissionAutoAccept(permission, resolvedDirectory).then(
-        completePermissionCheck,
-        () => completePermissionCheck(false),
-      )
-      return
-    }
     if (!autoAnswerDeclined && holdBackUntilAutoAnswered(
       permission,
       permissionReplayAsAsk(rawDirectory, payload, childStores, routingIndex, expectedRuntimeKey, streamingDirectory),
@@ -2086,8 +2012,6 @@ export function handleEvent(
     // A request the routing safety net was holding is settled either way.
     if (requestID) useRoutingStore.getState().releasePermission(requestID)
     const toastKey = getPermissionToastKey(sessionID, requestID)
-    const eventKey = getVSCodePermissionEventKey(expectedRuntimeKey, resolvedDirectory, sessionID, requestID)
-    if (eventKey) pendingVSCodePermissionEvents.delete(eventKey)
     if (toastKey) {
       pendingPermissionToastIds.delete(toastKey)
       toast.dismiss(`permission-${toastKey}`)
@@ -2693,7 +2617,7 @@ export function SyncProvider(props: {
         }
         let initializationAttempt = 0
 
-        const runBootstrap = async (attempt: number): Promise<"complete" | "failed" | "stale"> => {
+        const runBootstrap = async (): Promise<"complete" | "failed" | "stale"> => {
           if (!isCurrent()) return "stale"
           const currentAttempt = ++initializationAttempt
           const globalState = useGlobalSyncStore.getState()
@@ -2759,32 +2683,10 @@ export function SyncProvider(props: {
           if (!isCurrent()) return "stale"
           if (result !== "complete") return result
 
-          // VS Code-only race: the bridge can answer with an empty 200 (instead
-          // of a retryable 503) while OpenCode is still warming up, which the
-          // page retries inside loadSessions can't catch. Re-run a few times there.
-          //
-          // On web/desktop this retry is both redundant and harmful: loadSessions
-          // already retries transient failures (listGlobalSessionPages throws on
-          // 5xx and retries internally), so an empty result here is AUTHORITATIVE —
-          // the directory genuinely has no sessions (e.g. a deleted worktree only
-          // referenced by archived sessions). Re-running the full bootstrap 6×2s
-          // per such directory is the startup log storm.
-          if (isVSCodeRuntime() && isCurrent()) {
-            const state = store.getState()
-            if (state.session.length === 0 && attempt < 5) {
-              console.warn(`[bootstrap] sessions empty for ${directory} after attempt ${attempt + 1}; retrying in 2s`)
-              await new Promise((r) => setTimeout(r, 2000))
-              if (!isCurrent()) return "stale"
-              store.setState({ status: "loading" as const })
-              return runBootstrap(attempt + 1)
-            } else if (state.session.length === 0) {
-              console.warn(`[bootstrap] sessions empty for ${directory} after ${attempt + 1} attempts; giving up`)
-            }
-          }
           return "complete"
         }
 
-        const result = await runBootstrap(0)
+        const result = await runBootstrap()
         if (result === "failed") await failBootstrap()
 
         // Selecting a session whose directory this client had not indexed yet
@@ -2867,7 +2769,6 @@ export function SyncProvider(props: {
         const batch = createDirectoryEventBatch()
         try {
           for (const payload of payloads) {
-            dispatchVSCodeRuntimeNotificationEvent(directory, payload)
             if (payload.type === "installation.update-available") {
               const { version } = payload.properties
               if (version) dispatchOpenCodeUpdateAvailable({ version })
@@ -2919,7 +2820,7 @@ export function SyncProvider(props: {
       onReconnect: ({ replayReset }) => {
         // The first connection and every one after a gap: spaces being made or whose making failed
         // are known only to the journey list, and a step announced during the gap was missed.
-        if (useUIStore.getState().isolatedSpacesEnabled && !isVSCodeRuntime()) {
+        if (useUIStore.getState().isolatedSpacesEnabled) {
           void refreshSpacesJourney().catch(() => undefined)
         }
         // Queue recovery is independent of the directory-bootstrap debounce.
@@ -3716,8 +3617,6 @@ type SessionMessageRecordsSnapshot = {
 }
 
 const SESSION_MESSAGE_RECORDS_CACHE_MAX = 40
-const VSCODE_SESSION_MESSAGE_RECORDS_CACHE_MAX = 4
-const VSCODE_SESSION_MESSAGE_RECORDS_CACHE_MAX_MESSAGES = 30
 const MOBILE_SESSION_MESSAGE_RECORDS_CACHE_MAX = 4
 const MOBILE_SESSION_MESSAGE_RECORDS_CACHE_MAX_MESSAGES = 30
 const sessionMessageRecordsCache = new WeakMap<StoreApi<DirectoryStore>, Map<string, SessionMessageRecordsSnapshot>>()
@@ -3766,22 +3665,18 @@ const rememberSessionMessageRecordsSnapshot = (
     snapshot.suspendPartUpdates,
     snapshot.suspendedPartUpdatesMessageID,
   )
-  const constrainedMaxMessages = isVSCodeRuntime()
-    ? VSCODE_SESSION_MESSAGE_RECORDS_CACHE_MAX_MESSAGES
-    : isMobileSurfaceRuntime()
-      ? MOBILE_SESSION_MESSAGE_RECORDS_CACHE_MAX_MESSAGES
-      : null
+  const constrainedMaxMessages = isMobileSurfaceRuntime()
+    ? MOBILE_SESSION_MESSAGE_RECORDS_CACHE_MAX_MESSAGES
+    : null
   if (constrainedMaxMessages !== null && snapshot.list.length > constrainedMaxMessages) {
     cache.delete(key)
     return
   }
   cache.delete(key)
   cache.set(key, snapshot)
-  const max = isVSCodeRuntime()
-    ? VSCODE_SESSION_MESSAGE_RECORDS_CACHE_MAX
-    : isMobileSurfaceRuntime()
-      ? MOBILE_SESSION_MESSAGE_RECORDS_CACHE_MAX
-      : SESSION_MESSAGE_RECORDS_CACHE_MAX
+  const max = isMobileSurfaceRuntime()
+    ? MOBILE_SESSION_MESSAGE_RECORDS_CACHE_MAX
+    : SESSION_MESSAGE_RECORDS_CACHE_MAX
   while (cache.size > max) {
     const oldest = cache.keys().next().value
     if (typeof oldest !== "string") break

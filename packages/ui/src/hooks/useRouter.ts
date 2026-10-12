@@ -8,17 +8,6 @@ import { resolveSettingsSlug } from '@/lib/settings/metadata';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 /**
- * Check if running in VS Code webview context.
- */
-function isVSCodeContext(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  const win = window as { __VSCODE_CONFIG__?: unknown };
-  return win.__VSCODE_CONFIG__ !== undefined;
-}
-
-/**
  * Hook that provides bidirectional URL routing for OpenChamber.
  *
  * On mount:
@@ -29,11 +18,8 @@ function isVSCodeContext(): boolean {
  * Works in:
  * - Web: Full bidirectional sync
  * - Desktop: Full bidirectional sync
- * - VS Code: State-only (no URL updates, reads initial params)
  */
 export function useRouter(): void {
-  const isVSCode = React.useMemo(() => isVSCodeContext(), []);
-
   // Track initialization to avoid duplicate applies
   const initializedRef = React.useRef(false);
   const isApplyingRouteRef = React.useRef(false);
@@ -116,14 +102,14 @@ export function useRouter(): void {
    */
   const syncURLFromState = React.useCallback(
     (options: { replace?: boolean } = {}) => {
-      if (isVSCode || isApplyingRouteRef.current) {
+      if (isApplyingRouteRef.current) {
         return;
       }
 
       const state = getCurrentAppState();
       updateBrowserURL(state, options);
     },
-    [isVSCode, getCurrentAppState]
+    [getCurrentAppState]
   );
 
   // Initialize: parse URL and apply route on mount
@@ -153,24 +139,18 @@ export function useRouter(): void {
       // Use the parsed route values instead of an immediate store snapshot so
       // deep links do not briefly normalize `?session=...` back to `/` while
       // the session's directory/message bootstrap is still catching up.
-      if (!isVSCode) {
-        updateBrowserURL({
-          ...getCurrentAppState(),
-          sessionId: route.sessionId ?? useSessionUIStore.getState().currentSessionId,
-          settingsPath: route.settingsPath ?? useUIStore.getState().settingsPage,
-        }, { replace: true, force: true });
-      }
+      updateBrowserURL({
+        ...getCurrentAppState(),
+        sessionId: route.sessionId ?? useSessionUIStore.getState().currentSessionId,
+        settingsPath: route.settingsPath ?? useUIStore.getState().settingsPage,
+      }, { replace: true, force: true });
     };
 
     void initializeRoute();
-  }, [applyRoute, getCurrentAppState, isVSCode, syncURLFromState]);
+  }, [applyRoute, getCurrentAppState, syncURLFromState]);
 
   // Subscribe to session changes
   React.useEffect(() => {
-    if (isVSCode) {
-      return;
-    }
-
     let prevSessionId: string | null = useSessionUIStore.getState().currentSessionId;
 
     const unsubscribe = useSessionUIStore.subscribe((state) => {
@@ -186,14 +166,10 @@ export function useRouter(): void {
     });
 
     return unsubscribe;
-  }, [isVSCode, syncURLFromState]);
+  }, [syncURLFromState]);
 
   // Subscribe to UI store changes (view, settings)
   React.useEffect(() => {
-    if (isVSCode) {
-      return;
-    }
-
     let prevSettingsOpen: boolean = useUIStore.getState().isSettingsDialogOpen;
     let prevSettingsPath: string = useUIStore.getState().settingsPage;
 
@@ -215,11 +191,12 @@ export function useRouter(): void {
     });
 
     return unsubscribe;
-  }, [isVSCode, syncURLFromState]);
+  }, [syncURLFromState]);
 
   // Listen for browser back/forward navigation
   React.useEffect(() => {
-    if (typeof window === 'undefined' || isVSCode) {
+    const browserWindow = globalThis.window;
+    if (!browserWindow) {
       return;
     }
 
@@ -240,10 +217,10 @@ export function useRouter(): void {
       }
     };
 
-    window.addEventListener('popstate', handlePopState);
+    browserWindow.addEventListener('popstate', handlePopState);
 
     return () => {
-      window.removeEventListener('popstate', handlePopState);
+      browserWindow.removeEventListener('popstate', handlePopState);
     };
-  }, [applyRoute, isVSCode, setSettingsDialogOpen]);
+  }, [applyRoute, setSettingsDialogOpen]);
 }

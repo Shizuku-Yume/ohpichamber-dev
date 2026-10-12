@@ -36,9 +36,8 @@ export type PermissionPolicySnapshot = {
 };
 
 /**
- * A policy as the server or VS Code's bridge sends it, over HTTP or as a
- * broadcast. `modes` is the policy; servers from before the modes and VS Code
- * send only `sessions` as on/off, where on means `auto`.
+ * A server policy received over HTTP or as a broadcast. `modes` is the policy;
+ * servers from before the modes send only `sessions` as on/off, where on means `auto`.
  */
 export const permissionPolicyWireSchema = z.object({
   sessions: z.record(z.string().min(1), z.boolean()),

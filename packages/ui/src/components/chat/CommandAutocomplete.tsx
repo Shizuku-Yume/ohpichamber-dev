@@ -8,7 +8,6 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
 import { mergeCommandAutocompleteItems, rankCommandAutocompleteItems } from './commandAutocompleteItems';
 import { useGuestCommands } from '@/hooks/useGuestSurfaces';
@@ -80,7 +79,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   const hasNewSessionDraft = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
   const canStartSessionCommand = hasSession || hasNewSessionDraft;
   const isMobile = useUIStore((state) => state.isMobile);
-  const canUseReviewHandoffFlow = hasSession && !isMobile && !isVSCodeRuntime();
+  const canUseReviewHandoffFlow = hasSession && !isMobile;
 
   // Commands belong to the directory the composer sends to — the session's
   // own directory, or the Chats root for a chat draft — not to the project

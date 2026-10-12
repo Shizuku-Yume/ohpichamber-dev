@@ -2,22 +2,12 @@ import { describe, expect, mock, test } from 'bun:test';
 
 let requestCount = 0;
 let requestPaths: string[] = [];
-const PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==',
-  'base64',
-);
-const runtimeFetch = mock(async (path: string, init?: RequestInit & { query?: Record<string, unknown> }) => {
-  requestPaths.push(path);
-  if (path === '/api/fs/stat') {
-    return new Response(JSON.stringify({ isFile: true, size: PNG.byteLength }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
-  }
-  if (path === '/api/fs/raw') {
-    return new Response(PNG, { status: 200, headers: { 'content-type': 'image/png' } });
-  }
+let requestInits: (RequestInit | undefined)[] = [];
+
+const runtimeFetch = mock(async (path: string, init?: RequestInit) => {
   requestCount += 1;
+  requestPaths.push(path);
+  requestInits.push(init);
   const body = JSON.parse(String(init?.body)) as { sources: string[] };
   return new Response(JSON.stringify({
     results: body.sources.map((source) => ({ source, status: 'ready', path: `/repo/${source}` })),
@@ -33,35 +23,17 @@ const resolver = {
 
 mock.module('@/lib/runtime-fetch', () => ({ runtimeFetch }));
 mock.module('@/lib/runtime-url', () => ({ getRuntimeUrlResolver: () => resolver }));
-
-class TestFileReader {
-  result: string | ArrayBuffer | null = null;
-  error: DOMException | null = null;
-  onload: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-
-  readAsDataURL(blob: Blob) {
-    void blob.arrayBuffer().then((buffer) => {
-      this.result = `data:${blob.type};base64,${Buffer.from(buffer).toString('base64')}`;
-      this.onload?.();
-    }).catch((error) => {
-      this.error = error as DOMException;
-      this.onerror?.();
-    });
-  }
-}
-
-globalThis.FileReader = TestFileReader as unknown as typeof FileReader;
-
+// Load after installing runtime mocks so these tests exercise the grant request boundary.
 const {
   getPreparedMarkdownImageUrl,
   prepareLocalMarkdownImages,
-  resolveWorkspaceMarkdownImageSource,
 } = await import('./markdownImageAssets');
 
 describe('Markdown image asset preparation', () => {
   test('prepares many images in one message-level request', async () => {
     requestCount = 0;
+    requestPaths = [];
+    requestInits = [];
     const sources = Array.from({ length: 12 }, (_, index) => `${index}.png`);
 
     const result = await prepareLocalMarkdownImages({
@@ -74,6 +46,12 @@ describe('Markdown image asset preparation', () => {
 
     expect(result.size).toBe(12);
     expect(requestCount).toBe(1);
+    expect(requestPaths).toEqual(['/api/openchamber/sessions/ses_batch/markdown-image-grants']);
+    expect(JSON.parse(String(requestInits[0]?.body))).toEqual({
+      directory: '/repo',
+      messageId: 'msg_batch',
+      sources,
+    });
   });
 
   test('reuses preparation for one thousand messages after virtualized remounts', async () => {
@@ -104,16 +82,4 @@ describe('Markdown image asset preparation', () => {
     expect(url).toContain('outsideFileGrant=grant-1');
   });
 
-  test('loads a workspace image through the local filesystem bridge', async () => {
-    requestPaths = [];
-
-    const url = await resolveWorkspaceMarkdownImageSource(
-      'screens/image.png',
-      '/repo',
-      new AbortController().signal,
-    );
-
-    expect(url.startsWith('data:image/png;base64,')).toBe(true);
-    expect(requestPaths).toEqual(['/api/fs/stat', '/api/fs/raw']);
-  });
 });

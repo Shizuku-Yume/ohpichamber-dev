@@ -110,7 +110,7 @@ export const createNotificationTriggerRuntime = (deps) => {
   };
 
   const fanoutPush = (payload, options) => {
-    // Presence-aware routing: if any interactive (non-mobile) client — desktop/web/vscode — is
+    // Presence-aware routing: if any interactive (non-mobile) client — desktop/web — is
     // currently visible, it already shows the in-app notification, so skip the native push to the
     // phone. Gated on the desktop's visibility (reliable), never the phone's own. When we skip we
     // also skip toApnsGenericPayload, so the badge isn't incremented for an undelivered push.

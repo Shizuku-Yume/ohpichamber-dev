@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Session } from '@/lib/opencode/model';
 import { opencodeClient } from '@/lib/opencode/client';
-import { filterManagedChatsForRuntime, listGlobalSessionPages, splitGlobalSessionsByArchived, type SessionPageLister } from '@/stores/globalSessions';
+import { listGlobalSessionPages, splitGlobalSessionsByArchived, type SessionPageLister } from '@/stores/globalSessions';
 import { getReviewTransferDirection, type ReviewTransferDirection } from '@/lib/reviewFlow';
 import { getOriginalSessionID, getReviewSessionID } from '@/lib/sessionReviewMetadata';
 import { normalizePath } from '@/lib/pathNormalization';
@@ -13,7 +13,6 @@ import {
   readGlobalSessionSnapshot,
   readManagedChatSessions,
 } from '@/sync/persist-cache';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
 import { useSpacesStore, type SpaceMark } from '@/lib/spaces/spaces-store';
 import { ensureChatsRootDirectory, getChatsRoot } from '@/lib/chatDirectories';
@@ -377,10 +376,6 @@ const applySnapshot = (
       they must not claim the authority `hasLoaded` grants. */
   markLoaded = status === 'ready',
 ): Partial<GlobalSessionsState> | GlobalSessionsState => {
-  if (isVSCodeRuntime()) {
-    activeSessions = filterManagedChatsForRuntime(activeSessions, true);
-    archivedSessions = filterManagedChatsForRuntime(archivedSessions, true);
-  }
   const nextActiveSessions = sameSessionList(state.activeSessions, activeSessions)
     ? state.activeSessions
     : activeSessions;
@@ -547,14 +542,7 @@ const applySessionMutations = (
   state: GlobalSessionsState,
   requestedMutations: readonly GlobalSessionMutation[],
 ): Partial<GlobalSessionsState> => {
-  let mutations = requestedMutations;
-  if (isVSCodeRuntime()) {
-    mutations = requestedMutations.filter((mutation) => (
-      mutation.type === 'remove'
-      || filterManagedChatsForRuntime([mutation.session], true).length > 0
-    ));
-    if (mutations.length === 0) return state;
-  }
+  const mutations = requestedMutations;
   const revisionPatch = mutationRevisionPatch(state, mutations.map((mutation) => (
     mutation.type === 'upsert' ? mutation.session.id : mutation.sessionId
   )));

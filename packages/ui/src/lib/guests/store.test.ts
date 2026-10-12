@@ -43,16 +43,16 @@ describe('useGuestsStore', () => {
     expect(useGuestsStore.getState().runtimeKey).toBe('instance-b');
   });
 
-  test('marks vscode and mobile as unsupported, not an empty ready catalog', () => {
+  test('marks mobile as unsupported, not an empty ready catalog', () => {
     resetStore();
-    useGuestsStore.getState().resetForRuntimeSwitch('vscode-a');
-    useGuestsStore.getState().markUnsupported('vscode-a');
+    useGuestsStore.getState().resetForRuntimeSwitch('mobile-a');
+    useGuestsStore.getState().markUnsupported('mobile-a');
     expect(useGuestsStore.getState().status).toBe('unsupported');
     expect(useGuestsStore.getState().guests).toEqual([]);
 
     useGuestsStore.getState().markUnsupported('other');
     expect(useGuestsStore.getState().status).toBe('unsupported');
-    expect(useGuestsStore.getState().runtimeKey).toBe('vscode-a');
+    expect(useGuestsStore.getState().runtimeKey).toBe('mobile-a');
   });
 
   test('keeps a ready catalog when a later fetch on the same instance fails', () => {

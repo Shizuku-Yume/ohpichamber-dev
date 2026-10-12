@@ -85,7 +85,6 @@ mock.module('@/lib/opencode/client', () => ({
 
 mock.module('@/lib/desktop', () => ({
   getDesktopHomeDirectory: async () => MAC_HOME,
-  isVSCodeRuntime: () => false,
   isDesktopShell: () => false,
 }));
 

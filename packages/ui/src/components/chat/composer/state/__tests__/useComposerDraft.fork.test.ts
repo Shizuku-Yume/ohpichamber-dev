@@ -172,7 +172,7 @@ describe('attachment draft ownership', () => {
             try {
                 input.addRestoredAttachment({ ...replayFile, filename: 'source.txt' });
                 input.addRestoredAttachment({ url: 'data:image/png;base64,aGVsbG8=', mimeType: 'image/png', filename: 'source.png' });
-                input.addVSCodeFileAttachment('/repo/code.ts', 'code.ts', 10);
+                input.addRestoredAttachment({ url: 'file:///repo/code.ts', mimeType: 'text/plain', filename: 'code.ts' });
                 const sourceFiles = useInputStore.getState().attachedFiles;
                 for (const identity of [
                     fork,

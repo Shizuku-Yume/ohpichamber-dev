@@ -111,14 +111,13 @@ interface SortableProjectItemProps extends ProjectIdentityProps {
   projectDirectory?: string;
   isCollapsed: boolean;
   isRepo: boolean;
-  hideDirectoryControls: boolean;
   mobileVariant: boolean;
   alwaysShowActions: boolean;
   onToggle: () => void;
   onNewSession: () => void;
   onNewWorktreeSession?: () => void;
   onManageWorktrees?: () => void;
-  /** The project's isolated spaces page; absent while the feature is off, and always in VS Code. */
+  /** The project's isolated spaces page; absent while the feature is off. */
   onManageSpaces?: () => void;
   onRenameStart: () => void;
   /** Archives the project's sessions except pinned, running and In work ones. */
@@ -147,7 +146,6 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   projectIconBackground,
   isCollapsed,
   isRepo,
-  hideDirectoryControls,
   alwaysShowActions,
   onToggle,
   onNewSession,
@@ -192,19 +190,19 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
 
   const renderProjectMenuItems = (Item: React.ElementType) => (
     <>
-      {showCreateButtons && !isRepo && !hideDirectoryControls && onNewSession && (
+      {showCreateButtons && !isRepo && onNewSession && (
         <Item onClick={onNewSession}>
           <Icon name="add" className="mr-1.5 h-4 w-4" />
           {t('sessions.sidebar.project.actions.newSession')}
         </Item>
       )}
-      {isRepo && !hideDirectoryControls && onManageWorktrees && (
+      {isRepo && onManageWorktrees && (
         <Item onClick={onManageWorktrees}>
           <Icon name="node-tree" className="mr-1.5 h-4 w-4" />
           {t('sessions.sidebar.project.actions.manageWorktrees')}
         </Item>
       )}
-      {isRepo && !hideDirectoryControls && onManageSpaces && (
+      {isRepo && onManageSpaces && (
         <Item onClick={onManageSpaces}>
           <Icon name="box-3" className="mr-1.5 h-4 w-4" />
           {t('spaces.page.menuItem')}
@@ -263,8 +261,8 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   // reach in past the header's 14px right padding: the new-session button
   // 2px from the edge, then the worktree and menu buttons (24px, 4px apart)
   // from 28px.
-  const showWorktreeAction = showCreateButtons && isRepo && !hideDirectoryControls && Boolean(onNewWorktreeSession);
-  const groupedHeaderActionCount = (showWorktreeAction ? 1 : 0) + (hideDirectoryControls ? 0 : 1);
+  const showWorktreeAction = showCreateButtons && isRepo && Boolean(onNewWorktreeSession);
+  const groupedHeaderActionCount = (showWorktreeAction ? 1 : 0) + 1;
   const headerActionsReserveClass = groupedHeaderActionCount === 2
     ? '[--oc-actions-reserve:66px]'
     : groupedHeaderActionCount === 1 && showCreateButtons
@@ -306,8 +304,6 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                   )}
                   data-sidebar-sticky-header={stickyZoneHeaders ? 'true' : undefined}
                   onContextMenu={(event) => {
-                    // VS Code hides project actions entirely (hideDirectoryControls).
-                    if (hideDirectoryControls) return;
                     event.preventDefault();
                     setIsContextMenuOpen(true);
                   }}
@@ -327,7 +323,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                         'flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         // Reserve hover space for the absolute action buttons,
                         // matching the collapse-toggle branch below.
-                        isRepo && !hideDirectoryControls
+                        isRepo
                           ? (alwaysShowActions || isMenuOpen ? 'pr-20' : 'pr-0 group-hover/project:pr-20 group-focus-within/project:pr-20')
                           : (alwaysShowActions || isMenuOpen ? 'pr-14' : 'pr-0 group-hover/project:pr-14 group-focus-within/project:pr-14'),
                       )}
@@ -359,7 +355,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                       className={cn(
                         '@container flex-1 min-w-0 flex items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md cursor-grab active:cursor-grabbing',
                         alwaysShowActions
-                          ? (isRepo && !hideDirectoryControls ? 'pr-20' : 'pr-14')
+                          ? (isRepo ? 'pr-20' : 'pr-14')
                           : headerActionsReserveClass,
                       )}
                     >
@@ -399,7 +395,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                 'absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-1',
                 showCreateButtons ? 'right-7' : 'right-0.5',
               )}>
-                {showCreateButtons && isRepo && !hideDirectoryControls && onNewWorktreeSession ? (
+                {showCreateButtons && isRepo && onNewWorktreeSession ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -423,7 +419,6 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                   </Tooltip>
                 ) : null}
 
-                {!hideDirectoryControls ? (
                 <DropdownMenu
                   open={isMenuOpen}
                   onOpenChange={handleMenuOpenChange}
@@ -451,7 +446,6 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                       {renderProjectMenuItems(DropdownMenuItem)}
                     </DropdownMenuContent>
                   </DropdownMenu>
-                ) : null}
               </div>
 
               {showCreateButtons && onNewSession ? (

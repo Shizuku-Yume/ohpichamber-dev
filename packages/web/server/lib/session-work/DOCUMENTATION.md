@@ -35,7 +35,6 @@ needs neither the In work block nor a session in work.
 The UI parser is `packages/ui/src/lib/sessionWorkMetadata.ts`; the user's own
 Track / Done go through the generic metadata route
 (`setSessionWorkState` in `packages/ui/src/sync/session-actions.ts`), which
-also exists in VS Code.
 
 ## Invariants
 
@@ -105,22 +104,15 @@ the wording or thresholds without re-running this measurement.
 ## Settings
 
 - `sessionWorkEnabled`: the block and the actions, default on.
-- `sessionWorkAutoOpen`: Jev opens sessions, default on; not offered in VS
-  Code, and inert without a classification provider.
-- `sessionReviewOfferEnabled`: the review offer, default off (Settings → Chat →
-  Session Assistance); not offered in VS Code, inert without a classification
-  provider, independent of the other two.
-- `sessionWorkKeepInGroup`: a tracked session also stays under its project
-  group and folders, default off; Recent, Timeline, and Chats still place it
-  once.
+- `sessionWorkAutoOpen`: Jev opens sessions, default on, and is inert without a classification provider.
+- `sessionReviewOfferEnabled`: the review offer, default off (Settings → Chat → Session Assistance), and inert without a classification provider.
+- `sessionWorkKeepInGroup`: a tracked session also stays under its project group and folders, default off; Recent, Timeline, and Chats still place it once.
 
 All four are read at every use.
 
 ## Runtime parity
 
 - Web, desktop, hosted mobile, Capacitor: all of it; the server owns Jev.
-- VS Code: no OpenChamber server, so no Jev, no done hint and no review offer. The block and
-  Track / Done work through the extension's metadata bridge.
 
 ## Tests
 

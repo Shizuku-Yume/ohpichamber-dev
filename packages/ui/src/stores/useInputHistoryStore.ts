@@ -19,7 +19,7 @@ export type InputHistoryIdentity = {
 
 export type InputHistoryAttachment = {
   key: string;
-  source: 'file-url' | 'vscode-file';
+  source: 'file-url';
   filename: string;
   mimeType: string;
   size: number;
@@ -118,7 +118,7 @@ type RawNamespaceRecord = z.infer<typeof rawNamespaceRecordSchema>;
 
 const attachmentSchema = z.object({
   key: z.string().min(1),
-  source: z.union([z.literal('file-url'), z.literal('vscode-file')]),
+  source: z.literal('file-url'),
   filename: z.string().min(1),
   mimeType: z.string().min(1),
   size: z.number().finite().nonnegative(),
@@ -380,9 +380,6 @@ export const createInputHistoryIdentity = (
 };
 
 const getAttachmentReference = (attachment: AttachedFile): string | null => {
-  if (attachment.source === 'vscode' && attachment.vscodeSource === 'file') {
-    return normalizePath(attachment.vscodePath ?? null);
-  }
   const candidate = attachment.dataUrl.trim();
   return candidate || null;
 };
@@ -408,16 +405,6 @@ const buildAttachmentKey = (attachment: AttachedFile): string => {
 const toRestorableAttachment = (attachment: AttachedFile): InputHistoryAttachment | null => {
   const reference = getAttachmentReference(attachment);
   if (!reference || !canRestoreReference(reference)) return null;
-  if (attachment.source === 'vscode' && attachment.vscodeSource === 'file') {
-    return {
-      key: buildAttachmentKey(attachment),
-      source: 'vscode-file',
-      filename: attachment.filename,
-      mimeType: attachment.mimeType,
-      size: attachment.size,
-      reference,
-    };
-  }
   return {
     key: buildAttachmentKey(attachment),
     source: 'file-url',

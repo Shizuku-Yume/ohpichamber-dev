@@ -60,7 +60,6 @@ const Harness = ({ inputs, capture }: { inputs: Inputs; capture: (sections: Sect
     pinnedSessionIds: stableMaps.pinnedSessionIds,
     sessionOrderRanks: inputs.ranks,
     gitBranches: stableMaps.gitBranches,
-    isVSCode: false,
     worktreeSortOrder: 'recent',
     sessionOwners: inputs.owners,
   });

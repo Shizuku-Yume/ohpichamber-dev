@@ -1,7 +1,7 @@
 /**
  * Reads OpenCode's integration list once the app has started and the browser
  * is idle, so Settings → Providers opens on it instead of waiting for the
- * read. Mounted by the desktop/web/VS Code app only: the phone layout reads
+ * read. Mounted by the desktop/web app only: the phone layout reads
  * the list when Settings opens, and so does any window talking to its server
  * through the relay, where every byte is paid.
  */

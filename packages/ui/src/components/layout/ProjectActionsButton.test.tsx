@@ -142,7 +142,7 @@ mock.module('@/components/ui', () => ({
   },
 }));
 mock.module('@/components/icon/Icon', () => ({ Icon: ({ name, className }: { name: string; className?: string }) => React.createElement('span', { 'data-icon': name, className }) }));
-mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ terminal, runtime: { isVSCode: false, platform: 'web' } }) }));
+mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ terminal, runtime: { platform: 'web' } }) }));
 mock.module('@/lib/device', () => ({ useDeviceInfo: () => mockedDeviceInfo }));
 // Modules under test import other desktop helpers too; keep the real ones.
 const desktop = await import('@/lib/desktop');

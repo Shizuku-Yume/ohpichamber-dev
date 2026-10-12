@@ -35,7 +35,6 @@ import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { normalizePath } from "@/lib/pathNormalization"
 import { CHAT_DRAFT_PROJECT_ID, createChatDirectory, deleteChatDirectory, getChatsRootFromDirectory, isChatDirectoryPath, warmChatsRootDirectory } from "@/lib/chatDirectories"
-import { isVSCodeRuntime } from "@/lib/desktop"
 import { composeForkSessionMessage } from "@/lib/messages/executionMeta"
 import { findLatestUserModelChoice } from "@/lib/messages/userModelChoice"
 import { noteDraftSendWaiting, waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree"
@@ -1394,19 +1393,17 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     // project beats Chat — a project removed since must not open a draft
     // pointing at a directory that is no longer registered — and the live
     // directory must not itself be an unregistered external path.
-    const restoresProjectTarget = !isVSCodeRuntime()
-      && !options?.target
+    const restoresProjectTarget = !options?.target
       && options?.directoryOverride === undefined
       && options?.selectedProjectId === undefined
       && persistedTarget?.target === "project"
       && persistedProject !== null
       && !isImplicitExternalChatFallback
 
-    let target = isVSCodeRuntime() ? "project" : options?.target
+    let target = options?.target
     if (!target) {
       const hasExplicitProjectTarget = (options?.directoryOverride !== undefined && !explicitDirectoryIsChat)
         || (options?.selectedProjectId !== undefined && options.selectedProjectId !== CHAT_DRAFT_PROJECT_ID)
-        || isVSCodeRuntime()
       target = options?.selectedProjectId === CHAT_DRAFT_PROJECT_ID
         ? "chat"
         : hasExplicitProjectTarget || restoresProjectTarget
@@ -1576,7 +1573,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   },
 
   setNewSessionDraftTarget: (target) => {
-    if (isVSCodeRuntime() && target.projectId === CHAT_DRAFT_PROJECT_ID) return
     const previousDraft = get().newSessionDraft
     if (previousDraft.preparedChatDirectory && target.projectId !== CHAT_DRAFT_PROJECT_ID) {
       void deleteChatDirectory(previousDraft.preparedChatDirectory).catch(() => undefined)

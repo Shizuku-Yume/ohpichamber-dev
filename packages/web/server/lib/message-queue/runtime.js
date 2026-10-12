@@ -2,8 +2,7 @@
 // busy, delivered by the web server the moment the session goes idle. The
 // queue lives here, not in the browser, so closing the tab, locking the phone,
 // or losing the connection no longer strands what was queued. Structural
-// template: permission-auto-accept (server-authoritative state, UI as a
-// projection, VS Code keeps its own foreground implementation).
+// template: permission-auto-accept (server-authoritative state, UI as a projection).
 //
 // Event-driven like session-goal: the shared upstream hub delivers
 // `session.status`, and an idle transition arms a short per-session timer. The
@@ -42,7 +41,7 @@ const HOLD_MAX_TTL_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 15_000;
 const MESSAGE_TAIL_LIMIT = 2;
 
-const ATTACHMENT_SOURCES = new Set(['local', 'server', 'vscode']);
+const ATTACHMENT_SOURCES = new Set(['local', 'server']);
 // Context captured with a queued message (see QueuedContextPart in the UI
 // store): attached context items carry metadata the timeline renders back;
 // the other kinds are plain synthetic text.

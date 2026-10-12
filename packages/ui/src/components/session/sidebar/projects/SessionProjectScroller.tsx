@@ -14,7 +14,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Button } from '@/components/ui/button';
 import { formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { isVSCodeRuntime, requestDirectoryAccess } from '@/lib/desktop';
+import { requestDirectoryAccess } from '@/lib/desktop';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
@@ -63,7 +63,7 @@ type SessionProjectScrollerState = Pick<SessionGroupSectionProps,
 
 type GroupProps = Pick<SessionGroupSectionProps,
   | 'hasSessionSearchQuery' | 'normalizedSessionSearchQuery' | 'groupSearchDataByGroup'
-  | 'collapsedGroups' | 'hideDirectoryControls' | 'mobileVariant' | 'alwaysShowActions'
+  | 'collapsedGroups' | 'mobileVariant' | 'alwaysShowActions'
   | 'activeProjectId' | 'notifyOnSubtasks' | 'expandedParents' | 'editTitle'
   | 'editingRowKey'
   | 'folderRename' | 'setFolderRenameDraft' | 'clearFolderRename'
@@ -93,7 +93,6 @@ type SessionProjectScrollerModel = {
 type View = {
   homeDirectory: string | null;
   hasSessionSearchQuery: boolean;
-  hideDirectoryControls: boolean;
   stickyZoneHeaders: boolean;
   mobileVariant: boolean;
   alwaysShowActions: boolean;
@@ -133,8 +132,7 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
   const deleteFolder = useSessionFoldersStore((state) => state.deleteFolder);
   const addSessionToFolder = useSessionFoldersStore((state) => state.addSessionToFolder);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
-  // A project's isolated spaces page: while the feature's switch is on, and never in VS Code (decision 16).
-  const spacesPageAvailable = useUIStore((state) => state.isolatedSpacesEnabled) && !isVSCodeRuntime();
+  const spacesPageAvailable = useUIStore((state) => state.isolatedSpacesEnabled);
   const spacesJourney = useSpacesStore((state) => state.journey);
   const [folderDeleteConfirm, setFolderDeleteConfirm] = React.useState<DeleteFolderConfirmState>(null);
   const [stickyIdentity, setStickyIdentity] = React.useState<string | null>(null);
@@ -321,7 +319,6 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
         projectDirectory={project.normalizedPath}
         projectIcon={project.icon} projectColor={project.color} projectIconImage={project.iconImage} projectIconBackground={project.iconBackground}
         isCollapsed={row.collapsed} isRepo={Boolean(model.projectRepoStatus.get(project.id))}
-        hideDirectoryControls={view.hideDirectoryControls}
         mobileVariant={view.mobileVariant} alwaysShowActions={view.alwaysShowActions}
         statusIndicator={row.collapsed ? actions.renderProjectStatusIndicator?.(project.id, row.section.groups) : null}
         openSidebarMenuKey={model.state.openSidebarMenuKey} setOpenSidebarMenuKey={model.state.setOpenSidebarMenuKey}

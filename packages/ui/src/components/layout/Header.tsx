@@ -59,7 +59,7 @@ import { SessionTabsStrip, type SessionTabMenuArgs } from './SessionTabsStrip';
 import { SessionMenuItemHint } from '@/components/session/SessionMenuItemHint';
 import { MoveChatToProjectDialog } from '@/components/session/MoveChatToProjectDialog';
 import { HeaderSessionArchiveMenuItem } from './HeaderSessionArchiveMenuItem';
-import { canUseElectronDesktopIPC, invokeDesktop, isDesktopLocalOriginActive, isDesktopShell, isVSCodeRuntime, startDesktopWindowDrag, type UpdateInfo } from '@/lib/desktop';
+import { canUseElectronDesktopIPC, invokeDesktop, isDesktopLocalOriginActive, isDesktopShell, startDesktopWindowDrag, type UpdateInfo } from '@/lib/desktop';
 import { desktopHostsGet, redactSensitiveUrl } from '@/lib/desktopHosts';
 import {
   LOCAL_HOST_ID,
@@ -395,7 +395,6 @@ export const Header: React.FC = () => {
   const [remoteUpdateInfo, setRemoteUpdateInfo] = React.useState<UpdateInfo | null>(null);
   const [remoteUpdateChecking, setRemoteUpdateChecking] = React.useState(false);
   const [remoteUpdateError, setRemoteUpdateError] = React.useState<string | null>(null);
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   // While the work-status panel is on screen it already reports the project,
   // the branch and the context fill — three paces away in the same window.
   // These yield to it rather than saying the same thing twice, and return the
@@ -410,8 +409,8 @@ export const Header: React.FC = () => {
   const { context: contextLimit, output: outputLimit } = useContextWindowLimits(currentSessionId);
   // The readout follows the session's messages through a subscription that
   // re-renders the header only when the reading changes, and reads nothing
-  // while the readout cannot show (VS Code, work status panel open, draft).
-  const headerContextUsageEnabled = !isVSCode && !workStatusPanelVisible && !isNewSessionDraftOpen;
+  // while the readout cannot show (work status panel open, draft).
+  const headerContextUsageEnabled = !workStatusPanelVisible && !isNewSessionDraftOpen;
   const selectContextUsage = React.useCallback(
     (messages: Message[]) => buildSessionContextUsage(messages, contextLimit, outputLimit),
     [contextLimit, outputLimit],
@@ -455,8 +454,7 @@ export const Header: React.FC = () => {
     }
     setWorkStatusPanelEnabled(!workStatusPanelEnabled);
   }, [setWorkStatusOverlayOpen, setWorkStatusPanelEnabled, workStatusOverlayOpen, workStatusPanelEnabled, workStatusPanelFits]);
-  const showDesktopHeaderContextUsage = !isVSCode
-    && !workStatusPanelVisible
+  const showDesktopHeaderContextUsage = !workStatusPanelVisible
     && !!stableDesktopContextUsage;
 
   const refreshCurrentInstanceLabel = React.useCallback(async () => {
@@ -1117,11 +1115,11 @@ export const Header: React.FC = () => {
     if (isTabletStandalonePwa) {
       return 'max(calc(0.75rem + var(--oc-wco-left-inset, 0px)), 5.5rem)';
     }
-    if ((!isDesktopApp || usesFramelessChrome) && !isVSCode) {
+    if (!isDesktopApp || usesFramelessChrome) {
       return 'calc(0.75rem + var(--oc-wco-left-inset, 0px))';
     }
     return '0.75rem';
-  }, [isDesktopApp, isDesktopWindowFullscreen, isMacPlatform, isTabletStandalonePwa, isVSCode, usesFramelessChrome]);
+  }, [isDesktopApp, isDesktopWindowFullscreen, isMacPlatform, isTabletStandalonePwa, usesFramelessChrome]);
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -1208,10 +1206,10 @@ export const Header: React.FC = () => {
     // interface scale on runtimes that have no native controls to clear.
     const height = `max(3rem, ${titlebarMinHeight}, var(--oc-wco-titlebar-height, 0px))`;
 
-    // VS Code and non-frameless desktop size their own header, and frameless
-    // Electron with right-side controls keeps the pr-0 class and no inline
-    // padding so the close button sits flush with the window corner.
-    const sizesItsOwnHeader = (isDesktopApp && !usesFramelessChrome) || isVSCode;
+    // Non-frameless desktop sizes its own header, and frameless Electron with
+    // right-side controls keeps no inline padding so the close button sits
+    // flush with the window corner.
+    const sizesItsOwnHeader = isDesktopApp && !usesFramelessChrome;
     const rightEdgeOwnedByInWindowControls = usesFramelessChrome && windowControlsSide === 'right';
 
     if (sizesItsOwnHeader && titlebarMinHeight === '0px') {
@@ -1225,7 +1223,7 @@ export const Header: React.FC = () => {
       style.paddingRight = 'calc(0.75rem + var(--oc-wco-right-inset, 0px))';
     }
     return style;
-  }, [isDesktopApp, isVSCode, titlebarMinHeight, usesFramelessChrome, windowControlsSide]);
+  }, [isDesktopApp, titlebarMinHeight, usesFramelessChrome, windowControlsSide]);
 
   // Written on the root, where every element inherits it: written only when
   // the height changed, since a new value restyles the whole document.
@@ -1371,8 +1369,8 @@ export const Header: React.FC = () => {
 
   const renderSessionTabMenu = React.useCallback(({ session, open, isActive, select, closeOtherTabs, components }: SessionTabMenuArgs) => {
     const { Item, Separator } = components;
-    const canMoveToWorktree = isActive && !isVSCode && !isChatContext && currentSession && !currentSession.parentId;
-    const canMoveToProject = isActive && !isVSCode && isChatContext && currentSession && !currentSession.parentId && hasProjects;
+    const canMoveToWorktree = isActive && !isChatContext && currentSession && !currentSession.parentId;
+    const canMoveToProject = isActive && isChatContext && currentSession && !currentSession.parentId && hasProjects;
     return (
       <>
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.rename')}>
@@ -1448,7 +1446,7 @@ export const Header: React.FC = () => {
         </SessionMenuItemHint>
       </>
     );
-  }, [copySessionIdFor, currentSession, exportCurrentSession, hasProjects, isChatContext, isCurrentSessionActive, isCurrentSessionMovingToWorktree, isVSCode, moveCurrentSessionToWorktree, renderGuestSessionActionItems, sessionDirectory, t]);
+  }, [copySessionIdFor, currentSession, exportCurrentSession, hasProjects, isChatContext, isCurrentSessionActive, isCurrentSessionMovingToWorktree, moveCurrentSessionToWorktree, renderGuestSessionActionItems, sessionDirectory, t]);
 
   const renderDesktop = () => (
     <div
@@ -1509,7 +1507,7 @@ export const Header: React.FC = () => {
             ) : null}
           </div>
           </>
-        ) : (isVSCode || !sessionTabsEnabled) ? (
+        ) : !sessionTabsEnabled ? (
           <div className="app-region-no-drag mr-3 flex min-w-0 max-w-full items-center gap-0.5 py-0.5 -my-0.5 text-left">
             {isCurrentSessionAiRenaming ? <Icon name="loader-4" className="mr-1 size-3 shrink-0 animate-spin text-primary" aria-label={t('sessions.aiRename.generating')} /> : null}
             {!isSidebarOpen ? (
@@ -1622,7 +1620,7 @@ export const Header: React.FC = () => {
                     <DropdownMenuSeparator />
                     <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.exportMarkdown')}><DropdownMenuItem onClick={() => void exportCurrentSession()}><Icon name="download" className="mr-1 size-4" />{t('sessions.sidebar.session.menu.exportMarkdown')}</DropdownMenuItem></SessionMenuItemHint>
                     {renderGuestSessionActionItems(DropdownMenuItem)}
-                    {!isVSCode && !isChatContext && currentSession && !currentSession.parentId ? (
+                    {!isChatContext && currentSession && !currentSession.parentId ? (
                       <SessionMenuItemHint hint={isCurrentSessionMovingToWorktree
                         ? t('sessions.sidebar.session.moveToWorktree.tooltipMoving')
                         : isCurrentSessionActive
@@ -1722,7 +1720,7 @@ export const Header: React.FC = () => {
           </div>
         )}
 
-        {activeSurfaceHeader || isVSCode || !sessionTabsEnabled ? <div className="flex-1" /> : null}
+        {activeSurfaceHeader || !sessionTabsEnabled ? <div className="flex-1" /> : null}
 
         <div className="flex shrink-0 items-center gap-1">
           {showDesktopHeaderContextUsage && stableDesktopContextUsage ? (
@@ -1749,7 +1747,6 @@ export const Header: React.FC = () => {
             className={cn(desktopHeaderIconButtonClass, 'mr-1')}
             Icon={'picture-in-picture-2'}
           />
-          {!isVSCode ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -1781,7 +1778,6 @@ export const Header: React.FC = () => {
                     : t('header.workStatusPanel.show')}
               </TooltipContent>
             </Tooltip>
-          ) : null}
 
           {desktopSidebarActions}
           <WindowsWindowControls visible={usesFramelessChrome && windowControlsSide === 'right'} position="right" />

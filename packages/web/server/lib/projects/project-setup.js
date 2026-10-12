@@ -7,10 +7,8 @@
 // - the shared file `<repo>/.openchamber/project.json`, committed by a team so
 //   a teammate who pulls the code gets the setup without configuring anything.
 //
-// This module knows both shapes and the one merge rule per field. The route
-// and the VS Code bridge (`packages/vscode/src/project-setup.ts`, a mirror of
-// this file) use the same code paths so a value reads back the same on every
-// surface.
+// This module knows both shapes and the one merge rule per field. The routes
+// use these code paths so a value reads back the same on every retained surface.
 
 import { isRecord as isObjectRecord } from '../shared/guards.js';
 import crypto from 'node:crypto';

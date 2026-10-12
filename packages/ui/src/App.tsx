@@ -226,7 +226,6 @@ function App({ apis }: AppProps) {
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
   const refreshSourceControlAuth = useSourceControlAuthStore((state) => state.refreshAll);
   const refreshLinearAuthStatus = useLinearAuthStore((state) => state.refreshStatus);
-  const [isVSCodeRuntime, setIsVSCodeRuntime] = React.useState<boolean>(() => apis.runtime.isVSCode);
   const [initRetryExhausted, setInitRetryExhausted] = React.useState(false);
   const [initRetryEpoch, setInitRetryEpoch] = React.useState(0);
   const [runtimeEndpointEpoch, setRuntimeEndpointEpoch] = React.useState(0);
@@ -273,9 +272,6 @@ function App({ apis }: AppProps) {
     applyMobileKeyboardMode(mobileKeyboardMode);
   }, [mobileKeyboardMode]);
 
-  React.useEffect(() => {
-    setIsVSCodeRuntime(apis.runtime.isVSCode);
-  }, [apis.runtime.isVSCode]);
 
   React.useEffect(() => {
     // A change of runtime is reset by `installRuntimeEndpointReset`, which runs
@@ -404,16 +400,11 @@ function App({ apis }: AppProps) {
   }, [setPlanModeEnabled]);
 
   React.useEffect(() => {
-    // VS Code runtime bootstraps config + sessions after the managed OpenCode instance reports "connected".
-    // Doing the default initialization here can race with startup and lead to one-shot failures.
-    if (isVSCodeRuntime) {
-      return;
-    }
     void initializeApp();
-  }, [initializeApp, isVSCodeRuntime]);
+  }, [initializeApp]);
 
   React.useEffect(() => {
-    if (isVSCodeRuntime || isInitialized) return;
+    if (isInitialized) return;
 
     let active = true;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -457,7 +448,7 @@ function App({ apis }: AppProps) {
       active = false;
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [initRetryEpoch, isInitialized, isVSCodeRuntime]);
+  }, [initRetryEpoch, isInitialized]);
 
   React.useEffect(() => {
     if (isInitialized) {
@@ -481,7 +472,7 @@ function App({ apis }: AppProps) {
   // loadProviders/loadAgents resolve normally even on failure (errors swallowed),
   // so a reactive effect can't detect failure — we need an interval.
   React.useEffect(() => {
-    if (isVSCodeRuntime || !isConnected) return;
+    if (!isConnected) return;
     if (providersLoaded && agentsLoaded) return;
 
     let active = true;
@@ -503,17 +494,13 @@ function App({ apis }: AppProps) {
       void attempt();
     }, 2000);
     return () => { active = false; clearInterval(id); };
-  }, [isConnected, isVSCodeRuntime, loadAgents, loadProviders, providersLoaded, agentsLoaded]);
+  }, [isConnected, loadAgents, loadProviders, providersLoaded, agentsLoaded]);
 
   React.useEffect(() => {
     if (isSwitchingDirectory) {
       return;
     }
 
-    // VS Code runtime loads sessions via VSCodeLayout bootstrap to avoid startup races.
-    if (isVSCodeRuntime) {
-      return;
-    }
 
     if (!isConnected) {
       return;
@@ -521,7 +508,7 @@ function App({ apis }: AppProps) {
     opencodeClient.setDirectory(currentDirectory);
 
     // Session loading is handled by the sync system's bootstrap — no manual loadSessions needed.
-  }, [currentDirectory, isSwitchingDirectory, isConnected, isVSCodeRuntime]);
+  }, [currentDirectory, isSwitchingDirectory, isConnected]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -869,7 +856,7 @@ function App({ apis }: AppProps) {
     );
   }
 
-  if (initRetryExhausted && !isInitialized && !isVSCodeRuntime) {
+  if (initRetryExhausted && !isInitialized) {
     return (
       <ErrorBoundary>
         <StartupInitializationRecovery

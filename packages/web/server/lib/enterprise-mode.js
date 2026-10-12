@@ -66,17 +66,13 @@ import { z } from 'zod';
  * The file can also pin the OpenCode CLI (`opencodeBinary`), with or without
  * enterprise mode: managed OpenCode then starts only from that path, never
  * falls back to the bundled CLI or PATH, ignores the user's binary setting,
- * and OpenChamber neither installs nor upgrades it (`opencode/env-runtime.js`,
- * `packages/vscode/src/opencode.ts`).
+ * and OpenChamber neither installs nor upgrades it (`opencode/env-runtime.js`).
  *
  * The file can also hide the skills catalogs OpenChamber ships with
  * (`hideBuiltinSkillCatalogs`), with or without enterprise mode, so the only
  * catalogs on offer are the ones the organization added
- * (`skills-catalog/curated-sources.js`, `packages/vscode/src/skillsCatalog.ts`).
+ * (`skills-catalog/curated-sources.js`).
  *
- * The VS Code extension host, which runs no OpenChamber server, reads the
- * same policy through this module for the parts it has (provider connection,
- * update checks).
  */
 
 const WINDOWS_PROGRAM_DATA = 'C:\\ProgramData';
@@ -342,10 +338,10 @@ export const ENTERPRISE_MODE_ERROR = 'Not available in enterprise mode: this ser
 
 /**
  * Whether a request asks OpenCode for every stored credential. Since 2.0.20
- * `GET /api/credential` answers with the secrets themselves. This server and
- * the VS Code extension host read it for themselves (`opencode/auth.js`); no
- * client gets it, in or out of enterprise mode, because anyone signed in to
- * the UI (over a tunnel or a paired phone too) would otherwise read every key.
+ * `GET /api/credential` answers with the secrets themselves. The server reads
+ * it for itself (`opencode/auth.js`); no client gets it, in or out of enterprise
+ * mode, because anyone signed in to the UI (over a tunnel or a paired phone
+ * too) would otherwise read every key.
  * It lives here because it needs the same reading of an OpenCode path as the
  * provider-connect check. A path under `/api` that cannot be read safely
  * counts as a read; anything else never reaches OpenCode and is left alone.

@@ -52,7 +52,6 @@ const renderSections = (
       pinnedSessionIds: new Set(),
       sessionOrderRanks: new Map(),
       gitBranches: new Map(),
-      isVSCode: false,
       worktreeSortOrder: 'recent' as const,
     });
     captured = useSessionSidebarSections({

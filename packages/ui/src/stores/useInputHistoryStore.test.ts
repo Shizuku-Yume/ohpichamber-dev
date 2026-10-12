@@ -86,8 +86,6 @@ const makeAttachment = (overrides: Partial<AttachedFile> = {}): AttachedFile => 
   size: overrides.size ?? 3,
   source: overrides.source ?? 'local',
   serverPath: overrides.serverPath,
-  vscodePath: overrides.vscodePath,
-  vscodeSource: overrides.vscodeSource,
   sourceDocumentId: overrides.sourceDocumentId,
 });
 
@@ -176,12 +174,12 @@ describe('useInputHistoryStore', () => {
               attachmentKeys: [],
               restorableAttachments: [
                 {
-                  key: 'vscode|file.ts|text/plain|10|/repo/file.ts',
-                  source: 'vscode-file',
+                  key: 'server|file.ts|text/plain|10|file:///repo/file.ts',
+                  source: 'file-url',
                   filename: 'file.ts',
                   mimeType: 'text/plain',
                   size: 10,
-                  reference: '/repo/file.ts',
+                  reference: 'file:///repo/file.ts',
                 },
               ],
               submittedAt: 3,
@@ -207,12 +205,12 @@ describe('useInputHistoryStore', () => {
         attachmentKeys: [],
         restorableAttachments: [
           {
-            key: 'vscode|file.ts|text/plain|10|/repo/file.ts',
-            source: 'vscode-file',
+            key: 'server|file.ts|text/plain|10|file:///repo/file.ts',
+            source: 'file-url',
             filename: 'file.ts',
             mimeType: 'text/plain',
             size: 10,
-            reference: '/repo/file.ts',
+            reference: 'file:///repo/file.ts',
           },
         ],
         submittedAt: 3,
@@ -268,14 +266,13 @@ describe('useInputHistoryStore', () => {
         serverPath: '/repo/server.ts',
       }),
       makeAttachment({
-        id: 'vscode-file',
-        source: 'vscode',
+        id: 'restored-file',
+        source: 'server',
         filename: 'editor.ts',
         mimeType: 'text/plain',
         size: 8,
         dataUrl: 'file:///repo/editor.ts',
-        vscodePath: '/repo/editor.ts',
-        vscodeSource: 'file',
+        serverPath: '/repo/editor.ts',
       }),
       makeAttachment({
         id: 'data-url',
@@ -315,12 +312,12 @@ describe('useInputHistoryStore', () => {
         reference: 'file:///repo/server.ts',
       },
       {
-        key: 'vscode|editor.ts|text/plain|8|/repo/editor.ts',
-        source: 'vscode-file',
+        key: 'server|editor.ts|text/plain|8|file:///repo/editor.ts',
+        source: 'file-url',
         filename: 'editor.ts',
         mimeType: 'text/plain',
         size: 8,
-        reference: '/repo/editor.ts',
+        reference: 'file:///repo/editor.ts',
       },
       {
         key: 'local|clean.png|image/png|6|https://cdn.example.com/file.png',

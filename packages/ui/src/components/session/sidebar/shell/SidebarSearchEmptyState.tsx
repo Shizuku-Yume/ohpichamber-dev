@@ -6,7 +6,7 @@ import { useUIStore } from '@/stores/useUIStore';
 type Props = {
   /** The committed sidebar query that matched nothing. */
   query: string;
-  /** Whether the Archive page exists here; VS Code keeps its archive inline. */
+  /** Whether the Archive page is available here. */
   showArchive: boolean;
   resetSessionSearch: () => void;
 };

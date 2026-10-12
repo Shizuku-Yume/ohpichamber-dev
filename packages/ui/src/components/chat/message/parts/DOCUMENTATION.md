@@ -34,14 +34,14 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 - `toolPresentation.tsx`
   - Shared icon mapping for tool names (`getToolIcon`).
   - Used by `ProgressiveGroup.tsx`, `ToolPart.tsx`, and `ToolOutputDialog.tsx`.
-  - Takes an optional extension rule (below) whose `icon` wins when the sprite carries it.
+  - Takes an optional guest rule (below) whose `icon` wins when the sprite carries it.
 
-- Extension tool presentations (`contributes.tools` in a guest manifest)
-  - The registry is `lib/guests/tool-presentation.ts`: `useGuestToolPresentation(part.tool)` / `resolveGuestToolPresentation` return the first matching rule of an active guest (exact `match` beats a suffix wildcard; first extension wins) or `null`. Rules are compiled once per catalog array; each part does one linear scan.
+- Guest tool presentations (`contributes.tools` in a guest manifest)
+  - The Guest SDK catalog is loaded for retained web/PWA and Electron embedded Node Host runtimes. `useGuestToolPresentation(part.tool)` / `resolveGuestToolPresentation` return the first matching rule of an active guest (exact `match` beats a suffix wildcard; first guest wins) or `null`. Rules are compiled once per catalog array; each part does one linear scan.
   - The lookup always gets the **full** tool name OpenCode reported (`mcp.jira.search`); `normalizeToolName` still feeds every built-in switch, so built-in behavior is untouched when there is no rule.
   - Hook points, each falling back to today's code when the rule is `null` or silent on that field: icon (`getToolIcon`), header title (`title` template, else `name`, else `getToolMetadata`), header subtitle (`subtitle` template replaces both the description and the justification text), and the expanded body (`output`: `text` / `code` / `json` / `markdown` / `table`, checked at the top of `renderResultContent` and inside `ToolScrollableTextOutput`; `auto` keeps detection). A `table` whose output is not an array or `{ items: [] }` falls through to detection.
   - `GuestToolTable.tsx` draws the table with the same cell classes the markdown decorator gives assistant tables, capped at 200 rows with a count line.
-  - VS Code and mobile mark the guest catalog unsupported, so the registry is empty and nothing changes there.
+  - Hosted mobile and Capacitor intentionally mark the guest catalog unsupported; their built-in tool rendering remains unchanged. The Guest SDK manifest, catalog parsing, approvals, and web/Electron presentation behavior remain intact.
 
 - `toolRenderUtils.ts`
   - Core classification helpers:
@@ -145,35 +145,46 @@ tool patch is parsed while the turn streams.
 - Assistant markdown treats raw HTML as inert visible text. The final generated
   HTML is sanitized as defense in depth, with script and style elements
   forbidden, so message content cannot inject active DOM or application-wide
-  CSS into any runtime surface. Safe custom application links go through the
-  app-link confirmation flow in every supported renderer, including VS Code.
+  CSS into any retained runtime surface. Safe custom application links,
+  including external `vscode://` links, go through the app-link confirmation
+  flow in web/PWA, Electron, hosted mobile, and Capacitor renderers.
+- Session links to the current instance open in place in all retained
+  renderers. Mobile keeps file-reference annotation disabled entirely,
+  including filesystem stat probes; web/PWA and Electron retain the normal
+  annotation limits and directory-scoped file navigation.
 - Final assistant Markdown rendering is independent from image gallery
   extraction: gallery presence never changes the chat body. Assistant image
   syntax consistently renders as a shared image icon followed by its filename,
   without loading the image in the body; tool and simple Markdown retain normal
-  inline image rendering. The gallery separately collects HTTP(S), embedded, and workspace-local
-  PNG/JPEG/GIF/WebP image candidates into one 100px thumbnail gallery in the
-  message-completion area after all message text and above the turn's changed
-  files. Each muted filename caption includes the shared image-file icon.
-  HTTP(S) images keep their browser URL. Embedded and workspace-local images
-  are limited to 10 MiB and validated as PNG/JPEG/GIF/WebP. Chat Markdown uses
+  inline image rendering. The gallery separately collects embedded and
+  workspace-local PNG/JPEG/GIF/WebP candidates into one 100px thumbnail gallery
+  in the message-completion area after all message text and above the turn's
+  changed files. HTTP(S) images remain intentional links rather than loading
+  remote tracking images as thumbnails. Each muted filename caption includes
+  the shared image-file icon. Embedded and local images are limited to 10 MiB
+  and validated as PNG/JPEG/GIF/WebP. Chat Markdown uses
   the assistant image-label policy without gallery-specific link rewriting,
   completion-state switching, or hidden placeholders. A
   completed assistant message hydrates at most 12 unique image candidates,
   including persisted text parts that omit their optional part-level end time.
-  In server-backed runtimes, a gallery approaching the viewport prepares all
-  local candidates in one message-level request, then reuses the authenticated
-  `/api/fs/raw` asset route. Each URL loads only when its thumbnail approaches
-  the viewport. VS Code instead loads workspace-contained images through its
-  local filesystem bridge and never calls the server grant route; OpenCode
-  temporary-directory images remain unsupported there. Mounted historical
-  messages therefore do not eagerly read every image.
+  In retained web/PWA, Electron embedded Node Host, hosted mobile, and
+  Capacitor runtimes, a gallery approaching the viewport prepares all local
+  candidates through the host's message-scoped grant route, then reuses the
+  authenticated `/api/fs/raw` asset route. Each URL loads only when its
+  thumbnail approaches the viewport. No renderer uses a workspace filesystem
+  bridge for message images. Mounted historical messages therefore do not
+  eagerly read every image.
   Gallery clicks do not introduce or alter preview chrome: desktop and mobile
   both reuse the pre-existing attachment image preview overlay.
   Workspace-external images receive the existing path-bound `outsideFileGrant`
-  only when the server verifies the exact source in the owning assistant
+  only when the host verifies the exact source in the owning assistant
   message and the real file is inside OpenCode's dedicated temporary directory.
-- `read` and `skill` are **static navigation tools** and render via `StaticToolRow`.
+- `read` and `skill` are **static navigation tools** and render via `StaticToolRow` in every retained runtime.
+- Subagent actions reuse the active pinned or embedded chat column when one
+  owns navigation. Otherwise mobile navigates to the child session in place;
+  web/PWA and Electron open its read-only chat in the context panel. File
+  navigation in the dedicated mobile app stages the existing file focus and
+  opens its Files pane, while desktop/web keeps context-file navigation.
 - Every other tool, including search/fetch, OpenCode built-ins, custom tools, plugins, and MCP tools, is **expandable** and renders through `ToolPart`.
 - The managed `openchamber` plugin tool uses the expandable path and hides its broad protocol input. The plugin supplies the selected action's human description as the native tool title; the UI renders that metadata without owning an action map. The full versioned result envelope renders through the same neutral JSON summary/tree/raw views as other tools, without a tool-specific output card.
 - Selecting a JSON summary, tree, or raw view saves that mode in the persisted UI settings. New and refreshed JSON tool outputs read the saved mode across sessions; missing or invalid preferences use Summary.
@@ -223,7 +234,9 @@ Why: only navigation tools use the compact static path; all other tools need obs
   issues are instead converted to link file-parts in
   `normalizeUserDisplayParts.ts`. Legacy pre-metadata messages still render
   via text sniffing (`<terminal_context>` blocks, `GitHub issue context (JSON)`
-  and `Linear issue context (JSON)` prefixes).
+  and `Linear issue context (JSON)` prefixes). Context cards and linked issue
+  links are retained on mobile; phone shells open their URLs rather than
+  relying on a desktop side panel, and custom schemes still use confirmation.
 - Tools: `ToolPart.tsx`, `ToolPartDiffPreview.tsx`, `PlainDiffFallback.tsx`, `ProgressiveGroup.tsx`, `toolPresentation.tsx`, `toolRenderUtils.ts`, `ToolRevealOnMount.tsx`, `GuestToolTable.tsx`
 - Reasoning/justification: `ReasoningPart.tsx`, `JustificationBlock.tsx`
 - Status/placeholders: `WorkingPlaceholder.tsx`, `SessionActiveSpinner.tsx`, `MigratingPart.tsx`, `BusyDots.tsx`

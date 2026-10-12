@@ -8,9 +8,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { SidebarHeader } from './SidebarHeader';
 
 const baseProps = {
-  hideDirectoryControls: false,
-  showProjectDisplayControls: true,
-  showRecentControls: true,
   handleOpenDirectoryDialog: () => undefined,
   showSourceBoard: true,
   headerActionIconClass: 'h-4.5 w-4.5',
@@ -76,29 +73,12 @@ afterEach(async () => {
 });
 
 describe('SidebarHeader', () => {
-  test('compact variant renders a persistent search input and no directory controls', async () => {
+
+  test('clears the committed search query with the clear button', async () => {
     await act(async () => root.render(
       <I18nProvider>
         <TooltipProvider>
-          <StatefulHeader {...baseProps} hideDirectoryControls />
-        </TooltipProvider>
-      </I18nProvider>,
-    ));
-
-    const inputs = document.querySelectorAll('input');
-    expect(inputs.length).toBe(1);
-    expect(inputs[0]?.getAttribute('placeholder')).toBe('Search sessions...');
-
-    expect(document.querySelector('[aria-label="Search sessions"]')).toBeNull();
-    expect(document.querySelector('[aria-label="Add project"]')).toBeNull();
-    expect(document.querySelector('[aria-label="Display mode"]')).toBeNull();
-  });
-
-  test('compact variant clears the search query with the clear button', async () => {
-    await act(async () => root.render(
-      <I18nProvider>
-        <TooltipProvider>
-          <StatefulHeader {...baseProps} hideDirectoryControls initialQuery="draft" />
+          <StatefulHeader {...baseProps} isSessionSearchOpen initialQuery="draft" />
         </TooltipProvider>
       </I18nProvider>,
     ));
@@ -112,12 +92,12 @@ describe('SidebarHeader', () => {
     expect(input.value).toBe('');
   });
 
-  test('compact variant applies the query on Enter, not on every keystroke', async () => {
+  test('applies an open search query on Enter, not on every keystroke', async () => {
     const submitted: string[] = [];
     await act(async () => root.render(
       <I18nProvider>
         <TooltipProvider>
-          <SidebarHeader {...baseProps} hideDirectoryControls setSessionSearchQuery={(value) => submitted.push(value)} />
+          <SidebarHeader {...baseProps} isSessionSearchOpen setSessionSearchQuery={(value) => submitted.push(value)} />
         </TooltipProvider>
       </I18nProvider>,
     ));

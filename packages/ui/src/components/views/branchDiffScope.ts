@@ -54,7 +54,7 @@ export const isBranchScopeDefinitelyUnavailable = (
 /**
  * A context tab persists its scope across branch checkouts and runtime
  * switches. When the Branch scope stops being offered (checked out the
- * default branch, VS Code runtime), fall back to a always-available one instead
+ * default branch), fall back to an always-available one instead
  * of rendering the base-resolution spinner forever.
  */
 export const coerceDiffScope = <T extends string>(

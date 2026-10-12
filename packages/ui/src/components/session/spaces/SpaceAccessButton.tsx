@@ -8,7 +8,6 @@ import React from 'react';
 
 import { Icon } from '@/components/icon/Icon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { spaceAccessNoticeOf } from '@/lib/spaces/space-access';
 import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
@@ -26,7 +25,7 @@ export const SpaceAccessButton: React.FC<{ directory: string | null | undefined;
     const notice = spaceAccessNoticeOf(state.journey?.get(spaceId));
     return notice?.kind === 'needs_again' || notice?.kind === 'no_model';
   });
-  if (!enabled || !spaceId || isVSCodeRuntime()) return null;
+  if (!enabled || !spaceId) return null;
   const label = lacking ? t('spaces.header.accessLacking') : t('spaces.group.access.give');
   return (
     <Tooltip>

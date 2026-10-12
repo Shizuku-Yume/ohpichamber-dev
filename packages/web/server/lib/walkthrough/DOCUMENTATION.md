@@ -444,6 +444,5 @@ telling someone to upgrade would send them after the wrong thing.
 
 ## Runtime availability
 
-Web, desktop, and hosted mobile reach these routes normally. VS Code serves Git
-through its own bridge rather than the OpenChamber Git routes, so the feature is
-not offered there; the surface is also gated to tablet width and above.
+Web, desktop, and hosted mobile reach these routes normally. The surface is
+also gated to tablet width and above.

@@ -9,7 +9,6 @@ import {
 } from '@/stores/useInputHistoryStore';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import type { TranscriptPrompt } from '@/sync/user-message-history';
-import { toServerFileUrl } from './composer/attachments/filePaths';
 
 type HistoryQueuedMessage = {
   content: string;
@@ -56,20 +55,6 @@ function materializeHistoryAttachment(attachment: InputHistoryAttachment): Attac
       size: attachment.size,
       source: 'local',
       serverPath: attachment.reference,
-    };
-  }
-
-  if (attachment.source === 'vscode-file') {
-    return {
-      id: `history-${attachment.key}`,
-      file: new File([], attachment.filename, { type: attachment.mimeType }),
-      dataUrl: toServerFileUrl(attachment.reference),
-      mimeType: attachment.mimeType,
-      filename: attachment.filename,
-      size: attachment.size,
-      source: 'vscode',
-      vscodePath: attachment.reference,
-      vscodeSource: 'file',
     };
   }
 

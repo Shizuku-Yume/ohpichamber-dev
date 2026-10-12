@@ -1,9 +1,7 @@
 import type { ChatMessageEntry, TurnProjectionResult } from './types';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 
 const TURN_PROJECTION_CACHE_MAX = 30;
-const VSCODE_TURN_PROJECTION_CACHE_MAX = 4;
 const MOBILE_TURN_PROJECTION_CACHE_MAX = 4;
 
 // A projection contains message/part references. Cache hits may reuse a live
@@ -11,12 +9,6 @@ const MOBILE_TURN_PROJECTION_CACHE_MAX = 4;
 const projectionCache = new Map<string, WeakRef<TurnProjectionResult>>();
 const objectVersionByRef = new WeakMap<object, number>();
 let nextObjectVersion = 1;
-
-const getProjectionCacheMax = () => {
-  if (isVSCodeRuntime()) return VSCODE_TURN_PROJECTION_CACHE_MAX;
-  if (isMobileSurfaceRuntime()) return MOBILE_TURN_PROJECTION_CACHE_MAX;
-  return TURN_PROJECTION_CACHE_MAX;
-};
 
 const getObjectVersion = (value: object): number => {
   const cached = objectVersionByRef.get(value);
@@ -77,7 +69,7 @@ export const setCachedProjection = (
   projection: TurnProjectionResult,
 ): void => {
   projectionCache.delete(key);
-  const max = getProjectionCacheMax();
+  const max = isMobileSurfaceRuntime() ? MOBILE_TURN_PROJECTION_CACHE_MAX : TURN_PROJECTION_CACHE_MAX;
   while (projectionCache.size >= max) {
     const oldest = projectionCache.keys().next().value;
     if (typeof oldest !== 'string') break;

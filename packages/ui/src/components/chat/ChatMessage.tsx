@@ -41,7 +41,6 @@ import { useI18n } from '@/lib/i18n';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { getContextObligatoryMessages } from '@/lib/contextObligatoryMessages';
 import { setContextObligatoryMessage } from '@/sync/session-actions';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useChatColumnActions } from './chatColumnSession';
 import { isFileChangeTool, isShellTool } from '@/lib/opencode/tools';
 
@@ -138,7 +137,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const { t } = useI18n();
     const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
     const alwaysShowMessageActions = isMobile || isTablet;
-    const canPinIntoContext = !isVSCodeRuntime();
     const { currentTheme } = useThemeSystem();
     const messageContainerRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -827,7 +825,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                                 onFork={isUser ? handleFork : undefined}
                                                 contextPinned={isPinnedIntoContext}
                                                 contextPinPending={pinPending}
-                                                onToggleContextPin={canPinIntoContext && messageCreatedAt ? handleToggleContextPin : undefined}
+                                                onToggleContextPin={messageCreatedAt ? handleToggleContextPin : undefined}
                                                 errorMessage={assistantErrorText}
                                                 errorResponseBody={assistantErrorResponseBody}
                                                 userActionsMode={useExternalUserActionsRow ? 'external-content' : 'inline'}
@@ -864,7 +862,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                                 onFork={isUser ? handleFork : undefined}
                                                 contextPinned={isPinnedIntoContext}
                                                 contextPinPending={pinPending}
-                                                onToggleContextPin={canPinIntoContext && messageCreatedAt ? handleToggleContextPin : undefined}
+                                                onToggleContextPin={messageCreatedAt ? handleToggleContextPin : undefined}
                                                 errorMessage={assistantErrorText}
                                                 errorResponseBody={assistantErrorResponseBody}
                                                 userActionsMode="external-actions"
@@ -889,7 +887,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 messageCreatedAt={messageCreatedAt ?? undefined}
                                 contextPinned={isPinnedIntoContext}
                                 contextPinPending={pinPending}
-                                onToggleContextPin={canPinIntoContext && messageCreatedAt ? handleToggleContextPin : undefined}
+                                onToggleContextPin={messageCreatedAt ? handleToggleContextPin : undefined}
                                  isMobile={isMobile}
                                  alwaysShowActions={alwaysShowMessageActions}
                                  hasTouchInput={hasTouchInput}

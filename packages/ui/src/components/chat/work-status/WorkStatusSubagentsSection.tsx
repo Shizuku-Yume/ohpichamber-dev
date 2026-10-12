@@ -10,7 +10,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getProviderModelDisplayName } from '@/lib/modelDisplay';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { WorkStatusCollapsibleSection, WorkStatusRow, WorkStatusValue } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
 import { formatCost } from './subagentCost';
@@ -83,11 +82,11 @@ export const WorkStatusSubagentsSection: React.FC<Props> = ({ sessionId, directo
     hadChildren.current = present;
   }, [children.length, setSectionExpanded]);
 
-  // Same branch the transcript's Task tool takes: surfaces that cannot host an
-  // side panel navigate to the child session instead of opening a tab.
+  // Mobile selects the child session in place; other layouts open the child's
+  // read-only chat in the context panel.
   const openChildSession = React.useCallback((childId: string, label: string) => {
     if (!directory) return;
-    if (isMobile || isVSCodeRuntime()) {
+    if (isMobile) {
       setCurrentSession(childId, directory);
       return;
     }

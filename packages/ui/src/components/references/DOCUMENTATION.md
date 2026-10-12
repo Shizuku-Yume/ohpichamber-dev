@@ -61,13 +61,12 @@ checks the highlighted item. Double-click attaches a row.
 ## Runtimes
 
 Web, desktop and hosted mobile use it as above; Capacitor mobile gets the
-in-place preview layout. VS Code never opens it: the composer offers only files
-there.
+in-place preview layout.
 
 ## Board
 
 `components/sourceBoard` is a full page over the chat area, opened from the
-sidebar header (desktop and web, and the phone shell's menu; not VS Code). It
+sidebar header (desktop and web, and the phone shell's menu). It
 uses `useReferenceBrowser` and the shared parts without checkboxes; the
 preview's footer holds actions instead of what the agent gets.
 
@@ -98,7 +97,7 @@ preview's footer holds actions instead of what the agent gets.
   finds that one item whatever its state, on GitLab too, where a number or link
   is read rather than searched; one the host does not know opens in the
   browser, and a Linear identifier Linear cannot read is searched for. The phone opens the found
-  item's preview. Cmd or Ctrl-click, VS Code, a session outside any
+  item's preview. Cmd or Ctrl-click, a session outside any
   project, Linear while disconnected and links the board does not list open in
   the browser. A badge's `+N` does nothing; its tooltip lists the others.
 - The side panel and its rail stay beside the board. A board under 960 px

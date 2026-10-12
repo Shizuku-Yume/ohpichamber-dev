@@ -258,7 +258,6 @@ mock.module('@/lib/i18n', () => ({
 mock.module('@/lib/desktop', () => ({
   invokeDesktop: () => desktopInvoke(),
   isDesktopShell: mock(() => desktopShell),
-  isVSCodeRuntime: mock(() => false),
 }));
 
 mock.module('@/lib/persistence', () => ({

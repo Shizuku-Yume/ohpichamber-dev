@@ -125,7 +125,7 @@ is a compact row behind "Show all", and the search covers all of them.
 
 The integration list is kept for the app session by
 `lib/opencode/integration-catalog.ts`, so the page opens on it without a
-loading state. The desktop/web/VS Code app reads it once at startup when the
+loading state. The desktop/web app reads it once at startup when the
 browser is idle (`hooks/useIntegrationCatalogPrefetch.ts`); the phone layout
 and relay connections skip that read, because relay bytes are paid, and read
 it when Settings opens. The snapshot is only a starting point: the page reads

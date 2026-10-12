@@ -915,18 +915,17 @@ describe("archiving a batch through the server", () => {
     expect(source.getState().session.map((item) => item.id)).toEqual(["session-b"])
   })
 
-  test("reports every session as failed when the runtime does not serve the route", async () => {
+  test("reports every session as failed when the archive request fails", async () => {
     globalActiveSessions = [liveSession("session-a"), liveSession("session-b")]
-    archiveBatchResponse = { status: 501, body: { error: "not supported in VS Code" } }
+    archiveBatchResponse = { status: 503, body: { error: "archive storage unavailable" } }
     const source = createStore({}, { session: [liveSession("session-a"), liveSession("session-b")] })
     const { archiveSessions, setActionRefs } = await import("./session-actions")
     setActionRefs(createChildStores([["/test/project", source]]), () => "/test/project")
 
     const result = await archiveSessions(["session-a", "session-b"])
 
-    // Archive is OpenChamber's own route now, so a runtime that does not serve
-    // it cannot archive at all — the sessions stay put rather than vanishing
-    // locally on an unconfirmed write.
+    // A rejected host write leaves sessions in place rather than removing
+    // them locally on an unconfirmed archive.
     expect(result.archivedIds).toEqual([])
     expect(result.failedIds.sort()).toEqual(["session-a", "session-b"])
     expect(source.getState().session.map((item) => item.id)).toEqual(["session-a", "session-b"])

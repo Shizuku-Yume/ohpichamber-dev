@@ -3,7 +3,6 @@ import { runtimeFetch } from './runtime-fetch';
 import { useAuthSessionStore, waitForAuthSession } from './runtime-auth-expiry';
 import { isRelayModeActive } from './relay/runtime-tunnel';
 import { subscribeRuntimeEndpointChanged } from './runtime-switch';
-import { isVSCodeRuntime } from './desktop';
 import { canDriveBrowserPage } from './browser/hostCapability';
 import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
 import { z } from 'zod';
@@ -593,10 +592,6 @@ const cleanupRuntimeChangeSubscription = () => {
 };
 
 export const subscribeOpenchamberEvents = (listener: Listener): (() => void) => {
-  // VS Code runs OpenCode through its bridge, not the OpenChamber server that
-  // owns this stream. Opening it here retries against vscode-webview:// forever.
-  if (isVSCodeRuntime()) return () => undefined;
-
   listeners.add(listener);
   ensureRuntimeChangeSubscription();
   connect();

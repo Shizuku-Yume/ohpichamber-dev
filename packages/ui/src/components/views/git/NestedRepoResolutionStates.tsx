@@ -31,7 +31,7 @@ type NestedRepoResolutionStatesProps = {
  * has finished — either the root is a repository or the operating directory
  * probed as one — so the consumer can proceed into its own content.
  *
- * A runtime without the discovery route (VS Code) reports "unsupported": the
+ * A runtime without the discovery route reports "unsupported": the
  * honest state there is the plain not-a-repository empty state, without a
  * retry that can never succeed.
  */

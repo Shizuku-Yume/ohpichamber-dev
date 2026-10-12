@@ -6,7 +6,6 @@ import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { SESSION_GOAL_OBJECTIVE_CHAR_LIMIT } from '@/lib/sessionGoalMetadata';
 import { sessionGoalStatusColor } from '@/lib/sessionGoalPresentation';
 import { SessionGoalDialog } from '@/components/chat/SessionGoalDialog';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -41,13 +40,10 @@ export const SessionGoalButton: React.FC<SessionGoalButtonProps> = React.memo(({
   // The goal loop checks every turn with Jev or the small model; with neither
   // a goal would stop after two failed checks, so arming is disabled with the
   // reason. A goal that already exists stays manageable.
-  const canCheck = useGoalCheckAvailable(directory, !isVSCodeRuntime() && enabled);
+  const canCheck = useGoalCheckAvailable(directory, enabled);
   const cannotCheck = !canCheck && !goal;
 
-  // The goal loop runs in the web server; the VS Code extension only renders
-  // goal state. Arming a goal there would create one nothing drives, so the
-  // entry point is hidden entirely.
-  if (isVSCodeRuntime() || !enabled || (!sessionId && !draftOpen)) {
+  if (!enabled || (!sessionId && !draftOpen)) {
     return null;
   }
 

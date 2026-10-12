@@ -42,7 +42,7 @@ export function useGitPublishChooser({ directory, branch, chooseContributor }: {
   branch: string | undefined;
   chooseContributor: (candidates: ContributorDestinationCandidate[]) => Promise<string | null>;
 }) {
-  const { git, sourceControl, runtime } = useRuntimeAPIs();
+  const { git, sourceControl } = useRuntimeAPIs();
   const { t } = useI18n();
   const confirmation = useConfirmDialog();
   const [context, setContext] = React.useState<GitPublishContext | null>(null);
@@ -78,7 +78,7 @@ export function useGitPublishChooser({ directory, branch, chooseContributor }: {
       if (getRuntimeKey() !== capturedRuntime) throw new BoundGitNetworkOperationError('stale-runtime');
       if (generation.current !== capturedGeneration) throw new BoundGitNetworkOperationError('publish-selection-stale');
     };
-    const provenance = runtime.isVSCode ? { kind: 'ordinary' as const } : await git.listContributorDestinations(directory);
+    const provenance = await git.listContributorDestinations(directory);
     assertCurrent();
     if (provenance.kind === 'contributor') {
       const status = await git.getGitStatus(directory);

@@ -72,12 +72,10 @@ server for a grant (`POST /api/fs/preview`) and loads the page from
 `/api/fs/preview/<grant>/<path>`; the frame's `sandbox` has no
 `allow-same-origin`, so the page runs as an opaque origin with no session and
 cannot reach the app's API, DOM or terminal. Its neighbouring images, styles
-and scripts load through the grant in the path. VS Code renders `srcDoc` in
-its own Webview with a `<base>` tag instead.
+and scripts load through the grant in the path on every retained runtime.
 
 
 An agent can ask for a file to be shown (`file.open` on the managed
 `openchamber` tool). The server broadcasts `openchamber:file-open-request`;
 `ContextPanel` answers it with `openContextFile`, `MobileApp` additionally
-opens the files drawer. VS Code has no shared file viewer and no managed
-tool, so the event never reaches it.
+opens the files drawer.

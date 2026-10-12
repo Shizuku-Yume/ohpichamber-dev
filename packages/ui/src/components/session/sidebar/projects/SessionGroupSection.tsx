@@ -76,7 +76,6 @@ export type SessionGroupSectionProps = {
   visibleSessionCount?: number;
   sessionBatchSize?: number;
   collapsedGroups: Set<string>;
-  hideDirectoryControls: boolean;
   showMoreGroupSessions: (groupKey: string, currentVisibleCount: number, increment?: number) => void;
   resetGroupSessionLimit: (groupKey: string) => void;
   mobileVariant: boolean;
@@ -235,7 +234,6 @@ const areGroupPropsEqual = (prev: SessionGroupSectionProps, next: SessionGroupSe
   return (
     prev.hasSessionSearchQuery === next.hasSessionSearchQuery
     && prev.normalizedSessionSearchQuery === next.normalizedSessionSearchQuery
-    && prev.hideDirectoryControls === next.hideDirectoryControls
     && prev.showMoreGroupSessions === next.showMoreGroupSessions
     && prev.resetGroupSessionLimit === next.resetGroupSessionLimit
     && prev.mobileVariant === next.mobileVariant
@@ -330,7 +328,6 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
     visibleSessionCount,
     sessionBatchSize,
     collapsedGroups,
-    hideDirectoryControls,
     showMoreGroupSessions,
     resetGroupSessionLimit,
     mobileVariant,
@@ -443,7 +440,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
       setIsRequestingBootstrapAccess(false);
     }
   }, [canGrantBootstrapAccess, failedBootstrapDirectory, isRequestingBootstrapAccess, retryFailedBootstrap]);
-  const maxVisible = sessionBatchSize ?? (hideDirectoryControls ? 10 : 5);
+  const maxVisible = sessionBatchSize ?? 5;
   const nonArchivedVisibleCount = Math.max(maxVisible, visibleSessionCount ?? maxVisible);
   const groupMatchesSearch = hasSessionSearchQuery ? searchData?.groupMatches === true : false;
   const shouldFilterGroupContents = hasSessionSearchQuery;
@@ -455,7 +452,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
   const folderScopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
   const folderOwnerKey = getSessionFolderOwnerKey(projectId, group.directory);
   // Merged flat groups list every contributing scope; single-scope groups
-  // (archived buckets, VS Code workspaces) fall back to folderScopeKey.
+  // fall back to folderScopeKey.
   const folderScopes = React.useMemo<FolderScope[]>(() => {
     if (group.folderScopes && group.folderScopes.length > 0) return group.folderScopes;
     return folderScopeKey ? [{ scopeKey: folderScopeKey, directory: group.directory ?? null }] : [];

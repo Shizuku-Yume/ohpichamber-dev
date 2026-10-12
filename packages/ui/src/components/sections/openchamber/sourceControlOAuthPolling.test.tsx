@@ -351,7 +351,7 @@ mock.module('@/contexts/runtimeAPIRegistry', () => ({
   getRegisteredRuntimeAPIs: () => ({ sourceControl }),
 }));
 mock.module('@/hooks/useRuntimeAPIs', () => ({
-  useRuntimeAPIs: () => ({ sourceControl, git, runtime: { isVSCode: false } }),
+  useRuntimeAPIs: () => ({ sourceControl, git, runtime: {} }),
 }));
 mock.module('@/hooks/useEffectiveDirectory', () => ({ useEffectiveDirectory: () => effectiveDirectory }));
 mock.module('@/stores/useSourceControlAuthStore', () => ({

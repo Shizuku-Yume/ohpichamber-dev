@@ -39,20 +39,6 @@ describe('openchamber events', () => {
     Reflect.deleteProperty(globalThis, 'EventSource');
   });
 
-  test('does not open the server-only event stream in VS Code', async () => {
-    Object.defineProperty(window, '__VSCODE_CONFIG__', {
-      value: { workspaceFolder: 'C:/repo', workspaceFolders: [] },
-      configurable: true,
-    });
-    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
-    const unsubscribe = subscribeOpenchamberEvents(() => undefined);
-    try {
-      expect(MockEventSource.instances).toHaveLength(0);
-    } finally {
-      unsubscribe();
-    }
-  });
-
   test('desktop browser-capable events cross the active relay as streamed HTTP, not native EventSource', async () => {
     Object.defineProperty(window, '__OPENCHAMBER_ELECTRON__', { value: true, configurable: true });
     const requests: Array<{ path: string; authorization: string | null; signal: AbortSignal | undefined }> = [];

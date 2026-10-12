@@ -13,7 +13,6 @@ import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { Icon } from '@/components/icon/Icon';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import type { ProjectEntry } from '@/lib/api/types';
@@ -35,7 +34,6 @@ export const SettingsProjectSelector: React.FC<{ className?: string }> = ({ clas
   const settingsDirectory = useSettingsDirectory();
   const setSettingsProjectPath = useUIStore((state) => state.setSettingsProjectPath);
 
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
   const sortedProjects = React.useMemo(() => sortSettingsProjects(projects), [projects]);
 
@@ -43,7 +41,7 @@ export const SettingsProjectSelector: React.FC<{ className?: string }> = ({ clas
     return sortedProjects.find((p) => p.path === settingsDirectory) ?? sortedProjects[0] ?? null;
   }, [settingsDirectory, sortedProjects]);
 
-  if (isVSCode || !activeProject) {
+  if (!activeProject) {
     return null;
   }
 

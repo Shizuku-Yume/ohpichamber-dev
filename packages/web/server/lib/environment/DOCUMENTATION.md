@@ -97,4 +97,3 @@ token, PATH entries it needs) are applied after the user's variables and win.
 |---|---|
 | Web, hosted mobile, Capacitor | The server route; Settings sections render. |
 | Electron | Same server, in process. |
-| VS Code | No OpenChamber server: both Settings sections are hidden and nothing is applied to the processes the extension host starts. |

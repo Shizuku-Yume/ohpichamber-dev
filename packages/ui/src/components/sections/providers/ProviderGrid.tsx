@@ -114,7 +114,7 @@ const EnterpriseProvidersNotice: React.FC<{ directory: string | null; integratio
 /**
  * Classification providers answer OpenChamber's own Jev decisions (safety
  * net, Auto), not OpenCode, so they get one card of their own that opens a
- * dedicated page. Absent where there is no OpenChamber server (VS Code).
+ * dedicated page.
  */
 const ClassificationCard: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
   const { t } = useI18n();

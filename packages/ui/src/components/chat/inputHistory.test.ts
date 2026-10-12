@@ -74,8 +74,8 @@ describe('mapInputHistoryEntriesToValues', () => {
         text: 'newest',
         attachmentKeys: ['b'],
         restorableAttachments: [{
-          key: 'vscode-file',
-          source: 'vscode-file',
+          key: 'newer-server-file',
+          source: 'file-url',
           filename: 'editor.ts',
           mimeType: 'text/plain',
           size: 22,
@@ -92,9 +92,9 @@ describe('mapInputHistoryEntriesToValues', () => {
     expect(values[0]?.attachments[0]?.dataUrl).toBe('/repo/server.txt');
     expect(values[0]?.attachments[0]?.source).toBe('local');
     expect(values[1]?.attachments[0]?.filename).toBe('editor.ts');
-    expect(values[1]?.attachments[0]?.vscodePath).toBe('/repo/editor.ts');
-    expect(values[1]?.attachments[0]?.vscodeSource).toBe('file');
-    expect(values[1]?.attachments[0]?.source).toBe('vscode');
+    expect(values[1]?.attachments[0]?.dataUrl).toBe('/repo/editor.ts');
+    expect(values[1]?.attachments[0]?.serverPath).toBe('/repo/editor.ts');
+    expect(values[1]?.attachments[0]?.source).toBe('local');
   });
 
   test('drops unsupported attachment descriptors', () => {

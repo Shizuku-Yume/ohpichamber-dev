@@ -42,7 +42,7 @@ describe('createSessionOwnershipIndex', () => {
       ['/projects/app', [{ path: '/worktrees/app-feature' }]],
     ]);
 
-    const ownership = createSessionOwnershipIndex(sessions, projects, worktrees, false);
+    const ownership = createSessionOwnershipIndex(sessions, projects, worktrees);
 
     expect(ownership.bySessionId.get('nested')?.projectId).toBe('admin');
     expect(ownership.bySessionId.get('external-worktree')).toEqual({
@@ -73,7 +73,6 @@ describe('createSessionOwnershipIndex', () => {
         { id: 'admin', normalizedPath: '/projects/app/packages/admin' },
       ],
       new Map([['/projects/app', [{ path: '/projects/app/packages/admin' }]]]),
-      false,
     );
 
     expect(ownership.bySessionId.get('nested')?.projectId).toBe('admin');
@@ -85,7 +84,6 @@ describe('createSessionOwnershipIndex', () => {
       [],
       [{ id: 'app', normalizedPath: '/projects/app' }],
       new Map([['/projects/app', [{ path: '/worktrees/app-feature' }]]]),
-      false,
       [
         { id: 'archived-child', directory: '/worktrees/app-feature/src', time: { archived: 1 } },
         { id: 'archived-fallback', project: { worktree: '/worktrees/app-feature' }, time: { archived: 1 } },
@@ -98,21 +96,6 @@ describe('createSessionOwnershipIndex', () => {
     ]);
   });
 
-  test('requires exact workspace directories in VS Code', () => {
-    const ownership = createSessionOwnershipIndex(
-      [
-        { id: 'workspace', directory: '/projects/app' },
-        { id: 'nested', directory: '/projects/app/packages/ui' },
-      ] as Session[],
-      [{ id: 'app', normalizedPath: '/projects/app' }],
-      new Map(),
-      true,
-    );
-
-    expect(ownership.bySessionId.get('workspace')?.projectId).toBe('app');
-    expect(ownership.bySessionId.has('nested')).toBe(false);
-  });
-
   test('resolves a deleted directory through canonical OpenCode project metadata', () => {
     const ownership = createSessionOwnershipIndex(
       [
@@ -121,7 +104,6 @@ describe('createSessionOwnershipIndex', () => {
       ],
       [{ id: 'configured-app', normalizedPath: '/projects/app' }],
       new Map([['/projects/app', [{ path: '/worktrees/feature' }]]]),
-      false,
     );
 
     expect(ownership.bySessionId.get('restored')).toEqual({
@@ -137,7 +119,6 @@ describe('createSessionOwnershipIndex', () => {
       [ownershipSession('restored', { projectID: 'opencode-app', directory: '/deleted/worktrees/feature' })],
       [{ id: 'configured-app', normalizedPath: '/projects/app' }],
       new Map(),
-      false,
       [],
       [{ id: 'opencode-app', worktree: '/projects/app' }],
     );
@@ -157,7 +138,6 @@ describe('createSessionOwnershipIndex', () => {
         { id: 'configured-embedded', normalizedPath: '/projects/embedded' },
       ],
       new Map(),
-      false,
       [],
       [{ id: 'opencode-app', worktree: '/projects/authoritative' }],
     );
@@ -177,7 +157,6 @@ describe('createSessionOwnershipIndex', () => {
         { id: 'configured-two', normalizedPath: '/projects/two' },
       ],
       new Map(),
-      false,
     );
 
     expect(ownership.bySessionId.has('restored')).toBe(false);
@@ -192,7 +171,6 @@ describe('createSessionOwnershipIndex', () => {
       })],
       [{ id: 'configured-app', normalizedPath: '/projects/app' }],
       new Map(),
-      false,
     );
 
     expect(ownership.bySessionId.has('restored')).toBe(false);
@@ -206,7 +184,6 @@ describe('createSessionOwnershipIndex', () => {
       ],
       [{ id: 'configured-app', normalizedPath: '/projects/app' }],
       new Map([['/projects/app', [{ path: '/worktrees/app-feature' }]]]),
-      false,
     );
 
     expect(ownership.bySessionId.get('worktree')?.scopeDirectory).toBe('/worktrees/app-feature');
@@ -218,7 +195,6 @@ describe('createSessionOwnershipIndex', () => {
       [{ id: 'windows-root', directory: 'c:\\Users\\name\\project' } as Session],
       [{ id: 'drive', normalizedPath: 'C:/' }],
       new Map(),
-      false,
     );
 
     expect(ownership.bySessionId.get('windows-root')?.projectId).toBe('drive');
@@ -241,7 +217,7 @@ describe('createSessionOwnershipIndex', () => {
       directory: `/worktrees/${index % 15}/${index % 4}/session/${index}`,
     })) as unknown as Session[];
 
-    const ownership = createSessionOwnershipIndex(sessions, projects, worktrees, false);
+    const ownership = createSessionOwnershipIndex(sessions, projects, worktrees);
 
     expect(ownership.bySessionId.size).toBe(14_561);
     expect(ownership.directoryResolutions).toBeLessThan(14_561 * 2);
@@ -261,7 +237,7 @@ describe('createSessionOwnershipIndex', () => {
       { id: ORPHAN, name: 'Old', state: 'stale' as const, projectDirectory: null, directory: null },
     ];
 
-    const ownership = createSessionOwnershipIndex(sessions, projects, new Map(), false, [], [], spaces);
+    const ownership = createSessionOwnershipIndex(sessions, projects, new Map(), [], [], spaces);
 
     expect(ownership.bySessionId.get('in-space')).toEqual({
       projectId: 'app',
@@ -271,8 +247,6 @@ describe('createSessionOwnershipIndex', () => {
       spaceId: SPACE,
     });
     expect(ownership.bySessionId.has('orphan-space')).toBe(false);
-    // VS Code never has spaces.
-    expect(createSessionOwnershipIndex(sessions, projects, new Map(), true, [], [], spaces).bySessionId.has('in-space')).toBe(false);
   });
 
   test('lists only top-level sessions as archived', () => {
@@ -282,7 +256,6 @@ describe('createSessionOwnershipIndex', () => {
       [],
       [{ id: 'workspace', normalizedPath: '/workspace' }],
       new Map(),
-      false,
       [archivedParent, archivedChild],
     );
 

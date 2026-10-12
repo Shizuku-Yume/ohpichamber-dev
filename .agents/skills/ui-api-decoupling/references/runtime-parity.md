@@ -6,22 +6,10 @@
 2. Implement web behavior under `packages/web/src/api/*` and compose it in `packages/web/src/api/index.ts`.
 3. Keep Electron shared through the web runtime unless behavior is inherently native.
 4. Support hosted-mobile and Capacitor mobile requirements as applicable to the surface.
-5. Do not add new implementations or bridge handlers to `packages/vscode`; the extension is a retired target scheduled for removal.
-6. Register APIs through app entrypoints and consume via `RuntimeAPIProvider` hooks.
+5. Register APIs through app entrypoints and consume via `RuntimeAPIProvider` hooks.
 
 React components use `useRuntimeAPIs()` or `useRuntimeAPI()`. Non-React modules use `getRegisteredRuntimeAPIs()` only when hooks are impossible. Do not introduce direct reads of `window.__OPENCHAMBER_RUNTIME_APIS__` in feature code.
 
-## Legacy VS Code Route Inventory
-
-The VS Code extension is a retired target scheduled for removal. Do not extend its routing or add new bridge handlers. For reference, inherited legacy routes were handled as follows:
-
-| Route type | Inherited legacy VS Code behavior |
-|---|---|
-| OpenChamber local route | Handled in webview and bridged to extension host |
-| Official OpenCode route | Forwarded through generic OpenCode proxy |
-| SSE | Dedicated SSE bridge |
-| Session message POST | Dedicated session-message path |
-| Unsupported native feature | Stable explicit unsupported behavior, normally 501 JSON |
 
 ## Electron Boundary
 
@@ -35,4 +23,4 @@ Electron normally reuses the web runtime/server implementation. Keep privileged 
 
 ## Shared Contract Rule
 
-For every shared capability, decide web, Electron, hosted-mobile, and Capacitor behavior explicitly across retained surfaces (do not extend retired VS Code support). A stable unsupported response is acceptable; accidental fallthrough is not.
+For every shared capability, decide web, Electron, hosted-mobile, and Capacitor behavior explicitly across retained surfaces. A stable unsupported response is acceptable; accidental fallthrough is not.

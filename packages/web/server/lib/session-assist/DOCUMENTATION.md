@@ -124,8 +124,7 @@ the session is idle. A new message invalidates it without clearing writes.
 - `SessionRecapSpacer` shows the reminder in the reserved gap under the reply.
 - `SessionSuggestionChip` fills the composer; it never sends automatically.
 
-Web, Electron, hosted mobile, and Capacitor use the server watcher. VS Code's
-extension-only runtime does not generate assists; shared UI can render payloads
-produced by a server. The background watcher cannot use the browser's message
-store when the UI is closed. Manual AI rename uses that store through
+Web, Electron, hosted mobile, and Capacitor use the server watcher. The
+background watcher cannot use the browser's message store when the UI is closed.
+Manual AI rename uses that store through
 `SessionMessageLoader`; these are intentionally different retrieval lifecycles.

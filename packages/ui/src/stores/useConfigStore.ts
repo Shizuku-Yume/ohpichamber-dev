@@ -1335,9 +1335,8 @@ type SelectionField = typeof SELECTION_FIELDS[number];
  * Whether writing `next` would leave both the top-level selection and the
  * active directory's snapshot as they are. The persist middleware writes the
  * whole store after every `set()`, even one whose updater returns the same
- * state, and VS Code delivers each `config-store` write to every OpenChamber
- * webview in every window. So a setter makes this check before it calls
- * `set()`. A missing snapshot is a change: the write would create it.
+ * state. A setter checks for a change before it calls `set()` to avoid an
+ * unnecessary durable write. A missing snapshot is a change: the write would create it.
  */
 const isUnchangedSelection = (
     state: Pick<ConfigStore, "activeDirectoryKey" | "directoryScoped" | SelectionField>,
@@ -3879,8 +3878,7 @@ export const useConfigStore = create<ConfigStore>()(
                             const voiceApiKeys = migrated ?? await fetchVoiceApiKeys();
                             if (getRuntimeKey() === runtimeKey) set({ voiceApiKeys });
                         } catch (error) {
-                            // A runtime without the route (VS Code) or an offline
-                            // server: keys read as unset, which offers setting one.
+                            // An offline server leaves keys unset, which offers setting one.
                             if (getRuntimeKey() === runtimeKey) set({ voiceApiKeys: EMPTY_VOICE_API_KEYS });
                             console.warn('Failed to read voice API keys:', error);
                         }
@@ -4060,8 +4058,8 @@ export const useConfigStore = create<ConfigStore>()(
                                 });
                                 attempt += 1;
                                 // A host that held the answer has already waited; one that
-                                // answered at once (an older host, the VS Code bridge, an
-                                // unreachable server) keeps the old pacing.
+                                // answered at once (an older host or an unreachable
+                                // server) keeps the old pacing.
                                 await sleep(Math.max(0, 400 * attempt - (Date.now() - probeStarted)));
                                 continue;
                             }
@@ -4320,10 +4318,8 @@ export const useConfigStore = create<ConfigStore>()(
                     return hydrateActiveDirectorySnapshot(merged);
                 },
                 // Selections only. The provider and agent catalogs are not
-                // persisted: VS Code gives every OpenChamber webview one origin,
-                // so each write reaches every webview in every window as a
-                // StorageEvent carrying the old and the new value, and with the
-                // catalogs a write was tens of megabytes. On a cold start the
+                // persisted: large catalog payloads would make every selection
+                // write unnecessarily expensive. On a cold start the
                 // pickers wait for initializeApp() / activateDirectory() to load
                 // the catalogs. Older blobs that still carry them hydrate as before.
                 partialize: (state) => ({

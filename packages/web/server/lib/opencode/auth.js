@@ -1,6 +1,5 @@
 /**
- * READ-ONLY view of OpenCode's provider credentials, shared by the web server
- * and the VS Code extension host.
+ * READ-ONLY view of OpenCode's provider credentials for the OpenChamber server.
  *
  * OpenCode 2.x owns every credential. Since 2.0.20 it hands them back over
  * `GET /api/credential`, secrets included, so the quota providers, voice keys
@@ -26,8 +25,7 @@
 import { OpenCode } from '@opencode/client';
 import { z } from 'zod';
 
-// Wired once per runtime: `server/index.js` on the web server, the extension
-// entry point in VS Code. Until then every read throws.
+// Wired once by the server. Until then every read throws.
 let source = null;
 
 /** Wires the reader to a credential source (`{ list }`). Pass `null` to detach. */

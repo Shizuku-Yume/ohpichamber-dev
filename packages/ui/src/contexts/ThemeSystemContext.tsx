@@ -7,7 +7,7 @@ import React, {
 } from 'react';
 import { z } from 'zod';
 import type { Theme, ThemeMode } from '@/types/theme';
-import { isDesktopLocalOriginActive, isDesktopShell as detectDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell as detectDesktopShell } from '@/lib/desktop';
 import { setDesktopWindowTheme } from '@/lib/desktopNative';
 import { CSSVariableGenerator } from '@/lib/theme/cssGenerator';
 import { type SettingsSyncedDetail, updateDesktopSettings } from '@/lib/persistence';
@@ -20,7 +20,6 @@ import {
 } from '@/lib/theme/themes';
 import { withPrColors } from '@/lib/theme/themes/prColors';
 import { ThemeSystemContext, type ThemeContextValue } from './theme-system-context';
-import type { VSCodeThemePayload } from '@/lib/theme/vscode/adapter';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { themeSchema, themeListSchema, type ThemeDefinition } from '@/lib/theme/definition';
 import { ThemeImportError } from '@/lib/theme/importErrors';
@@ -119,14 +118,6 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
   const [customThemes, setCustomThemes] = useState<Theme[]>([]);
   const [developmentThemes, setDevelopmentThemes] = useState<Theme[]>([]);
   const [customThemesLoading, setCustomThemesLoading] = useState(false);
-  const [vscodeTheme, setVSCodeTheme] = useState<Theme | null>(() => {
-    if (typeof window === 'undefined' || !isVSCodeRuntime()) {
-      return null;
-    }
-    const existing = (window as unknown as { __OPENCHAMBER_VSCODE_THEME__?: Theme }).__OPENCHAMBER_VSCODE_THEME__;
-    return existing || null;
-  });
-  const isVSCode = useMemo(() => isVSCodeRuntime(), []);
   const isDesktopShell = useMemo(() => detectDesktopShell(), []);
   const customThemesRequestRef = useRef(0);
   const themeImportRequestRef = useRef(0);
@@ -150,9 +141,6 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
       merged.push(theme);
     };
 
-    if (isVSCode && vscodeTheme) {
-      add(vscodeTheme);
-    }
 
     // Custom themes first so they can override built-ins with the same id.
     customThemes.forEach(add);
@@ -162,7 +150,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     themes.forEach(add);
 
     return merged;
-  }, [customThemes, developmentThemes, isVSCode, vscodeTheme]);
+  }, [customThemes, developmentThemes]);
 
   useEffect(() => {
     const handleThemeHmr = (event: Event) => {
@@ -203,9 +191,6 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
   );
 
   const currentTheme = useMemo(() => {
-    if (isVSCode && vscodeTheme) {
-      return vscodeTheme;
-    }
     if (preferences.themeMode === 'light') {
       return ensureThemeById(preferences.lightThemeId, 'light');
     }
@@ -215,10 +200,10 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     return systemPrefersDark
       ? ensureThemeById(preferences.darkThemeId, 'dark')
       : ensureThemeById(preferences.lightThemeId, 'light');
-  }, [ensureThemeById, isVSCode, preferences, systemPrefersDark, vscodeTheme]);
+  }, [ensureThemeById, preferences, systemPrefersDark]);
 
   const reloadCustomThemes = useCallback(async () => {
-    if (typeof window === 'undefined' || isVSCode) {
+    if (typeof window === 'undefined') {
       return;
     }
 
@@ -254,14 +239,14 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
         setCustomThemesLoading(false);
       }
     }
-  }, [isVSCode]);
+  }, []);
 
   useEffect(() => {
     void reloadCustomThemes();
   }, [reloadCustomThemes]);
 
   useEffect(() => {
-    if (isVSCode || customThemesLoading) return;
+    if (customThemesLoading) return;
     const missing = [preferences.lightThemeId, preferences.darkThemeId]
       .filter((id) => !availableThemes.some((theme) => theme.metadata.id === id));
     if (!missing.length) {
@@ -274,10 +259,10 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     if (missingThemeReloadRef.current === key) return;
     missingThemeReloadRef.current = key;
     void reloadCustomThemes();
-  }, [availableThemes, customThemesLoading, isVSCode, preferences.lightThemeId, preferences.darkThemeId, reloadCustomThemes]);
+  }, [availableThemes, customThemesLoading, preferences.lightThemeId, preferences.darkThemeId, reloadCustomThemes]);
 
   useEffect(() => subscribeRuntimeEndpointChanged((detail) => {
-    if (detail.runtimeKey === detail.previousRuntimeKey || isVSCode) return;
+    if (detail.runtimeKey === detail.previousRuntimeKey) return;
     themeWriteIntentRef.current = false;
     customThemesRequestRef.current += 1;
     themeRuntimeGenerationRef.current += 1;
@@ -287,33 +272,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     // settings sync refines it with the server's authoritative value.
     setPreferences((prev) => adoptThemePreferencesForRuntime(detail.runtimeKey, prev));
     void reloadCustomThemes();
-  }), [isVSCode, reloadCustomThemes]);
-
-  useEffect(() => {
-    if (!isVSCode) {
-      return;
-    }
-
-    const applyVSCodeTheme = (theme: Theme) => {
-      setVSCodeTheme(theme);
-    };
-
-    const handleThemeEvent = (event: Event) => {
-      const detail = (event as CustomEvent<VSCodeThemePayload>).detail;
-      if (detail?.theme) {
-        applyVSCodeTheme(detail.theme);
-      }
-    };
-
-    const existing = (window as unknown as { __OPENCHAMBER_VSCODE_THEME__?: Theme }).__OPENCHAMBER_VSCODE_THEME__;
-    if (existing) {
-      applyVSCodeTheme(existing);
-    }
-
-    window.addEventListener('openchamber:vscode-theme', handleThemeEvent as EventListener);
-    return () => window.removeEventListener('openchamber:vscode-theme', handleThemeEvent as EventListener);
-  }, [isVSCode]);
-
+  }), [reloadCustomThemes]);
   const updateBrowserChrome = useCallback((theme: Theme) => {
     if (typeof document === 'undefined') {
       return;
@@ -346,12 +305,6 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     metaThemeColorMedia.setAttribute('content', chromeColor);
   }, []);
 
-  const applyVSCodeRuntimeClass = useCallback((enabled: boolean) => {
-    if (typeof document === 'undefined') {
-      return;
-    }
-    document.documentElement.classList.toggle('vscode-runtime', enabled);
-  }, []);
 
   useIsomorphicLayoutEffect(() => {
     if (typeof window === 'undefined') {
@@ -359,7 +312,6 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     }
     const restoreTransitions = suppressTransitionsForThemeSwitch();
     cssGenerator.apply(currentTheme);
-    applyVSCodeRuntimeClass(isVSCode);
     updateBrowserChrome(currentTheme);
 
     const root = document.documentElement;
@@ -367,7 +319,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     root.classList.add(currentTheme.metadata.variant);
 
     return restoreTransitions;
-  }, [applyVSCodeRuntimeClass, cssGenerator, currentTheme, isVSCode, updateBrowserChrome]);
+  }, [cssGenerator, currentTheme, updateBrowserChrome]);
 
   useEffect(() => {
     if (preferences.themeMode !== 'system' || typeof window === 'undefined') {
@@ -617,7 +569,6 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
   );
 
   const importTheme = useCallback(async (definition: ThemeDefinition, { activate = true }: { activate?: boolean } = {}): Promise<Theme> => {
-    if (isVSCode) throw new ThemeImportError('unsupported');
     const runtimeKey = getRuntimeKey();
     const initialPreferences = preferences;
     const runtimeGeneration = themeRuntimeGenerationRef.current;
@@ -653,10 +604,10 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
       };
     });
     return theme;
-  }, [isVSCode, preferences]);
+  }, [preferences]);
 
   const deleteImportedTheme = useCallback(async (themeId: string): Promise<void> => {
-    if (isVSCode || !customThemes.some((theme) => theme.metadata.id === themeId)) throw new Error('unsupported');
+    if (!customThemes.some((theme) => theme.metadata.id === themeId)) throw new Error('unsupported');
     const runtimeKey = getRuntimeKey();
     const runtimeGeneration = themeRuntimeGenerationRef.current;
     const response = await runtimeFetch(`/api/config/themes/${encodeURIComponent(themeId)}`, { method: 'DELETE' });
@@ -675,7 +626,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
         darkThemeId: current.darkThemeId === themeId ? fallbackThemeForVariant('dark').metadata.id : current.darkThemeId,
       };
     });
-  }, [customThemes, isVSCode]);
+  }, [customThemes]);
 
   const value: ThemeContextValue = {
     currentTheme,

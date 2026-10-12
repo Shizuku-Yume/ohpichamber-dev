@@ -178,7 +178,6 @@ export function useRepositoryReferenceProvider(directory: string | null): Source
  * connected anywhere.
  */
 export function useGitHubSourceStatus(directory: string | null): ReferenceSourceStatus {
-    const { runtime } = useRuntimeAPIs();
     const context = useGitHubReadContext(directory);
     const { hosts } = useRepositoryHosts(directory);
     const anyConnected = useSourceControlAuthStore((state) => Object.values(state.entries)
@@ -186,7 +185,6 @@ export function useGitHubSourceStatus(directory: string | null): ReferenceSource
     const githubChecked = useSourceControlAuthStore((state) => Boolean(
         state.entries[getSourceControlAuthKey(GITHUB_SOURCE_CONTROL_IDENTITY)]?.hasChecked,
     ));
-    if (runtime.isVSCode) return 'unsupported';
     if (context !== 'missing') return 'ready';
     return hosts.length > 0 || (githubChecked && !anyConnected) ? 'disconnected' : 'ready';
 }

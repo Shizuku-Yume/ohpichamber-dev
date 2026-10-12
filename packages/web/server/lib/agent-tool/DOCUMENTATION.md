@@ -43,7 +43,7 @@ both settings are `false`.
 
 ## Migration status
 
-OhPiChamber retains these tools in the adopted pre-M0 baseline. Target adapters use OMP SDK tools or MCP under `.workflow/omp-migration/scope.md`, SCOPE-4.3. The inherited VS Code integration remains temporary until its SCOPE-2.3 retirement.
+OhPiChamber retains these tools in the adopted pre-M0 baseline. Target adapters use OMP SDK tools or MCP under `.workflow/omp-migration/scope.md`, SCOPE-4.3.
 
 ## Runtime flow
 
@@ -173,9 +173,7 @@ error state.
 ## Runtime parity
 
 - Web and Desktop managed OpenCode: injected automatically.
-- External OpenCode selected with `OPENCODE_HOST` or skip-start: not injected,
-  because OpenChamber does not control that process environment.
-- VS Code: not injected; the extension owns a separate OpenCode lifecycle.
+- External OpenCode: not injected; OpenChamber does not control that process environment.
 - Hosted and Capacitor mobile clients use the server's managed OpenCode tool
   when connected to such a server; no tool runs in the client runtime.
 

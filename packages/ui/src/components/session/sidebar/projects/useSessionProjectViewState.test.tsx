@@ -83,7 +83,7 @@ describe('useSessionProjectViewState', () => {
     const projects = [{ id: 'project-a' }, { id: 'project-b' }];
     const Harness = () => {
       capture.renderCount += 1;
-      const viewState = useSessionProjectViewState({ isVSCode: true, projects });
+      const viewState = useSessionProjectViewState({ projects });
       capture.state = viewState.state;
       capture.actions = viewState.actions;
       return null;
@@ -161,7 +161,7 @@ describe('useSessionProjectViewState', () => {
     const capture: HookCapture = { renderCount: 0 };
     const Harness = () => {
       capture.renderCount += 1;
-      const value = useSessionProjectViewState({ isVSCode: true, projects: [{ id: 'project-a' }] });
+      const value = useSessionProjectViewState({ projects: [{ id: 'project-a' }] });
       capture.state = value.state;
       capture.actions = value.actions;
       return null;
@@ -197,7 +197,7 @@ describe('useSessionProjectViewState', () => {
     const Harness = ({ hidden }: { hidden: boolean }) => {
       void hidden;
       capture.renderCount += 1;
-      const value = useSessionProjectViewState({ isVSCode: true, projects: [{ id: 'project-a' }] });
+      const value = useSessionProjectViewState({ projects: [{ id: 'project-a' }] });
       capture.state = value.state;
       capture.actions = value.actions;
       return null;

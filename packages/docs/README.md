@@ -2,7 +2,7 @@
 
 This directory contains product documentation for the pinned inherited OpenChamber baseline.
 
-OhPiChamber's target is Oh My Pi (OMP) as its sole agent runtime, retaining Web/PWA, Electron desktop, Mobile and the Guest SDK. OpenCode runtime integration and the VS Code extension package remain in the inherited source until their later cutover. These guides describe that inherited runtime, not completed OMP support.
+OhPiChamber's target is Oh My Pi (OMP) as its sole agent runtime, retaining Web/PWA, Electron desktop, Mobile and the Guest SDK. OpenCode runtime integration remains in the inherited source until its later cutover. The VS Code extension form has been removed; external editor launch and VS Code theme import remain. These guides describe the retained inherited runtime, not completed OMP support.
 
 ## Layout
 

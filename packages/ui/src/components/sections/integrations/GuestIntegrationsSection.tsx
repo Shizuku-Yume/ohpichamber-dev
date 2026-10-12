@@ -7,7 +7,7 @@ import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
-import { focusDesktopWindow, isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
+import { focusDesktopWindow, isDesktopShell } from '@/lib/desktop';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/lib/i18n';
@@ -467,7 +467,7 @@ export const GuestIntegrationsSection: React.FC<{ divider?: boolean }> = ({ divi
     void loadGuestCatalog();
   }, []);
 
-  if (isVSCodeRuntime() || isMobileSurfaceRuntime()) {
+  if (isMobileSurfaceRuntime()) {
     return null;
   }
 

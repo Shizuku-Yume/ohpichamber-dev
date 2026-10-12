@@ -23,7 +23,6 @@ import {
 import { Icon } from "@/components/icon/Icon";
 import {
     isDesktopShell,
-    isVSCodeRuntime,
     isWebRuntime,
     usesFramelessElectronChrome,
     type DesktopWindowControlsPosition,
@@ -531,7 +530,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         void updateDesktopSettings({ desktopWindowControlsStyle: value });
     }, [setDesktopWindowControlsStyle]);
 
-    const shouldAnimateChatPreview = (isSettingsDialogOpen || isMobile || isVSCodeRuntime())
+    const shouldAnimateChatPreview = (isSettingsDialogOpen || isMobile)
         && (visibleSettings ? visibleSettings.includes('chatRenderMode') : true);
 
     React.useEffect(() => {
@@ -738,17 +737,13 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         return visibleSettings.includes(setting);
     };
 
-    const isVSCode = isVSCodeRuntime();
-    const hasThemeSettings = shouldShow('theme') && !isVSCode;
+    const hasThemeSettings = shouldShow('theme');
     const showWindowControlsPositionSetting = shouldShow('windowControlsPosition') && showWindowControlsPosition;
-    const hasLocalizationSettings = shouldShow('theme') || shouldShow('timeFormat') || shouldShow('weekStart');
-    const hasAppearanceSettings = isVSCode
-        ? hasLocalizationSettings
-        : (shouldShow('theme') || showWindowControlsPositionSetting || shouldShow('pwaInstallName') || shouldShow('pwaOrientation') || shouldShow('timeFormat') || shouldShow('weekStart'));
+    const hasAppearanceSettings = shouldShow('theme') || showWindowControlsPositionSetting || shouldShow('pwaInstallName') || shouldShow('pwaOrientation') || shouldShow('timeFormat') || shouldShow('weekStart');
     const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('editorFontSize') || shouldShow('spacing') || (shouldShow('scrollbars') && !hasThemeSettings) || (shouldShow('inputBarOffset') && isMobile);
-    const hasNavigationSettings = (shouldShow('terminalQuickKeys') && !isMobile) || ((shouldShow('terminalShell') || shouldShow('terminalLoginShell')) && !isVSCode) || shouldShow('fileEditorKeymap') || shouldShow('autoSaveEnabled') || (shouldShow('confirmFileTreeMove') && !isVSCode && !isMobile) || (shouldShow('sessionTabs') && !isVSCode && !isMobile);
+    const hasNavigationSettings = (shouldShow('terminalQuickKeys') && !isMobile) || shouldShow('terminalShell') || shouldShow('terminalLoginShell') || shouldShow('fileEditorKeymap') || shouldShow('autoSaveEnabled') || (shouldShow('confirmFileTreeMove') && !isMobile) || (shouldShow('sessionTabs') && !isMobile);
     const hasBehaviorSettings = shouldShow('mermaidRendering')
-        || (shouldShow('sessionGoal') && !isVSCode)
+        || shouldShow('sessionGoal')
         || shouldShow('userMessageRendering')
         || shouldShow('chatRenderMode')
         || shouldShow('messageTransport')
@@ -780,12 +775,12 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const showTransportSection = shouldShow('messageTransport');
     const showBehaviorMessageOptions = shouldShow('userMessageRendering')
         || shouldShow('mermaidRendering')
-        || (shouldShow('diffLayout') && !isVSCode)
+        || shouldShow('diffLayout')
         || shouldShow('followUpBehavior')
         || shouldShow('inputHistoryScope')
         || shouldShow('inputHistoryLimit');
     const showBehaviorFeatureCheckboxes = shouldShow('sessionAssist')
-        || (shouldShow('sessionGoal') && !isVSCode)
+        || shouldShow('sessionGoal')
         || shouldShow('subagentReadOnlyBanner')
         || shouldShow('collapsibleUserMessages')
         || shouldShow('stickyUserHeader')
@@ -809,10 +804,10 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     // when Appearance (or earlier sections) already rendered, keep the default divider.
     const behaviorSectionDivider = hasAppearanceSettings || hasLayoutSettings || hasNavigationSettings;
 
-    const showPwaInstallNameSetting = shouldShow('pwaInstallName') && isWebRuntime() && browserTab && !isDesktopShell() && !isVSCode;
-    const showPwaOrientationSetting = shouldShow('pwaOrientation') && isWebRuntime() && !isDesktopShell() && !isVSCode;
-    const showMobileKeyboardModeSetting = shouldShow('mobileKeyboardMode') && isWebRuntime() && !isDesktopShell() && !isVSCode && supportsMobileKeyboardResizeContent();
-    const showTerminalShellSetting = (shouldShow('terminalShell') || shouldShow('terminalLoginShell')) && !isVSCode;
+    const showPwaInstallNameSetting = shouldShow('pwaInstallName') && isWebRuntime() && browserTab && !isDesktopShell();
+    const showPwaOrientationSetting = shouldShow('pwaOrientation') && isWebRuntime() && !isDesktopShell();
+    const showMobileKeyboardModeSetting = shouldShow('mobileKeyboardMode') && isWebRuntime() && !isDesktopShell() && supportsMobileKeyboardResizeContent();
+    const showTerminalShellSetting = shouldShow('terminalShell') || shouldShow('terminalLoginShell');
     const [availableTerminalShells, setAvailableTerminalShells] = React.useState<TerminalShellOption[]>([]);
     const [terminalShellRuntimeEpoch, setTerminalShellRuntimeEpoch] = React.useState(0);
     React.useEffect(() => subscribeRuntimeEndpointChanged(() => {
@@ -1108,7 +1103,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             </SettingsSection>
                         )}
 
-                        {hasLocalizationSettings && (
                             <SettingsSection title={t('settings.openchamber.visual.section.localization')}>
                                 <SettingsTwoColumn>
                                     <SettingsStackedField
@@ -1171,7 +1165,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     )}
                                 </SettingsTwoColumn>
                             </SettingsSection>
-                        )}
 
                         {(showPwaInstallNameSetting || showPwaOrientationSetting || showMobileKeyboardModeSetting) && (
                             <SettingsSection title={t('settings.openchamber.visual.section.appInstall')} contentClassName={SETTINGS_FIELDS_STACK_CLASS}>
@@ -1644,7 +1637,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     settingsItem="appearance.auto-save-enabled"
                                 />
                             )}
-                            {shouldShow('confirmFileTreeMove') && !isVSCode && !isMobile && (
+                            {shouldShow('confirmFileTreeMove') && !isMobile && (
                                 <SettingsCheckboxRow
                                     checked={confirmFileTreeMove}
                                     onChange={setConfirmFileTreeMove}
@@ -1696,7 +1689,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 />
                             )}
                         </div>
-                        {shouldShow('sessionTabs') && !isVSCode && !isMobile && (
+                        {shouldShow('sessionTabs') && !isMobile && (
                             <SettingsControlGroup
                                 title={t('settings.openchamber.visual.field.sessionTabsGroup')}
                                 settingsItem="appearance.session-tabs"
@@ -1891,7 +1884,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                         </SettingsControlGroup>
                                     )}
 
-                                    {shouldShow('diffLayout') && !isVSCode && (
+                                    {shouldShow('diffLayout') && (
                                         <SettingsControlGroup title={t('settings.openchamber.visual.section.diffLayout')}>
                                             <SettingsRadioGroup aria-label={t('settings.openchamber.visual.section.diffLayoutAria')}>
                                                 {DIFF_LAYOUT_OPTIONS.map((option) => (
@@ -1974,7 +1967,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             </SettingsSection>
                         )}
 
-                        {shouldShow('messageSearch') && !isVSCode && <MessageSearchSettings />}
+                        {shouldShow('messageSearch') && <MessageSearchSettings />}
 
                         {showBehaviorFeatureCheckboxes && (
                             <>
@@ -2028,8 +2021,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 />
                                             </>
                                         )}
-                                        {/* Jev runs on the OpenChamber server, which VS Code does not have. */}
-                                        {shouldShow('sessionAssist') && !isVSCode && (
+                                        {shouldShow('sessionAssist') && (
                                             <div>
                                                 <SettingsCheckboxRow
                                                     checked={jevAvailable && sessionReviewOfferEnabled}
@@ -2053,9 +2045,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             />
                                         )}
                                 </SettingsSection>
-                                {/* The goal loop runs in the web server — VS Code only renders
-                                    goal state, so the settings section is hidden there too. */}
-                                {shouldShow('sessionGoal') && !isVSCode && (
+                                {shouldShow('sessionGoal') && (
                                     <SettingsSection
                                         title={t('settings.openchamber.visual.goal.sectionTitle')}
                                         info={t('settings.openchamber.visual.goal.description')}
@@ -2233,7 +2223,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 </SettingsSection>
                                 )}
 
-                                {(shouldShow('showToolFileIcons') || shouldShow('showTurnChangedFiles') || (shouldShow('dotfiles') && !isVSCodeRuntime()) || shouldShow('fileViewerPreview')) && (
+                                {(shouldShow('showToolFileIcons') || shouldShow('showTurnChangedFiles') || shouldShow('dotfiles') || shouldShow('fileViewerPreview')) && (
                                 <SettingsSection
                                     title={t('settings.openchamber.visual.section.toolsAndFiles')}
                                     settingsItem="chat.tools-and-files"
@@ -2259,7 +2249,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     />
                                 )}
 
-                                {shouldShow('dotfiles') && !isVSCodeRuntime() && (
+                                {shouldShow('dotfiles') && (
                                     <SettingsCheckboxRow
                                         checked={directoryShowHidden}
                                         onChange={setDirectoryShowHidden}

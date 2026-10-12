@@ -8,7 +8,6 @@ const desktop = await import('@/lib/desktop')
 // accepts one install per app session, so the store must not invoke it twice.
 mock.module('@/lib/desktop', () => ({
   ...desktop,
-  isVSCodeRuntime: () => false,
   isWebRuntime: () => false,
   isElectronShell: () => true,
   isDesktopLocalOriginActive: () => true,

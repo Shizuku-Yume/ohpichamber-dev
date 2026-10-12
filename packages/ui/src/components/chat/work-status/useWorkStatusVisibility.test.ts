@@ -90,7 +90,7 @@ const installMinimalDom = () => {
   };
 };
 
-type Args = { isMobile: boolean; isVSCode: boolean };
+type Args = { isMobile: boolean };
 
 /**
  * Renders the hook with a stand-in row node, attached through the returned
@@ -147,7 +147,7 @@ afterEach(() => {
 describe('useWorkStatusVisibility', () => {
   test('shows the panel when the row can afford both columns', () => {
     const { result, teardown } = renderVisibility(
-      { isMobile: false, isVSCode: false },
+      { isMobile: false },
       REQUIRED,
     );
     expect(result.visible).toBe(true);
@@ -156,7 +156,7 @@ describe('useWorkStatusVisibility', () => {
 
   test('hides the panel when the row cannot afford both columns', () => {
     const { result, teardown } = renderVisibility(
-      { isMobile: false, isVSCode: false },
+      { isMobile: false },
       REQUIRED - 1,
     );
     expect(result.visible).toBe(false);
@@ -179,7 +179,6 @@ describe('useWorkStatusVisibility', () => {
     const Probe: React.FC = () => {
       const { rowRef, visible } = useWorkStatusVisibility({
         isMobile: false,
-        isVSCode: false,
       });
       result.visible = visible;
       React.useLayoutEffect(() => {
@@ -203,7 +202,7 @@ describe('useWorkStatusVisibility', () => {
     // In the app this is the chat area (chat + context panel); here `closest`
     // finds nothing, so the hook falls back to the row it was given.
     const { rowNode, teardown } = renderVisibility(
-      { isMobile: false, isVSCode: false },
+      { isMobile: false },
       REQUIRED,
     );
     expect(observed).toHaveLength(1);
@@ -213,7 +212,7 @@ describe('useWorkStatusVisibility', () => {
 
   test('reacts to a live resize across the threshold', () => {
     const { result, teardown } = renderVisibility(
-      { isMobile: false, isVSCode: false },
+      { isMobile: false },
       REQUIRED,
     );
     expect(result.visible).toBe(true);
@@ -232,7 +231,7 @@ describe('useWorkStatusVisibility', () => {
       '/repo': { isOpen: true, tabs: [{ id: 'tab-1', mode: 'git' }], activeTabId: 'tab-1' },
     };
     const { result, rowNode, teardown } = renderVisibility(
-      { isMobile: false, isVSCode: false },
+      { isMobile: false },
       REQUIRED,
     );
     expect(result.visible).toBe(false);
@@ -244,7 +243,7 @@ describe('useWorkStatusVisibility', () => {
     // The right slot keeps the card's column on this, so closing the context
     // panel narrows the slot straight to the card instead of to nothing first.
     panelByDirectory['/repo'] = { isOpen: true, tabs: [{ id: 'tab-1', mode: 'git' }], activeTabId: 'tab-1' };
-    const { result, teardown } = renderVisibility({ isMobile: false, isVSCode: false }, REQUIRED);
+    const { result, teardown } = renderVisibility({ isMobile: false }, REQUIRED);
     expect(result.fits).toBe(false);
     expect(result.roomy).toBe(true);
     teardown();
@@ -253,7 +252,7 @@ describe('useWorkStatusVisibility', () => {
   test('does not re-render while the width moves on one side of the threshold', () => {
     // A sidebar animation changes the chat area's width on every frame; only
     // crossing the threshold may re-render the chat that owns this hook.
-    const { result, teardown } = renderVisibility({ isMobile: false, isVSCode: false }, REQUIRED + 300);
+    const { result, teardown } = renderVisibility({ isMobile: false }, REQUIRED + 300);
     const rendersBefore = result.renders;
     for (let frame = 1; frame <= 12; frame += 1) {
       act(() => { notify?.([{ contentRect: { width: REQUIRED + 300 - frame * 20 } }]); });
@@ -273,7 +272,7 @@ describe('useWorkStatusVisibility', () => {
     panelByDirectory = {
       '/repo': { isOpen: true, tabs: [{ id: 'tab-1', mode: 'git' }], activeTabId: 'tab-1' },
     };
-    const { result, teardown } = renderVisibility({ isMobile: false, isVSCode: false }, REQUIRED);
+    const { result, teardown } = renderVisibility({ isMobile: false }, REQUIRED);
     expect(result.visible).toBe(false);
     teardown();
   });
@@ -282,7 +281,7 @@ describe('useWorkStatusVisibility', () => {
     // ContextPanel renders nothing in that state, so it displaces nothing.
     panelByDirectory = { '/repo': { isOpen: true, tabs: [], activeTabId: null } };
     const { result, teardown } = renderVisibility(
-      { isMobile: false, isVSCode: false },
+      { isMobile: false },
       REQUIRED,
     );
     expect(result.visible).toBe(true);
@@ -307,7 +306,6 @@ describe('useWorkStatusVisibility', () => {
       const [attached, setAttached] = React.useState(false);
       const { rowRef, visible } = useWorkStatusVisibility({
         isMobile: false,
-        isVSCode: false,
       });
       result.visible = visible;
       attach = setAttached;
@@ -333,7 +331,7 @@ describe('useWorkStatusVisibility', () => {
     // there is room for it.
     panelEnabled = false;
     const { result, teardown } = renderVisibility(
-      { isMobile: false, isVSCode: false },
+      { isMobile: false },
       REQUIRED * 2,
     );
     expect(result.visible).toBe(false);
@@ -343,7 +341,7 @@ describe('useWorkStatusVisibility', () => {
 
   test('reports no fit when the row is too narrow, whatever the switch says', () => {
     const { result, teardown } = renderVisibility(
-      { isMobile: false, isVSCode: false },
+      { isMobile: false },
       REQUIRED - 1,
     );
     expect(result.fits).toBe(false);
@@ -351,20 +349,14 @@ describe('useWorkStatusVisibility', () => {
     teardown();
   });
 
-  test('stays hidden on mobile and in VS Code regardless of width', () => {
+  test('stays hidden on mobile regardless of width', () => {
     const mobile = renderVisibility(
-      { isMobile: true, isVSCode: false },
+      { isMobile: true },
       REQUIRED * 2,
     );
     expect(mobile.result.visible).toBe(false);
+    expect(mobile.result.roomy).toBe(false);
+    expect(mobile.result.fits).toBe(false);
     mobile.teardown();
-
-    observed = [];
-    const vscode = renderVisibility(
-      { isMobile: false, isVSCode: true },
-      REQUIRED * 2,
-    );
-    expect(vscode.result.visible).toBe(false);
-    vscode.teardown();
   });
 });

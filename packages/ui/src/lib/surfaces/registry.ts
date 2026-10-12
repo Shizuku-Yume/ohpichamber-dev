@@ -1,9 +1,6 @@
 import type { IconName } from '@/components/icon/icons';
 import type { I18nKey } from '@/lib/i18n';
-import {
-  isPluginContextPanelMode,
-  type ContextPanelMode,
-} from '@/lib/surfaces/modes';
+import { isPluginContextPanelMode, type ContextPanelMode } from '@/lib/surfaces/modes';
 
 type BuiltInContextSurfaceId =
   | 'editor'
@@ -209,15 +206,13 @@ type VisibleRailSurfacesOptions = {
       shortcuts, which share this filter). */
   hiddenSurfaces?: readonly string[];
   planModeEnabled: boolean;
-  isVSCode: boolean;
   screenWidth: number;
   tabs: readonly { mode: ContextPanelMode }[];
   /** The pull-request rail icon stays off until a GitHub or GitLab account is
       connected (OAuth, a token, or a detected `gh`/`glab` login). Accounts are
       connected from Settings, so hiding the surface removes no entry point. */
   sourceControlConnected: boolean;
-  /** Installed guest panels. Empty on VS Code and when the catalog has not
-      loaded or failed. */
+  /** Installed guest panels. Empty when the catalog has not loaded or failed. */
   extras?: readonly ContextSurfaceDescriptor[];
 };
 
@@ -234,23 +229,11 @@ export const getVisibleContextRailSurfaces = (options: VisibleRailSurfacesOption
     if (options.hiddenSurfaces?.includes(surface.id)) {
       return false;
     }
-    if (isPluginContextPanelMode(surface.mode) && options.isVSCode) {
-      return false;
-    }
     if (surface.id === 'plan' && !options.planModeEnabled) {
       return false;
     }
-    // The walkthrough needs room for a stop list beside real code, and its
-    // diffs come from OpenChamber's Git routes, which VS Code does not serve.
-    if (surface.id === 'walkthrough' && (options.isVSCode || options.screenWidth < WALKTHROUGH_MIN_WIDTH)) {
-      return false;
-    }
-    // VS Code already is an editor with a browser next to it. What OpenChamber
-    // could add there is a bare frame: no annotation, no agent control, no
-    // remote dev servers — all of which need a Chromium host the extension does
-    // not have. Offering the surface anyway would promise the panel people see
-    // on the desktop.
-    if (surface.id === 'browser' && options.isVSCode) {
+    // The walkthrough needs room for a stop list beside real code.
+    if (surface.id === 'walkthrough' && options.screenWidth < WALKTHROUGH_MIN_WIDTH) {
       return false;
     }
     if (surface.id === 'pr' && !options.sourceControlConnected) {

@@ -21,7 +21,6 @@ import type { GuestAttachItem } from '@/hooks/useGuestSurfaces';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { isDictationCaptureSupported } from '@/lib/dictation/use-dictation-audio-source';
 import { ModelControls } from '../../ModelControls';
 import { ComposerActionButtons } from './ComposerActionButtons';
@@ -36,7 +35,6 @@ const MemoComposerDictation = React.memo(ComposerDictation);
 
 interface ComposerFooterProps {
     isMobile: boolean;
-    isVSCode: boolean;
     sessionId: string | null;
     directory?: string;
     newSessionDraftOpen: boolean;
@@ -112,7 +110,6 @@ function ComposerFooterView(props: ComposerFooterProps) {
     const { t } = useI18n();
     const {
         isMobile,
-        isVSCode,
         sessionId: currentSessionId,
         directory,
         newSessionDraftOpen,
@@ -162,7 +159,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
     } = props;
 
     const dictationEnabled = useConfigStore((state) => state.dictationEnabled);
-    const [dictationSupported] = React.useState(() => !isVSCodeRuntime() && isDictationCaptureSupported());
+    const [dictationSupported] = React.useState(isDictationCaptureSupported);
     const showDictation = dictationEnabled && dictationSupported;
 
     return (
@@ -186,7 +183,6 @@ function ComposerFooterView(props: ComposerFooterProps) {
                     <div className="flex w-full items-center justify-between gap-x-1.5">
                         <div className="composer-mobile-actions flex items-center gap-x-2 pl-1">
                             <ComposerAttachmentControls
-                                isVSCode={isVSCode}
                                 footerIconButtonClass={footerIconButtonClass}
                                 iconSizeClass={iconSizeClass}
                                 handlePickLocalFiles={onPickLocalFiles}
@@ -261,7 +257,6 @@ function ComposerFooterView(props: ComposerFooterProps) {
                 <>
                     <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>
                         <ComposerAttachmentControls
-                            isVSCode={isVSCode}
                             footerIconButtonClass={footerIconButtonClass}
                             iconSizeClass={iconSizeClass}
                             handlePickLocalFiles={onPickLocalFiles}

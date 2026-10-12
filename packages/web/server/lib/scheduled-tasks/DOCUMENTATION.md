@@ -34,7 +34,6 @@ scheduled like one more project, with three differences:
   projects, so an agent working in a chat schedules into chats.
 
 The chats root is `OPENCHAMBER_CHATS_DIR` (default `<config root>/chats`). The
-VS Code extension has no chats, so its UI does not offer the scope.
 
 ## Cross-instance occurrence claiming
 

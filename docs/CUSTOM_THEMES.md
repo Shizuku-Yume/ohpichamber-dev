@@ -14,9 +14,8 @@ themes published only in Microsoft Marketplace may not appear.
 **Choose JSON file** imports a self-contained `.json` or `.jsonc` file. Desktop
 starts its native picker in the local `~/.vscode/extensions` folder when it exists,
 even when connected to a remote server. Browsers and mobile use their own picker.
-UI colors use the same
-surface mapping as the VS Code runtime adapter; general TextMate and semantic
-token colors populate the syntax palette, and diff colors remain separate.
+UI colors map to OpenChamber surfaces; general TextMate and semantic token
+colors populate the syntax palette, and diff colors remain separate.
 Regular imports soften borders and selected rows, adjust text for readability,
 and adapt backgrounds and status colors to OpenChamber. Syntax colors retain
 the source palette. High-contrast themes keep stronger contrast.

@@ -131,7 +131,7 @@ type TurnOffNotice = { kind: 'stops'; count: number } | { kind: 'unknown' };
  * makes the feature exist now, turning it off stops every running space and keeps its files. When
  * there is something to stop, or the host cannot say what runs, a notice says so before anything
  * happens, and a space that could not be stopped is named afterwards. Removing spaces is never
- * part of this. Never mounted in VS Code (decision 16), and nowhere until the feature is
+ * part of this. Not mounted until the feature is
  * released, see `lib/spaces/release.ts`.
  */
 /**

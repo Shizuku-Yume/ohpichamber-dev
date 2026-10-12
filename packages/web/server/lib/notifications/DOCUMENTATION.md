@@ -163,5 +163,4 @@ connection or switches sources when the main pipeline changes transport.
 
 The control stream retains its browser-control capability declaration, runtime
 switch cleanup, stale-source rejection, heartbeat, and reconnect-ready events.
-Electron uses its native notification path; VS Code does not subscribe to this
-server-only stream. Mobile shells retain their existing push behavior.
+Electron uses its native notification path. Mobile shells retain their existing push behavior.

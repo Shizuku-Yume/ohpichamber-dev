@@ -133,8 +133,6 @@ export type SessionSidebarRowModelArgs = {
   activeProjectId: string | null;
   singleProjectMode: boolean;
   singleProjectId: string | null;
-  showOnlyMainWorkspace: boolean;
-  hideDirectoryControls: boolean;
   sessionBatchSize?: number;
   /** Active multi-runs; their member sessions collapse into one run row per container. */
   runIndex?: MultiRunIndex;
@@ -554,7 +552,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     for (const folder of roots) appendFolder(folder, '');
 
     const sessionBatchSize = projectId ? args.sessionBatchSize : undefined;
-    const initialLimit = limits?.initial ?? sessionBatchSize ?? (args.hideDirectoryControls ? 10 : 5);
+    const initialLimit = limits?.initial ?? sessionBatchSize ?? 5;
     const increment = limits?.increment ?? sessionBatchSize ?? 7;
     const requested = Math.max(initialLimit, args.visibleCountByContainer.get(groupKey) ?? initialLimit);
     // Pinned sessions are the user's own always-on shortlist: they stay
@@ -730,23 +728,17 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     }
   }
 
-  let projectSections = timelineMode ? [] : args.singleProjectMode
+  const projectSections = timelineMode ? [] : args.singleProjectMode
     ? args.sections.filter((section) => section.project.id === args.singleProjectId)
     : [...args.sections];
-  if (args.showOnlyMainWorkspace) {
-    const active = projectSections.find((section) => section.project.id === args.activeProjectId) ?? projectSections[0];
-    projectSections = active ? [active] : [];
-  }
   for (const section of projectSections) {
-    const descriptors = buildGroupRenderDescriptors(section, { mainWorkspaceOnly: args.showOnlyMainWorkspace });
+    const descriptors = buildGroupRenderDescriptors(section);
     // A project whose only matches moved to In work shows no empty header.
     if (search && !descriptors.some((descriptor) => groupSearchMatches(descriptor.group) > 0)) continue;
-    const projectCollapsed = !search && !args.singleProjectMode && !args.showOnlyMainWorkspace && args.collapsedProjects.has(section.project.id);
-    if (!args.showOnlyMainWorkspace) {
-      const rowIndex = rows.length;
-      push({ kind: 'project-header', key: `project:${section.project.id}:header`, estimateSize: HEADER_ESTIMATE, section, collapsed: projectCollapsed, forceExpanded: search });
-      stickyHeaders.push(Object.freeze({ rowIndex, kind: 'project', id: section.project.id }));
-    }
+    const projectCollapsed = !search && !args.singleProjectMode && args.collapsedProjects.has(section.project.id);
+    const rowIndex = rows.length;
+    push({ kind: 'project-header', key: `project:${section.project.id}:header`, estimateSize: HEADER_ESTIMATE, section, collapsed: projectCollapsed, forceExpanded: search });
+    stickyHeaders.push(Object.freeze({ rowIndex, kind: 'project', id: section.project.id }));
     if (projectCollapsed) continue;
     for (const descriptor of descriptors) appendGroup(descriptor.group, descriptor.groupKey, descriptor.projectId, descriptor.hideGroupLabel);
   }

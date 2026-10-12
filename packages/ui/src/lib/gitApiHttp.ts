@@ -216,7 +216,7 @@ const redactedDestinationSchema = z.object({
 }).strict();
 const runtimeIdentitySchema = z.object({
   id: identityStringSchema,
-  platform: z.enum(['web', 'desktop', 'vscode']),
+  platform: z.enum(['web', 'desktop']),
   label: boundedString(512).optional(),
 }).strict();
 const transportActorSchema = z.discriminatedUnion('kind', [

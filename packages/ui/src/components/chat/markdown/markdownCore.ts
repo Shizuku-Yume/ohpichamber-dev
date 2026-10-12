@@ -6,7 +6,6 @@ import DOMPurify, { type DOMPurify as DOMPurifyInstance } from 'dompurify';
 import { INLINE_REFERENCE_CHIP_CLASS, INTERACTIVE_REFERENCE_CHIP_CLASS, buildAgentMentionUrl, parseAgentHref, parseAttachmentHref, parseSkillHref } from '@/lib/messages/inlineMessageLinks';
 import { isAppLinkUrl } from '@/lib/url';
 import { isSessionDeepLink } from '@/lib/sessionLinks';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import {
   contentFingerprint,
   EMPTY_FINGERPRINT,
@@ -962,7 +961,6 @@ const CODE_BLOCK_RE = /<pre><code(?:\s+class="language-([^"]*)")?>([\s\S]*?)<\/c
 // Skip syntax highlighting for very large blocks — tokenizing thousands of
 // lines blocks the main thread. Plain (escaped) code is shown instead.
 const CODE_HIGHLIGHT_LINE_LIMIT = 1200;
-const VSCODE_CODE_HIGHLIGHT_LINE_LIMIT = 200;
 
 const exceedsLineLimit = (value: string, limit: number): boolean => {
   let lines = 1;
@@ -975,8 +973,6 @@ const exceedsLineLimit = (value: string, limit: number): boolean => {
 const highlightCodeBlocks = async (html: string, transient = false): Promise<string> => {
   const matches = [...html.matchAll(CODE_BLOCK_RE)];
   if (matches.length === 0) return html;
-
-  const lineLimit = isVSCodeRuntime() ? VSCODE_CODE_HIGHLIGHT_LINE_LIMIT : CODE_HIGHLIGHT_LINE_LIMIT;
 
   // Highlight all eligible fences concurrently — sequential await was O(n)
   // worker round-trips for messages with multiple code blocks.
@@ -991,7 +987,7 @@ const highlightCodeBlocks = async (html: string, transient = false): Promise<str
       const code = unescapeHtml(escapedCode ?? '');
 
       // Oversized block: skip highlight, keep plain code but stamp the language.
-      if (exceedsLineLimit(code, lineLimit)) {
+      if (exceedsLineLimit(code, CODE_HIGHLIGHT_LINE_LIMIT)) {
         return { full, next: full.replace('<pre', `<pre data-md-lang="${requested}"`) };
       }
 
@@ -1035,9 +1031,8 @@ const installAnchorHooks = (purifier: DOMPurifyInstance): void => {
     // (obsidian://, vscode://, ...). Keep them for anchors; dangerous schemes
     // stay excluded via isAppLinkUrl and clicks go through confirmation.
     // OpenChamber's own scheme is kept only for session links, which the chat
-    // opens in place; pairing and other privileged routes stay stripped. VS
-    // Code keeps them as text: its sessions live on its own OpenCode.
-    const keepSessionLink = isSessionDeepLink(data.attrValue) && !isVSCodeRuntime();
+    // opens in place; pairing and other privileged routes stay stripped.
+    const keepSessionLink = isSessionDeepLink(data.attrValue);
     if (isLocalFileUrl(data.attrValue) || isAppLinkUrl(data.attrValue) || keepSessionLink) {
       data.forceKeepAttr = true;
     }

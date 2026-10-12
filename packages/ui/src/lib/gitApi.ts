@@ -22,7 +22,7 @@ const getRuntimeGit = () => {
   return getRegisteredRuntimeAPIs()?.git ?? null;
 };
 
-// Runtime git adapters (the VS Code bridge today) do not go through the HTTP
+// Runtime git adapters do not necessarily go through the HTTP
 // adapter's cache, so the invalidation signal `useGitStore` relies on has to be
 // emitted here, at the dispatch layer, once a runtime mutation succeeds. The
 // HTTP adapter keeps emitting it itself when it clears its own cache, so a

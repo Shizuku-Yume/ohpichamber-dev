@@ -49,7 +49,6 @@ import { guestGenerate } from '@/lib/guests/generate';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { openGuestCommit, readCurrentBranch } from '@/lib/guests/open-commit';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { registerGuestResolver, type GuestResolveOutcome } from '@/lib/guests/resolve';
 import type { GuestBackgroundAction } from '@/lib/guests/run-action';
@@ -240,7 +239,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     const features: NonNullable<HostReadyContext['features']> = {};
     if (guest?.storageId && globalThis.indexedDB) features.deviceStorage = true;
     if (surface === 'status' && onStatusControls) features.statusControls = true;
-    if (!popoverHost && !popover && !headless && !isVSCodeRuntime() && !isMobileSurfaceRuntime()
+    if (!popoverHost && !popover && !headless && !isMobileSurfaceRuntime()
       && (surface === 'panel' || surface === 'page' || surface === 'status')) features.popovers = true;
     return {
     theme: {
@@ -834,7 +833,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
           directory: directoryRef.current || null,
           git,
           currentBranch: (dir) => (git ? readCurrentBranch(git, dir) : Promise.resolve(null)),
-          supported: !isVSCodeRuntime() && !isMobileSurfaceRuntime(),
+          supported: !isMobileSurfaceRuntime(),
           });
         },
         resize: (height) => {
@@ -850,7 +849,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
           waiter({ ok: true, item: payload.item });
         },
         openPopover: (request) => {
-          if (childPopover || popover || headless || isVSCodeRuntime() || isMobileSurfaceRuntime()
+          if (childPopover || popover || headless || isMobileSurfaceRuntime()
             || !(surface === 'panel' || surface === 'page' || surface === 'status')) {
             throw new HostRequestError('UNSUPPORTED', 'This frame cannot open a popover.');
           }

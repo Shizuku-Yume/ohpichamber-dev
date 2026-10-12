@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
-import { isServerOwnedMessageQueue, useMessageQueueStore } from '@/stores/messageQueueStore';
+import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 
 // Server holds expire on their own (the UI that asserted them may be gone);
@@ -18,7 +18,6 @@ export function useMessageQueueHoldSync(): void {
   const heldRef = React.useRef<Set<string>>(new Set());
 
   const running = React.useMemo(() => {
-    if (!isServerOwnedMessageQueue()) return new Set<string>();
     const runtimeKey = getRuntimeKey();
     return new Set(
       Object.values(runs)

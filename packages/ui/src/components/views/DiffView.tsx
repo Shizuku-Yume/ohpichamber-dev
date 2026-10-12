@@ -54,7 +54,6 @@ import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
 import type { SourceControlProvider } from '@/lib/api/types';
 import { buildDiffTreeRows } from './diffFileTree';
 import { fileDiffFromPatch, isBinaryPatch, extractHunkPatch, haveMatchingPatchVersions, getPatchHunkAnchors } from '@/lib/diff/patchFileDiff';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { startReviewFlow } from '@/lib/reviewFlow';
 import { WALKTHROUGH_ACTION_CLASS } from '@/components/views/walkthrough/walkthroughAction';
 import type { WalkthroughTarget } from '@/lib/walkthrough/types';
@@ -1277,10 +1276,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const activeDiffStaged = forcedStaged ?? displayFileStaged;
 
     const isMobileLayout = isMobile || screenWidth <= 768;
-    const showReviewAction = Boolean(currentSessionId) && activeDiffScope !== 'turn' && activeDiffScope !== 'commit' && activeDiffScope !== 'pr' && !isMobileLayout && !isVSCodeRuntime();
+    const showReviewAction = Boolean(currentSessionId) && activeDiffScope !== 'turn' && activeDiffScope !== 'commit' && activeDiffScope !== 'pr' && !isMobileLayout;
     // Same runtime and width rules as the rail surface: no point offering an
     // entry point to a surface that cannot open here.
-    const showWalkthroughAction = activeDiffScope !== 'turn' && !isMobileLayout && !isVSCodeRuntime();
+    const showWalkthroughAction = activeDiffScope !== 'turn' && !isMobileLayout;
     const showFileSidebar = !hideStackedFileSidebar && !isMobileLayout && screenWidth >= 1024;
     const diffScrollRef = React.useRef<HTMLElement | null>(null);
     const fileSectionRefs = React.useRef(new Map<string, HTMLDivElement | null>());
@@ -1392,21 +1391,15 @@ export const DiffView: React.FC<DiffViewProps> = ({
         : null;
     // A pull request opened from the issues and PRs board.
     const requestedPr = usePullRequestSelectionStore((state) => (effectiveDirectory ? state.diffRequests.get(effectiveDirectory) : undefined));
-    const prComparison = usePullRequestComparison(effectiveDirectory ?? null, currentBranch, pullRequestContext, visible && activeDiffScope === 'pr' && !isVSCodeRuntime(), requestedPr);
+    const prComparison = usePullRequestComparison(effectiveDirectory ?? null, currentBranch, pullRequestContext, visible && activeDiffScope === 'pr', requestedPr);
     const selectedPr = prComparison.selectedSource;
     // Taken once the branch is known: the selection it landed in is the real one.
     React.useEffect(() => {
         if (!effectiveDirectory || !requestedPr || !status || selectedPr !== requestedPr) return;
         usePullRequestSelectionStore.getState().settleDiffRequest(effectiveDirectory, requestedPr);
     }, [effectiveDirectory, requestedPr, selectedPr, status]);
-    const commitComparison = useCommitComparison(effectiveDirectory ?? null, currentBranch, visible && activeDiffScope === 'commit' && !isVSCodeRuntime());
+    const commitComparison = useCommitComparison(effectiveDirectory ?? null, currentBranch, visible && activeDiffScope === 'commit');
     const selectedCommitHash = commitComparison.selectedCommit?.hash ?? null;
-    React.useEffect(() => {
-        if ((activeDiffScope === 'commit' || activeDiffScope === 'pr') && isVSCodeRuntime()) {
-            setActiveDiffScope('working');
-            onDiffScopeChange?.('working');
-        }
-    }, [activeDiffScope, onDiffScopeChange]);
     const branches = useGitStore((state) => (effectiveDirectory ? state.directories.get(effectiveDirectory)?.branches ?? null : null));
     const isLoadingBranches = useGitStore((state) => (effectiveDirectory ? state.directories.get(effectiveDirectory)?.isLoadingBranches ?? false : false));
 
@@ -1436,11 +1429,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
         return primaryRemote ? branches?.defaultBranches?.[primaryRemote] ?? null : null;
     }, [binding.contexts, branches]);
     // Offered only while the default branch is known and the current branch is
-    // not it (an unknown default must not flash the option on a guess), and
-    // only outside VS Code (the extension has no context diff panel).
-    const showBranchOption = !isVSCodeRuntime() && isBranchScopeAvailable(currentBranch, repositoryDefaultBranch);
-    // Coercion acts only on CONFIRMED unavailability: the runtime has no branch
-    // scope at all, a settled status has no branch (detached HEAD), the default
+    // not it (an unknown default must not flash the option on a guess).
+    const showBranchOption = isBranchScopeAvailable(currentBranch, repositoryDefaultBranch);
+    // Coercion acts only on CONFIRMED unavailability: a settled status has no
+    // branch (detached HEAD), the default
     // branch is known and we are on it, or metadata retries were exhausted.
     // While status/metadata are still loading a persisted branch scope must
     // survive instead of being rewritten to working on the first render.
@@ -1448,8 +1440,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     // even starts, status is null with loading still false, and that must not
     // read as "settled without a branch".
     const isBranchStatusResolved = status !== null;
-    const branchScopeDefinitelyUnavailable = isVSCodeRuntime()
-        || branchMetadataExhausted
+    const branchScopeDefinitelyUnavailable = branchMetadataExhausted
         || isBranchScopeDefinitelyUnavailable(
             currentBranch,
             repositoryDefaultBranch,
@@ -1467,7 +1458,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
     // A context tab persists its scope across branch checkouts and runtime
     // switches. When the Branch scope is CONFIRMED unavailable (checked out the
-    // known default branch, VS Code runtime), fall back to Working instead of
+    // known default branch), fall back to Working instead of
     // rendering the base-resolution spinner forever. Persist the coercion so
     // the tab and the selector agree. Note it keys off confirmed
     // unavailability, not off `showBranchOption`: while metadata loads the
@@ -1507,7 +1498,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
         }
         return null;
     }, [activeDiffScope, qualifiedBranchBase, currentBranch, selectedCommitHash, selectedPr]);
-    const comparison = useGitComparison(effectiveDirectory ?? null, comparisonSource, visible && !isVSCodeRuntime(), activeDiffScope === 'branch' ? branchRevision : '', prComparison.readContext, prComparison.provider);
+    const comparison = useGitComparison(effectiveDirectory ?? null, comparisonSource, visible, activeDiffScope === 'branch' ? branchRevision : '', prComparison.readContext, prComparison.provider);
     const { fetchDiff: loadComparisonDiff, fetchFullFile: loadComparisonFullFile } = comparison;
     const commitFiles = activeDiffScope === 'commit' ? comparison.files : null;
     const commitFilesError = activeDiffScope === 'commit' ? comparison.error : null;
@@ -2527,7 +2518,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                             branchCount={branchFileCount}
                             commitCount={activeDiffScope === 'commit' ? commitFiles?.length ?? null : null}
                             prCount={activeDiffScope === 'pr' ? comparison.files?.length ?? null : null}
-                            showCommitOption={!isVSCodeRuntime()}
+                            showCommitOption
                             showBranchOption={showBranchOption}
                             changeRequestProvider={prComparison.provider}
                             onScopeChange={(scope) => {

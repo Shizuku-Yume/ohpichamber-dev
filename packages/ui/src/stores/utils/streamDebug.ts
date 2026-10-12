@@ -47,13 +47,6 @@ declare global {
             reset: () => void;
             getSnapshot: () => StreamPerfSnapshot;
         };
-        __openchamberVsCodeStreamPerfState?: {
-            counters: Map<string, PerfCounter>;
-            lastReportAt?: number;
-            lastUpdatedAt?: number;
-            reportTimer?: number | null;
-            startedAt?: number;
-        };
     }
 }
 
@@ -77,7 +70,6 @@ const clearStreamPerfStateIfDisabled = (): void => {
     }
 
     delete window.__openchamberStreamPerfState;
-    delete window.__openchamberVsCodeStreamPerfState;
 };
 
 const nowMs = (): number => {
@@ -182,15 +174,6 @@ export const resetStreamPerf = (): void => {
             lastUpdatedAt: Date.now(),
         };
     }
-
-    if (window.__openchamberVsCodeStreamPerfState) {
-        window.__openchamberVsCodeStreamPerfState = {
-            ...window.__openchamberVsCodeStreamPerfState,
-            counters: new Map<string, PerfCounter>(),
-            startedAt: Date.now(),
-            lastUpdatedAt: Date.now(),
-        };
-    }
 };
 
 export const getStreamPerfSnapshot = (): StreamPerfSnapshot => {
@@ -220,39 +203,6 @@ export const getStreamPerfSnapshot = (): StreamPerfSnapshot => {
         startedAt: state.startedAt,
         lastUpdatedAt: state.lastUpdatedAt,
         durationMs: Math.max(0, Date.now() - state.startedAt),
-        entries: normalizePerfEntries(state.counters),
-    };
-};
-
-export const getVsCodeStreamPerfSnapshot = (): StreamPerfSnapshot => {
-    if (typeof window === 'undefined') {
-        return {
-            enabled: false,
-            startedAt: null,
-            lastUpdatedAt: null,
-            durationMs: 0,
-            entries: [],
-        };
-    }
-
-    const state = window.__openchamberVsCodeStreamPerfState;
-    if (!isStreamPerfEnabled() || !state) {
-        return {
-            enabled: false,
-            startedAt: null,
-            lastUpdatedAt: null,
-            durationMs: 0,
-            entries: [],
-        };
-    }
-
-    const startedAt = typeof state.startedAt === 'number' ? state.startedAt : null;
-    const lastUpdatedAt = typeof state.lastUpdatedAt === 'number' ? state.lastUpdatedAt : null;
-    return {
-        enabled: true,
-        startedAt,
-        lastUpdatedAt,
-        durationMs: startedAt ? Math.max(0, Date.now() - startedAt) : 0,
         entries: normalizePerfEntries(state.counters),
     };
 };

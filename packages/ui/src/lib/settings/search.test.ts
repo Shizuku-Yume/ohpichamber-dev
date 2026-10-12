@@ -5,7 +5,6 @@ import { buildSettingsSearchResults } from './search';
 const t = (key: I18nKey): string => key;
 
 const runtimeCtx = {
-  isVSCode: false,
   isWeb: true,
   isDesktop: false,
   isMobile: false,
@@ -21,23 +20,23 @@ const runtimeCtx = {
 describe('settings search', () => {
   test('finds double-paste on every shared Settings surface', () => {
     for (const query of ['double paste', 'ctrl v', 'cmd v']) {
-      for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isVSCode: true }, { ...runtimeCtx, isMobile: true }]) {
+      for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {
         const results = buildSettingsSearchResults({ query, runtimeCtx: context, t, getPageTitle: (page) => page });
         expect(results.find((result) => result.id === 'chat.large-text-paste')?.page).toBe('chat');
       }
     }
   });
-  test('finds the Claude Code integration by name and package, never in VS Code', () => {
+  test('finds the Claude Code integration by name and package on retained surfaces', () => {
     for (const query of ['claude', '@openchamber/opencode-claude']) {
-      for (const isVSCode of [false, true]) {
+      for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {
         const results = buildSettingsSearchResults({
           query,
-          runtimeCtx: { ...runtimeCtx, isVSCode },
+          runtimeCtx: context,
           t,
           getPageTitle: (page) => page,
         });
 
-        expect(results.some((result) => result.id === 'integrations.third-party.opencode-claude')).toBe(!isVSCode);
+        expect(results.some((result) => result.id === 'integrations.third-party.opencode-claude')).toBe(true);
       }
     }
   });
@@ -55,8 +54,8 @@ describe('settings search', () => {
     }
   });
 
-  test('finds the scrollbar preference on every surface', () => {
-    for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isVSCode: true }, { ...runtimeCtx, isMobile: true }]) {
+  test('finds the scrollbar preference on every retained surface', () => {
+    for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {
       const results = buildSettingsSearchResults({
         query: 'scrollbar',
         runtimeCtx: context,
@@ -101,18 +100,6 @@ describe('settings search', () => {
     expect(results.some((result) => result.id === 'chat.input-history-limit')).toBe(true);
   });
 
-  test('hides Linear connect in VS Code', () => {
-    const results = buildSettingsSearchResults({
-      query: 'linear',
-      runtimeCtx: { ...runtimeCtx, isVSCode: true },
-      t,
-      getPageTitle: (page) => page,
-    });
-
-    expect(results.some((result) => result.id === 'integrations.linear')).toBe(false);
-    expect(results.some((result) => result.id === 'integrations.linear.add-workspace')).toBe(false);
-    expect(results.some((result) => result.id === 'integrations.linear.mapping')).toBe(false);
-  });
 
   test('keeps repository controls out of Settings search and indexes account connection controls', () => {
     const results = buildSettingsSearchResults({
@@ -135,25 +122,6 @@ describe('settings search', () => {
     expect(connectResults.some((result) => result.id === 'git.gitlab-connect')).toBe(true);
   });
 
-  test('keeps repository transport and provider controls out of VS Code Settings search', () => {
-    const vscodeCtx = { ...runtimeCtx, isVSCode: true, isWeb: false };
-    const transportResults = buildSettingsSearchResults({
-      query: 'transport',
-      runtimeCtx: vscodeCtx,
-      t,
-      getPageTitle: (page) => page,
-    });
-    const accountResults = buildSettingsSearchResults({
-      query: 'account',
-      runtimeCtx: vscodeCtx,
-      t,
-      getPageTitle: (page) => page,
-    });
-
-    expect(transportResults.some((result) => result.id === 'git.repository-transport')).toBe(false);
-    expect(accountResults.some((result) => result.id === 'git.github-account')).toBe(false);
-    expect(accountResults.some((result) => result.id === 'git.gitlab-account')).toBe(false);
-  });
 
   test('finds guest extension panels on the integrations page', () => {
     const results = buildSettingsSearchResults({
@@ -165,13 +133,4 @@ describe('settings search', () => {
     expect(results.some((result) => result.id === 'integrations.guests')).toBe(true);
   });
 
-  test('hides guest extension panels in VS Code', () => {
-    const results = buildSettingsSearchResults({
-      query: 'clickup',
-      runtimeCtx: { ...runtimeCtx, isVSCode: true },
-      t,
-      getPageTitle: (page) => page,
-    });
-    expect(results.some((result) => result.id === 'integrations.guests')).toBe(false);
-  });
 });

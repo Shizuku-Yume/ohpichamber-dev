@@ -167,7 +167,7 @@ describe("SessionMessageLoader", () => {
   })
 
   test("keeps a post-rollover tail after legacy messages for shared runtime identities", async () => {
-    const runtimes = ["web", "desktop", "vscode", "mobile"]
+    const runtimes = ["web", "desktop", "mobile"]
     for (const runtimeKey of runtimes) {
       const childStores = new ChildStoreManager()
       const sdk = {

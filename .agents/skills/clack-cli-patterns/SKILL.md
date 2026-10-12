@@ -15,7 +15,7 @@ OpenChamber terminal CLI uses `@clack/prompts` for interactive UX, but command p
 
 Use this skill for terminal CLI work only (for example `packages/web/bin/*`).
 
-Do not use this skill for web UI or VS Code webview styling work.
+Do not use this skill for web UI styling work.
 
 ## Mode Contract
 

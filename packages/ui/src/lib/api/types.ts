@@ -50,14 +50,12 @@ export type {
   GitIdentityTransport,
 } from './git-identity';
 
-type RuntimePlatform = 'web' | 'desktop' | 'vscode';
+type RuntimePlatform = 'web' | 'desktop';
 
 interface RuntimeDescriptor {
   platform: RuntimePlatform;
 
   isDesktop: boolean;
-
-  isVSCode: boolean;
 
   label?: string;
 }
@@ -954,7 +952,7 @@ export interface CreateGitWorktreePayload {
   ensureRemoteUrl?: string;
   /** Exact commit the selected existing ref must resolve to before checkout. */
   expectedRevision?: string;
-  /** Server-resolved change-request checkout. Unsupported by VS Code. */
+  /** Server-resolved change-request checkout. */
   changeRequestSource?: GitChangeRequestSourceRequest;
   /** Return once the target directory exists and finish Git worktree setup in the background. */
   returnAfterDirectoryCreated?: boolean;
@@ -1099,7 +1097,7 @@ export interface GitAPI {
   executeNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
   getNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
   cancelNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
-  /** Connected-server inventory only; the VS Code webview does not implement it. */
+  /** Connected-server managed SSH credential inventory. */
   managedSshCredentials?(intent: GitManagedSshIntent): Promise<GitManagedSshResult>;
   /** Host-owned credential setup is available only in runtimes that implement this operation. */
   configureTransportBinding?(intent: GitTransportBindingIntent): Promise<GitTransportBindingResult>;
@@ -1357,15 +1355,6 @@ export interface EditorAPI {
   ): Promise<void>;
 }
 
-export interface VSCodeAPI {
-  executeCommand(command: string, ...args: unknown[]): Promise<unknown>;
-  openExternalUrl(url: string): Promise<void>;
-  pickFiles?(options?: { extensions?: string[] }): Promise<unknown>;
-  saveImage?(payload: unknown): Promise<unknown>;
-  saveMarkdown?(payload: unknown): Promise<unknown>;
-  /** Add a directory as a VS Code workspace folder; resolves with the full folder list after the add. */
-  addWorkspaceFolder?(path: string): Promise<Array<{ name: string; path: string }>>;
-}
 
 export interface PushSubscribePayload {
   endpoint: string;
@@ -1374,7 +1363,7 @@ export interface PushSubscribePayload {
     auth: string;
   };
   origin?: string;
-  /** Runtime surface ('ios' | 'android' | 'vscode' | 'desktop' | 'web') for presence-aware routing. */
+  /** Runtime surface ('ios' | 'android' | 'desktop' | 'web') for presence-aware routing. */
   platform?: string;
 }
 
@@ -2220,7 +2209,7 @@ export interface LinearAPI {
 }
 
 export interface RuntimeAPIs {
-  /** Native local picker. Web/mobile fall back to their browser file input; VS Code does not import themes. */
+  /** Native local picker. Web/mobile fall back to their browser file input. */
   themeFiles?: {
     pick(): Promise<{ status: 'unsupported' } | { status: 'picked'; file: { name: string; size: number; text: string } | null }>;
   };
@@ -2237,7 +2226,6 @@ export interface RuntimeAPIs {
   diagnostics?: DiagnosticsAPI;
   clientAuth?: ClientAuthAPI;
   editor?: EditorAPI;
-  vscode?: VSCodeAPI;
   worktrees?: WorktreeMetadata[];
 }
 

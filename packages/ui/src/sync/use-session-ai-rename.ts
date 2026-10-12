@@ -2,7 +2,6 @@ import { useCallback } from 'react';
 import { opencodeClient } from '@/lib/opencode/client';
 import { generateSessionTitle } from '@/lib/sessionTitle';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { normalizePath } from '@/lib/pathNormalization';
 import { buildSessionMessageRecordsSnapshot, useSyncRuntime } from './sync-context';
 import { loadSessionTitleTurns } from './session-title-context';
@@ -18,7 +17,7 @@ export function useSessionAiRename(sessionID: string, directory: string | null |
   const { runtimeKey, childStores, messageLoader } = useSyncRuntime();
 
   const prepare = useCallback(async (signal: AbortSignal) => {
-    if (!directory || isVSCodeRuntime()) throw new Error('Session title generation is unavailable');
+    if (!directory) throw new Error('Session title generation is unavailable');
     signal.throwIfAborted();
     if (getRuntimeKey() !== runtimeKey) throw new Error('Runtime changed');
     const session = await opencodeClient.getSession(sessionID, directory);

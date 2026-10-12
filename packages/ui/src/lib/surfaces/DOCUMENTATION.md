@@ -41,7 +41,7 @@ Full-screen extension pages are separate from this rail registry. `contributes.p
   (`useUIStore.contextRailHiddenSurfaces`, edited from the rail's trailing
   configure button — `ContextRailSurfacesDialog`), drops the plan surface
   unless plan mode is enabled,
-  drops the walkthrough on VS Code and below `WALKTHROUGH_MIN_WIDTH`, hides
+  drops the walkthrough below `WALKTHROUGH_MIN_WIDTH`, hides
   Linear unless a workspace is connected, hides the pull-request surface
   unless GitHub is connected (OAuth or `gh` CLI — signed in from Settings →
   Integrations), and hides `has-content` surfaces
@@ -62,7 +62,7 @@ Full-screen extension pages are separate from this rail registry. `contributes.p
    the desktop/web chat + menu that opens `plugin:${id}`. `"dialog"` opens a
    host window around the same iframe so the guest can pick an item and call
    `attach`. New Worktree also opens that window for dialog guests. The guest
-   still owns the list and HTTP. VS Code and mobile omit the row. Do not add
+   still owns the list and HTTP. Mobile omits the row. Do not add
    a built-in mode for that guest.
 
 No new header buttons: the rail, `openContextSurface`, the composer +
@@ -85,10 +85,9 @@ chat/palette go through the `openContext*` actions in `useUIStore`.
   surfaces must restore their state from stores or snapshots.
 - Portalled menus and dialogs handle their own Escape key. The panel's capture
   handler ignores their events so dismissing an overlay does not close the panel.
-- Runtime scope: desktop/web `MainLayout` only. VS Code and the dedicated
-  mobile shell have their own layouts and do not consume this registry.
-  Linear is a desktop/web singleton on this rail. VS Code and mobile omit it
-  (no this registry, and VS Code has no `RuntimeAPIs.linear`). The Linear
+- Runtime scope: desktop/web `MainLayout` only. The dedicated mobile shell
+  has its own layout and does not consume this registry.
+  Linear is a desktop/web singleton on this rail. Mobile omits it. The Linear
   rail icon is hidden until a Linear workspace is connected. A persisted Linear
   tab stays open across reload until auth has resolved; only a confirmed
   disconnect closes the panel. The surface lists

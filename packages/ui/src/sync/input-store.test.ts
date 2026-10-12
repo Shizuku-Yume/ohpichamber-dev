@@ -93,7 +93,6 @@ describe("input-store attachments", () => {
       pendingSyntheticParts: null,
       pendingGuestIssue: null,
       pendingBtwComposerRequest: null,
-      activeEditorFile: null,
       attachmentDraftKey: null,
       attachmentDrafts: new Map(),
     })
@@ -111,21 +110,21 @@ describe("input-store attachments", () => {
     expect(useInputStore.getState().attachedFiles).toEqual([])
   })
 
-  testWithMockFileReader("rejects pending file and selection reads after switching drafts, even after returning", async () => {
+  testWithMockFileReader("rejects pending local file reads after switching drafts, even after returning", async () => {
     const source = { runtimeKey: "runtime", directory: "/repo", sessionId: "source" }
     const input = useInputStore.getState()
     input.selectAttachmentDraft(source)
     input.addRestoredAttachment({ url: "data:text/plain;base64,aGVsbG8=", mimeType: "text/plain", filename: "ready.txt" })
     const ready = useInputStore.getState().attachedFiles
     const local = input.addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
-    const selection = input.addVSCodeSelectionAttachment("/repo/code.ts", new File(["hello"], "selection.ts", { type: "text/plain" }))
+    const code = input.addAttachedFile(new File(["hello"], "code.ts", { type: "text/plain" }))
     expect(pendingReaders).toHaveLength(2)
     input.selectAttachmentDraft({ ...source, sessionId: "other" })
     expect(useInputStore.getState().attachedFiles).toEqual([])
     input.selectAttachmentDraft(source)
     for (const reader of pendingReaders) resolveReader(reader, "data:text/plain;base64,aGVsbG8=")
     expect(await local).toBe(false)
-    await selection
+    expect(await code).toBe(false)
     expect(useInputStore.getState().attachedFiles).toBe(ready)
   })
 
@@ -140,21 +139,21 @@ describe("input-store attachments", () => {
     expect(useInputStore.getState().attachedFiles).toEqual([])
   })
 
-  testWithMockFileReader("a pending selection in another draft does not block the same selection here", async () => {
+  testWithMockFileReader("a pending local file in another draft does not affect a read here", async () => {
     const source = { runtimeKey: "runtime", directory: "/repo", sessionId: "source" }
     const input = useInputStore.getState()
-    const file = new File(["hello"], "selection.ts", { type: "text/plain" })
+    const file = new File(["hello"], "code.ts", { type: "text/plain" })
     input.selectAttachmentDraft(source)
-    const first = input.addVSCodeSelectionAttachment("/repo/code.ts", file)
+    const first = input.addAttachedFile(file)
     input.selectAttachmentDraft({ ...source, sessionId: "other" })
-    const second = input.addVSCodeSelectionAttachment("/repo/code.ts", file)
+    const second = input.addAttachedFile(file)
     expect(pendingReaders).toHaveLength(2)
     // A repeated selection of the current identity must not cancel its read.
     input.selectAttachmentDraft({ ...source, sessionId: "other" })
     input.clearAttachedFiles(source)
     for (const reader of pendingReaders) resolveReader(reader, "data:text/plain;base64,aGVsbG8=")
-    await Promise.all([first, second])
-    expect(useInputStore.getState().attachedFiles.map((attachment) => attachment.filename)).toEqual(["selection.ts"])
+    expect(await Promise.all([first, second])).toEqual([false, true])
+    expect(useInputStore.getState().attachedFiles.map((attachment) => attachment.filename)).toEqual(["code.ts"])
     input.selectAttachmentDraft(source)
     expect(useInputStore.getState().attachedFiles).toEqual([])
   })
@@ -179,20 +178,6 @@ describe("input-store attachments", () => {
     expect(useInputStore.getState().attachedFiles.map((file) => file.filename)).toEqual(["restored.txt"])
   })
 
-  testWithMockFileReader("does not attach a VS Code selection that finishes reading after attachments are cleared", async () => {
-    const addPromise = useInputStore.getState().addVSCodeSelectionAttachment(
-      "/workspace/hello.txt",
-      new File(["hello"], "hello.txt", { type: "text/plain" })
-    )
-    expect(pendingReaders).toHaveLength(1)
-
-    useInputStore.getState().clearAttachedFiles()
-    resolveReader(pendingReaders[0], "data:text/plain;base64,aGVsbG8=")
-    await addPromise
-
-    expect(useInputStore.getState().attachedFiles).toEqual([])
-  })
-
   test("does not leave local file reads pending after a reader error", async () => {
     const addPromise = useInputStore.getState().addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
     expect(pendingReaders).toHaveLength(1)
@@ -201,22 +186,6 @@ describe("input-store attachments", () => {
     await addPromise
 
     expect(useInputStore.getState().attachedFiles).toEqual([])
-  })
-
-  test("cleans up pending VS Code selection keys after a reader error", async () => {
-    const file = new File(["hello"], "hello.txt", { type: "text/plain" })
-    const firstAdd = useInputStore.getState().addVSCodeSelectionAttachment("/workspace/hello.txt", file)
-    expect(pendingReaders).toHaveLength(1)
-
-    rejectReader(pendingReaders[0])
-    await firstAdd
-
-    const secondAdd = useInputStore.getState().addVSCodeSelectionAttachment("/workspace/hello.txt", file)
-    expect(pendingReaders).toHaveLength(2)
-    resolveReader(pendingReaders[1], "data:text/plain;base64,aGVsbG8=")
-    await secondAdd
-
-    expect(useInputStore.getState().attachedFiles.map((attached) => attached.filename)).toEqual(["hello.txt"])
   })
 
   testWithMockFileReader("normalizes code files to text/plain", async () => {
@@ -333,7 +302,7 @@ describe("input-store attachments", () => {
     await waitForReaderCount(1)
     resolveReader(pendingReaders[0], "data:text/plain;base64,RG9jdW1lbnQ=")
     await waitForReaderCount(2)
-    useInputStore.getState().addVSCodeFileAttachment("/workspace/design-image-1.png", "design-image-1.png", 1)
+    useInputStore.getState().addRestoredAttachment({ url: "data:image/png;base64,AQID", mimeType: "image/png", filename: "design-image-1.png" })
     resolveReader(pendingReaders[1], "data:image/png;base64,AQID")
 
     await waitForReaderCount(3)

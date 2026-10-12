@@ -26,7 +26,7 @@ description: Use when creating or modifying OpenChamber shared UI data access, O
 
 ## Name The Surfaces Before Editing
 
-Before writing code that changes what a user can reach or do, write the surface list: every runtime this behavior exists on, and one line per runtime saying what happens there. Retained runtimes are web, Electron desktop, hosted mobile, and Capacitor mobile (the VS Code extension is a retired target scheduled for removal; do not extend its support).
+Before writing code that changes what a user can reach or do, write the surface list: every runtime this behavior exists on, and one line per runtime saying what happens there. Retained runtimes are web, Electron desktop, hosted mobile, and Capacitor mobile; the VS Code extension form has been removed.
 
 The step is done when no runtime is missing a line. "Not applicable" is a line; silence is not. A stable unsupported response is a valid outcome, an accidental fallthrough is not.
 

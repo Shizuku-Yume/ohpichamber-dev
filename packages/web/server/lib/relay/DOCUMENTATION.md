@@ -102,10 +102,10 @@ It does not replace a physical iOS/LTE check.
 Host-control, host-data and client upgrades include optional `appId`,
 `appVersion` and `platform` query parameters. OpenChamber sends `openchamber`,
 the local package version and the local runtime. Client platforms use the
-existing presence values: `desktop` for Electron, `vscode`, `ios`, `android`
-and `web` for browsers, including hosted mobile. Hosts use
-`OPENCHAMBER_RUNTIME`, defaulting to `web`, so SSH hosts report `ssh-remote`.
-These labels describe the connecting process, not its remote target.
+existing presence values: `desktop`, `ios`, `android` and `web` for browsers,
+including hosted mobile. Hosts use `OPENCHAMBER_RUNTIME`, defaulting to `web`,
+so SSH hosts report `ssh-remote`. These labels describe the connecting process,
+not its remote target.
 
 These fields are diagnostics only, outside the signed auth payload. Older
 relays ignore them and older apps remain connectable. The hosted relay groups

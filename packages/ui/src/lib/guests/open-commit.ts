@@ -17,7 +17,7 @@ type OpenGuestCommitOptions = {
   git: Pick<GitAPI, 'getGitLog'> | null;
   /** The directory's current branch, which keys the Diff view's commit selection. */
   currentBranch: (directory: string) => Promise<string | null>;
-  /** VS Code and mobile have no Diff view commit scope for guests. */
+  /** Mobile has no Diff view commit scope for guests. */
   supported: boolean;
 };
 

@@ -2,8 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { opencodeClient } from '@/lib/opencode/client';
 import { getNormalizedParentDirectory, normalizePath } from '@/lib/pathNormalization';
-import { getDesktopHomeDirectory, isVSCodeRuntime } from '@/lib/desktop';
-import { getVSCodeBootstrapConfig } from '@/lib/vscodeBootstrap';
+import { getDesktopHomeDirectory } from '@/lib/desktop';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getChatsRoot, resolveChatsRootDirectory } from '@/lib/chatDirectories';
@@ -50,15 +49,14 @@ export const isDirectoryUnknown = (state: Pick<DirectoryStore, 'currentDirectory
  * root, where a chat draft works anyway. Every OpenCode read names the app's
  * directory, and with the home there OpenCode started over the whole home
  * folder, file watcher and MCP servers included. The home stays the answer
- * only when the server cannot name the chats root, and in VS Code, which has
- * no managed chats.
+ * only when the server cannot name the chats root.
  */
 const noProjectDirectory = (home: string, chatsRoot: string | null | undefined): string =>
-  (!isVSCodeRuntime() && chatsRoot) || home;
+  chatsRoot || home;
 
-/** The chats root the server names; null in VS Code or when it does not answer. */
+/** The chats root the server names; null when it does not answer. */
 const resolveChatsRoot = (): Promise<string | null> => (
-  isVSCodeRuntime() ? Promise.resolve(null) : resolveChatsRootDirectory().catch(() => null)
+  resolveChatsRootDirectory().catch(() => null)
 );
 
 let cachedHomeDirectory: string | null = null;
@@ -158,7 +156,7 @@ const getHomeDirectory = () => {
     }
 
     const storedHome = getStoredHomeDirectory();
-    if (storedHome && !isVSCodeRuntime()) {
+    if (storedHome) {
       cachedHomeDirectory = storedHome;
       return storedHome;
     }
@@ -240,28 +238,16 @@ const initializeHomeDirectory = async () => {
   return fallback;
 };
 
-const getVsCodeWorkspaceFolder = (): string | null => {
-  if (!isVSCodeRuntime()) {
-    return null;
-  }
-  const workspaceFolder = getVSCodeBootstrapConfig()?.workspaceFolder;
-  if (typeof workspaceFolder !== 'string' || workspaceFolder.trim().length === 0) {
-    return null;
-  }
-  const normalized = normalizeDirectoryPath(workspaceFolder);
-  return normalized.length > 0 ? normalized : null;
-};
-
-const initialHomeDirectory = getVsCodeWorkspaceFolder() || getHomeDirectory();
+const initialHomeDirectory = getHomeDirectory();
 const initialCurrentDirectory = (() => {
   const persisted = getStoredLastDirectory();
-  if (persisted && !isVSCodeRuntime()) {
+  if (persisted) {
     return resolveDirectoryPath(persisted, initialHomeDirectory);
   }
   // No project open: no directory until the server names the chats root
   // (noProjectDirectory). Nothing is read for an empty directory, and the app
   // stays unmounted until then because the home is not ready either.
-  return isVSCodeRuntime() ? initialHomeDirectory : '';
+  return '';
 })();
 
 if (initialCurrentDirectory) {
@@ -437,7 +423,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
         // login on a server with a UI password while the home is known from
         // storage. It stays not ready, so the session gate resolves again after
         // login; marked ready, the app would work in the home all session.
-        const awaitingChatsRoot = shouldReplaceCurrent && !isVSCodeRuntime() && !chatsRoot;
+        const awaitingChatsRoot = shouldReplaceCurrent && !chatsRoot;
         const updates: Partial<DirectoryStore> = {
           homeDirectory: resolvedHome,
           hasPersistedDirectory: hasSavedLastDirectory,

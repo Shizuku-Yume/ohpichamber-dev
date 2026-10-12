@@ -40,7 +40,7 @@ export const createWebAPIs = (options: WebAPIsOptions = {}): RuntimeAPIs => {
 
   return {
    themeFiles: createDesktopThemeFileAPI(),
-  runtime: { platform: 'web', isDesktop: false, isVSCode: false, label: 'web' },
+  runtime: { platform: 'web', isDesktop: false, label: 'web' },
   terminal: createWebTerminalAPI(),
   git: createWebGitAPI(),
   files: createWebFilesAPI({ urls: activeUrls, getDirectory: () => useDirectoryStore.getState().currentDirectory }),

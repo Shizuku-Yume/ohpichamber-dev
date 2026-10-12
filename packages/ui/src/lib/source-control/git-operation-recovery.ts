@@ -19,7 +19,7 @@ const text = z.string().min(1).max(512);
 const digestSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const referenceSchema = z.object({
   runtimeKey: digestSchema,
-  runtimeIdentity: z.object({ id: text, platform: z.enum(['web', 'desktop', 'vscode']) }).strict(),
+  runtimeIdentity: z.object({ id: text, platform: z.enum(['web', 'desktop']) }).strict(),
   repositoryId: text.nullable(),
   operationId: text,
   operation: z.enum(['push', 'pull', 'fetch', 'sync', 'delete-remote-branch', 'clone', 'checkout-hydration']),

@@ -87,9 +87,9 @@ LeftSidebar.displayName = 'LeftSidebar';
  * crossing the threshold reloads into it (see watchHostedSurfaceViewport).
  */
 export const MainLayout: React.FC = () => {
-    useSessionListSync({ isVSCode: false });
+    useSessionListSync();
     useTerminalSessionKeepalive();
-    // The grant dialog of isolated spaces; the main layout is never VS Code's (decision 16).
+    // The grant dialog of isolated spaces.
     const isolatedSpacesEnabled = useUIStore((state) => state.isolatedSpacesEnabled);
     const setIsMobile = useUIStore((state) => state.setIsMobile);
     const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);

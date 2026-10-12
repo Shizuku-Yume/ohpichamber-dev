@@ -12,7 +12,6 @@ type Props = {
   onOpenShortcuts: () => void;
   onOpenAbout: () => void;
   onOpenUpdate: () => void;
-  showRuntimeButtons?: boolean;
   showUpdateButton?: boolean;
 };
 
@@ -24,7 +23,6 @@ export function SidebarFooter({
   onOpenShortcuts,
   onOpenAbout,
   onOpenUpdate,
-  showRuntimeButtons = true,
   showUpdateButton = true,
 }: Props): React.ReactNode {
   const { t } = useI18n();
@@ -33,54 +31,46 @@ export function SidebarFooter({
   // Usage is a page in the main area: the button stays pressed while it is open and closes it again.
   const isUsageOpen = useUIStore((state) => state.isUsageStatsPageOpen);
 
-  if (!showRuntimeButtons && !showUpdateButton) {
-    return null;
-  }
-
   return (
     <div className="flex shrink-0 items-center justify-start gap-1 px-2.5 py-2">
-      {showRuntimeButtons ? (
-        <>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button type="button" onClick={onOpenSettings} className={footerButtonClassName} aria-label={t('sessions.sidebar.footer.actions.settings')}>
-                <Icon name="settings-3" className="h-4.5 w-4.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}><p>{t('sessions.sidebar.footer.actions.settings')}</p></TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => useUIStore.getState().setUsageStatsPageOpen(!isUsageOpen)}
-                className={cn(footerButtonClassName, isUsageOpen && pressedFooterButtonClassName)}
-                aria-label={t('usageStats.openAction')}
-                aria-pressed={isUsageOpen}
-              >
-                <Icon name="bar-chart" className="h-4.5 w-4.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}><p>{t('usageStats.openAction')}</p></TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button type="button" onClick={onOpenShortcuts} className={footerButtonClassName} aria-label={t('sessions.sidebar.footer.actions.shortcuts')}>
-                <Icon name="command" className="h-4.5 w-4.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}><p>{t('sessions.sidebar.footer.actions.shortcuts')}</p></TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button type="button" onClick={onOpenAbout} className={footerButtonClassName} aria-label={t('sessions.sidebar.footer.actions.aboutOpenChamber')}>
-                <Icon name="information" className="h-4.5 w-4.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}><p>{t('sessions.sidebar.footer.actions.aboutOpenChamber')}</p></TooltipContent>
-          </Tooltip>
-        </>
-      ) : null}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" onClick={onOpenSettings} className={footerButtonClassName} aria-label={t('sessions.sidebar.footer.actions.settings')}>
+            <Icon name="settings-3" className="h-4.5 w-4.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}><p>{t('sessions.sidebar.footer.actions.settings')}</p></TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => useUIStore.getState().setUsageStatsPageOpen(!isUsageOpen)}
+            className={cn(footerButtonClassName, isUsageOpen && pressedFooterButtonClassName)}
+            aria-label={t('usageStats.openAction')}
+            aria-pressed={isUsageOpen}
+          >
+            <Icon name="bar-chart" className="h-4.5 w-4.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}><p>{t('usageStats.openAction')}</p></TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" onClick={onOpenShortcuts} className={footerButtonClassName} aria-label={t('sessions.sidebar.footer.actions.shortcuts')}>
+            <Icon name="command" className="h-4.5 w-4.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}><p>{t('sessions.sidebar.footer.actions.shortcuts')}</p></TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" onClick={onOpenAbout} className={footerButtonClassName} aria-label={t('sessions.sidebar.footer.actions.aboutOpenChamber')}>
+            <Icon name="information" className="h-4.5 w-4.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}><p>{t('sessions.sidebar.footer.actions.aboutOpenChamber')}</p></TooltipContent>
+      </Tooltip>
       {showUpdateButton ? (
         <Button
           type="button"

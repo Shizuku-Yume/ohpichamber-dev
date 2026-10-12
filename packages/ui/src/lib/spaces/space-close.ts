@@ -5,7 +5,6 @@
 // without a project meanwhile. Files are kept, as with any stop.
 
 import { toast } from '@/components/ui';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { formatMessage, useI18nStore, type I18nKey, type I18nParams } from '@/lib/i18n';
 import { normalizePath } from '@/lib/pathNormalization';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
@@ -33,7 +32,7 @@ export const spacesToStopOnClose = (journey: ReadonlyMap<string, SpaceEntry>, pr
 
 /** Stops the spaces of a project the user just closed, and says what happened. */
 export const stopSpacesOfClosedProject = async (projectPath: string, projectLabel: string): Promise<void> => {
-  if (!useUIStore.getState().isolatedSpacesEnabled || isVSCodeRuntime()) return;
+  if (!useUIStore.getState().isolatedSpacesEnabled) return;
   // A list that cannot be read now, usually a runtime that is not running, stops nothing: what
   // still runs is listed in Settings among the spaces without a project once it can be read.
   const listed = await refreshSpacesJourney().then(() => true, () => false);

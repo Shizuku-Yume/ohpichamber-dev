@@ -996,7 +996,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   // tree, the same split the desktop sidebar makes. Temporary /btw forks are
   // dropped here as well.
   const { projectSessions, chatSessions } = React.useMemo(
-    () => partitionSidebarSessions(sessions, false),
+    () => partitionSidebarSessions(sessions),
     [sessions],
   );
 
@@ -1037,7 +1037,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     projectSessions,
     projectsMeta.map((project) => ({ id: project.id, normalizedPath: project.path })),
     new Map(projectsMeta.map((project) => [project.path, project.worktrees])),
-    false,
     [],
     authoritativeProjects,
     spaceList,
@@ -1101,7 +1100,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   // that moment would drop the whole section mid exit slide.
   const liveRecentRoots = useRecentSessionCollection({
     enabled: presented && recentShown,
-    isVSCode: false,
     pinnedSessionIds,
     sessionOrderRanks,
     sessions: sectionProjectSessions,

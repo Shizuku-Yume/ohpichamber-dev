@@ -15,7 +15,6 @@ import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { summarizeSelectionForNotes } from '@/lib/smallModel';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { getTypeToCommentText } from '@/lib/typeToComment';
 import { useCommentImagePaste } from '@/components/comments/useCommentImagePaste';
@@ -834,7 +833,6 @@ const TextSelectionMenuImpl: React.FC<TextSelectionMenuProps> = ({ containerRef,
               </button>
             ) : null}
 
-            {!isVSCodeRuntime() ? (
               <button
                 onClick={handleAddToNotes}
                 disabled={isAddingToNotes}
@@ -851,7 +849,6 @@ const TextSelectionMenuImpl: React.FC<TextSelectionMenuProps> = ({ containerRef,
                 {isAddingToNotes ? <Icon name="loader-4" className="h-5 w-5 flex-shrink-0 animate-spin" /> : <Icon name="booklet" className="h-5 w-5 flex-shrink-0" />}
                 <span className="min-w-0 whitespace-normal">{t('chat.textSelection.actions.addToNotes')}</span>
               </button>
-            ) : null}
           </div>
         </div>
       </div>,
@@ -917,8 +914,6 @@ const TextSelectionMenuImpl: React.FC<TextSelectionMenuProps> = ({ containerRef,
           ) : null}
 
 
-          {!isVSCodeRuntime() ? (
-            <>
               <div className="mx-0.5 h-5 w-px shrink-0 bg-[var(--interactive-border)]" />
 
               <button
@@ -937,8 +932,6 @@ const TextSelectionMenuImpl: React.FC<TextSelectionMenuProps> = ({ containerRef,
                 {isAddingToNotes ? <Icon name="loader-4" className="h-4 w-4 animate-spin" /> : null}
                 <span className="whitespace-nowrap">{t('chat.textSelection.actions.addToNotes')}</span>
               </button>
-            </>
-          ) : null}
 
           {canReadAloud ? (
             <>

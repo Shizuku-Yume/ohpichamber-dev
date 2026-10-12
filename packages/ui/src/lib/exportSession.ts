@@ -2,7 +2,7 @@ import type { Message, Part } from '@/lib/opencode/model';
 import { hasParts } from '@/lib/opencode/model';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getCurrentIntlLocale } from '@/lib/i18n';
-import { isVSCodeRuntime, openDesktopPath, revealDesktopPath, saveDesktopMarkdownFile } from '@/lib/desktop';
+import { openDesktopPath, revealDesktopPath, saveDesktopMarkdownFile } from '@/lib/desktop';
 import { getRevealLabelKey } from '@/lib/utils';
 import { readContextPart } from '@/lib/messages/contextParts';
 import { formatContextMessage, formatMessageText } from '@/lib/messages/messageMarkdown';
@@ -148,30 +148,8 @@ export function downloadAsMarkdown(content: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export async function saveAsMarkdownDesktop(content: string, filename: string): Promise<string | null> {
-  const desktopPath = await saveDesktopMarkdownFile(filename, content);
-  if (desktopPath) {
-    return desktopPath;
-  }
-
-  if (!isVSCodeRuntime()) {
-    return null;
-  }
-
-  try {
-    const payload = await getRegisteredRuntimeAPIs()?.vscode?.saveMarkdown?.({ fileName: filename, content }) as { saved?: boolean; path?: string } | undefined;
-    if (!payload) {
-      return null;
-    }
-    if (payload.saved !== true) {
-      return null;
-    }
-
-    const savedPath = typeof payload.path === 'string' ? payload.path.trim() : '';
-    return savedPath.length > 0 ? savedPath : null;
-  } catch {
-    return null;
-  }
+export function saveAsMarkdownDesktop(content: string, filename: string): Promise<string | null> {
+  return saveDesktopMarkdownFile(filename, content);
 }
 
 export async function revealExportedMarkdown(path: string): Promise<boolean> {

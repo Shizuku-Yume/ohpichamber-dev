@@ -6,7 +6,6 @@ import type { EditorAPI } from '@/lib/api/types';
 
 import { ApplyPatchFileButtons } from './ApplyPatchFileButtons';
 import { openApplyPatchFileInEditor } from './applyPatchEditorAction';
-import { getApplyPatchFilePath } from './toolDiffUtils';
 
 const makePatch = (path: string, line: number, before: string, after: string) => [
     `--- a/${path}`,
@@ -68,7 +67,7 @@ describe('ApplyPatchFileButtons', () => {
         };
         for (const file of [{ file: 'gone.ts', status: 'deleted' }, { filePath: 'gone.ts', type: 'delete' }]) {
             expect(openApplyPatchFileInEditor({
-                currentDirectory: '/workspace/project', diffLabel: 'changes', editor, file, isVSCode: true,
+                currentDirectory: '/workspace/project', editor, file,
             })).toBe(false);
         }
         expect(calls).toEqual([]);
@@ -90,11 +89,12 @@ describe('ApplyPatchFileButtons', () => {
         expect(markup).toContain('aria-label="Open file diff: legacy.ts"');
     });
 
-    test('opens each clicked file with its own authoritative path, patch, and line', () => {
+    test('opens each clicked file with its own authoritative path and changed line', () => {
+        const openFileCalls: Parameters<EditorAPI['openFile']>[] = [];
         const openDiffCalls: Parameters<EditorAPI['openDiff']>[] = [];
         const editor: EditorAPI = {
             openDiff: async (...args) => { openDiffCalls.push(args); },
-            openFile: async () => undefined,
+            openFile: async (...args) => { openFileCalls.push(args); },
         };
         let propagationStops = 0;
         const stopPropagation = () => { propagationStops += 1; };
@@ -105,13 +105,10 @@ describe('ApplyPatchFileButtons', () => {
             openDiffLabel: 'Open file diff',
             onFileClick: (file, event) => {
                 event.stopPropagation();
-                const targetPath = (getApplyPatchFilePath(file) ?? '').replace('/workspace/project/', '');
                 openApplyPatchFileInEditor({
                     currentDirectory: '/workspace/project',
-                    diffLabel: `${targetPath} (changes)`,
                     editor,
                     file,
-                    isVSCode: true,
                 });
             },
         }) as React.ReactElement<{ children: React.ReactNode }>;
@@ -125,15 +122,10 @@ describe('ApplyPatchFileButtons', () => {
         buttons[1]?.props.onClick?.({ stopPropagation });
 
         expect(propagationStops).toBe(2);
-        expect(openDiffCalls).toEqual([
-            ['', '/workspace/project/src/first.ts', 'src/first.ts (changes)', {
-                line: 4,
-                patch: files[0]?.patch,
-            }],
-            ['', '/workspace/project/src/second.ts', 'src/second.ts (changes)', {
-                line: 12,
-                patch: files[1]?.patch,
-            }],
+        expect(openFileCalls).toEqual([
+            ['/workspace/project/src/first.ts', 4],
+            ['/workspace/project/src/second.ts', 12],
         ]);
+        expect(openDiffCalls).toEqual([]);
     });
 });

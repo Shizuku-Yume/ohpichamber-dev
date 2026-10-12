@@ -53,9 +53,8 @@ Narrow provider and transport routes apply the same response-only projection aft
 
 Revision conflicts return `409` with the current authoritative record. Missing or unsupported repositories fail explicitly; they never fall back to a path-scoped or project-scoped binding. Raw remote URLs and Git common-directory paths remain server-internal.
 
-Shared UI runtimes read through `SourceControlAPI.repositoryBinding` and mutate through narrow provider, transport, remote-removal, auxiliary, and confirmed-reset intents. No shared generic whole-binding set/delete API exists. Web, Electron, hosted mobile, and Capacitor mobile execute narrow mutations on the OpenChamber server. VS Code persists no bindings: its webview projects repository remotes as a ready System-transport binding read and exposes no binding mutations.
-
-The optional presentation field gives runtime parity without weakening native boundaries. Web, Electron, hosted mobile and Capacitor receive server-projected metadata. VS Code never returns managed grants, so it never carries a presentation. Shared UI treats omission as unavailable and never turns the opaque grant reference into a label.
+Shared UI runtimes read through `SourceControlAPI.repositoryBinding` and mutate through narrow provider, transport, remote-removal, auxiliary, and confirmed-reset intents. No shared generic whole-binding set/delete API exists. Web, Electron, hosted mobile, and Capacitor mobile execute narrow mutations on the OpenChamber server.
+The optional presentation field gives runtime parity without weakening native boundaries. Web, Electron, hosted mobile and Capacitor receive server-projected metadata. Shared UI treats omission as unavailable and never turns the opaque grant reference into a label.
 
 ## Account and binding UI
 

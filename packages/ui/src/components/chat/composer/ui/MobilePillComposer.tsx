@@ -20,7 +20,6 @@ import { StopIcon } from '@/components/icons/StopIcon';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { isDictationCaptureSupported } from '@/lib/dictation/use-dictation-audio-source';
 import { ComposerAttachmentControls } from './ComposerAttachmentControls';
 
@@ -29,7 +28,6 @@ export interface MobilePillComposerProps {
     sessionId: string | null;
     newSessionDraftOpen: boolean;
     hasContent: boolean;
-    isVSCode: boolean;
     canAbort: boolean;
     footerIconButtonClass: string;
     iconSizeClass: string;
@@ -63,7 +61,6 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
         sessionId: currentSessionId,
         newSessionDraftOpen,
         hasContent,
-        isVSCode,
         canAbort,
         footerIconButtonClass,
         iconSizeClass,
@@ -87,7 +84,7 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
     const canPrimaryAction = hasContent && Boolean(currentSessionId || newSessionDraftOpen);
     const showQueueAction = canPrimaryAction && canAbort;
     const dictationEnabled = useConfigStore((state) => state.dictationEnabled);
-    const [dictationSupported] = useState(() => !isVSCodeRuntime() && isDictationCaptureSupported());
+    const [dictationSupported] = useState(isDictationCaptureSupported);
     const showDictation = dictationEnabled && dictationSupported;
 
     return (
@@ -118,7 +115,6 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
                 do not shift across the swap. */}
             <div className="flex h-12 min-w-0 items-center gap-x-0.5 pl-1 pr-1">
                 <ComposerAttachmentControls
-                    isVSCode={isVSCode}
                     footerIconButtonClass={footerIconButtonClass}
                     iconSizeClass={iconSizeClass}
                     handlePickLocalFiles={onPickLocalFiles}

@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-    collectDroppedFileUris,
     collectDroppedFiles,
     hasDraggedFiles,
     INTERNAL_FILE_PATH_TYPE,
@@ -13,7 +12,6 @@ function fakeTransfer(options: {
     data?: Record<string, string>;
     files?: File[];
     items?: Array<{ kind: string; file?: File }>;
-    throwOnGetData?: boolean;
 }): DataTransfer {
     const data = options.data ?? {};
     return {
@@ -23,10 +21,6 @@ function fakeTransfer(options: {
             kind: item.kind,
             getAsFile: () => item.file ?? null,
         })),
-        getData: (type: string) => {
-            if (options.throwOnGetData) throw new Error('unavailable during dragover');
-            return data[type] ?? '';
-        },
     } as unknown as DataTransfer;
 }
 
@@ -39,28 +33,14 @@ describe('hasDraggedFiles', () => {
 
     test('a declared file-bearing type is enough', () => {
         expect(hasDraggedFiles(fakeTransfer({ types: ['Files'] }))).toBe(true);
-        expect(hasDraggedFiles(fakeTransfer({ types: ['text/uri-list'] }))).toBe(true);
-        expect(hasDraggedFiles(fakeTransfer({ types: ['CodeFiles'] }))).toBe(true);
     });
 
     test('an internal file-tree drag is recognized', () => {
         expect(hasDraggedFiles(fakeTransfer({ types: [INTERNAL_FILE_PATH_TYPE] }))).toBe(true);
     });
 
-    test('a VS Code tree type is recognized by prefix', () => {
-        expect(hasDraggedFiles(fakeTransfer({ types: ['application/vnd.code.tree.explorer'] })))
-            .toBe(true);
-    });
-
     test('type matching is case-insensitive', () => {
         expect(hasDraggedFiles(fakeTransfer({ types: ['FILES'] }))).toBe(true);
-    });
-
-    test('falls back to scanning payloads when the types say nothing useful', () => {
-        expect(hasDraggedFiles(fakeTransfer({
-            types: ['application/unknown'],
-            data: { 'text/plain': '/repo/a.ts' },
-        }))).toBe(true);
     });
 
     test('dragged text is not a file drag', () => {
@@ -75,12 +55,6 @@ describe('hasDraggedFiles', () => {
         expect(hasDraggedFiles(undefined)).toBe(false);
     });
 
-    test('an unreadable payload does not abort the scan', () => {
-        expect(hasDraggedFiles(fakeTransfer({
-            types: ['application/unknown'],
-            throwOnGetData: true,
-        }))).toBe(false);
-    });
 });
 
 describe('collectDroppedFiles', () => {
@@ -111,27 +85,3 @@ describe('collectDroppedFiles', () => {
     });
 });
 
-describe('collectDroppedFileUris', () => {
-    test('reads paths out of a VS Code payload', () => {
-        expect(collectDroppedFileUris(fakeTransfer({
-            data: { 'text/uri-list': 'file:///repo/a.ts' },
-        }))).toEqual(['file:///repo/a.ts']);
-    });
-
-    test('the same path across several types is returned once', () => {
-        expect(collectDroppedFileUris(fakeTransfer({
-            data: { 'text/uri-list': '/repo/a.ts', 'text/plain': '/repo/a.ts' },
-        }))).toEqual(['/repo/a.ts']);
-    });
-
-    test('a payload with no paths yields nothing', () => {
-        expect(collectDroppedFileUris(fakeTransfer({
-            data: { 'text/plain': 'words' },
-        }))).toEqual([]);
-    });
-
-    test('a transfer without getData yields nothing', () => {
-        expect(collectDroppedFileUris({} as DataTransfer)).toEqual([]);
-        expect(collectDroppedFileUris(null)).toEqual([]);
-    });
-});

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
-import { invokeDesktop, isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
+import { invokeDesktop, isDesktopShell } from '@/lib/desktop';
 import { syncDesktopSettings, initializeAppearancePreferences } from '@/lib/persistence';
 import { applyPersistedDirectoryPreferences } from '@/lib/directoryPersistence';
 import { ensureHomeDirectoryResolved, useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -340,10 +340,8 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   children,
 }) => {
   const { t } = useI18n();
-  const vscodeRuntime = React.useMemo(() => isVSCodeRuntime(), []);
-  const skipAuth = vscodeRuntime;
-  const showHostSwitcher = React.useMemo(() => isDesktopShell() && !vscodeRuntime, [vscodeRuntime]);
-  const [state, setState] = React.useState<GateState>(() => (skipAuth ? 'authenticated' : 'pending'));
+  const showHostSwitcher = React.useMemo(() => isDesktopShell(), []);
+  const [state, setState] = React.useState<GateState>('pending');
   const [password, setPassword] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState('');
@@ -355,13 +353,13 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   const [trustDevice, setTrustDevice] = React.useState<boolean>(() => readStoredTrustDevice());
   const [activePasskeyAction, setActivePasskeyAction] = React.useState<'auth' | 'register' | null>(null);
   const passwordInputRef = React.useRef<HTMLInputElement | null>(null);
-  const hasResyncedRef = React.useRef(skipAuth);
-  const hasBootstrapResyncedRef = React.useRef(skipAuth);
+  const hasResyncedRef = React.useRef(false);
+  const hasBootstrapResyncedRef = React.useRef(false);
   // Whether the home directory was resolved after authentication. Until then
   // the app stays unmounted when the home is unknown: on a first visit to a
   // password-protected server the page-load attempt could only fall back to
   // "/", and the app would start working there.
-  const [homeChecked, setHomeChecked] = React.useState(skipAuth);
+  const [homeChecked, setHomeChecked] = React.useState(false);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') {
@@ -371,9 +369,6 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   }, [trustDevice]);
 
   const refreshPasskeyStatus = React.useCallback(async (runtime = captureRuntimeIdentity()) => {
-    if (skipAuth) {
-      return defaultPasskeyStatus;
-    }
 
     try {
       const nextStatus = await fetchPasskeyStatus();
@@ -387,14 +382,11 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
       }
       return defaultPasskeyStatus;
     }
-  }, [skipAuth]);
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
 
-    if (skipAuth) {
-      return;
-    }
 
     void (async () => {
       try {
@@ -417,7 +409,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [skipAuth]);
+  }, []);
 
   // Bounded retry scheduling for transient session-check failures. Lives in refs
   // so retries survive re-renders; the timer is cleared on unmount, endpoint
@@ -454,10 +446,6 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   React.useEffect(() => clearTransientRetry, [clearTransientRetry]);
 
   const checkStatus = React.useCallback(async () => {
-    if (skipAuth) {
-      setState('authenticated');
-      return;
-    }
 
     const runtime = captureRuntimeIdentity();
     setState((prev) => (prev === 'authenticated' ? prev : 'pending'));
@@ -531,23 +519,17 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
       setState('error');
       setIsTunnelLocked(false);
     }
-  }, [refreshPasskeyStatus, resetTransientRetry, scheduleTransientRetry, skipAuth]);
+  }, [refreshPasskeyStatus, resetTransientRetry, scheduleTransientRetry]);
 
   React.useEffect(() => {
     checkStatusRef.current = checkStatus;
   }, [checkStatus]);
 
   React.useEffect(() => {
-    if (skipAuth) {
-      return;
-    }
     void checkStatus();
-  }, [checkStatus, skipAuth]);
+  }, [checkStatus]);
 
   React.useEffect(() => {
-    if (skipAuth) {
-      return;
-    }
 
     return subscribeRuntimeEndpointChanged(() => {
       cancelPasskeyCeremony();
@@ -563,7 +545,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
       setState('pending');
       void checkStatus();
     });
-  }, [checkStatus, resetTransientRetry, skipAuth]);
+  }, [checkStatus, resetTransientRetry]);
 
   React.useEffect(() => {
     if (homeChecked || state !== 'authenticated') return;
@@ -582,10 +564,10 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   }, [homeChecked, state]);
 
   React.useEffect(() => {
-    if (!skipAuth && state === 'locked') {
+    if (state === 'locked') {
       hasResyncedRef.current = false;
     }
-  }, [skipAuth, state]);
+  }, [state]);
 
   // Mid-session expiry: the banner asks for a re-login by flipping the shared
   // auth store to 'reauthenticating'; the gate answers with its own status
@@ -593,20 +575,18 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   // successful login resolves the store back to 'ok'.
   const authSessionState = useAuthSessionStore((store) => store.state);
   React.useEffect(() => {
-    if (!skipAuth) installAuthSessionFocusWatch();
-  }, [skipAuth]);
+    installAuthSessionFocusWatch();
+  }, []);
   React.useEffect(() => {
-    if (skipAuth) return;
     if (authSessionState === 'reauthenticating') {
       void checkStatusRef.current?.();
     }
-  }, [authSessionState, skipAuth]);
+  }, [authSessionState]);
   React.useEffect(() => {
-    if (skipAuth) return;
     if (state === 'authenticated' && useAuthSessionStore.getState().state !== 'ok') {
       useAuthSessionStore.getState().markAuthenticated();
     }
-  }, [skipAuth, state]);
+  }, [state]);
 
   React.useEffect(() => {
     if (state === 'locked' && passwordInputRef.current) {
@@ -616,9 +596,6 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
   }, [state]);
 
   React.useEffect(() => {
-    if (skipAuth) {
-      return;
-    }
     if (state === 'authenticated' && !hasResyncedRef.current) {
       hasResyncedRef.current = true;
       // First authentication of this page load is bootstrap: adopt the
@@ -635,7 +612,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
         }
       })();
     }
-  }, [skipAuth, state]);
+  }, [state]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1048,7 +1025,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
 
   return (
     <>
-      {skipAuth ? null : <AuthExpiredBanner />}
+      <AuthExpiredBanner />
       {children}
     </>
   );

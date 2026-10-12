@@ -1,4 +1,4 @@
-export type ThemeImportErrorCode = 'invalid' | 'include' | 'size' | 'background' | 'save' | 'connection' | 'unsupported' | 'conflict';
+export type ThemeImportErrorCode = 'invalid' | 'include' | 'size' | 'background' | 'save' | 'connection' | 'conflict';
 
 export class ThemeImportError extends Error {
   constructor(public readonly code: ThemeImportErrorCode) {

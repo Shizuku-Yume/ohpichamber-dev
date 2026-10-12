@@ -94,7 +94,6 @@ import {
 import { useSync } from '@/sync/use-sync';
 import { usePlanDetection } from '@/hooks/usePlanDetection';
 import { useI18n } from '@/lib/i18n';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { eventMatchesShortcut, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { ChatSearchBar } from './search/ChatSearchBar';
 import { WorkStatusPanel } from './work-status/WorkStatusPanel';
@@ -1015,7 +1014,6 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     }, [currentSessionId, sessionMessageLoadState.complete, sessionMessageLoadState.cursor, sessionMessageLoadState.status, sessionMessages.length]);
 
     const { isMobile } = useDeviceInfo();
-    const isVSCode = isVSCodeRuntime();
     const chatSurfaceMode = useChatSurfaceMode();
     // The new-session draft is the main chat's; a pinned column never shows it.
     const draftOpen = !pinned && Boolean(newSessionDraft?.open);
@@ -1033,14 +1031,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     // Despite the historical name, this now covers mobile too: the mobile
     // composer enters the same fullscreen-input mode via its drag handle.
     const isDesktopExpandedInput = isExpandedInput;
-    const useCompactDraftLayout = isMobile || isVSCode || chatSurfaceMode === 'mini-chat';
+    const useCompactDraftLayout = isMobile || chatSurfaceMode === 'mini-chat';
     // Work-status panel: a borderless column to the right of the transcript.
     // It yields to the context panel and to a narrow chat; `rowRef` goes on the
     // row that holds both columns, so its width never depends on the panel's
     // own visibility.
     const { rowRef: workStatusRowRef, visible: workStatusVisible, fits: workStatusFits, roomy: workStatusRoomy } = useWorkStatusVisibility({
         isMobile,
-        isVSCode,
     });
     const attachColumnRoot = React.useCallback((node: HTMLDivElement | null) => {
         columnRootRef.current = node;
@@ -1051,7 +1048,6 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     // A pinned column leaves the panel, and the app-wide flags below, to the
     // main chat.
     const workStatusPanelMountable = !isMobile
-        && !isVSCode
         && !pinned
         && chatSurfaceMode !== 'mini-chat';
     const showWorkStatusPanel = workStatusPanelMountable && workStatusVisible;
@@ -1246,15 +1242,14 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     // the chat (its composer, or nothing focused after clicking its text)
     // opens this bar. With several chat columns on screen, an unfocused
     // Cmd+F goes to the column the pointer last pressed in. Search is opt-in;
-    // while it is off the shortcut is left alone. VS Code has no OpenChamber
-    // server and so no index to search.
+    // while it is off the shortcut is left alone.
     const chatRootRef = React.useRef<HTMLDivElement>(null);
     const lastPressedInsideRef = React.useRef(false);
     const [chatSearch, setChatSearch] = React.useState({ open: false, focusRequest: 0 });
     const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
     const messageSearchEnabled = useUIStore((state) => state.messageSearchEnabled);
     React.useEffect(() => {
-        if (!active || !currentSessionId || !messageSearchEnabled || isVSCodeRuntime()) return;
+        if (!active || !currentSessionId || !messageSearchEnabled) return;
         const combo = getEffectiveShortcutCombo('find_in_file', shortcutOverrides);
         const onPointerDown = (event: PointerEvent) => {
             // SAFETY: a pointer event target inside the document is a Node.

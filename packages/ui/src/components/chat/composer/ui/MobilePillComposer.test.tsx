@@ -37,7 +37,6 @@ const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: b
                 sessionId={options.newSessionDraftOpen ? null : 'session-1'}
                 newSessionDraftOpen={options.newSessionDraftOpen}
                 hasContent={options.hasContent}
-                isVSCode={false}
                 canAbort={options.canAbort ?? false}
                 footerIconButtonClass="icon-button"
                 iconSizeClass="icon-size"

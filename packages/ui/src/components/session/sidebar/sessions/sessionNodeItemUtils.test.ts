@@ -243,14 +243,12 @@ describe('canShowSessionWorktreeMenu', () => {
     expect(canShowSessionWorktreeMenu({
       isSubtaskSession: false,
       archivedBucket: false,
-      isVSCode: false,
       sessionDirectory: '/home/test/.config/openchamber/chats/2026-08-25/session-1',
     })).toBe(false);
 
     expect(canShowSessionWorktreeMenu({
       isSubtaskSession: false,
       archivedBucket: false,
-      isVSCode: false,
       sessionDirectory: '/repo',
     })).toBe(true);
   });
@@ -280,14 +278,13 @@ describe('resolveSessionPrLookup', () => {
   });
 
   test('takes the row worktree directory and branch', () => {
-    expect(resolveSessionPrLookup(worktree('/worktrees/feature', 'feature-1'), false))
+    expect(resolveSessionPrLookup(worktree('/worktrees/feature', 'feature-1')))
       .toEqual({ directory: '/worktrees/feature', branch: 'feature-1' });
   });
 
-  test('rejects rows with no worktree, no branch, or a VS Code runtime', () => {
-    expect(resolveSessionPrLookup(null, false)).toBeNull();
-    expect(resolveSessionPrLookup(worktree('/worktrees/feature', '   '), false)).toBeNull();
-    expect(resolveSessionPrLookup(worktree('/worktrees/feature', 'feature-1'), true)).toBeNull();
+  test('rejects rows with no worktree or branch', () => {
+    expect(resolveSessionPrLookup(null)).toBeNull();
+    expect(resolveSessionPrLookup(worktree('/worktrees/feature', '   '))).toBeNull();
   });
 });
 

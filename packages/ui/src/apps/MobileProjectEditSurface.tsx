@@ -435,7 +435,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
               </div>
             ) : null}
 
-            {/* Isolated spaces: while the feature's switch is on; the phone is never VS Code. */}
+            {/* Isolated spaces: while the feature's switch is on. */}
             {project.isGitRepo && isolatedSpacesEnabled ? <MobileProjectSpaces projectPath={project.path} /> : null}
           </div>
         ) : null}

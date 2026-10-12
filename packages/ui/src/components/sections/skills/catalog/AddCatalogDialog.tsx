@@ -20,7 +20,6 @@ import {
 import { Icon } from "@/components/icon/Icon";
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import type { SkillCatalogConfig } from '@/lib/desktop';
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
@@ -184,10 +183,6 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
 
     if (!result.ok) {
       if (result.error?.kind === 'authRequired') {
-        if (isVSCodeRuntime()) {
-          toast.error(t('settings.skills.catalog.shared.toast.privateRepoNotSupportedVsCode'));
-          return;
-        }
 
         toast.error(t('settings.skills.catalog.add.toast.authenticationRequiredScan'));
         return;
@@ -317,7 +312,7 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
             />
           </div>
 
-          {(availableIdentities.length > 0 || selectedIdentityValue !== 'none') && !isVSCodeRuntime() ? (
+          {(availableIdentities.length > 0 || selectedIdentityValue !== 'none') ? (
             <div className="space-y-2">
               <div className="flex items-center gap-1">
                 <span className="typography-ui-label text-foreground">{t('settings.skills.catalog.shared.auth.description')}</span>

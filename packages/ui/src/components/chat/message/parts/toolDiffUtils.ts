@@ -333,7 +333,7 @@ export const resolveToolQuickOpenTarget = (
     toolName: string,
     input: Record<string, unknown> | undefined,
     metadata: Record<string, unknown> | undefined,
-): { filePath: string; line?: number; patch?: string } | null => {
+): { filePath: string; line?: number } | null => {
     const filePath = getPrimaryToolPath(toolName, input, metadata);
     if (!filePath) {
         return null;
@@ -346,7 +346,6 @@ export const resolveToolQuickOpenTarget = (
     return {
         filePath,
         line: patch ? extractFirstChangedLineFromDiff(patch) : undefined,
-        patch,
     };
 };
 

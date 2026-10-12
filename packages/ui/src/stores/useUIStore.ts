@@ -16,7 +16,6 @@ import type { PermissionMode } from './utils/permissionAutoAccept';
 import { directoryMayHaveActiveProjectAction, useTerminalStore } from '@/stores/useTerminalStore';
 import { useFilesViewTabsStore } from './useFilesViewTabsStore';
 import { rebaseMovedPath } from '@/lib/filePathMoves';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { noteBrowserTabOpenedWithAddress, requestBrowserTabLoad } from '@/lib/browser/devServerWait';
 import { isContextPanelMode, type ContextPanelMode } from '@/lib/surfaces/modes';
 import { sanitizeWorkStatusSectionOrder, type WorkStatusPanelSectionId } from '@/components/chat/work-status/sections';
@@ -376,7 +375,6 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
   if (!Array.isArray(tabs)) {
     return [];
   }
-  const dropBrowserTabs = isVSCodeRuntime();
 
   const result: ContextPanelTab[] = [];
   const seen = new Set<string>();
@@ -407,12 +405,6 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
     // anything still carrying an unknown mode here is discarded rather than
     // resurrected into a tab the panel cannot render.
     if (typeof candidate.mode !== 'string' || !isContextPanelMode(candidate.mode)) {
-      continue;
-    }
-
-    // State is shared with the desktop and web surfaces, which do have a
-    // browser; inside VS Code such a tab would have no surface to belong to.
-    if (dropBrowserTabs && candidate.mode === 'browser') {
       continue;
     }
 
@@ -1745,7 +1737,7 @@ export const useUIStore = create<UIStore>()(
         openContextPreview: (directory, url) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
           const normalizedUrl = (url || '').trim();
-          if (!normalizedDirectory || !normalizedUrl || isVSCodeRuntime()) {
+          if (!normalizedDirectory || !normalizedUrl) {
             return;
           }
 
@@ -1764,7 +1756,7 @@ export const useUIStore = create<UIStore>()(
         // address, and the panel stays as the user left it.
         openAgentBrowserTab: (directory, url, ownerSessionId) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
-          if (!normalizedDirectory || isVSCodeRuntime()) return null;
+          if (!normalizedDirectory) return null;
           browserTabSequence += 1;
           const dedupeKey = `browser:agent:${Date.now()}-${browserTabSequence}`;
           if (url.trim()) noteBrowserTabAddressRequested(get().contextPanelByDirectory, normalizedDirectory, dedupeKey, url.trim());
@@ -1781,7 +1773,7 @@ export const useUIStore = create<UIStore>()(
         // for one is to keep what is already open.
         openNewContextBrowserTab: (directory) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
-          if (!normalizedDirectory || isVSCodeRuntime()) return;
+          if (!normalizedDirectory) return;
           browserTabSequence += 1;
           get().openContextPanelTab(normalizedDirectory, {
             mode: 'browser',
@@ -1792,7 +1784,7 @@ export const useUIStore = create<UIStore>()(
         },
         openContextBrowser: (directory, url = '', options) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
-          if (!normalizedDirectory || isVSCodeRuntime()) return;
+          if (!normalizedDirectory) return;
           const targetUrl = typeof url === 'string' && url.trim().length > 0 ? url.trim() : '';
           if (targetUrl) noteBrowserTabAddressRequested(get().contextPanelByDirectory, normalizedDirectory, targetUrl, targetUrl);
           get().openContextPanelTab(normalizedDirectory, {
