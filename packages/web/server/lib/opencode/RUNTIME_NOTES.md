@@ -117,7 +117,7 @@ documentation move. Confirm against the installed pin and affected source when r
   compatibility boundary, not permission to change runtime requirements.
 - Pinned version: `opencodeCli.version` in `packages/electron/package.json`
   (the bundled binary) and `@opencode/client` / `@opencode/schema` in the
-  root, ui, web and vscode manifests, plus `@opencode/cli@` in the
+  root, ui and web manifests, plus `@opencode/cli@` in the
   Dockerfile. These are coordinated inherited pins, not an automatic bump instruction.
 - Wire-type lookup: `model.ts` and `events.ts` at the UI boundary classify inherited message types and events. Preserve complete classification when maintaining that boundary; do not use these shapes for new OMP functionality.
 

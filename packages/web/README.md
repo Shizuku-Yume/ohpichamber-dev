@@ -10,7 +10,7 @@ This package owns the browser UI build, the Host Gateway HTTP and WebSocket serv
 
 ### Migration status
 
-OhPiChamber is currently in a pre-M0 baseline state. In this baseline, the web server runs the inherited Host Gateway together with OpenCode proxy and process lifecycle management. Under the planned OhPiChamber migration (see `.workflow/omp-migration/scope.md`, `SCOPE-2.1`, `SCOPE-7.1` through `SCOPE-9.3`, and `SCOPE-17.1`), Host Gateway infrastructure is retained, while OpenCode proxy routes and process management are scheduled for retirement in favor of the OMP Agent Service and Canonical API (`/api/agent/v1`).
+OpenChamber's retained Host Gateway infrastructure is split between the dedicated `server/lib/host/` modules and the OpenCode integration directory; the extracted Host owner is documented in [`server/lib/host/DOCUMENTATION.md`](server/lib/host/DOCUMENTATION.md). OpenCode proxy routes and process lifecycle management remain scheduled for retirement in favor of the OMP Agent Service and Canonical API (`/api/agent/v1`).
 
 Full project overview, screenshots, and architecture documents live in the repository root and `.workflow/omp-migration/`.
 

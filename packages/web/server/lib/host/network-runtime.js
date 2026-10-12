@@ -1,8 +1,9 @@
-import { readOpenCodeInfo, isSupportedOpenCodeVersion } from './compatibility.js';
 export const createOpenCodeNetworkRuntime = (deps) => {
   const {
     state,
     getOpenCodeAuthHeaders,
+    readOpenCodeInfo,
+    isSupportedOpenCodeVersion,
     configuredOpenCodeHostname = '127.0.0.1',
   } = deps;
 

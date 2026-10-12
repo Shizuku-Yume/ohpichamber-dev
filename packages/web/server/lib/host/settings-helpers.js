@@ -1146,8 +1146,7 @@ export const createSettingsHelpers = (dependencies) => {
       // Tells the client whether agent memory exists in this build at all, so
       // its settings row and panel tab can be absent rather than merely off.
       agentMemoryFeatureAvailable: isAgentMemoryFeatureAvailable(),
-      // Jev routing needs the OpenChamber server, so it is present here and
-      // absent wherever this payload does not come from one (VS Code).
+      // Jev routing needs the OpenChamber server and is always available here.
       routingFeatureAvailable: true,
       ...(pwaAppName ? { pwaAppName } : {}),
       pwaOrientation,

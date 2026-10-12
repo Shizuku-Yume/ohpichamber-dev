@@ -9,7 +9,7 @@ import {
 } from './config-mutation-response.js';
 import { getClaudeCliAuthStatus } from './claude-cli-auth.js';
 import { OPENCODE_CONFIG_DIR, readConfigLayers } from './shared.js';
-import { settingsSurfaceOf } from './settings-files.js';
+import { settingsSurfaceOf } from '../host/settings-files.js';
 import { parseWebSearchSelection, readSectionEntry, toProviderEntity } from './config-v2.js';
 import { getWebSearchSource, setWarmingEnabled, setWebSearchSelection } from './websearch-config.js';
 import {

@@ -1,5 +1,5 @@
 import { installOpenCodeV2, supportsOpenCodeV2Install } from './lib/opencode/v2-install.js';
-import { describeOpenCodeCompatibility, readOpenCodeCliVersion, readExternalOpenCodeVersion } from './lib/opencode/compatibility.js';
+import { describeOpenCodeCompatibility, readOpenCodeCliVersion, readExternalOpenCodeVersion, readOpenCodeInfo, isSupportedOpenCodeVersion } from './lib/opencode/compatibility.js';
 import 'reflect-metadata';
 import express from 'express';
 import compression from 'compression';
@@ -13,7 +13,7 @@ import os from 'os';
 import crypto from 'crypto';
 import http2 from 'node:http2';
 import { createUiAuth } from './lib/ui-auth/ui-auth.js';
-import { createTunnelAuth } from './lib/opencode/tunnel-auth.js';
+import { createTunnelAuth } from './lib/host/tunnel-auth.js';
 import { createManagedTunnelConfigRuntime } from './lib/tunnels/managed-config.js';
 import { createTunnelProviderRegistry } from './lib/tunnels/registry.js';
 import { createCloudflareTunnelProvider } from './lib/tunnels/providers/cloudflare.js';
@@ -56,15 +56,15 @@ import {
 import { createFsSearchRuntime as createFsSearchRuntimeFactory } from './lib/fs/search.js';
 import { createOpenCodeLifecycleRuntime } from './lib/opencode/lifecycle.js';
 import { createOpenCodeEnvRuntime } from './lib/opencode/env-runtime.js';
-import { providedLoginShellEnvSnapshot } from './lib/opencode/login-shell-env.js';
+import { providedLoginShellEnvSnapshot } from './lib/host/login-shell-env.js';
 import { resolveOpenCodeEnvConfig } from './lib/opencode/env-config.js';
 import { createHmrStateRuntime } from './lib/opencode/hmr-state-runtime.js';
-import { createOpenCodeNetworkRuntime } from './lib/opencode/network-runtime.js';
+import { createOpenCodeNetworkRuntime } from './lib/host/network-runtime.js';
 import { createOpenCodeAuthStateRuntime } from './lib/opencode/auth-state-runtime.js';
-import { createProjectDirectoryRuntime } from './lib/opencode/project-directory-runtime.js';
-import { createSettingsNormalizationRuntime } from './lib/opencode/settings-normalization-runtime.js';
-import { createSettingsHelpers } from './lib/opencode/settings-helpers.js';
-import { createThemeRuntime } from './lib/opencode/theme-runtime.js';
+import { createProjectDirectoryRuntime } from './lib/host/project-directory-runtime.js';
+import { createSettingsNormalizationRuntime } from './lib/host/settings-normalization-runtime.js';
+import { createSettingsHelpers } from './lib/host/settings-helpers.js';
+import { createThemeRuntime } from './lib/host/theme-runtime.js';
 import { createFeatureRoutesRuntime } from './lib/opencode/feature-routes-runtime.js';
 import { parseServeCliOptions } from './lib/opencode/cli-options.js';
 import {
@@ -75,8 +75,8 @@ import {
 } from './lib/opencode/core-routes.js';
 import { registerOpenChamberRoutes } from './lib/opencode/openchamber-routes.js';
 import { createServerUtilsRuntime } from './lib/opencode/server-utils-runtime.js';
-import { createStaticRoutesRuntime } from './lib/opencode/static-routes-runtime.js';
-import { createSettingsRuntime } from './lib/opencode/settings-runtime.js';
+import { createStaticRoutesRuntime } from './lib/host/static-routes-runtime.js';
+import { createSettingsRuntime } from './lib/host/settings-runtime.js';
 import { createOpenCodeResolutionRuntime } from './lib/opencode/opencode-resolution-runtime.js';
 import { runOpenCodeCliUpgrade } from './lib/opencode/cli-upgrade.js';
 import { resolveOpenCodeUpgradeCapability } from './lib/opencode/upgrade-capability.js';
@@ -94,9 +94,9 @@ import { createMessageSearchRuntime } from './lib/message-search/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
 import { resolveSessionDefaults } from './lib/scheduled-tasks/session-defaults.js';
 import { createChatsScope } from './lib/scheduled-tasks/chats-scope.js';
-import { createServerStartupRuntime } from './lib/opencode/server-startup-runtime.js';
-import { createTunnelWiringRuntime } from './lib/opencode/tunnel-wiring-runtime.js';
-import { createStartupPipelineRuntime } from './lib/opencode/startup-pipeline-runtime.js';
+import { createServerStartupRuntime } from './lib/host/server-startup-runtime.js';
+import { createTunnelWiringRuntime } from './lib/host/tunnel-wiring-runtime.js';
+import { createStartupPipelineRuntime } from './lib/host/startup-pipeline-runtime.js';
 import { runCliEntryIfMain } from './lib/opencode/cli-entry-runtime.js';
 import { registerNotificationRoutes } from './lib/notifications/routes.js';
 import { createNotificationEmitterRuntime } from './lib/notifications/emitter-runtime.js';
@@ -818,6 +818,8 @@ Object.defineProperties(openCodeNetworkState, {
 const openCodeNetworkRuntime = createOpenCodeNetworkRuntime({
   state: openCodeNetworkState,
   getOpenCodeAuthHeaders,
+  readOpenCodeInfo,
+  isSupportedOpenCodeVersion,
   configuredOpenCodeHostname: ENV_CONFIGURED_OPENCODE_HOSTNAME,
 });
 
@@ -1086,7 +1088,7 @@ notificationTriggerRuntime.setGetIsSessionAutoAccepting(
 );
 
 // Queued follow-up messages are delivered by the server so a closed tab or a
-// dropped connection no longer strands them (VS Code keeps its UI-side queue).
+// dropped connection no longer strands them.
 const messageQueueRuntime = createMessageQueueRuntime({
   globalEventHub: globalMessageStreamHub,
   buildOpenCodeUrl,

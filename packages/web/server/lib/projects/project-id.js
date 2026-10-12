@@ -45,9 +45,8 @@ export const projectPathFromId = (projectId) => {
  * so a deeply nested project would otherwise get a name the filesystem
  * rejects (ENAMETOOLONG); such an id maps to a fixed-length digest instead.
  * The digest keeps the `path_` prefix so the orphan recovery in
- * `opencode/settings-runtime.js` never mistakes the file for a leftover of the
- * random-id era. The VS Code extension host applies the same rule
- * (`packages/vscode/src/bridge-project-setup-runtime.ts`); keep the two in sync.
+ * `host/settings-runtime.js` never mistakes the file for a leftover of the
+ * random-id era.
  */
 export const projectConfigFileStemOf = (projectId) => {
   if (projectId.length <= MAX_PROJECT_CONFIG_FILE_STEM_LENGTH) return projectId;

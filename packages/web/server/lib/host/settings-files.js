@@ -4,9 +4,8 @@
 // older builds left there). `preferences.json` holds the user's profile: the
 // keys the settings registry marks `profile`, each with the time the store
 // last accepted a new value for it. Device keys never reach either file.
-//
-// The VS Code extension host writes the same two files with the same shape
-// (`packages/vscode/src/settings-files.ts`); keep the format changes in sync.
+// The files are consumed by Host settings routes and other server-side
+// integrations; format changes are kept local to this implementation.
 import { createRequire } from 'node:module';
 
 const registry = createRequire(import.meta.url)('./settings-registry.json');
@@ -23,7 +22,7 @@ export const isDeviceSettingsKey = (key) => getSettingsScope(key) === 'device';
 /** Profile keys the owner chose to store per surface kind (a change on a phone stays on phones). */
 const isPerSurfaceSettingsKey = (key) => registry.fields[key]?.perSurface === true;
 
-const SETTINGS_SURFACES = Object.freeze(['web', 'desktop', 'vscode', 'mobile']);
+const SETTINGS_SURFACES = Object.freeze(['web', 'desktop', 'mobile']);
 
 export const normalizeSettingsSurface = (value) => (
   typeof value === 'string' && SETTINGS_SURFACES.includes(value.trim()) ? value.trim() : null

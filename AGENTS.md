@@ -2,7 +2,7 @@
 
 ## Purpose
 
-OhPiChamber is an OpenChamber fork. The pinned upstream application baseline has been adopted and identified fork customization is being restored and verified. Runtime acceptance and the source-based documentation audit are still in progress; [development.md](.workflow/development.md) owns their evidence. The subsequent target is Oh My Pi (OMP) as the only agent runtime, retaining Web/PWA, Electron, hosted and Capacitor mobile, and the Guest SDK. OpenCode compatibility and the VS Code extension are not final target features.
+OhPiChamber is an OpenChamber fork. The pinned upstream application baseline and source-based documentation audit are complete; unavailable runtime certification remains explicit. M0 evidence is accepted for entry into M1. [Development progress](.workflow/development.md) owns implementation evidence and remaining gates. The target is Oh My Pi (OMP) as the only agent runtime, retaining Web/PWA, Electron, hosted and Capacitor mobile, and the Guest SDK. OpenCode compatibility and the VS Code extension are not final target features.
 
 This file contains only always-on repository rules and routing. Detailed workflows belong to project skills and module documentation.
 <!-- workflow:start -->
@@ -35,7 +35,7 @@ The workflow is the default, not an optional appendix. Its project facts live in
 
 The [OMP migration documents](.workflow/omp-migration/README.md) define the target, not completed implementation. Existing OpenCode code, package names, skills, and upstream documentation describe the inherited baseline. Verify implementation status in the affected source and gate evidence before claiming a milestone is complete.
 
-The active effort is [latest-upstream rebaseline](.workflow/specs/upstream-rebaseline.md), before OMP implementation. Source acquisition and preservation inventory are complete; continue assembled-source verification and documentation adaptation rather than reacquiring or selectively porting the old baseline. Inheriting upstream OpenCode code during this prerequisite is not adding an OMP compatibility layer or changing the final runtime target. Preserve earlier investigations as dated inputs, not current implementation evidence.
+The active effort is [OMP migration through M3](.workflow/specs/omp-through-m3.md). Continue M1 Host extraction and VS Code extension retirement from the assembled application baseline; do not reacquire upstream or repeat accepted M0 probes. The [rebaseline spec](.workflow/specs/upstream-rebaseline.md) records the closed source/document prerequisite and unverified runtime limits. Still-used OpenCode execution owners remain until the coordinated M3 cutover; they are not a fallback engine. Preserve earlier investigations as dated inputs, not current implementation evidence.
 
 - Build agent execution around the Canonical API at `/api/agent/v1`, backed by the OMP SDK in a separate Bun Agent Service. Keep SDK objects private to the service and its workers.
 - Preserve the existing host services and their security boundaries. Extract host-owned code from legacy OpenCode directories before removing the agent integration.

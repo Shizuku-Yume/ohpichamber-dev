@@ -418,8 +418,7 @@
       "scope": "profile",
       "surfaces": [
         "web",
-        "desktop",
-        "vscode"
+        "desktop"
       ]
     },
     "allowPromptingSubagentSessions": {

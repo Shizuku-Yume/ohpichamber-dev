@@ -4,10 +4,10 @@ import { accessSync, constants as fsConstants, statSync } from 'node:fs';
 import net from 'node:net';
 import { stripAppImageArgv0Leak, stripAppImageLauncherEnv } from '../inherited-env.js';
 import { assignInjectedEnv } from '../injected-env.js';
-import { registerManagedProcess, unregisterManagedProcess, reapOrphanedProcesses } from './managed-process-registry.js';
+import { registerManagedProcess, unregisterManagedProcess, reapOrphanedProcesses } from '../host/managed-process-registry.js';
 import { applyProviderEnvAliases } from './provider-env-aliases.js';
 import { overlayEnvironment } from '../environment/variables.js';
-import { recordStartupPerformance } from './startup-performance.js';
+import { recordStartupPerformance } from '../host/startup-performance.js';
 import { topUpV1Migration } from './v1-migration-topup.js';
 
 const parsePositiveInt = (value, fallback) => {

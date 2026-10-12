@@ -14,6 +14,8 @@ const createRuntime = (overrides = {}) => createOpenCodeNetworkRuntime({
     ...overrides.state,
   },
   getOpenCodeAuthHeaders: () => ({}),
+  readOpenCodeInfo: async (response) => response.json(),
+  isSupportedOpenCodeVersion: () => true,
   configuredOpenCodeHostname: overrides.configuredOpenCodeHostname,
 });
 

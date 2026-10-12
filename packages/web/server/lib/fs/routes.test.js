@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mintOutsideFileGrant, registerFsRoutes } from './routes.js';
-import { createProjectDirectoryRuntime } from '../opencode/project-directory-runtime.js';
+import { createProjectDirectoryRuntime } from '../host/project-directory-runtime.js';
 
 const createRouteRegistry = () => {
   const routes = new Map();

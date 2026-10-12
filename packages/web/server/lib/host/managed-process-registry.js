@@ -11,15 +11,14 @@
 // standalone binary). So we use the same pattern OpenCode's own CLI daemon uses
 // for its detached server: an on-disk record of the pids WE spawned, plus a
 // startup reaper that kills ONLY our own, verified, genuinely-orphaned
-// processes — never a process a live instance (another desktop window, a VS
-// Code host, the user's standalone `opencode`) is actively using.
+// processes — never a process a live instance or the user's standalone
+// `opencode` is actively using.
 //
-// Storage: ONE FILE PER SPAWNED PROCESS in a registry directory, named
-// `<childPid>.json`. Multiple runtimes (web/desktop/VS Code) and multiple
-// windows all run concurrently; a single shared JSON file would be corrupted by
-// the read-modify-write race (last writer wins, clobbering another instance's
-// entry). Per-process files mean every instance only ever writes/deletes its
-// OWN file, so there is no write contention at all.
+// Storage: one file per spawned process in a registry directory, named
+// `<childPid>.json`. Multiple Host windows can run concurrently; a single shared
+// JSON file would be corrupted by the read-modify-write race (last writer wins,
+// clobbering another instance's entry). Per-process files mean every instance
+// only ever writes/deletes its own entry.
 //
 // Safety model (why this never kills the wrong thing):
 //   1. The reaper only ever considers pids THIS product recorded. The user's
@@ -41,9 +40,7 @@
 // whole process and is what caused the 1.13.3 `openchamber-ui://` lag
 // regression (#1841). `execFile`/`fsp.*` keep the event loop responsive while
 // the reaper waits on the kernel.
-//
-// The VS Code extension cannot import this module (it does not bundle the web
-// package); it carries a parity implementation that reads/writes the SAME dir.
+// The registry is shared by every Host runtime that launches managed OpenCode.
 
 import fsp from 'node:fs/promises';
 import os from 'node:os';

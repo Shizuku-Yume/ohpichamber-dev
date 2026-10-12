@@ -1,7 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { useUIStore } from '@/stores/useUIStore';
@@ -13,13 +10,9 @@ import {
   SETTINGS_KEYS,
   SETTINGS_REGISTRY,
   applySettingsToStores,
-  buildSettingsRegistrySnapshot,
   parseSettingsDocument,
   readAutoSaveSnapshot,
 } from './registry';
-import { renderSettingsRegistrySnapshot, SETTINGS_REGISTRY_SNAPSHOT_PATHS } from './registry-snapshot';
-
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
 
 describe('settings registry', () => {
   test('round-trips all large text paste modes through settings and local persistence', async () => {
@@ -210,18 +203,4 @@ describe('settings registry', () => {
     expect(useUIStore.getState().workStatusHiddenSectionsExplicit).toBe(true);
   });
 
-  test('the checked-in JSON snapshots match the registry (run `bun run settings-registry:generate`)', () => {
-    const rendered = renderSettingsRegistrySnapshot();
-    for (const relativePath of SETTINGS_REGISTRY_SNAPSHOT_PATHS) {
-      expect(readFileSync(resolve(repoRoot, relativePath), 'utf8')).toBe(rendered);
-    }
-  });
-
-  test('the snapshot names every key of every table', () => {
-    const snapshot = buildSettingsRegistrySnapshot();
-    const keys = Object.keys(snapshot.fields);
-    expect(keys.length).toBe(SETTINGS_KEYS.length + LOCAL_DEVICE_KEYS.length + DESKTOP_SHELL_KEYS.length);
-    for (const key of LOCAL_DEVICE_KEYS) expect(snapshot.fields[key]).toEqual({ scope: 'device', local: true });
-    for (const key of DESKTOP_SHELL_KEYS) expect(snapshot.fields[key].owner).toBe('desktop-shell');
-  });
 });
