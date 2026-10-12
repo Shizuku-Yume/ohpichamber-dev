@@ -5,12 +5,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { AgentServiceReadySchema, EntityIdSchema, HistoryPageRequestSchema, ProblemDetailsSchema, PromptRequestSchema } from '@openchamber/agent-contract';
-import type { AgentServiceReady, CanonicalEvent, HistoryPage, ProblemCode, ProblemDetails, Run, RuntimeSession, SessionDeleteAck, SessionSnapshot, StreamInvalidated } from '@openchamber/agent-contract';
+import { AgentServiceReadySchema, ApprovalReplySchema, EntityIdSchema, HistoryPageRequestSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema } from '@openchamber/agent-contract';
+import type { AgentServiceReady, ApprovalRequest, CanonicalEvent, HistoryPage, ProblemCode, ProblemDetails, QuestionRequest, Run, RuntimeSession, SessionDeleteAck, SessionSnapshot, StreamInvalidated } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerInfo } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { PrivateSessionBootstrapSchema, SessionRegistry } from '../sessions/registry.ts';
+import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
+import type { SessionList } from '../sessions/registry.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
 import { WorkerOperationError, WorkerRegistry } from './workers.ts';
 
@@ -19,13 +21,15 @@ interface ServiceOptions {
   internalSecret: string;
   stateDirectory: string;
   port?: number;
+  approvalPolicyCommit?: ApprovalPolicyCommit;
+  approvalPolicyLoad?: ApprovalPolicyLoad;
 }
 const InternalSecretSchema = z.string().regex(/^[a-f0-9]{64}$/i);
 const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port: z.number().int().min(1).max(65_535) });
 class RequestError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
 }
-type JsonResponse = AgentServiceReady | WorkerInfo | { workers: WorkerInfo[] } | RuntimeSession | SessionSnapshot | HistoryPage | { run: Run } | SessionDeleteAck | ReturnType<SessionRegistry['list']>;
+type JsonResponse = AgentServiceReady | WorkerInfo | { workers: WorkerInfo[] } | RuntimeSession | SessionSnapshot | HistoryPage | { run: Run } | SessionDeleteAck | ApprovalRequest[] | QuestionRequest[] | ApprovalRequest | QuestionRequest | SessionList;
 function respondJson(response: ServerResponse, status: number, body: JsonResponse): void {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(body));
@@ -69,9 +73,10 @@ export class AgentService {
     this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, callbacks: {
       onOpened: (...args) => this.sessions.onOpened(...args),
       onEvents: (...args) => this.sessions.onEvents(...args),
+      onInteraction: (...args) => this.sessions.onInteraction(...args),
       onExit: (...args) => this.sessions.onExit(...args),
     } });
-    this.sessions = new SessionRegistry(options.stateDirectory, this.workers);
+    this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad);
   }
   async start(): Promise<void> {
     await this.sessions.initialize();
@@ -175,6 +180,20 @@ export class AgentService {
       if (privateRun && request.method === 'POST') {
         const operation = await readBody(request, WorkerOperationSchema.options[0]);
         respondJson(response, 202, { run: await this.sessions.prompt(identity(privateRun[1]), operation) }); return;
+      }
+      const approvalList = /^\/api\/agent\/v1\/sessions\/([^/]+)\/approvals$/.exec(url.pathname);
+      if (approvalList && request.method === 'GET') { respondJson(response, 200, this.sessions.approvals(identity(approvalList[1]))); return; }
+      const approvalRespond = /^\/api\/agent\/v1\/sessions\/([^/]+)\/approvals\/([^/]+)\/respond$/.exec(url.pathname);
+      if (approvalRespond && request.method === 'POST') {
+        const sessionId = identity(approvalRespond[1]);
+        respondJson(response, 200, await this.sessions.resolveApproval(sessionId, identity(approvalRespond[2]), await readBody(request, ApprovalReplySchema))); return;
+      }
+      const questionList = /^\/api\/agent\/v1\/sessions\/([^/]+)\/questions$/.exec(url.pathname);
+      if (questionList && request.method === 'GET') { respondJson(response, 200, this.sessions.questions(identity(questionList[1]))); return; }
+      const questionRespond = /^\/api\/agent\/v1\/sessions\/([^/]+)\/questions\/([^/]+)\/respond$/.exec(url.pathname);
+      if (questionRespond && request.method === 'POST') {
+        const sessionId = identity(questionRespond[1]);
+        respondJson(response, 200, await this.sessions.resolveQuestion(sessionId, identity(questionRespond[2]), await readBody(request, QuestionReplySchema))); return;
       }
       const sessionRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)(?:\/(snapshot|history|events)|\/(runs)(?:\/([^/]+)\/abort)?)?$/.exec(url.pathname);
       if (sessionRoute) {

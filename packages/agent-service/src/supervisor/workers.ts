@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema } from '../protocol.ts';
-import type { WorkerBootstrap, WorkerInfo, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
+import type { WorkerApprovalPolicy, WorkerBootstrap, WorkerInfo, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import type { ProblemCode } from '@openchamber/agent-contract';
 
@@ -12,6 +12,7 @@ export class WorkerOperationError extends Error {
 interface WorkerLifecycleCallbacks {
   onOpened?: (rootSessionId: string, generation: string, sessionFile: string, seed: ProjectionSeed) => void;
   onEvents?: (rootSessionId: string, generation: string, inputs: ProjectionInput[]) => void;
+  onInteraction?: (rootSessionId: string, generation: string, interaction: WorkerInteraction) => void;
   onExit?: (rootSessionId: string, generation: string) => void;
 }
 
@@ -76,14 +77,14 @@ export class WorkerRegistry {
     return result;
   }
 
-  async start(input: WorkerBootstrap, replace = false): Promise<WorkerInfo> {
+  async start(input: WorkerBootstrap, replace = false, approvalPolicies?: WorkerApprovalPolicy[]): Promise<WorkerInfo> {
     return this.withRoot(input.rootSessionId, async () => {
       if (this.closing) throw new Error('Worker admission is closed');
       const previous = this.entries.get(input.rootSessionId);
       if (previous?.info.state === 'ready' && !replace) return { ...previous.info };
       if (previous) await this.stopEntry(previous);
       if (this.closing) throw new Error('Worker admission is closed');
-      return this.launch(input);
+      return this.launch(input, approvalPolicies);
     });
   }
 
@@ -113,7 +114,7 @@ export class WorkerRegistry {
     }
   }
 
-  private async launch(input: WorkerBootstrap): Promise<WorkerInfo> {
+  private async launch(input: WorkerBootstrap, approvalPolicies?: WorkerApprovalPolicy[]): Promise<WorkerInfo> {
     const workerGeneration = randomUUID();
     const ready = Promise.withResolvers<void>();
     const exited = Promise.withResolvers<void>();
@@ -153,6 +154,8 @@ export class WorkerRegistry {
         this.options.callbacks?.onOpened?.(input.rootSessionId, workerGeneration, reply.data.sessionFile, reply.data.seed);
       } else if (reply.data.type === 'events') {
         this.options.callbacks?.onEvents?.(input.rootSessionId, workerGeneration, reply.data.inputs);
+      } else if (reply.data.type === 'interaction') {
+        this.options.callbacks?.onInteraction?.(input.rootSessionId, workerGeneration, reply.data.request);
       } else if (reply.data.type === 'result') {
         const pending = entry.pending.get(reply.data.commandId);
         if (pending) { entry.pending.delete(reply.data.commandId); pending.resolve(reply.data.result); }
@@ -173,6 +176,7 @@ export class WorkerRegistry {
       projectId: input.projectId, workspaceId: input.workspaceId,
       cwd: input.cwd, agentDirectory: input.agentDirectory,
       sessionsDirectory: input.sessionsDirectory, sessionFile: input.sessionFile, options: input.options,
+      approvalPolicies,
     });
     if (child.connected) child.send(command);
     try {

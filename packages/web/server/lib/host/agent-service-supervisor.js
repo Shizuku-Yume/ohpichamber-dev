@@ -2,6 +2,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import path from 'node:path';
 
+import { openApprovalPolicyStore } from './approval-policy-store.js';
 import { AgentServiceReadySchema } from '@openchamber/agent-contract';
 
 import { registerManagedProcess, unregisterManagedProcess } from './managed-process-registry.js';
@@ -47,30 +48,38 @@ const normalizeAnnouncement = (line) => {
 };
 
 export const createAgentServiceSupervisor = ({
-  bunPath = 'bun',
-  entrypoint,
-  dataDir,
-  env = {},
-  startupTimeoutMs = STARTUP_TIMEOUT_MS,
-  stopTimeoutMs = STOP_TIMEOUT_MS,
-  spawn = nodeSpawn,
-  fetchImpl = globalThis.fetch,
-  registry = { registerManagedProcess, unregisterManagedProcess },
-  randomBytes = crypto.randomBytes,
+  bunPath = 'bun', entrypoint, dataDir, env = {}, startupTimeoutMs = STARTUP_TIMEOUT_MS,
+  stopTimeoutMs = STOP_TIMEOUT_MS, spawn = nodeSpawn, fetchImpl = globalThis.fetch,
+  registry = { registerManagedProcess, unregisterManagedProcess }, randomBytes = crypto.randomBytes,
+  approvalPolicyStore = null,
 } = {}) => {
-  let phase = 'stopped';
-  let child = null;
-  let port = null;
-  let secret = null;
-  let startupPromise = null;
-  let stopPromise = null;
-  let lifecycle = 0;
-  let startupController = null;
-  let accepting = false;
-
+  let phase = 'stopped'; let child = null; let port = null; let secret = null;
+  let startupPromise = null; let stopPromise = null; let lifecycle = 0; let startupController = null; let accepting = false;
+  const scopes = new Map();
+  let policyStore = approvalPolicyStore;
+  let ownsPolicyStore = false;
   const state = () => ({ phase, pid: child?.pid ?? null, port });
-  const assertAdmitted = () => {
-    if (!accepting || phase !== 'ready' || !child) throw new Error('Agent service is not accepting requests');
+  const assertAdmitted = () => { if (!accepting || phase !== 'ready' || !child) throw new Error('Agent service is not accepting requests'); };
+  const captureScope = (body) => {
+    if (![body?.rootSessionId, body?.projectId, body?.workspaceId].every(value => typeof value === 'string' && value.length > 0)) throw new Error('Invalid Host bootstrap scope');
+    const captured = { sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: body.projectId, workspaceId: body.workspaceId };
+    const prior = scopes.get(captured.sessionId);
+    if (prior && (prior.projectId !== captured.projectId || prior.workspaceId !== captured.workspaceId)) throw new Error('Host bootstrap scope cannot change');
+    scopes.set(captured.sessionId, captured);
+    return { captured, prior };
+  };
+  const handlePolicyMessage = (launched, message) => {
+    const send = (value) => { if (launched.connected) launched.send(value, () => {}); };
+    if (!['approval.policy.commit', 'approval.policy.list'].includes(message?.type)) return;
+    try {
+      const captured = scopes.get(message.request?.sessionId);
+      if (child !== launched || !policyStore) throw new Error('Approval policy store unavailable');
+      if (!captured || captured.workspaceId !== message.request?.workspaceId) throw new Error('Unauthorized approval policy scope');
+      const result = message.type === 'approval.policy.commit' ? policyStore.commit({ scope: message.request.scope, decision: message.request.decision, target: message.request.target, ...captured }) : { policies: policyStore.list(captured) };
+      send(message.type === 'approval.policy.commit'
+        ? { type: 'approval.policy.committed', requestId: message.requestId, policyId: result.policyId, revision: result.revision }
+        : { type: 'approval.policy.listed', requestId: message.requestId, policies: result.policies });
+    } catch { send({ type: 'approval.policy.failed', requestId: message.requestId, code: 'APPROVAL_POLICY_WRITE_FAILED' }); }
   };
   const killChild = async () => {
     if (!child) return;
@@ -105,6 +114,7 @@ export const createAgentServiceSupervisor = ({
       if (lifecycle !== myLifecycle) throw new Error('Agent service startup cancelled');
       phase = 'starting';
       accepting = false;
+      if (!policyStore && dataDir) { policyStore = openApprovalPolicyStore({ dataDir }); ownsPolicyStore = true; }
       const bytes = randomBytes(32);
       secret = Buffer.from(bytes).toString('hex');
       const childEnv = { ...process.env, ...env, [SECRET_ENV]: secret };
@@ -113,9 +123,12 @@ export const createAgentServiceSupervisor = ({
         env: childEnv,
         detached: process.platform !== 'win32',
         windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       });
       child = launched;
+      const onPolicyMessage = message => handlePolicyMessage(launched, message);
+      launched.on('message', onPolicyMessage);
+      launched.once('close', () => launched.removeListener('message', onPolicyMessage));
       launched.stderr?.on('data', () => {});
       let announcement = '';
       const announced = new Promise((resolve, reject) => {
@@ -143,8 +156,6 @@ export const createAgentServiceSupervisor = ({
       });
       const remaining = () => Math.max(1, deadline - Date.now());
       port = await waitWithin(announced, remaining(), 'Agent service startup timed out', startupController.signal);
-      if (!Number.isInteger(launched.pid)) throw new Error('Agent service did not provide a pid');
-      await registry.registerManagedProcess({ pid: launched.pid, ownerPid: process.pid, port, binary: bunPath, entrypoint: path.resolve(entrypoint), kind: 'agent-service', runtime: 'web' });
       while (Date.now() < deadline && lifecycle === myLifecycle) {
         try {
           const response = await fetchImpl(`http://127.0.0.1:${port}/api/agent/v1/ready`, { method: 'GET', headers: { [SECRET_HEADER]: secret, Accept: 'application/json' }, signal: AbortSignal.any([startupController.signal, timeoutSignal(Math.min(1500, remaining()))]) });
@@ -177,6 +188,8 @@ export const createAgentServiceSupervisor = ({
       await killChild();
       secret = null;
       port = null;
+      scopes.clear();
+      if (ownsPolicyStore) { policyStore.close(); policyStore = null; ownsPolicyStore = false; }
       phase = 'stopped';
     })().finally(() => { stopPromise = null; });
     return stopPromise;
@@ -185,9 +198,23 @@ export const createAgentServiceSupervisor = ({
   const request = async (requestPath, init = {}) => {
     assertAdmitted();
     if (!requestPath.startsWith('/')) throw new Error('Agent service request requires an absolute path');
-    const headers = new Headers(init.headers ?? {});
-    headers.set(SECRET_HEADER, secret);
-    return fetchImpl(`http://127.0.0.1:${port}${requestPath}`, { ...init, headers });
+    let capture;
+    if (requestPath === '/internal/sessions' && String(init.method ?? 'GET').toUpperCase() === 'POST') capture = captureScope(JSON.parse(init.body));
+    const rollback = () => {
+      if (!capture || scopes.get(capture.captured.sessionId) !== capture.captured) return;
+      if (capture.prior) scopes.set(capture.captured.sessionId, capture.prior);
+      else scopes.delete(capture.captured.sessionId);
+    };
+    const headers = new Headers(init.headers ?? {}); headers.set(SECRET_HEADER, secret);
+    try {
+      const response = await fetchImpl(`http://127.0.0.1:${port}${requestPath}`, { ...init, headers });
+      if (!response.ok) rollback();
+      if (response.ok && String(init.method).toUpperCase() === 'DELETE') {
+        const deleted = /^\/api\/agent\/v1\/sessions\/([^/]+)$/.exec(requestPath);
+        if (deleted) scopes.delete(decodeURIComponent(deleted[1]));
+      }
+      return response;
+    } catch (error) { rollback(); throw error; }
   };
   return { start, stop, restart, request, getState: state };
 };

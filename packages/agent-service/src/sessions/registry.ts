@@ -1,17 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { RuntimeSessionSchema } from '@openchamber/agent-contract';
-import type { HistoryPageRequest, RuntimeSession } from '@openchamber/agent-contract';
+import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema } from '@openchamber/agent-contract';
+import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema } from '../protocol.ts';
-import type { WorkerOperation } from '../protocol.ts';
+import type { WorkerInteraction, WorkerOperation } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError, SessionJournal } from '../projection/journal.ts';
+import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { WorkerOperationError, WorkerRegistry } from '../supervisor/workers.ts';
 import { SessionReferenceError, SessionReferences } from './references.ts';
 import type { SessionReference } from './references.ts';
-
 export const PrivateSessionBootstrapSchema = WorkerBootstrapSchema.merge(z.strictObject({}).merge(RuntimeSessionSchema).pick({ displayPath: true }));
 export type PrivateSessionBootstrap = z.infer<typeof PrivateSessionBootstrapSchema>;
+export interface SessionList { items: RuntimeSession[]; errors: { sessionId: string; code: ProblemCode }[]; }
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' }>;
 type Opened = { generation: string; sessionFile: string; journal: SessionJournal };
 type Entry =
@@ -21,14 +22,16 @@ type Entry =
 
 export class SessionRegistry {
   private readonly references: SessionReferences;
+  private readonly interactions: InteractionManager;
   private readonly entries = new Map<string, Entry>();
   private readonly openings = new Map<string, Promise<RuntimeSession>>();
   private readonly pendingRuns = new Set<string>();
   private readonly deleting = new Set<string>();
   private closing = false;
 
-  constructor(stateDirectory: string, private readonly workers: WorkerRegistry) {
+  constructor(stateDirectory: string, private readonly workers: WorkerRegistry, policyCommit?: ApprovalPolicyCommit, private readonly policyLoad?: ApprovalPolicyLoad) {
     this.references = new SessionReferences(stateDirectory);
+    this.interactions = new InteractionManager(undefined, policyCommit);
   }
 
   async initialize(): Promise<void> {
@@ -67,7 +70,7 @@ export class SessionRegistry {
     return entry.opened.journal.runtime();
   }
 
-  list(workspaceId: string) {
+  list(workspaceId: string): SessionList {
     const references = this.references.list(workspaceId);
     const items: RuntimeSession[] = [];
     for (const [id, entry] of this.entries) {
@@ -100,6 +103,7 @@ export class SessionRegistry {
   async abort(sessionId: string, runId: string) {
     this.ensureOpen();
     if (this.runtime(sessionId).activeRunId !== runId) throw new WorkerOperationError(404, 'RUN_NOT_FOUND');
+    this.interactions.invalidate(sessionId);
     const result = await this.workers.request(sessionId, { type: 'abort', runId });
     if (result.type !== 'abort') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result.run;
@@ -111,6 +115,19 @@ export class SessionRegistry {
     const result = await this.workers.request(request.sessionId, { type: 'history', request });
     if (result.type !== 'history') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
     return result.history;
+  }
+  approvals(sessionId: string) { this.get(sessionId); return this.interactions.approvals(sessionId); }
+
+  questions(sessionId: string) { this.get(sessionId); return this.interactions.questions(sessionId); }
+
+  async resolveApproval(sessionId: string, approvalId: string, input: ApprovalReply) {
+    this.get(sessionId);
+    return this.interactions.resolveApproval(sessionId, approvalId, ApprovalReplySchema.parse(input));
+  }
+
+  async resolveQuestion(sessionId: string, questionId: string, input: QuestionReply) {
+    this.get(sessionId);
+    return this.interactions.resolveQuestion(sessionId, questionId, QuestionReplySchema.parse(input));
   }
 
   async delete(sessionId: string) {
@@ -125,6 +142,7 @@ export class SessionRegistry {
       if (result.type !== 'delete') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
       // The SDK deletion is authoritative even if reference cleanup later fails.
       for (const id of result.deletedSessionIds) this.entries.delete(id);
+      this.interactions.closeSession(sessionId);
       journal.close();
       await this.workers.stop(sessionId);
       for (const id of result.deletedSessionIds) await this.references.remove(id);
@@ -136,19 +154,41 @@ export class SessionRegistry {
     const entry = this.entries.get(sessionId);
     if (entry?.state !== 'opening') return;
     const journal = entry.opened?.journal;
+    if (entry.opened) this.interactions.invalidate(sessionId, entry.opened.generation);
     if (journal) journal.replace(seed);
-    entry.opened = { generation, sessionFile, journal: journal ?? new SessionJournal({
+    const opened = { generation, sessionFile, journal: journal ?? new SessionJournal({
       sessionId, rootSessionId: sessionId, projectId: entry.input.projectId,
       workspaceId: entry.input.workspaceId, displayPath: entry.input.displayPath,
     }, seed) };
+    entry.opened = opened;
+    this.interactions.openSession(sessionId, opened.journal.runtime().epoch, generation, entry.input.workspaceId,
+      async operation => {
+        const result = await this.workers.request(sessionId, operation);
+        if (operation.type === 'approval.resolve' && result.type !== 'approval.resolve') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        if (operation.type === 'question.resolve' && result.type !== 'question.resolve') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      }, input => opened.journal.append([input]));
   }
 
   onEvents(sessionId: string, generation: string, inputs: ProjectionInput[]): void {
     if (this.closing) return;
     const entry = this.entries.get(sessionId);
     if (entry?.state === 'unloaded' || entry?.opened?.generation !== generation) return;
-    try { entry.opened.journal.append(inputs); }
+    try {
+      if (inputs.some(input => input.event.type === 'run.failed' || input.event.type === 'run.cancelled')) this.interactions.invalidate(sessionId, generation);
+      entry.opened.journal.append(inputs);
+    }
     catch {
+      entry.opened.journal.unavailable();
+      void this.workers.stop(sessionId).catch(() => {});
+    }
+  }
+  onInteraction(sessionId: string, generation: string, interaction: WorkerInteraction): void {
+    if (this.closing) return;
+    const entry = this.entries.get(sessionId);
+    if (entry?.state === 'unloaded' || entry?.opened?.generation !== generation) return;
+    try { this.interactions.onRequest(sessionId, generation, interaction); }
+    catch {
+      this.interactions.invalidate(sessionId, generation);
       entry.opened.journal.unavailable();
       void this.workers.stop(sessionId).catch(() => {});
     }
@@ -156,6 +196,7 @@ export class SessionRegistry {
 
   onExit(sessionId: string, generation: string): void {
     if (this.closing) return;
+    this.interactions.invalidate(sessionId, generation);
     const entry = this.entries.get(sessionId);
     if (entry?.state === 'unloaded' || entry?.opened?.generation !== generation) return;
     entry.opened.journal.unavailable();
@@ -163,7 +204,10 @@ export class SessionRegistry {
 
   async close(): Promise<void> {
     this.closing = true;
-    for (const entry of this.entries.values()) if (entry.state !== 'unloaded') entry.opened?.journal.close();
+    for (const entry of this.entries.values()) if (entry.state !== 'unloaded') {
+      this.interactions.closeSession(entry.input.rootSessionId);
+      entry.opened?.journal.close();
+    }
     await Promise.allSettled(this.openings.values());
     await this.references.close();
   }
@@ -178,7 +222,9 @@ export class SessionRegistry {
     this.entries.set(input.rootSessionId, entry);
     try {
       const { displayPath, ...bootstrap } = resolved;
-      await this.workers.start(bootstrap, previous?.state === 'live');
+      const policies = this.policyLoad ? await this.policyLoad({ sessionId: input.rootSessionId, workspaceId: input.workspaceId }) : [];
+      this.interactions.loadPolicies(input.rootSessionId, input.workspaceId, policies);
+      await this.workers.start(bootstrap, previous?.state === 'live', policies);
       if (!entry.opened) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
       const runtime = entry.opened.journal.runtime();
       await this.references.put({

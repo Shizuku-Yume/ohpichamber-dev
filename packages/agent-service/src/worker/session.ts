@@ -1,10 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { createAgentSession, discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
+import type { ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
 import type { CapturedSendOptions, Run } from '@openchamber/agent-contract';
-import type { WorkerBootstrapMessage, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
+import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
+import { WorkerInteraction as NativeInteraction } from './interaction.ts';
 import { WorkerProjection } from './projection.ts';
 
 type Session = Awaited<ReturnType<typeof createAgentSession>>['session'];
@@ -49,6 +52,7 @@ export class WorkerSession {
     private readonly publish: (inputs: ProjectionInput[]) => void,
     private readonly sessionId: string,
     private readonly onFatal: () => void,
+    private readonly interaction: NativeInteraction,
   ) {
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
     this.unsubscribe = session.subscribe(event => {
@@ -61,10 +65,18 @@ export class WorkerSession {
     });
   }
 
-  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onFatal: () => void): Promise<WorkerSession> {
+  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void): Promise<WorkerSession> {
     const authStorage = await discoverAuthStorage(input.agentDirectory, { cwd: input.cwd });
     let manager: SessionManager | undefined;
     let session: Session | undefined;
+    let projection: WorkerProjection | undefined;
+    const interaction = new NativeInteraction({ request: onInteraction, currentTurn: () => projection?.currentTurn()?.turnId });
+    const observer: ExtensionFactory = api => {
+      api.on('tool_call', event => { interaction.observeToolCall(event); });
+      api.on('tool_approval_requested', event => { interaction.observeApproval(event); });
+      api.on('tool_result', event => { interaction.forgetToolCall(event.toolCallId); });
+      api.on('tool_approval_resolved', event => { interaction.forgetToolCall(event.toolCallId); });
+    };
     try {
       const directory = input.sessionsDirectory ?? SessionManager.getDefaultSessionDir(input.cwd, input.agentDirectory);
       manager = input.sessionFile
@@ -72,15 +84,25 @@ export class WorkerSession {
         : SessionManager.create(input.cwd, directory);
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage,
-        enableMCP: false, enableLsp: false, disableExtensionDiscovery: true, hasUI: false,
+        enableMCP: false, enableLsp: false, disableExtensionDiscovery: true, hasUI: true, interactivePrompts: true, extensions: [observer],
       });
       session = result.session;
+      result.setToolUIContext(interaction.ui, true);
       if (input.options) await selectOptions(session, input.options);
       await manager.ensureOnDisk();
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
-      return new WorkerSession(session, authStorage, sessionFile, publish, input.rootSessionId, onFatal);
+      const owned = new WorkerSession(session, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction);
+      projection = owned.projection;
+      await initializeExtensions(session, {
+        mode: 'rpc', uiContext: interaction.ui,
+        reportSendError: () => owned.fail(),
+        reportRuntimeError: () => owned.fail(),
+        onShutdown: onFatal,
+      });
+      return owned;
     } catch (error) {
+      interaction.close();
       try {
         if (session) await session.dispose();
         else await manager?.close();
@@ -175,6 +197,7 @@ export class WorkerSession {
         const run = this.projection.activeRun();
         if (!run || run.runId !== operation.runId) throw new ProjectionError(404, 'RUN_NOT_FOUND', 'Run not found');
         this.cancellingRunId = operation.runId;
+        this.interaction.cancelAll();
         await this.session.abort();
         await this.promptTask;
         await this.bind();
@@ -182,6 +205,12 @@ export class WorkerSession {
         this.cancellingRunId = undefined;
         return { type: 'abort', run: { ...run } };
       }
+      case 'approval.resolve':
+        if (!this.interaction.resolveApproval(operation.approvalId, operation.decision)) throw new ProjectionError(404, 'APPROVAL_NOT_FOUND', 'Approval request is not pending');
+        return { type: 'approval.resolve', resolved: true };
+      case 'question.resolve':
+        if (!this.interaction.resolveQuestion(operation.questionId, operation.action, operation.response)) throw new ProjectionError(404, 'QUESTION_NOT_FOUND', 'Question request is not pending');
+        return { type: 'question.resolve', resolved: true };
       case 'history':
         await this.binding;
         return { type: 'history', history: this.projection.history(operation.request) };
@@ -196,6 +225,7 @@ export class WorkerSession {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.interaction.close();
     try {
       try { await this.preparation; } catch { /* The operation reports preparation failure to its caller. */ }
       await this.session.abort();
