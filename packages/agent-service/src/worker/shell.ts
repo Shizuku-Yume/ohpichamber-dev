@@ -1,22 +1,153 @@
-import type { ShellJob, ShellOutput, ShellSnapshot, ShellStartRequest, ShellStopRequest, ShellJobIdentity } from '@openchamber/agent-contract';
-import { ShellOperationSchema, type ShellOperation, type ShellResult } from '../shell/protocol.ts';
+import type { ShellJob, ShellJobIdentity, ShellOutput, ShellSnapshot, ShellStartRequest, ShellStopRequest } from '@openchamber/agent-contract';
 import { AsyncJobManager, type AsyncJob } from '@oh-my-pi/pi-coding-agent/async/job-manager';
 import { executeBash } from '@oh-my-pi/pi-coding-agent/exec/bash-executor';
 import type { ToolSession } from '@oh-my-pi/pi-coding-agent/tools';
-const encoder=new TextEncoder(); const decoder=new TextDecoder();
-type Running=Extract<ShellJob,{status:'running'}>; type Ended=Extract<ShellJob,{status:'ended'}>;
-type Job={identity:Running;native:AsyncJob;output:Uint8Array;result?:{exitCode:number|undefined;timedOut?:boolean;cancelled:boolean};stopped:boolean};
-export interface WorkerShellContext{session:ToolSession;manager:AsyncJobManager;workspaceId:string;projectId:string;sessionId:string;workerGeneration:string;epoch:string;cwd:string;}
-export class WorkerShell{
- private jobs=new Map<string,Job>(); private ended=new Map<string,{job:Ended;output:Uint8Array}>(); private revision=0; private closed=false;
- constructor(private context:WorkerShellContext){}
- async operation(op:ShellOperation):Promise<ShellResult>{if(this.closed)throw Error('Shell worker is closed');const p=ShellOperationSchema.parse(op);if(p.type==='start')return this.start(p.request);if(p.type==='output')return this.output(p.request.job,p.request.cursor,p.request.tailBytes);if(p.type==='snapshot')return{type:'snapshot',snapshot:this.snapshot()};return{type:'stop',result:await this.stop(p.request)};}
- private start(r:ShellStartRequest):ShellResult{const id=crypto.randomUUID();const identity:Running={jobId:id,sessionId:this.context.sessionId,epoch:this.context.epoch,workerGeneration:this.context.workerGeneration,workspaceId:this.context.workspaceId,projectId:this.context.projectId,command:r.command,background:r.background,startedAt:Date.now(),outputCursor:'0',status:'running'};const item={identity,native:undefined as unknown as AsyncJob,output:new Uint8Array(),stopped:false};const nid=this.context.manager.register('bash',r.command,async({signal,reportProgress})=>{const out=await executeBash(r.command,{cwd:this.context.cwd,timeout:r.timeoutMs,signal,sessionKey:`${this.context.sessionId}:shell:${id}`,onChunk:c=>this.append(item,c),onPreview:t=>{this.replace(item,t);void reportProgress(t);}});item.result=out;if(out.output)this.replace(item,out.output);if(out.cancelled)throw Error(out.timedOut?'Command timed out':'Command stopped');return out.output;},{id,ownerId:this.context.sessionId});const native=this.context.manager.getJob(nid);if(!native)throw Error('Native shell job was not registered');item.native=native;this.jobs.set(id,item);void native.promise.then(()=>this.finish(id));return{type:'start',job:identity};}
- private append(i:Job,s:string){const b=encoder.encode(s),o=new Uint8Array(i.output.length+b.length);o.set(i.output);o.set(b,i.output.length);i.output=o;} private replace(i:Job,s:string){i.output=encoder.encode(s);}
- private finish(id:string){const i=this.jobs.get(id);if(!i||i.native.status==='running')return;const r=i.result;const termination=r?.timedOut?{reason:'timeout' as const,exitCode:null}:i.stopped||i.native.status==='cancelled'?{reason:'stopped' as const,exitCode:r?.exitCode??null}:{reason:'exit' as const,exitCode:r?.exitCode??-1};const job:Ended={...i.identity,status:'ended',endedAt:Date.now(),termination};this.jobs.delete(id);this.ended.set(id,{job,output:i.output});while(this.ended.size>200)this.ended.delete(this.ended.keys().next().value!);this.revision++;}
- private owner(j:ShellJobIdentity){const i=this.jobs.get(j.jobId);if(!i||i.identity.sessionId!==j.sessionId||i.identity.epoch!==j.epoch||i.identity.workerGeneration!==j.workerGeneration)throw Error('Shell job not found');return i;}
- private output(j:ShellJobIdentity,c:string,tail:number):ShellResult{const i=this.jobs.get(j.jobId);const e=this.ended.get(j.jobId);if(!i&&!e)throw Error('Shell job not found');if(i)this.owner(j);const bytes=i?.output??e!.output,req=BigInt(c),min=BigInt(Math.max(0,bytes.length-tail)),start=req<min?min:req,text=decoder.decode(bytes.slice(Number(start))),end=start+BigInt(encoder.encode(text).length);const output:ShellOutput={job:j,requestedCursor:c,startCursor:start.toString(),cursor:end.toString(),skippedBytes:(start-req).toString(),output:text,ended:Boolean(e)};return{type:'output',output};}
- private snapshot():ShellSnapshot{return{scope:{kind:'session',sessionId:this.context.sessionId},epoch:this.context.epoch,revision:String(this.revision),running:[...this.jobs.values()].map(x=>x.identity),ended:[...this.ended.values()].map(x=>x.job),recovery:{priorEpochs:'invalidated'}};}
- private async stop(r:ShellStopRequest){const i=this.owner(r.job);if(!this.context.manager.cancel(i.native.id,{ownerId:this.context.sessionId}))throw Error('Shell job is no longer running');i.stopped=true;await i.native.promise;this.finish(r.job.jobId);const e=this.ended.get(r.job.jobId)?.job;if(!e||e.termination.reason!=='stopped')throw Error('Shell job did not stop');return{job:e} as const;}
- async close(){if(this.closed)return;this.closed=true;this.context.manager.cancelAll({ownerId:this.context.sessionId});await this.context.manager.waitForOwnerJobs(this.context.sessionId);for(const id of [...this.jobs.keys()])this.finish(id);}
+import { ShellOperationSchema, type ShellOperation, type ShellResult } from '../shell/protocol.ts';
+
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+type Running = Extract<ShellJob, { status: 'running' }>;
+type Ended = Extract<ShellJob, { status: 'ended' }>;
+type ShellResultState = { exitCode: number | undefined; timedOut?: boolean; cancelled: boolean };
+type Job = { identity: Running; native: AsyncJob; output: Uint8Array; result?: ShellResultState; stopped: boolean };
+
+export interface WorkerShellContext {
+  session: ToolSession;
+  manager: AsyncJobManager;
+  workspaceId: string;
+  projectId: string;
+  sessionId: string;
+  workerGeneration: string;
+  epoch: string;
+  cwd: string;
+}
+
+export class WorkerShell {
+  private readonly jobs = new Map<string, Job>();
+  private readonly ended = new Map<string, { job: Ended; output: Uint8Array }>();
+  private revision = 0;
+  private closed = false;
+
+  constructor(private readonly context: WorkerShellContext) {}
+
+  async operation(operation: ShellOperation): Promise<ShellResult> {
+    if (this.closed) throw new Error('Shell worker is closed');
+    const parsed = ShellOperationSchema.parse(operation);
+    if (parsed.type === 'start') return this.start(parsed.request);
+    if (parsed.type === 'output') return this.output(parsed.request.job, parsed.request.cursor, parsed.request.tailBytes);
+    if (parsed.type === 'snapshot') return { type: 'snapshot', snapshot: this.snapshot() };
+    return { type: 'stop', result: await this.stop(parsed.request) };
+  }
+
+  private start(request: ShellStartRequest): ShellResult {
+    const jobId = crypto.randomUUID();
+    const identity: Running = {
+      jobId, sessionId: this.context.sessionId, epoch: this.context.epoch,
+      workerGeneration: this.context.workerGeneration, workspaceId: this.context.workspaceId,
+      projectId: this.context.projectId, command: request.command, background: request.background,
+      startedAt: Date.now(), outputCursor: '0', status: 'running',
+    };
+    const job: Job = { identity, native: undefined as unknown as AsyncJob, output: new Uint8Array(), stopped: false };
+    const nativeId = this.context.manager.register('bash', request.command, async ({ signal, reportProgress }) => {
+      const result = await executeBash(request.command, {
+        cwd: this.context.cwd,
+        timeout: request.timeoutMs,
+        signal,
+        sessionKey: `${this.context.sessionId}:shell:${jobId}`,
+        onChunk: chunk => this.append(job, chunk),
+        onPreview: preview => { this.replace(job, preview); void reportProgress(preview); },
+      });
+      job.result = result;
+      if (result.output) this.replace(job, result.output);
+      if (result.cancelled) throw new Error(result.timedOut ? 'Command timed out' : 'Command stopped');
+      return result.output;
+    }, { id: jobId, ownerId: this.context.sessionId });
+    const native = this.context.manager.getJob(nativeId);
+    if (!native) throw new Error('Native shell job was not registered');
+    job.native = native;
+    this.jobs.set(jobId, job);
+    void native.promise.then(() => this.finish(jobId));
+    return { type: 'start', job: identity };
+  }
+
+  private append(job: Job, text: string): void {
+    const bytes = encoder.encode(text);
+    const output = new Uint8Array(job.output.length + bytes.length);
+    output.set(job.output);
+    output.set(bytes, job.output.length);
+    job.output = output;
+  }
+
+  private replace(job: Job, text: string): void { job.output = encoder.encode(text); }
+
+  private finish(jobId: string): void {
+    const item = this.jobs.get(jobId);
+    if (!item || item.native.status === 'running') return;
+    const result = item.result;
+    const termination = result?.timedOut
+      ? { reason: 'timeout' as const, exitCode: null }
+      : item.stopped || item.native.status === 'cancelled'
+        ? { reason: 'stopped' as const, exitCode: result?.exitCode ?? null }
+        : { reason: 'exit' as const, exitCode: result?.exitCode ?? -1 };
+    const job: Ended = { ...item.identity, status: 'ended', endedAt: Date.now(), termination };
+    this.jobs.delete(jobId);
+    this.ended.set(jobId, { job, output: item.output });
+    while (this.ended.size > 200) this.ended.delete(this.ended.keys().next().value!);
+    this.revision++;
+  }
+
+  private owner(identity: ShellJobIdentity): Job {
+    const job = this.jobs.get(identity.jobId);
+    if (!job || job.identity.sessionId !== identity.sessionId || job.identity.epoch !== identity.epoch || job.identity.workerGeneration !== identity.workerGeneration) throw new Error('Shell job not found');
+    return job;
+  }
+
+  private output(identity: ShellJobIdentity, cursor: string, tailBytes: number): ShellResult {
+    const running = this.jobs.get(identity.jobId);
+    const ended = this.ended.get(identity.jobId);
+    if (!running && !ended) throw new Error('Shell job not found');
+    if (running) this.owner(identity);
+    if (ended && (ended.job.sessionId !== identity.sessionId || ended.job.epoch !== identity.epoch || ended.job.workerGeneration !== identity.workerGeneration)) throw new Error('Shell job not found');
+    const bytes = running?.output ?? ended!.output;
+    const requested = BigInt(cursor);
+    const minimum = BigInt(Math.max(0, bytes.length - tailBytes));
+    let start = requested < minimum ? minimum : requested;
+    while (start < BigInt(bytes.length) && (bytes[Number(start)]! & 0xc0) === 0x80) start++;
+    const text = decoder.decode(bytes.slice(Number(start)));
+    const end = start + BigInt(encoder.encode(text).length);
+    const output: ShellOutput = {
+      job: identity, requestedCursor: cursor, startCursor: start.toString(), cursor: end.toString(),
+      skippedBytes: (start - requested).toString(), output: text, ended: Boolean(ended),
+    };
+    return { type: 'output', output };
+  }
+  private snapshot(): ShellSnapshot {
+    return {
+      scope: { kind: 'session', sessionId: this.context.sessionId },
+      epoch: this.context.epoch,
+      revision: String(this.revision),
+      running: [...this.jobs.values()].map(item => item.identity),
+      ended: [...this.ended.values()].map(item => item.job),
+      recovery: { priorEpochs: 'invalidated' },
+    };
+  }
+
+  private async stop(request: ShellStopRequest) {
+    const item = this.owner(request.job);
+    if (!this.context.manager.cancel(item.native.id, { ownerId: this.context.sessionId })) throw new Error('Shell job is no longer running');
+    item.stopped = true;
+    await item.native.promise;
+    this.finish(request.job.jobId);
+    const ended = this.ended.get(request.job.jobId)?.job;
+    if (!ended || ended.termination.reason !== 'stopped') throw new Error('Shell job did not stop');
+    return { job: ended } as const;
+  }
+
+  async close(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    this.context.manager.cancelAll({ ownerId: this.context.sessionId });
+    await this.context.manager.waitForOwnerJobs(this.context.sessionId);
+    for (const jobId of [...this.jobs.keys()]) this.finish(jobId);
+  }
 }

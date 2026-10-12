@@ -2,7 +2,7 @@ import type { CompletionRequest, CompletionResult } from '@openchamber/agent-con
 import { CompletionRequestSchema, JsonValueSchema } from '@openchamber/agent-contract';
 import { completeSimple } from '@oh-my-pi/pi-ai';
 import type { Context, Effort, SimpleStreamOptions, Tool } from '@oh-my-pi/pi-ai';
-import type { createAgentSession } from '@oh-my-pi/pi-coding-agent/sdk';
+import type { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
 function toEffort(value: string): Effort | undefined {
   switch (value) {
     case 'minimal': return 'minimal' as Effort;
@@ -15,7 +15,7 @@ function toEffort(value: string): Effort | undefined {
   }
 }
 
-export type CompletionModelRegistry = Awaited<ReturnType<typeof createAgentSession>>['session']['modelRegistry'];
+export type CompletionModelRegistry = ModelRegistry;
 
 type ErrorCode = 'MODEL_UNAVAILABLE' | 'PROVIDER_UNAVAILABLE' | 'PROVIDER_FAILURE' | 'CONTEXT_LIMIT' | 'STRUCTURED_OUTPUT_INVALID' | 'UNSUPPORTED_CAPABILITY';
 
