@@ -4,7 +4,7 @@
 
 OhPiChamber is an OpenChamber fork. The [active effort](specs/omp-through-m3.md) migrates the adopted application baseline to OMP through M3 acceptance. The [rebaseline spec](specs/upstream-rebaseline.md) records the closed source/document prerequisite and unverified runtime certification. Recover the next task through the workflow.
 
-The pinned upstream application source has been adopted; unavailable runtime certification remains explicit. M0 SDK evidence and the recorded provider/platform limits are accepted for entry into M1 Host extraction and VS Code extension retirement. Application execution still uses the inherited OpenCode integration. The target is OMP-only across Web/PWA, Electron, mobile and Guest SDK surfaces; the Agent Service, Canonical API and client cutover remain proposed. [development.md](development.md) owns current evidence; the [old upstream assessment](upstream-review.md) is historical research, not a selective-import policy.
+The pinned upstream application source has been adopted; unavailable runtime certification remains explicit. M0 SDK evidence and the recorded provider/platform limits were accepted, and M1 Host extraction, durable operational metadata, authenticated credential preflight and VS Code extension retirement are complete. Application execution still uses the inherited OpenCode integration. The active step is the M2 Canonical contract package and Bun Agent Service; the target remains OMP-only across Web/PWA, Electron, mobile and Guest SDK surfaces. [development.md](development.md) owns current evidence; the [old upstream assessment](upstream-review.md) is historical research, not a selective-import policy.
 
 ## Starting a conversation
 
