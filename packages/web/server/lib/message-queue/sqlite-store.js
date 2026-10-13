@@ -377,7 +377,7 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
               options = resolved.options;
               context = resolved.context ?? context;
               const hasProvenance = context.some((entry) => entry.kind === 'context' && entry.metadata.scheduledTask !== undefined);
-              if (!hasProvenance) context = [...context, { kind: 'context', text: '', metadata: { scheduledTask: { mode: 'existing', ...item.scheduledTask } } }];
+              if (!hasProvenance) context = [...context, { kind: 'context', text: '', metadata: { scheduledTask: { mode: 'existing', projectId: item.scheduledTask.projectId, taskId: item.scheduledTask.taskId, sessionId: scope.sessionId, workspaceId: scope.workspaceId, triggeredAt: item.createdAt } } }];
             }
             const input = { text: item.text ?? item.content, attachments, context };
             if (item.agentMention) input.agentMention = { agentId: item.agentMention };
