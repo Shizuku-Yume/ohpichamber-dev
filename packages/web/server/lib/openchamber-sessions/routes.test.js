@@ -1555,3 +1555,32 @@ describe('openchamber session service directory resolution', () => {
     }
   });
 });
+describe('Host operational session state independence', () => {
+  it('keeps admitted metadata and archive operations available when native service is unavailable', async () => {
+    const { createOpenChamberSessionService } = await import('./routes.js');
+    const archiveStore = createMemoryArchiveStore();
+    const sessionMetadataStore = createMemorySessionMetadataStore();
+    const admitted = { sessionId: 'ses_admitted', projectId: 'proj_1', workspaceId: 'ws_1', cwd: '/repo/app', agentDirectoryId: 'agent-dir-1', agentDirectory: '/repo/app/.agents' };
+    const resolveNativeSessionScope = async () => { throw new Error('native service unavailable'); };
+    const service = createOpenChamberSessionService({
+      service: { request: resolveNativeSessionScope },
+      resolveWorkspaceScope: async () => ({ projectId: 'proj_1', workspaceId: 'ws_1', cwd: '/repo/app', agentDirectoryId: 'agent-dir-1', agentDirectory: '/repo/app/.agents' }),
+      resolveSessionScope: resolveNativeSessionScope,
+      resolveHostSessionScope: async (sessionId) => sessionId === admitted.sessionId ? admitted : null,
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, request) => request,
+      beforeDispatch: async () => {},
+      onPromptAccepted: async () => {},
+      archiveStore,
+      sessionMetadataStore,
+    });
+
+    await expect(service.setMetadata(admitted.sessionId, { changes: { notes: 'host-owned' } })).resolves.toMatchObject({ metadata: { notes: 'host-owned' } });
+    await expect(service.getMetadata(admitted.sessionId)).resolves.toMatchObject({ metadata: { notes: 'host-owned' } });
+    await expect(service.archive({ ids: [admitted.sessionId], archivedAt: 1700 })).resolves.toMatchObject({ archived: [{ id: admitted.sessionId, archivedAt: 1700 }] });
+    await expect(service.unarchive({ ids: [admitted.sessionId] })).resolves.toMatchObject({ restored: [{ id: admitted.sessionId, archivedAt: null }] });
+    await expect(service.getMetadata('ses_foreign')).rejects.toMatchObject({ statusCode: 404 });
+    await expect(service.archive({ ids: ['ses_foreign'] })).rejects.toMatchObject({ statusCode: 404 });
+  });
+});

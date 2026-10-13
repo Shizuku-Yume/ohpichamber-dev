@@ -50,9 +50,9 @@ const parseArchiveRequest = (payload) => {
 
 
 const createCanonicalSessionService = (dependencies) => {
-  const { service, resolveWorkspaceScope, resolveSessionScope, listWorkspaceScopes, registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted, publishSessionEvent, archiveStore, sessionMetadataStore, persistSessionMetadata, broadcastGlobalUiEvent } = dependencies;
+  const { service, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope, listWorkspaceScopes, registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted, publishSessionEvent, archiveStore, sessionMetadataStore, persistSessionMetadata, broadcastGlobalUiEvent } = dependencies;
   if (!service || typeof service.request !== 'function') throw new Error('session routes require the Agent service');
-  if (typeof resolveWorkspaceScope !== 'function' || typeof resolveSessionScope !== 'function') throw new Error('session routes require Host scope resolvers');
+  if (typeof resolveWorkspaceScope !== 'function' || typeof resolveSessionScope !== 'function' || typeof resolveHostSessionScope !== 'function') throw new Error('session routes require Host scope resolvers');
   if (typeof registerSessionScope !== 'function') throw new Error('session routes require registerSessionScope');
   if (typeof resolveAttachments !== 'function') throw new Error('session routes require resolveAttachments');
   if (typeof capturePrompt !== 'function' || typeof beforeDispatch !== 'function' || typeof onPromptAccepted !== 'function') throw new Error('session routes require direct delivery hooks');
@@ -62,7 +62,8 @@ const createCanonicalSessionService = (dependencies) => {
     if (!response.ok) { const problem = ProblemDetailsSchema.safeParse(body); const error = new OpenChamberControlError(problem.success ? problem.data.detail : body?.detail || body?.error || 'Agent service request failed', response.status); error.code = problem.success ? problem.data.code : body?.code; throw error; }
     return body;
   };
-  const scopeFor = async (sessionId) => { const scope = await resolveSessionScope(sessionId); if (!scope) throw new OpenChamberControlError('Session scope was not found', 404); return scope; };
+  const scopeFor = async (sessionId) => { const scope = await resolveSessionScope(sessionId); if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404); return scope; };
+  const hostScopeFor = async (sessionId) => { const scope = await resolveHostSessionScope(sessionId); if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404); return scope; };
   const emit = (event) => { try { publishSessionEvent?.(event); } catch {} try { broadcastGlobalUiEvent?.(event); } catch {} };
   const metadata = { getState: (id) => sessionMetadataStore.getState(id), set: async (id, patch, directory = '') => persistSessionMetadata ? persistSessionMetadata(id, patch, { directory }) : sessionMetadataStore.setSessionMetadata(id, patch) };
   const create = async (payload = {}) => {
@@ -119,10 +120,10 @@ const createCanonicalSessionService = (dependencies) => {
     }));
     return z.strictObject({ items: z.array(SessionSchema), errors: z.record(ProblemCodeSchema) }).parse({ items: pages.flatMap(page => page.items), errors: Object.assign({}, parsedScopes.errors, ...pages.map(page => page.errors)) });
   };
-  const archive = async (payload = {}) => { const parsed = parseArchiveRequest(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); await Promise.all(parsed.ids.map((id) => scopeFor(id))); return archiveStore.archive(parsed.ids, parsed.archivedAt); };
-  const unarchive = async (payload = {}) => { const parsed = parseIdBatch(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); await Promise.all(parsed.ids.map((id) => scopeFor(id))); return archiveStore.unarchive(parsed.ids); };
-  const getMetadata = async (id) => { await scopeFor(id); const state = await sessionMetadataStore.getState(id); return SessionMetadataStateSchema.parse({ sessionId: id, revision: state?.revision ?? '0', metadata: state?.metadata ?? null }); };
-  const setMetadata = async (id, payload = {}) => { const scope = await scopeFor(id); const patch = SessionMetadataPatchSchema.parse(payload); const result = await metadata.set(id, patch.changes, scope.cwd); return SessionMetadataStateSchema.parse({ sessionId: id, revision: result.revision, metadata: result.metadata }); };
+  const archive = async (payload = {}) => { const parsed = parseArchiveRequest(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); await Promise.all(parsed.ids.map((id) => hostScopeFor(id))); return archiveStore.archive(parsed.ids, parsed.archivedAt); };
+  const unarchive = async (payload = {}) => { const parsed = parseIdBatch(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); await Promise.all(parsed.ids.map((id) => hostScopeFor(id))); return archiveStore.unarchive(parsed.ids); };
+  const getMetadata = async (id) => { await hostScopeFor(id); const state = await sessionMetadataStore.getState(id); return SessionMetadataStateSchema.parse({ sessionId: id, revision: state?.revision ?? '0', metadata: state?.metadata ?? null }); };
+  const setMetadata = async (id, payload = {}) => { const scope = await hostScopeFor(id); const patch = SessionMetadataPatchSchema.parse(payload); const result = await metadata.set(id, patch.changes, scope.cwd); return SessionMetadataStateSchema.parse({ sessionId: id, revision: result.revision, metadata: result.metadata }); };
   const control = async (sessionId, operation = {}) => { await scopeFor(sessionId); if (operation?.type !== 'abort') throw new OpenChamberControlError('Unsupported session control operation', 400); const parsed = RunAbortRequestSchema.parse({ sessionId, runId: operation.runId }); const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(parsed.sessionId)}/runs/${encodeURIComponent(parsed.runId)}/abort`, { method: 'POST' }); return { run: RunSchema.parse(body?.run) }; };
   const remove = async (id) => { await scopeFor(id); const ack = SessionDeleteAckSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })); if (ack.sessionId !== id) throw new OpenChamberControlError('Session deletion acknowledgement identified another session', 502); return ack; };
   return { create, send, steer, followUp, fork, delete: remove, open, history, list, control, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, sessionMetadataStore, archiveStore };
