@@ -13,7 +13,6 @@ export const RuntimeCapabilitySetSchema = z.strictObject({
   mcp: z.boolean(), skills: z.boolean(), statelessCompletion: z.boolean(), shells: z.boolean(),
   credentialHandoff: z.boolean().optional(),
 });
-export type RuntimeCapabilitySet = z.infer<typeof RuntimeCapabilitySetSchema>;
 
 export const RuntimeCapabilitiesSchema = z.strictObject({
   version: z.literal('1.0.0'), engine: z.literal('omp'), capabilities: RuntimeCapabilitySetSchema,
