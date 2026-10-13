@@ -335,12 +335,10 @@ export class WorkerSession {
     }
     if (operation.type === 'prompt') {
       for (const message of contextMessages) {
-        if (message.role === 'custom') {
-          await this.session.sendCustomMessage(message, { triggerTurn: false, deliverAs: 'nextTurn' });
-        } else {
-          this.session.agent.appendMessage(message);
-          this.session.sessionManager.appendMessage(message);
-        }
+        // Keep every native role in the same ordered transcript path; nextTurn can
+        // buffer custom messages while a previous terminal turn is still unwinding.
+        this.session.agent.appendMessage(message);
+        this.session.sessionManager.appendMessage(message);
       }
     }
     await this.session.sessionManager.flush();

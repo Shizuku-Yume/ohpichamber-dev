@@ -20,6 +20,17 @@ const generation = 'native-generation';
 const options = { providerId: 'native-fixture', modelId: 'native-model', agentId: null, variant: null, reasoningEffort: null };
 const prompt = (text: string): PromptRequest => ({ input: { text, context: [], attachments: [] }, options });
 
+function expectContextOrder(request: JsonObject | undefined, markers: string[]): void {
+  if (!request) throw new Error('Native provider request was not captured');
+  const messages = JSON.stringify(request.messages);
+  let previous = -1;
+  for (const marker of markers) {
+    const index = messages.indexOf(marker);
+    expect(index).toBeGreaterThan(previous);
+    previous = index;
+  }
+}
+
 function completion(tool?: { name: string; input: JsonObject; id: string }): Response {
   const chunk = { id: 'native-response', object: 'chat.completion.chunk', created: 1, model: 'native-model', choices: [{ index: 0,
     delta: tool ? { role: 'assistant', tool_calls: [{ index: 0, id: tool.id, type: 'function', function: { name: tool.name, arguments: JSON.stringify(tool.input) } }] }
@@ -232,14 +243,31 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     await expect(harness.worker.operation({ type: 'steer', request: prompt('idle steer') })).rejects.toMatchObject({ code: 'RUN_NOT_FOUND', status: 404 });
     await expect(harness.worker.operation({ type: 'follow-up', request: prompt('idle follow-up') })).rejects.toMatchObject({ code: 'RUN_NOT_FOUND', status: 404 });
     expect(harness.requests).toHaveLength(0);
-    await harness.worker.operation({ type: 'prompt', runId: 'streaming-run', request: prompt('Keep this initial turn open.') });
+    await harness.worker.operation({ type: 'prompt', runId: 'streaming-run', request: {
+      ...prompt('Keep this initial turn open.'), input: { text: 'Keep this initial turn open.', attachments: [], context: [
+        { kind: 'context', text: 'DIRECT_CONTEXT_ENTRY', metadata: {}, instructions: 'DIRECT_ASSOCIATED_INSTRUCTION' },
+        { kind: 'instruction', text: 'DIRECT_LATER_INSTRUCTION' },
+        { kind: 'synthetic', text: 'DIRECT_SYNTHETIC_ENTRY' },
+        { kind: 'context', text: 'DIRECT_LAST_CONTEXT', metadata: {} },
+      ] },
+    } });
     await firstRequest.promise;
+    expectContextOrder(harness.requests[0], [
+      'DIRECT_ASSOCIATED_INSTRUCTION', 'DIRECT_CONTEXT_ENTRY', 'DIRECT_LATER_INSTRUCTION', 'DIRECT_SYNTHETIC_ENTRY', 'DIRECT_LAST_CONTEXT',
+    ]);
     const attachment = { attachmentId: 'streaming-attachment', name: 'note.txt', mediaType: 'text/plain', size: Buffer.byteLength('ATTACHMENT_MARKER'), uri: 'attachment://streaming-attachment' };
     const path = join(harness.root, 'note.txt');
     await writeFile(path, 'ATTACHMENT_MARKER');
     const steered = await harness.worker.operation({ type: 'steer', request: { ...prompt('STEER_MARKER'), input: { text: 'STEER_MARKER', attachments: [], context: [{ kind: 'instruction', text: 'STEERING_INSTRUCTION' }] } } });
     expect(steered).toMatchObject({ type: 'steer', ack: { sessionId: rootSessionId, runId: 'streaming-run', acceptedAt: expect.any(Number) } });
-    const queued = await harness.worker.operation({ type: 'follow-up', request: { ...prompt('FOLLOW_UP_MARKER'), input: { text: 'FOLLOW_UP_MARKER', attachments: [attachment], context: [{ kind: 'context', text: 'FOLLOW_UP_CONTEXT', metadata: { captured: true }, deliveryReceiptId: 'delivery' }] } }, attachments: [{ attachmentId: attachment.attachmentId, path }] });
+    const queued = await harness.worker.operation({ type: 'follow-up', request: {
+      ...prompt('FOLLOW_UP_MARKER'), input: { text: 'FOLLOW_UP_MARKER', attachments: [attachment], context: [
+        { kind: 'context', text: 'FOLLOW_UP_CONTEXT', metadata: { captured: true }, deliveryReceiptId: 'delivery', instructions: 'FOLLOW_UP_ASSOCIATED_INSTRUCTION' },
+        { kind: 'instruction', text: 'FOLLOW_UP_LATER_INSTRUCTION' },
+        { kind: 'synthetic', text: 'FOLLOW_UP_SYNTHETIC_ENTRY' },
+        { kind: 'context', text: 'FOLLOW_UP_LAST_CONTEXT', metadata: {} },
+      ] },
+    }, attachments: [{ attachmentId: attachment.attachmentId, path }] });
     if (queued.type !== 'follow-up') throw new Error('Follow-up acknowledgment was not returned');
     followUpId = queued.ack.followUpId;
     expect(queued.ack).toMatchObject({ sessionId: rootSessionId, followUpId: expect.any(String), acceptedAt: expect.any(Number) });
@@ -255,6 +283,9 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     expect(JSON.stringify(followUp)).toContain('FOLLOW_UP_MARKER');
     expect(JSON.stringify(harness.requests)).toContain('STEERING_INSTRUCTION');
     expect(JSON.stringify(harness.requests)).toContain('FOLLOW_UP_CONTEXT');
+    expectContextOrder(harness.requests.find(request => JSON.stringify(request.messages).includes('FOLLOW_UP_CONTEXT')), [
+      'FOLLOW_UP_ASSOCIATED_INSTRUCTION', 'FOLLOW_UP_CONTEXT', 'FOLLOW_UP_LATER_INSTRUCTION', 'FOLLOW_UP_SYNTHETIC_ENTRY', 'FOLLOW_UP_LAST_CONTEXT',
+    ]);
     expect(harness.fatal()).toBe(false);
   } finally { release.resolve(); unsubscribe(); await harness.close(); }
 }, 30000);
