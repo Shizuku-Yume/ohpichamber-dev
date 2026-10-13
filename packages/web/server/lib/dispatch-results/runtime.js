@@ -7,18 +7,12 @@
 // own: background primary sessions, the way OpenCode 2 reports a background
 // subagent to its parent (core `session/subagent-completion.ts`).
 //
-// Event-driven like the message queue: the shared upstream hub delivers
-// `session.status`, and an idle transition of a watched session arms a short
-// timer. The tick confirms the turn is over against OpenCode itself (not
-// running, no running subagent, and the `idle` record OpenCode appends when a
-// run ends) before anything is delivered. Pending deliveries are persisted,
-// so a restart in between still delivers.
+// Event-driven: the Host event hub supplies canonical envelopes directly.
+// Pending deliveries are persisted so a restart still delivers them.
 
 import fs from 'fs';
 import path from 'path';
 import { z } from 'zod';
-import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
-import { createSessionActivityProbe } from '../opencode/session-activity.js';
 
 const FILE_NAME = 'dispatch-results.json';
 const FILE_VERSION = 1;
@@ -33,7 +27,6 @@ const SETTLE_RECHECK_MS = 2_000;
 const SETTLE_RECHECKS = 3;
 const RETRY_BASE_DELAY_MS = 2_000;
 const RETRY_MAX_DELAY_MS = 60_000;
-const FETCH_TIMEOUT_MS = 15_000;
 const MESSAGE_PAGE_LIMIT = 50;
 // The answer travels into the parent's context; a session that wrote a book
 // is cut, and the agent can read the rest with session.messages.
@@ -46,7 +39,7 @@ const ID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 // Boundary schemas: the only place raw JSON (the file, OpenCode answers, hub
 // events) is inspected. Everything below branches on what they return.
 const sessionIdSchema = z.string().regex(/^[A-Za-z0-9_-]{4,128}$/);
-const messageIdSchema = z.string().regex(/^msg_[A-Za-z0-9]{8,64}$/);
+const messageIdSchema = z.string().min(1);
 const timeSchema = z.number().finite().nonnegative();
 
 const afterIdleSchema = z.string().min(1).nullable();
@@ -64,39 +57,7 @@ const entrySchema = z.object({
 
 const storedFileSchema = z.object({ entries: z.array(z.unknown()) });
 
-const idleRecordSchema = z.object({
-  id: z.string().min(1),
-  type: z.literal('idle'),
-  outcome: z.enum(['succeeded', 'failed', 'interrupted']),
-  time: z.object({ created: timeSchema }),
-});
-
-const assistantRecordSchema = z.object({
-  type: z.literal('assistant'),
-  content: z.array(z.unknown()).default([]),
-  error: z.object({ message: z.string().optional() }).nullish(),
-  time: z.object({ created: timeSchema }),
-});
-
-const textContentSchema = z.object({ type: z.literal('text'), text: z.string() });
-
-const recordTypeSchema = z.object({ type: z.string() });
-const recordIdSchema = z.object({ id: z.string() });
-const sessionRecordSchema = z.object({ title: z.string().optional() });
-const messagePageSchema = z.object({ data: z.array(z.unknown()) });
-
-const statusEventSchema = z.object({
-  type: z.literal('session.status'),
-  properties: z.object({ sessionID: z.string().min(1), status: z.object({ type: z.string().min(1) }) }),
-});
-
-const deletedEventSchema = z.object({
-  type: z.literal('session.deleted'),
-  properties: z.object({ sessionID: z.string().min(1) }),
-});
-
 const errorCodeSchema = z.object({ code: z.string() });
-
 const parse = (schema, value) => {
   const parsed = schema.safeParse(value);
   return parsed.success ? parsed.data : null;
@@ -104,19 +65,14 @@ const parse = (schema, value) => {
 
 const retryDelay = (failures) => Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(failures - 1, 0), RETRY_MAX_DELAY_MS);
 
-const httpError = (message, status) => Object.assign(new Error(message), { status });
+const unavailableError = (message, status) => Object.assign(new Error(message), { status });
 
-/**
- * A message id in OpenCode's own ascending format (`msg_` + time + random),
- * minted once per delivery and persisted before the first attempt. OpenCode
- * refuses a second admission of the same id, so a retry after a crash or a
- * lost response can never deliver the answer twice.
- */
+/** A durable delivery id minted once and reused across retries. */
 const createMessageId = (now) => {
   const time = (BigInt(now) * 0x1000n + BigInt(Math.floor(Math.random() * 0x1000))).toString(16).padStart(12, '0').slice(-12);
   let random = '';
   for (let index = 0; index < 14; index += 1) random += ID_CHARS[Math.floor(Math.random() * ID_CHARS.length)];
-  return `msg_${time}${random}`;
+  return `delivery_${time}${random}`;
 };
 
 const escapeAttribute = (value) => value
@@ -125,47 +81,27 @@ const escapeAttribute = (value) => value
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;');
 
-const assistantText = (assistant) => assistant.content
-  .map((item) => parse(textContentSchema, item)?.text ?? '')
+const messageText = (message) => (Array.isArray(message?.parts) ? message.parts : [])
+  .filter((part) => part?.type === 'text' && typeof part.content === 'string')
+  .map((part) => part.content)
   .join('')
   .trim();
 
-const OUTCOME_STATES = { succeeded: 'completed', failed: 'error', interrupted: 'cancelled' };
+const OUTCOME_STATES = { completed: 'completed', failed: 'error', cancelled: 'cancelled' };
 
-/**
- * How the dispatched turn ended, read from the newest page of the session's
- * records (newest first), or null while it has not ended since the dispatch.
- *
- * OpenCode appends an `idle` record with the run's outcome when a run ends,
- * so the outcome is authoritative and survives a restart of either server.
- * The answer is the newest assistant reply of that turn.
- *
- * "Since the dispatch" is decided by record order against `afterIdleId`, the
- * newest idle record before the prompt went out, so OpenChamber's clock never
- * meets OpenCode's: a remote OpenCode whose clock lags would otherwise make a
- * finished turn look older than its own dispatch. Only an entry stored
- * without that baseline (`afterIdleId` undefined) falls back to `dispatchedAt`.
- */
-export const readDispatchOutcome = (records, dispatchedAt, afterIdleId) => {
-  const idleIndex = records.findIndex((record) => parse(recordTypeSchema, record)?.type === 'idle');
-  if (idleIndex === -1) return null;
-  // A malformed idle record proves nothing about the turn: keep waiting.
-  const idle = parse(idleRecordSchema, records[idleIndex]);
-  if (!idle) return null;
-  const byOrder = afterIdleId !== undefined;
-  if (byOrder ? idle.id === afterIdleId : idle.time.created < dispatchedAt) return null;
-  // The turn's records sit between its idle record and the baseline one.
-  const baselineIndex = byOrder && afterIdleId !== null
-    ? records.findIndex((record) => parse(recordIdSchema, record)?.id === afterIdleId)
-    : -1;
-  const turnRecords = records.slice(idleIndex + 1, baselineIndex === -1 ? undefined : baselineIndex);
-  const reply = turnRecords
-    .map((record) => parse(assistantRecordSchema, record))
-    .find((assistant) => assistant !== null && (byOrder || assistant.time.created >= dispatchedAt));
+export const readDispatchOutcome = (page, dispatchedAt, afterTurnId) => {
+  if (!page || !Array.isArray(page.turns) || !Array.isArray(page.messages)) return null;
+  const turns = page.turns.filter((turn) => turn.status === 'completed' || turn.status === 'failed' || turn.status === 'cancelled');
+  const turn = turns.find((candidate) => {
+    if (afterTurnId !== undefined && candidate.turnId === afterTurnId) return false;
+    return Number(candidate.finishedAt) >= dispatchedAt;
+  });
+  if (!turn) return null;
+  const reply = page.messages.find((message) => message.turnId === turn.turnId && message.role === 'assistant');
   return {
-    state: OUTCOME_STATES[idle.outcome],
-    text: reply ? assistantText(reply) : '',
-    errorMessage: reply?.error?.message?.trim() ?? '',
+    state: OUTCOME_STATES[turn.status],
+    text: reply ? messageText(reply) : '',
+    errorMessage: typeof turn.error === 'string' ? turn.error.trim() : '',
   };
 };
 
@@ -198,19 +134,21 @@ export const buildDispatchResultMessage = ({ sessionId, title, outcome }) => {
 const DELETED_OUTCOME = { state: 'cancelled', text: '', errorMessage: '' };
 
 export function createDispatchResultsRuntime({
-  globalEventHub,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService,
+  resolveSessionScope,
   dataDir,
-  // Archive is OpenChamber's: an archived parent records the answer but is not woken.
   isSessionArchived = async () => false,
-  fetchImpl = fetch,
   now = Date.now,
   quietMs = QUIET_MS,
   retryDelayMs = retryDelay,
   subagentRecheckMs = SUBAGENT_RECHECK_MS,
   settleRecheckMs = SETTLE_RECHECK_MS,
 }) {
+  if (!sessionService || typeof sessionService.open !== 'function' || typeof sessionService.history !== 'function' || typeof sessionService.list !== 'function' || typeof sessionService.send !== 'function') {
+    throw new Error('dispatch-results requires the canonical session service');
+  }
+  if (typeof resolveSessionScope !== 'function') throw new Error('dispatch-results requires a session scope resolver');
+  if (typeof dataDir !== 'string' || !dataDir) throw new Error('dispatch-results requires a data directory');
   const filePath = path.join(dataDir, FILE_NAME);
 
   /** entry id → { id, parentSessionId, sessionId, dispatchedAt, messageId? } */
@@ -283,72 +221,43 @@ export function createDispatchResultsRuntime({
 
   // --- OpenCode access -----------------------------------------------------
 
-  const openCodeRequest = async (fetchPath, { method = 'GET', body, query } = {}) => {
-    const base = buildOpenCodeUrl(fetchPath, '');
-    const search = new URLSearchParams(query || {}).toString();
-    const headers = { Accept: 'application/json', ...getOpenCodeAuthHeaders() };
-    const init = { method, headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
-    if (body) {
-      headers['Content-Type'] = 'application/json';
-      init.body = JSON.stringify(body);
-    }
-    const response = await fetchImpl(search ? `${base}?${search}` : base, init);
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw httpError(`OpenCode ${method} ${fetchPath} failed with ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`, response.status);
-    }
-    return unwrapOpenCodeResponse(await response.json().catch(() => null));
-  };
-
-  const activityProbe = createSessionActivityProbe({ buildOpenCodeUrl, getOpenCodeAuthHeaders, timeoutMs: FETCH_TIMEOUT_MS, fetchImpl });
-
-  /**
-   * Where the watched session stands: `running`, `ended` with its record page
-   * and title, `deleted`, or null when OpenCode could not be asked. Unknown is
-   * never "ended": a failed read retries instead of reporting a guess.
-   */
+  // --- canonical session access -------------------------------------------
   const readWatchedSession = async (sessionId) => {
-    const statuses = await activityProbe.fetchActiveSessionStatuses();
-    if (!statuses) return null;
-    if (statuses[sessionId]) return { kind: 'running' };
-    // A turn is over only when its subagents are done too: the session idles
-    // while a background subagent works and runs again on its result.
-    const subagentsWorking = await activityProbe.hasWorkingChildren(sessionId, statuses);
-    if (subagentsWorking === null) return null;
-    if (subagentsWorking) return { kind: 'subagents' };
-    const encoded = encodeURIComponent(sessionId);
+    if (typeof sessionService?.open !== 'function' || typeof sessionService?.history !== 'function' || typeof resolveSessionScope !== 'function') return null;
     try {
-      const session = parse(sessionRecordSchema, await openCodeRequest(`/api/session/${encoded}`));
-      const page = parse(messagePageSchema, await openCodeRequest(`/api/session/${encoded}/message`, {
-        query: { limit: String(MESSAGE_PAGE_LIMIT), order: 'desc' },
-      }));
-      // An answer that is not a page is unknown, never an empty history.
-      if (!page) return null;
-      return { kind: 'ended', title: session?.title?.trim() ?? '', records: page.data };
+      const scope = await resolveSessionScope(sessionId);
+      if (!scope) return { kind: 'deleted' };
+      const snapshot = await sessionService.open(sessionId);
+      const session = snapshot?.session;
+      if (!session) return { kind: 'deleted' };
+      if (session.runtimeStatus === 'running' || session.runtimeStatus === 'awaiting_approval' || session.runtimeStatus === 'awaiting_input') return { kind: 'running' };
+      const listed = await sessionService.list(scope.workspaceId);
+      if (!listed || !Array.isArray(listed.items) || (Array.isArray(listed.errors) && listed.errors.length > 0)) return null;
+      if (listed.items.some((item) => item.parentSessionId === sessionId && ['running', 'awaiting_approval', 'awaiting_input'].includes(item.runtimeStatus))) return { kind: 'subagents' };
+      const page = await sessionService.history(sessionId, new URLSearchParams({ limit: String(MESSAGE_PAGE_LIMIT) }).toString());
+      if (!page || !Array.isArray(page.turns) || !Array.isArray(page.messages)) return null;
+      return { kind: 'ended', title: typeof session.metadata?.title === 'string' ? session.metadata.title.trim() : '', page };
     } catch (error) {
-      if (error?.status === 404) return { kind: 'deleted' };
+      if (error?.status === 404 || error?.statusCode === 404) return { kind: 'deleted' };
       return null;
     }
   };
 
-  /** Admits the result into the parent. Resolves true when it is there (now or before). */
   const deliver = async (entry, message) => {
-    // The archive store answers asynchronously; reading its Promise as a
-    // value made every parent look archived, so none was ever woken. A failed
-    // lookup wakes: the agent asked for this result.
     const archived = await Promise.resolve(isSessionArchived(entry.parentSessionId)).catch(() => false);
-    const resume = archived !== true;
+    if (archived === true) return true;
     try {
-      await openCodeRequest(`/api/session/${encodeURIComponent(entry.parentSessionId)}/synthetic`, {
-        method: 'POST',
-        body: { id: entry.messageId, ...message, delivery: 'steer', resume },
+      const parentPage = await sessionService.history(entry.parentSessionId, new URLSearchParams({ limit: '20' }).toString());
+      const latestAssistant = [...(parentPage?.messages ?? [])].reverse().find((candidate) => candidate.role === 'assistant');
+      if (!latestAssistant?.providerId || !latestAssistant.modelId) throw unavailableError('Parent model is unavailable', 503);
+      await sessionService.send(entry.parentSessionId, {
+        input: { text: '', attachments: [], context: [{ kind: 'synthetic', text: message.text }] },
+        options: { providerId: latestAssistant.providerId, modelId: latestAssistant.modelId, agentId: null, variant: null, reasoningEffort: null },
       });
       return true;
     } catch (error) {
-      // The id is ours and was admitted before: an earlier attempt landed.
-      if (error?.status === 409) return true;
-      // The parent is gone; nobody is left to tell.
-      if (error?.status === 404) {
+      if (error?.status === 409 || error?.statusCode === 409) return true;
+      if (error?.status === 404 || error?.statusCode === 404) {
         console.log(`[dispatch-results] dropping the result of ${entry.sessionId}: session ${entry.parentSessionId} no longer exists`);
         return true;
       }
@@ -404,7 +313,7 @@ export function createDispatchResultsRuntime({
       for (const entry of pendingFor(sessionId)) {
         const outcome = watched.kind === 'deleted'
           ? DELETED_OUTCOME
-          : readDispatchOutcome(watched.records, entry.dispatchedAt, entry.afterIdleId);
+          : readDispatchOutcome(watched.page, entry.dispatchedAt, entry.afterIdleId);
         if (!outcome) {
           waiting = true;
           continue;
@@ -489,47 +398,33 @@ export function createDispatchResultsRuntime({
     return { id: entry.id };
   };
 
-  const processPayload = (payload) => {
-    if (stopped) return;
-
-    const deleted = parse(deletedEventSchema, payload);
-    if (deleted) {
-      const deletedSessionId = deleted.properties.sessionID;
-      // A deleted parent has nobody left to tell; a deleted dispatched session
-      // still reports, as stopped, so the agent is not left waiting.
+  const processCanonicalEvent = (event, scope) => {
+    if (stopped || !event || typeof event.sessionId !== 'string') return;
+    if (scope?.sessionId && scope.sessionId !== event.sessionId) return;
+    const sessionId = event.sessionId;
+    if (event.type === 'session.deleted') {
       let changed = false;
       for (const entry of entries.values()) {
-        if (entry.parentSessionId === deletedSessionId) {
+        if (entry.parentSessionId === sessionId) {
           entries.delete(entry.id);
           changed = true;
         }
       }
       if (changed) void persist();
-      arm(deletedSessionId);
+      arm(sessionId);
       return;
     }
-
-    const status = parse(statusEventSchema, payload);
-    if (!status) return;
-    const sessionId = status.properties.sessionID;
     if (pendingFor(sessionId).length === 0) return;
-    if (status.properties.status.type === 'idle') {
+    if ((event.type === 'session.status' && (event.runtimeStatus === 'idle' || event.runtimeStatus === 'unavailable'))
+      || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled') {
       settleChecks.delete(sessionId);
       arm(sessionId);
-    } else {
+    } else if (event.type === 'session.status') {
       clearTimer(sessionId);
     }
   };
 
-  const processEvent = (event) => {
-    for (const payload of event?.translated?.() ?? []) processPayload(payload);
-  };
-
   const start = () => {
-    const unsubscribeEvent = globalEventHub.subscribeEvent(processEvent);
-    const unsubscribeStatus = globalEventHub.subscribeStatus((status) => {
-      if (status?.type === 'connect') reconcileAll();
-    });
     void load()
       .then(() => {
         if (entries.size > 0) console.log(`[dispatch-results] restored ${entries.size} pending result(s)`);
@@ -538,10 +433,6 @@ export function createDispatchResultsRuntime({
       .catch((error) => {
         console.warn('[dispatch-results] failed to load pending results:', error?.message ?? error);
       });
-    return () => {
-      unsubscribeEvent();
-      unsubscribeStatus();
-    };
   };
 
   const stop = () => {
@@ -553,7 +444,7 @@ export function createDispatchResultsRuntime({
   return {
     load,
     register,
-    processPayload,
+    processCanonicalEvent,
     start,
     stop,
     /** Pending entries, oldest first; tests and diagnostics read it. */

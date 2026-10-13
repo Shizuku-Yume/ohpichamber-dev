@@ -1,6 +1,12 @@
 import { asNonEmptyString } from '../shared/guards.js';
 import { OpenChamberControlError, asControlError } from './error.js';
-import { OPENCHAMBER_ALL_ACTIONS } from './actions.js';
+import {
+  OPENCHAMBER_ALL_ACTIONS,
+  OPENCHAMBER_AGENT_TOOL_ACTIONS,
+  OPENCHAMBER_WEB_ACTIONS,
+  OPENCHAMBER_MEMORY_ACTIONS,
+  OPENCHAMBER_NOTIFY_ACTIONS,
+} from './actions.js';
 import { writeScreenshot } from './screenshots.js';
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
@@ -8,6 +14,12 @@ const MAX_WAIT_TIMEOUT_SECONDS = 86_400;
 const WAIT_POLL_INTERVAL_MS = 500;
 // One service, both capabilities: which tool asked is the caller's concern.
 const CONTROL_ACTIONS = new Set(OPENCHAMBER_ALL_ACTIONS);
+const TOOL_ACTIONS = new Map([
+  ['openchamber', new Set(OPENCHAMBER_AGENT_TOOL_ACTIONS)],
+  ['openchamber_web', new Set(OPENCHAMBER_WEB_ACTIONS)],
+  ['openchamber_memory', new Set(OPENCHAMBER_MEMORY_ACTIONS)],
+  ['openchamber_notify', new Set(OPENCHAMBER_NOTIFY_ACTIONS)],
+]);
 const SCHEDULE_TASK_ID_ACTIONS = new Set([
   'schedule.update',
   'schedule.run',
@@ -223,6 +235,7 @@ const patchScheduledTask = (existing, input) => {
 
 export const createOpenChamberControlService = (dependencies) => {
   const {
+    readSettingsFromDiskMigrated,
     service,
     sessionService,
     resolveSessionScope,
@@ -254,6 +267,7 @@ export const createOpenChamberControlService = (dependencies) => {
   if (typeof listWorkspaceScopes !== 'function' || typeof listProjects !== 'function') {
     throw new Error('control service requires canonical workspace and project listings');
   }
+  if (typeof readSettingsFromDiskMigrated !== 'function') throw new Error('control service requires settings for feature policy');
 
   const wait = (duration, signal) => {
     if (!signal) return sleep(duration);
@@ -875,6 +889,25 @@ export const createOpenChamberControlService = (dependencies) => {
       throw asControlError(error, `Failed to execute ${action || 'OpenChamber action'}`);
     }
   };
+  const featurePolicy = async (toolName, action) => {
+    const actions = TOOL_ACTIONS.get(toolName);
+    if (!actions || !actions.has(action)) return { code: 'INVALID_REQUEST', status: 400 };
+    let settings;
+    try {
+      settings = await readSettingsFromDiskMigrated();
+    } catch {
+      return { code: 'UNAVAILABLE', status: 503 };
+    }
+    const enabled = toolName === 'openchamber'
+      ? settings?.agentControlToolEnabled !== false
+      : toolName === 'openchamber_web'
+        ? settings?.agentWebToolEnabled !== false
+        : toolName === 'openchamber_memory'
+          ? settings?.agentMemoryToolEnabled === true
+          : settings?.agentNotifyToolEnabled === true;
+    return enabled ? null : { code: 'FEATURE_DISABLED', status: 403 };
+  };
+
   const invokeHostAction = async (scope, request, signal) => {
     const fail = (code, status) => ({ ok: false, code, status });
     if (!scope || typeof scope !== 'object' || typeof scope.rootSessionId !== 'string' || !scope.rootSessionId
@@ -888,6 +921,8 @@ export const createOpenChamberControlService = (dependencies) => {
       || (request.input !== undefined && (typeof request.input !== 'object' || request.input === null || Array.isArray(request.input)))) {
       return fail('INVALID_REQUEST', 400);
     }
+    const policy = await featurePolicy(request.toolName, request.action);
+    if (policy) return fail(policy.code, policy.status);
     if (typeof resolveSessionScope !== 'function') return fail('INTERNAL_ERROR', 503);
     try {
       const resolved = await resolveSessionScope(request.sessionId);

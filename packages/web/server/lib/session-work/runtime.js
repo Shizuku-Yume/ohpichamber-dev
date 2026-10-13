@@ -17,8 +17,6 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { OpenCode } from '@opencode/client';
-import { z } from 'zod';
 import { readMergedSettingsSync } from '../host/settings-files.js';
 import { loadAssistContext, loadSettledTurns } from '../session-assist/context.js';
 import { turnsToHistory, excerptHead, excerptHeadTail } from '../routing/history.js';
@@ -49,7 +47,6 @@ const readSessionWorkSettings = () => {
   };
 };
 
-const READ_TIMEOUT_MS = 5_000;
 const REQUEST_CHARS = 1_500;
 /** Head and tail of the turn's answer: what was changed sits early, the outcome late. */
 const ANSWER_EDGE_CHARS = 500;
@@ -57,29 +54,9 @@ const SEEN_MESSAGES_LIMIT = 500;
 
 const errorMessage = (error) => (error instanceof Error ? error.message : String(error));
 
-const userMessageSchema = z.object({
-  type: z.literal('message.updated'),
-  properties: z.object({
-    sessionID: z.string().min(1),
-    info: z.object({
-      id: z.string().min(1),
-      role: z.literal('user'),
-      text: z.string(),
-      time: z.object({ created: z.number() }).partial().optional(),
-    }),
-  }),
-});
-
-const busySchema = z.object({
-  type: z.literal('session.status'),
-  properties: z.object({ sessionID: z.string().min(1), status: z.object({ type: z.literal('busy') }) }),
-});
-
-const reviewSessionSchema = z.object({ openchamber: z.object({ kind: z.literal('review') }) });
-
 export function createSessionWorkRuntime({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService,
+  resolveSessionScope,
   /** `{ enabled, autoOpen, reviewOffer }` as currently saved. */
   getSettings = readSessionWorkSettings,
   /** The classification provider's endpoint, or null when there is no Jev. */
@@ -95,6 +72,10 @@ export function createSessionWorkRuntime({
   lineage = null,
   now = Date.now,
 }) {
+  if (!sessionService || typeof sessionService.open !== 'function' || typeof sessionService.history !== 'function') {
+    throw new Error('session-work requires the canonical session service');
+  }
+  if (typeof resolveSessionScope !== 'function') throw new Error('session-work requires a session scope resolver');
   const resolvedChatRoots = chatRoots.filter(Boolean).map((root) => path.resolve(root));
   const isChatDirectory = (directory) => {
     if (!directory) return false;
@@ -123,30 +104,21 @@ export function createSessionWorkRuntime({
     while (turnGenerations.size > SEEN_MESSAGES_LIMIT) turnGenerations.delete(turnGenerations.keys().next().value);
   };
 
-  const openCodeClient = (directory) => {
-    const headers = { ...getOpenCodeAuthHeaders() };
-    // v2 scopes by header and rejects non-ASCII header values.
-    if (directory) headers['x-opencode-directory'] = encodeURIComponent(directory);
-    return OpenCode.make({ baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''), headers });
+  const readPages = (sessionId, signal) => ({ limit, cursor }) => {
+    signal?.throwIfAborted();
+    const query = new URLSearchParams({ limit: String(limit), ...(cursor ? { cursor } : {}) });
+    return sessionService.history(sessionId, query.toString());
   };
 
-  const readPages = (client, sessionId, signal) => ({ limit, cursor }) => client.message.list(
-    { sessionID: sessionId, limit, ...(cursor ? { cursor } : { order: 'desc' }) },
-    { signal },
-  );
-
-  /**
-   * The session record when it is one this feature serves: a top-level,
-   * unarchived project session that is not a review of another one. Chats
-   * are plain conversations and never in work. Null otherwise.
-   */
-  const eligibleSession = async (client, sessionId, signal) => {
-    const session = await client.session.get({ sessionID: sessionId }, { signal });
-    if (session?.id === sessionId) lineage?.remember(sessionId, session.parentID ?? null);
-    if (session?.id !== sessionId || session.parentID) return null;
-    if (isChatDirectory(session.location?.directory ?? session.directory)) return null;
-    if (reviewSessionSchema.safeParse(session.metadata).success) return null;
+  const eligibleSession = async (sessionId, scope) => {
+    const snapshot = await sessionService.open(sessionId);
+    const session = snapshot?.session;
+    if (!session || session.sessionId !== sessionId || session.parentSessionId) return null;
+    if (isChatDirectory(scope.cwd)) return null;
+    const metadata = await readMetadata(sessionId, scope.cwd);
+    if (metadata?.openchamber?.kind === 'review') return null;
     if (await isSessionArchived(sessionId)) return null;
+    lineage?.remember(sessionId, session.parentSessionId ?? null);
     return session;
   };
 
@@ -156,28 +128,24 @@ export function createSessionWorkRuntime({
     while (suggested.size > SEEN_MESSAGES_LIMIT) suggested.delete(suggested.keys().next().value);
   };
 
-  const onUserMessage = async ({ sessionId, directory, messageId, text, createdAt }) => {
+  const onUserMessage = async ({ sessionId, scope, messageId, text, createdAt }) => {
     const settings = getSettings();
     if (!settings.enabled || !settings.autoOpen || !text.trim()) return;
     if (seenMessages.has(messageId)) return;
     seenMessages.add(messageId);
     while (seenMessages.size > SEEN_MESSAGES_LIMIT) seenMessages.delete(seenMessages.values().next().value);
-
     const endpoint = await classifierEndpoint();
     if (!endpoint) return;
-    const signal = AbortSignal.timeout(READ_TIMEOUT_MS);
-    const client = openCodeClient(directory);
-    const session = await eligibleSession(client, sessionId, signal);
+    const session = await eligibleSession(sessionId, scope);
     if (!session) return;
-    if (readWork(await readMetadata(sessionId, directory))?.state === 'open') return;
-
-    const turns = await loadSettledTurns({ readPage: readPages(client, sessionId, signal), signal });
+    if (readWork(await readMetadata(sessionId, scope.cwd))?.state === 'open') return;
+    const turns = await loadSettledTurns({ readPage: readPages(sessionId), signal: undefined });
     const { answers } = await jev.ask(
       buildSendRequest({ history: turnsToHistory(turns), request: excerptHead(text.trim(), REQUEST_CHARS) }),
       endpoint,
     );
     if (stopped || !decideOpen(answers)) return;
-    await updateMetadata(sessionId, (metadata) => openByJevPatch(metadata, { requestAt: createdAt, now: now() }), { directory });
+    await updateMetadata(sessionId, (metadata) => openByJevPatch(metadata, { requestAt: createdAt, now: now() }), { directory: scope.cwd });
   };
 
   const retireSuggestion = (sessionId) => {
@@ -188,27 +156,22 @@ export function createSessionWorkRuntime({
       .catch((error) => console.warn('[session-work] could not retire a hint:', errorMessage(error)));
   };
 
-  const processPayload = (payload, directoryHint = '') => {
-    if (stopped) return;
-    const busy = busySchema.safeParse(payload);
-    if (busy.success) {
-      advanceTurn(busy.data.properties.sessionID);
-      retireSuggestion(busy.data.properties.sessionID);
+  const processCanonicalEvent = (event, scope) => {
+    if (stopped || !event || typeof event.sessionId !== 'string' || (scope?.sessionId && scope.sessionId !== event.sessionId)) return;
+    const sessionId = event.sessionId;
+    if (event.type === 'session.status' && event.runtimeStatus !== 'idle') {
+      advanceTurn(sessionId);
+      retireSuggestion(sessionId);
       return;
     }
-    const message = userMessageSchema.safeParse(payload);
-    if (!message.success) return;
-    const { sessionID, info } = message.data.properties;
-    // A subsession is never in work: no read, no Jev.
-    if (lineage?.isChild(sessionID) === true) return;
-    if (!seenMessages.has(info.id)) advanceTurn(sessionID);
-    const directory = payload.properties?.directory || directoryHint;
+    if (event.type !== 'message.created' || event.role !== 'user' || typeof event.messageId !== 'string') return;
+    if (lineage?.isChild(sessionId) === true) return;
+    if (!seenMessages.has(event.messageId)) advanceTurn(sessionId);
+    const text = (Array.isArray(event.parts) ? event.parts : [])
+      .filter((part) => part?.type === 'text' && typeof part.content === 'string')
+      .map((part) => part.content).join('\n\n');
     void onUserMessage({
-      sessionId: sessionID,
-      directory,
-      messageId: info.id,
-      text: info.text,
-      createdAt: info.time?.created ?? now(),
+      sessionId, scope: scope || { sessionId, cwd: '' }, messageId: event.messageId, text, createdAt: event.createdAt ?? now(),
     }).catch((error) => console.warn('[session-work] could not check a sent message:', errorMessage(error)));
   };
 
@@ -228,11 +191,11 @@ export function createSessionWorkRuntime({
     try {
       const endpoint = await classifierEndpoint();
       if (!endpoint) return null;
-      const signal = AbortSignal.timeout(READ_TIMEOUT_MS);
-      const client = openCodeClient(directory);
-      const session = await eligibleSession(client, sessionId, signal);
-      if (!session || session.revert?.messageID) return null;
-      const work = settings.enabled ? readWork(await readMetadata(sessionId, directory)) : null;
+      const scope = await resolveSessionScope(sessionId);
+      if (!scope) return null;
+      const session = await eligibleSession(sessionId, scope);
+      if (!session) return null;
+      const work = settings.enabled ? readWork(await readMetadata(sessionId, scope.cwd)) : null;
       const ask = {
         open: settings.enabled && settings.autoOpen && work?.state !== 'open',
         wrapUp: settings.enabled && work?.state === 'open',
@@ -240,7 +203,7 @@ export function createSessionWorkRuntime({
         recap: assist.recap,
         nextStep: assist.suggestion,
       };
-      const context = await loadAssistContext({ readPage: readPages(client, sessionId, signal), signal });
+      const context = await loadAssistContext({ readPage: readPages(sessionId), signal: undefined });
       if (!context) return null;
       const turn = context.turns.at(-1);
       const request = buildTurnEndRequest({
@@ -254,7 +217,7 @@ export function createSessionWorkRuntime({
       if (stopped) return null;
       if (ask.open && decideOpen(answers)) {
         const requestAt = turn.user.created ?? now();
-        await updateMetadata(sessionId, (metadata) => openByJevPatch(metadata, { requestAt, now: now() }), { directory });
+        await updateMetadata(sessionId, (metadata) => openByJevPatch(metadata, { requestAt, now: now() }), { directory: scope.cwd });
       }
       // Looks done wins over a review offer from the same turn.
       const suggest = ask.wrapUp && decideWrapUp(answers)
@@ -266,9 +229,9 @@ export function createSessionWorkRuntime({
         const { changed } = await updateMetadata(
           sessionId,
           (metadata) => (turnGeneration(sessionId) === generation ? suggest(metadata, { now: now() }) : null),
-          { directory },
+          { directory: scope.cwd },
         );
-        if (changed) markSuggested(sessionId, directory);
+        if (changed) markSuggested(sessionId, scope.cwd);
       }
       return ask.recap || ask.nextStep ? decideAssist(answers) : null;
     } catch (error) {
@@ -284,5 +247,5 @@ export function createSessionWorkRuntime({
     turnGenerations.clear();
   };
 
-  return { processPayload, evaluateTurnEnd, stop };
+  return { processCanonicalEvent, evaluateTurnEnd, stop };
 }

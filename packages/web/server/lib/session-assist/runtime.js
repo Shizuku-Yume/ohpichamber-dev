@@ -4,7 +4,6 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { OpenCode } from '@opencode/client';
 import { readMergedSettingsSync } from '../host/settings-files.js';
 import { loadAssistContext, newestContentId } from './context.js';
 import { buildAssistPrompt, buildAssistSystemPrompt } from './prompt.js';
@@ -27,7 +26,6 @@ const getSessionAssistTargets = () => {
 const IDLE_QUIET_MS = 60_000;
 const RECAP_CHAR_LIMIT = 320;
 const SUGGESTION_CHAR_LIMIT = 500;
-const FETCH_TIMEOUT_MS = 5_000;
 const GENERATION_TIMEOUT_MS = 120_000;
 // Enough records to look past the idle marker and a couple of switches.
 const TAIL_RECHECK_LIMIT = 8;
@@ -53,42 +51,15 @@ const extractJsonObject = (value) => {
   return null;
 };
 
-const extractSessionStatus = (payload) => {
-  if (!payload || payload.type !== 'session.status') return null;
-  const properties = payload.properties && typeof payload.properties === 'object' ? payload.properties : {};
-  const status = properties.status && typeof properties.status === 'object' ? properties.status : {};
-  const info = properties.info && typeof properties.info === 'object' ? properties.info : {};
-  const sessionId = typeof properties.sessionID === 'string' ? properties.sessionID.trim() : '';
-  const type = typeof status.type === 'string'
-    ? status.type.trim()
-    : (typeof info.type === 'string' ? info.type.trim() : '');
-  if (!sessionId || !type) return null;
-  const directory = typeof properties.directory === 'string' && properties.directory
-    ? properties.directory
-    : (typeof info.directory === 'string' ? info.directory : '');
-  return { sessionId, type, directory };
-};
-
-const extractUserMessage = (payload) => {
-  if (!payload || payload.type !== 'message.updated') return null;
-  const info = payload.properties?.info;
-  if (!info || typeof info !== 'object' || info.role !== 'user') return null;
-  if (typeof info.sessionID !== 'string' || !info.sessionID) return null;
-  return {
-    sessionId: info.sessionID,
-    createdAt: typeof info.time?.created === 'number' ? info.time.created : 0,
-  };
-};
 
 /**
- * The recap and the suggestion live in OpenChamber's own session metadata
- * store: OpenCode 2.x accepts session metadata only when a session is created.
- * `persistSessionAssist(sessionID, directory, assist)` writes it; without that
- * seam the runtime stays inert rather than generating text it cannot save.
+ * The recap and suggestion live in OpenChamber's own session metadata store.
+ * Without that persistence seam the runtime stays inert rather than generating
+ * text it cannot save.
  */
 export const createSessionAssistRuntime = ({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService,
+  resolveSessionScope,
   getSmallModelService,
   getTargets = getSessionAssistTargets,
   quietMs = IDLE_QUIET_MS,
@@ -104,6 +75,11 @@ export const createSessionAssistRuntime = ({
   // turn end arms nothing and reads nothing.
   lineage = null,
 }) => {
+  if (!sessionService || typeof sessionService.open !== 'function' || typeof sessionService.history !== 'function') {
+    throw new Error('session-assist requires the canonical session service');
+  }
+  if (typeof resolveSessionScope !== 'function') throw new Error('session-assist requires a session scope resolver');
+  if (typeof getSmallModelService !== 'function') throw new Error('session-assist requires the small-model service');
   const timers = new Map();
   // Turn ends waiting for `evaluateTurn`; a newer event replaces or drops the entry.
   const gates = new Map();
@@ -145,58 +121,32 @@ export const createSessionAssistRuntime = ({
       suggestion: enabledTargets.suggestion && allowed.suggestion,
     };
     if (!targets.recap && !targets.suggestion) return;
-    const baseUrl = buildOpenCodeUrl('/', '').replace(/\/$/, '');
-    const client = OpenCode.make({
-      baseUrl,
-      headers: {
-        ...getOpenCodeAuthHeaders(),
-        // v2 scopes by header and rejects non-ASCII header values.
-        ...(directory ? { 'x-opencode-directory': encodeURIComponent(directory) } : {}),
-      },
-    });
-    const requestOptions = () => ({ signal: AbortSignal.any([signal, AbortSignal.timeout(FETCH_TIMEOUT_MS)]) });
-    const checkCurrent = () => {
-      signal.throwIfAborted();
-      if (buildOpenCodeUrl('/', '').replace(/\/$/, '') !== baseUrl) throw new Error('Session assist runtime changed');
-    };
-    const session = await client.session.get({ sessionID: sessionId }, requestOptions());
-    checkCurrent();
-    // Reverted history is not the active conversation. A new prompt clears
-    // the revert boundary before its next idle event.
-    if (session?.id === sessionId) lineage?.remember(sessionId, session.parentID ?? null);
-    if (session?.id !== sessionId || session.parentID || session.revert?.messageID) return;
-    // An archived session is put away: no recap or suggestion is generated for it.
+    const scope = await resolveSessionScope(sessionId);
+    if (!scope) return;
+    const session = await sessionService.open(sessionId);
+    if (session?.session?.parentSessionId || session?.session?.revertMessageId) return;
     if (await isSessionArchived(sessionId)) return;
     const context = await loadAssistContext({
       signal,
-      readPage: ({ limit, cursor }) => client.message.list(
-        { sessionID: sessionId, limit, ...(cursor ? { cursor } : { order: 'desc' }) },
-        requestOptions(),
-      ),
+      readPage: ({ limit, cursor }) => {
+        const query = new URLSearchParams({ limit: String(limit), ...(cursor ? { cursor } : {}) });
+        return sessionService.history(sessionId, query.toString());
+      },
     });
-    checkCurrent();
     if (!context) return;
     const { last, turns } = context;
     const { describeSmallModel, generateSmallModelText } = await getSmallModelService();
-    const preferredProviderID = last.providerID;
-    const preferredModelID = last.modelID;
-    const described = await describeSmallModel({ directory, preferredProviderID, preferredModelID });
-    checkCurrent();
+    const preferredProviderID = last.providerId;
+    const preferredModelID = last.modelId;
+    const described = await describeSmallModel({ workspaceId: scope.workspaceId, preferredProviderID, preferredModelID });
     if (!described) return;
-    // A local server keeps one prompt cache per slot: a side request on the
-    // session's own model evicts it, and the next turn reprocesses the whole
-    // history. There only a different model may write the assist, however the
-    // session's model was picked (fallback or an explicit Small Model).
-    if (described.localEndpoint
-      && described.providerID === preferredProviderID
-      && described.modelID === preferredModelID) return;
     const system = buildAssistSystemPrompt(targets);
     const prompt = buildAssistPrompt(turns, targets, described.inputCharBudget - system.length - 512);
     if (!prompt) return;
     let generated;
     try {
       generated = await generateSmallModelText({
-        prompt: prompt.text, system, directory,
+        prompt: prompt.text, system, workspaceId: scope.workspaceId,
         preferredProviderID, preferredModelID,
         onOverflow: 'error', timeoutMs: GENERATION_TIMEOUT_MS, signal,
       });
@@ -206,7 +156,6 @@ export const createSessionAssistRuntime = ({
       }
       return;
     }
-    checkCurrent();
     const structured = extractJsonObject(generated?.text);
     let recap = targets.recap && typeof structured?.recap === 'string' ? structured.recap.trim().slice(0, RECAP_CHAR_LIMIT) : '';
     let suggestion = targets.suggestion && typeof structured?.suggestion === 'string' ? structured.suggestion.trim().slice(0, SUGGESTION_CHAR_LIMIT) : '';
@@ -222,15 +171,11 @@ export const createSessionAssistRuntime = ({
     // v2 lists newest first. The answer is followed by its `idle` marker and
     // possibly a model or agent switch, so read a short tail and compare the
     // newest content record rather than the newest record.
-    const latestPage = await client.message.list({ sessionID: sessionId, limit: TAIL_RECHECK_LIMIT, order: 'desc' }, requestOptions());
-    checkCurrent();
-    if (newestContentId(latestPage?.data) !== last.id) return;
-    // Never fall back to the pre-generation metadata snapshot after a failed
-    // fresh read: doing so overwrites dismissals and unrelated metadata.
-    const freshSession = await client.session.get({ sessionID: sessionId }, requestOptions());
-    checkCurrent();
-    if (freshSession?.id !== sessionId || freshSession.revert?.messageID || freshSession.location?.directory !== session.location?.directory) return;
-    if (await isSessionArchived(sessionId)) return;
+    const latestPage = await sessionService.history(sessionId, new URLSearchParams({ limit: String(TAIL_RECHECK_LIMIT) }).toString());
+    signal.throwIfAborted();
+    if (newestContentId(latestPage?.messages) !== last.id) return;
+    const freshSession = await sessionService.open(sessionId);
+    if (freshSession?.session?.parentSessionId || freshSession?.session?.revertMessageId) return;
     const enabled = getTargets();
     if (!enabled.recap || !allowed.recap) recap = '';
     if (!enabled.suggestion || !allowed.suggestion) suggestion = '';
@@ -302,7 +247,7 @@ export const createSessionAssistRuntime = ({
   };
 
   let parkedNoticeLogged = false;
-  const processPayload = (payload, directoryHint = '') => {
+  const processCanonicalEvent = (event, scope) => {
     if (stopped) return;
     if (typeof persistSessionAssist !== 'function') {
       if (!parkedNoticeLogged) {
@@ -311,24 +256,20 @@ export const createSessionAssistRuntime = ({
       }
       return;
     }
-    const status = extractSessionStatus(payload);
-    if (status) {
-      if (status.type === 'idle') {
-        if (lineage?.isChild(status.sessionId) !== true) onTurnEnd(status.sessionId, status.directory || directoryHint);
-      }
-      else {
-        invalidate(status.sessionId);
-        retireStored(status.sessionId, status.directory || directoryHint);
-      }
+    const sessionId = typeof event?.sessionId === 'string' ? event.sessionId : '';
+    if (!sessionId || (scope?.sessionId && scope.sessionId !== sessionId)) return;
+    if (event.type === 'session.idle') {
+      if (lineage?.isChild(sessionId) !== true) onTurnEnd(sessionId, scope?.cwd || '');
       return;
     }
-    const userMessage = extractUserMessage(payload);
-    if (userMessage) {
-      // Ignore old message.updated events re-emitted after completion.
-      const since = timers.get(userMessage.sessionId)?.armedAt
-        ?? gates.get(userMessage.sessionId)?.armedAt
-        ?? inflight.get(userMessage.sessionId)?.armedAt;
-      if (since !== undefined && userMessage.createdAt >= since) invalidate(userMessage.sessionId);
+    if (event.type === 'session.busy' || event.type === 'session.error' || event.type === 'session.started') {
+      invalidate(sessionId);
+      retireStored(sessionId, scope?.cwd || '');
+      return;
+    }
+    if (event.type === 'message.created' && event.role === 'user') {
+      const since = timers.get(sessionId)?.armedAt ?? gates.get(sessionId)?.armedAt ?? inflight.get(sessionId)?.armedAt;
+      if (since !== undefined && Number(event.createdAt) >= since) invalidate(sessionId);
     }
   };
 
@@ -339,5 +280,5 @@ export const createSessionAssistRuntime = ({
     ready.clear();
     for (const { controller } of inflight.values()) controller.abort();
   };
-  return { processPayload, stop };
+  return { processCanonicalEvent, stop };
 };

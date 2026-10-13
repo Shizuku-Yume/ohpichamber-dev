@@ -18,7 +18,6 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { assertPromptResponse } from '../opencode/prompt-response.js';
 import { GOAL_OBJECTIVE_CHAR_LIMIT, readObjective } from './objectives.js';
 import {
   buildJevAuditRequest,
@@ -28,8 +27,6 @@ import {
   readSmallModelAnswers,
 } from './audit.js';
 import { readMergedSettingsSync } from '../host/settings-files.js';
-import { createSessionActivityProbe } from '../opencode/session-activity.js';
-import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
 
 const OPENCHAMBER_SETTINGS_FILE = path.join(
   process.env.OPENCHAMBER_DATA_DIR
@@ -59,7 +56,6 @@ const KICKOFF_QUIET_MS = 3_000;
 // already bails if the session turns out to be busy. The tiny delay only
 // coalesces duplicate session.updated events.
 const RESUME_KICKOFF_MS = 250;
-const FETCH_TIMEOUT_MS = 10_000;
 const MESSAGE_FETCH_LIMIT = 40;
 const REASON_CHAR_LIMIT = 200;
 // Hard safety cap on auto-continuations per goal id. The audit and markers are
@@ -119,48 +115,6 @@ const buildContinuationPrompt = (goal, maxAutoTurns) => {
   ].join('\n');
 };
 
-const extractSessionStatus = (payload) => {
-  if (!payload || payload.type !== 'session.status') return null;
-  const properties = payload.properties && typeof payload.properties === 'object' ? payload.properties : {};
-  const status = properties.status && typeof properties.status === 'object' ? properties.status : {};
-  const info = properties.info && typeof properties.info === 'object' ? properties.info : {};
-  const sessionId = typeof properties.sessionID === 'string' ? properties.sessionID.trim() : '';
-  const type = typeof status.type === 'string'
-    ? status.type.trim()
-    : (typeof info.type === 'string' ? info.type.trim() : '');
-  if (!sessionId || !type) return null;
-  const directory = typeof properties.directory === 'string' && properties.directory
-    ? properties.directory
-    : (typeof info.directory === 'string' ? info.directory : '');
-  return { sessionId, type, directory };
-};
-
-/**
- * A user abort no longer lands as an assistant message carrying
- * `MessageAbortedError`: v2 reports `session.execution.interrupted`, which the
- * translator turns into `session.idle` with `aborted: true`.
- */
-const extractAbortedAssistant = (payload) => {
-  if (!payload || payload.type !== 'session.idle') return null;
-  const properties = payload.properties;
-  if (!properties || typeof properties !== 'object' || properties.aborted !== true) return null;
-  if (typeof properties.sessionID !== 'string' || !properties.sessionID) return null;
-  return { sessionId: properties.sessionID };
-};
-
-const extractSessionUpdate = (payload) => {
-  if (!payload || payload.type !== 'session.updated') return null;
-  const info = payload.properties?.info;
-  if (!info || typeof info !== 'object' || typeof info.id !== 'string' || !info.id) return null;
-  // No goal here any more: the record OpenCode publishes carries only what
-  // OpenCode owns, and the goal lives in OpenChamber's own metadata store. A
-  // new or resumed goal reaches this runtime through `notifyGoalChanged`.
-  return {
-    sessionId: info.id,
-    directory: typeof info.directory === 'string' ? info.directory : '',
-    parentID: typeof info.parentID === 'string' ? info.parentID : '',
-  };
-};
 
 const parseGoalMetadata = (session) => {
   const metadata = session?.metadata;
@@ -341,8 +295,8 @@ const hasRepeatedLengthTail = (messages, latestAssistant, goalCreatedAt) => {
 };
 
 export const createSessionGoalRuntime = ({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService,
+  resolveSessionScope,
   getSmallModelService,
   /** Resolves to the Jev endpoint the classification provider answers on, or null. */
   classifierEndpoint = async () => null,
@@ -356,6 +310,11 @@ export const createSessionGoalRuntime = ({
   persistSessionGoal = null,
   readSessionMetadata = null,
 }) => {
+  if (!sessionService || typeof sessionService.open !== 'function' || typeof sessionService.history !== 'function' || typeof sessionService.list !== 'function' || typeof sessionService.send !== 'function') {
+    throw new Error('session-goal requires the canonical session service');
+  }
+  if (typeof resolveSessionScope !== 'function') throw new Error('session-goal requires a session scope resolver');
+  if (typeof getSmallModelService !== 'function') throw new Error('session-goal requires the small-model service');
   const timers = new Map();
   const inflight = new Set();
   let stopped = false;
@@ -368,58 +327,49 @@ export const createSessionGoalRuntime = ({
     }
   };
 
-  const openCodeFetch = async (fetchPath, { directory, method = 'GET', body, query } = {}) => {
-    const base = buildOpenCodeUrl(fetchPath, '');
-    const params = new URLSearchParams(query || {});
-    if (directory) params.set('directory', directory);
-    const search = params.toString();
-    const url = search ? `${base}?${search}` : base;
-    const response = await fetch(url, {
-      method,
-      headers: {
-        Accept: 'application/json',
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-        ...getOpenCodeAuthHeaders(),
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (method === 'POST' && fetchPath.endsWith('/prompt')) {
-      await assertPromptResponse(response, 'session.prompt');
-    } else if (!response.ok) {
-      throw new Error(`OpenCode ${method} ${fetchPath} failed with ${response.status}`);
-    }
-    return unwrapOpenCodeResponse(await response.json().catch(() => null));
+  const fetchRecentMessages = async (sessionId) => {
+    const page = await sessionService.history(sessionId, new URLSearchParams({ limit: String(MESSAGE_FETCH_LIMIT) }).toString()).catch(() => null);
+    if (!page || !Array.isArray(page.messages)) return null;
+    const turns = new Map((Array.isArray(page.turns) ? page.turns : []).map((turn) => [turn.turnId, turn]));
+    return page.messages.map((message) => {
+      const turn = turns.get(message.turnId);
+      const usage = message.usage;
+      const info = {
+        id: message.messageId, sessionID: message.sessionId, role: message.role,
+        time: { created: message.createdAt, completed: turn?.finishedAt ?? message.createdAt },
+        providerID: message.providerId, modelID: message.modelId,
+        summary: false,
+        tokens: usage ? { input: usage.input, output: usage.output, cache: { read: usage.cacheRead } } : undefined,
+        error: turn?.status === 'cancelled' ? { name: 'MessageAbortedError' } : turn?.status === 'failed' ? { name: turn.error || 'assistant turn failed' } : undefined,
+        finish: turn?.status === 'failed' || turn?.status === 'cancelled' ? 'error' : 'stop',
+      };
+      return { info, parts: Array.isArray(message.parts) ? message.parts.filter((part) => part.type === 'text').map((part) => ({ type: 'text', text: part.content })) : [] };
+    }).reverse();
   };
 
-  const fetchRecentMessages = async (sessionId, directory) => {
-    // v2 pages messages as `{ data, cursor }`, newest first.
-    const page = await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}/message`, {
-      directory,
-      query: { limit: String(MESSAGE_FETCH_LIMIT) },
-    }).catch(() => null);
-    const messages = page && typeof page === 'object' ? page.data : null;
-    if (!Array.isArray(messages)) return null;
-    return messages.map(toLoopMessage).filter(Boolean).reverse();
+  const readActivity = async (sessionId) => {
+    const scope = await resolveSessionScope(sessionId);
+    if (!scope) return null;
+    const snapshot = await sessionService.open(sessionId).catch(() => null);
+    if (!snapshot) return null;
+    const listed = await sessionService.list(scope.workspaceId).catch(() => null);
+    if (!listed || !Array.isArray(listed.items) || (Array.isArray(listed.errors) && listed.errors.length > 0)) return null;
+    const items = listed.items;
+    const statusOf = (session) => session.runtimeStatus;
+    const statuses = Object.fromEntries(items.map((entry) => [entry.sessionId, statusOf(entry)]));
+    return { scope, statuses, childrenWorking: items.some((entry) => entry.parentSessionId === sessionId && isWorkingStatus(statusOf(entry))), current: snapshot };
   };
 
-  const activityProbe = createSessionActivityProbe({
-    buildOpenCodeUrl,
-    getOpenCodeAuthHeaders,
-    timeoutMs: FETCH_TIMEOUT_MS,
-  });
+  const isWorkingStatus = (status) => status === 'running' || status === 'awaiting_approval' || status === 'awaiting_input';
 
-  // v2 reports only that a session is running.
-  const isWorkingStatus = (status) => Boolean(status);
 
   // Merge-write the goal payload from a FRESH session read so concurrent
   // metadata writes (assist payloads, dismissals, UI goal edits) survive.
   // Returns the written goal, or null when the stored goal no longer matches
   // the expected id (user replaced/cleared it while we worked).
   /**
-   * The goal lives in OpenChamber's own metadata store: OpenCode 2.x accepts
-   * session metadata only at create time. Re-read before every write so a
-   * concurrent edit (the user pausing from the UI) is not overwritten.
+   * The goal lives in OpenChamber's own metadata store. Re-read before every
+   * write so a concurrent edit (the user pausing from the UI) is not overwritten.
    */
   const readGoal = async (sessionId) => parseGoalMetadata({ metadata: await readSessionMetadata(sessionId) });
 
@@ -472,7 +422,7 @@ export const createSessionGoalRuntime = ({
     }
   };
 
-  const checkWithSmallModel = async ({ objective, answer, directory, lastAssistantInfo }) => {
+  const checkWithSmallModel = async ({ objective, answer, workspaceId, lastAssistantInfo }) => {
     let service;
     try {
       service = await getSmallModelService();
@@ -481,12 +431,8 @@ export const createSessionGoalRuntime = ({
     }
     try {
       const generated = await service.generateSmallModelText({
-        // Background feature: conversation content stays on the session's own
-        // provider unless the user explicitly picked a small model (settings
-        // override / opencode config); naming the provider is what keeps it.
+        workspaceId,
         prompt: buildSmallModelAuditPrompt({ objective, answer }),
-        directory,
-        sessionID: typeof lastAssistantInfo?.sessionID === 'string' ? lastAssistantInfo.sessionID : undefined,
         preferredProviderID: typeof lastAssistantInfo?.providerID === 'string' ? lastAssistantInfo.providerID : undefined,
         preferredModelID: typeof lastAssistantInfo?.modelID === 'string' ? lastAssistantInfo.modelID : undefined,
       });
@@ -516,11 +462,11 @@ export const createSessionGoalRuntime = ({
    * answers otherwise, and also when Jev fails this time. Null means no check
    * could run.
    */
-  const runAudit = async ({ goal, assistantText, directory, lastAssistantInfo }) => {
+  const runAudit = async ({ goal, assistantText, workspaceId, lastAssistantInfo }) => {
     const input = { objective: goal.objective, answer: assistantText };
     const sessionId = lastAssistantInfo?.sessionID ?? null;
     const checked = (getChecker() === 'classifier' ? await checkWithJev({ ...input, sessionId }) : null)
-      ?? await checkWithSmallModel({ ...input, directory, lastAssistantInfo });
+      ?? await checkWithSmallModel({ ...input, workspaceId, lastAssistantInfo });
     if (!checked) return null;
     const verdict = decideProgress(checked.scores);
     console.log('[session-goal:diagnostic] progress check', {
@@ -535,11 +481,10 @@ export const createSessionGoalRuntime = ({
   // v2 keeps the model and agent on the session itself, so a plain prompt
   // runs on whatever the session was already using. v1 had to repeat the
   // selection on every request; there is nothing to repeat here.
-  const sendContinuation = async ({ sessionId, directory, goal, maxAutoTurns }) => {
-    await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}/prompt`, {
-      directory,
-      method: 'POST',
-      body: { text: buildContinuationPrompt(goal, maxAutoTurns) },
+  const sendContinuation = async ({ sessionId, goal, maxAutoTurns, lastAssistantInfo }) => {
+    await sessionService.send(sessionId, {
+      input: { text: '', attachments: [], context: [{ kind: 'synthetic', text: buildContinuationPrompt(goal, maxAutoTurns) }] },
+      options: { providerId: lastAssistantInfo?.providerID ?? null, modelId: lastAssistantInfo?.modelID ?? null, agentId: null, variant: null, reasoningEffort: null },
     });
   };
 
@@ -547,14 +492,11 @@ export const createSessionGoalRuntime = ({
     if (!isEnabled()) return;
     const maxAutoTurns = getMaxAutoTurns();
 
-    const session = await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}`, { directory })
-      .catch((error) => {
-        console.warn(`[session-goal] session fetch failed: ${error?.message || error}`);
-        return null;
-      });
+    const activity = await readActivity(sessionId);
+    const session = activity?.current?.session ?? activity?.current;
     if (!session || typeof session !== 'object') return;
-    // Sub-agent/task sessions never carry user goals — skip them.
-    if (typeof session.parentID === 'string' && session.parentID) return;
+    if (session.parentSessionId) return;
+
 
     const goal = await readGoal(sessionId);
     if (!goal || goal.status !== 'active') return;
@@ -577,31 +519,18 @@ export const createSessionGoalRuntime = ({
       }
     }
 
-    // Parent idle does not imply the whole task is quiescent: a background
-    // subagent runs in a child session while its parent stays idle. Re-read
-    // authoritative live status after the quiet window. If the parent resumed,
-    // its next idle event will arm a fresh tick. If a child is still working,
-    // recheck after another quiet window: OpenCode normally runs the parent
-    // again when the child finishes, but a missed parent idle event must not
-    // strand the goal.
-    const statuses = await activityProbe.fetchActiveSessionStatuses();
+    const statuses = activity.statuses;
     if (!statuses) {
       armTimer(sessionId, directory, idleQuietMs);
       return;
     }
     if (isWorkingStatus(statuses[sessionId])) return;
-
-    const childrenWorking = await activityProbe.hasWorkingChildren(sessionId, statuses);
-    if (childrenWorking === null) {
-      armTimer(sessionId, directory, idleQuietMs);
-      return;
-    }
-    if (childrenWorking) {
+    if (activity.childrenWorking) {
       armTimer(sessionId, directory, idleQuietMs);
       return;
     }
 
-    const messages = await fetchRecentMessages(sessionId, directory);
+    const messages = await fetchRecentMessages(sessionId);
     if (!messages) return;
 
     let lastAssistant = null;
@@ -707,11 +636,8 @@ export const createSessionGoalRuntime = ({
     // --- Terminal conditions, cheapest first ---
 
     // A user abort means "stop working" — pause the goal instead of blocking
-    // it (this is the tick-side safety net; the event path in processPayload
-    // usually pauses immediately). The exception is a goal the user just
-    // resumed over an aborted tail: that is an explicit "keep going", so it
-    // falls through to the continuation below (skipping the audit — an
-    // aborted reply is not evidence of anything).
+    // it. The canonical interruption event usually pauses immediately; this
+    // tick-side safety net handles an interrupted tail that races the idle tick.
     const error = lastAssistantInfo.error;
     const errorName = getErrorName(error);
     const hasError = error !== null && error !== undefined;
@@ -774,10 +700,9 @@ export const createSessionGoalRuntime = ({
     // by the output token limit (length stop), the agent by definition ran into
     // the context/output limit mid-work — that IS "in progress, not finished".
     // No check; continue unconditionally.
-    let audit = null;
     let auditFailStreak = goal.auditFailStreak;
     if (!(lastAssistantInfo.summary === true || abortedTail || lengthTail)) {
-      audit = await runAudit({ goal: { ...goal, objective: effectiveObjective }, assistantText, directory, lastAssistantInfo: executionInfo ?? lastAssistantInfo });
+      audit = await runAudit({ goal: { ...goal, objective: effectiveObjective }, assistantText, workspaceId: activity.scope.workspaceId, lastAssistantInfo: executionInfo ?? lastAssistantInfo });
 
       // No check could run: tolerate one consecutive failure (transient
       // hiccup), then stop the goal instead of continuing blind. Blocked is
@@ -834,7 +759,7 @@ export const createSessionGoalRuntime = ({
 
     // The tail may have moved while auditing (user sent a message) — a
     // continuation now would collide with the user's own turn.
-    const latest = await fetchRecentMessages(sessionId, directory);
+    const latest = await fetchRecentMessages(sessionId);
     const latestLastInfo = latest && latest.length > 0 ? latest[latest.length - 1]?.info : null;
     if (!latestLastInfo || latestLastInfo.id !== lastMessageInfo?.id) {
       console.log('[session-goal] tail moved on, dropping continuation');
@@ -842,7 +767,7 @@ export const createSessionGoalRuntime = ({
     }
 
     console.log(`[session-goal] continuing ${sessionId} (turn ${written.turnsUsed}/${maxAutoTurns}, tokens ${written.tokensUsed}${written.tokenBudget ? `/${written.tokenBudget}` : ''})`);
-    await sendContinuation({ sessionId, directory, goal: { ...written, objective: effectiveObjective }, maxAutoTurns });
+    await sendContinuation({ sessionId, goal: { ...written, objective: effectiveObjective }, maxAutoTurns, lastAssistantInfo });
   };
 
   const armTimer = (sessionId, directory, quietMs) => {
@@ -881,8 +806,7 @@ export const createSessionGoalRuntime = ({
 
   /**
    * A goal is created, edited or resumed through OpenChamber's own metadata
-   * route, not through an OpenCode event, so the write tells this runtime
-   * directly. That is also the authoritative moment: the store already holds it.
+   * route. The store already holds the authoritative write when this is called.
    */
   const notifyGoalChanged = async (sessionId, directory, metadata) => {
     if (stopped || !isWired()) return;
@@ -894,72 +818,36 @@ export const createSessionGoalRuntime = ({
     if (goal.turnsUsed !== 0 && goal.statusReason !== 'resumed') return;
     if (timers.has(sessionId) || inflight.has(sessionId)) return;
 
-    // A patch from the UI names no directory, and the loop needs one to scope
-    // its own OpenCode calls. The session record is authoritative for it.
     let resolved = directory;
     if (!resolved) {
-      const session = await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}`).catch(() => null);
-      resolved = typeof session?.location?.directory === 'string' ? session.location.directory : '';
+      const scope = await resolveSessionScope(sessionId);
+      resolved = scope?.cwd || '';
     }
     if (stopped || timers.has(sessionId) || inflight.has(sessionId)) return;
     armTimer(sessionId, resolved, goal.statusReason === 'resumed' ? RESUME_KICKOFF_MS : kickoffQuietMs);
   };
 
-  let parkedNoticeLogged = false;
-  const processPayload = (payload, directoryHint = '') => {
-    if (stopped) return;
-    if (!isWired()) {
-      if (!parkedNoticeLogged) {
-        parkedNoticeLogged = true;
-        console.log('[session-goal] parked: no session metadata store is wired, so goal progress cannot be saved');
+  const processCanonicalEvent = (event, scope) => {
+    if (stopped || !event || typeof event.sessionId !== 'string') return;
+    if (scope?.sessionId && scope.sessionId !== event.sessionId) return;
+    const sessionId = event.sessionId;
+    const directory = scope?.cwd || '';
+    if (event.type === 'session.execution.interrupted') {
+      clearTimer(sessionId);
+      if (!inflight.has(sessionId)) {
+        inflight.add(sessionId);
+        pauseAfterAbort(sessionId, directory)
+          .catch((error) => console.warn('[session-goal] pause after abort failed:', error?.message || error))
+          .finally(() => inflight.delete(sessionId));
       }
       return;
     }
-
-    const aborted = extractAbortedAssistant(payload);
-    if (aborted) {
-      clearTimer(aborted.sessionId);
-      if (!inflight.has(aborted.sessionId)) {
-        inflight.add(aborted.sessionId);
-        pauseAfterAbort(aborted.sessionId, directoryHint)
-          .catch((error) => {
-            console.warn('[session-goal] pause after abort failed:', error?.message || error);
-          })
-          .finally(() => {
-            inflight.delete(aborted.sessionId);
-          });
-      }
+    if (event.type === 'session.idle' || (event.type === 'session.status' && event.status === 'idle')) {
+      armTimer(sessionId, directory, idleQuietMs);
       return;
     }
-
-    const status = extractSessionStatus(payload);
-    if (status) {
-      if (status.type === 'idle') {
-        armTimer(status.sessionId, status.directory || directoryHint, idleQuietMs);
-      } else {
-        clearTimer(status.sessionId);
-      }
-      return;
-    }
-
-    // Kickoff path: a goal set (or resumed — the UI stamps statusReason
-    // 'resumed') while the session is already idle emits no status
-    // transition, only session.updated. Arm a short timer; the tick's
-    // quiescence check keeps this safe if the session is actually busy.
-    const update = extractSessionUpdate(payload);
-    if (update && !update.parentID && !timers.has(update.sessionId) && !inflight.has(update.sessionId)) {
-      void readGoal(update.sessionId)
-        .then((goal) => {
-          if (stopped || !goal || goal.status !== 'active') return;
-          if (goal.turnsUsed !== 0 && goal.statusReason !== 'resumed') return;
-          if (timers.has(update.sessionId) || inflight.has(update.sessionId)) return;
-          armTimer(
-            update.sessionId,
-            update.directory || directoryHint,
-            goal.statusReason === 'resumed' ? RESUME_KICKOFF_MS : kickoffQuietMs,
-          );
-        })
-        .catch(() => undefined);
+    if (event.type === 'session.running' || event.type === 'session.started' || event.type === 'session.busy') {
+      clearTimer(sessionId);
     }
   };
 
@@ -971,5 +859,5 @@ export const createSessionGoalRuntime = ({
     timers.clear();
   };
 
-  return { processPayload, notifyGoalChanged, stop };
+  return { processCanonicalEvent, notifyGoalChanged, stop };
 };

@@ -1,8 +1,5 @@
 import { isRecord } from '../shared/guards.js';
-import { assertPromptResponse } from '../opencode/prompt-response.js';
-import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
-const FETCH_TIMEOUT_MS = 15_000;
-const MESSAGE_FETCH_LIMIT = 20;
+const MESSAGE_FETCH_LIMIT = 100;
 
 const readContextState = (session) => {
   const metadata = isRecord(session?.metadata) ? session.metadata : {};
@@ -40,148 +37,77 @@ const buildContextPrompt = (entries) => {
  * got; without both seams the runtime stays inert.
  */
 export const createContextObligatoryRuntime = ({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService,
+  resolveSessionScope,
   sessionKnowledgeRuntime = null,
   persistContextCursor = null,
   readSessionMetadata = null,
 }) => {
+  if (!sessionService || typeof sessionService.open !== 'function' || typeof sessionService.history !== 'function' || typeof sessionService.send !== 'function') {
+    throw new Error('context-obligatory requires the canonical session service');
+  }
+  if (typeof resolveSessionScope !== 'function') throw new Error('context-obligatory requires a session scope resolver');
   const inflight = new Set();
   let stopped = false;
 
-  const openCodeFetch = async (fetchPath, { directory, method = 'GET', body, query } = {}) => {
-    const params = new URLSearchParams(query || {});
-    if (directory) params.set('directory', directory);
-    const search = params.toString();
-    const response = await fetch(`${buildOpenCodeUrl(fetchPath, '')}${search ? `?${search}` : ''}`, {
-      method,
-      headers: {
-        Accept: 'application/json',
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-        ...getOpenCodeAuthHeaders(),
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (method === 'POST' && fetchPath.endsWith('/synthetic')) {
-      await assertPromptResponse(response, 'session.synthetic');
-    } else if (!response.ok) {
-      throw new Error(`OpenCode ${method} ${fetchPath} failed with ${response.status}`);
+  const readHistory = async (sessionId, signal) => {
+    const messages = [];
+    let cursor;
+    for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+      signal?.throwIfAborted();
+      const query = new URLSearchParams({ limit: String(MESSAGE_FETCH_LIMIT), ...(cursor ? { cursor } : {}) });
+      const page = await sessionService.history(sessionId, query.toString());
+      messages.push(...(Array.isArray(page?.messages) ? page.messages : []));
+      if (!page?.nextCursor) break;
+      cursor = page.nextCursor;
     }
-    return unwrapOpenCodeResponse(await response.json().catch(() => null));
+    return messages;
   };
 
-  const tick = async (sessionId, directory) => {
-    const session = await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}`, { directory });
-    if (session?.parentID) return;
-    // Pins and the cursor are OpenChamber's, not OpenCode's.
+  const textOf = (message) => (Array.isArray(message?.parts) ? message.parts : [])
+    .filter((part) => part?.type === 'text' && typeof part.content === 'string')
+    .map((part) => part.content.trim()).filter(Boolean).join('\n\n');
+
+  const tick = async (sessionId, compactionId) => {
+    const scope = await resolveSessionScope(sessionId);
+    if (!scope) return;
+    const snapshot = await sessionService.open(sessionId);
+    if (snapshot?.session?.parentSessionId) return;
     const stored = { metadata: await readSessionMetadata(sessionId) };
     const state = readContextState(stored);
-
-    /**
-     * Project knowledge rides along with the pinned messages. Compaction takes
-     * both away, and both are restored for the same reason, so they travel as
-     * one message: two synthetic turns back to back would read as the agent
-     * being interrupted twice.
-     */
     const knowledge = sessionKnowledgeRuntime
-      ? await sessionKnowledgeRuntime
-        .resolvePending(
-          directory,
-          // Compaction removed the previously delivered block, so its stored
-          // signature is no longer evidence that the session still carries it.
-          '',
-          sessionKnowledgeRuntime.readPins(stored),
-        )
-        .catch(() => ({ text: '', signature: '' }))
+      ? await sessionKnowledgeRuntime.resolvePending(scope.cwd, '', sessionKnowledgeRuntime.readPins(stored)).catch(() => ({ text: '', signature: '' }))
       : { text: '', signature: '' };
-
     if (state.messages.length === 0 && !knowledge.text) return;
-
-    const recent = await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}/message`, {
-      directory,
-      query: { limit: String(MESSAGE_FETCH_LIMIT) },
-    });
-    // v2 pages messages as `{ data, cursor }`, newest first, and a compaction
-    // is its own message role rather than an assistant message flagged
-    // `summary`.
-    const recentMessages = Array.isArray(recent?.data) ? recent.data : [];
-    if (recentMessages.length === 0) return;
-    const summary = recentMessages.find((message) => message?.type === 'compaction' && message?.status === 'completed');
-    // A v2 compaction message has only `time.created`; `status` says it finished.
-    if (!summary?.id) return;
-    if (state.openchamber.context_obligatory_last_compaction_message_id === summary.id) return;
-
-    const fetched = await Promise.allSettled(state.messages.map(async (pinned) => {
-      const message = await openCodeFetch(
-        `/api/session/${encodeURIComponent(sessionId)}/message/${encodeURIComponent(pinned.id)}`,
-        { directory },
-      );
-      // A user message carries `text`; an assistant one carries `content[]`.
-      const parts = Array.isArray(message?.content)
-        ? message.content
-        : (typeof message?.text === 'string' ? [{ type: 'text', text: message.text }] : []);
-      const text = parts
-        .filter((part) => part?.type === 'text' && typeof part.text === 'string')
-        .map((part) => part.text.trim())
-        .filter(Boolean)
-        .join('\n\n');
-      return { pinned, text };
-    }));
-    const entries = fetched
-      .filter((result) => result.status === 'fulfilled' && result.value.text)
-      .map((result) => result.value)
-      .sort((left, right) => left.pinned.createdAt - right.pinned.createdAt);
+    if (state.openchamber.context_obligatory_last_compaction_id === compactionId) return;
+    const messages = await readHistory(sessionId);
+    const entries = state.messages.map((pinned) => {
+      const message = messages.find((candidate) => candidate.messageId === pinned.id);
+      return message ? { pinned, text: textOf(message) } : null;
+    }).filter((entry) => entry?.text).sort((left, right) => left.pinned.createdAt - right.pinned.createdAt);
     if (entries.length === 0 && !knowledge.text) return;
-
-    // v2 has no inline synthetic parts, and the model/agent selection lives on
-    // the session, so the restored context is simply its own synthetic message.
-    await openCodeFetch(`/api/session/${encodeURIComponent(sessionId)}/synthetic`, {
-      directory,
-      method: 'POST',
-      body: {
-        text: [knowledge.text, entries.length > 0 ? buildContextPrompt(entries) : '']
-          .filter(Boolean)
-          .join('\n\n---\n\n'),
-        resume: false,
-      },
+    const text = [knowledge.text, entries.length > 0 ? buildContextPrompt(entries) : ''].filter(Boolean).join('\n\n---\n\n');
+    const latestAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
+    if (!latestAssistant?.providerId || !latestAssistant.modelId) return;
+    await sessionService.send(sessionId, {
+      input: { text: '', attachments: [], context: [{ kind: 'synthetic', text }] },
+      options: { providerId: latestAssistant.providerId, modelId: latestAssistant.modelId, agentId: null, variant: null, reasoningEffort: null },
     });
-
-    // A merge patch: the store folds this into whatever else the session's
-    // `openchamber` namespace holds, so a concurrent goal or assist write is
-    // not clobbered.
-    const patch = { context_obligatory_last_compaction_message_id: summary.id };
-    if (knowledge.signature) {
-      // Recorded together with the cursor: the session now carries this
-      // knowledge again, so the next send must not repeat it.
-      patch[sessionKnowledgeRuntime.metadataKey] = knowledge.signature;
-    }
-    await persistContextCursor(sessionId, directory, { openchamber: patch });
+    const patch = { context_obligatory_last_compaction_id: compactionId };
+    if (knowledge.signature) patch[sessionKnowledgeRuntime.metadataKey] = knowledge.signature;
+    await persistContextCursor(sessionId, scope.cwd, { openchamber: patch });
   };
 
-  let parkedNoticeLogged = false;
-  const processPayload = (payload, directoryHint = '') => {
-    if (stopped) return;
-    if (typeof persistContextCursor !== 'function' || typeof readSessionMetadata !== 'function') {
-      if (!parkedNoticeLogged) {
-        parkedNoticeLogged = true;
-        console.log('[context-obligatory] parked: no session metadata store is wired, so the compaction cursor cannot be saved');
-      }
-      return;
-    }
-    if (payload?.type !== 'session.compacted') return;
-    const sessionId = payload?.properties?.sessionID;
-    if (typeof sessionId !== 'string' || inflight.has(sessionId)) return;
-    const directory = payload?.properties?.directory || directoryHint;
-    inflight.add(sessionId);
-    return tick(sessionId, directory)
+  const processCanonicalEvent = (event, scope) => {
+    if (stopped || typeof persistContextCursor !== 'function' || typeof readSessionMetadata !== 'function') return;
+    if (event?.type !== 'session.compacted' || typeof event.sessionId !== 'string' || inflight.has(event.sessionId)) return;
+    if (scope?.sessionId && scope.sessionId !== event.sessionId) return;
+    inflight.add(event.sessionId);
+    return tick(event.sessionId, event.compactionId)
       .catch((error) => console.warn('[context-obligatory] injection failed:', error?.message || error))
-      .finally(() => inflight.delete(sessionId));
+      .finally(() => inflight.delete(event.sessionId));
   };
 
-  const stop = () => {
-    stopped = true;
-  };
-
-  return { processPayload, stop };
+  const stop = () => { stopped = true; };
+  return { processCanonicalEvent, stop };
 };

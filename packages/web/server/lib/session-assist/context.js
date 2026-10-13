@@ -77,51 +77,24 @@ export function newestContentId(records) {
  * Tool payloads never enter this view.
  */
 function readMessage(message) {
-  const role = message.type;
+  const role = message.role;
   const blocks = [];
   const authored = [];
-
-  if (role === 'user') {
+  const textParts = Array.isArray(message.parts) ? message.parts.filter((part) => part?.type === 'text' && typeof part.content === 'string') : [];
+  if (role === 'user' || role === 'synthetic') {
     const attached = attachedText(message);
-    if (attached) {
-      blocks.push(attached.text);
-      authored.push(attached.authored);
-    } else if (typeof message.text === 'string') {
-      blocks.push(message.text);
-      // Legacy terminal selections are source material, not a language sample.
-      authored.push(message.text.replace(/\n*<terminal_context>\n[\s\S]*?\n<\/terminal_context>\s*$/, ''));
-    }
-  } else if (role === 'assistant') {
-    for (const part of Array.isArray(message.content) ? message.content : []) {
-      if (part?.type === 'text' && typeof part.text === 'string') blocks.push(part.text);
-    }
-  } else if (role === 'synthetic') {
-    // Context the user attached to the message that follows: in v1 it was a
-    // `synthetic` text part inside the user message, in v2 it is its own turn.
-    const attached = attachedText(message);
-    if (attached) {
-      blocks.push(attached.text);
-      authored.push(attached.authored);
-    } else if (typeof message.text === 'string') {
-      blocks.push(message.text);
-    }
-  }
-
+    if (attached) { blocks.push(attached.text); authored.push(attached.authored); }
+    else if (textParts.length) { blocks.push(textParts.map((part) => part.content).join('\n\n')); authored.push(blocks[0]); }
+  } else if (role === 'assistant') blocks.push(...textParts.map((part) => part.content));
   return {
-    id: message.id,
+    id: message.messageId || message.id,
     role,
-    created: Number.isFinite(message.time?.created) ? message.time.created : null,
-    completed: Number.isFinite(message.time?.completed) ? message.time.completed : null,
-    transparent: isTransparent(message),
-    // v2 has no `parentID` on a message: a turn is the run of messages between
-    // one user message and the assistant reply that follows it, which is what
-    // `collectTurns` walks.
-    providerID: message.model?.providerID,
-    modelID: message.model?.id,
-    complete: role === 'assistant'
-      && message.finish === 'stop'
-      && Boolean(message.time?.completed)
-      && !message.error,
+    created: Number.isFinite(message.createdAt) ? message.createdAt : null,
+    completed: Number.isFinite(message.completedAt) ? message.completedAt : null,
+    transparent: false,
+    providerId: message.providerId,
+    modelId: message.modelId,
+    complete: role === 'assistant' && Boolean(message.completedAt) && !message.error,
     text: excerpt(blocks.join('\n\n').trim(), role === 'user' ? USER_CHAR_LIMIT : ANSWER_CHAR_LIMIT),
     authored: excerpt(authored.filter(Boolean).join('\n\n').trim(), USER_CHAR_LIMIT),
   };
@@ -180,22 +153,23 @@ export async function loadSettledTurns({ readPage, signal }) {
   const cursors = new Set();
   const ids = new Set();
   for (let pageNumber = 0; pageNumber < MAX_PAGES; pageNumber++) {
-    signal.throwIfAborted();
+    signal?.throwIfAborted();
     const page = await readPage({ limit: PAGE_SIZE, cursor });
-    signal.throwIfAborted();
-    if (!Array.isArray(page?.data)) throw new Error('Session message page is unavailable');
+    signal?.throwIfAborted();
+    if (!Array.isArray(page?.messages)) throw new Error('Session history page is unavailable');
     const older = [];
-    for (const record of page.data) {
-      if (!record?.id || ids.has(record.id)) continue;
-      ids.add(record.id);
+    for (const record of page.messages) {
+      const id = record?.messageId || record?.id;
+      if (!id || ids.has(id)) continue;
+      ids.add(id);
       older.push(readMessage(record));
     }
     older.reverse();
     messages = older.concat(messages);
     const settled = settledTurns(messages);
-    const next = typeof page.cursor?.next === 'string' ? page.cursor.next : null;
+    const next = typeof page.nextCursor === 'string' ? page.nextCursor : null;
     if (settled.length === TURN_LIMIT || !next) return settled;
-    if (cursors.has(next)) throw new Error('Session message pagination made no progress');
+    if (cursors.has(next)) throw new Error('Session history pagination made no progress');
     cursors.add(next);
     cursor = next;
   }
@@ -210,19 +184,18 @@ export async function loadAssistContext({ readPage, signal }) {
   const ids = new Set();
   for (let pageNumber = 0; pageNumber < MAX_PAGES; pageNumber++) {
     signal.throwIfAborted();
-    // v2 pages messages newest first and returns `{ data, cursor }`.
     const page = await readPage({ limit: PAGE_SIZE, cursor });
     signal.throwIfAborted();
-    if (!Array.isArray(page?.data)) throw new Error('Session message page is unavailable');
+    if (!Array.isArray(page?.messages)) throw new Error('Session message page is unavailable');
     const older = [];
-    for (const record of page.data) {
-      if (!record?.id || ids.has(record.id)) continue;
-      ids.add(record.id);
+    for (const record of page.messages) {
+      const id = record?.messageId || record?.id;
+      if (!id || ids.has(id)) continue;
+      ids.add(id);
       older.push(readMessage(record));
     }
-    older.reverse();
     messages = older.concat(messages);
-    const next = typeof page.cursor?.next === 'string' ? page.cursor.next : null;
+    const next = typeof page.nextCursor === 'string' ? page.nextCursor : null;
     // A successful turn ends with an `idle` marker after the answer; look past
     // it and its siblings to the newest content record.
     const last = messages.findLast((message) => !message.transparent);
