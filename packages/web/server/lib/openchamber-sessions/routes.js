@@ -5,6 +5,7 @@ import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchem
 import { EntityIdSchema } from '@openchamber/agent-contract';
 
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
+import { asNonEmptyString } from '../shared/guards.js';
 const SessionForkAckSchema = z.strictObject({ sessionId: z.string().min(1), rootSessionId: z.string().min(1), sessionFile: z.string().min(1), sourceSessionId: z.string().min(1), entryId: z.string().min(1).nullable(), mode: z.enum(['selected', 'full']) });
 const SessionReopenScopeSchema = z.strictObject({ rootSessionId: z.string().min(1), projectId: z.string().min(1), workspaceId: z.string().min(1), cwd: z.string().min(1), agentDirectory: z.string().min(1), agentDirectoryId: z.string().min(1), displayPath: z.string().min(1), env: z.record(z.string(), z.string()).optional() });
 
@@ -92,16 +93,37 @@ const createCanonicalSessionService = (dependencies) => {
   const send = async (sessionId, payload = {}) => { const scope = await scopeFor(sessionId); const requestBody = PromptRequestSchema.parse(payload); const runId = randomUUID(); const capture = await prepareDelivery(scope, requestBody, { runId, deliveryRunId: runId }); const response = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'prompt', runId, request: capture.request, attachments: capture.attachments }) }); const run = RunSchema.parse(response?.run); const receipt = { runId, deliveryRunId: runId, run }; await onPromptAccepted(scope, { ...capture, receipt }, receipt); return { run }; };
   const steer = async (sessionId, payload = {}) => { const scope = await scopeFor(sessionId); const requestBody = PromptRequestSchema.parse(payload.request ?? payload); const envelope = SteerRequestSchema.parse({ sessionId, request: requestBody }); const deliveryRunId = randomUUID(); const capture = await prepareDelivery(scope, envelope.request, { deliveryRunId }); const ack = SteerAckSchema.parse(await request(`/internal/sessions/${encodeURIComponent(sessionId)}/steer`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request: capture.request, attachments: capture.attachments }) })); const receipt = { runId: ack.runId, deliveryRunId, ack }; await onPromptAccepted(scope, { ...capture, runId: ack.runId, receipt }, receipt); return ack; };
   const followUp = async (sessionId, payload = {}) => { const scope = await scopeFor(sessionId); const requestBody = PromptRequestSchema.parse(payload.request ?? payload); const envelope = FollowUpRequestSchema.parse({ sessionId, request: requestBody }); const deliveryRunId = randomUUID(); const capture = await prepareDelivery(scope, envelope.request, { deliveryRunId }); const ack = FollowUpAckSchema.parse(await request(`/internal/sessions/${encodeURIComponent(sessionId)}/follow-up`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request: capture.request, attachments: capture.attachments }) })); const receipt = { deliveryRunId, followUpId: ack.followUpId, ack }; await onPromptAccepted(scope, { ...capture, receipt }, receipt); return ack; };
-  const fork = async (sessionId, payload = {}) => { const source = await scopeFor(sessionId); const publicMessageId = asNonEmptyString(payload.messageId); const directEntryId = asNonEmptyString(payload.entryId); const entryId = publicMessageId ? asNonEmptyString((await request(`/internal/sessions/${encodeURIComponent(sessionId)}/native-entry/${encodeURIComponent(publicMessageId)}`)).entryId) : directEntryId; const mode = payload.mode === undefined ? (entryId ? 'selected' : 'full') : payload.mode; if (mode !== 'selected' && mode !== 'full') throw new OpenChamberControlError('Fork mode must be selected or full', 400); if (mode === 'selected' && !entryId) throw new OpenChamberControlError('A native entry identity is required for a selected fork', 400); const body = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/fork`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceSessionId: sessionId, entryId: entryId ?? null, mode }) }); const ack = SessionForkAckSchema.parse(body); if (ack.sourceSessionId !== sessionId || (mode === 'selected' && ack.entryId !== entryId) || ack.mode !== mode) throw new OpenChamberControlError('Fork acknowledgement does not match the requested source', 502); const child = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(ack.sessionId)}`)); if (child.sessionId !== ack.sessionId || child.rootSessionId !== ack.rootSessionId || child.projectId !== source.projectId || child.workspaceId !== source.workspaceId) throw new OpenChamberControlError('Fork acknowledgement is outside the source scope', 502); if (!await registerSessionScope(child)) throw new OpenChamberControlError('Forked session scope registration failed', 500); const stored = await sessionMetadataStore.getState(child.sessionId); const archive = await archiveStore.getState(child.sessionId); const result = SessionCreateAckSchema.parse({ session: SessionSchema.parse({ ...child, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', ...(archive?.archivedAt == null ? {} : { archivedAt: archive.archivedAt }), archiveRevision: archive?.revision ?? '0' }) }); return result; };
+  const fork = async (sessionId, payload = {}) => {
+    const source = await scopeFor(sessionId);
+    const publicMessageId = asNonEmptyString(payload.messageId);
+    const directEntryId = asNonEmptyString(payload.entryId);
+    const entryId = publicMessageId ? asNonEmptyString((await request(`/internal/sessions/${encodeURIComponent(sessionId)}/native-entry/${encodeURIComponent(publicMessageId)}`)).entryId) : directEntryId;
+    const mode = payload.mode === undefined ? (entryId ? 'selected' : 'full') : payload.mode;
+    if (mode !== 'selected' && mode !== 'full') throw new OpenChamberControlError('Fork mode must be selected or full', 400);
+    if (mode === 'selected' && !entryId) throw new OpenChamberControlError('A native entry identity is required for a selected fork', 400);
+    const body = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/fork`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceSessionId: sessionId, entryId: entryId ?? null, mode }) });
+    const ack = SessionForkAckSchema.parse(body);
+    if (ack.sourceSessionId !== sessionId || (mode === 'selected' && ack.entryId !== entryId) || ack.mode !== mode) throw new OpenChamberControlError('Fork acknowledgement does not match the requested source', 502);
+    const child = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(ack.sessionId)}`));
+    if (child.sessionId !== ack.sessionId || child.rootSessionId !== ack.rootSessionId || child.projectId !== source.projectId || child.workspaceId !== source.workspaceId) throw new OpenChamberControlError('Fork acknowledgement is outside the source scope', 502);
+    if (!await registerSessionScope(child)) throw new OpenChamberControlError('Forked session scope registration failed', 500);
+    const stored = await sessionMetadataStore.getState(child.sessionId);
+    const archive = await archiveStore.getState(child.sessionId);
+    const projected = { ...child, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', archiveRevision: archive?.revision ?? '0' };
+    if (archive?.archivedAt != null) projected.archivedAt = archive.archivedAt;
+    return SessionCreateAckSchema.parse({ session: SessionSchema.parse(projected) });
+  };
   const reopen = async (scope) => {
-    const bootstrap = SessionReopenScopeSchema.parse({ rootSessionId: scope.rootSessionId, projectId: scope.projectId, workspaceId: scope.workspaceId, cwd: scope.cwd, agentDirectory: scope.agentDirectory, agentDirectoryId: scope.agentDirectoryId, displayPath: scope.displayPath ?? 'workspace', ...(scope.env ? { env: scope.env } : {}) });
+    const privateScope = { rootSessionId: scope.rootSessionId, projectId: scope.projectId, workspaceId: scope.workspaceId, cwd: scope.cwd, agentDirectory: scope.agentDirectory, agentDirectoryId: scope.agentDirectoryId, displayPath: scope.displayPath ?? 'workspace' };
+    if (scope.env) privateScope.env = scope.env;
+    const bootstrap = SessionReopenScopeSchema.parse(privateScope);
     const runtime = RuntimeSessionSchema.parse(await request(`/internal/sessions/${encodeURIComponent(bootstrap.rootSessionId)}/reopen`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bootstrap) }));
     if (runtime.sessionId !== bootstrap.rootSessionId || runtime.rootSessionId !== bootstrap.rootSessionId || runtime.projectId !== bootstrap.projectId || runtime.workspaceId !== bootstrap.workspaceId) throw new OpenChamberControlError('Session restore acknowledgement is outside the authorized scope', 502);
   };
   const open = async (id) => { const scope = await scopeFor(id); await reopen(scope); const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/snapshot`)); if (snapshot.session.sessionId !== id || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Session snapshot is outside the authorized scope', 502); return snapshot; };
   const history = async (id, query = '') => { const scope = await scopeFor(id); await reopen(scope); const page = HistoryPageSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`)); if (page.sessionId !== id || page.turns.some(turn => turn.projectId !== undefined && turn.projectId !== scope.projectId) || page.messages.some(message => message.projectId !== undefined && message.projectId !== scope.projectId)) throw new OpenChamberControlError('Session history is outside the authorized scope', 502); return page; };
   const list = async (workspaceId) => {
-    const scopePage = workspaceId ? { items: [{ workspaceId }], errors: {} } : await (typeof listWorkspaceScopes === 'function' ? listWorkspaceScopes() : Promise.reject(new OpenChamberControlError('Workspace enumeration is unavailable', 503)));
+    const scopePage = workspaceId ? { items: [{ workspaceId }], errors: {} } : await (listWorkspaceScopes instanceof Function ? listWorkspaceScopes() : Promise.reject(new OpenChamberControlError('Workspace enumeration is unavailable', 503)));
     const parsedScopes = z.strictObject({ items: z.array(z.strictObject({ workspaceId: z.string().min(1) })), errors: z.record(z.string(), ProblemCodeSchema) }).parse(scopePage);
     const pages = await Promise.all(parsedScopes.items.map(async ({ workspaceId: id }) => {
       try {
@@ -114,7 +136,9 @@ const createCanonicalSessionService = (dependencies) => {
             const metadataState = await sessionMetadataStore.getState(session.sessionId);
             const archiveState = await archiveStore.getState(session.sessionId);
             if (!await registerSessionScope(session)) throw new OpenChamberControlError('Session scope registration failed', 500, { code: 'INTERNAL_ERROR' });
-            return { item: SessionSchema.parse({ ...session, metadata: metadataState?.metadata ?? null, metadataRevision: metadataState?.revision ?? '0', ...(archiveState?.archivedAt == null ? {} : { archivedAt: archiveState.archivedAt }), archiveRevision: archiveState?.revision ?? '0' }) };
+            const projected = { ...session, metadata: metadataState?.metadata ?? null, metadataRevision: metadataState?.revision ?? '0', archiveRevision: archiveState?.revision ?? '0' };
+            if (archiveState?.archivedAt != null) projected.archivedAt = archiveState.archivedAt;
+            return { item: SessionSchema.parse(projected) };
           } catch (error) {
             const code = ProblemCodeSchema.safeParse(error?.code);
             return { error: { sessionId: session.sessionId, code: code.success ? code.data : 'SERVICE_UNAVAILABLE' } };
@@ -158,7 +182,7 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
 
   app.post('/api/openchamber/sessions', express.json({ limit: '1mb' }), async (req, res) => {
     try {
-      return res.json(await service.create(req.body && typeof req.body === 'object' ? req.body : {}));
+      return res.json(await service.create(req.body ?? {}));
     } catch (error) {
       console.error('[OpenChamberSessions] failed to create session:', error);
       return sendServiceError(res, error, 'Failed to create session');
@@ -167,7 +191,7 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
 
   app.post('/api/openchamber/sessions/archive', express.json({ limit: '1mb' }), async (req, res) => {
     try {
-      return res.json(await service.archive(req.body && typeof req.body === 'object' ? req.body : {}));
+      return res.json(await service.archive(req.body ?? {}));
     } catch (error) {
       console.error('[OpenChamberSessions] failed to archive sessions:', error);
       return sendServiceError(res, error, 'Failed to archive sessions');
@@ -187,7 +211,7 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
     try {
       return res.json(await service.setMetadata(
         req.params.sessionId,
-        req.body && typeof req.body === 'object' ? req.body : {},
+        req.body ?? {},
       ));
     } catch (error) {
       console.error('[OpenChamberSessions] failed to store session metadata:', error);
@@ -197,7 +221,7 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
 
   app.post('/api/openchamber/sessions/unarchive', express.json({ limit: '1mb' }), async (req, res) => {
     try {
-      return res.json(await service.unarchive(req.body && typeof req.body === 'object' ? req.body : {}));
+      return res.json(await service.unarchive(req.body ?? {}));
     } catch (error) {
       console.error('[OpenChamberSessions] failed to unarchive sessions:', error);
       return sendServiceError(res, error, 'Failed to unarchive sessions');
@@ -246,7 +270,10 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
 export const registerCanonicalSessionRoutes = (router, service) => {
   const call = async (res, operation, fallback) => { try { res.json(await operation()); } catch (error) { sendServiceError(res, error, fallback); } };
   router.post('/', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.create(req.body || {}), 'Failed to create session'));
-  router.get('/', (req, res) => call(res, () => service.list(typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined), 'Failed to list sessions'));
+  router.get('/', (req, res) => call(res, () => {
+    const workspace = EntityIdSchema.safeParse(req.query.workspaceId);
+    return service.list(workspace.success ? workspace.data : undefined);
+  }, 'Failed to list sessions'));
   router.get('/:sessionId/snapshot', (req, res) => call(res, () => service.open(req.params.sessionId), 'Failed to open session snapshot'));
   router.get('/:sessionId', (req, res) => call(res, () => service.open(req.params.sessionId), 'Failed to open session'));
   router.get('/:sessionId/history', (req, res) => call(res, () => service.history(req.params.sessionId, new URLSearchParams(req.query).toString()), 'Failed to read session history'));

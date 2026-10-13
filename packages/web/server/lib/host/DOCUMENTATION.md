@@ -48,6 +48,8 @@ The database file is created at `0600` before SQLite opens it. New database dire
 
 Metadata and archive `listAll()` return `{ entries, errors, conversion }`: valid entities remain available beside per-entity error codes. `conversion` carries its status and, for source-wide failure, a code. An absent entry under a source-wide conversion error is unknown, not authoritative empty state. Folder scopes are separate rows; the folder read returns `{ snapshot, revision, errors, conversion }`, so one corrupt scope does not hide valid siblings. Archive `null` timestamps are durable restore tombstones. Folder deletion tombstones keep their existing 30-day retention and merge policy.
 
+Canonical session projections omit the `archivedAt` field for an unarchive tombstone but retain `archiveRevision`. A failed session enrichment remains a per-session error beside healthy items; it does not erase the complete workspace page or prevent those sessions from being observed.
+
 ### Canonical agent scope and containment
 
 `createHostAgentScopeRuntime` and `createAgentScopeStore` manage directory and session authority in `host-metadata.sqlite`. Configured Host projects (`readSettings().projects`), their registered Git worktrees (`getWorktrees()`), and managed chats (`managedChatsScope`) define canonical containment. Client path hints are unverified.
@@ -79,7 +81,7 @@ Every store read, conversion, explicit import, and write is admitted through its
 - Guest scope actions remain capability-scoped; scoped asset tokens do not authorize the canonical gateway namespace, and opaque-origin mutations are refused.
 - VS Code is retired; this change adds no support for it.
 
-These describe source contracts, not verified runtime features. Composed Gate 22/23 acceptance remains open pending completion of actual composed scenarios; application activation remains deferred to task 17 after all UI callers migrate.
+The composed Node Host/Bun scenario has verified these boundaries on Linux, including cold service reopen, scoped Guest actions, metadata/archive access while the service is stopped, explicit credential handoff, and canonical completion notification fan-out. Owning evidence is recorded in `.workflow/development.md`. Requirements, source quality, and final trust reviews passed; application activation remains task 17 after all UI callers migrate.
 
 ## Canonical gateway and credential handoff
 

@@ -19,10 +19,12 @@ const within = (candidate, root) => {
   return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 };
 const invalid = () => new MetadataReadError('Legacy attachment could not be converted');
-const ScopeSchema = z.strictObject({ projectId: z.string().min(1), workspaceId: z.string().min(1), agentDirectoryId: z.string().min(1) });
+const ScopeSchema = z.object({ projectId: z.string().min(1), workspaceId: z.string().min(1), agentDirectoryId: z.string().min(1).optional() });
+const PrivateScopeSchema = ScopeSchema.extend({ agentDirectoryId: z.string().min(1) });
 const RootSchema = z.string().min(1).refine((value) => path.isAbsolute(value));
 const StoreSchema = z.object({ upload: z.function() });
-const DependenciesSchema = z.object({ store: StoreSchema, resolveWorkspaceScope: z.function(), maxBytes: z.number().int().positive() });
+const FilesystemSchema = z.object({ realpath: z.function(), open: z.function(), stat: z.function() });
+const DependenciesSchema = z.object({ store: StoreSchema, resolveWorkspaceScope: z.function(), maxBytes: z.number().int().positive(), fsPromises: FilesystemSchema.optional() });
 const validScope = (value) => ScopeSchema.safeParse(value).success;
 export function createLegacyAttachmentImporter(dependencies) {
   const parsedDependencies = DependenciesSchema.parse(dependencies);
@@ -33,7 +35,7 @@ export function createLegacyAttachmentImporter(dependencies) {
     const attachment = parsed.data;
     let privateScope;
     try { privateScope = await resolveWorkspaceScope(scope?.workspaceId); } catch { throw invalid(); }
-    if (!validScope(privateScope) || !validScope(scope) || privateScope.projectId !== scope.projectId || privateScope.workspaceId !== scope.workspaceId || (scope.agentDirectoryId !== undefined && privateScope.agentDirectoryId !== scope.agentDirectoryId)) throw invalid();
+    if (!PrivateScopeSchema.safeParse(privateScope).success || !validScope(scope) || privateScope.projectId !== scope.projectId || privateScope.workspaceId !== scope.workspaceId || (scope.agentDirectoryId !== undefined && privateScope.agentDirectoryId !== scope.agentDirectoryId)) throw invalid();
     let bytes;
     if (attachment.source === 'local') {
       // FileReader's retained representation is a base64 data URL. Never fetch URLs.
