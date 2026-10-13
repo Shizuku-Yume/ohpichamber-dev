@@ -68,7 +68,18 @@ export class NativeCredentials {
       if (!key) throw new ProjectionError(404, 'CREDENTIAL_UNAVAILABLE', 'Selected provider credential is unavailable');
       return PrivateCredentialResolveResultSchema.parse({ ...request, credential: { type: 'api_key', key } });
     }
-    const parsed = PrivateCredentialResolveResultSchema.safeParse({ ...request, credential });
+    let selectedCredential;
+    try {
+      const access = await this.authStorage.oauth.accessById(request.providerId, row.id);
+      if (!access?.ok || (access.credentialId !== undefined && access.credentialId !== row.id))
+        throw new Error('Selected OAuth credential is unavailable');
+      await this.authStorage.credentials.reload();
+      selectedCredential = this.authStorage.credentials.list(request.providerId)
+        .find(candidate => candidate.id === row.id && candidate.disabledCause === null)?.credential;
+    } catch {
+      throw new ProjectionError(503, 'CREDENTIAL_UNAVAILABLE', 'Selected provider credential is unavailable');
+    }
+    const parsed = PrivateCredentialResolveResultSchema.safeParse({ ...request, credential: selectedCredential });
     if (!parsed.success) throw new ProjectionError(422, 'OAUTH_REAUTH_REQUIRED', 'Selected provider credential requires re-authentication');
     return parsed.data;
   }

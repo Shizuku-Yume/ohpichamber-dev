@@ -243,12 +243,21 @@ test('bound OAuth credentialRef pins session affinity to the selected row withou
     const accounts = runtime.authStorage.oauth.accounts(providerId, 'oauth-session-1');
     const activeAccount = accounts.find(account => account.active);
     expect(activeAccount && credentialReference(providerId, activeAccount.credentialId)).toBe(secondRef);
+    const privateSelection = { workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', providerId,
+      credentialRef: secondRef, purpose: 'quota' as const };
+    expect((await credentials.resolve(privateSelection)).credential).toEqual({
+      type: 'oauth', access: 'oauth-access-two', refresh: 'oauth-refresh-two', expires: expiresAt,
+    });
+    await expect(credentials.resolve({ ...privateSelection, agentDirectoryId: 'sibling-agent' })).rejects.toMatchObject({
+      status: 403, code: 'UNAUTHORIZED',
+    });
 
     await credentials.delete({
       expectedRevision: '4',
       providerId,
       credentialRef: secondRef,
     }, '5');
+    await expect(credentials.resolve(privateSelection)).rejects.toMatchObject({ status: 404, code: 'CREDENTIAL_UNAVAILABLE' });
     await expect(models.selection({ providerId, modelId })).rejects.toMatchObject({
       status: 422,
       code: 'PROVIDER_UNAVAILABLE',
