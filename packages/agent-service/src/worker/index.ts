@@ -42,8 +42,11 @@ function stop(exitCode: number): Promise<void> {
   return shutdown;
 }
 
+process.stderr.write(`worker-start connected=${String(process.connected)}\n`);
 process.on('message', raw => {
+  process.stderr.write('worker-message\n');
   const parsed = WorkerCommandSchema.safeParse(raw);
+  process.stderr.write(parsed.success ? `worker-command ${parsed.data.type}\n` : 'worker-command invalid\n');
   if (!parsed.success) return;
   const command = parsed.data;
   if (command.type === 'policy.result') {

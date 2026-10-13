@@ -144,6 +144,7 @@ export class WorkerRegistry {
     this.entries.set(input.rootSessionId, entry);
     child.on('message', raw => {
       const reply = WorkerReplySchema.safeParse(raw);
+      process.stderr.write(reply.success ? `worker-reply ${reply.data.type}\n` : 'worker-reply invalid\n');
       if (!reply.success || reply.data.workerGeneration !== workerGeneration) return;
       if (this.entries.get(input.rootSessionId) !== entry) return;
       if (entry.info.state !== 'starting' && entry.info.state !== 'ready') return;
