@@ -202,11 +202,19 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
   };
 
   return {
+    getState: (scope) => store.getState(queueScope(scope)),
     append: async (scope, commandId, request) => {
       const captured = await capturePrompt(scope, request.request);
       const queue = await store.append(queueScope(scope), commandId, { ...request, request: captured });
       changed(scope, queue); schedule(scope); return queue;
     },
+    remove: async (scope, request) => {
+      const queue = await store.remove(queueScope(scope), request);
+      changed(scope, queue);
+      schedule(scope);
+      return queue;
+    },
+    dispatch: (scope) => dispatch(scope),
     hasScheduledTask: (projectId, taskId) => store.hasScheduledTask({ projectId, taskId }),
     cancelScheduledTask: async (projectId, taskId) => {
       const result = await store.cancelScheduledTask({ projectId, taskId });

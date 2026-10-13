@@ -187,8 +187,8 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
       if (row) db.prepare('UPDATE prompt_queue_owner SET revision = ? WHERE session_id = ?').run((BigInt(row.revision) + 1n).toString(), sessionId);
     }
   });
-  const scheduledTaskProvenance = (request) => scheduledTask({ request: PromptRequestSchema.parse(request) });
   return {
+    getState: (scope) => read(() => state(ScopeSchema.parse(scope))),
     getDeliveryCapture,
     scheduledTaskProvenance,
     hasScheduledTask: (query) => read(() => matchingScheduledItems(query).length > 0),
