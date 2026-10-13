@@ -7,10 +7,11 @@ import { SelectedCredentialHandoffRequestSchema, SelectedCredentialHandoffResult
 import { isEnterpriseMode } from '../enterprise-mode.js';
 
 const PREFIX = '/api/agent/v1';
-const ScopeSchema = z.strictObject({
+const HostScopeSchema = z.strictObject({
   workspaceId: C.EntityIdSchema, projectId: C.EntityIdSchema, agentDirectoryId: C.EntityIdSchema,
   cwd: z.string().refine(isAbsolute), agentDirectory: z.string().refine(isAbsolute),
 });
+const ScopeSchema = HostScopeSchema;
 const NativeServiceCapabilitiesSchema = C.RuntimeCapabilitiesSchema.extend({
   capabilities: C.RuntimeCapabilitiesSchema.shape.capabilities.omit({ documentExtraction: true, credentialHandoff: true })
     .extend({ attachments: z.boolean() }),
@@ -84,21 +85,20 @@ export function registerCanonicalHostRoutes(app, {
   resolveWorkspaceScope, resolveSessionScope, listProjects, listWorkspaces,
   resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes,
 }) {
-  if (!service || typeof service.request !== 'function' || typeof service.getState !== 'function')
-    throw new TypeError('Canonical gateway requires the real Agent Service request/getState');
-  if (!express || typeof express.Router !== 'function' || typeof express.json !== 'function'
-    || typeof uiAuthController?.resolveAuthContext !== 'function'
-    || typeof tunnelAuthController?.classifyRequestScope !== 'function'
-    || typeof tunnelAuthController?.getTunnelSessionFromRequest !== 'function')
-    throw new TypeError('Canonical gateway requires the production HTTP and auth owners');
-  for (const value of [isRequestOriginAllowed, resolveWorkspaceScope, resolveSessionScope, listProjects, listWorkspaces,
-    resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes]) {
-    if (typeof value !== 'function') throw new TypeError('Canonical gateway requires every scoped local owner');
-  }
+  const validService = service && z.function().safeParse(service.request).success && z.function().safeParse(service.getState).success;
+  if (!validService) throw new TypeError('Canonical gateway requires the real Agent Service request/getState');
+  const validHttp = express && z.function().safeParse(express.Router).success && z.function().safeParse(express.json).success
+    && z.function().safeParse(uiAuthController?.resolveAuthContext).success
+    && z.function().safeParse(tunnelAuthController?.classifyRequestScope).success
+    && z.function().safeParse(tunnelAuthController?.getTunnelSessionFromRequest).success;
+  if (!validHttp) throw new TypeError('Canonical gateway requires the production HTTP and auth owners');
+  const owners = [isRequestOriginAllowed, resolveWorkspaceScope, resolveSessionScope, listProjects, listWorkspaces,
+    resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes];
+  if (owners.some(owner => !z.function().safeParse(owner).success)) throw new TypeError('Canonical gateway requires every scoped local owner');
   const router = express.Router();
   router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   router.get('/health', (_req, res) => {
-    const { phase } = service.getState();
+    const { phase } = z.strictObject({ phase: z.string() }).passthrough().parse(service.getState());
     res.json({ status: 'ok', engine: 'omp', agent: { status: phase, ready: phase === 'ready' } });
   });
   router.get('/ready', async (_req, res) => {

@@ -19,7 +19,7 @@ async function readPrivateResponse(response, schema) {
   if (!response.ok) {
     let failure;
     try { failure = await response.json(); } catch {}
-    const code = typeof failure?.code === 'string' && SAFE_CODES[failure.code] === true ? failure.code : 'SERVICE_UNAVAILABLE';
+    const code = SAFE_CODES[failure?.code] === true ? failure.code : 'SERVICE_UNAVAILABLE';
     throw credentialFailure(code, response.status);
   }
   try { return schema.parse(await response.json()); }
@@ -27,8 +27,10 @@ async function readPrivateResponse(response, schema) {
 }
 
 function requireDependencies(service, resolveWorkspaceScope) {
-  if (!service || typeof service.request !== 'function' || typeof service.getState !== 'function'
-    || typeof resolveWorkspaceScope !== 'function') throw new TypeError('Selected credentials require the real service and Host scope resolver');
+  const valid = service && resolveWorkspaceScope
+    && z.function().safeParse(service.request).success && z.function().safeParse(service.getState).success
+    && z.function().safeParse(resolveWorkspaceScope).success;
+  if (!valid) throw new TypeError('Selected credentials require the real service and Host scope resolver');
 }
 
 async function selectedScope(service, resolveWorkspaceScope, workspaceId, agentDirectoryId) {
@@ -168,7 +170,7 @@ function publicCredentialSelection(scope, provider) {
 /** Public catalogs select exact native records; these callbacks never read or return secret material. */
 export function createCatalogCredentialSelections({ service, resolveWorkspaceScope, getQuotaProviders }) {
   requireDependencies(service, resolveWorkspaceScope);
-  if (typeof getQuotaProviders !== 'function') throw new TypeError('Catalog selections require the quota registry owner');
+  if (!z.function().safeParse(getQuotaProviders).success) throw new TypeError('Catalog selections require the quota registry owner');
 
   const readCatalog = async (req, requireProvider = false) => {
     try {
@@ -202,7 +204,7 @@ export function createCatalogCredentialSelections({ service, resolveWorkspaceSco
     if ((request.providerId || request.credentialRef) && selections.length === 0) throw credentialFailure('CREDENTIAL_UNAVAILABLE', 422);
     try {
       const registry = await getQuotaProviders();
-      if (typeof registry?.listConfiguredQuotaProviders !== 'function') throw credentialFailure();
+      if (!registry || !z.function().safeParse(registry.listConfiguredQuotaProviders).success) throw credentialFailure();
       const supportedIds = await registry.listConfiguredQuotaProviders({ selections });
       if (!Array.isArray(supportedIds) || supportedIds.some(id => !EntityIdSchema.safeParse(id).success)) throw credentialFailure();
       const supported = new Set(supportedIds);
