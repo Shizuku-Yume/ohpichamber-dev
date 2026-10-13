@@ -1,6 +1,6 @@
 import { z } from 'zod';
+import { ApprovalRequestSchema, CanonicalEventSchema, RuntimeSessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 import { PERMISSION_MODES, isAutoAnsweringMode, isPermissionMode, toPermissionMode } from './modes.js';
-
 const SETTINGS_KEY = 'permissionAutoAccept';
 const DEFAULT_MODE_SETTINGS_KEY = 'permissionDefaultMode';
 const RETRY_DELAYS_MS = [0, 250, 1000];
@@ -18,7 +18,6 @@ const storedPolicySchema = z.object({
 
 const readStoredPolicy = (value) => storedPolicySchema.parse(value ?? {});
 
-const createdSessionSchema = z.object({ id: z.string().min(1), parentID: z.string().nullish() });
 
 const hasLegacyEntries = (stored) => Object.values(stored.sessions).some((entry) => entry === true || entry === false);
 
@@ -40,7 +39,9 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function createPermissionAutoAcceptRuntime({
   service,
+  globalEventHub,
   resolveSessionScope,
+  listWorkspaceScopes,
   readSettingsFromDiskMigrated,
   persistSettings,
   broadcastGlobalUiEvent,
@@ -51,7 +52,8 @@ export function createPermissionAutoAcceptRuntime({
   requestTimeoutMs = REQUEST_TIMEOUT_MS,
 }) {
   if (!service || typeof service.request !== 'function') throw new Error('permission auto-accept requires the Agent service');
-  if (typeof resolveSessionScope !== 'function') throw new Error('permission auto-accept requires resolveSessionScope');
+  if (!globalEventHub || typeof globalEventHub.subscribeEvent !== 'function' || typeof globalEventHub.subscribeStatus !== 'function') throw new Error('permission auto-accept requires the canonical event hub');
+  if (typeof resolveSessionScope !== 'function' || typeof listWorkspaceScopes !== 'function') throw new Error('permission auto-accept requires Host session/workspace scope resolvers');
   let policy = normalizePolicy().policy;
   let loaded = false;
   let loadPromise = null;
@@ -151,22 +153,14 @@ export function createPermissionAutoAcceptRuntime({
   };
 
   const rememberSession = (info, directoryHint) => {
-    if (!info || typeof info.id !== 'string' || !info.id) return;
-    // v2 session updates are partial (a rename carries only the title), so a
-    // field the update does not name keeps what an earlier record said.
-    const previous = sessions.get(info.id);
-    const parentID = typeof info.parentID === 'string' && info.parentID ? info.parentID : previous?.parentID ?? null;
-    // v2 keeps the directory on `location`; translated events already flatten it.
-    const directory = typeof info.directory === 'string' && info.directory
-      ? info.directory
-      : (typeof info.location?.directory === 'string' && info.location.directory
-        ? info.location.directory
-        : previous?.directory ?? directoryHint);
-    if (previous) sessions.delete(info.id);
-    sessions.set(info.id, { parentID, directory });
-    if (sessions.size > SESSION_CACHE_LIMIT) {
-      sessions.delete(sessions.keys().next().value);
-    }
+    const parsed = RuntimeSessionSchema.safeParse(info);
+    if (!parsed.success) return;
+    const session = parsed.data;
+    const previous = sessions.get(session.sessionId);
+    const directory = typeof directoryHint === 'string' && directoryHint ? directoryHint : previous?.directory;
+    if (previous) sessions.delete(session.sessionId);
+    sessions.set(session.sessionId, { parentSessionId: session.parentSessionId ?? null, directory, runtimeStatus: session.runtimeStatus, activeRunId: session.activeRunId });
+    if (sessions.size > SESSION_CACHE_LIMIT) sessions.delete(sessions.keys().next().value);
   };
 
   const request = async (path, { method = 'GET', body, signal } = {}) => {
@@ -176,13 +170,6 @@ export function createPermissionAutoAcceptRuntime({
     return payload;
   };
 
-  const getSession = async (sessionId, directory) => {
-    const cached = sessions.get(sessionId);
-    if (cached) return cached;
-    const info = await request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/snapshot`);
-    rememberSession(info?.session ?? info, directory);
-    return sessions.get(sessionId) ?? null;
-  };
 
   /** The nearest explicit mode up the session's lineage; unknown lineage fails closed to `ask`. */
   const resolveSessionMode = async (sessionId, directory) => {
@@ -192,7 +179,6 @@ export function createPermissionAutoAcceptRuntime({
     await writePromise.catch(() => undefined);
     const seen = new Set();
     let current = sessionId;
-    let currentDirectory = directory;
     while (current && !seen.has(current)) {
       if (Object.hasOwn(policy.sessions, current)) return policy.sessions[current];
       seen.add(current);
@@ -203,8 +189,7 @@ export function createPermissionAutoAcceptRuntime({
       } catch {
         return 'ask';
       }
-      current = info?.parentSessionId ?? info?.parentID ?? null;
-      currentDirectory = info?.cwd ?? info?.directory ?? currentDirectory;
+      current = info?.parentSessionId ?? null;
     }
     return 'ask';
   };
@@ -213,17 +198,18 @@ export function createPermissionAutoAcceptRuntime({
 
   /** `replied`, `held` (left for the user by the safety net), or `ignored` (an `ask` session). */
   const replyOnce = async (permission, directory) => {
-    if (!permission?.id || !permission?.sessionID) return 'ignored';
-    const mode = await resolveSessionMode(permission.sessionID, directory);
+    const approval = ApprovalRequestSchema.safeParse(permission);
+    if (!approval.success) return 'ignored';
+    const approvalRequest = approval.data;
+    const mode = await resolveSessionMode(approvalRequest.sessionId, directory);
     if (mode === 'ask') return 'ignored';
     if (mode === 'safety') {
-      const verdict = evaluatePermission ? await evaluatePermission(permission, directory) : null;
+      const verdict = evaluatePermission ? await evaluatePermission(approvalRequest, directory) : null;
       if (verdict?.action !== 'accept') return 'held';
     }
-    // v2 scopes a permission reply under its session.
-    await request(`/api/agent/v1/sessions/${encodeURIComponent(permission.sessionID)}/approvals/${encodeURIComponent(permission.id)}/respond`, {
+    await request(`/api/agent/v1/sessions/${encodeURIComponent(approvalRequest.sessionId)}/approvals/${encodeURIComponent(approvalRequest.approvalId)}/respond`, {
       method: 'POST',
-      body: { decision: 'accept' },
+      body: { version: approvalRequest.version, epoch: approvalRequest.epoch, workerGeneration: approvalRequest.workerGeneration, decision: 'approve' },
     });
     return 'replied';
   };
@@ -236,15 +222,17 @@ export function createPermissionAutoAcceptRuntime({
 
   /** Resolves to whether the request was handled here (replied to, or deliberately held). */
   const processPermission = (permission, directory) => {
-    if (!permission?.id) return Promise.resolve(false);
-    const key = permission.id;
+    const parsed = ApprovalRequestSchema.safeParse(permission);
+    if (!parsed.success) return Promise.resolve(false);
+    const approval = parsed.data;
+    const key = approval.approvalId;
     const existing = inFlight.get(key);
     if (existing) return existing;
     const outcome = (async () => {
       for (const delay of retryDelaysMs) {
         if (delay > 0) await wait(delay);
         try {
-          return await replyOnce(permission, directory);
+          return await replyOnce(approval, directory);
         } catch (error) {
           if (error?.status === 404) return 'replied';
         }
@@ -252,13 +240,11 @@ export function createPermissionAutoAcceptRuntime({
       return 'failed';
     })();
     rememberOutcome(key, outcome);
-    // A client hides a `safety` or `auto` session's request until it hears
-    // here that the request was not answered for the user.
     void outcome.then((result) => {
       if (result !== 'held' && result !== 'failed') return;
       broadcastGlobalUiEvent?.({
         type: 'openchamber:permission-auto-accept.left-for-user',
-        properties: { permissionId: key, sessionId: permission.sessionID, directory: directory ?? null },
+        properties: { permissionId: key, sessionId: approval.sessionId, directory: directory ?? null },
       });
     });
     const task = outcome.then((result) => result !== 'ignored' && result !== 'failed').finally(() => inFlight.delete(key));
@@ -278,84 +264,87 @@ export function createPermissionAutoAcceptRuntime({
     return outcome ? (await outcome) === 'replied' : false;
   };
 
-  // A pending request belongs to a turn that is still running, so the
-  // directories worth asking are those of running sessions, which OpenCode
-  // already has started. A list without a directory would answer for
-  // OpenCode's own working directory only, and start it, MCP servers included.
-  const runningSessionDirectories = async () => {
-    const payload = await request('/api/agent/v1/sessions?status=active');
-    const sessionsList = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.sessions) ? payload.sessions : [];
-    return sessionsList.map((entry) => entry?.cwd || entry?.directory).filter((directory) => typeof directory === 'string' && directory);
+  const listActiveSessions = async () => {
+    const workspacePage = z.strictObject({ items: z.array(z.strictObject({ workspaceId: z.string().min(1) })), errors: z.record(z.string()) }).parse(await listWorkspaceScopes());
+    const sessionsList = [];
+    for (const { workspaceId } of workspacePage.items) {
+      try {
+        const payload = z.strictObject({ items: z.array(RuntimeSessionSchema), errors: z.array(z.strictObject({ sessionId: z.string().min(1), code: z.string() })) }).parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(workspaceId)}`));
+        sessionsList.push(...payload.items);
+      } catch {
+        // One unavailable workspace must not prevent reconciliation elsewhere.
+      }
+    }
+    return sessionsList.filter((session) => session.activeRunId !== null && session.runtimeStatus !== 'unavailable');
   };
 
   async function reconcilePending({ directories = [] } = {}) {
-    const normalizedDirectories = Array.from(new Set(
-      directories.filter((directory) => typeof directory === 'string' && directory.trim()).map((directory) => directory.trim()),
-    ));
+    const normalizedDirectories = Array.from(new Set(directories.filter((directory) => typeof directory === 'string' && directory.trim()).map((directory) => directory.trim())));
     const key = normalizedDirectories.length > 0 ? normalizedDirectories.join('\n') : 'all';
     const existing = reconcilePromises.get(key);
     if (existing) return existing;
     const task = (async () => {
       await load();
-      const scopes = normalizedDirectories.length > 0
-        ? normalizedDirectories
-        : Array.from(new Set(await runningSessionDirectories().catch(() => [])));
       const pendingById = new Map();
-      for (const directory of scopes) {
-        let payload;
+      for (const session of await listActiveSessions()) {
+        const scope = await resolveSessionScope(session.sessionId).catch(() => null);
+        const directory = scope?.cwd ?? sessions.get(session.sessionId)?.directory;
+        if (normalizedDirectories.length > 0 && (!directory || !normalizedDirectories.includes(directory))) continue;
         try {
-          payload = await request('/api/agent/v1/permissions/pending');
+          const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(session.sessionId)}/snapshot`));
+          rememberSession(snapshot.session, directory);
+          for (const approval of snapshot.approvals) {
+            if (approval.status === 'pending') pendingById.set(approval.approvalId, { approval, directory });
+          }
         } catch {
-          continue;
-        }
-        const pending = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : null;
-        if (!pending) continue;
-        for (const permission of pending) {
-          if (!permission?.id) continue;
-          pendingById.set(permission.id, { permission, directory: permission.directory ?? directory });
+          // A failed snapshot is not an empty approval set; leave it for the next reconciliation.
         }
       }
-      await Promise.all(Array.from(pendingById.values()).map(({ permission, directory }) =>
-        processPermission(permission, directory)));
+      await Promise.all(Array.from(pendingById.values()).map(({ approval, directory }) => processPermission(approval, directory)));
     })().finally(() => { reconcilePromises.delete(key); });
     reconcilePromises.set(key, task);
     return task;
   }
 
   const processEvent = (event) => {
+    const parsed = CanonicalEventSchema.safeParse(event?.payload ?? event);
+    if (!parsed.success) return;
+    const payload = parsed.data;
     const directory = typeof event?.directory === 'string' && event.directory !== 'global' ? event.directory : undefined;
-    for (const payload of event?.translated?.() ?? []) {
-      if (payload.type === 'session.created' || payload.type === 'session.updated') {
-        const info = payload.properties?.info;
-        rememberSession(info, directory ?? payload.properties?.directory);
-        const created = payload.type === 'session.created' ? createdSessionSchema.safeParse(info) : null;
-        if (created?.success && !created.data.parentID) {
-          void applyDefaultMode(created.data.id).catch((error) => {
-            console.warn('[permission-auto-accept] failed to apply the default mode:', error?.message ?? error);
-          });
-        }
-        continue;
-      }
-      // A v2 permission request is `{ id, sessionID, action, resources, ... }`;
-      // only the id and session id are used to reply.
-      if (payload.type === 'permission.asked') {
-        void processPermission(payload.properties, directory ?? payload.properties?.directory);
-        continue;
-      }
-      // The routing safety net holds a request instead of replying; once the
-      // user answers it, stop tracking it.
-      if (payload.type === 'permission.replied') {
-        const permissionId = payload.properties?.requestID;
-        if (typeof permissionId === 'string' && permissionId) onPermissionReplied?.(permissionId);
-      }
+    if (payload.type === 'session.updated' && payload.session) {
+      rememberSession(payload.session, directory);
+      if (!payload.session.parentSessionId) void applyDefaultMode(payload.session.sessionId).catch((error) => console.warn('[permission-auto-accept] failed to apply the default mode:', error?.message ?? error));
+      return;
     }
+    if (payload.type === 'session.status') {
+      const previous = sessions.get(payload.sessionId);
+      if (previous) { sessions.delete(payload.sessionId); sessions.set(payload.sessionId, { ...previous, runtimeStatus: payload.runtimeStatus, activeRunId: payload.activeRunId }); }
+      return;
+    }
+    if (payload.type === 'approval.requested') { void processPermission(payload.approval, directory); return; }
+    if (payload.type === 'approval.resolved') onPermissionReplied?.(payload.approval.approvalId);
   };
 
+  let started = false;
+  let unsubscribeEvent;
+  let unsubscribeStatus;
+  const stop = () => {
+    if (!started) return;
+    started = false;
+    unsubscribeEvent?.();
+    unsubscribeStatus?.();
+    unsubscribeEvent = undefined;
+    unsubscribeStatus = undefined;
+  };
   const start = () => {
-    void load().then(() => reconcilePending()).catch((error) => {
-      console.warn('[permission-auto-accept] failed to load policy:', error?.message ?? error);
+    if (started) return stop;
+    started = true;
+    unsubscribeEvent = globalEventHub.subscribeEvent(processEvent);
+    unsubscribeStatus = globalEventHub.subscribeStatus((status) => {
+      if (status?.type === 'connect') void reconcilePending().catch((error) => console.warn('[permission-auto-accept] failed to reconcile permissions:', error?.message ?? error));
     });
-    return () => {};
+    void load().then(() => reconcilePending()).catch((error) => console.warn('[permission-auto-accept] failed to load policy:', error?.message ?? error));
+    return stop;
   };
 
   return {
@@ -368,6 +357,7 @@ export function createPermissionAutoAcceptRuntime({
     processPermission,
     processEvent,
     start,
+    stop,
   };
 }
 
