@@ -30,8 +30,12 @@ export async function executeCompletion(request: CompletionRequest, registry: Co
     catch (error) {
       if (timedOut) return cancelled('timeout');
       if (signal.aborted) return cancelled('requested');
-      if (error instanceof ProjectionError && error.code === 'UNSUPPORTED_CAPABILITY') return failed('UNSUPPORTED_CAPABILITY', 'Selected completion controls are unsupported');
-      if (error instanceof ProjectionError && error.code === 'PROVIDER_UNAVAILABLE') return failed('PROVIDER_UNAVAILABLE', 'Selected provider is unavailable', true);
+      if (error instanceof ProjectionError) {
+        if (error.status !== 422) throw error;
+        if (error.code === 'UNSUPPORTED_CAPABILITY') return failed('UNSUPPORTED_CAPABILITY', 'Selected completion controls are unsupported');
+        if (error.code === 'PROVIDER_UNAVAILABLE') return failed('PROVIDER_UNAVAILABLE', 'Selected provider is unavailable', true);
+        if (error.code !== 'MODEL_UNAVAILABLE') throw error;
+      }
       return failed('MODEL_UNAVAILABLE', 'Selected model is unavailable');
     }
     if (timedOut) return cancelled('timeout');
@@ -109,6 +113,7 @@ export async function executeCompletion(request: CompletionRequest, registry: Co
   } catch (error) {
     if (timedOut) return cancelled('timeout');
     if (signal.aborted) return cancelled('requested');
+    if (error instanceof ProjectionError) throw error;
     const errorId = NativeError.classify(error);
     if (NativeError.is(errorId, NativeError.Flag.Timeout)) return cancelled('timeout');
     if (NativeError.is(errorId, NativeError.Flag.AuthFailed)) return failed('PROVIDER_UNAVAILABLE', 'Selected provider is unavailable', true);
