@@ -1,11 +1,14 @@
-import { expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
+import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { NativeAgents } from './catalog-agents.ts';
-import { NativeModels } from './catalog-models.ts';
 import { nativeExtensionRoots, nativeModelsContext, openNativeRuntime } from './native-runtime.ts';
+
+beforeEach(resetSettingsForTest);
+afterEach(resetSettingsForTest);
 
 test('agent profile mutations round-trip through native markdown and model resolution', async () => {
   const root = await mkdtemp(join(tmpdir(), 'catalog-agents-'));
@@ -15,7 +18,8 @@ test('agent profile mutations round-trip through native markdown and model resol
   await mkdir(agentDirectory, { recursive: true });
   const runtime = await openNativeRuntime({ cwd, agentDirectory });
   try {
-    const models = new NativeModels(nativeModelsContext(runtime, () => 'gen-1'));
+    nativeModelsContext(runtime, () => 'gen-1');
+    const models = runtime.models;
     await models.configureProvider({ expectedRevision: '0', configuration: {
       providerId: 'm212-loopback', name: 'Loopback provider', endpoint: 'http://127.0.0.1:18080/v1', protocol: 'chat-completions', credentialRef: null,
     } }, '1');
@@ -38,6 +42,7 @@ test('agent profile mutations round-trip through native markdown and model resol
     expect(afterDelete.agents.some(entry => entry.agentId === agent.agentId)).toBe(false);
   } finally {
     runtime.authStorage.close();
+    resetSettingsForTest();
     await rm(root, { recursive: true, force: true });
   }
 });

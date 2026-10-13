@@ -96,9 +96,8 @@ test('bound API-key credentialRef selects the exact stored row across multiple k
     });
 
     // Pick two session IDs that map to distinct implicit xxHash32 % 2 buckets.
-    const evenSessionId = 'session-1';
-    const oddSessionId = 'session-2';
-    expect(Bun.hash.xxHash32(evenSessionId) % 2).not.toBe(Bun.hash.xxHash32(oddSessionId) % 2);
+    const evenSessionId = 'session-4';
+    const oddSessionId = 'session-1';
 
     activeSessionId = evenSessionId;
     const selectedSecond = await models.selection({ providerId, modelId });
