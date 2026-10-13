@@ -6,7 +6,7 @@
 
 **Delivers:** A disposable authenticated Host/Agent Service run proves the complete M2 service boundary before M3 client migration starts.
 
-**Blocked by:** 22
+**Blocked by:** 11, 22
 **Files:** `.workflow/development.md`, `.workflow/omp-migration/implementation-plan.md`, sanitized M2 acceptance evidence
 
 **Read first:** `.workflow/specs/omp-through-m3.md` M2/W3-W6/W8; authoritative M2 gate; artifacts from tasks 08-12 and 22

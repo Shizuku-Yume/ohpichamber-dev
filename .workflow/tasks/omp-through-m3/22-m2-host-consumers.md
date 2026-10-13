@@ -6,7 +6,7 @@
 
 **Delivers:** Host execution consumers use the Canonical Agent Service, and authenticated explicit one-time credential handoff runs through the real Bun SDK owner with provider-specific results before M2 gate 23/final task 17 retirement.
 
-**Blocked by:** 10, 11, 12
+**Blocked by:** 10, 12
 **Files:** `packages/web/server/index.js`, `packages/web/server/lib/session-work/`, Host credential-handoff owner from task 05, Agent Service AuthStorage integration, permission/queue/routing/small-model/notification modules; focused tests and owner docs
 
 **Read first:** `.workflow/specs/omp-through-m3.md` M2 host integration; contracts and architecture credential boundary; tasks 05/08/12/21; existing host composition and nearest owner documentation
@@ -22,3 +22,7 @@
 - [ ] Preserve original one-time migration acceptance with provider-specific imported or explicit unsupported/re-authentication failure results. No secret staging, startup import, runtime fallback or invented conversion; service/provider absence is unavailable, not success. Complete this evidence before gate 23 and remove importer/legacy readers only in task 17.
 - [ ] Test service unavailable and partial failure without converting them to empty authoritative success.
 - [ ] Leave application activation to task 17 after all UI callers move; the disposable service run has no OpenCode fallback.
+
+## Progress
+
+Under `decisions.md: 2026-10-13 - Remove the M2 queue and consumer acceptance cycle`, task 11's committed `sqlite-store.js` and `canonical-runtime.js` Host SQLite queue owner and canonical dispatcher source in `/home/shizuku/Project/ohpichamber-worktrees/m1-integration` (`omp-through-m3/recovery-20261013`) are an available source prerequisite after tasks 10 and 12 complete their acceptance, without waiting for task 11's final composed acceptance first. All actual composed queue/attachment/context-receipt, explicit one-time credential handoff and Host authorization scenarios remain required before task 11 final verification and gate 23; runtime activation remains deferred to task 17.

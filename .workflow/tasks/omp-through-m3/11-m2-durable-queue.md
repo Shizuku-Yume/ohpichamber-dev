@@ -5,11 +5,11 @@
 **Base commit:** c51efab064ce20378a0b9aed9a00b93556710578
 **Base branch:** omp-through-m3/m1-integration
 **Started:** 2026-10-12T20:48:32+00:00
-**Status:** active
+**Status:** paused
 
 **Delivers:** Host-owned SQLite prompt queue records canonical deliveries, survives Host/service restart, preserves per-session order, attachments and revisions, and exposes explicit storage/delivery failure without losing unrelated queues.
 
-**Blocked by:** 09
+**Blocked by:** 09, 22
 **Files:** `packages/web/server/lib/queue/`, host routes, migrations, queue tests and documentation
 
 **Read first:** `.workflow/specs/omp-through-m3.md` M2/W5; architecture Host Gateway persistence and queue sections; existing queue owner and schema; agent contract job/session events
@@ -36,4 +36,4 @@ Main implemented `sqlite-store.js` and `canonical-runtime.js` under the discover
 
 The four new consumer-visible Node regressions pass (latest run 222 ms). Authored source/test oxlint passes. `/tmp/ohpi-m211-acceptance-receipt.json` records two separate Node Host processes, the actual built Bun service and pinned public SDK, with exactly two loopback provider requests after Host/service restart. The first Host exited after real acceptance and native persistence but before local acknowledgement; the second recovered that claim and delivered the remaining captured request. Queue revision reached `6`, native history retained two turns and both canonical attachment records, and no dispatch failure was reported. The initial smoke incorrectly expected non-image file bytes to be embedded in the prompt; the actual SDK path supplies a Host-resolved file reference. The corrected check proves that reference, retained bytes and canonical attachment history instead. Disposable source and private state are removed.
 
-Still active: compose canonical Host authorization/routes, real attachment conversion, accepted context receipts, service event subscription and retained server callers with task22. Remove the inherited queue owner at that coordinated cutover. Task11 is not archived and gate23 is not advanced. Root/workspace checks and independent reviews wait for the complete integrated boundary rather than repeating the unchanged baseline now.
+Paused for task22 composition under `decisions.md: 2026-10-13 - Remove the M2 queue and consumer acceptance cycle`: the committed `sqlite-store.js` and `canonical-runtime.js` queue owner and dispatcher source are restored in `/home/shizuku/Project/ohpichamber-worktrees/m1-integration` on `omp-through-m3/recovery-20261013`, and the isolated-run receipt is recovered unchanged at `/home/shizuku/Project/ohpichamber-omp-artifacts/m211-acceptance-receipt-recovered.json` (historical receipt restored unchanged; not rerun, and not fresh full-gate acceptance). Final composed task11 verification (canonical Host authorization/routes, real attachment conversion, accepted context receipts, service event subscription and inherited queue owner removal) waits for task22 composition; task11 is not archived, no acceptance box is checked, and gate23 waits for both tasks 11 and 22.
