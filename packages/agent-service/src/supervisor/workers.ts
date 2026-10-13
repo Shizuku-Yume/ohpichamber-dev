@@ -194,7 +194,8 @@ export class WorkerRegistry {
       sessionsDirectory: input.sessionsDirectory, sessionFile: input.sessionFile, mcpConfigPath: input.mcpConfigPath, options: input.options,
       approvalPolicies,
     });
-    if (child.connected) child.send(command);
+    if (!child.connected) throw new Error('SDK worker IPC channel is unavailable');
+    child.send(command, error => { if (error) ready.reject(error); });
     try {
       await waitWithin(entry.ready, this.options.startupTimeoutMs ?? 15_000);
       return { ...entry.info };
