@@ -1,60 +1,61 @@
 import { readFile } from 'node:fs/promises';
-import { createAgentSession, discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
-import type { ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
+import { randomUUID } from 'node:crypto';
+import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
+import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
+import type { PromptOptions } from '@oh-my-pi/pi-coding-agent/session/agent-session-types';
+import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
-import type { CapturedSendOptions, Run } from '@openchamber/agent-contract';
+import { buildSkillPromptMessage } from '@oh-my-pi/pi-coding-agent/extensibility/skills';
+import { JsonObjectSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run } from '@openchamber/agent-contract';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { WorkerInteraction as NativeInteraction } from './interaction.ts';
 import { WorkerProjection } from './projection.ts';
+import { WorkerCatalogs, credentialReference } from './catalogs.ts';
+import { WorkerMcp } from './mcp.ts';
+import { WorkerShell } from './shell.ts';
+import { WorkerCompletion } from './completion.ts';
+import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
+import type { WorkerAuthorize } from './policy.ts';
 
-type Session = Awaited<ReturnType<typeof createAgentSession>>['session'];
-type AuthStorage = Awaited<ReturnType<typeof discoverAuthStorage>>;
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' }>;
-type NativePromptOptions = NonNullable<Parameters<Session['prompt']>[1]>;
-
-async function selectOptions(session: Session, options: CapturedSendOptions): Promise<void> {
-  if (options.agentId !== null) throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Agent profiles are not available in this service stage');
-  if (options.providerId !== null || options.modelId !== null) {
-    const provider = options.providerId ?? session.model?.provider;
-    const modelId = options.modelId ?? session.model?.id;
-    const model = provider && modelId ? session.modelRegistry.find(provider, modelId) : undefined;
-    if (!model) throw new ProjectionError(400, 'MODEL_UNAVAILABLE', 'Selected model is unavailable');
-    await session.setModelTemporary(model);
-  }
-  if (options.variant !== null && options.reasoningEffort !== null && options.variant !== options.reasoningEffort) {
-    throw new ProjectionError(400, 'INVALID_REQUEST', 'Variant and reasoning effort disagree');
-  }
-  const requested = options.reasoningEffort ?? options.variant;
-  if (requested !== null) {
-    const effort = session.getAvailableEffortSelectors().find(selector => selector === requested);
-    if (effort === undefined) throw new ProjectionError(400, 'MODEL_UNAVAILABLE', 'Selected effort is unavailable');
-    session.setThinkingLevel(effort);
-  }
-}
+type PreparedPrompt = { text: string; options: PromptOptions };
+type NativeAdmission = { skillsAvailable: boolean; profile: Agent | null };
 
 export class WorkerSession {
   private readonly projection: WorkerProjection;
   private readonly unsubscribe: () => void;
+  private readonly operations = new Set<Promise<WorkerOperationResult>>();
+  private readonly defaultToolNames: string[];
+  private readonly defaultMountedNames: string[];
   private binding: Promise<void> = Promise.resolve();
   private promptTask: Promise<void> | undefined;
-  private preparation: Promise<NativePromptOptions> | undefined;
+  private preparation: Promise<PreparedPrompt> | undefined;
   private cancellingRunId: string | undefined;
   private closed = false;
+  private skillsApplying = false;
   private failed = false;
 
   private constructor(
-    readonly session: Session,
+    readonly session: AgentSession,
     private readonly authStorage: AuthStorage,
     readonly sessionFile: string,
     private readonly publish: (inputs: ProjectionInput[]) => void,
     private readonly sessionId: string,
     private readonly onFatal: () => void,
     private readonly interaction: NativeInteraction,
+    private readonly catalogs: WorkerCatalogs,
+    private readonly mcp: WorkerMcp | undefined,
+    private readonly shell: WorkerShell,
+    private readonly completion: WorkerCompletion,
+    private readonly admission: NativeAdmission,
+    private readonly authorize: WorkerAuthorize,
   ) {
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
+    this.defaultToolNames = session.getActiveToolNames();
+    this.defaultMountedNames = session.getMountedXdevToolNames();
     this.unsubscribe = session.subscribe(event => {
       try {
         this.emit(this.projection.consume(event));
@@ -65,50 +66,141 @@ export class WorkerSession {
     });
   }
 
-  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void): Promise<WorkerSession> {
-    const authStorage = await discoverAuthStorage(input.agentDirectory, { cwd: input.cwd });
+  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, authorize: WorkerAuthorize): Promise<WorkerSession> {
+    if (input.mcpConfiguration && !input.mcpConfigPath) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'MCP storage ownership is missing');
+    if (input.skillSources && (!input.agentDirectoryId || input.catalogRevision === undefined || BigInt(input.catalogRevision) === 0n)) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Skill source ownership or publication revision is missing');
+    const runtime = await openNativeRuntime(input);
+    const { authStorage, settings, modelRegistry } = runtime;
     let manager: SessionManager | undefined;
-    let session: Session | undefined;
+    let session: AgentSession | undefined;
     let projection: WorkerProjection | undefined;
+    let owned: WorkerSession | undefined;
+    const admission: NativeAdmission = { skillsAvailable: !input.skillSources, profile: null };
+    const authorizeTool = (toolName: string, toolInput: JsonObject): Promise<void> => {
+      const profile = admission.profile;
+      return authorize({ type: 'tool', toolName, input: toolInput, agentId: profile?.agentId, permissionPresetId: profile?.permissionPresetId });
+    };
+    const worker = { workspaceId: input.workspaceId, rootSessionId: input.rootSessionId, workerGeneration: input.workerGeneration };
     const interaction = new NativeInteraction({ request: onInteraction, currentTurn: () => projection?.currentTurn()?.turnId });
     const observer: ExtensionFactory = api => {
-      api.on('tool_call', event => { interaction.observeToolCall(event); });
+      api.on('tool_call', async event => {
+        interaction.observeToolCall(event);
+        if (admission.profile && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
+        try { await authorizeTool(event.toolName, JsonObjectSchema.parse(event.input)); }
+        catch { return { block: true, reason: 'Host policy refused the tool operation' }; }
+      });
+      api.on('before_agent_start', () => admission.profile?.systemPromptOverride === undefined ? undefined : { systemPrompt: [admission.profile.systemPromptOverride] });
       api.on('tool_approval_requested', event => { interaction.observeApproval(event); });
       api.on('tool_result', event => { interaction.forgetToolCall(event.toolCallId); });
       api.on('tool_approval_resolved', event => { interaction.forgetToolCall(event.toolCallId); });
     };
+    const mcp = input.mcpConfigPath ? new WorkerMcp({
+      cwd: input.cwd, configPath: input.mcpConfigPath, worker, authStorage,
+      resolveCredentialRef: async reference => {
+        await authStorage.credentials.reload();
+        const row = authStorage.credentials.list().find(candidate => candidate.disabledCause === null && credentialReference(candidate.provider, candidate.id) === reference);
+        if (!row) throw new ProjectionError(403, 'UNAUTHORIZED', 'MCP credential reference is unavailable');
+        return row.provider;
+      },
+      // authorizeServer already checked the Host-resolved command before this resolver is called.
+      resolveCommand: async transport => transport.command,
+      authorizeServer: server => authorize({ type: 'mcp-server', server }),
+      authorizeOAuth: (server, configuration) => authorize({ type: 'mcp-oauth', server, configuration: JsonObjectSchema.parse(configuration) }),
+      sanitizeTool: tool => ({ ...tool, description: tool.description.split(input.cwd).join('[workspace]').split(input.agentDirectory).join('[agent-directory]') }),
+      onCatalog: state => publish([{ timestamp: Date.now(), event: { type: 'catalog.updated', catalog: { kind: 'mcp', state } } }]),
+      onRuntimeFailure: error => { process.stderr.write(`${JSON.stringify({ type: 'mcp.runtime.failure', error })}\n`); },
+      isCurrent: () => !owned || !owned.closed && !owned.failed,
+    }) : undefined;
     try {
       const directory = input.sessionsDirectory ?? SessionManager.getDefaultSessionDir(input.cwd, input.agentDirectory);
       manager = input.sessionFile
         ? await SessionManager.open(input.sessionFile, directory, undefined, { initialCwd: input.cwd, throwIfMissing: true })
         : SessionManager.create(input.cwd, directory);
       const result = await createAgentSession({
-        cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage,
-        enableMCP: false, enableLsp: false, disableExtensionDiscovery: true, hasUI: true, interactivePrompts: true, extensions: [observer],
+        cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
+        enableMCP: mcp !== undefined, mcpManager: mcp, enableLsp: false, disableExtensionDiscovery: true,
+        hasUI: true, interactivePrompts: true, extensions: [observer],
+        extensionRoots: () => nativeExtensionRoots(settings),
+        getApiKey: async model => {
+          await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
+          return modelRegistry.resolver(model, session?.agent.sessionId ?? input.workerGeneration);
+        },
       });
       session = result.session;
+      const nativeSession = session;
+      mcp?.attachSession(nativeSession);
       result.setToolUIContext(interaction.ui, true);
-      if (input.options) await selectOptions(session, input.options);
+      const catalogs = new WorkerCatalogs({
+        ...nativeModelsContext(runtime, () => nativeSession.agent.sessionId), worker,
+        cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration,
+        get extensionRoots() { return nativeExtensionRoots(settings); },
+        get options() { return nativeSkillOptions(settings); },
+        permissionPreset: presetId => authorize({ type: 'tool', toolName: 'permission.preset', input: { presetId }, permissionPresetId: presetId }),
+        availableToolNames: () => nativeSession.getAllToolInfos().map(tool => tool.name),
+        assertProviderEntryAllowed: () => authorize({ type: 'provider-entry' }),
+        publishSkills: async staged => {
+          await nativeSession.refreshSkills();
+          const capture = (skills: typeof staged | typeof nativeSession.skills) => skills.map(skill => JSON.stringify({ name: skill.name, description: skill.description, filePath: skill.filePath, baseDir: skill.baseDir, source: skill.source, hide: skill.hide, containRoot: skill.containRoot, metadata: skill._source })).sort();
+          const expected = capture(staged), actual = capture(nativeSession.skills);
+          if (expected.length !== actual.length || expected.some((skill, index) => skill !== actual[index])) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill publication changed during application');
+        },
+        setSkillsRuntimeAvailable: available => { admission.skillsAvailable = available; },
+      });
+      if (!nativeSession.asyncJobManager) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native shell manager is unavailable');
+      const shell = new WorkerShell({ manager: nativeSession.asyncJobManager, workspaceId: input.workspaceId, projectId: input.projectId, sessionId: input.rootSessionId, workerGeneration: input.workerGeneration, epoch: input.observationEpoch ?? randomUUID(), cwd: input.cwd });
+      const completion = new WorkerCompletion(modelRegistry, input.workspaceId, async (selection, controls) => {
+        const selected = await catalogs.resolveSelection(selection, controls);
+        await authorizeTool('provider.use', { providerId: selection.providerId, modelId: selection.modelId, endpoint: selected.nativeModel.baseUrl });
+        return selected;
+      });
       await manager.ensureOnDisk();
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
-      const owned = new WorkerSession(session, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize);
       projection = owned.projection;
-      await initializeExtensions(session, {
+      if (input.mcpConfiguration && mcp) {
+        const applied = await mcp.apply({ persistedRevision: input.mcpConfiguration.persistedRevision }, input.mcpConfiguration);
+        if (applied.outcome !== 'applied') throw new ProjectionError(503, 'MCP_APPLY_FAILED', 'Initial MCP configuration could not be applied');
+      }
+      if (input.skillSources && input.catalogRevision) await catalogs.skills.apply(input.skillSources, input.catalogRevision);
+      if (input.options) await owned.selectOptions(input.options);
+      await initializeExtensions(nativeSession, {
         mode: 'rpc', uiContext: interaction.ui,
-        reportSendError: () => owned.fail(),
-        reportRuntimeError: () => owned.fail(),
-        onShutdown: onFatal,
+        reportSendError: () => owned?.fail(), reportRuntimeError: () => owned?.fail(), onShutdown: onFatal,
       });
       return owned;
     } catch (error) {
       interaction.close();
-      try {
-        if (session) await session.dispose();
-        else await manager?.close();
-      } finally { authStorage.close(); }
+      if (owned) await owned.close();
+      else {
+        try { await mcp?.close(); }
+        finally { try { if (session) await session.dispose(); else await manager?.close(); } finally { authStorage.close(); } }
+      }
       throw error;
     }
+  }
+
+  private async selectOptions(options: CapturedSendOptions): Promise<void> {
+    const profile = options.agentId === null ? null : await this.catalogs.agents.profile(options.agentId);
+    const fallback = profile?.model ?? (this.session.model ? { providerId: this.session.model.provider, modelId: this.session.model.id } : null);
+    const providerId = options.providerId ?? fallback?.providerId;
+    const modelId = options.modelId ?? fallback?.modelId;
+    if (!providerId || !modelId) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected model is unavailable');
+    const selected = await this.catalogs.resolveSelection({ providerId, modelId }, { variant: options.variant, reasoningEffort: options.reasoningEffort });
+    await this.session.setModelTemporary(selected.nativeModel);
+    if (selected.reasoningEffort !== null || options.variant !== null || options.reasoningEffort !== null) {
+      const effort = this.session.getAvailableEffortSelectors().find(selector => selector === (selected.reasoningEffort ?? 'off'));
+      if (effort === undefined && selected.nativeModel.reasoning) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected model effort is unavailable');
+      this.session.setThinkingLevel(effort);
+    }
+    if (profile) {
+      const available = this.session.getAllToolInfos();
+      if (profile.allowedTools.some(name => !available.some(tool => tool.name === name))) throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected profile tool is unavailable');
+      await this.session.setActiveToolsByName([...profile.allowedTools]);
+    } else if (this.admission.profile) {
+      await this.session.restoreNonMCPToolPresentation(this.defaultToolNames, this.defaultMountedNames);
+    }
+    this.admission.profile = profile;
   }
 
   seed(): ProjectionSeed { return this.projection.seed(); }
@@ -131,10 +223,13 @@ export class WorkerSession {
     return this.binding;
   }
 
-  private async prepare(operation: PromptOperation): Promise<NativePromptOptions> {
+  private async prepare(operation: PromptOperation): Promise<PreparedPrompt> {
     const { input, options } = operation.request;
-    if (input.agentMention) throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Agent mentions are not available in this service stage');
-    await selectOptions(this.session, options);
+    if (input.agentMention && options.agentId !== null && input.agentMention.agentId !== options.agentId) throw new ProjectionError(400, 'INVALID_REQUEST', 'Agent mention and selected profile disagree');
+    await this.selectOptions(input.agentMention ? { ...options, agentId: input.agentMention.agentId } : options);
+    let text = input.text;
+    const invocation = /^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
+    if (invocation) text = (await buildSkillPromptMessage(this.catalogs.skills.nativeSkill(invocation[1]!), { args: invocation[2] ?? '' }, 'user')).message;
     for (const context of input.context) {
       if (context.kind === 'instruction' || context.kind === 'synthetic') {
         const message = context.kind === 'instruction'
@@ -154,7 +249,7 @@ export class WorkerSession {
         }
       }
     }
-    const images: NonNullable<NativePromptOptions['images']> = [];
+    const images: NonNullable<PromptOptions['images']> = [];
     for (const attachment of input.attachments) {
       const reference = operation.attachments?.find(item => item.attachmentId === attachment.attachmentId);
       if (!reference) throw new ProjectionError(400, 'INVALID_REQUEST', 'Attachment has no Host-resolved file');
@@ -167,24 +262,58 @@ export class WorkerSession {
       }
     }
     await this.session.sessionManager.flush();
-    return { throwOnDrop: true, images };
+    return { text, options: { throwOnDrop: true, images, runCommands: false, expandPromptTemplates: false } };
   }
 
-  async operation(operation: WorkerOperation): Promise<WorkerOperationResult> {
+  operation(operation: WorkerOperation): Promise<WorkerOperationResult> {
+    const task = this.executeOperation(operation);
+    this.operations.add(task);
+    void task.then(() => this.operations.delete(task), () => this.operations.delete(task));
+    return task;
+  }
+
+  private async executeOperation(operation: WorkerOperation): Promise<WorkerOperationResult> {
     if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
     switch (operation.type) {
+      case 'catalog': {
+        const applying = operation.operation.type === 'skills.apply';
+        if (applying && this.skillsApplying) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Skill application is already active');
+        if (applying) this.skillsApplying = true;
+        try {
+          const result = await this.catalogs.operation(operation.operation, operation.revision);
+          if (operation.operation.type === 'skills.apply') this.emit([{ timestamp: Date.now(), event: { type: 'catalog.updated', catalog: { kind: 'skills', state: this.catalogs.skills.read(operation.operation.sources) } } }]);
+          return { type: 'catalog', result };
+        } finally { if (applying) this.skillsApplying = false; }
+      }
+      case 'mcp': {
+        if (!this.mcp) throw new ProjectionError(503, 'MCP_APPLY_FAILED', 'MCP runtime ownership is unavailable');
+        const request = operation.operation;
+        switch (request.type) {
+          case 'read': return { type: 'mcp', result: { type: 'catalog', catalog: this.mcp.read(request.configuration) } };
+          case 'persist': return { type: 'mcp', result: { type: 'persisted', configuration: await this.mcp.persist(request.request, request.configuration) } };
+          case 'apply': return { type: 'mcp', result: { type: 'applied', result: await this.mcp.apply(request.request, request.configuration) } };
+          case 'reconnect': return { type: 'mcp', result: { type: 'catalog', catalog: await this.mcp.reconnect(request.serverId, request.request, request.configuration) } };
+        }
+      }
+      case 'shell':
+        if (operation.operation.type === 'start') await this.authorize({ type: 'shell', request: operation.operation.request });
+        return { type: 'shell', result: await this.shell.operation(operation.operation) };
+      case 'completion':
+        return { type: 'completion', result: await this.completion.operation(operation.operation) };
       case 'prompt': {
         if (this.preparation || this.projection.activeRun()) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+        if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills must be successfully applied before prompt admission');
         this.preparation = this.prepare(operation);
-        let options: NativePromptOptions;
-        try { options = await this.preparation; }
+        let prepared: PreparedPrompt;
+        try { prepared = await this.preparation; }
         finally { this.preparation = undefined; }
-        if (this.closed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is closed');
+        if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
+        if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills changed during prompt preparation');
         this.emit(this.projection.beginRun(operation.runId, Date.now(), operation.request.input.attachments));
         const run = this.projection.activeRun();
         if (!run) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Run admission failed');
         const accepted: Run = { ...run };
-        this.promptTask = this.session.prompt(operation.request.input.text, options).then(async dispatched => {
+        this.promptTask = this.session.prompt(prepared.text, prepared.options).then(async dispatched => {
           await this.bind();
           if (!dispatched) this.emit(this.projection.completeRun(Date.now()));
         }).catch(() => {
@@ -233,7 +362,13 @@ export class WorkerSession {
       await this.bind();
     } finally {
       this.unsubscribe();
-      try { await this.session.dispose(); } finally { this.authStorage.close(); }
+      try {
+        try { await this.completion.close(); }
+        finally {
+          await Promise.allSettled([...this.operations]);
+          try { await this.shell.close(); } finally { await this.mcp?.close(); }
+        }
+      } finally { try { await this.session.dispose(); } finally { this.authStorage.close(); } }
     }
   }
 }
