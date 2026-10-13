@@ -52,11 +52,10 @@ const parseArchiveRequest = (payload) => {
 
 const createCanonicalSessionService = (dependencies) => {
   const { service, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope, listWorkspaceScopes, registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted, publishSessionEvent, archiveStore, sessionMetadataStore, persistSessionMetadata, broadcastGlobalUiEvent } = dependencies;
-  if (!service || typeof service.request !== 'function') throw new Error('session routes require the Agent service');
-  if (typeof resolveWorkspaceScope !== 'function' || typeof resolveSessionScope !== 'function' || typeof resolveHostSessionScope !== 'function') throw new Error('session routes require Host scope resolvers');
-  if (typeof registerSessionScope !== 'function') throw new Error('session routes require registerSessionScope');
-  if (typeof resolveAttachments !== 'function') throw new Error('session routes require resolveAttachments');
-  if (typeof capturePrompt !== 'function' || typeof beforeDispatch !== 'function' || typeof onPromptAccepted !== 'function') throw new Error('session routes require direct delivery hooks');
+  const requiredFunctions = [service?.request, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope,
+    registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted];
+  if (!service || requiredFunctions.some((candidate) => !z.function().safeParse(candidate).success))
+    throw new Error('session routes require the Agent service, Host scope resolvers, registration, attachment and delivery owners');
   const request = async (pathname, init = {}) => {
     const response = await service.request(pathname, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
     const body = await response.json().catch(() => null);
@@ -75,8 +74,11 @@ const createCanonicalSessionService = (dependencies) => {
     const workspace = await resolveWorkspaceScope(workspaceId);
     if (!workspace || workspace.projectId !== projectId) throw new OpenChamberControlError('Workspace does not belong to project', 404);
     const rootSessionId = randomUUID();
-    const displayPath = typeof workspace.displayPath === 'string' && !workspace.displayPath.startsWith('/') && !workspace.displayPath.startsWith('\\') && !/^[A-Za-z]:/.test(workspace.displayPath) ? workspace.displayPath : 'workspace';
-    const body = await request('/internal/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rootSessionId, projectId, workspaceId, cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId, displayPath, options, ...(workspace.env ? { env: workspace.env } : {}) }) });
+    const workspaceDisplay = z.object({ displayPath: z.string().optional(), env: z.record(z.string(), z.string()).optional() }).passthrough().parse(workspace);
+    const displayPath = workspaceDisplay.displayPath && !workspaceDisplay.displayPath.startsWith('/') && !workspaceDisplay.displayPath.startsWith('\\') && !/^[A-Za-z]:/.test(workspaceDisplay.displayPath) ? workspaceDisplay.displayPath : 'workspace';
+    const sessionBootstrap = { rootSessionId, projectId, workspaceId, cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId, displayPath, options };
+    if (workspaceDisplay.env) sessionBootstrap.env = workspaceDisplay.env;
+    const body = await request('/internal/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sessionBootstrap) });
     const session = RuntimeSessionSchema.parse(body);
     if (session.projectId !== projectId || session.workspaceId !== workspaceId || session.rootSessionId !== rootSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502);
     if (!await registerSessionScope(session)) throw new OpenChamberControlError('Session scope registration failed', 500);
