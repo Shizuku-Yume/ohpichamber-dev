@@ -129,8 +129,9 @@ export class WorkerRegistry {
       cwd: input.cwd,
       env,
       windowsHide: true,
-      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
     });
+    child.stderr?.on('data', chunk => { process.stderr.write(`Agent worker startup: ${String(chunk).replace(/(?:\/[^\s]+|[A-Za-z0-9_-]{20,})/g, '[redacted]')}`); });
     const entry: WorkerEntry = {
       input,
       info: { rootSessionId: input.rootSessionId, projectId: input.projectId, workspaceId: input.workspaceId, workerGeneration, state: 'starting' },
