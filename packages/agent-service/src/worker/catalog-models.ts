@@ -3,6 +3,7 @@ import { mkdir, open, readFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { JSONC, YAML } from 'bun';
 import { z } from 'zod';
+import { getModelPricingStatus } from '@oh-my-pi/pi-catalog';
 import type { CreateAgentSessionOptions } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
@@ -120,6 +121,10 @@ export function publicModel(native: NativeCatalogModel, configured?: Model, enab
   }
   const offRoute = native.thinking?.effortRouting?.off;
   if (offRoute && !variants.some(variant => variant.variant === offRoute)) variants.push({ variant: offRoute, label: offRoute, reasoningEffort: null });
+  const cost = native.cost;
+  const pricingStatus = getModelPricingStatus(native);
+  const hasPublishedRates = cost.input >= 0 && cost.output >= 0 && cost.cacheRead >= 0 && cost.cacheWrite >= 0
+    && (pricingStatus === 'fixed' || pricingStatus === 'free');
   const candidate: Model = {
     modelId: native.id, provider: native.provider, name: configured?.name ?? native.name,
     modalities: [...new Set(modalities)], contextWindow: native.contextWindow,
@@ -129,10 +134,10 @@ export function publicModel(native: NativeCatalogModel, configured?: Model, enab
       reasoningEffort, label: reasoningEffort, budgetTokens: native.thinking?.effortBudgets?.[reasoningEffort] ?? null,
     })),
     variants: configured?.variants ?? variants,
-    pricing: configured ? configured.pricing : native.pricingStatus === 'unknown' || (native.pricingStatus === undefined && Object.values(native.cost).every(cost => cost === 0)) ? null : {
-      inputPerMillionTokens: native.cost.input, outputPerMillionTokens: native.cost.output,
-      cacheReadPerMillionTokens: native.cost.cacheRead, cacheWritePerMillionTokens: native.cost.cacheWrite,
-    },
+    pricing: configured ? configured.pricing : hasPublishedRates ? {
+      inputPerMillionTokens: cost.input, outputPerMillionTokens: cost.output,
+      cacheReadPerMillionTokens: cost.cacheRead, cacheWritePerMillionTokens: cost.cacheWrite,
+    } : null,
   };
   if (native.supportsTools !== undefined) candidate.toolsSupported = native.supportsTools;
   if (enabled !== undefined) candidate.enabled = enabled;
