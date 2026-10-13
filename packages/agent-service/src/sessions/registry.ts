@@ -181,6 +181,7 @@ export class SessionRegistry {
     return result.ack;
   }
 
+
   async abort(sessionId: string, runId: string) {
     this.ensureOpen();
     if (this.runtime(sessionId).activeRunId !== runId) throw new WorkerOperationError(404, 'RUN_NOT_FOUND');
