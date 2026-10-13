@@ -105,6 +105,8 @@
       "name": "@openchamber/agent-service",
       "version": "1.0.0",
       "dependencies": {
+        "@oh-my-pi/pi-agent-core": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-agent-core-18.8.9.tgz",
+        "@oh-my-pi/pi-ai": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-ai-18.8.9.tgz",
         "@oh-my-pi/pi-coding-agent": "file:../../vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-coding-agent-18.8.9.tgz",
         "@openchamber/agent-contract": "workspace:*",
         "fastembed": "3.0.0",
