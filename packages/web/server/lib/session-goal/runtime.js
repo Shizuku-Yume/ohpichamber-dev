@@ -357,7 +357,7 @@ export const createSessionGoalRuntime = ({
     const items = listed.items;
     const statusOf = (session) => session.runtimeStatus;
     const statuses = Object.fromEntries(items.map((entry) => [entry.sessionId, statusOf(entry)]));
-    return { scope, statuses, childrenWorking: items.some((entry) => entry.parentSessionId === sessionId && isWorkingStatus(statusOf(entry))), current: snapshot };
+    return { scope, statuses, childrenWorking: items.some((entry) => entry.rootSessionId === sessionId && entry.sessionId !== sessionId && isWorkingStatus(statusOf(entry))), current: snapshot };
   };
 
   const isWorkingStatus = (status) => status === 'running' || status === 'awaiting_approval' || status === 'awaiting_input';
@@ -495,7 +495,7 @@ export const createSessionGoalRuntime = ({
     const activity = await readActivity(sessionId);
     const session = activity?.current?.session ?? activity?.current;
     if (!session || typeof session !== 'object') return;
-    if (session.parentSessionId) return;
+    if (session.rootSessionId !== session.sessionId) return;
 
 
     const goal = await readGoal(sessionId);
@@ -793,6 +793,10 @@ export const createSessionGoalRuntime = ({
   // "stop". Messages the user sends afterwards leave the paused goal alone;
   // Resume re-arms the loop (and kicks off immediately on an idle session).
   const pauseAfterAbort = async (sessionId, directory) => {
+    const scope = await resolveSessionScope(sessionId);
+    if (!scope || scope.rootSessionId !== sessionId) return;
+    const snapshot = await sessionService.open(sessionId).catch(() => null);
+    if (snapshot?.session && snapshot.session.rootSessionId !== snapshot.session.sessionId) return;
     const goal = await readGoal(sessionId);
     if (!goal || goal.status !== 'active') return;
     await writeGoal(sessionId, directory, goal.id, () => ({
@@ -832,7 +836,7 @@ export const createSessionGoalRuntime = ({
     if (scope?.sessionId && scope.sessionId !== event.sessionId) return;
     const sessionId = event.sessionId;
     const directory = scope?.cwd || '';
-    if (event.type === 'session.execution.interrupted') {
+    if (event.type === 'run.cancelled') {
       clearTimer(sessionId);
       if (!inflight.has(sessionId)) {
         inflight.add(sessionId);
@@ -842,13 +846,11 @@ export const createSessionGoalRuntime = ({
       }
       return;
     }
-    if (event.type === 'session.idle' || (event.type === 'session.status' && event.status === 'idle')) {
+    if (event.type === 'session.status' && event.runtimeStatus === 'idle') {
       armTimer(sessionId, directory, idleQuietMs);
       return;
     }
-    if (event.type === 'session.running' || event.type === 'session.started' || event.type === 'session.busy') {
-      clearTimer(sessionId);
-    }
+    if (event.type === 'session.status') clearTimer(sessionId);
   };
 
   const stop = () => {

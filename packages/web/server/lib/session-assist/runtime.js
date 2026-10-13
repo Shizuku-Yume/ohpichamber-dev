@@ -124,7 +124,7 @@ export const createSessionAssistRuntime = ({
     const scope = await resolveSessionScope(sessionId);
     if (!scope) return;
     const session = await sessionService.open(sessionId);
-    if (session?.session?.parentSessionId || session?.session?.revertMessageId) return;
+    if (session?.session && session.session.rootSessionId !== session.session.sessionId) return;
     if (await isSessionArchived(sessionId)) return;
     const context = await loadAssistContext({
       signal,
@@ -175,7 +175,7 @@ export const createSessionAssistRuntime = ({
     signal.throwIfAborted();
     if (newestContentId(latestPage?.messages) !== last.id) return;
     const freshSession = await sessionService.open(sessionId);
-    if (freshSession?.session?.parentSessionId || freshSession?.session?.revertMessageId) return;
+    if (freshSession?.session && freshSession.session.rootSessionId !== freshSession.session.sessionId) return;
     const enabled = getTargets();
     if (!enabled.recap || !allowed.recap) recap = '';
     if (!enabled.suggestion || !allowed.suggestion) suggestion = '';
@@ -258,11 +258,11 @@ export const createSessionAssistRuntime = ({
     }
     const sessionId = typeof event?.sessionId === 'string' ? event.sessionId : '';
     if (!sessionId || (scope?.sessionId && scope.sessionId !== sessionId)) return;
-    if (event.type === 'session.idle') {
+    if (event.type === 'session.status' && event.runtimeStatus === 'idle') {
       if (lineage?.isChild(sessionId) !== true) onTurnEnd(sessionId, scope?.cwd || '');
       return;
     }
-    if (event.type === 'session.busy' || event.type === 'session.error' || event.type === 'session.started') {
+    if (event.type === 'session.status' && event.runtimeStatus !== 'idle') {
       invalidate(sessionId);
       retireStored(sessionId, scope?.cwd || '');
       return;

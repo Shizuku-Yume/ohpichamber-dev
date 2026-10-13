@@ -233,7 +233,7 @@ export function createDispatchResultsRuntime({
       if (session.runtimeStatus === 'running' || session.runtimeStatus === 'awaiting_approval' || session.runtimeStatus === 'awaiting_input') return { kind: 'running' };
       const listed = await sessionService.list(scope.workspaceId);
       if (!listed || !Array.isArray(listed.items) || (Array.isArray(listed.errors) && listed.errors.length > 0)) return null;
-      if (listed.items.some((item) => item.parentSessionId === sessionId && ['running', 'awaiting_approval', 'awaiting_input'].includes(item.runtimeStatus))) return { kind: 'subagents' };
+      if (listed.items.some((item) => item.rootSessionId === sessionId && item.sessionId !== sessionId && ['running', 'awaiting_approval', 'awaiting_input'].includes(item.runtimeStatus))) return { kind: 'subagents' };
       const page = await sessionService.history(sessionId, new URLSearchParams({ limit: String(MESSAGE_PAGE_LIMIT) }).toString());
       if (!page || !Array.isArray(page.turns) || !Array.isArray(page.messages)) return null;
       return { kind: 'ended', title: typeof session.metadata?.title === 'string' ? session.metadata.title.trim() : '', page };

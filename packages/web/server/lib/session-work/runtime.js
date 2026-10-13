@@ -109,16 +109,31 @@ export function createSessionWorkRuntime({
     const query = new URLSearchParams({ limit: String(limit), ...(cursor ? { cursor } : {}) });
     return sessionService.history(sessionId, query.toString());
   };
+  const readMessageText = async (sessionId, messageId, signal) => {
+    let cursor;
+    for (let pageNumber = 0; pageNumber < 8; pageNumber += 1) {
+      signal?.throwIfAborted();
+      const page = await sessionService.history(sessionId, new URLSearchParams({ limit: '50', ...(cursor ? { cursor } : {}) }).toString());
+      const message = page?.messages?.find((candidate) => (candidate?.messageId || candidate?.id) === messageId);
+      if (message) return (Array.isArray(message.parts) ? message.parts : [])
+        .filter((part) => part?.type === 'text' && typeof part.content === 'string')
+        .map((part) => part.content).join('\n\n');
+      const next = typeof page?.nextCursor === 'string' ? page.nextCursor : null;
+      if (!next || next === cursor) break;
+      cursor = next;
+    }
+    return '';
+  };
 
   const eligibleSession = async (sessionId, scope) => {
     const snapshot = await sessionService.open(sessionId);
     const session = snapshot?.session;
-    if (!session || session.sessionId !== sessionId || session.parentSessionId) return null;
+    if (!session || session.sessionId !== sessionId || session.rootSessionId !== sessionId) return null;
     if (isChatDirectory(scope.cwd)) return null;
     const metadata = await readMetadata(sessionId, scope.cwd);
     if (metadata?.openchamber?.kind === 'review') return null;
     if (await isSessionArchived(sessionId)) return null;
-    lineage?.remember(sessionId, session.parentSessionId ?? null);
+    lineage?.remember(session.sessionId, session.rootSessionId);
     return session;
   };
 
@@ -128,10 +143,12 @@ export function createSessionWorkRuntime({
     while (suggested.size > SEEN_MESSAGES_LIMIT) suggested.delete(suggested.keys().next().value);
   };
 
-  const onUserMessage = async ({ sessionId, scope, messageId, text, createdAt }) => {
+  const onUserMessage = async ({ sessionId, scope, messageId, text = '', createdAt }) => {
     const settings = getSettings();
-    if (!settings.enabled || !settings.autoOpen || !text.trim()) return;
+    if (!settings.enabled || !settings.autoOpen) return;
     if (seenMessages.has(messageId)) return;
+    const requestText = text.trim() || (await readMessageText(sessionId, messageId));
+    if (!requestText.trim()) return;
     seenMessages.add(messageId);
     while (seenMessages.size > SEEN_MESSAGES_LIMIT) seenMessages.delete(seenMessages.values().next().value);
     const endpoint = await classifierEndpoint();
@@ -141,7 +158,7 @@ export function createSessionWorkRuntime({
     if (readWork(await readMetadata(sessionId, scope.cwd))?.state === 'open') return;
     const turns = await loadSettledTurns({ readPage: readPages(sessionId), signal: undefined });
     const { answers } = await jev.ask(
-      buildSendRequest({ history: turnsToHistory(turns), request: excerptHead(text.trim(), REQUEST_CHARS) }),
+      buildSendRequest({ history: turnsToHistory(turns), request: excerptHead(requestText.trim(), REQUEST_CHARS) }),
       endpoint,
     );
     if (stopped || !decideOpen(answers)) return;

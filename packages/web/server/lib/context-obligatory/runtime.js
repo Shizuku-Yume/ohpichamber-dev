@@ -72,7 +72,7 @@ export const createContextObligatoryRuntime = ({
     const scope = await resolveSessionScope(sessionId);
     if (!scope) return;
     const snapshot = await sessionService.open(sessionId);
-    if (snapshot?.session?.parentSessionId) return;
+    if (snapshot?.session && snapshot.session.rootSessionId !== snapshot.session.sessionId) return;
     const stored = { metadata: await readSessionMetadata(sessionId) };
     const state = readContextState(stored);
     const knowledge = sessionKnowledgeRuntime

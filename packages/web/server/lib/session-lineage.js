@@ -1,51 +1,38 @@
 /**
- * Which sessions are subsessions, remembered so per-turn work can skip them
- * without asking OpenCode. Whether a session has a parent never changes, so an
- * answer never goes stale; it is learned from `session.created` events (the
- * translated event names the parent) and from any session record a runtime
- * read anyway. Bounded: the oldest entries go first, and a forgotten session
- * is simply unknown again.
+ * Which canonical runtime sessions are children of another root. A child is
+ * identified by the Host-owned relation `sessionId !== rootSessionId`; no
+ * OpenCode parent field or inferred directory relationship is used.
  */
-import { z } from 'zod';
+import { CanonicalEventSchema } from '@openchamber/agent-contract';
 
 const DEFAULT_LIMIT = 5000;
 
-const createdSchema = z.object({
-  type: z.literal('session.created'),
-  properties: z.object({
-    sessionID: z.string().min(1),
-    info: z.object({ parentID: z.string().min(1).optional() }).optional(),
-  }),
-});
-
-const deletedSchema = z.object({
-  type: z.literal('session.deleted'),
-  properties: z.object({ sessionID: z.string().min(1) }),
-});
-
 export function createSessionLineage({ limit = DEFAULT_LIMIT } = {}) {
-  // sessionID → true for a subsession, false for a top-level session.
+  // sessionId -> true for a child, false for an independent root.
   const isChildById = new Map();
 
-  const remember = (sessionId, parentId) => {
-    if (!sessionId) return;
+  const remember = (sessionId, rootSessionId) => {
+    if (typeof sessionId !== 'string' || !sessionId || typeof rootSessionId !== 'string' || !rootSessionId) return;
     isChildById.delete(sessionId);
-    isChildById.set(sessionId, Boolean(parentId));
+    isChildById.set(sessionId, rootSessionId !== sessionId);
     while (isChildById.size > limit) isChildById.delete(isChildById.keys().next().value);
   };
 
-  /** Learns from the server's translated event stream. */
+  /** Learn session lineage only from validated canonical Host events. */
   const observe = (payload) => {
-    const created = createdSchema.safeParse(payload);
-    if (created.success) {
-      remember(created.data.properties.sessionID, created.data.properties.info?.parentID ?? null);
+    const parsed = CanonicalEventSchema.safeParse(payload);
+    if (!parsed.success) return;
+    const event = parsed.data;
+    if (event.type === 'session.updated' && event.session) {
+      remember(event.session.sessionId, event.session.rootSessionId);
       return;
     }
-    const deleted = deletedSchema.safeParse(payload);
-    if (deleted.success) isChildById.delete(deleted.data.properties.sessionID);
+    if (event.type === 'session.deleted') {
+      for (const sessionId of event.deletedSessionIds) isChildById.delete(sessionId);
+    }
   };
 
-  /** True for a known subsession, false for a known top-level session, undefined when unknown. */
+  /** True for a known child, false for a known root, undefined when unknown. */
   const isChild = (sessionId) => isChildById.get(sessionId);
 
   return { observe, remember, isChild };
