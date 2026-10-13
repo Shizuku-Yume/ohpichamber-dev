@@ -50,8 +50,10 @@ const MetadataSchema = z.object({
 const FileMetadataSchema = z.object({ openchamber: MetadataSchema });
 type CatalogMetadata = z.infer<typeof MetadataSchema>;
 type ConfigState = { config: ModelsConfig; metadata: CatalogMetadata; path: string; content: string | null };
-type NativeProviderConfig = NonNullable<ModelsConfig['providers']>[string];
-type NativeModelDefinition = NonNullable<NativeProviderConfig['models']>[number];
+type ModelsConfigInput = typeof ModelsConfigSchema.inferIn;
+type NativeProviderConfigInput = NonNullable<ModelsConfigInput['providers']>[string];
+type NativeModelDefinitionInput = NonNullable<NativeProviderConfigInput['models']>[number];
+type NativeThinkingEffortInput = NonNullable<NonNullable<NativeModelDefinitionInput['thinking']>['efforts']>[number];
 
 function modelKey(selection: ModelSelection): string {
   return JSON.stringify([selection.providerId, selection.modelId]);
@@ -80,7 +82,7 @@ function nativeApi(protocol: NonNullable<Provider['protocol']>): NonNullable<Non
   }
 }
 
-function nativeProviderApi(api: NativeCatalogModel['api'] | undefined): NativeProviderConfig['api'] {
+function nativeProviderApi(api: string): NonNullable<NativeProviderConfigInput['api']> {
   switch (api) {
     case 'openai-completions': case 'openai-responses': case 'openai-codex-responses':
     case 'azure-openai-responses': case 'anthropic-messages': case 'bedrock-converse-stream':
@@ -88,7 +90,16 @@ function nativeProviderApi(api: NativeCatalogModel['api'] | undefined): NativePr
     case 'openrouter-decisions': case 'typesafe':
       return api;
     default:
-      return undefined;
+      throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model or provider configuration is invalid');
+  }
+}
+
+function nativeThinkingEffort(effort: string): NativeThinkingEffortInput {
+  switch (effort) {
+    case 'minimal': case 'low': case 'medium': case 'high': case 'xhigh': case 'max':
+      return effort;
+    default:
+      throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model or provider configuration is invalid');
   }
 }
 
@@ -274,7 +285,7 @@ export class NativeModels {
     return { ...resolveModelSelection(this.context.modelRegistry, input, configured, controls), nativeCredentialSessionId };
   }
 
-  private validate(config: ModelsConfig): ModelsConfig {
+  private validate(config: ModelsConfigInput): ModelsConfig {
     try {
       const parsed = ModelsConfigSchema.assert(config);
       for (const [providerId, provider] of Object.entries(parsed.providers ?? {})) {
@@ -379,21 +390,26 @@ export class NativeModels {
     }
     const nativeInput = model.modalities.filter((modality): modality is 'text' | 'image' => modality === 'text' || modality === 'image');
     if (nativeInput.length === 0) throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model requires a supported input modality');
-    const reasoning = model.reasoningOptions.length > 0 ? { mode: existing?.thinking?.mode ?? 'effort', efforts: model.reasoningOptions.map(option => option.reasoningEffort) } : undefined;
+    const reasoning: NativeModelDefinitionInput['thinking'] = model.reasoningOptions.length > 0
+      ? { mode: existing?.thinking?.mode ?? 'effort', efforts: model.reasoningOptions.map(option => nativeThinkingEffort(option.reasoningEffort)) }
+      : undefined;
     const cost = model.pricing === null ? existing?.cost : {
       input: model.pricing.inputPerMillionTokens, output: model.pricing.outputPerMillionTokens,
       cacheRead: model.pricing.cacheReadPerMillionTokens ?? 0, cacheWrite: model.pricing.cacheWritePerMillionTokens ?? 0,
     };
     state.config.providers ??= {};
-    const providerApi = configuredProvider?.api ?? nativeProviderApi(existing?.api);
-    const provider: NativeProviderConfig = { ...configuredProvider, baseUrl };
-    if (providerApi) provider.api = providerApi;
-    const raw: NativeModelDefinition = {
+    const provider: NativeProviderConfigInput = { ...configuredProvider, api: nativeProviderApi(api), baseUrl };
+    const raw: NativeModelDefinitionInput = {
       id: model.modelId, name: model.name, api,
       input: nativeInput, reasoning: model.reasoningEffortSupported,
       contextWindow: model.contextWindow, maxTokens: model.maxOutputTokens,
     };
-    if (existing?.kind) raw.kind = existing.kind;
+    if (existing?.kind) {
+      if (existing.kind === 'search') {
+        throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model or provider configuration is invalid');
+      }
+      raw.kind = existing.kind;
+    }
     if (reasoning) raw.thinking = reasoning;
     if (cost) raw.cost = cost;
     if (model.toolsSupported !== undefined) raw.supportsTools = model.toolsSupported;
