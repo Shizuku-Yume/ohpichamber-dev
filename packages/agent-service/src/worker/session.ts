@@ -309,15 +309,15 @@ export class WorkerSession {
           : { role: 'user' as const, content: context.text, synthetic: true, timestamp: Date.now() };
         contextMessages.push(message);
       } else {
+        if (context.instructions) {
+          const message = { role: 'developer' as const, content: context.instructions, timestamp: Date.now() };
+          contextMessages.push(message);
+        }
         contextMessages.push({
           role: 'custom', customType: 'ohpichamber.context', content: context.text, display: false,
           details: { metadata: context.metadata, deliveryReceiptId: context.deliveryReceiptId },
           attribution: 'agent', timestamp: Date.now(),
         });
-        if (context.instructions) {
-          const message = { role: 'developer' as const, content: context.instructions, timestamp: Date.now() };
-          contextMessages.push(message);
-        }
       }
     }
     const images: NonNullable<PromptOptions['images']> = [];
