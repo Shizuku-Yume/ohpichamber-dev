@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { z } from 'zod';
 import { ProblemDetailsSchema } from '@openchamber/agent-contract';
+const ExpressDependencySchema = z.object({ Router: z.function(), json: z.function() });
+const RouteDependenciesSchema = z.object({ express: ExpressDependencySchema, store: z.object({ upload: z.function(), read: z.function() }), resolveWorkspaceScope: z.function(), maxBytes: z.number().int().positive() });
 
 const UploadSchema = z.strictObject({
   workspaceId: z.string().min(1),
@@ -18,7 +20,7 @@ const problem = (res, status, code, detail) => {
 const validBase64 = (data) => data.length % 4 === 0 && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data);
 
 export function createAttachmentRoutes({ express, store, resolveWorkspaceScope, maxBytes = 20 * 1024 * 1024 }) {
-  if (!express?.Router || !store || typeof resolveWorkspaceScope !== 'function') throw new TypeError('express, store and resolveWorkspaceScope are required');
+  RouteDependenciesSchema.parse({ express: { Router: express?.Router, json: express?.json }, store, resolveWorkspaceScope, maxBytes });
   const router = express.Router();
   const authorizedScope = async (workspaceId, res) => {
     try {
@@ -48,9 +50,9 @@ export function createAttachmentRoutes({ express, store, resolveWorkspaceScope, 
     }
   });
   router.get('/:attachmentId', async (req, res) => {
-    const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : '';
-    if (!workspaceId) return problem(res, 400, 'INVALID_REQUEST', 'workspaceId is required');
-    const scope = await authorizedScope(workspaceId, res);
+    const workspaceResult = z.string().min(1).safeParse(req.query.workspaceId);
+    if (!workspaceResult.success) return problem(res, 400, 'INVALID_REQUEST', 'workspaceId is required');
+    const scope = await authorizedScope(workspaceResult.data, res);
     if (!scope) return;
     let result;
     try {
