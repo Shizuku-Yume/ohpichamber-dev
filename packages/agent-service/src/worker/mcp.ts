@@ -99,7 +99,7 @@ export async function readNativeMcpConfigurationIfPresent(configPath: string, wo
   return readNativeMcpConfiguration(configPath, workspaceId);
 }
 
-export async function readNativeMcpConfiguration(configPath: string, workspaceId: string): Promise<MCPConfigurationState> {
+async function readNativeMcpConfiguration(configPath: string, workspaceId: string): Promise<MCPConfigurationState> {
   try {
     const file = ManagedFileSchema.parse(await readMCPConfigFile(configPath));
     if (file.openchamber.workspaceId !== workspaceId) throw new Error('Workspace mismatch');
