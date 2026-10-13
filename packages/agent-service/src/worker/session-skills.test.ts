@@ -33,8 +33,10 @@ test('native skill submission and catalog descriptions hide roots, and failed di
   const catalogEvents: string[] = [];
   const submitted: string[] = [];
   const provider = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
-    const payload = z.object({ messages: z.array(z.object({ role: z.string(), content: z.unknown() })) }).parse(await request.json());
-    submitted.push(JSON.stringify(payload.messages.filter(message => message.role === 'user')));
+    const textContent = z.union([z.string(), z.array(z.object({ type: z.literal('text'), text: z.string() }))]);
+    const payload = z.object({ messages: z.array(z.object({ role: z.string(), content: textContent })) }).parse(await request.json());
+    submitted.push(...payload.messages.filter(message => message.role === 'user').flatMap(message =>
+      typeof message.content === 'string' ? [message.content] : message.content.map(part => part.text)));
     const chunk = { id: 'skill-response', object: 'chat.completion.chunk', created: 1, model: 'skill-model',
       choices: [{ index: 0, delta: { role: 'assistant', content: 'Skill received.' }, finish_reason: null }] };
     const finish = { ...chunk, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } };
@@ -89,8 +91,13 @@ test('native skill submission and catalog descriptions hide roots, and failed di
     const entrySchema = z.object({ type: z.string(), message: z.object({ role: z.string(), content: z.unknown() }).optional() });
     const transcriptUsers = (await readFile(worker.sessionFile, 'utf8')).split('\n').filter(Boolean)
       .map(line => entrySchema.parse(JSON.parse(line))).filter(entry => entry.type === 'message' && entry.message?.role === 'user');
-    expect(submitted).toHaveLength(1);
-    for (const projection of [...submitted, JSON.stringify(liveUser), JSON.stringify(historyUser), JSON.stringify(transcriptUsers)]) {
+    // The SDK prepends a wire-only date/cwd text block; it is not the submitted skill or persisted message.
+    expect(submitted).toHaveLength(2);
+    expect(submitted[0]).toMatch(/^<system-reminder>\nToday: \d{4}-\d{2}-\d{2}; current working directory:/);
+    expect(submitted[0]).toContain(cwd);
+    const submittedSkill = submitted[1]!;
+    expect(submittedSkill).not.toContain('<system-reminder>');
+    for (const projection of [submittedSkill, JSON.stringify(liveUser), JSON.stringify(historyUser), JSON.stringify(transcriptUsers)]) {
       expect(projection).toContain('skill://privacy-proof');
       expect(projection).toContain('SKILL_BODY_MARKER');
       expect(projection).toContain('SKILL_ARGUMENT_MARKER');

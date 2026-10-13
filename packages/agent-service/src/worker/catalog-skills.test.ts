@@ -12,9 +12,24 @@ import { WorkerSkills } from './catalog-skills.ts';
 beforeEach(resetSettingsForTest);
 afterEach(resetSettingsForTest);
 
+const fixtureHome = process.env.OPENCHAMBER_SKILL_FIXTURE_HOME;
+
 for (const source of ['native', 'agents', 'github', 'opencode', 'opencode-user'] as const) {
+  if (fixtureHome && source !== 'opencode-user') continue;
   test(`an unreadable enabled ${source} skill preserves the last published catalog`, async () => {
-    const root = await mkdtemp(join(tmpdir(), 'catalog-skills-'));
+    if (source === 'opencode-user' && !fixtureHome) {
+      const home = await mkdtemp(join(tmpdir(), 'catalog-skills-home-'));
+      try {
+        // Bun caches os.homedir(); HOME must exist before this process imports the SDK.
+        const child = Bun.spawn([process.execPath, 'test', import.meta.path], {
+          env: { ...process.env, HOME: home, OPENCHAMBER_SKILL_FIXTURE_HOME: home }, stdout: 'pipe', stderr: 'pipe',
+        });
+        const [status, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+        if (status !== 0) throw new Error(`Fresh-HOME skill fixture failed (${status}):\n${stdout}\n${stderr}`);
+      } finally { await rm(home, { recursive: true, force: true }); }
+      return;
+    }
+    const root = fixtureHome ?? await mkdtemp(join(tmpdir(), 'catalog-skills-'));
     const home = process.env.HOME;
     const previousAgentDirectory = getAgentDir();
     process.env.HOME = root;
@@ -70,7 +85,7 @@ for (const source of ['native', 'agents', 'github', 'opencode', 'opencode-user']
       setAgentDir(previousAgentDirectory);
       if (home === undefined) delete process.env.HOME; else process.env.HOME = home;
       resetSettingsForTest();
-      await rm(root, { recursive: true, force: true });
+      if (!fixtureHome) await rm(root, { recursive: true, force: true });
     }
-  });
+  }, 30000);
 }
