@@ -12,7 +12,7 @@ const fixture = (settings = {}, overrides = {}) => {
   const sessionService = {
     open: async () => snapshot(records, [turn()]),
     history: async () => { throw new Error('not expected'); },
-    list: async () => ({ items: [{ ...runtimeSession(), metadata: null, metadataRevision: '0', archiveRevision: '0' }], errors: [] }),
+    list: async () => ({ items: [{ ...runtimeSession(), metadata: null, metadataRevision: '0', archiveRevision: '0' }], errors: {} }),
   };
   const readSettingsFromDisk = async () => ({ nativeNotificationsEnabled: true, notificationMode: 'always', projects: [], ...settings });
   const template = createNotificationTemplateRuntime({ sessionService, resolveSessionScope: async () => scope,
@@ -61,10 +61,12 @@ describe('canonical notification triggers', () => {
   it('suppresses completion while a live child works or its activity is unavailable', async () => {
     const f = fixture();
     const child = { ...runtimeSession({ sessionId: 'child', parentSessionId: 'session', runtimeStatus: 'running', activeRunId: 'child-run' }), metadata: null, metadataRevision: '0', archiveRevision: '0' };
-    f.sessionService.list = async () => ({ items: [child], errors: [] });
+    f.sessionService.list = async () => ({ items: [child], errors: {} });
     await f.runtime.processCanonicalEvent(terminal(), scope); expect(f.web).toEqual([]);
-    f.sessionService.list = async () => ({ items: [], errors: [{ sessionId: 'child', code: 'SESSION_UNAVAILABLE' }] });
+    f.sessionService.list = async () => ({ items: [], errors: { child: 'SERVICE_UNAVAILABLE' } });
     await f.runtime.processCanonicalEvent(terminal(2), scope); expect(f.web).toEqual([]);
+    f.sessionService.list = async () => ({ items: [{ ...runtimeSession(), metadata: null, metadataRevision: '0', archiveRevision: '0' }], errors: {} });
+    await f.runtime.processCanonicalEvent(terminal(3), scope); expect(f.web).toHaveLength(1);
   });
 
   it('cancels approval debounce on authoritative resolution and suppresses auto-accepted approvals', async () => {

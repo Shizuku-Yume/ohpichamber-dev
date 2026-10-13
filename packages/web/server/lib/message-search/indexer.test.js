@@ -10,7 +10,7 @@ const fixture = ({ records = [message()], turns = [turn()], includeReasoning = (
   const store = openMessageSearchStore(loadSqliteOpener()(':memory:'));
   const service = {
     open: async () => snapshot(records, turns), history: async () => history(records, turns),
-    list: async () => ({ items: [{ ...runtimeSession(), metadata: null, metadataRevision: '0', archiveRevision: '0' }], errors: [] }),
+    list: async () => ({ items: [{ ...runtimeSession(), metadata: null, metadataRevision: '0', archiveRevision: '0' }], errors: {} }),
   };
   const indexer = createMessageSearchIndexer({ store, sessionService: service, resolveSessionScope: async () => scope,
     readSessionMetadata: async () => ({ title: 'Host title' }), includeReasoning, liveDebounceMs: 0, backfillPauseMs: 0, logger: { warn() {} } });
@@ -70,11 +70,12 @@ describe('canonical search indexing', () => {
 
   it('establishes an authoritative baseline and preserves failed scopes during later enumeration', async () => {
     const f = fixture(); await f.indexer.onConnected(); await f.indexer.idle();
-    f.service.list = async () => ({ items: [], errors: [{ sessionId: 'session', code: 'SESSION_UNAVAILABLE' }] });
+    expect(f.search('searchable')).toHaveLength(1);
+    f.service.list = async () => ({ items: [], errors: { session: 'SERVICE_UNAVAILABLE' } });
     await f.indexer.onConnected(); await f.indexer.idle(); expect(f.search('searchable')).toHaveLength(1);
     f.service.list = async () => { throw new Error('unavailable'); };
     await f.indexer.onConnected(); expect(f.search('searchable')).toHaveLength(1);
-    f.service.list = async () => ({ items: [], errors: [] });
+    f.service.list = async () => ({ items: [], errors: {} });
     await f.indexer.onConnected(); await f.indexer.idle(); expect(f.search('searchable')).toEqual([]);
   });
 });

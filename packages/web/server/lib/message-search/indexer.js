@@ -102,8 +102,7 @@ export const createMessageSearchIndexer = ({
       const capturedRevisions = new Map(revisions);
       const result = await sessionService.list();
       const items = SessionSchema.array().parse(result.items);
-      if (!Array.isArray(result.errors)) throw new Error('Incomplete canonical session list');
-      const failedIds = new Set(EntityIdSchema.array().parse(result.errors.map((error) => error.sessionId)));
+      const failedIds = new Set(EntityIdSchema.array().parse(Object.keys(result.errors)));
       if (stopped) return;
       const listed = new Map(items.filter((session) => !session.parentSessionId
         && revision(session.sessionId) === (capturedRevisions.get(session.sessionId) ?? 0)).map((session) => [session.sessionId, session]));

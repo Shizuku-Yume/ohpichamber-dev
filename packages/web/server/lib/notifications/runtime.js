@@ -78,7 +78,7 @@ export const createNotificationTriggerRuntime = (deps) => {
       if (subtask && settings.notifyOnSubtasks === false) return;
       const page = await sessionService.list(resolved.workspaceId);
       const sessions = SessionSchema.array().parse(page.items);
-      if (!Array.isArray(page.errors) || page.errors.length > 0) return;
+      if (Object.keys(page.errors).length > 0) return;
       if (sessions.some((session) => session.rootSessionId === resolved.rootSessionId && session.sessionId !== event.sessionId
         && ['running', 'awaiting_approval', 'awaiting_input'].includes(session.runtimeStatus))) return;
       const metadata = await readSessionMetadata(event.sessionId);

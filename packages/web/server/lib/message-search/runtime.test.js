@@ -28,7 +28,7 @@ describe('message search runtime', () => {
   const indexFile = () => path.join(dataDir, 'message-search.sqlite');
   const create = (enabled, reasoning = false) => createMessageSearchRuntime({
     dataDir,
-    sessionService: { list: async () => ({ items: [], errors: [] }), open: async () => { throw new Error('No session'); }, history: async () => { throw new Error('No session'); } },
+    sessionService: { list: async () => ({ items: [], errors: {} }), open: async () => { throw new Error('No session'); }, history: async () => { throw new Error('No session'); } },
     resolveSessionScope: async () => { throw new Error('No session'); },
     readSessionMetadata: async () => null,
     globalEventHub: hub,
