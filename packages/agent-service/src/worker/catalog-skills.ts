@@ -17,6 +17,7 @@ import { readSkillsLock, readStoredIntegrity, getSkillStorePath, parseSkillId, S
 import {
   CatalogOperationErrorSchema,
   CatalogWorkerIdentitySchema,
+  EntityIdSchema,
   SkillExpandRequestSchema,
   SkillExpandResultSchema,
   SkillSourceRevisionsSchema,
@@ -24,6 +25,7 @@ import {
   SkillsWorkerApplyOutcomeSchema,
   PositiveCounterSchema,
   JsonObjectSchema, type JsonObject,
+  type CatalogOperationError,
   type CatalogWorkerIdentity,
   type SkillExpandRequest,
   type SkillExpandResult,
@@ -42,8 +44,8 @@ export type WorkerSkillsContext = {
   setSkillsRuntimeAvailable: (available: boolean) => void;
 };
 
-function errorDetail(): { code: string; detail: string; retryable: boolean } {
-  return { code: 'SKILLS_LOAD_FAILED', detail: 'Unable to load skills.', retryable: true };
+function errorDetail(): CatalogOperationError {
+  return CatalogOperationErrorSchema.parse({ code: 'SKILLS_LOAD_FAILED', detail: 'Unable to load skills.', retryable: true });
 }
 
 function publicScope(skill: Skill): 'workspace' | 'agent' {
@@ -117,17 +119,23 @@ export class WorkerSkills {
     for (const path of [join(root.path, 'marketplace.json'), join(root.path, '.omp-plugin', 'marketplace.json'), join(root.path, '.claude-plugin', 'marketplace.json')]) {
       const marketplace = await this.readManifest(path);
       if (!Array.isArray(marketplace?.plugins)) continue;
-      const entry = marketplace.plugins.find(candidate => candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate)
-        && candidate.name === root.plugin && candidate.source === './');
-      if (entry && typeof entry === 'object' && !Array.isArray(entry)) { marketplaceSelection = entry; break; }
+      for (const candidate of marketplace.plugins) {
+        const parsed = JsonObjectSchema.safeParse(candidate);
+        if (parsed.success && parsed.data.name === root.plugin && parsed.data.source === './') {
+          marketplaceSelection = parsed.data;
+          break;
+        }
+      }
+      if (marketplaceSelection) break;
     }
     if (marketplaceSelection) manifests.push(marketplaceSelection);
     const configured: string[] = [];
     for (const manifest of manifests) {
-      const paths = typeof manifest?.skills === 'string' ? [manifest.skills] : Array.isArray(manifest?.skills) ? manifest.skills : [];
-      for (const path of paths) {
-        if (typeof path !== 'string' || !path.trim()) continue;
-        const target = resolve(root.path, path.trim());
+      const candidates = Array.isArray(manifest?.skills) ? manifest.skills : [manifest?.skills];
+      for (const candidate of candidates) {
+        const parsedPath = EntityIdSchema.safeParse(candidate);
+        if (!parsedPath.success || !parsedPath.data.trim()) continue;
+        const target = resolve(root.path, parsedPath.data.trim());
         const escape = relative(root.path, target);
         if (escape.startsWith('..') || isAbsolute(escape)) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'A native plugin skill directory leaves its package');
         configured.push(target);
@@ -261,7 +269,7 @@ export class WorkerSkills {
     const built = await buildSkillPromptMessage({ ...skill, baseDir: `skill://${skill.name}` }, { args: parsedRequest.arguments }, 'user');
     let message = built.message;
     const roots = [skill.filePath, skill.baseDir, skill.containRoot, this.context.cwd, this.context.agentDirectory]
-      .filter((root): root is string => typeof root === 'string' && root.length > 0).sort((a, b) => b.length - a.length);
+      .filter((root): root is string => root !== undefined && root.length > 0).sort((a, b) => b.length - a.length);
     for (const root of roots) message = message.split(root).join('[skill-root]');
     return SkillExpandResultSchema.parse({ worker: this.context.worker, skillId: skill.name, catalogRevision: this.catalogRevision, message });
   }

@@ -115,13 +115,14 @@ export class NativeAgents {
       if (slash > 0) model = { providerId: selector.slice(0, slash), modelId: selector.slice(slash + 1) };
     }
     const profile = metadata.openchamber;
-    return AgentSchema.parse({
+    const candidate: Agent = {
       agentId: definition.name, name: profile?.name ?? definition.name, description: definition.description,
       model, allowedTools: profile?.allowedTools ?? definition.tools ?? [...this.context.availableToolNames()],
-      ...(profile ? profile.systemPromptOverride === undefined ? {} : { systemPromptOverride: profile.systemPromptOverride }
-        : definition.systemPrompt ? { systemPromptOverride: definition.systemPrompt } : {}),
-      ...(profile?.permissionPresetId ? { permissionPresetId: profile.permissionPresetId } : {}),
-    });
+    };
+    const systemPromptOverride = profile ? profile.systemPromptOverride : definition.systemPrompt || undefined;
+    if (systemPromptOverride !== undefined) candidate.systemPromptOverride = systemPromptOverride;
+    if (profile?.permissionPresetId) candidate.permissionPresetId = profile.permissionPresetId;
+    return AgentSchema.parse(candidate);
   }
 
   async read(workspaceId: string, revision: string): Promise<AgentCatalog> {
@@ -134,7 +135,9 @@ export class NativeAgents {
     if (!definition) throw new ProjectionError(404, 'INVALID_REQUEST', 'Agent profile is unavailable');
     const publicAgent = await this.project(definition);
     if (publicAgent.permissionPresetId) await this.context.permissionPreset(publicAgent.permissionPresetId);
-    return { ...definition, ...(publicAgent.systemPromptOverride === undefined ? {} : { systemPrompt: publicAgent.systemPromptOverride }) };
+    return publicAgent.systemPromptOverride === undefined
+      ? { ...definition }
+      : { ...definition, systemPrompt: publicAgent.systemPromptOverride };
   }
 
   async profile(agentId: string): Promise<Agent> {
@@ -180,10 +183,13 @@ export class NativeAgents {
     if (agent.model && !this.context.modelRegistry.find(agent.model.providerId, agent.model.modelId)) {
       throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Agent profile model is unavailable');
     }
-    const fields = {
+    const baseFields = {
       name: agent.agentId, description: agent.description, openchamber: agent,
-      tools: agent.allowedTools, ...(agent.model ? { model: `${agent.model.providerId}/${agent.model.modelId}` } : {}),
+      tools: agent.allowedTools,
     };
+    const fields = agent.model
+      ? { ...baseFields, model: `${agent.model.providerId}/${agent.model.modelId}` }
+      : baseFields;
     const content = `---\n${YAML.stringify(fields)}---\n\n${agent.systemPromptOverride ?? ''}\n`;
     const path = existing?.source === 'project' && existing.filePath && resolve(dirname(existing.filePath)) === resolve(this.context.cwd, '.omp', 'agents')
       ? existing.filePath : profilePath(this.context.cwd, agent.agentId);

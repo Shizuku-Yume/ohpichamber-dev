@@ -50,6 +50,8 @@ const MetadataSchema = z.object({
 const FileMetadataSchema = z.object({ openchamber: MetadataSchema });
 type CatalogMetadata = z.infer<typeof MetadataSchema>;
 type ConfigState = { config: ModelsConfig; metadata: CatalogMetadata; path: string; content: string | null };
+type NativeProviderConfig = NonNullable<ModelsConfig['providers']>[string];
+type NativeModelDefinition = NonNullable<NativeProviderConfig['models']>[number];
 
 function modelKey(selection: ModelSelection): string {
   return JSON.stringify([selection.providerId, selection.modelId]);
@@ -78,6 +80,18 @@ function nativeApi(protocol: NonNullable<Provider['protocol']>): NonNullable<Non
   }
 }
 
+function nativeProviderApi(api: NativeCatalogModel['api'] | undefined): NativeProviderConfig['api'] {
+  switch (api) {
+    case 'openai-completions': case 'openai-responses': case 'openai-codex-responses':
+    case 'azure-openai-responses': case 'anthropic-messages': case 'bedrock-converse-stream':
+    case 'google-generative-ai': case 'google-gemini-cli': case 'google-vertex':
+    case 'openrouter-decisions': case 'typesafe':
+      return api;
+    default:
+      return undefined;
+  }
+}
+
 export function publicModel(native: NativeCatalogModel, configured?: Model, enabled?: boolean): Model {
   if (native.contextWindow === null || native.maxTokens === null || native.contextWindow <= 0 || native.maxTokens <= 0) {
     throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Native model has no published usable token limits');
@@ -95,7 +109,7 @@ export function publicModel(native: NativeCatalogModel, configured?: Model, enab
   }
   const offRoute = native.thinking?.effortRouting?.off;
   if (offRoute && !variants.some(variant => variant.variant === offRoute)) variants.push({ variant: offRoute, label: offRoute, reasoningEffort: null });
-  return ModelSchema.parse({
+  const candidate: Model = {
     modelId: native.id, provider: native.provider, name: configured?.name ?? native.name,
     modalities: [...new Set(modalities)], contextWindow: native.contextWindow,
     maxOutputTokens: Math.min(native.contextWindow, native.maxTokens),
@@ -104,14 +118,16 @@ export function publicModel(native: NativeCatalogModel, configured?: Model, enab
       reasoningEffort, label: reasoningEffort, budgetTokens: native.thinking?.effortBudgets?.[reasoningEffort] ?? null,
     })),
     variants: configured?.variants ?? variants,
-    ...(native.supportsTools === undefined ? {} : { toolsSupported: native.supportsTools }),
-    ...(enabled === undefined ? {} : { enabled }),
-    ...(configured?.status ? { status: configured.status } : native.isBeta ? { status: 'beta' } : {}),
     pricing: configured ? configured.pricing : native.pricingStatus === 'unknown' || (native.pricingStatus === undefined && Object.values(native.cost).every(cost => cost === 0)) ? null : {
       inputPerMillionTokens: native.cost.input, outputPerMillionTokens: native.cost.output,
       cacheReadPerMillionTokens: native.cost.cacheRead, cacheWritePerMillionTokens: native.cost.cacheWrite,
     },
-  });
+  };
+  if (native.supportsTools !== undefined) candidate.toolsSupported = native.supportsTools;
+  if (enabled !== undefined) candidate.enabled = enabled;
+  if (configured?.status) candidate.status = configured.status;
+  else if (native.isBeta) candidate.status = 'beta';
+  return ModelSchema.parse(candidate);
 }
 
 export function resolveModelSelection(registry: ModelRegistry, input: ModelSelection, configured?: Model,
@@ -145,9 +161,11 @@ export function resolveModelSelection(registry: ModelRegistry, input: ModelSelec
     throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', 'Selected reasoning effort is unavailable');
   }
   if (variant) {
-    nativeModel = { ...nativeModel, requestModelId: variant.variant,
-      ...(nativeModel.thinking ? { thinking: { ...nativeModel.thinking,
-        effortRouting: { ...nativeModel.thinking.effortRouting, [reasoningEffort ?? 'off']: variant.variant } } } : {}) };
+    nativeModel = nativeModel.thinking
+      ? { ...nativeModel, requestModelId: variant.variant,
+        thinking: { ...nativeModel.thinking,
+          effortRouting: { ...nativeModel.thinking.effortRouting, [reasoningEffort ?? 'off']: variant.variant } } }
+      : { ...nativeModel, requestModelId: variant.variant };
   }
   return { nativeModel, publicModel: projected, reasoningEffort: reasoningEffort ?? null };
 }
@@ -208,7 +226,6 @@ export class NativeModels {
     const configured = this.metadata.providers[providerId];
     const first = this.context.modelRegistry.getProviderModels(providerId)[0];
     const rawEndpoint = configured?.endpoint ?? this.context.modelRegistry.getProviderBaseUrl(providerId) ?? null;
-    const endpoint = ProviderSchema.shape.endpoint.safeParse(rawEndpoint);
     const source = this.context.authStorage.keys.source(providerId);
     const rows = this.context.authStorage.credentials.list(providerId).filter(row => row.disabledCause === null);
     const supportedOAuth = this.context.oauthProviderIds().has(providerId) || rows.some(row => row.credential.type === 'oauth');
@@ -225,8 +242,12 @@ export class NativeModels {
         source: storedSource ? 'stored-credential' : source.kind === 'env' ? 'external-environment' : 'managed-environment',
       };
     }
-    return ProviderSchema.parse({ providerId, name: configured?.name ?? providerId,
-      endpoint: endpoint.success ? endpoint.data : null, protocol: configured?.protocol ?? apiProtocol(first?.api), authMethods, auth });
+    const base = {
+      providerId, name: configured?.name ?? providerId,
+      protocol: configured?.protocol ?? apiProtocol(first?.api), authMethods, auth,
+    };
+    const withEndpoint = ProviderSchema.safeParse({ ...base, endpoint: rawEndpoint });
+    return withEndpoint.success ? withEndpoint.data : ProviderSchema.parse({ ...base, endpoint: null });
   }
 
   async selection(input: ModelSelection, controls?: Pick<CompletionRequest, 'variant' | 'reasoningEffort'>): Promise<ResolvedModelSelection> {
@@ -253,7 +274,7 @@ export class NativeModels {
     return { ...resolveModelSelection(this.context.modelRegistry, input, configured, controls), nativeCredentialSessionId };
   }
 
-  private validate(config: object): ModelsConfig {
+  private validate(config: ModelsConfig): ModelsConfig {
     try {
       const parsed = ModelsConfigSchema.assert(config);
       for (const [providerId, provider] of Object.entries(parsed.providers ?? {})) {
@@ -364,13 +385,18 @@ export class NativeModels {
       cacheRead: model.pricing.cacheReadPerMillionTokens ?? 0, cacheWrite: model.pricing.cacheWritePerMillionTokens ?? 0,
     };
     state.config.providers ??= {};
-    const provider = { ...configuredProvider, api, baseUrl };
-    const raw = {
-      id: model.modelId, name: model.name, api, ...(existing?.kind ? { kind: existing.kind } : {}),
-      input: nativeInput, reasoning: model.reasoningEffortSupported, ...(reasoning ? { thinking: reasoning } : {}),
+    const providerApi = configuredProvider?.api ?? nativeProviderApi(existing?.api);
+    const provider: NativeProviderConfig = { ...configuredProvider, baseUrl };
+    if (providerApi) provider.api = providerApi;
+    const raw: NativeModelDefinition = {
+      id: model.modelId, name: model.name, api,
+      input: nativeInput, reasoning: model.reasoningEffortSupported,
       contextWindow: model.contextWindow, maxTokens: model.maxOutputTokens,
-      ...(cost ? { cost } : {}), ...(model.toolsSupported === undefined ? {} : { supportsTools: model.toolsSupported }),
     };
+    if (existing?.kind) raw.kind = existing.kind;
+    if (reasoning) raw.thinking = reasoning;
+    if (cost) raw.cost = cost;
+    if (model.toolsSupported !== undefined) raw.supportsTools = model.toolsSupported;
     // Native 'none' is a keyless fallback, not a credential override: stored/env auth still wins.
     // It permits custom definitions without copying AuthStorage's secrets into models.yml.
     state.config = this.validate({ ...state.config, providers: {
