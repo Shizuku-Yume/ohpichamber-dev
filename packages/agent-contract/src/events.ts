@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, EpochSchema, JsonObjectSchema, JsonValueSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
 import { SessionMetadataSchema } from './metadata.ts';
 import { RuntimeSessionSchema, SessionRuntimeStatusSchema } from './session.ts';
-import { PartSchema, ToolStatusSchema } from './messages.ts';
+import { PartSchema, TokenUsageSchema, ToolStatusSchema } from './messages.ts';
 import { ApprovalRequestSchema, QuestionRequestSchema } from './requests.ts';
 import { QueueStateSchema } from './queue.ts';
 import { CatalogUpdateSchema } from './catalogs.ts';
@@ -50,7 +50,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   DataEventEnvelopeSchema.extend({ type: z.literal('run.cancelled'), runId: EntityIdSchema, finishedAt: TimestampSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('turn.started'), turnId: EntityIdSchema, runId: EntityIdSchema, userMessageId: EntityIdSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('turn.completed'), turnId: EntityIdSchema, runId: EntityIdSchema }),
-  DataEventEnvelopeSchema.extend({ type: z.literal('message.created'), messageId: EntityIdSchema, turnId: EntityIdSchema, role: z.enum(['user', 'assistant', 'system']) }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('message.created'), messageId: EntityIdSchema, turnId: EntityIdSchema, role: z.enum(['user', 'assistant', 'system']), providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.started'), messageId: EntityIdSchema, part: PartSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.delta'), partId: EntityIdSchema, delta: z.string() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.completed'), part: PartSchema }),
@@ -75,6 +75,8 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   DataEventEnvelopeSchema.extend({ type: z.literal('queue.updated'), queue: QueueStateSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('catalog.updated'), catalog: CatalogUpdateSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('shell.updated'), job: ShellJobSchema }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('session.compacted'), compactionId: EntityIdSchema, tokensBefore: z.number().int().nonnegative(), completedAt: TimestampSchema }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('message.updated'), messageId: EntityIdSchema, providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional() }),
 ]);
 export type CanonicalEvent = z.infer<typeof CanonicalEventSchema>;
 

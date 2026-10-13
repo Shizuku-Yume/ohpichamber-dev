@@ -220,8 +220,18 @@ export class SessionJournal {
         const turn = this.turnById.get(event.turnId);
         if (turn) { turn.status = 'completed'; turn.finishedAt = event.timestamp; } return;
       }
+      case 'message.updated': {
+        const message = this.messageById.get(event.messageId);
+        if (!message) return;
+        if (event.providerId !== undefined) message.providerId = event.providerId;
+        if (event.modelId !== undefined) message.modelId = event.modelId;
+        if (event.usage !== undefined) message.usage = structuredClone(event.usage);
+        return;
+      }
       case 'message.created': {
-        const message: Message = { messageId: event.messageId, sessionId: this.identity.sessionId, turnId: event.turnId, role: event.role, createdAt: event.timestamp, parts: [] };
+        const message: Message = { messageId: event.messageId, sessionId: this.identity.sessionId, turnId: event.turnId, role: event.role, createdAt: event.timestamp, parts: [],
+          ...(event.providerId === undefined ? {} : { providerId: event.providerId }), ...(event.modelId === undefined ? {} : { modelId: event.modelId }),
+          ...(event.usage === undefined ? {} : { usage: structuredClone(event.usage) }) };
         this.messages.push(message); this.messageById.set(message.messageId, message);
         const turn = this.turnById.get(message.turnId);
         if (turn && message.role === 'assistant') turn.assistantMessageIds.push(message.messageId);

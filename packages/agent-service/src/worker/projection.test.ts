@@ -48,6 +48,9 @@ for (const outcome of ['failed', 'cancelled'] as const) {
       const history = projection.history({ sessionId: 'session' });
       expect(history.messages.flatMap(message => message.parts).find(part => part.type === 'tool_call')?.status).toBe(result.isError ? 'failed' : 'completed');
       expect(history.turns.map(turn => ({ status: turn.status, finishedAt: turn.finishedAt }))).toEqual(live.turns.map(turn => ({ status: turn.status, finishedAt: turn.finishedAt })));
+      const assistantHistory = history.messages.find(message => message.role === 'assistant');
+      expect(assistantHistory).toMatchObject({ providerId: 'fixture', modelId: 'fixture', usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 } });
+      expect(assistantHistory?.usage?.cost).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 });
       const file = manager.getSessionFile();
       if (!file) throw new Error('Native session file is required');
       await manager.close();
@@ -62,3 +65,24 @@ for (const outcome of ['failed', 'cancelled'] as const) {
     }
   });
 }
+
+test('completed native compaction emits opaque canonical transition only', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-compaction-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    projection.beginRun('run', Date.now());
+    const completed = projection.consume({ type: 'auto_compaction_end', action: 'context-full', result: { summary: 'native summary', firstKeptEntryId: 'native-entry', tokensBefore: 42 }, aborted: false, willRetry: false });
+    expect(completed).toHaveLength(1);
+    const compacted = completed[0]?.event;
+    expect(compacted).toMatchObject({ type: 'session.compacted', tokensBefore: 42, completedAt: expect.any(Number) });
+    if (compacted?.type !== 'session.compacted') throw new Error('Compaction event was not emitted');
+    expect(compacted.compactionId).toEqual(expect.any(String));
+    expect(projection.consume({ type: 'auto_compaction_end', action: 'context-full', result: { summary: 'retry', firstKeptEntryId: 'native-entry', tokensBefore: 40 }, aborted: false, willRetry: true })).toEqual([]);
+    expect(projection.consume({ type: 'auto_compaction_end', action: 'context-full', result: undefined, aborted: false, willRetry: false })).toEqual([]);
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

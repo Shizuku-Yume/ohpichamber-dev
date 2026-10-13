@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
-import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, PromptAttachmentSchema } from '@openchamber/agent-contract';
-import type { HistoryPage, HistoryPageRequest, Message, Part, PromptAttachment, Run, Turn } from '@openchamber/agent-contract';
+import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, PromptAttachmentSchema, TokenUsageSchema } from '@openchamber/agent-contract';
+import type { HistoryPage, HistoryPageRequest, Message, Part, PromptAttachment, Run, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 
@@ -27,7 +27,12 @@ const HistoryCursorSchema = z.tuple([EntityIdSchema, CounterSchema, EntityIdSche
 interface LiveMessage {
   messageId: string; turnId: string; runId: string; userMessageId: string;
   virtualUser: boolean; nativeRole: VisibleMessage['role']; timestamp: number;
-  attachments: PromptAttachment[]; started: Set<number>;
+  attachments: PromptAttachment[]; started: Set<number>; providerId?: string; modelId?: string; usage?: TokenUsage;
+}
+
+function metadata(message: VisibleMessage): Pick<LiveMessage, 'providerId' | 'modelId' | 'usage'> {
+  if (message.role !== 'assistant') return {};
+  return { providerId: message.provider, modelId: message.model, usage: TokenUsageSchema.parse(message.usage) };
 }
 
 function visible(message: NativeMessage): message is VisibleMessage {
@@ -108,15 +113,16 @@ export class WorkerProjection {
         const turn = this.turn;
         if (!turn) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Native message has no turn');
         const messageId = native.role === 'user' ? turn.userMessageId : randomUUID();
+        const nativeMetadata = metadata(native);
         const current: LiveMessage = { messageId, turnId: turn.turnId, runId: run.runId,
           userMessageId: turn.userMessageId, virtualUser: turn.virtualUser,
           nativeRole: native.role, timestamp: native.timestamp,
-          attachments: native.role === 'user' ? this.attachments : [], started: new Set(),
+          attachments: native.role === 'user' ? this.attachments : [], started: new Set(), ...nativeMetadata,
         };
         this.message = current;
         this.pending.push(current);
         emit({ type: 'message.created', messageId, turnId: turn.turnId,
-          role: native.role === 'toolResult' ? 'system' : native.role });
+          role: native.role === 'toolResult' ? 'system' : native.role, ...nativeMetadata });
         for (const part of parts(native, messageId, current.attachments)) {
           emit({ type: 'part.started', messageId, part });
           const index = native.role === 'toolResult' ? 0 : native.content instanceof Array
@@ -166,6 +172,11 @@ export class WorkerProjection {
           }
           emit({ type: 'part.completed', part });
         }
+        if (event.message.role === 'assistant') {
+          const finalMetadata = metadata(event.message);
+          Object.assign(current, finalMetadata);
+          emit({ type: 'message.updated', messageId: current.messageId, ...finalMetadata });
+        }
         if (event.message.role === 'assistant' && (event.message.stopReason === 'error' || event.message.stopReason === 'aborted')) {
           this.stopReason = event.message.stopReason;
         }
@@ -181,6 +192,10 @@ export class WorkerProjection {
           isError: event.isError === true, output: JsonValueSchema.parse(JSON.parse(JSON.stringify(event.result))),
           error: event.isError ? 'Tool execution failed' : undefined,
         });
+        break;
+      case 'auto_compaction_end':
+        if (event.result === undefined || event.aborted || event.willRetry || event.skipped === true) break;
+        emit({ type: 'session.compacted', compactionId: randomUUID(), tokensBefore: event.result.tokensBefore, completedAt: timestamp });
         break;
       case 'turn_end':
         if (this.turn?.open && this.stopReason === undefined) {
@@ -323,8 +338,9 @@ export class WorkerProjection {
         if (native.role !== 'user') messages.push({ messageId: userMessageId, turnId, sessionId: this.sessionId, role: 'user', createdAt: timestamp, parts: [] });
       }
       current = turn;
+      const nativeMetadata = metadata(native);
       messages.push({ messageId, turnId, sessionId: this.sessionId, role: native.role === 'toolResult' ? 'system' : native.role,
-        createdAt: timestamp, parts: parts(native, messageId, reference?.attachments ?? [], toolResults),
+        createdAt: timestamp, parts: parts(native, messageId, reference?.attachments ?? [], toolResults), ...nativeMetadata,
       });
       if (native.role === 'assistant') turn.assistantMessageIds.push(messageId);
       if (!turnTerminals.has(turn.turnId)) {

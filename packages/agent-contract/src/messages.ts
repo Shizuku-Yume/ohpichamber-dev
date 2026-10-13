@@ -38,8 +38,22 @@ export const PartSchema = z.discriminatedUnion('type', [
   TextPartSchema, ReasoningPartSchema, ToolCallPartSchema, ToolResultPartSchema, AttachmentPartSchema, StepSummaryPartSchema,
 ]);
 export type Part = z.infer<typeof PartSchema>;
+export const TokenUsageCostSchema = z.strictObject({
+  input: z.number().finite().nonnegative(), output: z.number().finite().nonnegative(),
+  cacheRead: z.number().finite().nonnegative(), cacheWrite: z.number().finite().nonnegative(),
+  total: z.number().finite().nonnegative(),
+});
+export type TokenUsageCost = z.infer<typeof TokenUsageCostSchema>;
+export const TokenUsageSchema = z.strictObject({
+  input: z.number().int().nonnegative(), output: z.number().int().nonnegative(),
+  cacheRead: z.number().int().nonnegative(), cacheWrite: z.number().int().nonnegative(),
+  totalTokens: z.number().int().nonnegative(), cost: TokenUsageCostSchema,
+});
+export type TokenUsage = z.infer<typeof TokenUsageSchema>;
+
 export const MessageSchema = z.strictObject({
   messageId: EntityIdSchema, sessionId: EntityIdSchema, turnId: EntityIdSchema,
   role: z.enum(['user', 'assistant', 'system']), createdAt: TimestampSchema, parts: z.array(PartSchema),
+  providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional(),
 });
 export type Message = z.infer<typeof MessageSchema>;
