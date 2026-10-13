@@ -12,9 +12,8 @@ import type { WorkerInteraction, WorkerOperation } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 
 type RequestKind = 'approval' | 'question';
-type RecordState =
-  | { kind: 'approval'; request: ApprovalRequest; timer?: NodeJS.Timeout }
-  | { kind: 'question'; request: QuestionRequest; timer?: NodeJS.Timeout };
+type ApprovalRecordState = { kind: 'approval'; request: ApprovalRequest; target: ApprovalPolicyWrite['target']; timer?: NodeJS.Timeout };
+type RecordState = ApprovalRecordState | { kind: 'question'; request: QuestionRequest; timer?: NodeJS.Timeout };
 type SessionState = { epoch: string; generation: string; workspaceId: string; dispatch: (operation: WorkerOperation) => Promise<void>; append: (input: ProjectionInput) => void };
 
 export interface ApprovalPolicyWrite {
@@ -117,16 +116,19 @@ export class InteractionManager {
     if (!state || state.generation !== generation) return;
     const now = Date.now();
     if (interaction.kind === 'approval') {
+      const privateTarget = interaction.policyTarget;
       const request: ApprovalRequest = ApprovalRequestSchema.parse({
         approvalId: interaction.approvalId, sessionId, turnId: interaction.turnId, toolCallId: interaction.toolCallId,
-        toolName: interaction.toolName, actionType: interaction.actionType, commandSummary: interaction.commandSummary,
-        details: interaction.details, policyTarget: interaction.policyTarget, status: 'pending', version: '1', epoch: state.epoch,
+        toolName: interaction.toolName, actionType: interaction.actionType,
+        commandSummary: 'Native tool operation requires approval',
+        details: { reason: 'The native tool operation requires approval.', options: ['Approve', 'Reject'] },
+        policyTarget: { toolName: interaction.toolName, pattern: 'native-input' }, status: 'pending', version: '1', epoch: state.epoch,
         workerGeneration: state.generation, requestedAt: now,
       });
       const timer = setTimeout(() => { void this.expirePending(sessionId, request.approvalId); }, this.timeoutMs);
-      this.records.set(request.approvalId, { kind: 'approval', request, timer });
+      this.records.set(request.approvalId, { kind: 'approval', request, target: privateTarget, timer });
       state.append({ timestamp: now, event: { type: 'approval.requested', approval: request } });
-      const policy = this.matchingPolicy(sessionId, state.workspaceId, interaction.policyTarget);
+      const policy = this.matchingPolicy(sessionId, state.workspaceId, privateTarget);
       if (policy) {
         const reply: ApprovalReply = policy.decision === 'allow'
           ? { decision: 'always-allow', policyScope: 'session', version: request.version, epoch: request.epoch, workerGeneration: generation }
@@ -164,16 +166,16 @@ export class InteractionManager {
     try {
       let policy: { policyId: string; revision: string } | undefined;
       if (reply.decision === 'always-allow' || reply.decision === 'always-deny') {
-        if (!request.policyTarget) throw new ProjectionError(503, 'APPROVAL_POLICY_WRITE_FAILED', 'Approval policy target is unavailable');
-        const key = this.policyKey(sessionId, state.workspaceId, reply.policyScope, request.policyTarget);
+        const target = record.target;
+        const key = this.policyKey(sessionId, state.workspaceId, reply.policyScope, target);
         const existing = this.policies.get(key);
         const decision = reply.decision === 'always-allow' ? 'allow' : 'deny';
         if (existing?.decision === decision) policy = existing;
         else {
           if (!this.policyCommit) throw new ProjectionError(503, 'APPROVAL_POLICY_WRITE_FAILED', 'Approval policy persistence is unavailable');
           try {
-            policy = await this.policyCommit({ sessionId, workspaceId: state.workspaceId, scope: reply.policyScope, decision, target: request.policyTarget });
-            this.policies.set(key, { ...policy, scope: reply.policyScope, decision, target: request.policyTarget });
+            policy = await this.policyCommit({ sessionId, workspaceId: state.workspaceId, scope: reply.policyScope, decision, target });
+            this.policies.set(key, { ...policy, scope: reply.policyScope, decision, target });
           } catch { throw new ProjectionError(503, 'APPROVAL_POLICY_WRITE_FAILED', 'Approval policy persistence failed'); }
         }
       }
@@ -185,7 +187,7 @@ export class InteractionManager {
       clearTimeout(record.timer);
       const resolvedAt = Date.now();
       const terminal = ApprovalRequestSchema.parse({ ...request, status: reply.decision === 'approve' || reply.decision === 'always-allow' ? 'approved' : 'rejected', version: increment(request.version), resolvedAt, resolvedBy: EntityIdSchema.parse(resolvedBy), resolution: terminalResolution(reply.decision, policy) });
-      this.records.set(approvalId, { kind: 'approval', request: terminal, timer: undefined });
+      this.records.set(approvalId, { kind: 'approval', request: terminal, target: record.target, timer: undefined });
       state.append({ timestamp: resolvedAt, event: { type: 'approval.resolved', approval: terminal } });
       return terminal;
     } finally {
@@ -251,7 +253,7 @@ export class InteractionManager {
   private expire(record: RecordState): RecordState {
     const terminal = { ...record.request, status: 'expired' as const, version: increment(record.request.version), resolvedAt: Date.now(), resolvedBy: 'agent-service' };
     return record.kind === 'approval'
-      ? { kind: 'approval', request: ApprovalRequestSchema.parse(terminal), timer: undefined }
+      ? { kind: 'approval', request: ApprovalRequestSchema.parse(terminal), target: record.target, timer: undefined }
       : { kind: 'question', request: QuestionRequestSchema.parse(terminal), timer: undefined };
   }
 

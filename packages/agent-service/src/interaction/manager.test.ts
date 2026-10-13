@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
+import { ApprovalRequestSchema } from '@openchamber/agent-contract';
 import type { ApprovalReply, QuestionReply } from '@openchamber/agent-contract';
 import type { ProjectionInput } from '../projection/protocol.ts';
 import type { WorkerInteraction, WorkerOperation } from '../protocol.ts';
+import { ProjectionError } from '../projection/journal.ts';
 import { InteractionManager } from './manager.ts';
 
 function sessionHarness() {
@@ -141,4 +143,97 @@ describe('service-owned interaction CAS', () => {
     await expect(manager.resolveApproval('session-1', 'approval-1', { decision: 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' })).rejects.toMatchObject({ status: 410, code: 'APPROVAL_EXPIRED' });
     manager.closeSession('session-1');
   });
+
+  test('projects public approval requests without exposing private paths, credentials, or raw native inputs', async () => {
+    let committedTarget: { toolName: string; pattern: string } | undefined;
+    const events: ProjectionInput[] = [];
+    const operations: WorkerOperation[] = [];
+    const manager = new InteractionManager(60_000, async write => {
+      committedTarget = write.target;
+      return { policyId: 'policy-1', revision: '1' };
+    });
+    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async op => { operations.push(op); }, input => { events.push(input); });
+
+    const credentialMarker = 'super-secret-token-12345';
+    const privateRootMarker = '/private/root/secret-workspace';
+    const rawInput = {
+      command: `${privateRootMarker}/bin/tool --token ${credentialMarker}`,
+      token: credentialMarker,
+      workspacePath: `${privateRootMarker}/config.json`,
+    };
+    const privateTarget = { toolName: 'bash', pattern: JSON.stringify(rawInput) };
+
+    const privateApproval: WorkerInteraction = {
+      kind: 'approval',
+      approvalId: 'approval-sec-1',
+      toolCallId: 'call-sec-1',
+      toolName: 'bash',
+      actionType: 'bash_command',
+      commandSummary: `Execute ${privateRootMarker}/bin/tool --token ${credentialMarker}`,
+      details: {
+        reason: `Need access to ${privateRootMarker} with ${credentialMarker}`,
+        options: ['Approve', 'Deny'],
+        approvalMode: 'prompt',
+        input: rawInput,
+      },
+      policyTarget: privateTarget,
+      turnId: 'turn-1',
+    };
+
+    manager.onRequest('session-1', 'worker-1', privateApproval);
+
+    const list = manager.approvals('session-1');
+    expect(list).toHaveLength(1);
+    const serializedList = JSON.stringify(list);
+    expect(serializedList.includes(credentialMarker)).toBe(false);
+    expect(serializedList.includes(privateRootMarker)).toBe(false);
+    expect(list[0]?.details).not.toHaveProperty('input');
+
+    let conflictError: ProjectionError | undefined;
+    try {
+      await manager.resolveApproval('session-1', 'approval-sec-1', {
+        decision: 'approve',
+        version: '99',
+        epoch: 'epoch-1',
+        workerGeneration: 'worker-1',
+      });
+      expect.unreachable('Should have thrown 409 conflict');
+    } catch (err) {
+      if (err instanceof ProjectionError) conflictError = err;
+    }
+    expect(conflictError).toBeDefined();
+    expect(conflictError?.status).toBe(409);
+    expect(conflictError?.code).toBe('APPROVAL_CONFLICT');
+    const serializedConflict = JSON.stringify(conflictError?.details);
+    expect(serializedConflict.includes(credentialMarker)).toBe(false);
+    expect(serializedConflict.includes(privateRootMarker)).toBe(false);
+    const currentRecord = ApprovalRequestSchema.parse(conflictError?.details?.currentRecord);
+    expect(currentRecord.details).not.toHaveProperty('input');
+
+    const resolved = await manager.resolveApproval('session-1', 'approval-sec-1', {
+      decision: 'always-allow',
+      policyScope: 'session',
+      version: '1',
+      epoch: 'epoch-1',
+      workerGeneration: 'worker-1',
+    });
+    expect(resolved.status).toBe('approved');
+    expect(committedTarget).toEqual(privateTarget);
+
+    expect(events.length).toBeGreaterThanOrEqual(2);
+    const serializedEvents = JSON.stringify(events);
+    expect(serializedEvents.includes(credentialMarker)).toBe(false);
+    expect(serializedEvents.includes(privateRootMarker)).toBe(false);
+
+    const secondApproval: WorkerInteraction = {
+      ...privateApproval,
+      approvalId: 'approval-sec-2',
+      toolCallId: 'call-sec-2',
+    };
+    manager.onRequest('session-1', 'worker-1', secondApproval);
+    expect(manager.approvals('session-1')).toHaveLength(0);
+    manager.closeSession('session-1');
+  });
+
+
 });
