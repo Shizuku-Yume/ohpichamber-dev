@@ -25,16 +25,22 @@ const OAuthPolicyConfigurationSchema = z.strictObject({
   callbackPort: z.number().int().min(1).max(65_535).optional(),
   callbackPath: z.string().startsWith('/').optional(), stripSameOriginResource: z.boolean().optional(),
 });
+const ProviderUseInputSchema = z.object({
+  providerId: z.string(), modelId: z.string(),
+  endpoint: z.string().url().pipe(z.string().refine(value => {
+    const endpoint = new URL(value);
+    return ['http:', 'https:'].includes(endpoint.protocol) && !endpoint.username && !endpoint.password;
+  })).optional(),
+});
+const BashInputSchema = z.object({ command: z.string(), cwd: z.string().optional() });
+const FilePathInputSchema = z.string().refine(value => !/[:;?*\u0000]/.test(value));
 
 /** Host configuration grants and native approval consent are independent authorities.
  * Shell grants authorize exact machine commands; a workspace cwd is not an OS sandbox.
  */
 export const createWorkerOperationAuthorizer = ({
   resolvePolicy, validateDirectoryPath, enterprisePolicyOptions, approvalPolicyStore,
-} = {}) => {
-  if (typeof resolvePolicy !== 'function' || typeof validateDirectoryPath !== 'function') {
-    throw new TypeError('Worker authorization requires Host policy and directory owners');
-  }
+}) => {
   return async (rawScope, rawRequest) => {
     try {
       const scopeResult = HostAuthorizationScopeSchema.safeParse(rawScope);
@@ -59,8 +65,9 @@ export const createWorkerOperationAuthorizer = ({
       const commandGranted = command => policy.shellCommands.includes(command)
         || exactPolicies.some(row => row.scope === 'session' && row.decision === 'allow');
       const pathAllowed = async rawPath => {
-        if (typeof rawPath !== 'string' || /[:;?*\u0000]/.test(rawPath)) return false;
-        const relative = path.isAbsolute(rawPath) ? path.relative(directory.directory, rawPath) : rawPath;
+        const target = FilePathInputSchema.safeParse(rawPath);
+        if (!target.success) return false;
+        const relative = path.isAbsolute(target.data) ? path.relative(directory.directory, target.data) : target.data;
         const resolved = await resolveGuestFilePath({ path: relative, projectDirectory: directory.directory, patterns: [], homeDir: os.homedir() });
         return resolved.ok && resolved.scope === 'project';
       };
@@ -80,21 +87,20 @@ export const createWorkerOperationAuthorizer = ({
       if (request.permissionPresetId !== undefined && (!isPermissionMode(request.permissionPresetId)
         || !policy.permissionPresetIds.includes(request.permissionPresetId))) return denied();
       if (request.toolName === 'provider.use') {
-        if (typeof request.input.providerId !== 'string' || typeof request.input.modelId !== 'string') return denied();
-        if (request.input.endpoint !== undefined) {
-          const endpoint = new URL(request.input.endpoint);
-          if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password) return denied();
-        }
-        return policy.providers.some(provider => provider.providerId === request.input.providerId
-          && provider.modelId === request.input.modelId && provider.endpoint === request.input.endpoint) ? allowed : denied();
+        const inputResult = ProviderUseInputSchema.safeParse(request.input);
+        if (!inputResult.success) return denied();
+        const input = inputResult.data;
+        return policy.providers.some(provider => provider.providerId === input.providerId
+          && provider.modelId === input.modelId && provider.endpoint === input.endpoint) ? allowed : denied();
       }
       if (request.toolName === 'permission.preset') {
         return request.input.presetId === request.permissionPresetId && isPermissionMode(request.input.presetId)
           && policy.permissionPresetIds.includes(request.input.presetId) ? allowed : denied();
       }
       if (request.toolName === 'bash') {
-        if (typeof request.input.command !== 'string' || (request.input.cwd !== undefined && !await pathAllowed(request.input.cwd))) return denied();
-        return commandGranted(request.input.command) ? allowed : denied();
+        const inputResult = BashInputSchema.safeParse(request.input);
+        if (!inputResult.success || (inputResult.data.cwd !== undefined && !await pathAllowed(inputResult.data.cwd))) return denied();
+        return commandGranted(inputResult.data.command) ? allowed : denied();
       }
       if (['read', 'write', 'edit'].includes(request.toolName)) {
         // Selector and patch-text formats need their owning parser, not guessed path extraction.
