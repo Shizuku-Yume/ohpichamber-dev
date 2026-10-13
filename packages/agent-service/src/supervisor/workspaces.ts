@@ -117,7 +117,8 @@ export class WorkspaceCatalogs {
       const root = await this.stateless(workspaceId);
       const result = await this.workers.request(root, { type: 'catalog', operation, revision });
       if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-      if (mutation) {
+      const committed = mutation && (result.result.type !== 'catalog.credential.handed-off' || result.result.result.outcome.status === 'imported');
+      if (committed) {
         await this.stateMutation(async () => {
           const previous = owner.revision;
           owner.revision = revision;

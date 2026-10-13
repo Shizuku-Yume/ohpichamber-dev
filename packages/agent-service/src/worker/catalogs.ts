@@ -27,7 +27,7 @@ export class WorkerCatalogs {
     this.models = context.models;
     this.agents = new NativeAgents(context);
     this.skills = new WorkerSkills(context);
-    this.credentials = new NativeCredentials(context.authStorage, this.models, context.worker.workspaceId);
+    this.credentials = new NativeCredentials(context.authStorage, this.models, context.worker.workspaceId, context.worker.agentDirectoryId);
   }
 
   // Reads receive their current owning revision; mutations receive the next committed revision.
@@ -68,6 +68,9 @@ export class WorkerCatalogs {
         return { type: 'catalog.credential.mutated', result: await this.credentials.write(operation.request, revision) };
       case 'catalog.credential.resolve':
         return { type: 'catalog.credential.resolved', result: await this.credentials.resolve(operation.request) };
+      case 'catalog.credential.handoff':
+        await this.context.assertProviderEntryAllowed();
+        return { type: 'catalog.credential.handed-off', result: await this.credentials.handoff(operation.request, revision) };
       case 'catalog.credential.delete':
         return { type: 'catalog.credential.mutated', result: await this.credentials.delete(operation.request, revision) };
       case 'catalog.agent.create':

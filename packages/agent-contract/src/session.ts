@@ -7,11 +7,29 @@ export const DisplayPathSchema = z.string().min(1).refine(
   (value) => !value.startsWith('/') && !value.startsWith('\\') && !/^[A-Za-z]:/.test(value),
   { message: 'Display path must be project-relative, never a Host absolute path' },
 );
+export const WorkspaceSchema = z.strictObject({
+  workspaceId: EntityIdSchema,
+  projectId: EntityIdSchema,
+  name: z.string().min(1),
+  displayPath: DisplayPathSchema.optional(),
+});
+export type Workspace = z.infer<typeof WorkspaceSchema>;
+export const DiscoveryErrorsSchema = z.record(EntityIdSchema, z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/));
+export const WorkspaceListSchema = z.strictObject({
+  items: z.array(WorkspaceSchema),
+  errors: DiscoveryErrorsSchema,
+});
+export type WorkspaceList = z.infer<typeof WorkspaceListSchema>;
 export const ProjectSchema = z.strictObject({
   projectId: EntityIdSchema, name: z.string(), workspaceIds: z.array(EntityIdSchema),
   displayPath: DisplayPathSchema.optional(),
 });
 export type Project = z.infer<typeof ProjectSchema>;
+export const ProjectListSchema = z.strictObject({
+  items: z.array(ProjectSchema),
+  errors: DiscoveryErrorsSchema,
+});
+export type ProjectList = z.infer<typeof ProjectListSchema>;
 export const AgentSchema = z.strictObject({
   agentId: EntityIdSchema, name: z.string().min(1), description: z.string(),
   model: z.strictObject({ providerId: EntityIdSchema, modelId: EntityIdSchema }).nullable(),

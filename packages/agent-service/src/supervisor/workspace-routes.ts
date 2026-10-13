@@ -10,6 +10,7 @@ import type { WorkspaceCatalogs } from './workspaces.ts';
 import type { WorkerRegistry } from './workers.ts';
 import { WorkerOperationError } from './workers.ts';
 import type { CatalogOperation, CatalogResult } from '../catalogs/protocol.ts';
+import { PrivateCredentialResolveRequestSchema, PrivateCredentialHandoffRequestSchema } from '../catalogs/private-credentials.ts';
 
 function id(value: string): string {
   try { return EntityIdSchema.parse(decodeURIComponent(value)); }
@@ -30,6 +31,23 @@ function unwrap(result: CatalogResult) {
 export class WorkspaceRoutes {
   constructor(private readonly catalogs: WorkspaceCatalogs, private readonly workers: WorkerRegistry) {}
   async handle(request: IncomingMessage, url: URL, readBody: <T>(request: IncomingMessage, schema: z.ZodType<T>) => Promise<T>) {
+    const privateCredential = /^\/internal\/workspaces\/([^/]+)\/credentials\/(resolve|handoff)$/.exec(url.pathname);
+    if (privateCredential && request.method === 'POST') {
+      const workspaceId = id(privateCredential[1]);
+      const requestBody = privateCredential[2] === 'resolve'
+        ? await readBody(request, PrivateCredentialResolveRequestSchema)
+        : await readBody(request, PrivateCredentialHandoffRequestSchema);
+      match(requestBody.workspaceId, workspaceId);
+      const workspace = this.catalogs.get(workspaceId);
+      // Private callers cannot redirect the stateless owner to a sibling agent directory.
+      if (requestBody.agentDirectoryId !== workspace.agentDirectoryId) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+      const result = 'purpose' in requestBody
+        ? await this.catalogs.operation(workspaceId, { type: 'catalog.credential.resolve', request: requestBody })
+        : await this.catalogs.operation(workspaceId, { type: 'catalog.credential.handoff', request: requestBody });
+      if (result.type !== 'catalog.credential.resolved' && result.type !== 'catalog.credential.handed-off')
+        throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return { status: 200, body: result.result };
+    }
     const completion = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/completions(?:\/([^/]+)\/cancel)?$/.exec(url.pathname);
     if (completion && request.method === 'POST') {
       const workspaceId = id(completion[1]);

@@ -251,6 +251,13 @@ export class NativeModels {
     return ProviderCatalogSchema.parse({ workspaceId, revision, providers: [...ids].map(id => this.provider(id)) });
   }
 
+  async supportsSelectedFileHandoff(providerId: string): Promise<boolean> {
+    const state = await this.load();
+    const configured = state.metadata.providers[providerId];
+    return configured !== undefined && configured.protocol === 'chat-completions'
+      && state.config.providers?.[providerId] !== undefined;
+  }
+
   provider(providerId: string): Provider {
     const configured = this.metadata.providers[providerId];
     const first = this.context.modelRegistry.getProviderModels(providerId)[0];

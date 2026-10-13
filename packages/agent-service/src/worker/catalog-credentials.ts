@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import {
   PositiveCounterSchema, ProviderCredentialMutationResultSchema,
@@ -5,12 +7,15 @@ import {
   type ProviderCredentialWriteRequest, type ProviderCredentialDeleteRequest,
   type ProviderCredentialMutationResult,
 } from '@openchamber/agent-contract';
-import type { PrivateCredentialResolveRequest, PrivateCredentialResolveResult } from '../catalogs/protocol.ts';
-import { PrivateCredentialResolveRequestSchema } from '../catalogs/protocol.ts';
+import type { PrivateCredentialResolveRequest, PrivateCredentialResolveResult,
+  PrivateCredentialHandoffRequest, PrivateCredentialHandoffResult } from '../catalogs/protocol.ts';
+import { PrivateCredentialResolveRequestSchema, PrivateCredentialHandoffRequestSchema,
+  PrivateCredentialResolveResultSchema, PrivateCredentialHandoffResultSchema } from '../catalogs/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { NativeModels, credentialReference } from './catalog-models.ts';
 export class NativeCredentials {
-  constructor(private readonly authStorage: AuthStorage, private readonly models: NativeModels, private readonly workspaceId: string) {}
+  constructor(private readonly authStorage: AuthStorage, private readonly models: NativeModels,
+    private readonly workspaceId: string, private readonly agentDirectoryId: string) {}
 
   async write(input: ProviderCredentialWriteRequest, revision: string): Promise<ProviderCredentialMutationResult> {
     const request = ProviderCredentialWriteRequestSchema.parse(input);
@@ -23,13 +28,13 @@ export class NativeCredentials {
     const credential = request.credential;
     let upsertedId: number | undefined;
     try {
-      const entries = await this.authStorage.credentials.upsert(request.providerId, credential.method === 'api-key'
+      await this.authStorage.credentials.upsert(request.providerId, credential.method === 'api-key'
         ? { type: 'api_key', key: credential.apiKey, source: 'login' }
         : { type: 'oauth', access: credential.accessToken, refresh: credential.refreshToken, expires: credential.expiresAt });
       await this.authStorage.credentials.reload();
-      const matched = entries.filter(entry => credential.method === 'api-key'
+      const matched = this.authStorage.credentials.list(request.providerId).filter(entry => entry.disabledCause === null && (credential.method === 'api-key'
         ? entry.credential.type === 'api_key' && entry.credential.key === credential.apiKey
-        : entry.credential.type === 'oauth' && entry.credential.access === credential.accessToken).at(-1);
+        : entry.credential.type === 'oauth' && entry.credential.access === credential.accessToken)).at(-1);
       upsertedId = matched?.id;
     } catch {
       throw new ProjectionError(503, 'CREDENTIAL_WRITE_FAILED', 'Provider credential persistence failed');
@@ -50,22 +55,63 @@ export class NativeCredentials {
   }
   async resolve(input: PrivateCredentialResolveRequest): Promise<PrivateCredentialResolveResult> {
     const request = PrivateCredentialResolveRequestSchema.parse(input);
+    this.assertOwner(request);
     await this.authStorage.credentials.reload();
     const row = this.authStorage.credentials.list(request.providerId)
       .find(candidate => candidate.disabledCause === null && credentialReference(request.providerId, candidate.id) === request.credentialRef);
     if (!row) throw new ProjectionError(404, 'CREDENTIAL_UNAVAILABLE', 'Selected provider credential is unavailable');
     const credential = row.credential;
-    if (credential.type === 'api_key') return {
-      workspaceId: request.workspaceId, agentDirectoryId: request.agentDirectoryId,
-      providerId: request.providerId, credentialRef: request.credentialRef, purpose: request.purpose,
-      credential: { method: 'api-key', apiKey: credential.key },
-    };
-    if (credential.type === 'oauth' && credential.access && credential.refresh && Number.isFinite(credential.expires)) return {
-      workspaceId: request.workspaceId, agentDirectoryId: request.agentDirectoryId,
-      providerId: request.providerId, credentialRef: request.credentialRef, purpose: request.purpose,
-      credential: { method: 'oauth', accessToken: credential.access, refreshToken: credential.refresh, expiresAt: credential.expires },
-    };
-    throw new ProjectionError(422, 'OAUTH_REAUTH_REQUIRED', 'Selected provider credential requires re-authentication');
+    if (credential.type === 'api_key') {
+      if (credential.key.startsWith('!')) throw new ProjectionError(422, 'CREDENTIAL_UNAVAILABLE', 'Command-backed credentials require native provider authentication');
+      let key: string | undefined;
+      try { key = await resolveConfigValue(credential.key); } catch {}
+      if (!key) throw new ProjectionError(404, 'CREDENTIAL_UNAVAILABLE', 'Selected provider credential is unavailable');
+      return PrivateCredentialResolveResultSchema.parse({ ...request, credential: { type: 'api_key', key } });
+    }
+    const parsed = PrivateCredentialResolveResultSchema.safeParse({ ...request, credential });
+    if (!parsed.success) throw new ProjectionError(422, 'OAUTH_REAUTH_REQUIRED', 'Selected provider credential requires re-authentication');
+    return parsed.data;
+  }
+
+  async handoff(input: PrivateCredentialHandoffRequest, revision: string): Promise<PrivateCredentialHandoffResult> {
+    const request = PrivateCredentialHandoffRequestSchema.parse(input);
+    this.assertOwner(request);
+    const { providerId, source, credentialType } = request.selection;
+    const outcome = (status: 'unsupported' | 'unavailable' | 're-auth-required', code: string) =>
+      PrivateCredentialHandoffResultSchema.parse({ workspaceId: this.workspaceId, agentDirectoryId: this.agentDirectoryId,
+        revision: request.expectedRevision, outcome: { providerId, source, credentialType, status, code } });
+    if (providerId === 'opencode') return outcome('unsupported', 'CONSOLE_CREDENTIAL_UNSUPPORTED');
+    if (credentialType === 'oauth') {
+      const reauth = source === 'stored-credential' && ['anthropic', 'openai-codex', 'github-copilot', 'google-gemini-cli'].includes(providerId);
+      return outcome(reauth ? 're-auth-required' : 'unsupported', reauth ? 'OAUTH_REAUTH_REQUIRED' : 'CREDENTIAL_FORMAT_UNSUPPORTED');
+    }
+    if (source === 'external-environment') return outcome('unavailable', 'LEGACY_ENVIRONMENT_UNAVAILABLE');
+    if (providerId === 'anthropic' || providerId === 'openai' || providerId === 'google') return outcome('unavailable', 'PROVIDER_CONVERSION_UNVERIFIED');
+    if (request.selection.source !== 'selected-file') return outcome('unavailable', 'SELECTED_SOURCE_UNAVAILABLE');
+    const catalog = await this.models.readProviders(this.workspaceId, request.expectedRevision);
+    const provider = catalog.providers.find(item => item.providerId === providerId);
+    if (!provider) return outcome('unavailable', 'PROVIDER_UNAVAILABLE');
+    if (provider.protocol !== 'chat-completions' || provider.endpoint === null) return outcome('unsupported', 'CREDENTIAL_FORMAT_UNSUPPORTED');
+    if (!await this.models.supportsSelectedFileHandoff(providerId)) return outcome('unsupported', 'CREDENTIAL_FORMAT_UNSUPPORTED');
+    // The supported legacy file is one selected auth.json API entry, never an entire account map.
+    let parsed: { type: 'api'; key: string };
+    try { parsed = z.strictObject({ type: z.literal('api'), key: z.string().min(1) }).parse(JSON.parse(request.selection.file.content)); }
+    catch { return outcome('unsupported', 'CREDENTIAL_FORMAT_UNSUPPORTED'); }
+    if (parsed.key.startsWith('!')) return outcome('unsupported', 'CREDENTIAL_FORMAT_UNSUPPORTED');
+    const written = await this.write({ expectedRevision: request.expectedRevision, providerId,
+      credential: { method: 'api-key', apiKey: parsed.key } }, revision);
+    if (written.auth.status !== 'configured') throw new ProjectionError(503, 'CREDENTIAL_WRITE_FAILED', 'Selected credential persistence failed');
+    const verified = await this.resolve({ workspaceId: this.workspaceId, agentDirectoryId: this.agentDirectoryId,
+      providerId, credentialRef: written.auth.credentialRef, purpose: 'routing' });
+    if (verified.credential.type !== 'api_key' || verified.credential.key !== parsed.key)
+      throw new ProjectionError(503, 'CREDENTIAL_WRITE_FAILED', 'Selected credential reload verification failed');
+    return PrivateCredentialHandoffResultSchema.parse({ workspaceId: this.workspaceId, agentDirectoryId: this.agentDirectoryId,
+      revision, outcome: { providerId, source, credentialType, status: 'imported', code: 'CREDENTIAL_IMPORTED', credentialRef: written.auth.credentialRef } });
+  }
+
+  private assertOwner(input: { workspaceId: string; agentDirectoryId: string }): void {
+    if (input.workspaceId !== this.workspaceId || input.agentDirectoryId !== this.agentDirectoryId)
+      throw new ProjectionError(403, 'UNAUTHORIZED', 'Selected credential owner is not authorized');
   }
 
 

@@ -27,6 +27,7 @@ import { WorkspaceCatalogs } from './workspaces.ts';
 import { WorkspaceRoutes } from './workspace-routes.ts';
 import { ShellCoordinator } from './shell.ts';
 import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
+import type { PrivateCredentialResolveResult, PrivateCredentialHandoffResult } from '../catalogs/private-credentials.ts';
 interface ServiceOptions {
   workerEntrypoint: string;
   workerRuntime?: string;
@@ -60,6 +61,7 @@ type ServiceResponse =
   | ModelCatalog | ProviderCatalog | AgentCatalog
   | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
   | CompletionResult | CompletionCancelResult
+  | PrivateCredentialResolveResult | PrivateCredentialHandoffResult
   | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult;
 
 function respondJson(response: ServerResponse, status: number, body: ServiceResponse): void {

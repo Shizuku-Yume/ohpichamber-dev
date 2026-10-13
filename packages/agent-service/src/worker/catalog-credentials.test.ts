@@ -25,7 +25,7 @@ test('bound API-key credentialRef selects the exact stored row across multiple k
   try {
     nativeModelsContext(runtime, () => activeSessionId);
     const models = runtime.models;
-    const credentials = new NativeCredentials(runtime.authStorage, models, 'workspace_1');
+    const credentials = new NativeCredentials(runtime.authStorage, models, 'workspace_1', 'agent_1');
     const providerId = 'm212-loopback';
     const modelId = 'm212-model';
     const endpoint = 'http://127.0.0.1:18080/v1';
@@ -188,7 +188,7 @@ test('bound OAuth credentialRef pins session affinity to the selected row withou
   try {
     nativeModelsContext(runtime, () => 'oauth-session-1');
     const models = runtime.models;
-    const credentials = new NativeCredentials(runtime.authStorage, models, 'workspace_1');
+    const credentials = new NativeCredentials(runtime.authStorage, models, 'workspace_1', 'agent_1');
     const providerId = 'anthropic';
     const modelId = 'anthropic-custom';
     const endpoint = 'http://127.0.0.1:18080/v1';
@@ -255,6 +255,84 @@ test('bound OAuth credentialRef pins session affinity to the selected row withou
     });
     expect(await runtime.modelRegistry.getApiKey(selected.nativeModel, 'oauth-session-1')).toBeUndefined();
     expect(await runtime.modelRegistry.getApiKeyWithCredentialForProvider(providerId, 'oauth-session-1')).toBeUndefined();
+  } finally {
+    runtime.authStorage.close();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('selected custom-provider file handoff persists and reloads the exact SDK API key across a cold owner reopen', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'selected-handoff-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  let runtime = await openNativeRuntime({ cwd, agentDirectory });
+  try {
+    nativeModelsContext(runtime, () => 'handoff-session');
+    await runtime.models.configureProvider({ expectedRevision: '0', configuration: {
+      providerId: 'selected-proxy', name: 'Selected proxy', endpoint: 'http://127.0.0.1:18080/v1',
+      protocol: 'chat-completions', credentialRef: null,
+    } }, '1');
+    const credentials = new NativeCredentials(runtime.authStorage, runtime.models, 'workspace_1', 'agent_1');
+    const imported = await credentials.handoff({ workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', expectedRevision: '1',
+      selection: { providerId: 'selected-proxy', source: 'selected-file', credentialType: 'key',
+        file: { format: 'opencode-auth-entry', content: JSON.stringify({ type: 'api', key: 'selected-secret-key' }) } },
+    }, '2');
+    expect(imported.outcome.status).toBe('imported');
+    expect(JSON.stringify(imported)).not.toContain('selected-secret-key');
+    const reference = imported.outcome.credentialRef;
+    if (!reference) throw new Error('Expected opaque selected credential reference');
+    const selection = { workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', providerId: 'selected-proxy', credentialRef: reference, purpose: 'quota' as const };
+    expect((await credentials.resolve(selection)).credential).toEqual({ type: 'api_key', key: 'selected-secret-key' });
+    await expect(credentials.resolve({ ...selection, agentDirectoryId: 'sibling-agent' })).rejects.toMatchObject({ code: 'UNAUTHORIZED', status: 403 });
+    await expect(credentials.resolve({ ...selection, workspaceId: 'sibling-workspace' })).rejects.toMatchObject({ code: 'UNAUTHORIZED', status: 403 });
+    await expect(credentials.resolve({ ...selection, credentialRef: 'missing-reference' })).rejects.toMatchObject({ code: 'CREDENTIAL_UNAVAILABLE', status: 404 });
+    runtime.authStorage.close();
+    runtime = await openNativeRuntime({ cwd, agentDirectory });
+    nativeModelsContext(runtime, () => 'cold-handoff-session');
+    const reopened = new NativeCredentials(runtime.authStorage, runtime.models, 'workspace_1', 'agent_1');
+    expect((await reopened.resolve(selection)).credential).toEqual({ type: 'api_key', key: 'selected-secret-key' });
+  } finally {
+    runtime.authStorage.close();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('unsupported files, official conversion limits, and OAuth reauthentication do not write SDK credentials', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'handoff-refusals-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  try {
+    nativeModelsContext(runtime, () => 'refused-handoff');
+    const credentials = new NativeCredentials(runtime.authStorage, runtime.models, 'workspace_1', 'agent_1');
+    const base = { workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', expectedRevision: '0' };
+    const official = await credentials.handoff({ ...base, selection: { providerId: 'openai', source: 'stored-credential', credentialType: 'key' } }, '1');
+    expect(official.outcome).toMatchObject({ status: 'unavailable', code: 'PROVIDER_CONVERSION_UNVERIFIED' });
+    const oauth = await credentials.handoff({ ...base, selection: { providerId: 'anthropic', source: 'stored-credential', credentialType: 'oauth' } }, '1');
+    expect(oauth.outcome).toMatchObject({ status: 're-auth-required', code: 'OAUTH_REAUTH_REQUIRED' });
+    const console = await credentials.handoff({ ...base, selection: { providerId: 'opencode', source: 'stored-credential', credentialType: 'key' } }, '1');
+    expect(console.outcome).toMatchObject({ status: 'unsupported', code: 'CONSOLE_CREDENTIAL_UNSUPPORTED' });
+    expect(runtime.authStorage.credentials.list('openai')).toHaveLength(0);
+    expect(runtime.authStorage.credentials.list('anthropic')).toHaveLength(0);
+    expect(runtime.authStorage.credentials.list('opencode')).toHaveLength(0);
+    expect(official.revision).toBe('0');
+    await runtime.models.configureProvider({ expectedRevision: '0', configuration: { providerId: 'refused-proxy',
+      name: 'Refused proxy', endpoint: 'http://127.0.0.1:18080/v1', protocol: 'chat-completions', credentialRef: null } }, '1');
+    for (const content of ['{"unexpected":"private-marker"}', '{"type":"api","key":"!touch /private/marker"}']) {
+      const rejected = await credentials.handoff({ ...base, expectedRevision: '1', selection: {
+        providerId: 'refused-proxy', source: 'selected-file', credentialType: 'key', file: { format: 'opencode-auth-entry', content },
+      } }, '2');
+      expect(rejected.outcome).toMatchObject({ status: 'unsupported', code: 'CREDENTIAL_FORMAT_UNSUPPORTED' });
+      expect(JSON.stringify(rejected)).not.toContain('private-marker');
+      expect(runtime.authStorage.credentials.list('refused-proxy')).toHaveLength(0);
+      expect(rejected.revision).toBe('1');
+    }
   } finally {
     runtime.authStorage.close();
     resetSettingsForTest();

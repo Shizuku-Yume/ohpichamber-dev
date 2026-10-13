@@ -42,3 +42,4 @@ export const HostWorkspacePolicySchema = z.strictObject({
 export type HostWorkspacePolicy = z.infer<typeof HostWorkspacePolicySchema>;
 export { WorkerBootstrapSchema, WorkerPolicyRequestSchema, WorkerPolicyResultSchema };
 export type { WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
+export * from '../catalogs/private-credentials.ts';
