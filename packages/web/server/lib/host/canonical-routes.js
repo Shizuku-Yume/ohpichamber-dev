@@ -1,154 +1,46 @@
 import { z } from 'zod';
-import { isEnterpriseMode } from '../enterprise-mode.js';
+import { PublicWorkspaceListSchema } from './canonical-contracts.js';
 
 const PREFIX = '/api/agent/v1';
-const selectionSchema = z.object({
-  providerId: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/),
-  source: z.enum(['stored-credential', 'managed-environment', 'external-environment']),
-  credentialType: z.enum(['key', 'oauth']),
-}).strict();
-const preflightSchema = z.object({
-  intent: z.literal('credential-handoff'),
-  consent: z.literal(true),
-  selections: z.array(selectionSchema).min(1).max(16),
-}).strict().refine(({ selections }) => new Set(selections.map(
-  ({ providerId, source, credentialType }) => `${providerId}:${source}:${credentialType}`,
-)).size === selections.length);
+const privateScopeSchema = z.object({ workspaceId: z.string(), agentDirectoryId: z.string(), cwd: z.string(), agentDirectory: z.string() }).strict();
+const selectionSchema = z.object({ providerId: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/), source: z.enum(['stored-credential', 'managed-environment', 'external-environment']), credentialType: z.enum(['key', 'oauth']), credentialRef: z.string().min(1).max(128).optional() }).strict();
+const preflightSchema = z.object({ intent: z.literal('credential-handoff'), consent: z.literal(true), workspaceId: z.string().min(1), selections: z.array(selectionSchema).min(1).max(16) }).strict();
+const problem = (res, status, code, title, detail, retryable = false, details) => { const body = { type: `urn:ohpichamber:problem:${code}`, title, status, detail, code, retryable }; if (details !== undefined) body.details = details; return res.status(status).type('application/problem+json').json(body); };
+const safeServiceError = (error) => ({ status: error?.status >= 400 && error.status <= 599 ? error.status : 503, code: typeof error?.code === 'string' ? error.code : 'SERVICE_UNAVAILABLE' });
 
-const observedOAuthProviders = new Set(['anthropic', 'openai-codex', 'github-copilot', 'google-gemini-cli']);
-const observedOfficialKeyProviders = new Set(['anthropic', 'openai', 'google']);
-
-const problem = (res, status, code, title, detail, retryable = false, details) => {
-  const body = { type: `urn:ohpichamber:problem:${code}`, title, status, detail, code, retryable };
-  if (details !== undefined) body.details = details;
-  return res.status(status).type('application/problem+json').json(body);
-};
-
-const unavailableAgent = () => ({ status: 'unavailable', ready: false });
-
-const preflightResult = (selection) => {
-  const { providerId, source, credentialType } = selection;
-  if (providerId === 'opencode') {
-    return { ...selection, status: 'unsupported', code: 'CONSOLE_CREDENTIAL_UNSUPPORTED' };
-  }
-  if (credentialType === 'oauth') {
-    if (source !== 'stored-credential' || !observedOAuthProviders.has(providerId)) {
-      return { ...selection, status: 'unsupported', code: 'CREDENTIAL_FORMAT_UNSUPPORTED' };
-    }
-    // M0 did not establish conversion, refresh, scopes, or account selection.
-    return { ...selection, status: 're-auth-required', code: 'OAUTH_REAUTH_REQUIRED' };
-  }
-  if (source === 'external-environment') {
-    return { ...selection, status: 'unavailable', code: 'LEGACY_ENVIRONMENT_UNAVAILABLE' };
-  }
-  if (observedOfficialKeyProviders.has(providerId)) {
-    return { ...selection, status: 'unavailable', code: 'PROVIDER_CONVERSION_UNVERIFIED' };
-  }
-  return { ...selection, status: 'unavailable', code: 'AGENT_SERVICE_UNAVAILABLE' };
-};
-
-/** M1 refuses handoff; task 22 replaces this refusal with the real private service owner. */
+/** Canonical Host gateway. Main supplies the real Agent Service and authoritative private scope resolvers. */
 export const registerCanonicalHostRoutes = (app, {
-  express,
-  uiAuthController,
-  tunnelAuthController,
-  isRequestOriginAllowed,
-  enterprisePolicyOptions,
+  express, service, uiAuthController, tunnelAuthController, isRequestOriginAllowed,
+  enterprisePolicyOptions, resolveWorkspaceScope, resolveSessionScope, listProjects, listWorkspaces,
+  resolveSelectedCredential, queueRoutes, sessionRoutes, attachmentRoutes,
 }) => {
+  if (!service || typeof service.request !== 'function') throw new TypeError('Canonical gateway requires the Agent Service');
+  if (typeof resolveWorkspaceScope !== 'function' || typeof resolveSessionScope !== 'function') throw new TypeError('Canonical gateway requires Host scope resolvers');
   const router = express.Router();
-  router.use((_req, res, next) => {
-    res.set('Cache-Control', 'no-store');
-    next();
-  });
-
-  router.get('/health', (_req, res) => {
-    res.json({ status: 'ok', engine: 'omp', agent: unavailableAgent() });
-  });
-  router.get('/ready', (_req, res) => problem(
-    res, 503, 'SERVICE_UNAVAILABLE', 'Agent Service unavailable',
-    'The OMP Agent Service is not available.', true,
-  ));
-
+  router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+  router.get('/health', (_req, res) => { const state = service.getState?.() ?? {}; res.json({ status: 'ok', engine: 'omp', agent: { ready: state.ready === true, status: state.status ?? 'unknown' } }); });
+  router.get('/ready', (_req, res) => { const state = service.getState?.() ?? {}; if (state.ready !== true) return problem(res, 503, 'SERVICE_UNAVAILABLE', 'Agent Service unavailable', 'The OMP Agent Service is not ready.', true); return res.json({ ready: true, engine: 'omp', version: state.version ?? '1.0.0' }); });
   router.use(async (req, res, next) => {
     try {
       const scope = tunnelAuthController.classifyRequestScope(req);
-      let auth;
-      if (scope === 'tunnel' || scope === 'unknown-public') {
-        auth = tunnelAuthController.getTunnelSessionFromRequest(req) ? { type: 'tunnel' } : null;
-      } else {
-        auth = await uiAuthController.resolveAuthContext(req, res, {
-          allowUrlToken: false,
-          allowAnonymousSession: false,
-        });
-      }
-      if (!auth) {
-        return problem(res, 401, 'UNAUTHORIZED', 'Authentication required',
-          'Authenticate with the Host before using this operation.');
-      }
-      res.locals.canonicalAuthType = auth.type;
-      next();
-    } catch {
-      problem(res, 500, 'INTERNAL_ERROR', 'Host request failed', 'The Host could not authorize the request.');
-    }
+      const auth = scope === 'tunnel' || scope === 'unknown-public' ? (tunnelAuthController.getTunnelSessionFromRequest(req) ? { type: 'tunnel' } : null) : await uiAuthController.resolveAuthContext(req, res, { allowUrlToken: false, allowAnonymousSession: false });
+      if (!auth) return problem(res, 401, 'UNAUTHORIZED', 'Authentication required', 'Authenticate with the Host before using this operation.');
+      if (req.headers.origin && !await isRequestOriginAllowed(req)) return problem(res, 403, 'INVALID_ORIGIN', 'Origin refused', 'Use an authorized Host client origin.');
+      res.locals.canonicalAuthType = auth.type; next();
+    } catch { problem(res, 500, 'INTERNAL_ERROR', 'Host request failed', 'The Host could not authorize the request.'); }
   });
-
-  router.get('/capabilities', (_req, res) => res.json({
-    version: '1.0.0',
-    engine: 'omp',
-    agent: unavailableAgent(),
-    capabilities: {
-      streaming: false,
-      casApprovals: false,
-      midTurnSteering: false,
-      followUpQueue: false,
-      subagents: false,
-      sessionBranching: false,
-      reasoningParts: false,
-      documentExtraction: false,
-      credentialHandoff: false,
-    },
-  }));
-
-  router.post('/credentials/preflight', async (req, res, next) => {
-    try {
-      const origin = req.headers.origin;
-      // Only a validated paired client can omit Origin. Cookies never grant this bypass.
-      if (origin ? !await isRequestOriginAllowed(req) : res.locals.canonicalAuthType !== 'client') {
-        return problem(res, 403, 'INVALID_ORIGIN', 'Origin refused', 'Use an authorized Host client origin.');
-      }
-      if (isEnterpriseMode(enterprisePolicyOptions)) {
-        return problem(res, 403, 'enterprise_mode', 'Provider entry refused',
-          'Credential handoff is not available in enterprise mode.');
-      }
-      if (!req.is('application/json')) {
-        return problem(res, 415, 'UNSUPPORTED_MEDIA_TYPE', 'JSON required', 'Send an application/json request body.');
-      }
-      next();
-    } catch {
-      problem(res, 500, 'INTERNAL_ERROR', 'Host request failed', 'The Host could not check the request boundary.');
-    }
-  }, express.json({ limit: '16kb', strict: true }), (req, res) => {
-    const parsed = preflightSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return problem(res, 400, 'INVALID_REQUEST', 'Invalid credential intent',
-        'Provide explicit credential-handoff intent, consent, and selected nonsecret credential descriptors.');
-    }
-    // No legacy source, SDK store, staging writer, or process launcher is reachable here.
-    return problem(res, 503, 'SERVICE_UNAVAILABLE', 'Agent Service unavailable',
-      'No credentials were read or imported. The real Agent Service handoff is not available.', true,
-      { results: parsed.data.selections.map(preflightResult) });
-  });
-
-  router.use((_req, res) => problem(res, 503, 'SERVICE_UNAVAILABLE', 'Agent Service unavailable',
-    'The OMP Agent Service is not available.', true));
-  router.use((error, _req, res, _next) => {
-    if (error.type === 'entity.too.large') {
-      return problem(res, 413, 'PAYLOAD_TOO_LARGE', 'Request too large', 'The preflight body exceeds 16 KiB.');
-    }
-    if (error.type === 'entity.parse.failed') {
-      return problem(res, 400, 'INVALID_REQUEST', 'Invalid JSON', 'Send a valid JSON object.');
-    }
-    return problem(res, 400, 'INVALID_REQUEST', 'Invalid request body', 'The request body could not be read.');
+  router.use('/attachments', attachmentRoutes ?? ((_req, res) => problem(res, 503, 'UNSUPPORTED_CAPABILITY', 'Attachments unavailable', 'The Host attachment owner is unavailable.')));
+  router.get('/projects', async (_req, res) => { if (!listProjects) return problem(res, 503, 'UNSUPPORTED_CAPABILITY', 'Projects unavailable', 'The Host project catalog is unavailable.'); try { return res.json(await listProjects()); } catch { return problem(res, 503, 'SERVICE_UNAVAILABLE', 'Projects unavailable', 'The Host project catalog could not be read.', true); } });
+  router.get('/workspaces', async (req, res) => { if (!listWorkspaces) return problem(res, 503, 'UNSUPPORTED_CAPABILITY', 'Workspaces unavailable', 'The Host workspace catalog is unavailable.'); try { const result = await listWorkspaces(typeof req.query.projectId === 'string' ? req.query.projectId : undefined); const safe = { items: (result?.items ?? []).map(({ workspaceId, projectId, name, displayPath }) => ({ workspaceId, projectId, name, displayPath: displayPath ?? null })), errors: result?.errors ?? [] }; return res.json(PublicWorkspaceListSchema.parse(safe)); } catch { return problem(res, 503, 'SERVICE_UNAVAILABLE', 'Workspaces unavailable', 'The Host workspace catalog could not be read.', true); } });
+  router.post('/credentials/preflight', express.json({ limit: '16kb', strict: true }), async (req, res) => {
+    if (!req.is('application/json')) return problem(res, 415, 'UNSUPPORTED_MEDIA_TYPE', 'JSON required', 'Send an application/json request body.');
+    if (isEnterpriseMode(enterprisePolicyOptions)) return problem(res, 403, 'ENTERPRISE_POLICY', 'Provider entry refused', 'Credential handoff is not available in enterprise mode.');
+    const parsed = preflightSchema.safeParse(req.body); if (!parsed.success) return problem(res, 400, 'INVALID_REQUEST', 'Invalid credential intent', 'Provide explicit credential-handoff intent, consent, workspace and selected descriptors.');
+    const scope = resolveWorkspaceScope(parsed.data.workspaceId); if (!scope || !privateScopeSchema.safeParse(scope).success) return problem(res, 403, 'FORBIDDEN', 'Workspace refused', 'The selected workspace is not authorized.');
+    if (!service.getState?.().ready) return problem(res, 503, 'SERVICE_UNAVAILABLE', 'Agent Service unavailable', 'No credentials were read or imported because the Agent Service is not ready.', true);
+    if (!resolveSelectedCredential) return problem(res, 503, 'SERVICE_UNAVAILABLE', 'Credential handoff unavailable', 'The selected credential owner is unavailable.', true);
+    const results = []; for (const selection of parsed.data.selections) { try { results.push(await resolveSelectedCredential({ ...selection, workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId })); } catch (error) { const failure = safeServiceError(error); results.push({ providerId: selection.providerId, status: failure.code === 'OAUTH_REAUTH_REQUIRED' ? 're-auth-required' : failure.code === 'CREDENTIAL_UNAVAILABLE' ? 'unavailable' : 'unsupported', code: failure.code }); } }
+    return res.status(207).json({ workspaceId: scope.workspaceId, results });
   });
   app.use(PREFIX, router);
 };

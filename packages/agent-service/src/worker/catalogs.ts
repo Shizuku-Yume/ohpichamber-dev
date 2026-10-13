@@ -66,6 +66,8 @@ export class WorkerCatalogs {
       case 'catalog.credential.write':
         await this.context.assertProviderEntryAllowed();
         return { type: 'catalog.credential.mutated', result: await this.credentials.write(operation.request, revision) };
+      case 'catalog.credential.resolve':
+        return { type: 'catalog.credential.resolved', result: await this.credentials.resolve(operation.request) };
       case 'catalog.credential.delete':
         return { type: 'catalog.credential.mutated', result: await this.credentials.delete(operation.request, revision) };
       case 'catalog.agent.create':

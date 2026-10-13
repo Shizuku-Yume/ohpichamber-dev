@@ -5,9 +5,10 @@ import {
   type ProviderCredentialWriteRequest, type ProviderCredentialDeleteRequest,
   type ProviderCredentialMutationResult,
 } from '@openchamber/agent-contract';
+import type { PrivateCredentialResolveRequest, PrivateCredentialResolveResult } from '../catalogs/protocol.ts';
+import { PrivateCredentialResolveRequestSchema } from '../catalogs/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { NativeModels, credentialReference } from './catalog-models.ts';
-
 export class NativeCredentials {
   constructor(private readonly authStorage: AuthStorage, private readonly models: NativeModels, private readonly workspaceId: string) {}
 
@@ -47,6 +48,26 @@ export class NativeCredentials {
       },
     });
   }
+  async resolve(input: PrivateCredentialResolveRequest): Promise<PrivateCredentialResolveResult> {
+    const request = PrivateCredentialResolveRequestSchema.parse(input);
+    await this.authStorage.credentials.reload();
+    const row = this.authStorage.credentials.list(request.providerId)
+      .find(candidate => candidate.disabledCause === null && credentialReference(request.providerId, candidate.id) === request.credentialRef);
+    if (!row) throw new ProjectionError(404, 'CREDENTIAL_UNAVAILABLE', 'Selected provider credential is unavailable');
+    const credential = row.credential;
+    if (credential.type === 'api_key') return {
+      workspaceId: request.workspaceId, agentDirectoryId: request.agentDirectoryId,
+      providerId: request.providerId, credentialRef: request.credentialRef, purpose: request.purpose,
+      credential: { method: 'api-key', apiKey: credential.key },
+    };
+    if (credential.type === 'oauth' && credential.access && credential.refresh && Number.isFinite(credential.expires)) return {
+      workspaceId: request.workspaceId, agentDirectoryId: request.agentDirectoryId,
+      providerId: request.providerId, credentialRef: request.credentialRef, purpose: request.purpose,
+      credential: { method: 'oauth', accessToken: credential.access, refreshToken: credential.refresh, expiresAt: credential.expires },
+    };
+    throw new ProjectionError(422, 'OAUTH_REAUTH_REQUIRED', 'Selected provider credential requires re-authentication');
+  }
+
 
   async delete(input: ProviderCredentialDeleteRequest, revision: string): Promise<ProviderCredentialMutationResult> {
     const request = ProviderCredentialDeleteRequestSchema.parse(input);
