@@ -33,10 +33,12 @@ test('native skill submission and catalog descriptions hide roots, and failed di
   const catalogEvents: string[] = [];
   const submitted: string[] = [];
   const provider = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
-    const textContent = z.union([z.string(), z.array(z.object({ type: z.literal('text'), text: z.string() }))]);
+    const textContent = z.union([
+      z.string().transform(text => [text]),
+      z.array(z.object({ type: z.literal('text'), text: z.string() })).transform(parts => parts.map(part => part.text)),
+    ]);
     const payload = z.object({ messages: z.array(z.object({ role: z.string(), content: textContent })) }).parse(await request.json());
-    submitted.push(...payload.messages.filter(message => message.role === 'user').flatMap(message =>
-      typeof message.content === 'string' ? [message.content] : message.content.map(part => part.text)));
+    submitted.push(...payload.messages.filter(message => message.role === 'user').flatMap(message => message.content));
     const chunk = { id: 'skill-response', object: 'chat.completion.chunk', created: 1, model: 'skill-model',
       choices: [{ index: 0, delta: { role: 'assistant', content: 'Skill received.' }, finish_reason: null }] };
     const finish = { ...chunk, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } };
