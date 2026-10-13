@@ -5,6 +5,7 @@ import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-sessi
 import type { PromptOptions } from '@oh-my-pi/pi-coding-agent/session/agent-session-types';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
 import { buildSkillPromptMessage } from '@oh-my-pi/pi-coding-agent/extensibility/skills';
 import { JsonObjectSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run } from '@openchamber/agent-contract';
@@ -73,6 +74,7 @@ export class WorkerSession {
     const { authStorage, settings, modelRegistry } = runtime;
     let manager: SessionManager | undefined;
     let session: AgentSession | undefined;
+    let shell: WorkerShell | undefined;
     let projection: WorkerProjection | undefined;
     let owned: WorkerSession | undefined;
     const admission: NativeAdmission = { skillsAvailable: !input.skillSources, profile: null };
@@ -146,8 +148,14 @@ export class WorkerSession {
         },
         setSkillsRuntimeAvailable: available => { admission.skillsAvailable = available; },
       });
-      if (!nativeSession.asyncJobManager) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native shell manager is unavailable');
-      const shell = new WorkerShell({ manager: nativeSession.asyncJobManager, workspaceId: input.workspaceId, projectId: input.projectId, sessionId: input.rootSessionId, workerGeneration: input.workerGeneration, epoch: input.observationEpoch ?? randomUUID(), cwd: input.cwd });
+      const nativeOwnerId = nativeSession.getAgentId();
+      if (!nativeSession.asyncJobManager || nativeOwnerId === undefined) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native shell ownership is unavailable');
+      // Subscribe before readiness and prompt admission; factory creation starts no Bash jobs.
+      shell = new WorkerShell({
+        manager: nativeSession.asyncJobManager, nativeOwner: { agentId: nativeOwnerId, registry: AgentRegistry.global() },
+        workspaceId: input.workspaceId, projectId: input.projectId, sessionId: input.rootSessionId,
+        workerGeneration: input.workerGeneration, epoch: input.observationEpoch ?? randomUUID(), cwd: input.cwd,
+      });
       const completion = new WorkerCompletion(modelRegistry, input.workspaceId, async (selection, controls) => {
         const selected = await catalogs.resolveSelection(selection, controls);
         await authorizeTool('provider.use', { providerId: selection.providerId, modelId: selection.modelId, endpoint: selected.nativeModel.baseUrl });
@@ -173,8 +181,11 @@ export class WorkerSession {
       interaction.close();
       if (owned) await owned.close();
       else {
-        try { await mcp?.close(); }
-        finally { try { if (session) await session.dispose(); else await manager?.close(); } finally { authStorage.close(); } }
+        try { await shell?.close(); }
+        finally {
+          try { await mcp?.close(); }
+          finally { try { if (session) await session.dispose(); else await manager?.close(); } finally { authStorage.close(); } }
+        }
       }
       throw error;
     }
