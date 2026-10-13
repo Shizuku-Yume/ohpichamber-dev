@@ -1,163 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { z } from 'zod';
-import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, SessionsPageSchema, ProblemDetailsSchema, ProblemCodeSchema } from '@openchamber/agent-contract';
+import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, RunAbortRequestSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, ProblemDetailsSchema, ProblemCodeSchema } from '@openchamber/agent-contract';
 
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
-const asNonEmptyString = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
-const asList = (value) => (Array.isArray(value) ? value : []);
-const isAutoModel = (selection) => selection?.providerID === 'opencode' && selection?.modelID === 'auto';
+const SessionForkAckSchema = z.strictObject({ sessionId: z.string().min(1), rootSessionId: z.string().min(1), sessionFile: z.string().min(1), sourceSessionId: z.string().min(1), entryId: z.string().min(1).nullable(), mode: z.enum(['selected', 'full']) });
 
 
-const splitModel = (value) => {
-  const model = asNonEmptyString(value);
-  if (!model) return null;
-  const slashIndex = model.indexOf('/');
-  if (slashIndex <= 0 || slashIndex === model.length - 1) return null;
-  return {
-    providerID: model.slice(0, slashIndex),
-    modelID: model.slice(slashIndex + 1),
-  };
-};
-
-
-const MIN_GOAL_TOKEN_BUDGET = 1_000;
-const MAX_GOAL_TOKEN_BUDGET = 100_000_000;
-
-const resolveGoalInput = (payload, prompt) => {
-  const enabled = payload?.goal === true;
-  if (payload?.goalTokenBudget !== undefined && !enabled) {
-    return { ok: false, error: 'goalTokenBudget requires goal' };
-  }
-  if (enabled && !prompt) {
-    return { ok: false, error: 'prompt is required when goal is enabled' };
-  }
-  if (payload?.goalTokenBudget === undefined) {
-    return { ok: true, enabled, tokenBudget: null };
-  }
-  const tokenBudget = payload.goalTokenBudget;
-  if (!Number.isSafeInteger(tokenBudget)
-    || tokenBudget < MIN_GOAL_TOKEN_BUDGET
-    || tokenBudget > MAX_GOAL_TOKEN_BUDGET) {
-    return { ok: false, error: `goalTokenBudget must be an integer from ${MIN_GOAL_TOKEN_BUDGET} to ${MAX_GOAL_TOKEN_BUDGET}` };
-  }
-  return { ok: true, enabled, tokenBudget };
-};
-
-const isPrimaryAgentMode = (mode) => !mode || mode === 'primary' || mode === 'all';
-
-
-const findCatalogModel = (models, providerID, modelID) => models.find(
-  (model) => model?.providerID === providerID && model?.modelID === modelID,
-) || null;
-
-const resolveVariant = (models, providerID, modelID, variant) => {
-  const normalized = asNonEmptyString(variant);
-  if (!normalized) return undefined;
-  const model = findCatalogModel(models, providerID, modelID);
-  // A model the catalog does not know yet (cold or unreachable) keeps the
-  // user's saved variant instead of losing it to a discovery gap.
-  if (!model) return normalized;
-  return asList(model.variants).some((entry) => entry?.id === normalized) ? normalized : undefined;
-};
-
-const isModelHidden = (hiddenModels, providerID, modelID) => hiddenModels.some(
-  (hidden) => hidden?.providerID === providerID && hidden?.modelID === modelID,
-);
-
-
-const resolveProjectDefaults = (settings, directory, projectId) => {
-  const projects = Array.isArray(settings?.projects) ? settings.projects : [];
-  const matchedProject = projectId
-    ? projects.find((entry) => entry?.id === projectId) || null
-    : projects.find((entry) => entry?.path === directory) || null;
-  return {
-    defaultAgent: asNonEmptyString(matchedProject?.defaultAgent),
-    defaultModel: asNonEmptyString(matchedProject?.defaultModel),
-    defaultVariant: asNonEmptyString(matchedProject?.defaultVariant),
-  };
-};
-
-
-const resolveDefaultSelection = ({ agents, models, settings, projectDefaults, opencodeDefaultAgent, opencodeDefaultModel, autoAvailable }) => {
-  const primaryAgents = agents.filter((agent) => isPrimaryAgentMode(agent?.mode) && agent?.hidden !== true);
-  let resolvedAgent = null;
-  const projectDefaultAgent = asNonEmptyString(projectDefaults?.defaultAgent);
-  const settingsDefaultAgent = asNonEmptyString(settings?.defaultAgent);
-  // The project's default agent wins over the global one. v1 stored the agent's
-  // display name; v2 agents are addressed by id (`build` vs `Build`), so a
-  // setting saved before the upgrade still resolves.
-  const findAgentBySetting = (wantedName) => {
-    const wanted = wantedName.toLowerCase();
-    return agents.find((agent) => agent?.id === wantedName)
-      || agents.find((agent) => typeof agent?.name === 'string' && agent.name.toLowerCase() === wanted)
-      || agents.find((agent) => typeof agent?.id === 'string' && agent.id.toLowerCase() === wanted)
-      || null;
-  };
-  if (projectDefaultAgent) resolvedAgent = findAgentBySetting(projectDefaultAgent);
-  if (!resolvedAgent && settingsDefaultAgent) resolvedAgent = findAgentBySetting(settingsDefaultAgent);
-  if (!resolvedAgent && opencodeDefaultAgent) {
-    const candidate = agents.find((agent) => agent?.id === opencodeDefaultAgent) || null;
-    if (candidate && isPrimaryAgentMode(candidate.mode) && candidate.hidden !== true) {
-      resolvedAgent = candidate;
-    }
-  }
-  if (!resolvedAgent) {
-    resolvedAgent = primaryAgents.find((agent) => agent?.id === 'build') || primaryAgents[0] || agents[0] || null;
-  }
-
-  let model = null;
-  let variant;
-  // Settings and project defaults store `provider/model` with the variant in
-  // its own field, so these two stay a plain split; the OpenCode config model
-  // can carry its variant and is parsed with the canonical parser.
-  const projectDefaultModel = splitModel(projectDefaults?.defaultModel);
-  const settingsDefaultModel = splitModel(settings?.defaultModel);
-  // A saved choice is honoured even when the catalog has not listed it yet: a
-  // discovery gap must not silently move the user onto another model.
-  if (projectDefaultModel) {
-    model = projectDefaultModel;
-    variant = resolveVariant(models, model.providerID, model.modelID, projectDefaults?.defaultVariant);
-  }
-  if (!model && settingsDefaultModel) {
-    model = settingsDefaultModel;
-    variant = resolveVariant(models, model.providerID, model.modelID, settings?.defaultVariant);
-  }
-
-  // An agent's model is a v2 `ModelRef`: `id` is the model id, not a composite.
-  const agentModel = resolvedAgent?.model;
-  if (!model && asNonEmptyString(agentModel?.providerID) && asNonEmptyString(agentModel?.id)) {
-    model = { providerID: agentModel.providerID, modelID: agentModel.id };
-    variant = resolveVariant(models, model.providerID, model.modelID, agentModel.variant);
-  }
-
-  if (!model && opencodeDefaultModel) {
-    model = { providerID: opencodeDefaultModel.providerID, modelID: opencodeDefaultModel.modelID };
-    variant = resolveVariant(models, model.providerID, model.modelID, opencodeDefaultModel.variant);
-  }
-
-  // The model last picked in a chat composer. Like a saved default it is kept
-  // through catalog gaps; a model hidden since, or Auto on a server without
-  // routing, is skipped.
-  const hiddenModels = asList(settings?.hiddenModels);
-  const lastSelectedModel = splitModel(settings?.lastSelectedModel);
-  if (!model
-    && lastSelectedModel
-    && !isModelHidden(hiddenModels, lastSelectedModel.providerID, lastSelectedModel.modelID)
-    && (autoAvailable || !isAutoModel(lastSelectedModel))) {
-    model = lastSelectedModel;
-  }
-
-  // No model is synthesized when the Host catalog has not supplied one.
-  // The caller can admit a session only with a captured, explicit selection.
-  if (!model) model = null;
-
-  return {
-    agent: resolvedAgent?.id,
-    model,
-    variant,
-  };
-};
 
 
 /**
@@ -199,52 +48,8 @@ const parseArchiveRequest = (payload) => {
 };
 
 
-// createWorktree returns while the worktree is still being populated in the
-// background (git reset --hard after a --no-checkout add). Dispatching a
-// prompt into a half-populated directory makes opencode's run die with
-// UnknownError (agent and config files are not there yet), so wait until the
-// bootstrap reaches git-ready (population done) or fails before creating the
-// session and dispatching.
-const WORKTREE_BOOTSTRAP_TIMEOUT_MS = 60_000;
-const WORKTREE_BOOTSTRAP_POLL_MS = 150;
-
-/**
- * A worktree from a pull or merge request: its number, and the folder and
- * branch names when the caller chose them. The head, the fork and its remote
- * come from the provider; a start ref or upstream would contradict them.
- */
-const resolvePullRequestInput = (payload) => {
-  if (payload?.pullRequest === undefined) return null;
-  if (!Number.isSafeInteger(payload.pullRequest) || payload.pullRequest < 1) {
-    throw new OpenChamberControlError('pullRequest must be a pull or merge request number, such as 42', 400);
-  }
-  if (payload.worktree?.startRef !== undefined || payload.setUpstream !== undefined) {
-    throw new OpenChamberControlError('pullRequest checks out the pull request\'s own branch; do not combine it with startRef or setUpstream', 400);
-  }
-  const input = { number: payload.pullRequest };
-  const name = asNonEmptyString(payload.worktree?.name);
-  if (name) input.name = name;
-  const branchName = asNonEmptyString(payload.worktree?.branchName);
-  if (branchName) input.branchName = branchName;
-  return input;
-};
-
-const resolveWorktreeInput = (payload) => {
-  if (!payload?.worktree || typeof payload.worktree !== 'object') return null;
-  const name = asNonEmptyString(payload.worktree.name);
-  if (!name) return null;
-  const branchName = asNonEmptyString(payload.worktree.branchName);
-  const startRef = asNonEmptyString(payload.worktree.startRef);
-  return {
-    mode: 'new',
-    name,
-    ...(branchName ? { branchName } : {}),
-    ...(startRef ? { startRef } : {}),
-    ...(typeof payload.setUpstream === 'boolean' ? { setUpstream: payload.setUpstream } : {}),
-  };
-};
 const createCanonicalSessionService = (dependencies) => {
-  const { service, resolveWorkspaceScope, resolveSessionScope, registerSessionScope, resolveAttachments, publishSessionEvent, archiveStore, sessionMetadataStore, persistSessionMetadata, broadcastGlobalUiEvent } = dependencies;
+  const { service, resolveWorkspaceScope, resolveSessionScope, listWorkspaceIds, registerSessionScope, resolveAttachments, publishSessionEvent, archiveStore, sessionMetadataStore, persistSessionMetadata, broadcastGlobalUiEvent } = dependencies;
   if (!service || typeof service.request !== 'function') throw new Error('session routes require the Agent service');
   if (typeof resolveWorkspaceScope !== 'function' || typeof resolveSessionScope !== 'function') throw new Error('session routes require Host scope resolvers');
   if (typeof registerSessionScope !== 'function') throw new Error('session routes require registerSessionScope');
@@ -252,7 +57,7 @@ const createCanonicalSessionService = (dependencies) => {
   const request = async (pathname, init = {}) => {
     const response = await service.request(pathname, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
     const body = await response.json().catch(() => null);
-    if (!response.ok) { const error = new OpenChamberControlError(body?.detail || body?.error || 'Agent service request failed', response.status); error.code = body?.code; throw error; }
+    if (!response.ok) { const problem = ProblemDetailsSchema.safeParse(body); const error = new OpenChamberControlError(problem.success ? problem.data.detail : body?.detail || body?.error || 'Agent service request failed', response.status); error.code = problem.success ? problem.data.code : body?.code; throw error; }
     return body;
   };
   const scopeFor = async (sessionId) => { const scope = await resolveSessionScope(sessionId); if (!scope) throw new OpenChamberControlError('Session scope was not found', 404); return scope; };
@@ -279,14 +84,15 @@ const createCanonicalSessionService = (dependencies) => {
     return result;
   };
   const send = async (sessionId, payload = {}) => { const scope = await scopeFor(sessionId); const requestBody = PromptRequestSchema.parse(payload); const attachments = await resolveAttachments(scope, requestBody.input.attachments); const runId = randomUUID(); const response = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'prompt', runId, request: requestBody, attachments }) }); const run = RunSchema.parse(response?.run); return { run }; };
-  const fork = async (sessionId, payload = {}) => { const source = await scopeFor(sessionId); const entryId = asNonEmptyString(payload.entryId || payload.messageId); const mode = payload.mode === undefined ? (entryId ? 'selected' : 'full') : payload.mode; if (mode !== 'selected' && mode !== 'full') throw new OpenChamberControlError('Fork mode must be selected or full', 400); if (mode === 'selected' && !entryId) throw new OpenChamberControlError('A native entry identity is required for a selected fork', 400); const body = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/fork`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceSessionId: sessionId, ...(mode === 'selected' ? { entryId } : {}), mode }) }); const ack = body?.session ? body : { session: body }; const child = RuntimeSessionSchema.parse(ack.session); if (child.projectId !== source.projectId || child.workspaceId !== source.workspaceId || child.rootSessionId !== source.rootSessionId) throw new OpenChamberControlError('Fork acknowledgement is outside the source scope', 502); if (!await registerSessionScope(child)) throw new OpenChamberControlError('Forked session scope registration failed', 500); return { session: child, sourceSessionId: sessionId, ...(entryId ? { entryId } : {}), mode }; };
+  const fork = async (sessionId, payload = {}) => { const source = await scopeFor(sessionId); const entryId = asNonEmptyString(payload.entryId || payload.messageId); const mode = payload.mode === undefined ? (entryId ? 'selected' : 'full') : payload.mode; if (mode !== 'selected' && mode !== 'full') throw new OpenChamberControlError('Fork mode must be selected or full', 400); if (mode === 'selected' && !entryId) throw new OpenChamberControlError('A native entry identity is required for a selected fork', 400); const body = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/fork`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceSessionId: sessionId, entryId: entryId ?? null, mode }) }); const ack = SessionForkAckSchema.parse(body); if (ack.sourceSessionId !== sessionId || (mode === 'selected' && ack.entryId !== entryId) || ack.mode !== mode) throw new OpenChamberControlError('Fork acknowledgement does not match the requested source', 502); const child = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(ack.sessionId)}`)); if (child.sessionId !== ack.sessionId || child.rootSessionId !== ack.rootSessionId || child.projectId !== source.projectId || child.workspaceId !== source.workspaceId) throw new OpenChamberControlError('Fork acknowledgement is outside the source scope', 502); if (!await registerSessionScope(child)) throw new OpenChamberControlError('Forked session scope registration failed', 500); const stored = await sessionMetadataStore.getState(child.sessionId); const archive = await archiveStore.getState(child.sessionId); const result = SessionCreateAckSchema.parse({ session: SessionSchema.parse({ ...child, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', ...(archive?.archivedAt === undefined ? {} : { archivedAt: archive.archivedAt }), archiveRevision: archive?.revision ?? '0' }) }); return result; };
   const open = async (id) => { const scope = await scopeFor(id); const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/snapshot`)); if (snapshot.session.sessionId !== id || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Session snapshot is outside the authorized scope', 502); return snapshot; };
   const history = async (id, query = '') => { const scope = await scopeFor(id); const page = HistoryPageSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`)); if (page.sessionId !== id || page.turns.some(turn => turn.projectId !== undefined && turn.projectId !== scope.projectId) || page.messages.some(message => message.projectId !== undefined && message.projectId !== scope.projectId)) throw new OpenChamberControlError('Session history is outside the authorized scope', 502); return page; };
-  const list = async (workspaceId) => { if (typeof workspaceId !== 'string' || workspaceId.length === 0) throw new OpenChamberControlError('Workspace identity is required', 400); const workspace = await resolveWorkspaceScope(workspaceId); if (!workspace) throw new OpenChamberControlError('Workspace was not found', 404); const raw = z.strictObject({ items: z.array(RuntimeSessionSchema), errors: z.array(z.strictObject({ sessionId: z.string().min(1), code: ProblemCodeSchema })) }).parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(workspaceId)}`)); if (raw.errors.length) throw new OpenChamberControlError('Some sessions could not be listed', 503); const items = await Promise.all(raw.items.map(async (session) => { if (session.projectId !== workspace.projectId || session.workspaceId !== workspaceId) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502); const metadataState = await sessionMetadataStore.getState(session.sessionId); const archiveState = await archiveStore.getState(session.sessionId); return SessionSchema.parse({ ...session, metadata: metadataState?.metadata ?? null, metadataRevision: metadataState?.revision ?? '0', ...(archiveState?.archivedAt === undefined ? {} : { archivedAt: archiveState.archivedAt }), archiveRevision: archiveState?.revision ?? '0' }); })); return SessionsPageSchema.parse({ items, nextCursor: null }); };
+  const list = async (workspaceId) => { const workspaceIds = workspaceId ? [workspaceId] : await (typeof listWorkspaceIds === 'function' ? listWorkspaceIds() : Promise.reject(new OpenChamberControlError('Workspace enumeration is unavailable', 503))); if (!Array.isArray(workspaceIds) || workspaceIds.some(id => typeof id !== 'string' || id.length === 0)) throw new OpenChamberControlError('Workspace enumeration is invalid', 503); const pages = await Promise.all(workspaceIds.map(async id => { const workspace = await resolveWorkspaceScope(id); if (!workspace) return { items: [], errors: [{ sessionId: id, code: 'SESSION_NOT_FOUND' }] }; const raw = z.strictObject({ items: z.array(RuntimeSessionSchema), errors: z.array(z.strictObject({ sessionId: z.string().min(1), code: ProblemCodeSchema })) }).parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(id)}`)); const items = await Promise.all(raw.items.map(async session => { if (session.projectId !== workspace.projectId || session.workspaceId !== id) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502); const metadataState = await sessionMetadataStore.getState(session.sessionId); const archiveState = await archiveStore.getState(session.sessionId); return SessionSchema.parse({ ...session, metadata: metadataState?.metadata ?? null, metadataRevision: metadataState?.revision ?? '0', ...(archiveState?.archivedAt === undefined ? {} : { archivedAt: archiveState.archivedAt }), archiveRevision: archiveState?.revision ?? '0' }); })); return { items, errors: raw.errors }; })); return z.strictObject({ items: z.array(SessionSchema), errors: z.array(z.strictObject({ sessionId: z.string().min(1), code: ProblemCodeSchema })) }).parse({ items: pages.flatMap(page => page.items), errors: pages.flatMap(page => page.errors) }); };
   const archive = async (payload = {}) => { const parsed = parseArchiveRequest(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); await Promise.all(parsed.ids.map((id) => scopeFor(id))); return archiveStore.archive(parsed.ids, parsed.archivedAt); };
   const unarchive = async (payload = {}) => { const parsed = parseIdBatch(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); await Promise.all(parsed.ids.map((id) => scopeFor(id))); return archiveStore.unarchive(parsed.ids); };
   const getMetadata = async (id) => { await scopeFor(id); return await sessionMetadataStore.getState(id) || { metadata: null, revision: '0' }; };
-  const setMetadata = async (id, payload = {}) => { const scope = await scopeFor(id); return metadata.set(id, payload.patch || {}, payload.directory || scope.cwd); };
+  const setMetadata = async (id, payload = {}) => { const scope = await scopeFor(id); return metadata.set(id, payload.patch || {}, scope.cwd); };
+  const control = async (sessionId, operation = {}) => { await scopeFor(sessionId); if (operation?.type !== 'abort') throw new OpenChamberControlError('Unsupported session control operation', 400); const parsed = RunAbortRequestSchema.parse({ sessionId, runId: operation.runId }); const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(parsed.sessionId)}/runs/${encodeURIComponent(parsed.runId)}/abort`, { method: 'POST' }); return { run: RunSchema.parse(body?.run) }; };
   const remove = async (id) => { await scopeFor(id); const ack = SessionDeleteAckSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })); if (ack.sessionId !== id) throw new OpenChamberControlError('Session deletion acknowledgement identified another session', 502); return ack; };
   return { create, send, fork, delete: remove, open, history, list, control, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, sessionMetadataStore, archiveStore };
 };

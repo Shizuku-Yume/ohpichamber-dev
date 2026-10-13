@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { z } from 'zod';
 import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema } from '@openchamber/agent-contract';
 import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession } from '@openchamber/agent-contract';
@@ -108,6 +108,39 @@ export class SessionRegistry {
       if (result.type !== 'prompt') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
       return result.run;
     } finally { this.pendingRuns.delete(sessionId); }
+  }
+  async fork(sessionId: string, entryId: string | null, mode: 'selected' | 'full') {
+    this.ensureOpen();
+    const entry = this.get(sessionId);
+    const source = entry.state === 'unloaded' ? entry.reference : entry.input;
+    const sourceFile = entry.state === 'live' ? entry.opened.sessionFile : source.sessionFile;
+    if (!sourceFile) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+    if (mode === 'selected' && !entryId) throw new WorkerOperationError(400, 'INVALID_REQUEST');
+    let manager: SessionManager | undefined;
+    try {
+      if (mode === 'selected') {
+        manager = await SessionManager.open(sourceFile, source.sessionsDirectory, undefined, { initialCwd: source.cwd, throwIfMissing: true });
+        const childFile = manager.createBranchedSession(entryId!, { copyArtifacts: true });
+        if (!childFile) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+      } else {
+        manager = await SessionManager.forkFrom(sourceFile, source.cwd, source.sessionsDirectory, undefined, { copyArtifacts: true });
+      }
+      const childFile = manager.getSessionFile();
+      const childSessionId = manager.getSessionId();
+      if (!childFile || !childSessionId) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+      const childInput: SessionBootstrap = {
+        rootSessionId: childSessionId, projectId: source.projectId, workspaceId: source.workspaceId,
+        cwd: source.cwd, agentDirectory: source.agentDirectory, displayPath: source.displayPath,
+        sessionFile: childFile, ...(source.sessionsDirectory ? { sessionsDirectory: source.sessionsDirectory } : {}),
+        ...(source.agentDirectoryId ? { agentDirectoryId: source.agentDirectoryId } : {}),
+        ...(source.mcpConfigPath ? { mcpConfigPath: source.mcpConfigPath } : {}),
+        ...(source.options ? { options: source.options } : {}),
+      };
+      const runtime = await this.open(childInput);
+      return { sessionId: runtime.sessionId, rootSessionId: runtime.rootSessionId, sessionFile: childFile, sourceSessionId: sessionId, entryId, mode };
+    } finally {
+      await manager?.close();
+    }
   }
 
   async abort(sessionId: string, runId: string) {

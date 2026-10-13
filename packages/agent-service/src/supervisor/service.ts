@@ -28,6 +28,8 @@ import { WorkspaceRoutes } from './workspace-routes.ts';
 import { ShellCoordinator } from './shell.ts';
 import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
 import type { PrivateCredentialResolveResult, PrivateCredentialHandoffResult } from '../catalogs/private-credentials.ts';
+const SessionForkRequestSchema = z.strictObject({ sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']) }).refine(input => input.mode === 'full' || input.entryId !== null, { message: 'Selected forks require an entry identity', path: ['entryId'] });
+const SessionForkAckSchema = z.strictObject({ sessionId: EntityIdSchema, rootSessionId: EntityIdSchema, sessionFile: z.string().min(1), sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']) });
 interface ServiceOptions {
   workerEntrypoint: string;
   workerRuntime?: string;
@@ -349,6 +351,14 @@ export class AgentService {
         const workspaceId = EntityIdSchema.safeParse(url.searchParams.get('workspaceId'));
         if (!workspaceId.success) throw new RequestError(400, 'INVALID_REQUEST', 'Workspace identity is required');
         respondJson(response, 200, this.sessions.list(workspaceId.data)); return;
+      }
+      const privateFork = /^\/internal\/sessions\/([^/]+)\/fork$/.exec(url.pathname);
+      if (privateFork && request.method === 'POST') {
+        const sourceSessionId = identity(privateFork[1]);
+        const input = SessionForkRequestSchema.parse(await readBody(request, SessionForkRequestSchema));
+        if (input.sourceSessionId !== sourceSessionId) throw new RequestError(400, 'INVALID_REQUEST', 'Fork source identity does not match the route');
+        const ack = SessionForkAckSchema.parse(await this.sessions.fork(sourceSessionId, input.entryId, input.mode));
+        respondJson(response, 201, ack); return;
       }
       const privateRun = /^\/internal\/sessions\/([^/]+)\/runs$/.exec(url.pathname);
       if (privateRun && request.method === 'POST') {
