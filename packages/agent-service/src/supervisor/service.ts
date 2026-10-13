@@ -352,6 +352,8 @@ export class AgentService {
         if (!workspaceId.success) throw new RequestError(400, 'INVALID_REQUEST', 'Workspace identity is required');
         respondJson(response, 200, this.sessions.list(workspaceId.data)); return;
       }
+      const privateEntry = /^\/internal\/sessions\/([^/]+)\/native-entry\/([^/]+)$/.exec(url.pathname);
+      if (privateEntry && request.method === 'GET') { respondJson(response, 200, await this.sessions.resolveNativeEntry(identity(privateEntry[1]), identity(privateEntry[2]))); return; }
       const privateFork = /^\/internal\/sessions\/([^/]+)\/fork$/.exec(url.pathname);
       if (privateFork && request.method === 'POST') {
         const sourceSessionId = identity(privateFork[1]);

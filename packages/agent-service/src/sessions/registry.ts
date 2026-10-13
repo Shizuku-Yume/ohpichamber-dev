@@ -142,6 +142,22 @@ export class SessionRegistry {
       await manager?.close();
     }
   }
+  async resolveNativeEntry(sessionId: string, messageId: string): Promise<{ entryId: string }> {
+    this.ensureOpen();
+    const entry = this.get(sessionId);
+    const source = entry.state === 'unloaded' ? entry.reference : entry.input;
+    const sourceFile = entry.state === 'live' ? entry.opened.sessionFile : source.sessionFile;
+    if (!sourceFile) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+    const manager = await SessionManager.open(sourceFile, source.sessionsDirectory, undefined, { initialCwd: source.cwd, throwIfMissing: true });
+    try {
+      for (const candidate of manager.getEntries()) {
+        if (candidate.type !== 'custom' || candidate.customType !== 'ohpichamber.canonical.v1') continue;
+        const data = z.strictObject({ nativeEntryId: z.string().min(1), messageId: z.string().min(1) }).safeParse(candidate.data);
+        if (data.success && data.data.messageId === messageId) return { entryId: data.data.nativeEntryId };
+      }
+    } finally { await manager.close(); }
+    throw new WorkerOperationError(404, 'RUN_NOT_FOUND');
+  }
 
   async abort(sessionId: string, runId: string) {
     this.ensureOpen();
