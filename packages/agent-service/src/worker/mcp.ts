@@ -361,10 +361,12 @@ export class WorkerMcp extends MCPManager {
         pendingFlow,
       });
     } catch (error) {
+      const wasAborted = entry.abort.signal.aborted;
+      const capturedError = error instanceof NativeMcpError ? error : entry.error;
       entry.abort.abort();
       await entry.done;
       if (this.#oauth.get(serverId) === entry) this.#oauth.delete(serverId);
-      throw this.#toOAuthError(error instanceof NativeMcpError ? error : entry.error, entry.abort.signal.aborted, entry.cancelReason);
+      throw this.#toOAuthError(capturedError, wasAborted, entry.cancelReason);
     }
   }
 
@@ -900,8 +902,8 @@ export class WorkerMcp extends MCPManager {
   }
   #toOAuthError(error: NativeMcpError | undefined, aborted: boolean, cancelReason?: NativeMcpError): NativeMcpError {
     if (cancelReason) return cancelReason;
-    if (aborted) return new NativeMcpError('MCP_OAUTH_CANCELLED', 'MCP OAuth was cancelled.', false);
     if (error) return error;
+    if (aborted) return new NativeMcpError('MCP_OAUTH_CANCELLED', 'MCP OAuth was cancelled.', false);
     return new NativeMcpError('MCP_OAUTH_FAILED', 'MCP OAuth authentication failed.', true);
   }
   #serialize<T>(operation: () => Promise<T>): Promise<T> {
