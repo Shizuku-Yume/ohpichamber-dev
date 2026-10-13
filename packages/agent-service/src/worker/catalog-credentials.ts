@@ -20,16 +20,31 @@ export class NativeCredentials {
       throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Provider does not support this credential method');
     }
     const credential = request.credential;
+    let upsertedId: number | undefined;
     try {
-      await this.authStorage.credentials.upsert(request.providerId, credential.method === 'api-key'
+      const entries = await this.authStorage.credentials.upsert(request.providerId, credential.method === 'api-key'
         ? { type: 'api_key', key: credential.apiKey, source: 'login' }
         : { type: 'oauth', access: credential.accessToken, refresh: credential.refreshToken, expires: credential.expiresAt });
       await this.authStorage.credentials.reload();
+      const matched = entries.filter(entry => credential.method === 'api-key'
+        ? entry.credential.type === 'api_key' && entry.credential.key === credential.apiKey
+        : entry.credential.type === 'oauth' && entry.credential.access === credential.accessToken).at(-1);
+      upsertedId = matched?.id;
     } catch {
       throw new ProjectionError(503, 'CREDENTIAL_WRITE_FAILED', 'Provider credential persistence failed');
     }
+    if (upsertedId === undefined) {
+      throw new ProjectionError(503, 'CREDENTIAL_WRITE_FAILED', 'Provider credential persistence failed');
+    }
     return ProviderCredentialMutationResultSchema.parse({
-      revision, providerId: request.providerId, auth: this.models.provider(request.providerId).auth,
+      revision,
+      providerId: request.providerId,
+      auth: {
+        status: 'configured',
+        credentialRef: credentialReference(request.providerId, upsertedId),
+        method: credential.method,
+        source: 'stored-credential',
+      },
     });
   }
 

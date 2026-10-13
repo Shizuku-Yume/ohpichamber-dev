@@ -3,6 +3,7 @@ import { mkdir, open, readFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { JSONC, YAML } from 'bun';
 import { z } from 'zod';
+import { oauthAccountKey, type AuthApiKeyOptions, type ResolvedApiKey } from '@oh-my-pi/pi-ai';
 import { getModelPricingStatus } from '@oh-my-pi/pi-catalog';
 import type { CreateAgentSessionOptions } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
@@ -11,6 +12,7 @@ import { ModelsConfigFile, validateProviderConfiguration } from '@oh-my-pi/pi-co
 import { ModelsConfigSchema, type ModelsConfig } from '@oh-my-pi/pi-coding-agent/config/models-config-schema';
 import { cfgDisabledProviders, cfgEnabledModels } from '@oh-my-pi/pi-coding-agent/config/model-settings';
 import { filterAvailableModelsByEnabledPatterns } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
+import { invalidateCommandConfig, resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
 import {
@@ -33,6 +35,9 @@ export type ResolvedModelSelection = {
   reasoningEffort: NativeReasoningEffort | null;
   nativeCredentialSessionId?: string;
 };
+export type BoundProviderCredentialResolution =
+  | { bound: false }
+  | { bound: true; credential: ResolvedApiKey | undefined };
 export type NativeModelsContext = {
   modelRegistry: ModelRegistry;
   authStorage: AuthStorage;
@@ -243,11 +248,22 @@ export class NativeModels {
     const first = this.context.modelRegistry.getProviderModels(providerId)[0];
     const rawEndpoint = configured?.endpoint ?? this.context.modelRegistry.getProviderBaseUrl(providerId) ?? null;
     const source = this.context.authStorage.keys.source(providerId);
-    const rows = this.context.authStorage.credentials.list(providerId).filter(row => row.disabledCause === null);
+    const rows = this.context.authStorage.credentials.list(providerId)
+      .filter(row => row.disabledCause === null && !this.context.authStorage.keys.isKeylessFallback(providerId, row.credential));
     const supportedOAuth = this.context.oauthProviderIds().has(providerId) || rows.some(row => row.credential.type === 'oauth');
     const authMethods: Provider['authMethods'] = supportedOAuth ? ['api-key', 'oauth'] : ['api-key'];
     let auth: Provider['auth'] = { status: 'missing' };
-    if (source) {
+    if (configured?.credentialRef) {
+      const selected = rows.find(row => credentialReference(providerId, row.id) === configured.credentialRef);
+      if (selected) {
+        auth = {
+          status: 'configured',
+          method: selected.credential.type === 'oauth' ? 'oauth' : 'api-key',
+          credentialRef: configured.credentialRef,
+          source: 'stored-credential',
+        };
+      }
+    } else if (source) {
       const method = source.kind === 'oauth' ? 'oauth' : 'api-key';
       const selected = rows.find(row => method === 'oauth' ? row.credential.type === 'oauth' : row.credential.type === 'api_key');
       const storedSource = source.kind === 'oauth' || source.kind === 'api_key';
@@ -266,6 +282,73 @@ export class NativeModels {
     return withEndpoint.success ? withEndpoint.data : ProviderSchema.parse({ ...base, endpoint: null });
   }
 
+  private async resolveBoundCredential(
+    providerId: string,
+    reference: string,
+    sessionId: string | undefined,
+    options?: AuthApiKeyOptions,
+  ): Promise<ResolvedApiKey | undefined> {
+    if (options?.signal?.aborted) return undefined;
+    if (cfgDisabledProviders.get(this.context.settings).includes(providerId)) return undefined;
+    const row = this.context.authStorage.credentials.list(providerId)
+      .find(candidate => candidate.disabledCause === null
+        && !this.context.authStorage.keys.isKeylessFallback(providerId, candidate.credential)
+        && credentialReference(providerId, candidate.id) === reference);
+    if (!row) return undefined;
+    if (row.credential.type === 'api_key') {
+      if (options?.forceRefresh) invalidateCommandConfig(row.credential.key);
+      const apiKey = await resolveConfigValue(row.credential.key);
+      if (!apiKey || options?.signal?.aborted) return undefined;
+      return { apiKey, credentialId: row.id };
+    }
+    const accountAccess = options?.accountIds
+      ? undefined
+      : options?.modelId ? this.context.modelRegistry.find(providerId, options.modelId)?.accountAccess : undefined;
+    const accountIds = options?.accountIds ?? (accountAccess ? Object.keys(accountAccess) : undefined);
+    const accountKey = oauthAccountKey(row.credential);
+    if (accountIds && accountIds.length > 0 && (accountKey === undefined || !accountIds.includes(accountKey))) {
+      return undefined;
+    }
+    const targetSessionId = sessionId ?? this.context.currentNativeSessionId();
+    if (targetSessionId && !this.context.authStorage.sessions.pin(providerId, targetSessionId, row.id)) {
+      return undefined;
+    }
+    const accessOptions: AuthApiKeyOptions = {
+      baseUrl: options?.baseUrl,
+      modelId: options?.modelId,
+      forceRefresh: options?.forceRefresh,
+      refreshReason: options?.refreshReason,
+      signal: options?.signal,
+    };
+    if (accountIds) accessOptions.accountIds = accountIds;
+    const access = await this.context.authStorage.oauth.accessById(providerId, row.id, accessOptions);
+    if (!access?.ok) return undefined;
+    return {
+      apiKey: access.accessToken,
+      credentialId: access.credentialId ?? row.id,
+      oauthIdentity: {
+        orgId: access.orgId,
+        region: access.region,
+        inferenceRegion: access.inferenceRegion,
+      },
+    };
+  }
+
+  async resolveProviderCredential(
+    providerId: string,
+    sessionId: string | undefined,
+    options?: AuthApiKeyOptions,
+  ): Promise<BoundProviderCredentialResolution> {
+    await this.load();
+    await this.context.authStorage.credentials.reload();
+    const reference = this.metadata.providers[providerId]?.credentialRef;
+    if (!reference) return { bound: false };
+    return {
+      bound: true,
+      credential: await this.resolveBoundCredential(providerId, reference, sessionId, options),
+    };
+  }
+
   async selection(input: ModelSelection, controls?: Pick<CompletionRequest, 'variant' | 'reasoningEffort'>): Promise<ResolvedModelSelection> {
     await this.load();
     await this.context.modelRegistry.refresh('offline');
@@ -280,9 +363,8 @@ export class NativeModels {
     const nativeCredentialSessionId = this.context.currentNativeSessionId();
     const reference = this.metadata.providers[input.providerId]?.credentialRef;
     if (reference) {
-      const row = this.context.authStorage.credentials.list(input.providerId)
-        .find(row => row.disabledCause === null && credentialReference(input.providerId, row.id) === reference);
-      if (!row || !this.context.authStorage.sessions.pin(input.providerId, nativeCredentialSessionId, row.id)) {
+      const resolved = await this.resolveBoundCredential(input.providerId, reference, nativeCredentialSessionId, { modelId: input.modelId });
+      if (!resolved) {
         throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider credential is unavailable');
       }
     }

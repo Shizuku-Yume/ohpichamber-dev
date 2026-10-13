@@ -5,7 +5,7 @@ import { CatalogOperationSchema, CatalogResultSchema, type CatalogOperation, typ
 import type { CompletionWorkerBootstrap, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { WorkerCompletion } from './completion.ts';
-import { NativeModels } from './catalog-models.ts';
+import type { NativeModels } from './catalog-models.ts';
 import { NativeAgents } from './catalog-agents.ts';
 import { NativeCredentials } from './catalog-credentials.ts';
 import { NativeMcpError, readNativeMcpConfiguration, writeNativeMcpConfiguration } from './mcp.ts';
@@ -24,7 +24,8 @@ export class StatelessWorker {
   private closed = false;
   private constructor(private readonly runtime: NativeWorkerRuntime, private readonly input: CompletionWorkerBootstrap, private readonly authorize: WorkerAuthorize) {
     this.credentialScopeId = input.workerGeneration;
-    const models = new NativeModels(nativeModelsContext(runtime, () => this.credentialScopeId));
+    nativeModelsContext(runtime, () => this.credentialScopeId);
+    const models = runtime.models;
     this.models = models;
     this.credentials = new NativeCredentials(runtime.authStorage, models, input.workspaceId);
     this.agents = new NativeAgents({

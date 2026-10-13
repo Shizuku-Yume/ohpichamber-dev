@@ -8,10 +8,11 @@ import {
 import { ProjectionError } from '../projection/journal.ts';
 import { NativeAgents, type NativeAgentsContext } from './catalog-agents.ts';
 import { NativeCredentials } from './catalog-credentials.ts';
-import { NativeModels, type NativeModelsContext, type ResolvedModelSelection } from './catalog-models.ts';
+import type { NativeModels, NativeModelsContext, ResolvedModelSelection } from './catalog-models.ts';
 import { WorkerSkills, type WorkerSkillsContext } from './catalog-skills.ts';
 
 export type CatalogNativeContext = NativeModelsContext & NativeAgentsContext & WorkerSkillsContext & {
+  readonly models: NativeModels;
   // Authoritative policy is resolved at each provider-entry mutation, not cached at worker startup.
   readonly assertProviderEntryAllowed: () => void | Promise<void>;
 };
@@ -23,7 +24,7 @@ export class WorkerCatalogs {
   private readonly credentials: NativeCredentials;
 
   constructor(private readonly context: CatalogNativeContext) {
-    this.models = new NativeModels(context);
+    this.models = context.models;
     this.agents = new NativeAgents(context);
     this.skills = new WorkerSkills(context);
     this.credentials = new NativeCredentials(context.authStorage, this.models, context.worker.workspaceId);
