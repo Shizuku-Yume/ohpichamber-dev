@@ -441,7 +441,7 @@ export class AgentService {
       if (error instanceof CatalogCoordinatorError) {
         respondProblem(response, error.status, error.code, 'Catalog operation failed', JsonObjectSchema.parse(error.details));
       } else if (error instanceof RequestError || error instanceof ProjectionError || error instanceof SessionReferenceError || error instanceof WorkerOperationError) {
-        respondProblem(response, error.status, error.code, error.message, error instanceof WorkerOperationError ? error.details : undefined);
+        respondProblem(response, error.status, error.code, error.message, error instanceof WorkerOperationError || error instanceof ProjectionError ? error.details : undefined);
       } else respondProblem(response, 503, 'SERVICE_UNAVAILABLE', 'Session operation failed');
     }
   }

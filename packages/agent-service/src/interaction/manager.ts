@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  ApprovalReplySchema, ApprovalRequestSchema, EntityIdSchema, JsonValueSchema,
+  ApprovalReplySchema, ApprovalRequestSchema, EntityIdSchema, JsonObjectSchema, JsonValueSchema,
   QuestionReplySchema, QuestionRequestSchema,
 } from '@openchamber/agent-contract';
 import type {
@@ -158,7 +158,7 @@ export class InteractionManager {
     if (!record || record.kind !== 'approval') throw new ProjectionError(404, 'APPROVAL_NOT_FOUND', 'Request was not found');
     const request = ApprovalRequestSchema.parse(record.request);
     this.assertCas(request, reply.version, 'approval');
-    if (this.reservations.has(approvalId)) throw new ProjectionError(409, 'APPROVAL_CONFLICT', 'Approval request is being resolved');
+    if (this.reservations.has(approvalId)) throw this.conflict(request, reply.version, 'approval', 'Approval request is being resolved');
     this.reservations.add(approvalId);
     clearTimeout(record.timer);
     try {
@@ -201,7 +201,7 @@ export class InteractionManager {
     if (!record || record.kind !== 'question') throw new ProjectionError(404, 'QUESTION_NOT_FOUND', 'Request was not found');
     const request = QuestionRequestSchema.parse(record.request);
     this.assertCas(request, reply.version, 'question');
-    if (this.reservations.has(questionId)) throw new ProjectionError(409, 'QUESTION_CONFLICT', 'Question request is being resolved');
+    if (this.reservations.has(questionId)) throw this.conflict(request, reply.version, 'question', 'Question request is being resolved');
     this.reservations.add(questionId);
     clearTimeout(record.timer);
     try {
@@ -265,7 +265,13 @@ export class InteractionManager {
   }
 
   private assertCas(request: ApprovalRequest | QuestionRequest, version: string, kind: RequestKind): void {
-    if (request.status !== 'pending' || request.version !== version) throw new ProjectionError(409, kind === 'approval' ? 'APPROVAL_CONFLICT' : 'QUESTION_CONFLICT', 'Request version is no longer current');
+    if (request.status !== 'pending' || request.version !== version) throw this.conflict(request, version, kind, 'Request version is no longer current');
+  }
+
+  private conflict(request: ApprovalRequest | QuestionRequest, version: string, kind: RequestKind, detail: string): ProjectionError {
+    return new ProjectionError(409, kind === 'approval' ? 'APPROVAL_CONFLICT' : 'QUESTION_CONFLICT', detail, {
+      expectedVersion: version, actualVersion: request.version, currentRecord: JsonObjectSchema.parse(request),
+    });
   }
 
   private validateAnswer(request: QuestionRequest, response: JsonValue): JsonValue {

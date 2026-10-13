@@ -32,6 +32,21 @@ describe('service-owned interaction CAS', () => {
     expect(events.at(-1)?.event).toMatchObject({ type: 'approval.resolved' });
   });
 
+  test('a stale approval version returns the authorized current record without resolving it', async () => {
+    const { manager } = sessionHarness();
+    manager.onRequest('session-1', 'worker-1', approval);
+    try {
+      await expect(manager.resolveApproval('session-1', 'approval-1', {
+        decision: 'approve', version: '99', epoch: 'epoch-1', workerGeneration: 'worker-1',
+      })).rejects.toMatchObject({ status: 409, code: 'APPROVAL_CONFLICT', details: {
+        expectedVersion: '99', actualVersion: '1', currentRecord: {
+          approvalId: 'approval-1', sessionId: 'session-1', version: '1', status: 'pending',
+        },
+      } });
+      expect(manager.approvals('session-1')[0]?.status).toBe('pending');
+    } finally { manager.closeSession('session-1'); }
+  });
+
   test('a worker generation change expires old handles and rejects stale replies', async () => {
     const { manager, events } = sessionHarness();
     manager.onRequest('session-1', 'worker-1', approval);
@@ -107,7 +122,9 @@ describe('service-owned interaction CAS', () => {
     expect(manager.questions('session-1')).toHaveLength(1);
     const cancel: QuestionReply = { action: 'cancel', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' };
     expect((await manager.resolveQuestion('session-1', 'question-1', cancel)).status).toBe('cancelled');
-    await expect(manager.resolveQuestion('session-1', 'question-1', cancel)).rejects.toMatchObject({ code: 'QUESTION_CONFLICT' });
+    await expect(manager.resolveQuestion('session-1', 'question-1', cancel)).rejects.toMatchObject({ code: 'QUESTION_CONFLICT', details: {
+      expectedVersion: '1', actualVersion: '2', currentRecord: { questionId: 'question-1', status: 'cancelled', version: '2' },
+    } });
     manager.closeSession('session-1');
     manager.closeSession('session-2');
   });

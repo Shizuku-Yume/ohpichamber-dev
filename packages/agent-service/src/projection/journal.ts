@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { CanonicalEventSchema, CounterSchema, CursorSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, RuntimeSessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
-import type { ApprovalRequest, CanonicalEvent, HistoryPage, HistoryPageRequest, Message, Part, ProblemCode, QuestionRequest, Run, RuntimeSession, SessionSnapshot, StreamInvalidated, Turn } from '@openchamber/agent-contract';
+import type { ApprovalRequest, CanonicalEvent, HistoryPage, HistoryPageRequest, JsonObject, Message, Part, ProblemCode, QuestionRequest, Run, RuntimeSession, SessionSnapshot, StreamInvalidated, Turn } from '@openchamber/agent-contract';
 import type { ProjectionInput, ProjectionSeed } from './protocol.ts';
 
 export class ProjectionError extends Error {
-  constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
+  constructor(readonly status: number, readonly code: ProblemCode, message: string, readonly details?: JsonObject) { super(message); }
 }
 type SessionIdentity = Pick<RuntimeSession, 'sessionId' | 'projectId' | 'workspaceId' | 'displayPath' | 'rootSessionId' | 'parentSessionId'>;
 type Listener = (event: CanonicalEvent | StreamInvalidated) => void;

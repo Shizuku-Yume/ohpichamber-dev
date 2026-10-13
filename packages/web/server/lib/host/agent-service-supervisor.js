@@ -236,7 +236,14 @@ export const createAgentServiceSupervisor = ({
         const prior = workspaceScopes.get(workspaceId);
         if (prior && !isDeepStrictEqual(prior.scope, captured)) throw new Error('Host workspace scope cannot change');
         workspaceCapture = { scope: captured, prior };
-      } else capture = captureScope(body);
+      } else {
+        if (body.agentDirectoryId === undefined) {
+          const registered = workspaceScopes.get(body.workspaceId)?.scope;
+          if (registered && registered.projectId === body.projectId && registered.cwd === body.cwd
+            && registered.agentDirectory === body.agentDirectory) body.agentDirectoryId = registered.agentDirectoryId;
+        }
+        capture = captureScope(body);
+      }
       init = { ...init, body: JSON.stringify(body) };
     }
     const rollback = () => {

@@ -3,8 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./private-protocol": {
+      "types": "./src/supervisor/host-authorization-protocol.ts",
+      "default": "./dist/supervisor/host-authorization-protocol.js"
+    }
+  },
   "scripts": {
-    "build": "bun build --target=bun --packages=external --root=src --outdir=dist src/index.ts src/worker/index.ts",
+    "build": "bun build --target=bun --packages=external --root=src --outdir=dist src/index.ts src/worker/index.ts src/supervisor/host-authorization-protocol.ts",
     "start": "bun --no-env-file src/index.ts",
     "type-check": "bun scripts/prepare-sdk-types.mjs && tsc -p node_modules/.cache/omp-types/tsconfig.json",
     "lint": "oxlint src scripts"
