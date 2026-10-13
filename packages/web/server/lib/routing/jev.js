@@ -19,16 +19,14 @@ export const buildRoutingRequest = ({ categories, history, request }) => {
   };
 };
 
-/**
- * `permission` is the v2 request OpenCode reported: the action (tool kind), the
- * resources it touches and its metadata. Jev's contract keeps its own names.
- */
+/** Jev sees the native approval's action and details, never request identity or CAS. */
 export const buildPermissionRequest = (permission) => ({
   state: {
     permission: {
-      type: permission.action,
-      patterns: permission.resources,
-      metadata: permission.metadata,
+      type: permission.actionType,
+      toolName: permission.toolName,
+      commandSummary: permission.commandSummary,
+      details: permission.details,
     },
   },
   questions: {

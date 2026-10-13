@@ -35,47 +35,37 @@ There is no env gate — the feature shipped dark behind
   one throws.
 - `jev.js` — request builders, answer parsing, and the HTTP call with a
   timeout to the endpoint `classifierEndpoint` chose.
-- `history.js` — the last three settled turns through session assist's
-  `loadAssistContext` (text parts only, attached quotes included, no files or
-  tool payloads), each user message cut to its head and each answer to head
-  plus tail. The new request is never cut. Also the model that wrote the last
-  settled answer and when it finished (`lastAnswer`), for `cache.js`.
-- `cache.js` — "Try to preserve cache usage": which category a send stays on
-  while the current model's prompt cache is likely warm (`cacheHoldCategory`),
-  and how long that is given OpenCode's `warming` config (`warmWindowMs`).
-- `runtime.js` — `createRoutingRuntime`: `describe`, `classifierEndpoint` (the
-  endpoint a Jev request goes to now, or null; also used by
-  `../session-work` and `../session-goal`), `noteModelSelection`,
-  `isAutoSession`, `resolveAutoSelection`, `applySessionSelection`, `routeSend`,
-  `evaluatePermission`, `legacySafetyNetEnabled`, config, token, classifier and
-  custom endpoint writes, event broadcasts, and `testClassifier` (one probe
-  request from Settings' Test button, through the provider answering now or
-  through custom endpoint fields as typed; stores nothing, and typed fields are
-  refused in enterprise mode like a save).
+- `history.js` — bounded text excerpts from settled turns. `runtime.js` reads
+  canonical session history through session assist's `loadSettledTurns`, keeps
+  the last three turns oldest first, and records the last settled model and
+  completion time for cache hysteresis. Tool payloads and unfinished answers
+  do not establish a warm model.
+- `cache.js` — "Try to preserve cache usage": `cacheHoldCategory` chooses
+  whether a downward move should stay on the current settled model.
+- `runtime.js` — `createRoutingRuntime`, Auto resolution, permission verdicts,
+  durable settings, availability and decision events. It requires the Agent
+  Service, Host session/workspace scope resolvers and the selected private
+  credential resolver. `describe(workspaceId)` reads only catalog presence;
+  `classifierEndpoint(workspaceId)` and `testClassifier(draft, workspaceId)`
+  resolve a selected native provider's credential only for execution.
 - `routes.js` — `/api/routing` (GET, PUT), `/api/routing/token` (PUT, DELETE),
   `/api/routing/classifier` (PUT), `/api/routing/classifier/custom` (PUT,
-  DELETE), `/api/routing/classifier/test` (POST) and
-  `registerRoutingPromptRewrite`.
+  DELETE), and `/api/routing/classifier/test` (POST). State and probe requests
+  accept `workspaceId` in the query for workspace-scoped provider availability.
 
 ## Invariants
 
-- The sentinel never reaches OpenCode. OpenCode 2.x holds the model and agent
-  on the session and a prompt body carries only the user's text, so Auto is
-  per-session state: `POST /api/session` drops the sentinel from the create
-  body (the session starts on OpenCode's default; the first send switches it),
-  `POST /api/session/:id/model` with the sentinel is
-  swallowed and marks the session (`noteModelSelection`), and every
-  `POST /api/session/:id/{prompt,command}` in a marked session is routed
-  (`routeSend`) and switches the session onto the answer before the send is
-  forwarded. Both sit ahead of the generic proxy, which replays a parsed body.
-  The message queue calls `resolveAutoSelection` itself and applies the answer
-  with the model/agent switches it already makes. Without a fallback model the
-  runtime throws 400 rather than forwarding. The OpenChamber session service
-  (`openchamber-sessions/routes.js`) talks to OpenCode through the SDK and can
-  pick Auto up from Session Defaults, so it calls `resolveAutoSelection` itself
-  before switching the session.
-- The mark lives in process memory. A server restart between the model switch
-  and the next send drops it (see the TODO in `runtime.js`).
+- The Auto sentinel is a Host choice, never an OMP model. A native send passes
+  `{ providerId: 'openchamber', modelId: 'auto' }` to `resolveAutoSelection`.
+  The returned `{ model: { providerId, modelId, variant? }, agent, decision }`
+  is captured by Host prompt delivery before execution. A non-Auto request
+  returns null without consulting the service or classifier. There is no
+  session Auto mark, model-switch route, proxy rewrite or private selection
+  endpoint. Routing category/fallback files retain their own persisted binding
+  shape; that binding is projected into native captured send options.
+- Host session scope authorizes routing and must match any requested workspace.
+  Missing scope and provider/credential service failures remain errors, not
+  successful empty availability. Auto without a fallback fails before execution.
 - Routing failures keep the user's own behaviour: a Jev error, timeout, unknown
   category or low confidence routes to the fallback model, and the decision
   carries the reason.
@@ -90,10 +80,9 @@ There is no env gate — the feature shipped dark behind
 - A category without a model uses the fallback model *and* variant; a variant
   only travels with the model it was chosen for. A category agent replaces the
   composer's agent; an empty one keeps it.
-- A variant the model's catalog entry does not list is dropped before the
-  switch, so the reply runs on the model's default thinking instead of OpenCode
-  refusing it (Settings from before #4133 saved list positions like `"2"`).
-  An unreadable catalog, or one that does not know the model yet, keeps it.
+- A variant the canonical model catalog excludes is dropped before capture,
+  so execution uses the model's default thinking level. An unreadable catalog,
+  or one that does not know the model yet, cannot invalidate a saved variant.
 - A provider's prompt cache belongs to one model, so a model switch makes the
   new model read the whole context uncached. With `preserveCache` on (the
   default; a config without the key reads as on), a send Jev routes to a
@@ -104,20 +93,21 @@ There is no env gate — the feature shipped dark behind
   and neither is a send routed to a user category, a fallback for low
   confidence or an error, or a hold that would change the agent (another
   agent is another system prompt, which misses the cache anyway). Warm means
-  within 5 minutes of the last answer finishing, or, when OpenCode's `warming`
-  is on for the directory, within its `duration` (30 minutes for `true`) plus
-  5 minutes. The config is read only after the first 5 minutes; an unreadable
-  one counts as warming off. The decision event names the category the send
-  ran as and carries `cacheHold.requested`, the one Jev chose.
+  strictly less than 5 minutes since the last settled answer completed. No
+  retired OpenCode warming/config reader extends this native window. The
+  decision names the category used and `cacheHold.requested`, the one Jev chose.
 - Auto is offered (`autoReady`) with a usable classification provider
   (`jevAvailable`), `enabled`, a fallback model and at least two enabled
   categories.
-- Held permission decisions are cached for 15 minutes per request id so
-  reconnect reconciliation in `permission-auto-accept` does not re-ask Jev;
-  `permission.replied` forgets them.
-- The send rewrite reads a body only in a session already marked as routed,
-  which the URL alone answers; every other send, and anything that is not JSON,
-  reaches the proxy as the stream it arrived as.
+- Safety receives a canonical pending `ApprovalRequest`. Jev sees its
+  `actionType`, `toolName`, `commandSummary` and `details`, not its identity or
+  CAS tokens. Terminal or malformed requests cannot produce acceptance.
+- Verdicts are cached for 15 minutes, bound to approval ID, session, epoch,
+  worker generation, version, effective source and safety threshold. Availability
+  and enterprise policy are rechecked before a cached acceptance. Reconciliation
+  cannot reuse a verdict across a worker/epoch or threshold change; forgetting
+  one request leaves independent siblings. The permission owner applies approval
+  CAS and forgets resolved requests.
 
 ## Where a Jev request goes
 
@@ -128,19 +118,14 @@ Classification providers:
 - `zen-promo`: `opencode.ai/zen/v1/systemone` as `jev-1.13-free`, which OpenCode
   Zen answers with no credential at all. Usable while
   `ZEN_JEV_PROMOTION_ACTIVE` is true; flip it when OpenCode ends the promotion.
-- `zen-key`: the same endpoint as `jev-1.13` with a Zen API key read from
-  OpenCode's credentials (`opencode/auth.js`, entry `opencode`, type `api`).
-  An OpenCode account sign-in is an OAuth credential, and zen rejects it as a
-  key ("Invalid API key", checked 2026-09-27), so it does not count. The paid
-  call itself is not verified live yet.
-- `openrouter`: `openrouter.ai/api/v1/systemone` as `jev-latest` (OpenRouter's
-  `~typesafe/jev-latest` alias) with the OpenRouter API key saved in OpenCode
-  (entry `openrouter`, type `api`), billed to that OpenRouter account.
-- `vercel`: `ai-gateway.vercel.sh/typesafe/v1/systemone` as `typesafe-ai/jev`
-  with the Vercel AI Gateway API key saved in OpenCode (entry `vercel`, type
-  `api`). Both gateways implement TypeSafe's request and response shapes, so
-  `jev.js` is the same for every source. Both answer 401 without a key
-  (checked 2026-09-27); a paid call is not verified live yet.
+- `zen-key`: the same endpoint as `jev-1.13`, using native provider
+  `opencode-zen` with configured API-key authentication. OAuth presence is not
+  a usable key for this classifier.
+- `openrouter`: `openrouter.ai/api/v1/systemone` as `jev-latest`, using native
+  provider `openrouter` with configured API-key authentication.
+- `vercel`: `ai-gateway.vercel.sh/typesafe/v1/systemone` as `typesafe-ai/jev`,
+  using native provider `vercel-ai-gateway` with configured API-key authentication.
+  All gateways use the same System One request and response shapes.
 - `typesafe`: `api.typesafe.ai/v1/systemone` as `jev-latest` with the key saved
   in `routing-auth.json`. Saving a key also picks it.
 - `custom`: any endpoint that speaks the System One API, with the URL, model
@@ -179,22 +164,19 @@ always won before the pick existed) and `off` otherwise. Until v2.0.3 the
 default was `zen-promo`, which sent every message of users who never opened
 this page to zen (#4109); an install without a stored pick now reads as `off`
 with no conversion. A pick that cannot be used falls back to the first usable
-key (`typesafe`, `custom`, `openrouter`, `vercel`, `zen-key`: what the user set
-up in OpenChamber for Jev before keys borrowed from OpenCode); none usable
-means no Jev.
+key (`typesafe`, `custom`, `openrouter`, `vercel`, `zen-key`: OpenChamber's
+own Jev settings before native workspace keys); none usable means no Jev.
 `zen-promo` needs no credential, so it is never a fallback: only an explicit
 pick sends anything there, and `off` never falls back.
-The OpenCode keys are read on every request, so a key added or removed in
-OpenCode counts from the next request on.
 
-OpenRouter and Vercel also count a key in `OPENROUTER_API_KEY` /
-`AI_GATEWAY_API_KEY` (`readOpenCodeKeys`), because OpenCode connects those
-providers from the variable live and never stores it (v2 `integration.ts`
-`resolveConnections`). A key saved in OpenCode wins. The server's
-`process.env` already carries the login-shell snapshot and a managed OpenCode
-is spawned from it, so both see the same variable; an external OpenCode
-started elsewhere may not, and then the variable simply is not seen. Zen has
-no variable.
+Native availability comes from
+`GET /api/agent/v1/workspaces/:workspaceId/providers`: configured API-key
+presence identifies the provider and opaque credential reference, never a raw
+key. Execution resolves only the chosen provider with the authorized workspace,
+agent-directory, provider ID, credential reference and purpose `routing`.
+Each execution rechecks presence and enterprise policy. No retired credential
+file, OpenCode config or Host environment key reader participates. Unscoped
+calls can use Host TypeSafe/custom settings but cannot borrow workspace keys.
 
 Every zen call is tagged `x-opencode-client: openchamber`. Dax approved the
 free use in Slack on 2026-09-22 on terms the code and the copy keep together:
@@ -243,10 +225,11 @@ features that need Jev.
 
 `store.test.js` (defaults, deviation round-trip, the cache setting's default,
 deleted built-ins, malformed
-file, token file mode, classifier pick, custom endpoint file), `runtime.test.js` (request text,
-excerpts, decisions, cache holds and the warm window, endpoints, custom URL normalization and setter,
-classifier fallback, rewrite and fallback
-paths, safety net accept/hold/skip/unavailable), `routes.http.test.js`
-(sentinel dropped from a create and swallowed on the model switch, routed send
-ahead of a stand-in proxy, the routes). The queue and auto-accept tests cover
-their hooks.
+file, token file mode, classifier pick, custom endpoint file), `runtime.test.js`
+(native captured selections, bounded settled history, fallback/confidence,
+cache hysteresis, model variants and agent choice, canonical safety inputs,
+request-identity cache boundaries, durable settings, enterprise policy and
+selected-provider use-time resolution), and `routes.http.test.js` (real runtime
+and durable settings through HTTP, scoped catalog presence, secret-free state,
+draft probes, preserved service errors and enterprise refusal). Native delivery
+and permission auto-accept owner suites exercise their consumers.
