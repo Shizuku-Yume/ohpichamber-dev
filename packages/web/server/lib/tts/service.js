@@ -1,6 +1,6 @@
 /** Server-side text-to-speech using the Host-selected provider credential. */
 import { loadOpenAI } from './openai-sdk.js';
-import { normalizeCustomOpenAIBaseURL } from './base-url.js';
+import { normalizeSelectedOpenAIBaseURL } from './base-url.js';
 import { requireSelectedCredential } from '../quota/providers/selected-credential.js';
 
 export const TTS_VOICES = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
@@ -18,11 +18,16 @@ export class TTSService {
     this._client = null;
     this._lastApiKey = null;
   }
-  async _getClient(options) {
+  async _getClient(options, normalized = normalizeSelectedOpenAIBaseURL(options.baseURL)) {
+    if (normalized.error) throw new Error(normalized.error);
     const apiKey = await selectedApiKey(this.resolveCredential, options);
+    if (normalized.value && !normalized.official) {
+      const OpenAI = await loadOpenAI();
+      return new OpenAI({ apiKey, baseURL: normalized.value });
+    }
     if (!this._client || this._lastApiKey !== apiKey) {
       const OpenAI = await loadOpenAI();
-      this._client = new OpenAI({ apiKey });
+      this._client = new OpenAI({ apiKey, ...(normalized.value ? { baseURL: normalized.value } : {}) });
       this._lastApiKey = apiKey;
     }
     return this._client;
@@ -33,23 +38,24 @@ export class TTSService {
   async generateSpeechStream(options = {}) {
     const { text, voice = 'coral', model = 'gpt-4o-mini-tts', speed = 1.0, instructions, baseURL, workspaceId, agentDirectoryId, providerId, credentialRef } = options;
     if (typeof text !== 'string' || !text.trim()) throw new Error('Text is required for TTS');
-    const normalized = normalizeCustomOpenAIBaseURL(baseURL);
+    const normalized = normalizeSelectedOpenAIBaseURL(baseURL);
     if (normalized.error) throw new Error(normalized.error);
     const credentialOptions = { workspaceId, agentDirectoryId, providerId, credentialRef };
-    const apiKey = await selectedApiKey(this.resolveCredential, credentialOptions);
-    const OpenAI = await loadOpenAI();
-    const client = normalized.value ? new OpenAI({ apiKey, baseURL: normalized.value }) : await this._getClient(credentialOptions);
+    const custom = normalized.value && !normalized.official;
+    const client = await this._getClient(credentialOptions, normalized);
     try {
-      const response = await client.audio.speech.create({ model, voice, input: text.trim(), speed, ...(normalized.value ? {} : instructions ? { instructions } : {}), response_format: 'mp3' });
+      const response = await client.audio.speech.create({ model, voice, input: text.trim(), speed, ...(custom ? {} : instructions ? { instructions } : {}), response_format: 'mp3' });
       return { buffer: Buffer.from(await response.arrayBuffer()), contentType: response.headers.get('content-type') ?? 'audio/mpeg' };
     } catch { throw new Error('Failed to generate speech'); }
   }
   async generateSpeechBuffer(options = {}) {
-    const { text, voice = 'coral', model = 'gpt-4o-mini-tts', speed = 1.0, instructions, workspaceId, agentDirectoryId, providerId, credentialRef } = options;
+    const { text, voice = 'coral', model = 'gpt-4o-mini-tts', speed = 1.0, instructions, baseURL, workspaceId, agentDirectoryId, providerId, credentialRef } = options;
     if (typeof text !== 'string' || !text.trim()) throw new Error('Text is required for TTS');
-    const client = await this._getClient({ workspaceId, agentDirectoryId, providerId, credentialRef });
+    const normalized = normalizeSelectedOpenAIBaseURL(baseURL);
+    const custom = normalized.value && !normalized.official;
+    const client = await this._getClient({ workspaceId, agentDirectoryId, providerId, credentialRef }, normalized);
     try {
-      const response = await client.audio.speech.create({ model, voice, input: text.trim(), speed, ...(instructions ? { instructions } : {}), response_format: 'mp3' });
+      const response = await client.audio.speech.create({ model, voice, input: text.trim(), speed, ...(custom ? {} : instructions ? { instructions } : {}), response_format: 'mp3' });
       return Buffer.from(await response.arrayBuffer());
     } catch { throw new Error('Failed to generate speech'); }
   }

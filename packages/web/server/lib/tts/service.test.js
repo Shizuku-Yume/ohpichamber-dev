@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { TTSService } from './service.js';
@@ -9,6 +9,8 @@ describe('OpenAI audio SDK compatibility', () => {
   const createService = () => new TTSService({ resolveCredential: async () => ({ type: 'api_key', key: 'test-key' }) });
   let server;
   afterEach(async () => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     if (server) {
       await new Promise((resolve, reject) => {
         server.close((error) => error ? reject(error) : resolve());
@@ -37,7 +39,7 @@ describe('OpenAI audio SDK compatibility', () => {
     });
 
     const result = await createService().generateSpeechStream({ ...selection,
-      text: 'Hello', model: 'custom-tts', voice: 'coral', speed: 1.2, baseURL,
+      text: 'Hello', model: 'custom-tts', voice: 'coral', speed: 1.2, baseURL, instructions: 'Do not send custom-server instructions',
     });
 
     // OpenRouter and other strict OpenAI-compatible servers reject /audio/speech
@@ -118,5 +120,29 @@ describe('OpenAI audio SDK compatibility', () => {
     const service = new TTSService({ resolveCredential: async () => { called = true; } });
     await expect(service.generateSpeechStream({ ...selection, providerId: undefined, text: 'Hello' })).rejects.toThrow('Selected credential context is required');
     expect(called).toBe(false);
+  });
+
+  it.each(['generateSpeechStream', 'generateSpeechBuffer'])('uses the trusted official endpoint and keeps instructions in %s', async (method) => {
+    vi.stubEnv('OPENCHAMBER_RUNTIME', '');
+    vi.stubEnv('OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS', 'false');
+    const audio = Buffer.from('official-speech');
+    const requests = [];
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      const request = new Request(input, init);
+      requests.push({ url: request.url, authorization: request.headers.get('authorization'), body: await request.json() });
+      return new Response(audio, { headers: { 'Content-Type': 'audio/mpeg' } });
+    }));
+    const result = await createService()[method]({ ...selection, baseURL: 'https://api.openai.com/v1', text: 'Hello', instructions: 'Speak softly' });
+    expect(requests).toEqual([{ url: 'https://api.openai.com/v1/audio/speech', authorization: 'Bearer test-key', body: { input: 'Hello', model: 'gpt-4o-mini-tts', voice: 'coral', speed: 1, instructions: 'Speak softly', response_format: 'mp3' } }]);
+    expect(method === 'generateSpeechStream' ? result.buffer : result).toEqual(audio);
+  });
+
+  it('refuses a trusted remote official endpoint in enterprise mode before resolving its credential', async () => {
+    vi.stubEnv('OPENCHAMBER_ENTERPRISE_MODE', 'true');
+    vi.stubEnv('OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS', 'true');
+    const resolveCredential = vi.fn();
+    const service = new TTSService({ resolveCredential });
+    await expect(service.generateSpeechStream({ ...selection, baseURL: 'https://api.openai.com/v1', text: 'Hello' })).rejects.toThrow(/enterprise mode/);
+    expect(resolveCredential).not.toHaveBeenCalled();
   });
 });

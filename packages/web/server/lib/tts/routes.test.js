@@ -1,15 +1,15 @@
-import { describe, expect, it, afterEach } from 'vitest';
+import { describe, expect, it, afterEach, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
 import { registerTtsRoutes, speechVoiceHeaderValue } from './routes.js';
 import { TTSService } from './service.js';
-import { normalizeCustomOpenAIBaseURL } from './base-url.js';
+import { normalizeCustomOpenAIBaseURL, normalizeSelectedOpenAIBaseURL } from './base-url.js';
 
 const createApp = (sayTTSCapability = null, overrides = {}) => {
   const app = express();
   app.use(express.json());
-  const selection = { workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', providerId: 'openai', credentialRef: 'credential_1' };
+  const selection = { workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', providerId: 'openai', credentialRef: 'credential_1', baseURL: 'https://api.openai.com/v1' };
   registerTtsRoutes(app, {
     sayTTSCapability,
     ttsService: new TTSService({ resolveCredential: async () => ({ type: 'api_key', key: 'test-key' }) }),
@@ -18,6 +18,8 @@ const createApp = (sayTTSCapability = null, overrides = {}) => {
   });
   return app;
 };
+
+afterEach(() => { vi.unstubAllEnvs(); });
 
 describe('tts routes', () => {
   it('waits for the authoritative macOS say capability', async () => {
@@ -134,6 +136,26 @@ describe('tts routes', () => {
     expect(response.status).toBe(503);
     expect(JSON.stringify(response.body)).not.toContain('selected-secret');
   });
+
+  it('accepts the trusted official catalog endpoint without enabling browser custom URLs', async () => {
+    vi.stubEnv('OPENCHAMBER_RUNTIME', '');
+    vi.stubEnv('OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS', 'false');
+    const generateSpeechStream = vi.fn(async () => ({ buffer: Buffer.from('speech'), contentType: 'audio/mpeg' }));
+    const app = createApp(null, { ttsService: { isAvailable: async () => true, generateSpeechStream } });
+    const response = await request(app).post('/api/tts/speak').send({ text: 'Hello', instructions: 'Speak softly' });
+    expect(response.status).toBe(200);
+    expect(generateSpeechStream.mock.calls[0][0]).toMatchObject({ baseURL: 'https://api.openai.com/v1', instructions: 'Speak softly' });
+    expect(normalizeCustomOpenAIBaseURL('https://api.openai.com/v1').error).toMatch(/Remote custom server URLs are disabled/);
+  });
+
+  it('does not exempt a browser override just because the selected provider is official', async () => {
+    vi.stubEnv('OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS', 'true');
+    const generateSpeechStream = vi.fn();
+    const app = createApp(null, { ttsService: { isAvailable: async () => true, generateSpeechStream } });
+    const response = await request(app).post('/api/tts/speak').send({ text: 'Hello', baseURL: 'https://other.example.com/v1' });
+    expect(response.status).toBe(400);
+    expect(generateSpeechStream).not.toHaveBeenCalled();
+  });
 });
 
 describe('normalizeCustomOpenAIBaseURL', () => {
@@ -216,5 +238,27 @@ describe('normalizeCustomOpenAIBaseURL', () => {
     const result = normalizeCustomOpenAIBaseURL('https://my-tts-server.example.com/v1');
     expect(result.error).toMatch(/Remote custom server URLs are disabled/);
     expect(result.value).toBeUndefined();
+  });
+});
+
+describe('trusted selected OpenAI endpoint normalization', () => {
+  it('recognizes only the standard official endpoint outside enterprise mode', () => {
+    vi.stubEnv('OPENCHAMBER_RUNTIME', '');
+    vi.stubEnv('OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS', 'false');
+    expect(normalizeSelectedOpenAIBaseURL('https://api.openai.com/v1')).toEqual({ value: 'https://api.openai.com/v1', official: true });
+    expect(normalizeSelectedOpenAIBaseURL('https://api.openai.com/v1/')).toEqual({ value: 'https://api.openai.com/v1', official: true });
+    expect(normalizeSelectedOpenAIBaseURL('https://api.openai.com/other').error).toMatch(/Remote custom server URLs are disabled/);
+    expect(normalizeSelectedOpenAIBaseURL('https://api.openai.com.example.com/v1').error).toMatch(/Remote custom server URLs are disabled/);
+    expect(normalizeSelectedOpenAIBaseURL('http://127.0.0.1:8880/v1')).toEqual({ value: 'http://127.0.0.1:8880/v1' });
+  });
+
+  it('retains custom endpoint remote policy and enterprise rejection for the official endpoint', () => {
+    vi.stubEnv('OPENCHAMBER_RUNTIME', 'desktop');
+    vi.stubEnv('OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS', 'true');
+    expect(normalizeSelectedOpenAIBaseURL('https://custom.example.com/v1')).toEqual({ value: 'https://custom.example.com/v1' });
+    vi.stubEnv('OPENCHAMBER_ENTERPRISE_MODE', 'true');
+    expect(normalizeSelectedOpenAIBaseURL('https://api.openai.com/v1').error).toMatch(/enterprise mode/);
+    expect(normalizeSelectedOpenAIBaseURL('https://custom.example.com/v1').error).toMatch(/enterprise mode/);
+    expect(normalizeSelectedOpenAIBaseURL('http://localhost:8880/v1')).toEqual({ value: 'http://localhost:8880/v1' });
   });
 });

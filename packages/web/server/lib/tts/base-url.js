@@ -1,5 +1,7 @@
 import { isEnterpriseMode } from '../enterprise-mode.js';
 
+const OFFICIAL_OPENAI_BASE_URL = 'https://api.openai.com/v1';
+
 const LOCAL_BASE_URL_HOSTS = new Set([
   'localhost',
   '127.0.0.1',
@@ -29,7 +31,7 @@ const isAllowedLocalHost = (hostname) => {
   return LOCAL_BASE_URL_HOSTS.has(normalized);
 };
 
-export const normalizeCustomOpenAIBaseURL = (value) => {
+const normalizeOpenAIBaseURL = (value, selected) => {
   if (typeof value !== 'string' || !value.trim()) {
     return { value: undefined };
   }
@@ -49,10 +51,22 @@ export const normalizeCustomOpenAIBaseURL = (value) => {
     return { error: 'Custom server URL must not include credentials' };
   }
 
+  parsed.hash = '';
+  parsed.search = '';
+  const pathname = parsed.pathname.replace(/\/+$/, '');
+  const normalizedPath = pathname.length > 0 ? pathname : '';
+  const normalized = `${parsed.protocol}//${parsed.host}${normalizedPath}`;
+
   // Speech and transcription carry conversation content, so enterprise mode
   // keeps them on this machine whatever else allows a remote host.
   if (isEnterpriseMode() && !isAllowedLocalHost(parsed.hostname)) {
     return { error: 'In enterprise mode a custom speech server has to run on this machine.' };
+  }
+
+  // Only the Host-selected standard OpenAI endpoint uses the official speech
+  // path. Browser custom URLs never receive this policy exemption.
+  if (selected && normalized === OFFICIAL_OPENAI_BASE_URL) {
+    return { value: normalized, official: true };
   }
 
   const isDesktop = (process.env.OPENCHAMBER_RUNTIME || '').trim().toLowerCase() === 'desktop';
@@ -65,9 +79,8 @@ export const normalizeCustomOpenAIBaseURL = (value) => {
     };
   }
 
-  parsed.hash = '';
-  parsed.search = '';
-  const pathname = parsed.pathname.replace(/\/+$/, '');
-  const normalizedPath = pathname.length > 0 ? pathname : '';
-  return { value: `${parsed.protocol}//${parsed.host}${normalizedPath}` };
+  return { value: normalized };
 };
+
+export const normalizeCustomOpenAIBaseURL = (value) => normalizeOpenAIBaseURL(value, false);
+export const normalizeSelectedOpenAIBaseURL = (value) => normalizeOpenAIBaseURL(value, true);

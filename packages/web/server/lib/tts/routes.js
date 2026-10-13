@@ -1,5 +1,5 @@
 import express from 'express';
-import { normalizeCustomOpenAIBaseURL } from './base-url.js';
+import { normalizeCustomOpenAIBaseURL, normalizeSelectedOpenAIBaseURL } from './base-url.js';
 import { summarizeText, sanitizeForTTS, sanitizeForNote } from '../text/summarization.js';
 
 import { detectTextLanguage, languageOfLocale, pickVoiceForLanguage } from './language-detect.js';
@@ -54,8 +54,8 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
       const requested = normalizeCustomOpenAIBaseURL(baseURL);
       if (requested.error) return res.status(400).json({ error: requested.error });
       const selection = await selectionFor(req);
-      const normalized = normalizeCustomOpenAIBaseURL(selection.baseURL);
-      if (normalized.error) return res.status(503).json({ error: 'Selected TTS provider unavailable' });
+      const normalized = normalizeSelectedOpenAIBaseURL(selection.baseURL);
+      if (normalized.error) return res.status(isEnterpriseMode() ? 403 : 503).json({ error: isEnterpriseMode() ? ENTERPRISE_MODE_ERROR : 'Selected TTS provider unavailable' });
       if (requested.value && requested.value !== normalized.value) return res.status(400).json({ error: 'TTS endpoint must match the selected provider' });
       if (isEnterpriseMode() && !normalized.value) return res.status(403).json({ error: ENTERPRISE_MODE_ERROR });
       const result = await ttsService.generateSpeechStream({ ...selection, text: text.trim(), voice, model, speed, instructions, baseURL: normalized.value });
