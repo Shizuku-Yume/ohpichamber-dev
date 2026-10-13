@@ -19,6 +19,7 @@ async function main(): Promise<void> {
     const workerFile = extname(current) === '.ts' ? './worker/index.ts' : './worker/index.js';
     service = new AgentService({
       workerEntrypoint: fileURLToPath(new URL(workerFile, import.meta.url)),
+      workerRuntime: process.env.OHPICHAMBER_BUN ?? undefined,
       internalSecret: process.env.OHPICHAMBER_INTERNAL_SECRET ?? '',
       stateDirectory: join(process.cwd(), 'agent-state'),
       port: requestedPort(process.argv.slice(2)),

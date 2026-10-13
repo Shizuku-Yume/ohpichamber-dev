@@ -30,10 +30,15 @@ interface WorkerEntry {
 
 export interface WorkerRegistryOptions {
   workerEntrypoint: string;
+  workerRuntime?: string;
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
   callbacks?: WorkerLifecycleCallbacks;
   policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest) => Promise<WorkerPolicyResult>;
+}
+function defaultWorkerRuntime(): string {
+  if (typeof Bun !== 'undefined' && process.execPath.includes('bun')) return process.execPath;
+  return Bun.which('bun') ?? process.execPath;
 }
 
 async function waitWithin(operation: Promise<void>, milliseconds: number): Promise<void> {
@@ -118,7 +123,9 @@ export class WorkerRegistry {
     const exited = Promise.withResolvers<void>();
     const env: NodeJS.ProcessEnv = { ...process.env, ...input.env, PI_CODING_AGENT_DIR: input.agentDirectory };
     delete env.OHPICHAMBER_INTERNAL_SECRET;
-    const child = spawn(process.execPath, ['--no-env-file', this.options.workerEntrypoint], {
+    const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
+    const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
+    const child = spawn(workerRuntime, workerArgs, {
       cwd: input.cwd,
       env,
       windowsHide: true,
