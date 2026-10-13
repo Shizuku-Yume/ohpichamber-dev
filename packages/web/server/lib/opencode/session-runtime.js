@@ -1,479 +1,174 @@
+import { CanonicalEventSchema, EntityIdSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
+
 const SESSION_COOLDOWN_DURATION_MS = 2000;
 const SESSION_STATE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const SESSION_ATTENTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const SESSION_ACTIVITY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SESSION_STATE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+const LIVE = new Set(['running', 'awaiting_approval', 'awaiting_input']);
 
-const extractSessionStatusUpdate = (payload) => {
-  if (!payload || payload.type !== 'session.status') {
-    return null;
-  }
+export const createSessionRuntime = ({ broadcastEvent, now = Date.now }) => {
+  if (typeof broadcastEvent !== 'function') throw new TypeError('Host UI broadcaster is required');
+  const phases = new Map();
+  const cooldowns = new Map();
+  const states = new Map();
+  const attention = new Map();
+  const pending = new Map();
+  let activeCount = 0;
+  let disposed = false;
 
-  const properties = payload.properties && typeof payload.properties === 'object' ? payload.properties : {};
-  const status = properties.status && typeof properties.status === 'object' ? properties.status : {};
-  const info = properties.info && typeof properties.info === 'object' ? properties.info : {};
-  const sessionId = typeof properties.sessionID === 'string' ? properties.sessionID.trim() : '';
-  // Canonical OpenCode schema uses properties.status.type. Keep legacy info.type fallback for compatibility.
-  const type = typeof status.type === 'string'
-    ? status.type.trim()
-    : (typeof info.type === 'string' ? info.type.trim() : '');
-
-  if (!sessionId || !type) {
-    return null;
-  }
-
-  return {
-    sessionId,
-    type,
-    eventId: typeof payload.id === 'string' ? payload.id : '',
-    attempt: typeof status.attempt === 'number'
-      ? status.attempt
-      : (typeof info.attempt === 'number' ? info.attempt : undefined),
-    message: typeof status.message === 'string'
-      ? status.message
-      : (typeof info.message === 'string' ? info.message : undefined),
-    next: typeof status.next === 'number'
-      ? status.next
-      : (typeof info.next === 'number' ? info.next : undefined),
-  };
-};
-
-const readRequestId = (value) => (typeof value === 'string' && value.trim() ? value.trim() : '');
-
-export const createSessionRuntime = ({ writeSseEvent, getNotificationClients, broadcastEvent }) => {
-  const sessionActivityPhases = new Map();
-  const sessionActivityCooldowns = new Map();
-  const sessionStates = new Map();
-  const sessionAttentionStates = new Map();
-  // Pending permission requests and forms per session, kept from the same
-  // upstream stream. Clients that do not initialize a directory cannot read
-  // its pending list from OpenCode (that read creates a location), so this map
-  // is their seed. Entries live until the matching reply, the session's
-  // deletion, or an OpenCode restart, which drops every pending request.
-  const pendingRequestsBySession = new Map();
-  let activeSessionCount = 0;
-
-  const getOrCreatePendingRequests = (sessionId) => {
-    let entry = pendingRequestsBySession.get(sessionId);
-    if (!entry) {
-      entry = { permissions: new Map(), forms: new Map() };
-      pendingRequestsBySession.set(sessionId, entry);
-    }
-    return entry;
-  };
-
-  const settlePendingRequest = (kind, sessionId, requestId) => {
-    const entry = pendingRequestsBySession.get(sessionId);
-    if (!entry) return;
-    // OpenCode may omit the request ID on a reply; the session then has no
-    // pending request of that kind we can still vouch for.
-    if (requestId) entry[kind].delete(requestId);
-    else entry[kind].clear();
-    if (entry.permissions.size === 0 && entry.forms.size === 0) pendingRequestsBySession.delete(sessionId);
-  };
-
-  const processBlockingRequestPayload = (payload) => {
-    if (!payload || typeof payload.type !== 'string') return;
-    const properties = payload.properties && typeof payload.properties === 'object' ? payload.properties : {};
-    if (payload.type === 'permission.asked') {
-      const sessionId = readRequestId(properties.sessionID);
-      const requestId = readRequestId(properties.id);
-      if (!sessionId || !requestId) return;
-      getOrCreatePendingRequests(sessionId).permissions.set(requestId, properties);
-      return;
-    }
-    // v2 replaced the question tool with forms; the request itself rides in
-    // `properties.form`, so that object is what clients receive.
-    if (payload.type === 'form.created') {
-      const form = properties.form && typeof properties.form === 'object' ? properties.form : null;
-      if (!form) return;
-      const sessionId = readRequestId(form.sessionID) || readRequestId(properties.sessionID);
-      const requestId = readRequestId(form.id);
-      if (!sessionId || !requestId) return;
-      getOrCreatePendingRequests(sessionId).forms.set(requestId, form);
-      return;
-    }
-    if (payload.type === 'permission.replied') {
-      settlePendingRequest('permissions', readRequestId(properties.sessionID), readRequestId(properties.requestID));
-      return;
-    }
-    if (payload.type === 'form.settled') {
-      settlePendingRequest('forms', readRequestId(properties.sessionID), readRequestId(properties.formID));
-      return;
-    }
-    if (payload.type === 'session.deleted') {
-      const info = properties.info && typeof properties.info === 'object' ? properties.info : {};
-      const sessionId = readRequestId(properties.sessionID) || readRequestId(info.id);
-      if (sessionId) pendingRequestsBySession.delete(sessionId);
-    }
-  };
-
-  const getPendingBlockingRequestsSnapshot = () => {
-    const result = {};
-    for (const [sessionId, entry] of pendingRequestsBySession) {
-      result[sessionId] = {
-        permissions: [...entry.permissions.values()],
-        forms: [...entry.forms.values()],
-      };
-    }
-    return result;
-  };
-
-  const getOrCreateAttentionState = (sessionId) => {
-    if (!sessionId || typeof sessionId !== 'string') return null;
-
-    let state = sessionAttentionStates.get(sessionId);
+  const getAttention = (sessionId) => {
+    if (disposed) return null;
+    let state = attention.get(sessionId);
     if (!state) {
-      state = {
-        needsAttention: false,
-        lastUserMessageAt: null,
-        lastStatusChangeAt: Date.now(),
-        viewedByClients: new Set(),
-        status: 'idle',
-      };
-      sessionAttentionStates.set(sessionId, state);
+      state = { needsAttention: false, lastUserMessageAt: null, lastStatusChangeAt: now(), viewedByClients: new Set(), status: 'unavailable' };
+      attention.set(sessionId, state);
     }
     return state;
   };
-
-  const setSessionActivityPhase = (sessionId, phase) => {
-    if (!sessionId || typeof sessionId !== 'string') return false;
-
-    const current = sessionActivityPhases.get(sessionId);
-    if (current?.phase === phase) return false;
-    if (phase === 'cooldown' && current?.phase !== 'busy') {
-      return false;
-    }
-
-    const existingTimer = sessionActivityCooldowns.get(sessionId);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
-      sessionActivityCooldowns.delete(sessionId);
-    }
-
-    const wasActive = current?.phase === 'busy';
-    const isActive = phase === 'busy';
-    if (wasActive !== isActive) {
-      activeSessionCount = Math.max(0, activeSessionCount + (isActive ? 1 : -1));
-    }
-    sessionActivityPhases.set(sessionId, { phase, updatedAt: Date.now() });
-
-    if (phase === 'cooldown') {
-      const timer = setTimeout(() => {
-        const now = sessionActivityPhases.get(sessionId);
-        if (now?.phase === 'cooldown') {
-          setSessionActivityPhase(sessionId, 'idle');
-          return;
-        }
-        sessionActivityCooldowns.delete(sessionId);
-      }, SESSION_COOLDOWN_DURATION_MS);
-      sessionActivityCooldowns.set(sessionId, timer);
-    }
-
-    if (typeof broadcastEvent === 'function') {
-      broadcastEvent({
-        type: 'openchamber:session-activity',
-        properties: {
-          sessionId,
-          phase,
-        },
-      });
-    }
-
-    return true;
-  };
-
-  const updateSessionAttentionStatus = (sessionId, status) => {
-    const state = getOrCreateAttentionState(sessionId);
+  const publishState = (sessionId) => {
+    const state = states.get(sessionId);
     if (!state) return;
-
-    const prevStatus = state.status;
-    state.status = status;
-    state.lastStatusChangeAt = Date.now();
-
-    if ((prevStatus === 'busy' || prevStatus === 'retry') && status === 'idle') {
-      if (state.lastUserMessageAt && state.viewedByClients.size === 0) {
-        state.needsAttention = true;
-      }
-    }
+    broadcastEvent({ type: 'openchamber:session-status', properties: {
+      sessionId, status: state.status, activeRunId: state.activeRunId, timestamp: state.lastUpdateAt,
+      metadata: state.metadata, needsAttention: attention.get(sessionId)?.needsAttention ?? false,
+    } });
   };
-
-  const updateSessionState = (sessionId, status, eventId, metadata = {}) => {
-    if (!sessionId || typeof sessionId !== 'string') return;
-
-    const now = Date.now();
-    const existing = sessionStates.get(sessionId);
-    const existingAttentionState = sessionAttentionStates.get(sessionId);
-    const isRestartInterruption = metadata.reason === 'opencode-restart';
-    if (existing && existing.lastUpdateAt > now - 5000 && status === existing.status && !isRestartInterruption) {
+  const setPhase = (sessionId, phase) => {
+    const prior = phases.get(sessionId);
+    if (prior?.phase === phase || (phase === 'cooldown' && prior?.phase !== 'busy')) return;
+    clearTimeout(cooldowns.get(sessionId)); cooldowns.delete(sessionId);
+    if ((prior?.phase === 'busy') !== (phase === 'busy')) activeCount += phase === 'busy' ? 1 : -1;
+    phases.set(sessionId, { phase, updatedAt: now() });
+    if (phase === 'cooldown') {
+      const timer = setTimeout(() => { cooldowns.delete(sessionId); if (phases.get(sessionId)?.phase === 'cooldown') setPhase(sessionId, 'idle'); }, SESSION_COOLDOWN_DURATION_MS);
+      cooldowns.set(sessionId, timer);
+      timer.unref?.();
+    }
+    broadcastEvent({ type: 'openchamber:session-activity', properties: { sessionId, phase } });
+  };
+  const updateState = (sessionId, status, activeRunId, eventId, metadata = {}, hydrate = false) => {
+    const prior = states.get(sessionId);
+    const observed = getAttention(sessionId);
+    if (!observed) return;
+    const wasAttention = observed.needsAttention;
+    if (!hydrate && LIVE.has(observed.status) && status === 'idle'
+      && observed.lastUserMessageAt !== null && observed.viewedByClients.size === 0) observed.needsAttention = true;
+    observed.status = status; observed.lastStatusChangeAt = now();
+    states.set(sessionId, { status, activeRunId, lastUpdateAt: now(), lastEventId: eventId, metadata });
+    if (!prior || prior.status !== status || prior.activeRunId !== activeRunId
+      || prior.metadata.reason !== metadata.reason || wasAttention !== observed.needsAttention) publishState(sessionId);
+    if (LIVE.has(status)) setPhase(sessionId, 'busy');
+    else if (!hydrate && status === 'idle' && phases.get(sessionId)?.phase === 'busy') setPhase(sessionId, 'cooldown');
+    else if (hydrate || status !== 'idle' || phases.get(sessionId)?.phase !== 'cooldown') setPhase(sessionId, 'idle');
+  };
+  const getPending = (sessionId) => {
+    let entry = pending.get(sessionId);
+    if (!entry) { entry = { approvals: new Map(), questions: new Map() }; pending.set(sessionId, entry); }
+    return entry;
+  };
+  const settle = (sessionId, kind, requestId) => {
+    const entry = pending.get(sessionId);
+    if (!entry) return;
+    entry[kind].delete(requestId);
+    if (entry.approvals.size === 0 && entry.questions.size === 0) pending.delete(sessionId);
+  };
+  const removeSession = (sessionId) => {
+    if (phases.get(sessionId)?.phase === 'busy') activeCount -= 1;
+    clearTimeout(cooldowns.get(sessionId)); cooldowns.delete(sessionId);
+    phases.delete(sessionId); states.delete(sessionId); attention.delete(sessionId); pending.delete(sessionId);
+  };
+  const requireScope = (scope) => {
+    if (!scope?.projectId || !scope?.workspaceId || !scope?.rootSessionId) throw new Error('Host session scope is required');
+  };
+  const markUserMessageSent = (sessionId, at = now()) => {
+    EntityIdSchema.parse(sessionId);
+    const state = getAttention(sessionId);
+    if (state) state.lastUserMessageAt = at;
+  };
+  const applySnapshot = (input, scope) => {
+    if (disposed) return;
+    requireScope(scope);
+    const snapshot = SessionSnapshotSchema.parse(input);
+    const session = snapshot.session;
+    if (session.projectId !== scope.projectId || session.workspaceId !== scope.workspaceId || session.rootSessionId !== scope.rootSessionId) {
+      throw new Error('Host session scope mismatch');
+    }
+    pending.delete(session.sessionId);
+    for (const request of snapshot.approvals) if (request.status === 'pending') getPending(session.sessionId).approvals.set(request.approvalId, request);
+    for (const request of snapshot.questions) if (request.status === 'pending') getPending(session.sessionId).questions.set(request.questionId, request);
+    updateState(session.sessionId, session.runtimeStatus, session.activeRunId, snapshot.cursor, {}, true);
+  };
+  const processCanonicalEvent = (input, scope) => {
+    if (disposed) return;
+    requireScope(scope);
+    const event = CanonicalEventSchema.parse(input);
+    const sessionId = event.sessionId;
+    const eventId = `${event.epoch}:${event.sequence}`;
+    if (event.type === 'session.deleted') { for (const id of event.deletedSessionIds) removeSession(id); return; }
+    if (event.type === 'session.status') { updateState(sessionId, event.runtimeStatus, event.activeRunId, eventId); return; }
+    if (event.type === 'run.started') { updateState(sessionId, 'running', event.runId, eventId); return; }
+    if (['run.completed', 'run.failed', 'run.cancelled'].includes(event.type)) {
+      const current = states.get(sessionId);
+      if (current?.activeRunId && current.activeRunId !== event.runId) return;
+      pending.delete(sessionId); updateState(sessionId, 'idle', null, eventId); return;
+    }
+    if (event.type === 'message.created' && event.role === 'user') { markUserMessageSent(sessionId, event.timestamp); return; }
+    if (event.type === 'approval.requested' || event.type === 'approval.resolved') {
+      if (event.approval.sessionId !== sessionId) throw new Error('Canonical approval scope mismatch');
+      if (event.type === 'approval.requested') getPending(sessionId).approvals.set(event.approval.approvalId, event.approval);
+      else settle(sessionId, 'approvals', event.approval.approvalId);
       return;
     }
-
-    sessionStates.set(sessionId, {
-      status,
-      lastUpdateAt: now,
-      lastEventId: eventId || `server-${now}`,
-      metadata: { ...existing?.metadata, ...metadata },
-    });
-
-    updateSessionAttentionStatus(sessionId, status);
-    const attentionState = sessionAttentionStates.get(sessionId);
-    const attentionChanged = !!attentionState && existingAttentionState?.needsAttention !== attentionState.needsAttention;
-    const clients = getNotificationClients();
-    if (!existing || existing.status !== status || attentionChanged || isRestartInterruption) {
-      const state = sessionStates.get(sessionId);
-      const syntheticPayload = {
-        type: 'openchamber:session-status',
-        properties: {
-          sessionID: sessionId,
-          status: state.status,
-          timestamp: state.lastUpdateAt,
-          metadata: state.metadata,
-          needsAttention: attentionState?.needsAttention ?? false,
-        },
-      };
-
-      if (typeof broadcastEvent === 'function') {
-        broadcastEvent(syntheticPayload);
-      } else if (clients.size > 0) {
-        for (const res of clients) {
-          try {
-            writeSseEvent(res, syntheticPayload);
-          } catch {
-          }
-        }
-      }
-    }
-
-    const phase = status === 'busy' || status === 'retry' ? 'busy' : 'idle';
-    if (phase !== 'idle' || sessionActivityPhases.get(sessionId)?.phase !== 'cooldown') {
-      setSessionActivityPhase(sessionId, phase);
+    if (event.type === 'question.requested' || event.type === 'question.resolved') {
+      if (event.question.sessionId !== sessionId) throw new Error('Canonical question scope mismatch');
+      if (event.type === 'question.requested') getPending(sessionId).questions.set(event.question.questionId, event.question);
+      else settle(sessionId, 'questions', event.question.questionId);
     }
   };
-
-  const getSessionStateSnapshot = () => {
-    const result = {};
-    const now = Date.now();
-    for (const [sessionId, data] of sessionStates) {
-      if (now - data.lastUpdateAt > SESSION_STATE_MAX_AGE_MS) continue;
-      result[sessionId] = {
-        status: data.status,
-        lastUpdateAt: data.lastUpdateAt,
-        metadata: data.metadata,
-      };
-    }
-    return result;
-  };
-
-  const getSessionState = (sessionId) => {
-    if (!sessionId) return null;
-    return sessionStates.get(sessionId) || null;
-  };
-
-  const markSessionViewed = (sessionId, clientId) => {
-    const state = getOrCreateAttentionState(sessionId);
-    if (!state) return;
-
-    const wasNeedsAttention = state.needsAttention;
-    state.viewedByClients.add(clientId);
-
-    if (wasNeedsAttention) {
-      state.needsAttention = false;
-
-      const syntheticPayload = {
-        type: 'openchamber:session-status',
-        properties: {
-          sessionID: sessionId,
-          status: state.status,
-          timestamp: Date.now(),
-          metadata: {},
-          needsAttention: false,
-        },
-      };
-
-      if (typeof broadcastEvent === 'function') {
-        broadcastEvent(syntheticPayload);
-      } else {
-        const clients = getNotificationClients();
-        for (const res of clients) {
-          try {
-            writeSseEvent(res, syntheticPayload);
-          } catch {
-          }
-        }
-      }
-    }
-  };
-
-  const markSessionUnviewed = (sessionId, clientId) => {
-    const state = sessionAttentionStates.get(sessionId);
-    if (!state) return;
-    state.viewedByClients.delete(clientId);
-  };
-
-  const markUserMessageSent = (sessionId) => {
-    const state = getOrCreateAttentionState(sessionId);
-    if (!state) return;
-    state.lastUserMessageAt = Date.now();
-  };
-
-  const getSessionAttentionSnapshot = () => {
-    const result = {};
-    const now = Date.now();
-    for (const [sessionId, state] of sessionAttentionStates) {
-      if (now - state.lastStatusChangeAt > SESSION_ATTENTION_MAX_AGE_MS) continue;
-      result[sessionId] = {
-        needsAttention: state.needsAttention,
-        lastUserMessageAt: state.lastUserMessageAt,
-        lastStatusChangeAt: state.lastStatusChangeAt,
-        status: state.status,
-        isViewed: state.viewedByClients.size > 0,
-      };
-    }
-    return result;
-  };
-
-  const getSessionAttentionState = (sessionId) => {
-    if (!sessionId) return null;
-    const state = sessionAttentionStates.get(sessionId);
-    if (!state) return null;
-    return {
-      needsAttention: state.needsAttention,
-      lastUserMessageAt: state.lastUserMessageAt,
-      lastStatusChangeAt: state.lastStatusChangeAt,
-      status: state.status,
-      isViewed: state.viewedByClients.size > 0,
-    };
-  };
-
-  const getSessionActivitySnapshot = () => {
-    const result = {};
-    for (const [sessionId, data] of sessionActivityPhases) {
-      result[sessionId] = { type: data.phase };
-    }
-    return result;
-  };
-
-  const getActiveSessionCount = () => activeSessionCount;
-
-  const resetAllSessionActivityToIdle = () => {
-    for (const timer of sessionActivityCooldowns.values()) {
-      clearTimeout(timer);
-    }
-    sessionActivityCooldowns.clear();
-    activeSessionCount = 0;
-    const now = Date.now();
-    for (const [sessionId] of sessionActivityPhases) {
-      sessionActivityPhases.set(sessionId, { phase: 'idle', updatedAt: now });
-    }
-  };
-
-  const interruptBusySessionsAfterRestart = () => {
-    const interruptedSessionIds = new Set();
-    for (const [sessionId, state] of sessionStates) {
-      if (state.status === 'busy' || state.status === 'retry') {
-        interruptedSessionIds.add(sessionId);
-      }
-    }
-    for (const [sessionId, activity] of sessionActivityPhases) {
-      if (activity.phase === 'busy') {
-        interruptedSessionIds.add(sessionId);
-      }
-    }
-
-    // A restarted OpenCode forgot every pending request with the turns.
-    pendingRequestsBySession.clear();
-    const eventId = `opencode-restart-${Date.now()}`;
-    for (const sessionId of interruptedSessionIds) {
-      updateSessionState(sessionId, 'idle', eventId, {
-        message: 'Interrupted by OpenCode restart',
-        reason: 'opencode-restart',
-      });
-      broadcastEvent?.({
-        type: 'session.error',
-        properties: {
-          sessionID: sessionId,
-          error: {
-            name: 'MessageAbortedError',
-            message: 'The running turn was interrupted when OpenCode restarted.',
-          },
-        },
-      });
-    }
-
-    resetAllSessionActivityToIdle();
-    return { sessionIds: [...interruptedSessionIds] };
-  };
-
-  const cleanupOldSessionStates = () => {
-    const now = Date.now();
-    for (const [sessionId, data] of sessionStates) {
-      if (now - data.lastUpdateAt > SESSION_STATE_MAX_AGE_MS) {
-        sessionStates.delete(sessionId);
-      }
-    }
-    for (const [sessionId, state] of sessionAttentionStates) {
-      if (now - state.lastStatusChangeAt > SESSION_ATTENTION_MAX_AGE_MS) {
-        sessionAttentionStates.delete(sessionId);
-      }
-    }
-    for (const [sessionId, data] of sessionActivityPhases) {
-      if (now - data.updatedAt <= SESSION_ACTIVITY_MAX_AGE_MS) continue;
-      const timer = sessionActivityCooldowns.get(sessionId);
-      if (timer) clearTimeout(timer);
-      sessionActivityCooldowns.delete(sessionId);
-      sessionActivityPhases.delete(sessionId);
-      if (data.phase === 'busy') activeSessionCount = Math.max(0, activeSessionCount - 1);
-    }
-  };
-
-  const cleanupInterval = setInterval(cleanupOldSessionStates, SESSION_STATE_CLEANUP_INTERVAL_MS);
-
-  const processOpenCodeSsePayload = (payload) => {
-    processBlockingRequestPayload(payload);
-    const update = extractSessionStatusUpdate(payload);
-    if (!update) return;
-
-    if (update.type === 'busy' || update.type === 'retry') {
-      setSessionActivityPhase(update.sessionId, 'busy');
-    } else if (update.type === 'idle') {
-      setSessionActivityPhase(update.sessionId, 'cooldown');
-    }
-
-    updateSessionState(update.sessionId, update.type, update.eventId || `sse-${Date.now()}`, {
-      attempt: update.attempt,
-      message: update.message,
-      next: update.next,
-    });
-  };
-
-  const dispose = () => {
-    clearInterval(cleanupInterval);
-    for (const timer of sessionActivityCooldowns.values()) {
-      clearTimeout(timer);
-    }
-    sessionActivityCooldowns.clear();
-    sessionActivityPhases.clear();
-    sessionStates.clear();
-    sessionAttentionStates.clear();
-    pendingRequestsBySession.clear();
-    activeSessionCount = 0;
-  };
+  const getSessionStateSnapshot = () => Object.fromEntries([...states].filter(([, state]) => now() - state.lastUpdateAt <= SESSION_STATE_MAX_AGE_MS)
+    .map(([id, state]) => [id, { status: state.status, activeRunId: state.activeRunId, lastUpdateAt: state.lastUpdateAt, metadata: state.metadata }]));
+  const getPendingBlockingRequestsSnapshot = () => Object.fromEntries([...pending].map(([id, entry]) => [id,
+    { approvals: [...entry.approvals.values()], questions: [...entry.questions.values()] }]));
+  const attentionSnapshot = (state) => ({ needsAttention: state.needsAttention, lastUserMessageAt: state.lastUserMessageAt,
+    lastStatusChangeAt: state.lastStatusChangeAt, status: state.status, isViewed: state.viewedByClients.size > 0 });
+  const cleanupInterval = setInterval(() => {
+    for (const [id, state] of states) if (now() - state.lastUpdateAt > SESSION_STATE_MAX_AGE_MS) removeSession(id);
+    for (const [id, state] of attention) if (now() - state.lastStatusChangeAt > SESSION_STATE_MAX_AGE_MS) attention.delete(id);
+  }, SESSION_STATE_CLEANUP_INTERVAL_MS);
+  cleanupInterval.unref?.();
 
   return {
-    processOpenCodeSsePayload,
-    getSessionActivitySnapshot,
-    getActiveSessionCount,
+    applySnapshot,
+    processCanonicalEvent,
     getSessionStateSnapshot,
     getPendingBlockingRequestsSnapshot,
-    getSessionAttentionSnapshot,
-    getSessionState,
-    getSessionAttentionState,
-    markSessionViewed,
-    markSessionUnviewed,
+    getSessionState: (sessionId) => states.get(sessionId) ?? null,
+    getSessionActivitySnapshot: () => Object.fromEntries([...phases].map(([id, entry]) => [id, { type: entry.phase }])),
+    getActiveSessionCount: () => activeCount,
+    getSessionAttentionSnapshot: () => Object.fromEntries([...attention].filter(([, state]) => now() - state.lastStatusChangeAt <= SESSION_STATE_MAX_AGE_MS)
+      .map(([id, state]) => [id, attentionSnapshot(state)])),
+    getSessionAttentionState(sessionId) { const state = attention.get(sessionId); return state ? attentionSnapshot(state) : null; },
     markUserMessageSent,
-    resetAllSessionActivityToIdle,
-    interruptBusySessionsAfterRestart,
-    dispose,
+    markSessionViewed(sessionId, clientId) {
+      const state = getAttention(sessionId);
+      if (!state) return;
+      state.viewedByClients.add(clientId);
+      if (state.needsAttention) { state.needsAttention = false; publishState(sessionId); }
+    },
+    markSessionUnviewed(sessionId, clientId) { attention.get(sessionId)?.viewedByClients.delete(clientId); },
+    interruptBusySessionsAfterRestart() {
+      const sessionIds = [...states].filter(([, state]) => LIVE.has(state.status)).map(([id]) => id);
+      pending.clear();
+      for (const sessionId of sessionIds) {
+        updateState(sessionId, 'unavailable', null, `host-restart-${now()}`, { reason: 'agent-service-restart' });
+        broadcastEvent({ type: 'openchamber:session-interrupted', properties: { sessionId, reason: 'agent-service-restart' } });
+      }
+      for (const sessionId of phases.keys()) if (phases.get(sessionId)?.phase === 'cooldown') setPhase(sessionId, 'idle');
+      return { sessionIds };
+    },
+    dispose() {
+      disposed = true; clearInterval(cleanupInterval);
+      for (const timer of cooldowns.values()) clearTimeout(timer);
+      cooldowns.clear(); phases.clear(); states.clear(); attention.clear(); pending.clear(); activeCount = 0;
+    },
   };
 };

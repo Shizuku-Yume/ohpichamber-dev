@@ -84,8 +84,10 @@ export function createGlobalMessageStreamHub({
         const response = await service.request(`${base}/snapshot`, { signal: entry.controller.signal });
         if (!response.ok) throw Object.assign(new Error('SNAPSHOT_UNAVAILABLE'), { status: response.status });
         const snapshot = SessionSnapshotSchema.parse(await response.json());
-        if (snapshot.session.sessionId !== entry.sessionId || snapshot.session.workspaceId !== entry.scope.workspaceId
-          || snapshot.session.rootSessionId !== entry.scope.rootSessionId) throw new Error('HOST_SCOPE_MISMATCH');
+        if (snapshot.session.sessionId !== entry.sessionId || snapshot.session.projectId !== entry.scope.projectId
+          || snapshot.session.workspaceId !== entry.scope.workspaceId || snapshot.session.rootSessionId !== entry.scope.rootSessionId) {
+          throw new Error('HOST_SCOPE_MISMATCH');
+        }
         entry.cursor = snapshot.cursor;
         if (entry.controller.signal.aborted) return;
         await notify(snapshotSubscribers, snapshot, entry.scope);

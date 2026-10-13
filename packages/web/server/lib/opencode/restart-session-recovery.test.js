@@ -1,59 +1,42 @@
-import { describe, expect, it, vi } from 'vitest';
-
+import { describe, expect, it } from 'vitest';
 import { createSessionRuntime } from './session-runtime.js';
+import { createGlobalMessageStreamHub } from '../event-stream/global-hub.js';
+import { deferred, encodeEvent, event, scope, snapshot, streamBoundary } from '../event-stream/canonical-test-fixtures.js';
 
-describe('managed OpenCode restart session recovery', () => {
-  it('settles busy sessions and broadcasts one interruption notification', () => {
-    const events = [];
-    const broadcastUiNotification = vi.fn();
-    const rebindUpstream = vi.fn();
-    const sessionRuntime = createSessionRuntime({
-      writeSseEvent() {},
-      getNotificationClients: () => new Set(),
-      broadcastEvent: (event) => events.push(event),
-    });
-    const onOpenCodeRestarted = () => {
-      rebindUpstream();
-      const { sessionIds } = sessionRuntime.interruptBusySessionsAfterRestart();
-      if (sessionIds.length > 0) {
-        const multiple = sessionIds.length > 1;
-        broadcastUiNotification({
-          title: multiple ? 'Chats interrupted' : 'Chat interrupted',
-          body: multiple
-            ? 'OpenCode restarted during running responses. Send a message in each chat to continue.'
-            : 'OpenCode restarted during a running response. Send a message to continue.',
-          tag: 'opencode-restart-interrupted',
-          kind: 'opencode-restart-interrupted',
-          sessionId: sessionIds[0],
-        });
-      }
-    };
-    const markBusy = (sessionID) => sessionRuntime.processOpenCodeSsePayload({
-      type: 'session.status',
-      properties: { sessionID, status: { type: 'busy' } },
-    });
-
+describe('canonical Agent Service restart activity recovery', () => {
+  it('reports Host interruption once and replaces activity from the new snapshot/epoch before live events', async () => {
+    const events = []; const before = streamBoundary(); const after = streamBoundary();
+    let boundary = before;
+    const service = { request: (path, init) => boundary === after && path.endsWith('/snapshot')
+      ? Promise.resolve(Response.json(snapshot([], [], { epoch: 'replacement' }))) : boundary.service.request(path, init) };
+    const runtime = createSessionRuntime({ broadcastEvent: (payload) => events.push(payload) });
+    const hub = createGlobalMessageStreamHub({ service, resolveSessionScope: async () => scope });
+    hub.subscribeSnapshot(runtime.applySnapshot); hub.subscribeEvent(runtime.processCanonicalEvent);
+    const first = deferred(); const resumed = deferred();
+    hub.subscribeFrame(({ event: record }) => (record.epoch === 'epoch' ? first : resumed).resolve());
     try {
-      markBusy('session-1');
-      markBusy('session-2');
-      markBusy('session-3');
+      await hub.start(['session']);
+      before.push(encodeEvent(event(1, { type: 'run.started', runId: 'run', createdAt: 1 })));
+      await first.promise; expect(runtime.getActiveSessionCount()).toBe(1);
+      await hub.stop(); expect(before.cancelled()).toBe(true);
       events.length = 0;
-
-      onOpenCodeRestarted();
-
-      expect(rebindUpstream).toHaveBeenCalledOnce();
-      expect(sessionRuntime.getActiveSessionCount()).toBe(0);
-      expect(Object.values(sessionRuntime.getSessionStateSnapshot()).map((state) => state.status))
-        .toEqual(['idle', 'idle', 'idle']);
-      expect(events.filter((event) => event.type === 'openchamber:session-status')).toHaveLength(3);
-      expect(events.filter((event) => event.type === 'session.error')).toHaveLength(3);
-      expect(broadcastUiNotification).toHaveBeenCalledOnce();
-      expect(broadcastUiNotification).toHaveBeenCalledWith(expect.objectContaining({
-        kind: 'opencode-restart-interrupted',
-        sessionId: 'session-1',
-      }));
-    } finally {
-      sessionRuntime.dispose();
-    }
+      expect(runtime.interruptBusySessionsAfterRestart()).toEqual({ sessionIds: ['session'] });
+      expect(runtime.getSessionState('session')).toMatchObject({ status: 'unavailable', activeRunId: null, metadata: { reason: 'agent-service-restart' } });
+      expect(runtime.getActiveSessionCount()).toBe(0);
+      expect(events.filter((record) => record.type === 'openchamber:session-interrupted')).toEqual([
+        { type: 'openchamber:session-interrupted', properties: { sessionId: 'session', reason: 'agent-service-restart' } },
+      ]);
+      expect(events.some((record) => record.type === 'session.error')).toBe(false);
+      const count = events.length;
+      expect(runtime.interruptBusySessionsAfterRestart()).toEqual({ sessionIds: [] }); expect(events).toHaveLength(count);
+      boundary = after; await hub.start(['session']);
+      expect(after.calls[0].init.headers['Last-Event-ID']).toBe('replacement:0');
+      expect(runtime.getSessionState('session')).toMatchObject({ status: 'idle', metadata: {} });
+      after.push(encodeEvent(event(1, { type: 'run.started', epoch: 'replacement', runId: 'new-run', createdAt: 2 })));
+      await resumed.promise;
+      expect(runtime.getActiveSessionCount()).toBe(1);
+      expect(runtime.getSessionState('session')).toMatchObject({ status: 'running', activeRunId: 'new-run', lastEventId: 'replacement:1' });
+      expect(JSON.stringify(events)).not.toContain(scope.cwd);
+    } finally { await hub.stop(); runtime.dispose(); }
   });
 });
