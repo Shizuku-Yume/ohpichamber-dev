@@ -3,13 +3,13 @@ import { CounterSchema, EntityIdSchema, EpochSchema, PositiveCounterSchema, Time
 import { CapturedSendOptionsSchema, PromptRequestSchema } from './prompt.ts';
 import { SessionMetadataSchema } from './metadata.ts';
 
-const displayPathSchema = z.string().min(1).refine(
+export const DisplayPathSchema = z.string().min(1).refine(
   (value) => !value.startsWith('/') && !value.startsWith('\\') && !/^[A-Za-z]:/.test(value),
   { message: 'Display path must be project-relative, never a Host absolute path' },
 );
 export const ProjectSchema = z.strictObject({
   projectId: EntityIdSchema, name: z.string(), workspaceIds: z.array(EntityIdSchema),
-  displayPath: displayPathSchema.optional(),
+  displayPath: DisplayPathSchema.optional(),
 });
 export type Project = z.infer<typeof ProjectSchema>;
 export const AgentSchema = z.strictObject({
@@ -34,7 +34,7 @@ export type AgentMutationResult = z.infer<typeof AgentMutationResultSchema>;
 export const SessionRuntimeStatusSchema = z.enum(['idle', 'running', 'awaiting_approval', 'awaiting_input', 'unavailable']);
 export type SessionRuntimeStatus = z.infer<typeof SessionRuntimeStatusSchema>;
 export const RuntimeSessionSchema = z.strictObject({
-  sessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema, displayPath: displayPathSchema,
+  sessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema, displayPath: DisplayPathSchema,
   parentSessionId: EntityIdSchema.optional(), rootSessionId: EntityIdSchema,
   createdAt: TimestampSchema, updatedAt: TimestampSchema, epoch: EpochSchema, headSequence: CounterSchema,
   runtimeStatus: SessionRuntimeStatusSchema, activeRunId: EntityIdSchema.nullable(),
