@@ -92,7 +92,7 @@ These describe source contracts, not verified runtime features. Composed Gate 22
 - `GET /capabilities` requires Host authentication. It queries service capabilities and exposes `RuntimeCapabilitiesSchema`, setting `followUpQueue: true`, `credentialHandoff: true`, `documentExtraction: false`, and omitting internal attachment flags.
 - `GET /projects` returns `listProjects()`.
 - `GET /workspaces` returns `listWorkspaces(projectId)`.
-- Locally owned queue routes are mounted under `/sessions/:sessionId/queue`, running delivery before any SDK proxy.
+- Locally owned queue routes are mounted under `/sessions/:sessionId/queue` with an authenticated 1 MiB strict JSON parser, running delivery before any SDK proxy. Attachment uploads keep their separate 20 MiB parser.
 - Locally owned session routes are mounted under `/sessions`.
 - Locally owned attachment routes are mounted under `/attachments`.
 

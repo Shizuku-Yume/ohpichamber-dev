@@ -38,3 +38,11 @@ Check before: the new composed Host/Agent Service scenario is not runnable yet. 
 Surfaces: Web/PWA and Electron use the authenticated Node Host boundary. Hosted mobile and Capacitor use that same remote Host; neither starts a local Agent Service. Guest actions remain Host capability-scoped and use the same canonical execution owner. This task prepares the composition; application activation remains task 17 after UI callers move.
 
 Implementation slices: S1 owns Host policy/supervisor and trusted Bun input derivation; S2 owns authenticated canonical gateway, explicit selected credential handoff, quota and TTS credential access; S3 owns queue/session/permission/routing/small-model consumers; S4 owns canonical event fan-out and retained execution-dependent features, including the authorized Host-tool bridge. Existing orchestration algorithms remain unchanged. The integration owner composes these modules and runs affected checks once after integration.
+
+### Current integration and verification
+
+S1–S4 source composition covers Host routes, queue, attachments, context, and private credentials. It wires `resolveCredential` into quota, TTS, and routing; propagates workspace scope to classifiers; dispatches stateless credential resolve/handoff under `providerEntry`; preserves native companion ordering; and adds an authenticated 1 MiB strict JSON parser for queue routes. Fresh native sessions accept an absent MCP file while malformed or unreadable configurations still fail.
+
+Focused suites passed: Host auth/private credentials/attachment store 39/39 (429 assertions), legacy attachment importer 5/5, and native session/stateless 11/11 (77 assertions), alongside service type-check and changed-file lint. Earlier unchanged queue and scoped-consumer evidence is reused.
+
+The real composed run verified queue append/replay/stale CAS, once-only provider FIFO, captured context, cold-service history identity, and canonical attachment records. Its PNG assertion used a 1×1 fixture that native SDK image normalization necessarily resizes; the disposable fixture is being corrected without weakening byte-exact verification. A composition call to nonexistent `sessionLineage.processCanonicalEvent` is replaced by its canonical `observe` owner, awaiting runtime verification. Complete composed acceptance remains open; no checkboxes or gate 23 are advanced.

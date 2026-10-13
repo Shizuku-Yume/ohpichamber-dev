@@ -1190,7 +1190,7 @@ globalMessageStreamHub.subscribeSnapshot((snapshot, scope) => {
 globalMessageStreamHub.subscribeEvent(async (event, scope) => {
   sessionRuntime.processCanonicalEvent(event, scope);
   await messageQueueRuntime.observe({ ...scope, sessionId: event.sessionId }, event);
-  sessionLineage.processCanonicalEvent(event, scope);
+  sessionLineage.observe(event);
   sessionAssistRuntime.processCanonicalEvent(event, scope);
   sessionWorkRuntime.processCanonicalEvent(event, scope);
   sessionGoalRuntime.processCanonicalEvent(event, scope);

@@ -148,6 +148,7 @@ export function registerCanonicalHostRoutes(app, {
     } catch { return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Host workspace catalog could not be read.'); }
   });
   // Queue routes address /sessions/:sessionId/queue and run delivery before any SDK proxy.
+  router.use(/^\/sessions\/[^/]+\/queue(?:\/|$)/, express.json({ limit: '1mb', strict: true }));
   queueRoutes(router);
   const sessionRouter = express.Router();
   sessionRoutes(sessionRouter);
