@@ -277,6 +277,7 @@ export class WorkerSession {
     if (input.agentMention && options.agentId !== null && input.agentMention.agentId !== options.agentId) throw new ProjectionError(400, 'INVALID_REQUEST', 'Agent mention and selected profile disagree');
     await this.selectOptions(input.agentMention ? { ...options, agentId: input.agentMention.agentId } : options);
     let text = input.text;
+    const streamingInstructions: string[] = [];
     const invocation = /^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
     if (invocation) text = await this.catalogs.skills.preparePrompt(invocation[1]!, invocation[2] ?? '');
     for (const context of input.context) {
@@ -286,6 +287,7 @@ export class WorkerSession {
           : { role: 'user' as const, content: context.text, synthetic: true, timestamp: Date.now() };
         this.session.agent.appendMessage(message);
         this.session.sessionManager.appendMessage(message);
+        if (context.kind === 'instruction') streamingInstructions.push(context.text);
       } else {
         await this.session.sendCustomMessage({
           customType: 'ohpichamber.context', content: context.text, display: false,
@@ -295,9 +297,11 @@ export class WorkerSession {
           const message = { role: 'developer' as const, content: context.instructions, timestamp: Date.now() };
           this.session.agent.appendMessage(message);
           this.session.sessionManager.appendMessage(message);
+          streamingInstructions.push(context.instructions);
         }
       }
     }
+    if (operation.type !== 'prompt' && streamingInstructions.length > 0) text = `${streamingInstructions.join('\n\n')}\n\n${text}`;
     const images: NonNullable<PromptOptions['images']> = [];
     for (const attachment of input.attachments) {
       const reference = operation.attachments?.find(item => item.attachmentId === attachment.attachmentId);

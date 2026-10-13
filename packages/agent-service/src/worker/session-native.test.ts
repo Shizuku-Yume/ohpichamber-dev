@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { JsonObjectSchema, type ApprovalRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
-import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
+import { cfgBashPatterns } from '@oh-my-pi/pi-coding-agent/exec/settings';
+import { cfgToolsApprovalMode } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { InteractionManager } from '../interaction/manager.ts';
 import { SessionJournal } from '../projection/journal.ts';
 import type { ProjectionInput } from '../projection/protocol.ts';
@@ -127,7 +128,7 @@ for (const approvalMode of ['always-ask', 'yolo'] as const) {
       const terminal = Promise.withResolvers<void>();
       const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
       try {
-        harness.worker.session.settings.set('tools.approvalMode', approvalMode);
+        cfgToolsApprovalMode.override(harness.worker.session.settings, approvalMode);
         await harness.worker.operation({ type: 'prompt', runId: 'bash-run', request: prompt('Run the native bash tool exactly once.') });
         const approval = await harness.waitApproval();
         expect(approval).toMatchObject({ status: 'pending', toolName: 'bash', actionType: 'bash_command', workerGeneration: generation });
@@ -160,8 +161,8 @@ for (const decision of ['allow', 'deny'] as const) {
     const terminal = Promise.withResolvers<void>();
     const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
     try {
-      harness.worker.session.settings.set('tools.approvalMode', 'always-ask');
-      harness.worker.session.settings.set('bash.patterns', [{ match: command, approval: decision }]);
+      cfgToolsApprovalMode.override(harness.worker.session.settings, 'always-ask');
+      cfgBashPatterns.override(harness.worker.session.settings, [{ match: command, approval: decision }]);
       await harness.worker.operation({ type: 'prompt', runId: 'pattern-run', request: prompt('Use the configured native bash pattern.') });
       await terminal.promise;
       if (decision === 'allow') expect(await readFile(join(harness.root, 'pattern.txt'), 'utf8')).toBe('PATTERN');
@@ -188,7 +189,7 @@ test('actual SDK Host tool reaches the captured capability owner and returns its
   const terminal = Promise.withResolvers<void>();
   const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
   try {
-    harness.worker.session.settings.set('tools.approvalMode', 'yolo');
+    cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
     expect(harness.worker.session.getAllToolInfos().map(tool => tool.name)).toEqual(expect.arrayContaining(['openchamber', 'web', 'memory', 'notify']));
     await harness.worker.operation({ type: 'prompt', runId: 'host-run', request: prompt('Store the marker with the memory tool.') });
     await terminal.promise;
