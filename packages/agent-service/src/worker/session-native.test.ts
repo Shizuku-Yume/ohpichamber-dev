@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { JsonObjectSchema, type ApprovalRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
 import { cfgBashPatterns } from '@oh-my-pi/pi-coding-agent/exec/settings';
 import { cfgToolsApprovalMode } from '@oh-my-pi/pi-coding-agent/tools/settings';
+import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { InteractionManager } from '../interaction/manager.ts';
 import { SessionJournal } from '../projection/journal.ts';
 import type { ProjectionInput } from '../projection/protocol.ts';
@@ -151,13 +152,11 @@ for (const approvalMode of ['always-ask', 'yolo'] as const) {
 
 for (const decision of ['allow', 'deny'] as const) {
   test(`actual native Bash pattern ${decision} remains authoritative without an extra Host approval`, async () => {
-    const machineCommands: string[] = [];
-    const harness = await fixture({ machineCommands, respond(payload, root) {
+    const command = 'printf PATTERN';
+    const harness = await fixture({ machineCommands: [command], respond(payload) {
       const messages = payload.messages as JsonObject[];
-      return messages.at(-1)?.role === 'tool' ? completion() : completion({ name: 'bash', id: 'pattern-call', input: { command: `printf PATTERN >> '${join(root, 'pattern.txt')}'` } });
+      return messages.at(-1)?.role === 'tool' ? completion() : completion({ name: 'bash', id: 'pattern-call', input: { command } });
     } });
-    const command = `printf PATTERN >> '${join(harness.root, 'pattern.txt')}'`;
-    machineCommands.push(command);
     const terminal = Promise.withResolvers<void>();
     const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
     try {
@@ -165,8 +164,20 @@ for (const decision of ['allow', 'deny'] as const) {
       cfgBashPatterns.override(harness.worker.session.settings, [{ match: command, approval: decision }]);
       await harness.worker.operation({ type: 'prompt', runId: 'pattern-run', request: prompt('Use the configured native bash pattern.') });
       await terminal.promise;
-      if (decision === 'allow') expect(await readFile(join(harness.root, 'pattern.txt'), 'utf8')).toBe('PATTERN');
-      else await expect(readFile(join(harness.root, 'pattern.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+      const outcomes = harness.events.map(input => input.event).filter(event => event.type === 'tool.completed' && event.toolCallId === 'pattern-call');
+      expect(outcomes).toHaveLength(1);
+      const outcome = outcomes[0];
+      if (!outcome || outcome.type !== 'tool.completed') throw new Error('Native pattern tool outcome was not projected');
+      if (decision === 'allow') {
+        expect(outcome).toMatchObject({ status: 'completed', isError: false,
+          output: { content: expect.arrayContaining([{ type: 'text', text: expect.stringContaining('PATTERN') }]) },
+        });
+      } else {
+        expect(outcome).toMatchObject({ status: 'failed', isError: true,
+          output: { content: expect.arrayContaining([{ type: 'text', text: expect.stringContaining('blocked by tool policy') }]) },
+        });
+        expect(outcome.output).not.toMatchObject({ content: expect.arrayContaining([{ type: 'text', text: 'PATTERN' }]) });
+      }
       expect(harness.events.filter(input => input.event.type === 'approval.requested')).toHaveLength(0);
       expect(harness.grants).toEqual([]);
       expect(harness.fatal()).toBe(false);

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
+import type { AgentMessage } from '@oh-my-pi/pi-agent-core';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import type { PromptOptions } from '@oh-my-pi/pi-coding-agent/session/agent-session-types';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
@@ -28,7 +29,7 @@ import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
 import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
 
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'follow-up' }>;
-type PreparedPrompt = { text: string; options: PromptOptions };
+type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
 type NativeAdmission = { skillsAvailable: boolean; profile: Agent | null };
 
 export class WorkerSession {
@@ -37,6 +38,8 @@ export class WorkerSession {
   private readonly operations = new Set<Promise<WorkerOperationResult>>();
   private readonly defaultToolNames: string[];
   private readonly defaultMountedNames: string[];
+  private readonly queuedContext = new WeakMap<AgentMessage, PreparedPrompt['context']>();
+  private readonly nativeQueuedPreparation: AgentSession['agent']['prepareQueuedMessages'];
   private binding: Promise<void> = Promise.resolve();
   private promptTask: Promise<void> | undefined;
   private preparation: Promise<PreparedPrompt> | undefined;
@@ -63,6 +66,25 @@ export class WorkerSession {
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
     this.defaultToolNames = session.getActiveToolNames();
     this.defaultMountedNames = session.getMountedXdevToolNames();
+    this.nativeQueuedPreparation = session.agent.prepareQueuedMessages;
+    session.agent.prepareQueuedMessages = async (messages, signal) => {
+      const nativePreparation = await this.nativeQueuedPreparation?.(messages, signal);
+      return {
+        commit: () => {
+          const nativeContext = nativePreparation?.commit();
+          if (nativePreparation && nativeContext === undefined) return undefined;
+          // Queued turns do not drain the SDK's direct-prompt nextTurn buffer.
+          // Native preparation commits these companions with the same user delivery.
+          const context: AgentMessage[] = [];
+          for (const message of messages) {
+            const captured = this.queuedContext.get(message);
+            if (captured) context.push(...captured);
+          }
+          if (nativeContext) context.push(...nativeContext);
+          return context;
+        },
+      };
+    };
     this.unsubscribe = session.subscribe(event => {
       try {
         this.emit(this.projection.consume(event));
@@ -277,7 +299,7 @@ export class WorkerSession {
     if (input.agentMention && options.agentId !== null && input.agentMention.agentId !== options.agentId) throw new ProjectionError(400, 'INVALID_REQUEST', 'Agent mention and selected profile disagree');
     await this.selectOptions(input.agentMention ? { ...options, agentId: input.agentMention.agentId } : options);
     let text = input.text;
-    const streamingInstructions: string[] = [];
+    const contextMessages: PreparedPrompt['context'] = [];
     const invocation = /^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
     if (invocation) text = await this.catalogs.skills.preparePrompt(invocation[1]!, invocation[2] ?? '');
     for (const context of input.context) {
@@ -285,23 +307,19 @@ export class WorkerSession {
         const message = context.kind === 'instruction'
           ? { role: 'developer' as const, content: context.text, timestamp: Date.now() }
           : { role: 'user' as const, content: context.text, synthetic: true, timestamp: Date.now() };
-        this.session.agent.appendMessage(message);
-        this.session.sessionManager.appendMessage(message);
-        if (context.kind === 'instruction') streamingInstructions.push(context.text);
+        contextMessages.push(message);
       } else {
-        await this.session.sendCustomMessage({
-          customType: 'ohpichamber.context', content: context.text, display: false,
+        contextMessages.push({
+          role: 'custom', customType: 'ohpichamber.context', content: context.text, display: false,
           details: { metadata: context.metadata, deliveryReceiptId: context.deliveryReceiptId },
-        }, { triggerTurn: false, deliverAs: 'nextTurn' });
+          attribution: 'agent', timestamp: Date.now(),
+        });
         if (context.instructions) {
           const message = { role: 'developer' as const, content: context.instructions, timestamp: Date.now() };
-          this.session.agent.appendMessage(message);
-          this.session.sessionManager.appendMessage(message);
-          streamingInstructions.push(context.instructions);
+          contextMessages.push(message);
         }
       }
     }
-    if (operation.type !== 'prompt' && streamingInstructions.length > 0) text = `${streamingInstructions.join('\n\n')}\n\n${text}`;
     const images: NonNullable<PromptOptions['images']> = [];
     for (const attachment of input.attachments) {
       const reference = operation.attachments?.find(item => item.attachmentId === attachment.attachmentId);
@@ -309,13 +327,24 @@ export class WorkerSession {
       if (attachment.mediaType.startsWith('image/')) {
         images.push({ type: 'image', data: (await readFile(reference.path)).toString('base64'), mimeType: attachment.mediaType });
       } else {
-        await this.session.sendCustomMessage({ customType: 'ohpichamber.attachment', display: false,
+        contextMessages.push({ role: 'custom', customType: 'ohpichamber.attachment', display: false,
           content: `Attached file ${attachment.name}: ${reference.path}`, details: attachment,
-        }, { triggerTurn: false, deliverAs: 'nextTurn' });
+          attribution: 'agent', timestamp: Date.now(),
+        });
+      }
+    }
+    if (operation.type === 'prompt') {
+      for (const message of contextMessages) {
+        if (message.role === 'custom') {
+          await this.session.sendCustomMessage(message, { triggerTurn: false, deliverAs: 'nextTurn' });
+        } else {
+          this.session.agent.appendMessage(message);
+          this.session.sessionManager.appendMessage(message);
+        }
       }
     }
     await this.session.sessionManager.flush();
-    return { text, options: { throwOnDrop: true, images, runCommands: false, expandPromptTemplates: false } };
+    return { text, options: { throwOnDrop: true, images, runCommands: false, expandPromptTemplates: false }, context: contextMessages };
   }
 
   operation(operation: WorkerOperation): Promise<WorkerOperationResult> {
@@ -379,8 +408,10 @@ export class WorkerSession {
             // Enforce the live-run contract there too instead of accidentally starting an idle turn.
             get expandPromptTemplates() { assertStreaming(); return false; },
             onPromptAdmitted: () => {
-              const queued = (streamingBehavior === 'steer' ? this.session.agent.peekSteeringQueue() : this.session.agent.peekFollowUpQueue()).at(-1);
+              const queue = streamingBehavior === 'steer' ? this.session.agent.peekSteeringQueue() : this.session.agent.peekFollowUpQueue();
+              const queued = queue.at(-1);
               if (!queued || queued.role !== 'user') throw new ProjectionError(503, 'INTERNAL_ERROR', 'Native queued user message is unavailable');
+              if (prepared.context.length > 0) this.queuedContext.set(queued, prepared.context);
               messageId = this.projection.admitQueuedPrompt(queued, operation.request.input.attachments);
               acceptedAt = Date.now();
             },
@@ -453,6 +484,7 @@ export class WorkerSession {
       await this.bind();
     } finally {
       this.unsubscribe();
+      this.session.agent.prepareQueuedMessages = this.nativeQueuedPreparation;
       try {
         try { await this.completion.close(); }
         finally {
