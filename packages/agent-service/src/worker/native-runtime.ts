@@ -60,6 +60,7 @@ export interface NativeWorkerRuntime {
   settings: Settings;
   modelsPath: string;
   bindSessionId: (currentNativeSessionId: () => string) => void;
+  effectiveEditMode: () => string;
 }
 
 export async function openNativeRuntime(input: { cwd: string; agentDirectory: string }): Promise<NativeWorkerRuntime> {
@@ -92,6 +93,10 @@ export async function openNativeRuntime(input: { cwd: string; agentDirectory: st
       models,
       settings,
       modelsPath,
+      effectiveEditMode: () => {
+        const configured = settings.get('editMode');
+        return typeof configured === 'string' && configured.length > 0 ? configured : 'replace';
+      },
       bindSessionId: next => { currentNativeSessionId = next; },
     };
   } catch (error) { authStorage.close(); throw error; }

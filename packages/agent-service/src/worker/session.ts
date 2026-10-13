@@ -87,9 +87,11 @@ export class WorkerSession {
     let projection: WorkerProjection | undefined;
     let owned: WorkerSession | undefined;
     const admission: NativeAdmission = { skillsAvailable: !input.skillSources, profile: null };
+    const effectiveEditMode = runtime.effectiveEditMode();
     const authorizeTool = (toolName: string, toolInput: JsonObject): Promise<void> => {
       const profile = admission.profile;
-      return authorize({ type: 'tool', toolName, input: toolInput, agentId: profile?.agentId, permissionPresetId: profile?.permissionPresetId });
+      const input = toolName === 'edit' ? { ...toolInput, mode: effectiveEditMode } : toolInput;
+      return authorize({ type: 'tool', toolName, input, agentId: profile?.agentId, permissionPresetId: profile?.permissionPresetId });
     };
     const worker = { workspaceId: input.workspaceId, rootSessionId: input.rootSessionId, workerGeneration: input.workerGeneration };
     const interaction = new NativeInteraction({ request: onInteraction, currentTurn: () => projection?.currentTurn()?.turnId });
