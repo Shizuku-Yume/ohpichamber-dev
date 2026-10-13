@@ -5,21 +5,23 @@ import { createSessionAssistRuntime } from './runtime.js';
 const scope = { sessionId: 'ses_1', rootSessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', cwd: '/repo' };
 const rootSession = { sessionId: 'ses_1', projectId: 'project-1', workspaceId: 'workspace-1', displayPath: '.', rootSessionId: 'ses_1', createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null };
 const childSession = { ...rootSession, sessionId: 'ses_child', rootSessionId: 'ses_1' };
+const turn = { turnId: 'turn_1', sessionId: 'ses_1', runId: 'run_1', status: 'completed', userMessageId: 'user-1', assistantMessageIds: ['assistant-1'], startedAt: 1, finishedAt: 3 };
 const messages = [
-  { messageId: 'assistant-1', role: 'assistant', createdAt: 2, completedAt: 3, providerId: 'provider-1', modelId: 'model-1', parts: [{ type: 'text', content: 'Finished the work.' }] },
-  { messageId: 'user-1', role: 'user', createdAt: 1, parts: [{ type: 'text', content: 'Please finish the work.' }] },
+  { messageId: 'user-1', sessionId: 'ses_1', turnId: 'turn_1', role: 'user', createdAt: 1, parts: [{ type: 'text', partId: 'part-user', content: 'Please finish the work.' }] },
+  { messageId: 'assistant-1', sessionId: 'ses_1', turnId: 'turn_1', role: 'assistant', createdAt: 2, providerId: 'provider-1', modelId: 'model-1', parts: [{ type: 'text', partId: 'part-assistant', content: 'Finished the work.' }] },
 ];
 
 const makeRuntime = ({ persistSessionAssist, getSmallModelService, session = rootSession, quietMs = 0 } = {}) => createSessionAssistRuntime({
   sessionService: {
     open: async () => ({ session }),
-    history: async () => ({ messages, nextCursor: null }),
+    history: async () => ({ sessionId: session.sessionId, branch: { branchId: 'branch-1', branchVersion: '1', leafMessageId: 'assistant-1' }, turns: [turn], messages, nextCursor: null }),
   },
   resolveSessionScope: async () => ({ ...scope, sessionId: session.sessionId }),
   getSmallModelService: getSmallModelService || (async () => ({
-    describeSmallModel: async () => ({ inputCharBudget: 20_000 }),
-    generateSmallModelText: async () => ({ text: '{"recap":"done","suggestion":"next"}' }),
+    describeSmallModel: async ({ preferredProviderID, preferredModelID }) => ({ inputCharBudget: 20_000, providerID: preferredProviderID, modelID: preferredModelID }),
+    generateSmallModelText: async ({ preferredProviderID, preferredModelID }) => ({ text: preferredProviderID === 'provider-1' && preferredModelID === 'model-1' ? '{"recap":"done","suggestion":"next"}' : '{}' }),
   })),
+  getTargets: () => ({ recap: true, suggestion: true }),
   persistSessionAssist,
   quietMs,
 });

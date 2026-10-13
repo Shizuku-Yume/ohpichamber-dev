@@ -44,57 +44,58 @@ function attachedText(message) {
   return null;
 }
 
-// Records OpenCode appends around a turn that carry no conversation content:
-// the `idle` marker that closes every turn and the agent/model/location
-// switches. They are invisible to turn boundaries and to "what is the newest
-// message". An `idle` whose outcome is not `succeeded` is not transparent: it
-// is the evidence that the turn failed or was interrupted.
+// Canonical HistoryPage records are chronological Message objects. Legacy
+// service markers are still ignored when a provider exposes them, but they do
+// not determine canonical turn completion.
 const TRANSPARENT_TYPES = new Set(['agent-switched', 'model-switched', 'location-switched']);
 
 function isTransparent(record) {
+  if (record?.role === 'system') return true;
   if (record?.type === 'idle') return record.outcome === 'succeeded';
   return TRANSPARENT_TYPES.has(record?.type);
 }
 
-/**
- * The id of the newest record that is conversation content, given a page in
- * v2's newest-first order; null when the page holds only service records.
- * Both the assist reader and the pre-write re-check use it so they agree on
- * what "the last message" is.
- */
+/** The newest conversation record in a chronological HistoryPage. */
 export function newestContentId(records) {
-  for (const record of Array.isArray(records) ? records : []) {
-    if (!record?.id || isTransparent(record)) continue;
-    return record.id;
+  const list = Array.isArray(records) ? records : [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const record = list[index];
+    if (!record || isTransparent(record)) continue;
+    const id = record.messageId || record.id;
+    if (id) return id;
   }
   return null;
 }
 
-/**
- * v2 message records are flat: an assistant message carries `content[]`, a user
- * message a single `text` plus its attachments, and context items that used to
- * ride along as `synthetic` text parts are their own `synthetic` messages now.
- * Tool payloads never enter this view.
- */
-function readMessage(message) {
-  const role = message.role;
+
+/** Read canonical Message text and derive completion from its Turn. */
+function readMessage(message, completedTurnIds = new Set()) {
+  const role = message.role || message.type;
   const blocks = [];
   const authored = [];
-  const textParts = Array.isArray(message.parts) ? message.parts.filter((part) => part?.type === 'text' && typeof part.content === 'string') : [];
+  const textParts = Array.isArray(message.parts)
+    ? message.parts.filter((part) => part?.type === 'text' && typeof part.content === 'string')
+    : Array.isArray(message.content)
+      ? message.content.filter((part) => part?.type === 'text' && typeof (part.text ?? part.content) === 'string')
+      : [];
   if (role === 'user' || role === 'synthetic') {
     const attached = attachedText(message);
     if (attached) { blocks.push(attached.text); authored.push(attached.authored); }
-    else if (textParts.length) { blocks.push(textParts.map((part) => part.content).join('\n\n')); authored.push(blocks[0]); }
-  } else if (role === 'assistant') blocks.push(...textParts.map((part) => part.content));
+    else if (typeof message.text === 'string') { blocks.push(message.text); authored.push(message.text); }
+    else if (textParts.length) { blocks.push(textParts.map((part) => part.content ?? part.text).join('\n\n')); authored.push(blocks[0]); }
+  } else if (role === 'assistant') blocks.push(...textParts.map((part) => part.content ?? part.text));
+  const completed = completedTurnIds.has(message.turnId)
+    || (Number.isFinite(message.completedAt) && !message.error)
+    || (message.finish === 'stop' && !message.error);
   return {
     id: message.messageId || message.id,
     role,
-    created: Number.isFinite(message.createdAt) ? message.createdAt : null,
+    created: Number.isFinite(message.createdAt) ? message.createdAt : message.time?.created ?? null,
     completed: Number.isFinite(message.completedAt) ? message.completedAt : null,
-    transparent: false,
-    providerId: message.providerId,
-    modelId: message.modelId,
-    complete: role === 'assistant' && Boolean(message.completedAt) && !message.error,
+    transparent: role === 'system' || isTransparent(message),
+    providerId: message.providerId || message.model?.providerID,
+    modelId: message.modelId || message.model?.id,
+    complete: role === 'assistant' && completed,
     text: excerpt(blocks.join('\n\n').trim(), role === 'user' ? USER_CHAR_LIMIT : ANSWER_CHAR_LIMIT),
     authored: excerpt(authored.filter(Boolean).join('\n\n').trim(), USER_CHAR_LIMIT),
   };
@@ -152,20 +153,23 @@ export async function loadSettledTurns({ readPage, signal }) {
   let cursor;
   const cursors = new Set();
   const ids = new Set();
+  const completedTurnIds = new Set();
   for (let pageNumber = 0; pageNumber < MAX_PAGES; pageNumber++) {
     signal?.throwIfAborted();
     const page = await readPage({ limit: PAGE_SIZE, cursor });
     signal?.throwIfAborted();
     if (!Array.isArray(page?.messages)) throw new Error('Session history page is unavailable');
-    const older = [];
+    for (const turn of Array.isArray(page.turns) ? page.turns : []) {
+      if (turn.status === 'completed') completedTurnIds.add(turn.turnId);
+    }
+    const current = [];
     for (const record of page.messages) {
       const id = record?.messageId || record?.id;
       if (!id || ids.has(id)) continue;
       ids.add(id);
-      older.push(readMessage(record));
+      current.push(readMessage(record, completedTurnIds));
     }
-    older.reverse();
-    messages = older.concat(messages);
+    messages = messages.concat(current);
     const settled = settledTurns(messages);
     const next = typeof page.nextCursor === 'string' ? page.nextCursor : null;
     if (settled.length === TURN_LIMIT || !next) return settled;
@@ -182,35 +186,39 @@ export async function loadAssistContext({ readPage, signal }) {
   let cursor;
   const cursors = new Set();
   const ids = new Set();
+  const completedTurnIds = new Set();
   for (let pageNumber = 0; pageNumber < MAX_PAGES; pageNumber++) {
     signal.throwIfAborted();
     const page = await readPage({ limit: PAGE_SIZE, cursor });
     signal.throwIfAborted();
     if (!Array.isArray(page?.messages)) throw new Error('Session message page is unavailable');
-    const older = [];
+    for (const turn of Array.isArray(page.turns) ? page.turns : []) {
+      if (turn.status === 'completed') completedTurnIds.add(turn.turnId);
+    }
+    const current = [];
     for (const record of page.messages) {
       const id = record?.messageId || record?.id;
       if (!id || ids.has(id)) continue;
       ids.add(id);
-      older.push(readMessage(record));
+      current.push(readMessage(record, completedTurnIds));
     }
-    older.reverse();
-    messages = older.concat(messages);
+    messages = messages.concat(current);
     const next = typeof page.nextCursor === 'string' ? page.nextCursor : null;
-    // A successful turn ends with an `idle` marker after the answer; look past
-    // it and its siblings to the newest content record.
     const last = messages.findLast((message) => !message.transparent);
     if (!last) {
       if (!next || pageNumber === MAX_PAGES - 1) return null;
     } else {
-      if (!last.complete || !last.text) return null;
-      const turns = collectTurns(messages);
-      if (turns.length === TURN_LIMIT || !next || pageNumber === MAX_PAGES - 1) {
-        if (!turns.at(-1)?.complete || turns.at(-1).assistant.id !== last.id) return null;
-        return { turns, last };
+      if (!last.complete || !last.text) {
+        if (!next || pageNumber === MAX_PAGES - 1) return null;
+      } else {
+        const turns = collectTurns(messages);
+        if (turns.length === TURN_LIMIT || !next || pageNumber === MAX_PAGES - 1) {
+          if (!turns.at(-1)?.complete || turns.at(-1).assistant.id !== last.id) return null;
+          return { turns, last };
+        }
       }
     }
-    if (cursors.has(next)) throw new Error('Session message pagination made no progress');
+    if (cursors.has(next)) throw new Error('Session history pagination made no progress');
     cursors.add(next);
     cursor = next;
   }

@@ -2,35 +2,33 @@ import { describe, expect, it } from 'vitest';
 import { excerpt, loadAssistContext, loadSettledTurns, newestContentId } from './context.js';
 import { buildAssistPrompt } from './prompt.js';
 
-// v2 message records are flat and a page lists them newest first.
-const user = (id, text, extra = {}) => ({ id, type: 'user', text, ...extra });
+// HistoryPage messages are chronological; turns carry completion separately.
+const user = (id, text, extra = {}) => ({ messageId: id, sessionId: 'ses_1', turnId: extra.turnId || `turn-${id}`, role: 'user', createdAt: 1, parts: [{ type: 'text', partId: `part-${id}`, content: text }], ...extra });
 const assistant = (id, text, extra = {}) => ({
-  id,
-  type: 'assistant',
-  content: text ? [{ type: 'text', text }] : [],
+  messageId: id,
+  sessionId: 'ses_1',
+  turnId: extra.turnId || `turn-${id}`,
+  role: 'assistant',
+  createdAt: 2,
+  providerId: 'provider',
+  modelId: 'model',
+  parts: text ? [{ type: 'text', partId: `part-${id}`, content: text }] : [],
   finish: 'stop',
-  time: { completed: 1 },
-  model: { providerID: 'provider', id: 'model' },
   ...extra,
 });
 const synthetic = (id, text, extra = {}) => ({ id, type: 'synthetic', text, ...extra });
-// OpenCode closes every turn with an idle marker; a switch is appended when
-// the user changes model or agent between turns.
 const idle = (id, outcome = 'succeeded') => ({ id, type: 'idle', outcome, time: { created: 2 } });
 const modelSwitch = (id) => ({ id, type: 'model-switched', model: { providerID: 'p', id: 'm' } });
-
-const pair = (id) => [user(`u${id}`, `request ${id}`), assistant(`a${id}`, `answer ${id}`)];
-
-/** `data` is given oldest-first here and reversed, the way OpenCode serves it. */
-const page = (data, next = null) => ({ data: [...data].reverse(), cursor: next ? { next } : {} });
+const pair = (id) => [user(`u${id}`, `request ${id}`, { turnId: `turn-${id}` }), assistant(`a${id}`, `answer ${id}`, { turnId: `turn-${id}` })];
+const page = (data, next = null) => ({ messages: [...data], turns: [], nextCursor: next });
 const load = (readPage) => loadAssistContext({ readPage, signal: new AbortController().signal });
 
 describe('session assist context', () => {
   it('stops paging at three human turns and excludes tools and injected instructions', async () => {
     let calls = 0;
     const records = [...pair(1), ...pair(2), ...pair(3), ...pair(4)];
-    records.at(-1).content.push(
-      { type: 'tool', tool: 'bash', state: { output: 'TOOL_PAYLOAD' } },
+    records.at(-1).parts.push(
+      { type: 'tool_call', toolName: 'bash', input: { output: 'TOOL_PAYLOAD' } },
     );
     const context = await load(async ({ limit, cursor }) => {
       calls++;
@@ -159,9 +157,9 @@ describe('session assist context', () => {
     expect(context?.last.id).toBe('a1');
   });
 
-  it('names the newest content record of a newest-first page', () => {
-    expect(newestContentId([idle('i'), modelSwitch('m'), assistant('a', 'x'), user('u', 'y')])).toBe('a');
-    expect(newestContentId([idle('i', 'failed'), assistant('a', 'x')])).toBe('i');
+  it('names the newest content record of a chronological HistoryPage', () => {
+    expect(newestContentId([idle('i'), modelSwitch('m'), assistant('a', 'x'), user('u', 'y')])).toBe('u');
+    expect(newestContentId([idle('i', 'failed'), assistant('a', 'x')])).toBe('a');
     expect(newestContentId([idle('i')])).toBeNull();
     expect(newestContentId(undefined)).toBeNull();
   });
