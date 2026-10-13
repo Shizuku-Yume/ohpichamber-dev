@@ -1,10 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import type { Serializable } from 'node:child_process';
 import { isDeepStrictEqual } from 'node:util';
-import { HostAuthorizationScopeSchema, HostWorkerAuthorizationReplySchema, HostWorkerAuthorizationRequestSchema } from './host-authorization-protocol.ts';
-import type { HostAuthorizationScope } from './host-authorization-protocol.ts';
+import {
+  HostAuthorizationScopeSchema,
+  HostWorkerAuthorizationRequestSchema,
+  nativeEditDescriptor,
+  type HostAuthorizationScope,
+  type NativeOperationDescriptor,
+  type NativePolicyResolver,
+} from './host-authorization-protocol.ts';
 import type { WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
-
 const unavailable = (): WorkerPolicyResult => ({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 });
 
 /** This process owns no permission authority; only its captured Node Host can grant work. */
@@ -25,7 +30,7 @@ export class HostWorkerAuthorization {
   };
   private readonly onDisconnect = (): void => this.close();
 
-  constructor(private readonly resolveScope: (rootSessionId: string) => HostAuthorizationScope | undefined) {
+  constructor(private readonly resolveScope: (rootSessionId: string) => HostAuthorizationScope | undefined, private readonly resolvePolicy?: NativePolicyResolver) {
     process.on('message', this.onMessage);
     process.once('disconnect', this.onDisconnect);
   }
@@ -36,9 +41,13 @@ export class HostWorkerAuthorization {
     try { captured = this.resolveScope(rootSessionId); } catch { return unavailable(); }
     const scope = HostAuthorizationScopeSchema.safeParse(captured);
     if (!scope.success || scope.data.rootSessionId !== rootSessionId) return { allowed: false, code: 'UNAUTHORIZED', status: 403 };
-    const requestId = randomUUID();
-    const message = HostWorkerAuthorizationRequestSchema.safeParse({ type: 'worker.authorization.request', requestId, scope: scope.data, request });
+    const message = HostWorkerAuthorizationRequestSchema.safeParse({
+      type: 'worker.authorization.request', requestId: randomUUID(), scope: scope.data, request,
+    });
     if (!message.success) return { allowed: false, code: 'UNAUTHORIZED', status: 403 };
+    const requestId = message.data.requestId;
+    if (descriptor && this.resolvePolicy) return this.resolvePolicy(scope.data, descriptor);
+    if (descriptor) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 };
     return new Promise<WorkerPolicyResult>(resolve => {
       const fail = (): void => {
         const pending = this.pending.get(requestId);
@@ -52,6 +61,12 @@ export class HostWorkerAuthorization {
       process.send!(message.data, error => { if (error) fail(); });
     });
   };
+  private describe(request: WorkerPolicyRequest): NativeOperationDescriptor | undefined {
+    if (request.type !== 'tool') return undefined;
+    if (request.toolName !== 'edit') return { toolName: request.toolName, sourcePaths: [], destinationPaths: [], fileOps: [] };
+    const mode = typeof request.input.mode === 'string' ? request.input.mode : 'replace';
+    return nativeEditDescriptor(mode, request.input);
+  }
 
   close(): void {
     if (this.closed) return;
