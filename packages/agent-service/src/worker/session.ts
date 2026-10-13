@@ -69,7 +69,7 @@ export class WorkerSession {
 
   static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, authorize: WorkerAuthorize): Promise<WorkerSession> {
     if (input.mcpConfiguration && !input.mcpConfigPath) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'MCP storage ownership is missing');
-    if (input.skillSources && (!input.agentDirectoryId || input.catalogRevision === undefined || BigInt(input.catalogRevision) === 0n)) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Skill source ownership or publication revision is missing');
+    if (input.skillSources && !input.agentDirectoryId) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Skill source ownership is missing');
     const runtime = await openNativeRuntime(input);
     const { authStorage, settings, modelRegistry } = runtime;
     let manager: SessionManager | undefined;
@@ -175,7 +175,8 @@ export class WorkerSession {
         const applied = await mcp.apply({ persistedRevision: input.mcpConfiguration.persistedRevision }, input.mcpConfiguration);
         if (applied.outcome !== 'applied') throw new ProjectionError(503, 'MCP_APPLY_FAILED', 'Initial MCP configuration could not be applied');
       }
-      if (input.skillSources && input.catalogRevision) await catalogs.skills.apply(input.skillSources, input.catalogRevision);
+      // Skill publications are generation-local; an untouched configuration still has CAS revision zero.
+      if (input.skillSources) await catalogs.skills.apply(input.skillSources, '1');
       if (input.options) await owned.selectOptions(input.options);
       await initializeExtensions(nativeSession, {
         mode: 'rpc', uiContext: interaction.ui,
