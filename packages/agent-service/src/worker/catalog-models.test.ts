@@ -125,16 +125,19 @@ test('disabling and deleting the last allowlisted model never enables unrelated 
 test('model selection reapplies a changed native context policy even when models.yml is unchanged', async () => {
   const fixture = await openCatalogFixture();
   try {
-    const promotable = fixture.reader.modelRegistry.getAll('all').find(model => model.contextPromotionTarget !== undefined);
-    if (!promotable) throw new Error('Pinned native catalog must contain a context promotion model');
-    const selection = { providerId: promotable.provider, modelId: promotable.id };
+    // Promotion targets route to another model; a published long-context tier
+    // exercises this model's settings-dependent window without missing token limits.
+    const published = getBundledModel('openai', 'gpt-5.6');
+    const selection = { providerId: published.provider, modelId: published.id };
     cfgExtendedContext.set(fixture.writer.settings, false);
     await fixture.writer.settings.flush();
     const before = (await fixture.reader.models.selection(selection)).nativeModel.contextWindow;
     cfgExtendedContext.set(fixture.writer.settings, true);
     await fixture.writer.settings.flush();
     const after = (await fixture.reader.models.selection(selection)).nativeModel.contextWindow;
-    expect(after).not.toBe(before);
+    expect(before).toBe(published.cost.longContext?.inputThreshold);
+    expect(after).toBe(published.contextWindow);
+    expect(after).toBeGreaterThan(before);
   } finally { await fixture.close(); }
 });
 
