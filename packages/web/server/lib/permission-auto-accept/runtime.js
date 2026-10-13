@@ -182,12 +182,15 @@ export function createPermissionAutoAcceptRuntime({
     while (current && !seen.has(current)) {
       if (Object.hasOwn(policy.sessions, current)) return policy.sessions[current];
       seen.add(current);
-      let info;
-      try {
-        info = await request(`/api/agent/v1/sessions/${encodeURIComponent(current)}/snapshot`);
-        info = info?.session ?? info;
-      } catch {
-        return 'ask';
+      let info = sessions.get(current);
+      if (!info) {
+        try {
+          const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(current)}/snapshot`));
+          rememberSession(snapshot.session, directory);
+          info = sessions.get(current);
+        } catch {
+          return 'ask';
+        }
       }
       current = info?.parentSessionId ?? null;
     }
@@ -266,7 +269,7 @@ export function createPermissionAutoAcceptRuntime({
   };
 
   const listActiveSessions = async () => {
-    const workspacePage = z.strictObject({ items: z.array(z.strictObject({ workspaceId: z.string().min(1) })), errors: z.record(z.string()) }).parse(await listWorkspaceScopes());
+    const workspacePage = z.strictObject({ items: z.array(z.strictObject({ workspaceId: z.string().min(1) })), errors: z.record(z.string(), z.string()) }).parse(await listWorkspaceScopes());
     const sessionsList = [];
     for (const { workspaceId } of workspacePage.items) {
       try {
@@ -319,7 +322,7 @@ export function createPermissionAutoAcceptRuntime({
     const directory = typeof scope?.cwd === 'string' && scope.cwd ? scope.cwd : undefined;
     if (payload.type === 'session.updated' && payload.session) {
       rememberSession(payload.session, directory);
-      if (!payload.session.parentSessionId) void applyDefaultMode(payload.session.sessionId).catch((error) => console.warn('[permission-auto-accept] failed to apply the default mode:', error?.message ?? error));
+      if (payload.session.rootSessionId === payload.session.sessionId) void applyDefaultMode(payload.session.sessionId).catch((error) => console.warn('[permission-auto-accept] failed to apply the default mode:', error?.message ?? error));
       return;
     }
     if (payload.type === 'session.status') {

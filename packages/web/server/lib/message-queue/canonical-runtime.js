@@ -245,6 +245,7 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
           schedule(scope);
         }
       } else if (event.type === 'session.status' && event.runtimeStatus === 'idle') schedule(scope);
+    },
     setHold: (scope, held, ttlMs = 300_000) => {
       queueScope(scope);
       if (typeof held !== 'boolean' || !Number.isFinite(ttlMs) || ttlMs <= 0) throw new PromptQueueError('INVALID_REQUEST', 400, 'Queue hold requires held and a positive duration');

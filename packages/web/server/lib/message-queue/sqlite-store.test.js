@@ -67,7 +67,8 @@ test('malformed owner and failed disk writes cannot erase valid sibling queues',
   await store.append(sibling, randomUUID(), { expectedRevision: '0', content: 'second', request: request('second') });
   db.prepare('UPDATE prompt_queue_item SET payload = ? WHERE session_id = ?').run('{malformed', sibling.sessionId);
   const listed = await store.list();
-  assert.deepEqual(listed.items, [{ scope, queue: first }]); assert.equal(listed.errors[0].scope.sessionId, sibling.sessionId);
+  assert.deepEqual(listed.items, [{ scope, queue: first }]);
+  assert.deepEqual(listed.errors, [{ sessionId: sibling.sessionId, code: 'INTERNAL_ERROR', storage: 'corrupt' }]);
   await assert.rejects(store.getState(sibling), { code: 'INTERNAL_ERROR', details: { storage: 'corrupt' } });
   db.exec('PRAGMA query_only = ON');
   await assert.rejects(append(store, '1', 'not committed'), { code: 'INTERNAL_ERROR', details: { storage: 'write_failed' } });

@@ -62,6 +62,41 @@ export const ensureHostMetadataSchema = (db) => {
       scope TEXT PRIMARY KEY,
       payload TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS host_agent_projects (
+      project_id TEXT PRIMARY KEY,
+      host_project_id TEXT NOT NULL,
+      directory TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      display_path TEXT
+    );
+    CREATE TABLE IF NOT EXISTS host_agent_directories (
+      agent_directory_id TEXT PRIMARY KEY,
+      directory TEXT NOT NULL UNIQUE
+    );
+    CREATE TABLE IF NOT EXISTS host_agent_workspaces (
+      workspace_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      cwd TEXT NOT NULL,
+      agent_directory_id TEXT NOT NULL,
+      UNIQUE (project_id, cwd)
+    );
+    CREATE TABLE IF NOT EXISTS host_agent_sessions (
+      session_id TEXT PRIMARY KEY,
+      root_session_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      agent_directory_id TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS host_attachments (
+      attachment_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      agent_directory_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      storage_name TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS metadata_conversion (
       source TEXT PRIMARY KEY,
       completed INTEGER NOT NULL CHECK (completed IN (0, 1))

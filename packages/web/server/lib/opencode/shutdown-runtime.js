@@ -6,7 +6,9 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     getIsShuttingDown,
     setIsShuttingDown,
     syncToHmrState,
-    openCodeWatcherRuntime,
+    globalMessageStreamHub,
+    hostAgentRuntime,
+    permissionAutoAcceptRuntime,
     sessionRuntime,
     sessionAssistRuntime,
     sessionWorkRuntime,
@@ -83,7 +85,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       () => getSpacesHost()?.close(),
       () => getRelayService()?.stop(),
       () => getDictationRuntime()?.stop(),
-      () => openCodeWatcherRuntime.stop(),
+      () => permissionAutoAcceptRuntime.stop(),
       () => sessionRuntime.dispose(),
       () => sessionAssistRuntime?.stop?.(),
       () => sessionWorkRuntime?.stop?.(),
@@ -93,6 +95,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       () => dispatchResultsRuntime?.stop?.(),
       () => messageSearchRuntime?.stop?.(),
       () => scheduledTasksRuntime?.stop?.(),
+      () => globalMessageStreamHub.stop(),
       stopAllGuestServices,
     ];
     for (const cleanup of cleanupOperations) {
@@ -181,6 +184,9 @@ export const createGracefulShutdownRuntime = (dependencies) => {
         }
       }
     }
+
+    // Stop SDK workers and drain private Host callbacks before closing their operational state.
+    await hostAgentRuntime.close();
 
     // No producer or HTTP admission remains; drain accepted metadata operations
     // before the sole owner closes its shared SQLite connection.

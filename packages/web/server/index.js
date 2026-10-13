@@ -41,18 +41,16 @@ import {
 } from './lib/tunnels/types.js';
 import { prepareNotificationLastMessage } from './lib/notifications/index.js';
 import { registerTtsRoutes } from './lib/tts/routes.js';
+import { createTTSService } from './lib/tts/service.js';
 import { detectSayTtsCapability } from './lib/tts/capability-runtime.js';
 import { createTerminalRuntime } from './lib/terminal/runtime.js';
 import { createDictationRuntime } from './lib/dictation/runtime.js';
 import {
   createGlobalUiEventBroadcaster,
-  translateWireEvent,
   createGlobalMessageStreamHub,
   createMessageStreamWsRuntime,
-  resolveDeltaCoalesceWindowMs,
-  DEFAULT_UPSTREAM_STALL_TIMEOUT_MS,
-  UPSTREAM_STALL_TIMEOUT_CONCURRENT_MS,
 } from './lib/event-stream/index.js';
+import { DEFAULT_UPSTREAM_STALL_TIMEOUT_MS, UPSTREAM_STALL_TIMEOUT_CONCURRENT_MS } from './lib/event-stream/upstream-reader.js';
 import { createFsSearchRuntime as createFsSearchRuntimeFactory } from './lib/fs/search.js';
 import { createOpenCodeLifecycleRuntime } from './lib/opencode/lifecycle.js';
 import { createOpenCodeEnvRuntime } from './lib/opencode/env-runtime.js';
@@ -82,9 +80,7 @@ import { runOpenCodeCliUpgrade } from './lib/opencode/cli-upgrade.js';
 import { resolveOpenCodeUpgradeCapability } from './lib/opencode/upgrade-capability.js';
 import { createBootstrapRuntime } from './lib/opencode/bootstrap-runtime.js';
 import { createSessionRuntime } from './lib/opencode/session-runtime.js';
-import { configureOpenCodeRuntimeProviders, resetOpenCodeRuntimeProviders } from './lib/small-model/client.js';
-import { configureOpenCodeCredentials, openCodeCredentialSource } from './lib/opencode/auth.js';
-import { createOpenCodeWatcherRuntime } from './lib/opencode/watcher.js';
+import { configureAgentService } from './lib/small-model/client.js';
 import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
 import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
 import { createContextObligatoryRuntime } from './lib/context-obligatory/runtime.js';
@@ -93,6 +89,7 @@ import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.j
 import { createMessageSearchRuntime } from './lib/message-search/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
 import { resolveSessionDefaults } from './lib/scheduled-tasks/session-defaults.js';
+import { createScheduledTaskContext } from './lib/scheduled-tasks/existing-session.js';
 import { createChatsScope } from './lib/scheduled-tasks/chats-scope.js';
 import { createServerStartupRuntime } from './lib/host/server-startup-runtime.js';
 import { createTunnelWiringRuntime } from './lib/host/tunnel-wiring-runtime.js';
@@ -105,7 +102,7 @@ import { createPushRuntime } from './lib/notifications/push-runtime.js';
 import { createApnsRuntime } from './lib/notifications/apns-runtime.js';
 import { createNotificationTemplateRuntime } from './lib/notifications/template-runtime.js';
 import { createPermissionAutoAcceptRuntime } from './lib/permission-auto-accept/runtime.js';
-import { createMessageQueueRuntime } from './lib/message-queue/runtime.js';
+import { createCanonicalQueueRuntime, createPromptQueueStore, registerCanonicalQueueRoutes } from './lib/message-queue/runtime.js';
 import { createDispatchResultsRuntime } from './lib/dispatch-results/runtime.js';
 import { createRoutingRuntime } from './lib/routing/runtime.js';
 import { createJevClient } from './lib/routing/jev.js';
@@ -129,7 +126,7 @@ import { createSpaceArchive } from './lib/spaces/space-archive.js';
 import { readIdleStopSetting, startIdleStop } from './lib/spaces/idle-stop.js';
 import { SPACE_IDLE_EXIT_CODE } from './lib/spaces/layout.js';
 import { createSwitchController, registerSpaceRoutes } from './lib/spaces/routes.js';
-import { configureGitEnvironment, resolvePrimaryWorktreeRoot } from './lib/git/service.js';
+import { configureGitEnvironment, resolvePrimaryWorktreeRoot, getWorktrees } from './lib/git/service.js';
 import { createEnvironmentStore } from './lib/environment/store.js';
 import { createEnvironmentRuntime } from './lib/environment/runtime.js';
 import { readOpenCodeServiceEnv } from './lib/environment/opencode-service-env.js';
@@ -141,15 +138,20 @@ import { attachRealtimeProxy } from './lib/realtime-proxy.js';
 import { createRelayService, relayBlockedByEnterprise } from './lib/relay/service.js';
 import { createRelayHostLock } from './lib/relay/host-lock.js';
 import { createRelayKeyStore } from './lib/relay/key-store.js';
-import { createAgentToolRuntime } from './lib/agent-tool/runtime.js';
 import { createBrowserControlBroker } from './lib/browser-control/broker.js';
 import { createBrowserControlRouter } from './lib/browser-control/provider.js';
 import { createDevServerScanner } from './lib/dev-servers/routes.js';
 import { createDevTunnelRuntime } from './lib/dev-tunnel/runtime.js';
 import { registerBrowserControlRoutes } from './lib/browser-control/routes.js';
 import { createManagedConfigRuntime } from './lib/opencode/managed-config-file.js';
-import { createOpenChamberSessionService } from './lib/openchamber-sessions/routes.js';
+import { createOpenChamberSessionService, registerCanonicalSessionRoutes } from './lib/openchamber-sessions/routes.js';
 import { createHostSessionState } from './lib/host/session-state.js';
+import { createHostAgentScopeRuntime } from './lib/host/agent-scope-runtime.js';
+import { createHostAgentRuntime } from './lib/host/agent-runtime.js';
+import { createAttachmentRoutes } from './lib/host/attachment-routes.js';
+import { createLegacyAttachmentImporter } from './lib/host/legacy-attachment-importer.js';
+import { createHostPromptDeliveryRuntime } from './lib/host/prompt-delivery-runtime.js';
+import { createSelectedCredentialResolver, createSelectedCredentialHandoff, createCatalogCredentialSelections } from './lib/host/private-credential.js';
 import { createOpenCodeClient } from './lib/openchamber-sessions/opencode-client.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
@@ -344,20 +346,13 @@ const saveImportedTheme = (...args) => themeRuntime.saveImportedTheme(...args);
 const deleteImportedTheme = (...args) => themeRuntime.deleteImportedTheme(...args);
 
 let notificationTemplateRuntime = null;
-let agentToolRuntime = null;
 let managedConfigRuntime = null;
 
-const createTimeoutSignal = (...args) => notificationTemplateRuntime.createTimeoutSignal(...args);
-const formatProjectLabel = (...args) => notificationTemplateRuntime.formatProjectLabel(...args);
 const resolveNotificationTemplate = (...args) => notificationTemplateRuntime.resolveNotificationTemplate(...args);
 const shouldApplyResolvedTemplateMessage = (...args) => notificationTemplateRuntime.shouldApplyResolvedTemplateMessage(...args);
-const fetchFreeZenModels = (...args) => notificationTemplateRuntime.fetchFreeZenModels(...args);
-const extractTextFromParts = (...args) => notificationTemplateRuntime.extractTextFromParts(...args);
 const extractLastMessageText = (...args) => notificationTemplateRuntime.extractLastMessageText(...args);
 const fetchLastAssistantMessageText = (...args) => notificationTemplateRuntime.fetchLastAssistantMessageText(...args);
-const maybeCacheSessionInfoFromEvent = (...args) => notificationTemplateRuntime.maybeCacheSessionInfoFromEvent(...args);
 const buildTemplateVariables = (...args) => notificationTemplateRuntime.buildTemplateVariables(...args);
-const getCachedZenModels = (...args) => notificationTemplateRuntime.getCachedZenModels(...args);
 
 const OPENCHAMBER_DATA_DIR = OPENCHAMBER_USER_CONFIG_ROOT;
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
@@ -553,7 +548,65 @@ const broadcastOpenChamberUiEvent = createGlobalUiEventBroadcaster({
 
 // Operational session state remains Host-owned when agent execution is unavailable.
 const hostSessionState = createHostSessionState({ dataDir: OPENCHAMBER_DATA_DIR });
-const { sessionMetadataStore, archiveStore, sessionFoldersStore } = hostSessionState;
+const { sessionMetadataStore, archiveStore, sessionFoldersStore, agentScopeStore, attachmentStore } = hostSessionState;
+const scheduledChatsScope = createChatsScope(OPENCHAMBER_CHATS_DIR);
+const agentScopeRuntime = createHostAgentScopeRuntime({
+  store: agentScopeStore,
+  readSettings: readSettingsFromDiskStrict,
+  sanitizeProjects,
+  validateDirectoryPath,
+  getWorktrees,
+  managedChatsScope: scheduledChatsScope,
+  fsPromises,
+});
+const hostAgentRuntime = createHostAgentRuntime({
+  dataDir: OPENCHAMBER_DATA_DIR,
+  scopeRuntime: agentScopeRuntime,
+  validateDirectoryPath,
+  getEnvironmentForDirectory: async (directory) => await environmentRuntime.forDirectory(directory) ?? {},
+  invokeHostAction: (scope, request, signal) => openChamberControlService.invokeHostAction(scope, request, signal),
+});
+const promptQueueStore = createPromptQueueStore({ dataDir: OPENCHAMBER_DATA_DIR });
+const resolveCredential = createSelectedCredentialResolver({
+  service: hostAgentRuntime.service,
+  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+});
+const resolveCredentialHandoff = createSelectedCredentialHandoff({
+  service: hostAgentRuntime.service,
+  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+});
+const { resolveQuotaSelection, listQuotaSelections, resolveTtsSelection } = createCatalogCredentialSelections({
+  service: hostAgentRuntime.service,
+  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+  getQuotaProviders: () => import('./lib/quota/index.js'),
+});
+const ttsService = createTTSService({ resolveCredential });
+const resolveAttachments = (scope, attachments) => attachmentStore.resolveAttachments(scope, attachments);
+const importLegacyAttachment = createLegacyAttachmentImporter({
+  store: attachmentStore,
+  resolveWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
+  maxBytes: 20 * 1024 * 1024,
+});
+const listWorkspaceScopes = async () => {
+  const listed = await agentScopeRuntime.listWorkspaces();
+  return { items: listed.items.map(({ workspaceId }) => ({ workspaceId })), errors: listed.errors };
+};
+const listQueueScopes = async () => {
+  const stored = await promptQueueStore.list();
+  const items = [];
+  const errors = [...stored.errors];
+  for (const entry of stored.items) {
+    try {
+      const scope = await hostAgentRuntime.resolveHostSessionScope(entry.scope.sessionId);
+      if (!scope || scope.projectId !== entry.scope.projectId || scope.workspaceId !== entry.scope.workspaceId) {
+        errors.push({ code: 'SESSION_NOT_FOUND' });
+        continue;
+      }
+      items.push({ sessionId: scope.sessionId, projectId: scope.projectId, workspaceId: scope.workspaceId });
+    } catch (error) { errors.push({ code: error.code ?? 'METADATA_READ_FAILED' }); }
+  }
+  return { items, errors };
+};
 
 const readStoredSessionMetadata = (sessionID) => sessionMetadataStore.get(sessionID);
 
@@ -586,6 +639,26 @@ const updateSessionMetadataWith = async (sessionID, decide, { directory = '' } =
   }
   return result;
 };
+const openChamberSessionService = createOpenChamberSessionService({
+  service: hostAgentRuntime.service,
+  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+  resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
+  listWorkspaceScopes,
+  registerSessionScope: hostAgentRuntime.registerSessionScope,
+  resolveAttachments,
+  capturePrompt: (...args) => hostPromptDeliveryRuntime.capturePrompt(...args),
+  beforeDispatch: (scope, capture) => hostPromptDeliveryRuntime.beforeDispatch(scope, capture.request),
+  onPromptAccepted: (scope, capture, receipt) => hostPromptDeliveryRuntime.onPromptAccepted(scope, capture.request, receipt),
+  publishSessionEvent: (event) => {
+    void globalMessageStreamHub.subscribeSession(event.properties.sessionId)
+      .catch((error) => console.warn('[agent-events] session observation failed:', error.code ?? 'SERVICE_UNAVAILABLE'));
+  },
+  sessionMetadataStore,
+  archiveStore,
+  persistSessionMetadata: persistSessionMetadataPatch,
+  broadcastGlobalUiEvent: broadcastOpenChamberUiEvent,
+});
 
 const sessionRuntime = createSessionRuntime({
   writeSseEvent,
@@ -685,7 +758,6 @@ let uiAuthController = null;
 // switch is off, and then nothing of the feature runs, see .workflow/isolated-spaces/DESIGN.md.
 let spacesHost = null;
 let activeTunnelController = null;
-let globalWatcherStartPromise = null;
 const tunnelProviderRegistry = createTunnelProviderRegistry([
   createCloudflareTunnelProvider(),
   createNgrokTunnelProvider(),
@@ -818,13 +890,8 @@ const buildOpenCodeUrl = (...args) => openCodeNetworkRuntime.buildOpenCodeUrl(..
 const ensureOpenCodeApiPrefix = (...args) => openCodeNetworkRuntime.ensureOpenCodeApiPrefix(...args);
 const scheduleOpenCodeApiDetection = (...args) => openCodeNetworkRuntime.scheduleOpenCodeApiDetection(...args);
 
-// Plugin-registered providers exist only inside the running OpenCode process.
-// Small-model callers resolve them through this connection; without it they
-// stay on the file-based resolution and plugin models remain unreachable.
-configureOpenCodeRuntimeProviders({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
-  getDefaultDirectory: () => openCodeLifecycleRuntime.getDefaultOpenCodeDirectory(),
+configureAgentService(hostAgentRuntime.service, {
+  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
 });
 
 const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
@@ -904,10 +971,9 @@ const getOpenCodeResolutionSnapshot = (...args) =>
 applyLoginShellEnvSnapshot();
 
 notificationTemplateRuntime = createNotificationTemplateRuntime({
+  sessionService: openChamberSessionService,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   readSettingsFromDisk,
-  persistSettings,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
   resolveGitBinaryForSpawn,
   readSessionMetadata: readStoredSessionMetadata,
 });
@@ -925,12 +991,11 @@ const notificationTriggerRuntime = createNotificationTriggerRuntime({
   sendPushToAllUiSessions,
   sendApnsToAllUiSessions,
   isAnyInteractiveClientVisible,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService: openChamberSessionService,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   readSessionMetadata: readStoredSessionMetadata,
 });
 
-const maybeSendPushForTrigger = (...args) => notificationTriggerRuntime.maybeSendPushForTrigger(...args);
 const setAutoAcceptSession = (sessionId, enabled) => permissionAutoAcceptRuntime.setSessionPolicy(sessionId, enabled);
 clearPendingPushBadge = () => notificationTriggerRuntime.clearPendingPushBadge();
 
@@ -938,8 +1003,8 @@ clearPendingPushBadge = () => notificationTriggerRuntime.clearPendingPushBadge()
 const sessionLineage = createSessionLineage();
 
 const sessionAssistRuntime = createSessionAssistRuntime({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService: openChamberSessionService,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   getSmallModelService: async () => import('./lib/small-model/index.js'),
   persistSessionAssist: (sessionID, directory, assist) =>
     persistSessionMetadataPatch(sessionID, { openchamber: { assist } }, { directory }),
@@ -951,10 +1016,10 @@ const sessionAssistRuntime = createSessionAssistRuntime({
 });
 
 const sessionGoalRuntime = createSessionGoalRuntime({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService: openChamberSessionService,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   getSmallModelService: async () => import('./lib/small-model/index.js'),
-  classifierEndpoint: () => routingRuntime.classifierEndpoint(),
+  classifierEndpoint: (workspaceId) => routingRuntime.classifierEndpoint(workspaceId),
   jev: createJevClient(),
   readSessionMetadata: readStoredSessionMetadata,
   persistSessionGoal: (sessionID, directory, goal) =>
@@ -1006,11 +1071,9 @@ const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
   // reference here would read it before it exists.
   resolveProjectId: (directory) => resolveMemoryProjectId(directory),
   isAgentMemoryEnabled,
-  // The plugin carrying the tool exists only in an OpenCode we launched.
   isSessionLinkingAvailable: async () => {
-    if (isExternalOpenCode || ENV_SKIP_OPENCODE_START) return false;
-    const settings = await readSettingsFromDiskMigrated().catch(() => null);
-    return settings?.agentControlToolEnabled !== false;
+    const settings = await readSettingsFromDiskMigrated();
+    return settings.agentControlToolEnabled !== false;
   },
   readSessionMetadata: readStoredSessionMetadata,
   // Pins and the delivered-signature cursor are read from and written to
@@ -1019,8 +1082,8 @@ const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
 });
 
 const contextObligatoryRuntime = createContextObligatoryRuntime({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService: openChamberSessionService,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   sessionKnowledgeRuntime,
   readSessionMetadata: readStoredSessionMetadata,
   persistContextCursor: (sessionID, directory, patch) => persistSessionMetadataPatch(sessionID, patch, { directory }),
@@ -1029,27 +1092,27 @@ const contextObligatoryRuntime = createContextObligatoryRuntime({
 const linearSessionStatusRuntime = createLinearSessionStatusRuntime();
 
 const globalMessageStreamHub = createGlobalMessageStreamHub({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
-  upstreamStallTimeoutMs: getUpstreamStallTimeoutMs,
-  deltaCoalesceWindowMs: resolveDeltaCoalesceWindowMs(),
+  service: hostAgentRuntime.service,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
 });
 
 // Jev model routing and the permission safety net. Every failure keeps the
 // user's own model or the auto-accept reply it was asked about.
 const routingRuntime = createRoutingRuntime({
   dataDir: OPENCHAMBER_DATA_DIR,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  service: hostAgentRuntime.service,
+  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+  resolveCredential,
   broadcastGlobalUiEvent: broadcastOpenChamberUiEvent,
 });
 
 // "In work": Jev opens a session when real work starts in it and hints when a
 // turn looks like the end of it. The same turn-end call gates session assist.
 const sessionWorkRuntime = createSessionWorkRuntime({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
-  classifierEndpoint: () => routingRuntime.classifierEndpoint(),
+  sessionService: openChamberSessionService,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+  classifierEndpoint: (workspaceId) => routingRuntime.classifierEndpoint(workspaceId),
   jev: createJevClient(),
   readMetadata: (sessionID, directory) => sessionMetadataStore.get(sessionID, { directory }),
   updateMetadata: updateSessionMetadataWith,
@@ -1059,9 +1122,10 @@ const sessionWorkRuntime = createSessionWorkRuntime({
 });
 
 const permissionAutoAcceptRuntime = createPermissionAutoAcceptRuntime({
+  service: hostAgentRuntime.service,
   globalEventHub: globalMessageStreamHub,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  listWorkspaceScopes,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   readSettingsFromDiskMigrated,
   persistSettings,
   broadcastGlobalUiEvent,
@@ -1069,38 +1133,35 @@ const permissionAutoAcceptRuntime = createPermissionAutoAcceptRuntime({
   onPermissionReplied: (permissionId) => routingRuntime.forgetPermission(permissionId),
   resolveLegacyEnabledMode: async () => ((await routingRuntime.legacySafetyNetEnabled()) ? 'safety' : 'auto'),
 });
-permissionAutoAcceptRuntime.start();
 // A request the safety net held still needs the user, so only one that was
 // actually answered automatically skips the notification.
 notificationTriggerRuntime.setGetIsSessionAutoAccepting(
-  (sessionId, directory, permissionId) => permissionAutoAcceptRuntime.isPermissionAutoAnswered(sessionId, directory, permissionId),
+  (sessionId, scope, approvalId) => permissionAutoAcceptRuntime.isPermissionAutoAnswered(sessionId, scope.cwd, approvalId),
 );
 
 // Queued follow-up messages are delivered by the server so a closed tab or a
 // dropped connection no longer strands them.
-const messageQueueRuntime = createMessageQueueRuntime({
-  globalEventHub: globalMessageStreamHub,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
-  sessionKnowledgeRuntime,
-  // OpenCode's event SSE proxy cannot carry OpenChamber-owned events. Use the
-  // shared control stream for SSE clients and the existing WS fan-out.
-  broadcastGlobalUiEvent: broadcastOpenChamberUiEvent,
-  resolveAutoSelection: (send) => routingRuntime.resolveAutoSelection(send),
-  onPromptSent: (sessionId) => sessionRuntime.markUserMessageSent(sessionId),
-  beforeScheduledTaskSend: (...args) => scheduledTasksRuntime.beforeScheduledTaskSend(...args),
-  validateScheduledTaskTarget: (...args) => scheduledTasksRuntime.validateTarget(...args),
+const messageQueueRuntime = createCanonicalQueueRuntime({
+  store: promptQueueStore,
+  service: hostAgentRuntime.service,
+  resolveAttachments,
+  capturePrompt: (...args) => hostPromptDeliveryRuntime.capturePrompt(...args),
+  beforeDispatch: (scope, capture) => hostPromptDeliveryRuntime.beforeDispatch(scope, capture.request),
+  onPromptAccepted: (scope, capture) => hostPromptDeliveryRuntime.onPromptAccepted(scope, capture.request, { runId: capture.runId }),
   onScheduledTaskResult: (...args) => scheduledTasksRuntime.onScheduledTaskResult(...args),
-  dataDir: OPENCHAMBER_DATA_DIR,
+  publishQueue: (properties) => broadcastOpenChamberUiEvent({ type: 'openchamber:message-queue.updated', properties }),
+  reportFailure: ({ sessionId, code }) => {
+    const properties = { code };
+    if (sessionId) properties.sessionId = sessionId;
+    broadcastOpenChamberUiEvent({ type: 'openchamber:message-queue.failed', properties });
+  },
 });
-messageQueueRuntime.start();
 
 // Sessions an agent dispatched with `returnResult` report back to it: their
 // final answer lands in the dispatching session and wakes it.
 const dispatchResultsRuntime = createDispatchResultsRuntime({
-  globalEventHub: globalMessageStreamHub,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService: openChamberSessionService,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   dataDir: OPENCHAMBER_DATA_DIR,
   // Declared further down; only ever called after startup.
   isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
@@ -1112,8 +1173,9 @@ dispatchResultsRuntime.start();
 // data in the data dir, fed from the same event stream; see lib/message-search.
 const messageSearchRuntime = createMessageSearchRuntime({
   dataDir: OPENCHAMBER_DATA_DIR,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService: openChamberSessionService,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+  readSessionMetadata: readStoredSessionMetadata,
   globalEventHub: globalMessageStreamHub,
   readSettings: async () => {
     const settings = await readSettingsFromDisk();
@@ -1121,107 +1183,23 @@ const messageSearchRuntime = createMessageSearchRuntime({
   },
 });
 
-const openCodeWatcherRuntime = createOpenCodeWatcherRuntime({
-  waitForOpenCodePort: (...args) => waitForOpenCodePort(...args),
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
-  parseSseDataPayload: (...args) => parseSseDataPayload(...args),
-  globalEventHub: globalMessageStreamHub,
-  onPayload: (payload) => {
-    maybeCacheSessionInfoFromEvent(payload);
-    void maybeSendPushForTrigger(payload);
-    sessionRuntime.processOpenCodeSsePayload(payload);
-  },
+
+globalMessageStreamHub.subscribeSnapshot((snapshot, scope) => {
+  sessionRuntime.applySnapshot(snapshot, scope);
+});
+globalMessageStreamHub.subscribeEvent(async (event, scope) => {
+  sessionRuntime.processCanonicalEvent(event, scope);
+  await messageQueueRuntime.observe({ ...scope, sessionId: event.sessionId }, event);
+  sessionLineage.processCanonicalEvent(event, scope);
+  sessionAssistRuntime.processCanonicalEvent(event, scope);
+  sessionWorkRuntime.processCanonicalEvent(event, scope);
+  sessionGoalRuntime.processCanonicalEvent(event, scope);
+  contextObligatoryRuntime.processCanonicalEvent(event, scope);
+  linearSessionStatusRuntime.processCanonicalEvent(event, scope);
+  await dispatchResultsRuntime.processCanonicalEvent(event, scope);
+  await notificationTriggerRuntime.processCanonicalEvent(event, scope);
 });
 
-// Session-assist subscribes to the hub directly: it needs the envelope's
-// directory to route its own OpenCode calls to the right instance.
-console.log('[session-assist] listening for session events');
-globalMessageStreamHub.subscribeEvent((event) => {
-  const directory = typeof event?.directory === 'string' && event.directory && event.directory !== 'global'
-    ? event.directory
-    : '';
-  // The hub translates v2 wire events into the server's vocabulary once; these
-  // consumers were written against it and stay unaware of the wire shape.
-  for (const payload of event?.translated?.() ?? []) {
-    // The user cancelled the turn: stop the OpenChamber tool actions that
-    // turn still has running (a browser action, a memory write). OpenCode 2
-    // gives the plugin no abort signal, so this is where the cancel lands.
-    if (payload.type === 'session.idle' && payload.properties?.aborted === true) {
-      agentToolRuntime?.abortSession?.(payload.properties.sessionID);
-    }
-    sessionLineage.observe(payload);
-    sessionAssistRuntime.processPayload(payload, directory || payload.properties?.directory || '');
-    sessionWorkRuntime.processPayload(payload, directory || payload.properties?.directory || '');
-    sessionGoalRuntime.processPayload(payload, directory || payload.properties?.directory || '');
-    contextObligatoryRuntime.processPayload(payload, directory || payload.properties?.directory || '');
-    linearSessionStatusRuntime.processPayload(payload);
-  }
-});
-
-/**
- * Browser bridges hand us the raw v2 wire payload (they forward it untouched to
- * the client). The synthetic OpenChamber frames the UI also expects are derived
- * from the translated event, so the translation happens here.
- */
-const processForwardedEventPayload = (payload, emitSyntheticEvent) => {
-  if (!payload || typeof payload !== 'object' || typeof emitSyntheticEvent !== 'function') {
-    return;
-  }
-
-  for (const translated of translateWireEvent(payload)) {
-    processForwardedServerEvent(translated, emitSyntheticEvent);
-  }
-};
-
-const processForwardedServerEvent = (payload, emitSyntheticEvent) => {
-  maybeCacheSessionInfoFromEvent(payload);
-
-  if (payload.type !== 'session.status') {
-    return;
-  }
-
-  const properties = payload.properties && typeof payload.properties === 'object' ? payload.properties : {};
-  const statusInfo = properties.status && typeof properties.status === 'object' ? properties.status : {};
-  const info = properties.info && typeof properties.info === 'object' ? properties.info : {};
-  const sessionId = typeof properties.sessionID === 'string' ? properties.sessionID.trim() : '';
-  const status = typeof statusInfo.type === 'string'
-    ? statusInfo.type.trim()
-    : (typeof info.type === 'string' ? info.type.trim() : '');
-
-  if (!sessionId || !status) {
-    return;
-  }
-
-  emitSyntheticEvent({
-    type: 'openchamber:session-status',
-    properties: {
-      sessionID: sessionId,
-      status,
-      timestamp: Date.now(),
-      metadata: {
-        attempt: typeof statusInfo.attempt === 'number'
-          ? statusInfo.attempt
-          : (typeof info.attempt === 'number' ? info.attempt : undefined),
-        message: typeof statusInfo.message === 'string'
-          ? statusInfo.message
-          : (typeof info.message === 'string' ? info.message : undefined),
-        next: typeof statusInfo.next === 'number'
-          ? statusInfo.next
-          : (typeof info.next === 'number' ? info.next : undefined),
-      },
-      needsAttention: false,
-    },
-  });
-
-  emitSyntheticEvent({
-    type: 'openchamber:session-activity',
-    properties: {
-      sessionId,
-      phase: status === 'busy' || status === 'retry' ? 'busy' : 'idle',
-    },
-  });
-};
 
 
 const serverUtilsRuntime = createServerUtilsRuntime({
@@ -1340,7 +1318,6 @@ const bootstrapRuntime = createBootstrapRuntime({
   registerTtsRoutes,
   registerNotificationRoutes,
   registerOpenChamberRoutes,
-  registerAgentToolRoutes: (app, options) => options.agentToolRuntime.registerRoutes(app, options.express),
   express,
 });
 const tunnelWiringRuntime = createTunnelWiringRuntime({
@@ -1473,14 +1450,6 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
   // process (#2638). The runtime is created later by the startup pipeline;
   // by the time any restart runs, it is assigned.
   onOpenCodeRestarted: () => {
-    // A restart reloads plugins: provider ports, credentials and the provider
-    // list itself can all differ from what was cached.
-    resetOpenCodeRuntimeProviders();
-    try {
-      messageStreamRuntime?.rebindUpstream();
-    } catch (error) {
-      console.warn('Failed to rebind message stream after OpenCode restart:', error?.message ?? error);
-    }
     try {
       const { sessionIds } = sessionRuntime.interruptBusySessionsAfterRestart();
       if (sessionIds.length > 0) {
@@ -1503,15 +1472,6 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
   getUserEnvironment: () => environmentRuntime.forOpenCode(),
 });
 
-// Quota lookups, voice keys and routing read provider credentials from the
-// running OpenCode (`GET /api/credential`), plus the values of the variables a
-// managed OpenCode takes keys from, read from the environment it was given.
-configureOpenCodeCredentials(openCodeCredentialSource({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
-  getLaunchEnvironment: () => openCodeLifecycleRuntime.getManagedOpenCodeProcessEnv(),
-  getDefaultDirectory: () => openCodeLifecycleRuntime.getDefaultOpenCodeDirectory(),
-}));
 
 const getOpenCodeCompatibility = async () => {
   if (isExternalOpenCode || ENV_SKIP_OPENCODE_START) {
@@ -1546,12 +1506,15 @@ const waitForAgentPresence = (...args) => openCodeLifecycleRuntime.waitForAgentP
 const refreshOpenCodeAfterConfigChange = (...args) => openCodeLifecycleRuntime.refreshOpenCodeAfterConfigChange(...args);
 const startHealthMonitoring = () => openCodeLifecycleRuntime.startHealthMonitoring(HEALTH_CHECK_INTERVAL);
 const triggerHealthCheck = () => openCodeLifecycleRuntime.triggerHealthCheck();
-const scheduledChatsScope = createChatsScope(OPENCHAMBER_CHATS_DIR);
 const scheduledTasksRuntime = createScheduledTasksRuntime({
   projectConfigRuntime,
   chatsScope: scheduledChatsScope,
+  sessionService: openChamberSessionService,
+  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+  listWorkspaceScopes,
+  createChatWorkspace: agentScopeRuntime.createChatWorkspace,
   messageQueueRuntime,
-  resolvePrimaryWorktreeRoot,
   isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
   readSessionDefaults: async (projectID) => {
     const settings = await readSettingsFromDiskMigrated();
@@ -1562,10 +1525,6 @@ const scheduledTasksRuntime = createScheduledTasksRuntime({
     const settings = await readSettingsFromDiskMigrated();
     return sanitizeProjects(settings?.projects || []);
   },
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
-  waitForOpenCodeReady,
-  sessionKnowledgeRuntime,
   persistSessionGoal: (sessionID, directory, goal) =>
     persistSessionMetadataPatch(sessionID, { openchamber: { goal } }, { directory }),
   setSessionAutoAccept: (sessionId, enabled, directory) => permissionAutoAcceptRuntime.setSessionPolicy(sessionId, enabled, directory),
@@ -1589,6 +1548,47 @@ const scheduledTasksRuntime = createScheduledTasksRuntime({
   },
   logger: console,
 });
+const hostPromptDeliveryRuntime = createHostPromptDeliveryRuntime({
+  resolveSessionScope: hostAgentRuntime.resolveHostSessionScope,
+  routingRuntime,
+  sessionKnowledgeRuntime,
+  scheduledTasksRuntime,
+  sessionRuntime,
+});
+const convertLegacyQueue = async () => {
+  const result = await promptQueueStore.convertLegacy({
+    resolveScope: async (sessionId, directory) => {
+      const scope = await hostAgentRuntime.resolveHostSessionScope(sessionId);
+      if (!scope || await fsPromises.realpath(directory) !== scope.cwd) {
+        throw new OpenChamberControlError('Legacy queue session scope is unavailable', 404);
+      }
+      return { sessionId: scope.sessionId, projectId: scope.projectId, workspaceId: scope.workspaceId };
+    },
+    importAttachment: importLegacyAttachment,
+    resolveScheduledTask: async (queuedScope, hint) => {
+      const scope = await hostAgentRuntime.resolveHostSessionScope(queuedScope.sessionId);
+      if (!scope || scope.projectId !== queuedScope.projectId || scope.workspaceId !== queuedScope.workspaceId || scope.hostProjectId !== hint.projectId) {
+        throw new OpenChamberControlError('Legacy scheduled queue scope does not match', 409);
+      }
+      const task = (await projectConfigRuntime.listScheduledTasks(scope.hostProjectId)).find((entry) => entry.id === hint.taskId);
+      if (!task || task.targetSessionId !== scope.sessionId) {
+        throw new OpenChamberControlError('Legacy scheduled queue target is unavailable', 409);
+      }
+      await scheduledTasksRuntime.validateTarget(scope.hostProjectId, scope.sessionId);
+      const options = task.execution.useDefaults
+        ? { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
+        : { providerId: task.execution.providerID ?? null, modelId: task.execution.modelID ?? null, agentId: task.execution.agent ?? null, variant: task.execution.variant ?? null, reasoningEffort: null };
+      return {
+        options,
+        context: [createScheduledTaskContext({ projectId: scope.hostProjectId, taskId: task.id, sessionId: scope.sessionId,
+          workspaceId: scope.workspaceId, mode: 'existing', triggeredAt: task.state?.lastRunAt ?? Date.now() })],
+      };
+    },
+  });
+  if (result.status === 'partial' || result.status === 'failed') {
+    console.warn('[message-queue] legacy conversion incomplete:', result.status, result.storage ?? 'conversion_failed', result.errors.length);
+  }
+};
 const emitSessionCreatedEvent = (event) => {
   for (const client of uiOpenChamberEventClients) {
     try {
@@ -1646,40 +1646,8 @@ const scheduledTaskService = createScheduledTaskService({
   sanitizeProjects,
   projectConfigRuntime,
   scheduledTasksRuntime,
+  resolveWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
   chatsScope: scheduledChatsScope,
-});
-const openChamberSessionService = createOpenChamberSessionService({
-  readSettingsFromDiskMigrated,
-  sanitizeProjects,
-  validateDirectoryPath,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
-  waitForOpenCodeReady,
-  emitSessionCreatedEvent,
-  sessionKnowledgeRuntime,
-  worktreeBootstrapStore,
-  hydrateWorktreeCheckout: featureRoutesRuntime.hydrateBoundCheckout,
-  createChangeRequestWorktree: featureRoutesRuntime.createChangeRequestWorktree,
-  sessionMetadataStore,
-  archiveStore,
-  readLegacySessionProjection: async (sessionID, { directory = '' } = {}) => {
-    const session = await createOpenCodeClient({
-      baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''),
-      headers: getOpenCodeAuthHeaders(),
-      directory,
-    }).session.get({ sessionID });
-    return {
-      id: session.id,
-      title: session.title,
-      directory: session.location.directory,
-      projectID: session.projectID,
-      metadata: session.metadata,
-    };
-  },
-  persistSessionMetadata: persistSessionMetadataPatch,
-  broadcastGlobalUiEvent: broadcastOpenChamberUiEvent,
-  resolveAutoSelection: (input) => routingRuntime.resolveAutoSelection(input),
-  isAutoReady: async () => (await routingRuntime.describe()).autoReady,
 });
 // Browser actions are published to whichever OpenChamber clients are connected;
 // the one owning the browser panel answers. `emitRequest` returns the number of
@@ -1771,10 +1739,11 @@ const pluginNotificationEmitter = createPluginNotificationEmitter({
 
 const openChamberControlService = createOpenChamberControlService({
   readSettingsFromDiskMigrated,
-  sanitizeProjects,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
-  waitForOpenCodeReady,
+  service: hostAgentRuntime.service,
+  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+  listWorkspaceScopes,
+  listProjects: agentScopeRuntime.listProjects,
   sessionService: openChamberSessionService,
   scheduledTaskService,
   browserControl: browserControlRouter,
@@ -1804,16 +1773,29 @@ const openChamberControlService = createOpenChamberControlService({
 });
 
 const ensureGlobalWatcherStarted = async () => {
-  if (globalWatcherStartPromise) {
-    return globalWatcherStartPromise;
+  if (hostAgentRuntime.service.getState().phase !== 'ready') return;
+  await globalMessageStreamHub.start();
+  const listed = await openChamberSessionService.list();
+  if (Object.keys(listed.errors).length > 0) {
+    console.warn('[agent-events] persisted session discovery was partial:', Object.values(listed.errors).join(','));
   }
-
-  globalWatcherStartPromise = openCodeWatcherRuntime.start().catch((error) => {
-    globalWatcherStartPromise = null;
-    throw error;
-  });
-
-  return globalWatcherStartPromise;
+  for (const session of listed.items) {
+    try {
+      await openChamberSessionService.open(session.sessionId);
+      await globalMessageStreamHub.subscribeSession(session.sessionId);
+    } catch (error) {
+      console.warn('[agent-events] persisted session observation failed:', error.code ?? 'SERVICE_UNAVAILABLE');
+    }
+  }
+};
+const startAgentService = async () => {
+  await hostAgentRuntime.start();
+  permissionAutoAcceptRuntime.start();
+  await ensureGlobalWatcherStarted();
+  await convertLegacyQueue();
+  await messageQueueRuntime.start();
+  await scheduledTasksRuntime.start();
+  return hostAgentRuntime.service.getState();
 };
 const bootstrapOpenCodeAtStartup = async (...args) => {
   await openCodeLifecycleRuntime.bootstrapOpenCodeAtStartup(...args);
@@ -1821,12 +1803,6 @@ const bootstrapOpenCodeAtStartup = async (...args) => {
   if (openCodeLifecycleState.openCodeProcess && !openCodeLifecycleState.isExternalOpenCode) {
     startHealthMonitoring();
   }
-  // The global watcher used to start only for desktop notifications; the
-  // session-assist runtime also rides its event hub, so it now starts
-  // unconditionally once OpenCode is up.
-  void ensureGlobalWatcherStarted().catch((error) => {
-    console.warn(`Global event watcher startup failed: ${error?.message || error}`);
-  });
 };
 const killProcessOnPort = (...args) => openCodeLifecycleRuntime.killProcessOnPort(...args);
 const waitForPortRelease = (...args) => openCodeLifecycleRuntime.waitForPortRelease(...args);
@@ -1841,7 +1817,9 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
     isShuttingDown = value;
   },
   syncToHmrState,
-  openCodeWatcherRuntime,
+  globalMessageStreamHub,
+  hostAgentRuntime,
+  permissionAutoAcceptRuntime,
   sessionAssistRuntime,
   sessionWorkRuntime,
   sessionGoalRuntime,
@@ -1894,6 +1872,7 @@ const gracefulShutdown = (...args) => gracefulShutdownRuntime.gracefulShutdown(.
 
 async function main(options = {}) {
   await hostSessionState.initialize();
+  await agentScopeRuntime.initialize();
   beginGuestServiceHost();
   // Again at start: the desktop shell merges the login shell's environment,
   // where proxy variables often live, after this module first loaded.
@@ -1904,28 +1883,11 @@ async function main(options = {}) {
     || (typeof process.env.OPENCHAMBER_HOST === 'string' && process.env.OPENCHAMBER_HOST.trim().length > 0
       ? process.env.OPENCHAMBER_HOST.trim()
       : '127.0.0.1');
-  agentToolRuntime = createAgentToolRuntime({
-    crypto,
-    fsPromises,
-    path,
-    dataDir: OPENCHAMBER_DATA_DIR,
-    env: process.env,
-    executeAction: (...args) => openChamberControlService.execute(...args),
-    // A v2 tool call carries no directory, only the session it runs in.
-    resolveSessionDirectory: (sessionID) => openChamberControlService.resolveSessionDirectory(sessionID),
-    getActivePort: () => {
-      const address = server?.address?.();
-      return typeof address === 'object' && address ? address.port : null;
-    },
-    // A pipe listener reports a string here, which has no address to bind back to.
-    getActiveHost: () => server?.address?.()?.address ?? null,
-  });
   managedConfigRuntime = createManagedConfigRuntime({
     fsPromises,
     path,
     dataDir: OPENCHAMBER_DATA_DIR,
     env: process.env,
-    agentToolRuntime,
     readSettings: () => readSettingsFromDiskMigrated(),
     isAgentMemoryAvailable: isAgentMemoryFeatureAvailable,
   });
@@ -2289,6 +2251,23 @@ async function main(options = {}) {
     readSettingsFromDiskMigrated,
     normalizeTunnelSessionTtlMs,
     sayTTSCapability,
+    ttsService,
+    resolveTtsSelection,
+    canonicalAgentRoutes: {
+      service: hostAgentRuntime.service,
+      resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+      resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+      listProjects: agentScopeRuntime.listProjects,
+      listWorkspaces: agentScopeRuntime.listWorkspaces,
+      resolveCredentialHandoff,
+      queueRoutes: (router) => registerCanonicalQueueRoutes(router, messageQueueRuntime, {
+        resolveSessionScope: hostAgentRuntime.resolveHostSessionScope,
+      }),
+      sessionRoutes: (router) => registerCanonicalSessionRoutes(router, openChamberSessionService),
+      attachmentRoutes: (router) => router.use(createAttachmentRoutes({
+        express, store: attachmentStore, resolveWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
+      })),
+    },
     ensurePushInitialized,
     ensureGlobalWatcherStarted,
     getOrCreateVapidKeys,
@@ -2314,10 +2293,7 @@ async function main(options = {}) {
     openchamberDataDir: OPENCHAMBER_DATA_DIR,
     modelsDevApiUrl: MODELS_DEV_API_URL,
     modelsMetadataCacheTtl: MODELS_METADATA_CACHE_TTL,
-    fetchFreeZenModels,
-    getCachedZenModels,
     setAutoAcceptSession,
-    agentToolRuntime,
     desktopUpdater,
     skipBodyParsing: (req) => spacesHost?.skipsBodyParsing(req) === true,
     isRequestOriginAllowed,
@@ -2437,6 +2413,13 @@ async function main(options = {}) {
     messageSearchRuntime,
     sessionFoldersStore,
     isRequestOriginAllowed,
+    resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+    resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+    resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
+    listQueueScopes,
+    resolveQuotaSelection,
+    listQuotaSelections,
+    resolveCredential,
     crypto,
     fs,
     os,
@@ -2542,12 +2525,8 @@ async function main(options = {}) {
     isExecutable,
     isRequestOriginAllowed,
     rejectWebSocketUpgrade,
-    buildOpenCodeUrl,
-    getOpenCodeAuthHeaders,
     globalEventHub: globalMessageStreamHub,
-    processForwardedEventPayload,
     messageStreamWsClients: uiNotificationWsClients,
-    upstreamStallTimeoutMs: getUpstreamStallTimeoutMs,
     terminalHeartbeatIntervalMs: TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS,
     terminalRebindWindowMs: TERMINAL_INPUT_WS_REBIND_WINDOW_MS,
     terminalMaxRebindsPerWindow: TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW,
@@ -2592,11 +2571,6 @@ async function main(options = {}) {
   dictationRuntime = startupPipelineResult.dictationRuntime;
   messageStreamRuntime = startupPipelineResult.messageStreamRuntime;
 
-  try {
-    await scheduledTasksRuntime.start();
-  } catch (error) {
-    console.warn('[ScheduledTasks] Failed to start runtime:', error?.message || error);
-  }
 
   // Only opens a relay control socket when the user opted in (config enabled).
   // Reconcile the relay lifecycle from demand on startup: run it if any relay
@@ -2632,6 +2606,13 @@ async function main(options = {}) {
     expressApp: app,
     httpServer: server,
     getPort: () => tunnelRuntimeContext.getActivePort(),
+    startAgentService,
+    stopAgentService: async () => {
+      await globalMessageStreamHub.stop();
+      await hostAgentRuntime.stop();
+      sessionRuntime.interruptBusySessionsAfterRestart();
+    },
+    getAgentServiceState: () => hostAgentRuntime.service.getState(),
     getOpenCodePort: () => openCodePort,
     getTunnelUrl: () => tunnelService.getPublicUrl(),
     getQuitRiskStatus: () => ({

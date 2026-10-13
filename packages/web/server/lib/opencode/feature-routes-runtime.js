@@ -20,7 +20,7 @@ import { registerSessionKnowledgeRoutes } from '../session-knowledge/routes.js';
 import { registerMessageSearchRoutes } from '../message-search/routes.js';
 import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/runtime.js';
 import { registerMessageQueueRoutes } from '../message-queue/runtime.js';
-import { registerRoutingPromptRewrite, registerRoutingRoutes } from '../routing/routes.js';
+import { registerRoutingRoutes } from '../routing/routes.js';
 import { registerConfigEntityRoutes } from './config-entity-routes.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
 import { registerProjectIconRoutes } from '../host/project-icon-routes.js';
@@ -260,6 +260,13 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       messageQueueRuntime,
       routingRuntime,
       globalEventHub,
+      resolveWorkspaceScope,
+      resolveSessionScope,
+      resolveHostSessionScope,
+      listQueueScopes,
+      resolveQuotaSelection,
+      listQuotaSelections,
+      resolveCredential,
       openchamberVersion,
     } = routeDependencies;
 
@@ -272,11 +279,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     });
 
     registerPermissionAutoAcceptRoutes(app, permissionAutoAcceptRuntime);
-    registerMessageQueueRoutes(app, messageQueueRuntime);
+    registerMessageQueueRoutes(app, messageQueueRuntime, { resolveSessionScope: resolveHostSessionScope, listQueueScopes });
     registerRoutingRoutes(app, routingRuntime);
-    // Before the generic OpenCode proxy: swallows the `openchamber/auto` model
-    // switch and routes the sends that follow it.
-    registerRoutingPromptRewrite(app, routingRuntime);
 
     registerOpenCodeRoutes(app, {
       crypto,
@@ -322,13 +326,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     });
 
     registerOpenChamberSessionRoutes(app, {
-      readSettingsFromDiskMigrated,
-      sanitizeProjects,
-      validateDirectoryPath,
-      buildOpenCodeUrl,
-      getOpenCodeAuthHeaders,
-      waitForOpenCodeReady,
-      emitSessionCreatedEvent,
       isRequestOriginAllowed: routeDependencies.isRequestOriginAllowed,
       sessionService: openChamberSessionService,
     });
@@ -338,11 +335,10 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerMarkdownImageGrantRoutes(app, {
       fsPromises,
       path,
-      os,
       crypto,
-      validateDirectoryPath,
-      buildOpenCodeUrl,
-      getOpenCodeAuthHeaders,
+      sessionService: openChamberSessionService,
+      resolveSessionScope,
+      approvedTempRoot: os.tmpdir(),
     });
 
     registerConfigEntityRoutes(app, {
@@ -398,8 +394,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
 
     const { getProfiles, getProfile, getGlobalIdentity, resolveRepositoryGitPaths } = await import('../git/index.js');
 
-    registerQuotaRoutes(app, { getQuotaProviders });
-    registerSmallModelRoutes(app, { getSmallModelService });
+    registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential });
+    registerSmallModelRoutes(app, { getSmallModelService, resolveWorkspaceScope });
     registerSessionGoalRoutes(app);
     const gitBinary = resolveGitBinaryForSpawn();
     const gitlabAuthStore = createSourceControlAuthStore({
@@ -493,6 +489,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     });
     registerWalkthroughRoutes(app, {
       getWalkthroughService,
+      resolveWorkspaceScope,
       validateReadContext: walkthroughBindingService.validateReadContext,
     });
     // Live state of the linked pull requests, merge requests and issues the
@@ -651,7 +648,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       resolveGitIdentity,
     });
     await registerBuiltInGuests({ persistPath: extensionsPersistPath(openchamberDataDir), root: routeDependencies.builtInExtensionsDir });
-    registerGuestRoutes(app, { openchamberDataDir, openchamberVersion, resolveGitBinaryForSpawn, resolveOptionalProjectDirectory, getSmallModelService, onGuestDeactivated, surfaceViewerHeaders });
+    registerGuestRoutes(app, { openchamberDataDir, openchamberVersion, resolveGitBinaryForSpawn, resolveOptionalProjectDirectory, getSmallModelService, resolveWorkspaceScope, onGuestDeactivated, surfaceViewerHeaders });
     gitWorktreeCreation = registerGitRoutes(app, {
       // Identities for accounts connected before identities carried one are
       // made the first time identities are listed: a moment someone asked for,

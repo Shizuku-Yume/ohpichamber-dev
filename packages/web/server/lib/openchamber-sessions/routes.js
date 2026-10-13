@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { z } from 'zod';
 import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, RunAbortRequestSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, SessionMetadataStateSchema, SessionMetadataPatchSchema, SteerRequestSchema, SteerAckSchema, FollowUpRequestSchema, FollowUpAckSchema, ProblemDetailsSchema, ProblemCodeSchema } from '@openchamber/agent-contract';
+import { EntityIdSchema } from '@openchamber/agent-contract';
 
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
 const SessionForkAckSchema = z.strictObject({ sessionId: z.string().min(1), rootSessionId: z.string().min(1), sessionFile: z.string().min(1), sourceSessionId: z.string().min(1), entryId: z.string().min(1).nullable(), mode: z.enum(['selected', 'full']) });
@@ -29,9 +30,9 @@ const parseIdBatch = (payload) => {
 
   const ids = [];
   for (const value of rawIds) {
-    const id = asNonEmptyString(value);
-    if (!id) return { ok: false, error: 'ids must contain non-empty session ids' };
-    ids.push(id);
+    const parsed = EntityIdSchema.safeParse(value);
+    if (!parsed.success) return { ok: false, error: 'ids must contain valid session ids' };
+    ids.push(parsed.data);
   }
   return { ok: true, ids };
 };
@@ -99,7 +100,7 @@ const createCanonicalSessionService = (dependencies) => {
   const history = async (id, query = '') => { const scope = await scopeFor(id); await reopen(scope); const page = HistoryPageSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`)); if (page.sessionId !== id || page.turns.some(turn => turn.projectId !== undefined && turn.projectId !== scope.projectId) || page.messages.some(message => message.projectId !== undefined && message.projectId !== scope.projectId)) throw new OpenChamberControlError('Session history is outside the authorized scope', 502); return page; };
   const list = async (workspaceId) => {
     const scopePage = workspaceId ? { items: [{ workspaceId }], errors: {} } : await (typeof listWorkspaceScopes === 'function' ? listWorkspaceScopes() : Promise.reject(new OpenChamberControlError('Workspace enumeration is unavailable', 503)));
-    const parsedScopes = z.strictObject({ items: z.array(z.strictObject({ workspaceId: z.string().min(1) })), errors: z.record(ProblemCodeSchema) }).parse(scopePage);
+    const parsedScopes = z.strictObject({ items: z.array(z.strictObject({ workspaceId: z.string().min(1) })), errors: z.record(z.string(), ProblemCodeSchema) }).parse(scopePage);
     const pages = await Promise.all(parsedScopes.items.map(async ({ workspaceId: id }) => {
       try {
         const workspace = await resolveWorkspaceScope(id);
@@ -118,7 +119,7 @@ const createCanonicalSessionService = (dependencies) => {
         return { items: [], errors: { [id]: code.success ? code.data : 'SERVICE_UNAVAILABLE' } };
       }
     }));
-    return z.strictObject({ items: z.array(SessionSchema), errors: z.record(ProblemCodeSchema) }).parse({ items: pages.flatMap(page => page.items), errors: Object.assign({}, parsedScopes.errors, ...pages.map(page => page.errors)) });
+    return z.strictObject({ items: z.array(SessionSchema), errors: z.record(z.string(), ProblemCodeSchema) }).parse({ items: pages.flatMap(page => page.items), errors: Object.assign({}, parsedScopes.errors, ...pages.map(page => page.errors)) });
   };
   const archive = async (payload = {}) => { const parsed = parseArchiveRequest(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); await Promise.all(parsed.ids.map((id) => hostScopeFor(id))); return archiveStore.archive(parsed.ids, parsed.archivedAt); };
   const unarchive = async (payload = {}) => { const parsed = parseIdBatch(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); await Promise.all(parsed.ids.map((id) => hostScopeFor(id))); return archiveStore.unarchive(parsed.ids); };
@@ -166,10 +167,7 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
 
   app.get('/api/openchamber/sessions/:sessionId/metadata', async (req, res) => {
     try {
-      return res.json(await service.getMetadata(
-        req.params.sessionId,
-        asNonEmptyString(req.query?.directory) || '',
-      ));
+      return res.json(await service.getMetadata(req.params.sessionId));
     } catch (error) {
       console.error('[OpenChamberSessions] failed to read session metadata:', error);
       return sendServiceError(res, error, 'Failed to read session metadata');

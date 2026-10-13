@@ -10,7 +10,6 @@ export const createBootstrapRuntime = (dependencies) => {
     registerTtsRoutes,
     registerNotificationRoutes,
     registerOpenChamberRoutes,
-    registerAgentToolRoutes = () => {},
     express,
   } = dependencies;
 
@@ -38,6 +37,9 @@ export const createBootstrapRuntime = (dependencies) => {
       readSettingsFromDiskMigrated,
       normalizeTunnelSessionTtlMs,
       sayTTSCapability,
+      ttsService,
+      resolveTtsSelection,
+      canonicalAgentRoutes,
       ensurePushInitialized,
       ensureGlobalWatcherStarted,
       getOrCreateVapidKeys,
@@ -65,7 +67,6 @@ export const createBootstrapRuntime = (dependencies) => {
       fetchFreeZenModels,
       getCachedZenModels,
       setAutoAcceptSession,
-      agentToolRuntime,
       pluginNotificationEmitter,
       desktopUpdater,
       skipBodyParsing,
@@ -99,20 +100,18 @@ export const createBootstrapRuntime = (dependencies) => {
     registerCommonRequestMiddleware(app, { express, verboseRequestLogs, skipBodyParsing });
 
     registerCanonicalHostRoutes(app, {
+      ...canonicalAgentRoutes,
       express,
       uiAuthController,
       tunnelAuthController,
       isRequestOriginAllowed,
     });
 
-    registerAgentToolRoutes(app, { express, agentToolRuntime });
 
     const notificationEmitRoutes = registerNotificationEmitRoutes(app, {
       express,
-      isAgentToolRequestAuthorized: (req) => agentToolRuntime?.authorizeRequest?.(req) === true,
       emitter: pluginNotificationEmitter,
     });
-    notificationEmitRoutes.registerPluginRoute();
 
     registerAuthAndAccessRoutes(app, {
       express,
@@ -132,7 +131,7 @@ export const createBootstrapRuntime = (dependencies) => {
 
     notificationEmitRoutes.registerApiRoute();
 
-    registerTtsRoutes(app, { sayTTSCapability });
+    registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTtsSelection });
 
     registerNotificationRoutes(app, {
       uiAuthController,

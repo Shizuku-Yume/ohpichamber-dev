@@ -23,13 +23,8 @@ export const createStartupPipelineRuntime = (dependencies) => {
       isExecutable,
       isRequestOriginAllowed,
       rejectWebSocketUpgrade,
-      buildOpenCodeUrl,
-      getOpenCodeAuthHeaders,
       globalEventHub,
-      processForwardedEventPayload,
       messageStreamWsClients,
-      triggerHealthCheck,
-      upstreamStallTimeoutMs,
       terminalHeartbeatIntervalMs,
       terminalRebindWindowMs,
       terminalMaxRebindsPerWindow,
@@ -95,13 +90,8 @@ export const createStartupPipelineRuntime = (dependencies) => {
       uiAuthController,
       isRequestOriginAllowed,
       rejectWebSocketUpgrade,
-      buildOpenCodeUrl,
-      getOpenCodeAuthHeaders,
       globalEventHub,
-      processForwardedEventPayload,
       wsClients: messageStreamWsClients,
-      triggerHealthCheck,
-      upstreamStallTimeoutMs,
     });
 
     setupProxy(app);

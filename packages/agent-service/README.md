@@ -91,6 +91,8 @@ Output checks session, epoch and worker generation for running and ended jobs. S
 
 Private credential handoff is exposed via `/internal/workspaces/:workspaceId/credentials/handoff` and credential lookup via `/internal/workspaces/:workspaceId/credentials/resolve`. The handoff endpoint receives verified `SelectedCredentialSelectionSchema` items, writes them to the worker's owned `AuthStorage`, and reloads storage to return confirmed outcomes with `credentialRef`. Lookup resolves stored credentials for authorized Node callers (quota, TTS, and model routing) without exposing secrets to external clients.
 
+Both private operations use the workspace-owned stateless worker; they do not require an admitted session.
+
 ## Package inputs
 
 The SDK closure uses source-derived archives and patches under `vendor/omp/c9de2b02`, not matching-version registry substitutes or an external source checkout. The vendor manifest binds archive identities and parent-scoped dependency versions. Linux x64 native inputs are retained; non-Linux native behavior and native source-build equivalence remain unverified.

@@ -405,8 +405,8 @@ export const createSessionGoalRuntime = ({
     }
   };
 
-  const checkWithJev = async ({ objective, answer, sessionId }) => {
-    const endpoint = await classifierEndpoint();
+  const checkWithJev = async ({ objective, answer, sessionId, workspaceId }) => {
+    const endpoint = await classifierEndpoint(workspaceId);
     if (!endpoint || !jev) return null;
     try {
       const { answers } = await jev.ask(buildJevAuditRequest({ objective, answer }), endpoint);
@@ -465,7 +465,7 @@ export const createSessionGoalRuntime = ({
   const runAudit = async ({ goal, assistantText, workspaceId, lastAssistantInfo }) => {
     const input = { objective: goal.objective, answer: assistantText };
     const sessionId = lastAssistantInfo?.sessionID ?? null;
-    const checked = (getChecker() === 'classifier' ? await checkWithJev({ ...input, sessionId }) : null)
+    const checked = (getChecker() === 'classifier' ? await checkWithJev({ ...input, sessionId, workspaceId }) : null)
       ?? await checkWithSmallModel({ ...input, workspaceId, lastAssistantInfo });
     if (!checked) return null;
     const verdict = decideProgress(checked.scores);

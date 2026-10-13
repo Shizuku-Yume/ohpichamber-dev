@@ -32,7 +32,6 @@ const AGENT_ROUTES = [
   { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/credential\/[^/]+$/, request: C.ProviderCredentialDeleteRequestSchema, response: C.ProviderCredentialMutationResultSchema },
   { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/completions$/, request: C.CompletionRequestSchema, response: C.CompletionResultSchema },
   { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/completions\/[^/]+\/cancel$/, request: C.CompletionCancelRequestSchema, response: C.CompletionCancelResultSchema },
-  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/snapshot$/, response: C.SessionSnapshotSchema },
   { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/history$/, response: C.HistoryPageSchema, query: ['cursor', 'leafTurnId', 'limit'] },
   { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/events$/, stream: true, query: ['cursor'] },
   { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/runs\/[^/]+\/abort$/, response: RunResponseSchema },
@@ -63,6 +62,13 @@ function problem(res, status, code, detail) {
     type: `urn:ohpichamber:problem:${code}`, title: status >= 500 ? 'Agent Service unavailable' : 'Request refused',
     status, code, detail, retryable: status >= 500,
   }));
+}
+
+function credentialProblem(res, error) {
+  const status = Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599 ? error.status : 503;
+  const parsedCode = C.ProblemCodeSchema.safeParse(error?.code);
+  const code = parsedCode.success ? parsedCode.data : 'SERVICE_UNAVAILABLE';
+  return problem(res, status, code, status >= 500 ? 'The selected credential owner is unavailable.' : 'The selected credential operation was refused.');
 }
 
 function capturedScope(value, expectedWorkspaceId) {
@@ -161,7 +167,7 @@ export function registerCanonicalHostRoutes(app, {
       const scope = capturedScope(await resolveWorkspaceScope(parsed.data.workspaceId), parsed.data.workspaceId);
       if (!scope) return problem(res, 403, 'UNAUTHORIZED', 'The selected workspace is not authorized.');
       return res.status(207).json(SelectedCredentialHandoffResultSchema.parse(await resolveCredentialHandoff(parsed.data)));
-    } catch { return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The selected credential owner is unavailable.'); }
+    } catch (error) { return credentialProblem(res, error); }
   });
   router.use((req, res, next) => {
     const route = AGENT_ROUTES.find(candidate => candidate.method === req.method && candidate.pattern.test(req.path));

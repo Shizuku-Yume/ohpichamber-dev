@@ -52,11 +52,11 @@ export function createHostPromptDeliveryRuntime({
   const capturePrompt = async (scope, request) => {
     const fresh = await requireScope(scope);
     const parsed = PromptRequestSchema.parse(request);
-    const options = { ...parsed.options };
-    const routing = await routingRuntime.resolveAutoSelection({ sessionId: fresh.sessionId, directory: fresh.cwd, workspaceId: fresh.workspaceId, model: options.modelId ? { providerID: options.providerId, id: options.modelId } : null, agent: options.agentId, requestText: parsed.input.text });
+    const options = parsed.options;
+    const routing = await routingRuntime.resolveAutoSelection({ sessionId: fresh.sessionId, directory: fresh.cwd, workspaceId: fresh.workspaceId, model: options.modelId ? { providerId: options.providerId, modelId: options.modelId } : null, agent: options.agentId, requestText: parsed.input.text });
     if (routing) {
-      options.providerId = routing.model.providerID;
-      options.modelId = routing.model.id;
+      options.providerId = routing.model.providerId;
+      options.modelId = routing.model.modelId;
       options.agentId = routing.agent ?? options.agentId;
       options.variant = routing.model.variant ?? options.variant;
     }
@@ -65,7 +65,10 @@ export function createHostPromptDeliveryRuntime({
     const scheduledEntry = context.find((entry) => entry?.kind === 'context' && entry?.metadata?.scheduledTask);
     const scheduledTask = scheduledEntry?.metadata?.scheduledTask;
     const deliveryReceiptId = scheduledEntry?.deliveryReceiptId;
-    const metadata = { ...(knowledge.text ? { knowledge: { signature: knowledge.signature } } : {}), ...(scheduledTask ? { scheduledTask } : {}), ...(deliveryReceiptId ? { deliveryReceiptId } : {}) };
+    const metadata = {};
+    if (knowledge.text) metadata.knowledge = { signature: knowledge.signature };
+    if (scheduledTask) metadata.scheduledTask = scheduledTask;
+    if (deliveryReceiptId) metadata.deliveryReceiptId = deliveryReceiptId;
     if (Object.keys(metadata).length > 0) context.push({ kind: 'context', text: knowledge.text || '', metadata });
     return PromptRequestSchema.parse({ input: { ...parsed.input, context }, options });
   };
@@ -92,8 +95,6 @@ export function createHostPromptDeliveryRuntime({
       const knowledge = contexts.find((entry) => entry?.kind === 'context' && entry?.metadata?.knowledge);
       if (knowledge?.metadata?.knowledge?.signature) await sessionKnowledgeRuntime.recordDelivered(fresh.sessionId, fresh.cwd, knowledge.metadata.knowledge.signature);
       sessionRuntime.markUserMessageSent(fresh.sessionId);
-      const scheduled = contexts.find((entry) => entry?.kind === 'context' && entry?.metadata?.scheduledTask)?.metadata?.scheduledTask;
-      if (scheduled && scheduled.mode === 'existing' && scheduledTasksRuntime?.onScheduledTaskResult) await scheduledTasksRuntime.onScheduledTaskResult(scheduled, 'accepted');
       return { duplicate: false, identity };
     })();
     accepted.set(key, operation);

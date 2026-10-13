@@ -100,3 +100,55 @@ for (const policyError of [
     }
   });
 }
+
+test('workspace credential handoff persists an SDK credential for private resolution after cold reopen', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'stateless-handoff-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  const bootstrap: CompletionWorkerBootstrap = {
+    type: 'completion.bootstrap', workerGeneration: 'handoff-generation',
+    workspaceId: 'handoff-workspace', projectId: 'handoff-project', cwd,
+    agentDirectory, agentDirectoryId: 'handoff-agent', catalogRevision: '0',
+  };
+  let worker: StatelessWorker | undefined;
+  try {
+    worker = await StatelessWorker.open(bootstrap, async () => {});
+    await worker.operation({ type: 'catalog', revision: '1', operation: {
+      type: 'catalog.provider.configure', request: { expectedRevision: '0', configuration: {
+        providerId: 'handoff-proxy', name: 'Handoff proxy', endpoint: 'http://127.0.0.1:18080/v1',
+        protocol: 'chat-completions', credentialRef: null,
+      } },
+    } });
+    const imported = await worker.operation({ type: 'catalog', revision: '2', operation: {
+      type: 'catalog.credential.handoff', request: {
+        workspaceId: bootstrap.workspaceId, agentDirectoryId: bootstrap.agentDirectoryId,
+        expectedRevision: '1', selection: {
+          providerId: 'handoff-proxy', source: 'selected-file', credentialType: 'key',
+          file: { format: 'opencode-auth-entry', content: JSON.stringify({ type: 'api', key: 'stateless-fixture-key' }) },
+        },
+      },
+    } });
+    if (imported.type !== 'catalog' || imported.result.type !== 'catalog.credential.handed-off') {
+      throw new Error('Expected a native credential handoff result');
+    }
+    expect(imported.result.result.outcome.status).toBe('imported');
+    expect(JSON.stringify(imported)).not.toContain('stateless-fixture-key');
+    const credentialRef = imported.result.result.outcome.credentialRef;
+    if (!credentialRef) throw new Error('Expected the persisted credential reference');
+    await worker.close();
+    worker = await StatelessWorker.open({ ...bootstrap, workerGeneration: 'cold-handoff-generation', catalogRevision: '2' }, async () => {});
+    expect(await worker.operation({ type: 'catalog', revision: '2', operation: {
+      type: 'catalog.credential.resolve', request: {
+        workspaceId: bootstrap.workspaceId, agentDirectoryId: bootstrap.agentDirectoryId,
+        providerId: 'handoff-proxy', credentialRef, purpose: 'quota',
+      },
+    } })).toMatchObject({ type: 'catalog', result: { type: 'catalog.credential.resolved', result: {
+      credential: { type: 'api_key', key: 'stateless-fixture-key' },
+    } } });
+  } finally {
+    await worker?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

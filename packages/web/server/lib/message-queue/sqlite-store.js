@@ -27,6 +27,10 @@ const LegacyItemSchema = z.object({
 const LegacyScheduledResolutionSchema = z.strictObject({ options: CapturedSendOptionsSchema, context: z.array(PromptContextSchema).optional() });
 const LegacySessionSchema = z.object({ directory: z.string().min(1), items: z.array(LegacyItemSchema) });
 const LegacyDirectorySchema = z.object({ directory: z.string().min(1) });
+const LegacyFileSchema = z.object({
+  version: z.literal(1), revision: z.number().int().nonnegative(),
+  sessions: z.record(z.string().min(1), z.json()),
+});
 
 export class PromptQueueError extends Error {
   constructor(code, status, detail, details) {

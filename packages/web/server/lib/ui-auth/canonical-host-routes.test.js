@@ -234,6 +234,21 @@ describe('canonical Host authenticated real-service boundary', () => {
     ]);
     expect(requests).toHaveLength(0);
   });
+  it('preserves credential scope refusal without exposing resolver details or treating it as an outage', async () => {
+    servicePhase = 'ready';
+    for (const [status, code] of [[403, 'UNAUTHORIZED'], [400, 'INVALID_REQUEST']]) {
+      resolveScope = async () => { throw Object.assign(new Error(`${privateDir} private-marker`), { status, code }); };
+      const response = await pairedPreflight();
+      assertProblem(response, status, code);
+      expect(response.text).not.toContain(privateDir);
+      expect(response.text).not.toContain('private-marker');
+    }
+    resolveScope = async () => { throw new Error(`${privateDir} private-marker`); };
+    const unavailable = await pairedPreflight();
+    assertProblem(unavailable, 503, 'SERVICE_UNAVAILABLE');
+    expect(unavailable.text).not.toContain('private-marker');
+    expect(requests).toHaveLength(0);
+  });
   it('admits known ready operations before parsing provider secrets and never parses unknown routes', async () => {
     const malformedCredential = () => request(app)
       .put('/api/agent/v1/workspaces/workspace_1/providers/custom-proxy/credential')

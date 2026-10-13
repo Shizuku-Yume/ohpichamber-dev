@@ -124,6 +124,11 @@ export class StatelessWorker {
       case 'catalog.credential.write':
         await providerEntry();
         result = { type: 'catalog.credential.mutated', result: await this.credentials.write(operation.request, revision) }; break;
+      case 'catalog.credential.resolve':
+        result = { type: 'catalog.credential.resolved', result: await this.credentials.resolve(operation.request) }; break;
+      case 'catalog.credential.handoff':
+        await providerEntry();
+        result = { type: 'catalog.credential.handed-off', result: await this.credentials.handoff(operation.request, revision) }; break;
       case 'catalog.credential.delete': result = { type: 'catalog.credential.mutated', result: await this.credentials.delete(operation.request, revision) }; break;
       case 'catalog.agent.create': result = { type: 'catalog.agent.mutated', result: await this.agents.create(operation.request, revision) }; break;
       case 'catalog.agent.update': result = { type: 'catalog.agent.mutated', result: await this.agents.update(operation.request, revision) }; break;
