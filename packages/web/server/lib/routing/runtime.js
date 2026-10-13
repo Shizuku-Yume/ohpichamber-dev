@@ -191,15 +191,24 @@ export function createRoutingRuntime({
   };
   const readHistory = readSessionHistory ?? (async ({ sessionId }) => {
     await scopeForSession(sessionId);
+    const completedAtByMessage = new Map();
     const turns = await loadSettledTurns({
       signal: AbortSignal.timeout(HISTORY_TIMEOUT_MS),
-      readPage: async ({ limit, cursor }) => requestAgent(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/history?${new URLSearchParams({ limit: String(limit), ...(cursor ? { cursor } : {}) })}`),
+      readPage: async ({ limit, cursor }) => {
+        const page = await requestAgent(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/history?${new URLSearchParams({ limit: String(limit), ...(cursor ? { cursor } : {}) })}`);
+        for (const turn of page.turns) {
+          if (turn.status !== 'completed' || !Number.isFinite(turn.finishedAt)) continue;
+          for (const messageId of turn.assistantMessageIds) completedAtByMessage.set(messageId, turn.finishedAt);
+        }
+        return page;
+      },
     });
     const last = turns.at(-1)?.assistant;
+    const completedAt = completedAtByMessage.get(last?.id);
     return {
       history: turnsToHistory(turns),
-      lastAnswer: last?.providerId && last.modelId && last.completed
-        ? { providerID: last.providerId, modelID: last.modelId, completed: last.completed }
+      lastAnswer: last?.providerId && last.modelId && Number.isFinite(completedAt)
+        ? { providerID: last.providerId, modelID: last.modelId, finishedAt: completedAt }
         : null,
     };
   });
@@ -211,7 +220,7 @@ export function createRoutingRuntime({
       categories: enabledCategories(config), fallback: config.fallback, composerAgent, chosen, current: lastAnswer,
     });
     if (!held) return null;
-    const idle = now() - lastAnswer.completed;
+    const idle = now() - lastAnswer.finishedAt;
     if (idle < PROMPT_CACHE_TTL_MS) return held;
     return null;
   };
@@ -480,9 +489,9 @@ export function createRoutingRuntime({
     }
   };
 
-  /** Where a Jev request goes right now, or null when no classification provider is usable. */
+  /** Resolve the endpoint for an authorized workspace, or null when no provider is usable. */
   const currentClassifierEndpoint = async (workspaceId) => {
-    const scope = workspaceId === undefined ? null : await scopeForWorkspace(workspaceId);
+    const scope = await scopeForWorkspace(workspaceId);
     return (await resolveAccess(scope, true)).endpoint;
   };
 

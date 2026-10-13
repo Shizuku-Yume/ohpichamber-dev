@@ -28,14 +28,19 @@ const readyConfig = () => {
     : category);
   return config;
 };
-const settledHistory = (model, completedAt = NOW - 60_000) => [
-  { messageId: 'answer_1', sessionId: 's1', role: 'assistant', createdAt: completedAt - 100,
-    completedAt, providerId: model.providerID, modelId: model.modelID,
-    parts: [{ partId: 'answer_text', type: 'text', content: 'The bounded fix is ready.' },
-      { partId: 'answer_tool', type: 'tool', output: 'private tool output' }] },
-  { messageId: 'user_1', sessionId: 's1', role: 'user', createdAt: completedAt - 1000,
+const historyPage = (messages = [], turns = []) => ({
+  sessionId: 's1', branch: { branchId: 'branch_a', branchVersion: '1', leafMessageId: messages.at(-1)?.messageId ?? null },
+  turns, messages, nextCursor: null,
+});
+const settledHistory = (model, finishedAt = NOW - 60_000) => historyPage([
+  { messageId: 'user_1', sessionId: 's1', turnId: 'turn_1', role: 'user', createdAt: finishedAt - 1000,
     parts: [{ partId: 'user_text', type: 'text', content: 'Investigate the regression.' }] },
-];
+  { messageId: 'answer_1', sessionId: 's1', turnId: 'turn_1', role: 'assistant', createdAt: finishedAt - 100,
+    providerId: model.providerID, modelId: model.modelID,
+    parts: [{ partId: 'answer_text', type: 'text', content: 'The bounded fix is ready.' },
+      { partId: 'answer_tool', type: 'tool_result', toolCallId: 'tool_1', toolName: 'bash', output: 'private tool output', isError: false }] },
+], [{ turnId: 'turn_1', sessionId: 's1', runId: 'run_1', status: 'completed',
+  userMessageId: 'user_1', assistantMessageIds: ['answer_1'], startedAt: finishedAt - 1000, finishedAt }]);
 const catalogModel = (model, variants) => ({
   provider: model.providerID, modelId: model.modelID, name: model.modelID,
   modalities: ['text'], contextWindow: 128_000, maxOutputTokens: 8_000,
@@ -48,7 +53,7 @@ const catalogModel = (model, variants) => ({
 const makeRuntime = async ({
   config = readyConfig(), token = 'key', classifierSource = 'typesafe', customEndpoint = null,
   credentials = {}, credentialError = null, providerError = null, zenPromotionActive = true, enterprise = false, pinned = null,
-  catalog = [], history = [], answers = { category: { choice: 'hard', confidence: 0.97 } },
+  catalog = [], history = historyPage(), answers = { category: { choice: 'hard', confidence: 0.97 } },
   askError = null, sessionScope = SCOPE, workspaceScope = SCOPE, nowMs = NOW,
 } = {}) => {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'routing-runtime-'));
@@ -66,7 +71,7 @@ const makeRuntime = async ({
       const url = new URL(resource, 'http://agent.internal');
       if (url.pathname === '/api/agent/v1/sessions/s1/history') {
         if (state.history instanceof Error) return Response.json({ detail: state.history.message, code: 'SERVICE_UNAVAILABLE' }, { status: 503 });
-        return Response.json({ messages: state.history, newestFirst: true, nextCursor: null });
+        return Response.json(state.history);
       }
       if (url.pathname === '/api/agent/v1/workspaces/workspace_a/models') {
         if (state.catalog instanceof Error) return Response.json({ detail: state.catalog.message, code: 'SERVICE_UNAVAILABLE' }, { status: 503 });
@@ -236,12 +241,22 @@ describe('prompt-cache hysteresis from settled native history', () => {
     expect((await route({ choice: 'docs', config })).decision.category).toBe('docs');
   });
   it('ignores unfinished answers and uses the most recent settled model even when another request is pending', async () => {
-    const pending = { messageId: 'pending', sessionId: 's1', role: 'user', createdAt: NOW, parts: [{ type: 'text', content: 'push it' }] };
-    expect((await route({ history: [pending, ...settledHistory(HARD)] })).decision.category).toBe('hard');
+    const pending = { messageId: 'pending', sessionId: 's1', turnId: 'turn_pending', role: 'user', createdAt: NOW,
+      parts: [{ partId: 'pending_text', type: 'text', content: 'push it' }] };
+    const settled = settledHistory(HARD);
+    const pendingTurn = { turnId: 'turn_pending', sessionId: 's1', runId: 'run_pending', status: 'running',
+      userMessageId: 'pending', assistantMessageIds: [], startedAt: NOW };
+    expect((await route({ history: historyPage([...settled.messages, pending], [...settled.turns, pendingTurn]) })).decision.category).toBe('hard');
     const unfinished = settledHistory(HARD);
-    delete unfinished[0].completedAt;
+    unfinished.turns[0].status = 'running';
+    delete unfinished.turns[0].finishedAt;
     expect((await route({ history: unfinished })).decision.category).toBe('trivial');
-    expect((await route({ history: [] })).decision.category).toBe('trivial');
+    expect((await route({ history: historyPage() })).decision.category).toBe('trivial');
+  });
+  it('keeps completed context but does not invent cache age when a Turn has no finishedAt', async () => {
+    const history = settledHistory(HARD);
+    delete history.turns[0].finishedAt;
+    expect((await route({ history })).decision.category).toBe('trivial');
   });
 });
 
@@ -366,7 +381,7 @@ describe('classifier policy and durable settings', () => {
   it('checks enterprise policy at use time and refuses provider entry without losing stored picks', async () => {
     const { runtime, store, state, jev } = await makeRuntime();
     state.enterprise = true;
-    expect(await runtime.classifierEndpoint()).toBeNull();
+    expect(await runtime.classifierEndpoint(SCOPE.workspaceId)).toBeNull();
     await expect(runtime.setToken('secret')).rejects.toMatchObject({ status: 403 });
     await expect(runtime.setClassifierSource('openrouter')).rejects.toMatchObject({ status: 403 });
     await expect(runtime.setCustomEndpoint({ url: 'https://jev.example/decision', model: 'm' })).rejects.toMatchObject({ status: 403 });
@@ -374,7 +389,7 @@ describe('classifier policy and durable settings', () => {
     expect(await store.readClassifierSource()).toBe('typesafe');
     expect(jev.ask).not.toHaveBeenCalled();
     state.enterprise = false;
-    expect(await runtime.classifierEndpoint()).not.toBeNull();
+    expect(await runtime.classifierEndpoint(SCOPE.workspaceId)).not.toBeNull();
   });
   it('uses only the administrator-pinned endpoint in enterprise mode, permits Off and never publishes its key', async () => {
     const pinned = { url: 'https://company.example/decision', model: 'jev-org', key: 'org-secret' };
@@ -384,11 +399,18 @@ describe('classifier policy and durable settings', () => {
     await expect(runtime.clearCustomEndpoint()).rejects.toMatchObject({ status: 409 });
     await expect(runtime.setCustomEndpoint({ url: 'https://other.example', model: 'm' })).rejects.toMatchObject({ status: 409 });
     await runtime.setClassifierSource('off');
-    expect(await runtime.classifierEndpoint()).toBeNull();
+    expect(await runtime.classifierEndpoint(SCOPE.workspaceId)).toBeNull();
     await runtime.setClassifierSource('custom');
-    expect((await runtime.classifierEndpoint()).url).toBe(pinned.url);
+    expect((await runtime.classifierEndpoint(SCOPE.workspaceId)).url).toBe(pinned.url);
     state.pinned = null;
-    expect(await runtime.classifierEndpoint()).toBeNull();
+    expect(await runtime.classifierEndpoint(SCOPE.workspaceId)).toBeNull();
+  });
+  it('requires an authorized workspace before resolving any classifier endpoint', async () => {
+    const { runtime, service, resolveCredential } = await makeRuntime();
+    await expect(runtime.classifierEndpoint()).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(runtime.classifierEndpoint('workspace_other')).rejects.toMatchObject({ status: 403, code: 'UNAUTHORIZED' });
+    expect(service.request).not.toHaveBeenCalled();
+    expect(resolveCredential).not.toHaveBeenCalled();
   });
   it('describes catalog presence without resolving keys, then resolves only the selected provider at use time', async () => {
     const { runtime, state, resolveCredential, jev } = await makeRuntime({ token: null, classifierSource: 'openrouter', credentials: {

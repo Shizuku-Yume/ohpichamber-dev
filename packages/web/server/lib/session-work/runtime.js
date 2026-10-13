@@ -59,7 +59,7 @@ export function createSessionWorkRuntime({
   resolveSessionScope,
   /** `{ enabled, autoOpen, reviewOffer }` as currently saved. */
   getSettings = readSessionWorkSettings,
-  /** The classification provider's endpoint, or null when there is no Jev. */
+  /** `(workspaceId) => endpoint | null`, resolved within the session's Host workspace scope. */
   classifierEndpoint,
   jev,
   readMetadata,
@@ -114,7 +114,7 @@ export function createSessionWorkRuntime({
     for (let pageNumber = 0; pageNumber < 8; pageNumber += 1) {
       signal?.throwIfAborted();
       const page = await sessionService.history(sessionId, new URLSearchParams({ limit: '50', ...(cursor ? { cursor } : {}) }).toString());
-      const message = page?.messages?.find((candidate) => (candidate?.messageId || candidate?.id) === messageId);
+      const message = page?.messages?.find((candidate) => candidate?.messageId === messageId);
       if (message) return (Array.isArray(message.parts) ? message.parts : [])
         .filter((part) => part?.type === 'text' && typeof part.content === 'string')
         .map((part) => part.content).join('\n\n');
@@ -143,15 +143,17 @@ export function createSessionWorkRuntime({
     while (suggested.size > SEEN_MESSAGES_LIMIT) suggested.delete(suggested.keys().next().value);
   };
 
-  const onUserMessage = async ({ sessionId, scope, messageId, text = '', createdAt }) => {
+  const onUserMessage = async ({ sessionId, messageId, text = '', createdAt }) => {
     const settings = getSettings();
     if (!settings.enabled || !settings.autoOpen) return;
     if (seenMessages.has(messageId)) return;
+    const scope = await resolveSessionScope(sessionId);
+    if (!scope) return;
     const requestText = text.trim() || (await readMessageText(sessionId, messageId));
     if (!requestText.trim()) return;
     seenMessages.add(messageId);
     while (seenMessages.size > SEEN_MESSAGES_LIMIT) seenMessages.delete(seenMessages.values().next().value);
-    const endpoint = await classifierEndpoint();
+    const endpoint = await classifierEndpoint(scope.workspaceId);
     if (!endpoint) return;
     const session = await eligibleSession(sessionId, scope);
     if (!session) return;
@@ -188,7 +190,7 @@ export function createSessionWorkRuntime({
       .filter((part) => part?.type === 'text' && typeof part.content === 'string')
       .map((part) => part.content).join('\n\n');
     void onUserMessage({
-      sessionId, scope: scope || { sessionId, cwd: '' }, messageId: event.messageId, text, createdAt: event.createdAt ?? now(),
+      sessionId, messageId: event.messageId, text, createdAt: event.createdAt ?? now(),
     }).catch((error) => console.warn('[session-work] could not check a sent message:', errorMessage(error)));
   };
 
@@ -206,10 +208,10 @@ export function createSessionWorkRuntime({
     if (!turnGenerations.has(sessionId)) advanceTurn(sessionId);
     const generation = turnGeneration(sessionId);
     try {
-      const endpoint = await classifierEndpoint();
-      if (!endpoint) return null;
       const scope = await resolveSessionScope(sessionId);
       if (!scope) return null;
+      const endpoint = await classifierEndpoint(scope.workspaceId);
+      if (!endpoint) return null;
       const session = await eligibleSession(sessionId, scope);
       if (!session) return null;
       const work = settings.enabled ? readWork(await readMetadata(sessionId, scope.cwd)) : null;
@@ -220,7 +222,7 @@ export function createSessionWorkRuntime({
         recap: assist.recap,
         nextStep: assist.suggestion,
       };
-      const context = await loadAssistContext({ readPage: readPages(sessionId), signal: undefined });
+      const context = await loadAssistContext({ readPage: readPages(sessionId), signal: new AbortController().signal });
       if (!context) return null;
       const turn = context.turns.at(-1);
       const request = buildTurnEndRequest({

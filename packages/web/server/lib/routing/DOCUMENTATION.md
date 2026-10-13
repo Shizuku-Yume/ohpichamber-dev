@@ -36,18 +36,21 @@ There is no env gate — the feature shipped dark behind
 - `jev.js` — request builders, answer parsing, and the HTTP call with a
   timeout to the endpoint `classifierEndpoint` chose.
 - `history.js` — bounded text excerpts from settled turns. `runtime.js` reads
-  canonical session history through session assist's `loadSettledTurns`, keeps
-  the last three turns oldest first, and records the last settled model and
-  completion time for cache hysteresis. Tool payloads and unfinished answers
-  do not establish a warm model.
+  chronological canonical session history through session assist's
+  `loadSettledTurns`. Only `Turn.status === 'completed'` settles an answer;
+  the matching Turn's `finishedAt` establishes the prompt-cache age. It keeps
+  the last three turns oldest first. Tool payloads and unfinished answers do
+  not establish a warm model.
 - `cache.js` — "Try to preserve cache usage": `cacheHoldCategory` chooses
   whether a downward move should stay on the current settled model.
 - `runtime.js` — `createRoutingRuntime`, Auto resolution, permission verdicts,
   durable settings, availability and decision events. It requires the Agent
   Service, Host session/workspace scope resolvers and the selected private
   credential resolver. `describe(workspaceId)` reads only catalog presence;
-  `classifierEndpoint(workspaceId)` and `testClassifier(draft, workspaceId)`
-  resolve a selected native provider's credential only for execution.
+  `classifierEndpoint(workspaceId)` requires an authorized workspace; it and
+  `testClassifier(draft, workspaceId)` resolve a selected native provider's
+  credential only for execution. Session consumers pass their Host-resolved
+  workspace identity, never an unscoped classifier fallback.
 - `routes.js` — `/api/routing` (GET, PUT), `/api/routing/token` (PUT, DELETE),
   `/api/routing/classifier` (PUT), `/api/routing/classifier/custom` (PUT,
   DELETE), and `/api/routing/classifier/test` (POST). State and probe requests

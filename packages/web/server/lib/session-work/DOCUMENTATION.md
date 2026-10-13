@@ -16,8 +16,8 @@ Small Model is worth waking.
   the thresholds, and the decisions taken from the answers.
 - `state.js` — `metadata.openchamber.work` and the merge patches that change
   it. Every patch is decided against the record at write time.
-- `runtime.js` — `createSessionWorkRuntime`: `processPayload` (a sent message,
-  a turn start), `evaluateTurnEnd` (called by session assist), `stop`.
+- `runtime.js` — `createSessionWorkRuntime`: `processCanonicalEvent` (a sent
+  message, a turn start), `evaluateTurnEnd` (called by session assist), `stop`.
 
 ## State
 
@@ -41,7 +41,7 @@ is the metadata authority; execution session metadata is never a fallback.
 
 - Jev only opens. Nothing here ever writes `done`.
 - Jev reopens a closed session only for a request sent after the user closed
-  it (`openByJevPatch` compares the request's `time.created` with `doneAt`).
+  it (`openByJevPatch` compares the request's `createdAt` with `doneAt`).
 - Writes go through `updateSessionMetadata`, which decides the patch inside the
   store's per-session write queue, so a user's Done written a moment earlier
   is seen and kept.
@@ -62,15 +62,19 @@ is the metadata authority; execution session metadata is never a fallback.
 - A known subsession costs nothing: `../session-lineage.js` remembers which
   sessions have a parent (from `session.created` events and from any record
   read anyway), and a known one is skipped before any read or Jev call.
+- Each classifier call resolves the session's Host scope first and passes its
+  `workspaceId` to `classifierEndpoint`. Missing scope never selects a global
+  endpoint. Canonical history pages are chronological and carry Turns;
+  `status: 'completed'` establishes a settled answer, not a message timestamp.
 - Every failure (no classification provider, Jev error or timeout, an
   unreadable session) leaves state unchanged and returns an unknown gate, so
   session assist runs exactly as it did without Jev.
 
 ## When Jev is asked
 
-- A user message was sent (`message.updated`, role user, from the hub's
-  translation of `session.inbox.enqueued`): only with the feature and auto-open
-  on, a usable classification provider, and the session not already in work.
+- A user message was sent (canonical `message.created`, role user): only with
+  the feature and auto-open on, a usable classification provider in the Host
+  workspace, and the session not already in work.
   History is the three settled turns before it (`loadSettledTurns`). Each
   message id is asked about once.
 - A turn ended: session assist calls `evaluateTurnEnd` before it arms its quiet
