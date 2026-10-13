@@ -230,11 +230,13 @@ export class SessionRegistry {
     const entry: Extract<Entry, { state: 'opening' }> = { state: 'opening', input: resolved };
     if (previous?.state === 'live') entry.opened = previous.opened;
     this.entries.set(input.rootSessionId, entry);
+    let workerStarted = false;
     try {
       const { displayPath, ...bootstrap } = resolved;
       const policies = this.policyLoad ? await this.policyLoad({ sessionId: input.rootSessionId, workspaceId: input.workspaceId }) : [];
       this.interactions.loadPolicies(input.rootSessionId, input.workspaceId, policies);
       await this.workers.start(bootstrap, replace || previous?.state === 'live', policies);
+      workerStarted = true;
       if (!entry.opened) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
       const runtime = entry.opened.journal.runtime();
       await this.references.put({
@@ -248,9 +250,16 @@ export class SessionRegistry {
       this.entries.set(input.rootSessionId, { state: 'live', input: resolved, opened: entry.opened });
       return runtime;
     } catch (error) {
-      await this.workers.stop(input.rootSessionId);
-      if (previous) this.entries.set(input.rootSessionId, previous);
-      else this.entries.delete(input.rootSessionId);
+      // WorkerRegistry cleans up a rejected start; only a successful launch is ours to stop.
+      if (workerStarted) await this.workers.stop(input.rootSessionId);
+      if (previous?.state === 'unloaded' || (previous?.state === 'live'
+        && entry.opened === previous.opened
+        && previous.opened.journal.runtime().runtimeStatus !== 'unavailable')) {
+        this.entries.set(input.rootSessionId, previous);
+      } else if (entry.opened) {
+        entry.opened.journal.unavailable();
+        this.entries.set(input.rootSessionId, { state: 'live', input: resolved, opened: entry.opened });
+      } else this.entries.delete(input.rootSessionId);
       throw error;
     }
   }
