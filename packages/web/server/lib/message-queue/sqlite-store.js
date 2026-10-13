@@ -14,6 +14,9 @@ const ClaimSchema = z.strictObject({ epoch: EpochSchema, expiresAt: z.number().i
 const PendingDeliverySchema = z.strictObject({ leaseId: EntityIdSchema, queueItemId: EntityIdSchema, runId: EntityIdSchema, epoch: EpochSchema, phase: z.enum(['claimed', 'submitting', 'accepted']) });
 const ScheduledTaskModeSchema = z.enum(['existing', 'new']);
 const ScheduledTaskMetadataSchema = z.strictObject({ mode: ScheduledTaskModeSchema.default('existing'), projectId: EntityIdSchema, taskId: EntityIdSchema });
+const ScheduledTaskQuerySchema = z.strictObject({ projectId: EntityIdSchema, taskId: EntityIdSchema });
+const StoredItemSchema = z.strictObject({ content: z.string(), contextPreview: z.string().optional(), request: PromptRequestSchema });
+const ScheduledTaskProvenanceSchema = z.strictObject({ mode: z.literal('existing'), projectId: EntityIdSchema, taskId: EntityIdSchema, sessionId: EntityIdSchema, workspaceId: EntityIdSchema, triggeredAt: z.number().int().nonnegative() });
 const LegacyAttachmentSchema = z.object({ id: z.string().min(1), filename: z.string().min(1), mimeType: z.string().min(1), size: z.number().int().nonnegative(), source: z.enum(['local', 'server']), serverPath: z.string().optional(), dataUrl: z.string().min(1) });
 const LegacyItemSchema = z.object({
   id: EntityIdSchema, createdAt: z.number().int().nonnegative(), content: z.string(), text: z.string().optional(),
@@ -97,12 +100,12 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
   const decode = (row) => {
     try { return StoredItemSchema.parse(JSON.parse(row.payload)); } catch { throw corrupt(); }
   };
-  const scheduledTask = (stored) => {
+  const scheduledTask = (stored, scope) => {
     for (const context of stored.request.input.context) {
       if (context.kind !== 'context' || context.metadata.scheduledTask === undefined) continue;
-      const parsed = ScheduledTaskMetadataSchema.safeParse(context.metadata.scheduledTask);
+      const parsed = ScheduledTaskProvenanceSchema.safeParse(context.metadata.scheduledTask);
       if (!parsed.success) throw corrupt();
-      if (parsed.data.mode === 'existing') return parsed.data;
+      if (parsed.data.mode === 'existing' && parsed.data.sessionId === scope.sessionId && parsed.data.workspaceId === scope.workspaceId) return parsed.data;
     }
     return null;
   };
@@ -110,7 +113,9 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
     const parsed = ScheduledTaskQuerySchema.parse(query);
     const matches = [];
     for (const row of db.prepare('SELECT * FROM prompt_queue_item ORDER BY session_id, position, item_id').all()) {
-      const provenance = scheduledTask(decode(row));
+      const scopeRow = db.prepare('SELECT project_id, workspace_id FROM prompt_queue_owner WHERE session_id = ?').get(row.session_id);
+      if (!scopeRow) throw corrupt();
+      const provenance = scheduledTask(decode(row), { sessionId: row.session_id, workspaceId: scopeRow.workspace_id });
       if (provenance?.projectId === parsed.projectId && provenance.taskId === parsed.taskId) matches.push({ row, provenance });
     }
     return matches;
@@ -187,6 +192,13 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
       if (row) db.prepare('UPDATE prompt_queue_owner SET revision = ? WHERE session_id = ?').run((BigInt(row.revision) + 1n).toString(), sessionId);
     }
   });
+  const scheduledTaskProvenance = (request) => {
+    const parsed = PromptRequestSchema.parse(request);
+    for (const context of parsed.input.context) {
+      if (context.kind === 'context' && context.metadata.scheduledTask !== undefined) return ScheduledTaskProvenanceSchema.parse(context.metadata.scheduledTask);
+    }
+    return null;
+  };
   return {
     getState: (scope) => read(() => state(ScopeSchema.parse(scope))),
     getDeliveryCapture,
