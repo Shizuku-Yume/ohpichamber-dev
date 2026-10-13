@@ -16,10 +16,10 @@ const queueScope = (scope) => ({
 const scopeKey = (scope) => JSON.stringify([scope.projectId, scope.workspaceId, scope.sessionId]);
 
 /** One Host queue dispatcher; service acknowledgements never mean a run is terminal. */
-export function createCanonicalQueueRuntime({ store, service, resolveAttachments, publishQueue, reportFailure, capturePrompt = async (_scope, request) => request, beforeDispatch = async () => {}, onPromptAccepted = async () => {}, now = Date.now }) {
+export function createCanonicalQueueRuntime({ store, service, resolveAttachments, publishQueue, reportFailure, capturePrompt = async (_scope, request) => request, beforeDispatch = async () => {}, onPromptAccepted = async () => {}, onScheduledTaskResult = async () => {}, now = Date.now }) {
   if (!store || !service || typeof service.request !== 'function') throw new TypeError('canonical queue requires store and Agent service');
   if (typeof resolveAttachments !== 'function' || typeof publishQueue !== 'function' || typeof reportFailure !== 'function') throw new TypeError('canonical queue requires attachments and publication callbacks');
-  if (typeof capturePrompt !== 'function' || typeof beforeDispatch !== 'function' || typeof onPromptAccepted !== 'function') throw new TypeError('canonical queue requires delivery hooks');
+  if (typeof capturePrompt !== 'function' || typeof beforeDispatch !== 'function' || typeof onPromptAccepted !== 'function' || typeof onScheduledTaskResult !== 'function') throw new TypeError('canonical queue requires delivery hooks');
   const timers = new Map();
   const operations = new Map();
   const holds = new Map();
@@ -86,7 +86,15 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
       cursor = page.nextCursor ?? undefined;
     } while (cursor !== undefined);
   };
-  const accepted = async (scope, capture) => onPromptAccepted(scope, capture);
+  const scheduledProvenance = (capture) => typeof store.scheduledTaskProvenance === 'function' ? store.scheduledTaskProvenance(capture.request) : null;
+  const scheduledResult = async (capture, status, error) => {
+    const provenance = scheduledProvenance(capture);
+    if (provenance) await onScheduledTaskResult(provenance, status, error);
+  };
+  const accepted = async (scope, capture) => {
+    await onPromptAccepted(scope, capture);
+    await scheduledResult(capture, 'sent');
+  };
   const recoveryCapture = async (scope, delivery) => {
     if (typeof store.getDeliveryCapture !== 'function') throw new PromptQueueError('INTERNAL_ERROR', 503, 'Queue delivery capture is unavailable');
     return store.getDeliveryCapture(queueScope(scope), delivery.leaseId);
@@ -137,9 +145,10 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
       changed(scope, claimed.queue);
       const capture = claimed.capture;
       try { await beforeDispatch(scope, capture); }
-      catch {
+      catch (error) {
         changed(scope, await store.fail(queueScope(scope), capture.leaseId, 'INVALID_REQUEST'));
         reportFailure({ sessionId: scope.sessionId, queueItemId: capture.queueItemId, runId: capture.runId, code: 'INVALID_REQUEST' });
+        await scheduledResult(capture, 'failed', error?.message);
         schedule(scope); return;
       }
       let attachments;
@@ -147,6 +156,7 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
       catch (error) {
         changed(scope, await store.fail(queueScope(scope), capture.leaseId, 'INVALID_REQUEST'));
         reportFailure({ sessionId: scope.sessionId, queueItemId: capture.queueItemId, runId: capture.runId, code: 'INVALID_REQUEST' });
+        await scheduledResult(capture, 'failed', error?.message);
         schedule(scope); return;
       }
       if (stopped) return;
@@ -173,6 +183,7 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
         else if (response.status >= 400 && response.status < 500) {
           changed(scope, await store.fail(queueScope(scope), capture.leaseId, problem.code));
           reportFailure({ sessionId: scope.sessionId, queueItemId: capture.queueItemId, runId: capture.runId, code: problem.code });
+          await scheduledResult(capture, 'failed', problem.detail);
         }
         // A 5xx can arrive after admission; leave its claim intact until reconciliation.
         schedule(scope, RETRY_MS); return;
@@ -196,10 +207,19 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
       const queue = await store.append(queueScope(scope), commandId, { ...request, request: captured });
       changed(scope, queue); schedule(scope); return queue;
     },
+    hasScheduledTask: (projectId, taskId) => store.hasScheduledTask({ projectId, taskId }),
+    cancelScheduledTask: async (projectId, taskId) => {
+      const result = await store.cancelScheduledTask({ projectId, taskId });
+      try {
+        for (const item of result.cancelled) await onScheduledTaskResult(item.provenance, 'cancelled');
+      } catch (error) {
+        await store.restoreScheduledCancellation(result.cancelled);
+        throw error;
+      }
+      for (const entry of result.queue) changed(entry.scope, entry.state);
+      return { cancelled: result.cancelled.length > 0 };
+    },
     reorder: async (scope, request) => changed(scope, await store.reorder(queueScope(scope), request)),
-    remove: async (scope, request) => changed(scope, await store.remove(queueScope(scope), request)),
-    getState: (scope) => store.getState(queueScope(scope)),
-    dispatch,
     observe: async (scope, input) => {
       const event = CanonicalEventSchema.parse(input);
       if (stopped || event.sessionId !== scope.sessionId) return;

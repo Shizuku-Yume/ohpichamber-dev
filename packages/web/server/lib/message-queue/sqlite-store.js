@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
-  CounterSchema, EntityIdSchema, EpochSchema, PromptContextSchema, PromptRequestSchema,
+  CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, PromptContextSchema, PromptRequestSchema,
   QueueAppendRequestSchema, QueueDeleteRequestSchema, QueueReorderRequestSchema, QueueStateSchema,
 } from '@openchamber/agent-contract';
 import { createMetadataLifecycle, openHostMetadataDatabase, withTransaction } from '../host/metadata-sqlite.js';
@@ -11,8 +11,9 @@ import { createMetadataLifecycle, openHostMetadataDatabase, withTransaction } fr
 const ScopeSchema = z.strictObject({ sessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema });
 const CommandIdSchema = z.uuid({ version: 'v4' });
 const ClaimSchema = z.strictObject({ epoch: EpochSchema, expiresAt: z.number().int().nonnegative() });
-const StoredItemSchema = QueueAppendRequestSchema.omit({ expectedRevision: true });
 const PendingDeliverySchema = z.strictObject({ leaseId: EntityIdSchema, queueItemId: EntityIdSchema, runId: EntityIdSchema, epoch: EpochSchema, phase: z.enum(['claimed', 'submitting', 'accepted']) });
+const ScheduledTaskModeSchema = z.enum(['existing', 'new']);
+const ScheduledTaskMetadataSchema = z.strictObject({ mode: ScheduledTaskModeSchema.default('existing'), projectId: EntityIdSchema, taskId: EntityIdSchema });
 const LegacyAttachmentSchema = z.object({ id: z.string().min(1), filename: z.string().min(1), mimeType: z.string().min(1), size: z.number().int().nonnegative(), source: z.enum(['local', 'server']), serverPath: z.string().optional(), dataUrl: z.string().min(1) });
 const LegacyItemSchema = z.object({
   id: EntityIdSchema, createdAt: z.number().int().nonnegative(), content: z.string(), text: z.string().optional(),
@@ -20,7 +21,7 @@ const LegacyItemSchema = z.object({
   agentMention: z.string().optional(), sendConfig: z.object({ providerID: z.string().min(1).optional(), modelID: z.string().min(1).optional(), agent: z.string().min(1).optional(), variant: z.string().min(1).optional() }),
   scheduledTask: z.object({ projectId: z.string().min(1), taskId: z.string().min(1) }).optional(),
 }).refine((item) => item.scheduledTask !== undefined || (item.sendConfig.providerID !== undefined && item.sendConfig.modelID !== undefined), 'Legacy queued prompts capture their provider and model');
-const LegacyFileSchema = z.object({ version: z.literal(1), revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), sessions: z.record(z.string(), z.json()) });
+const LegacyScheduledResolutionSchema = z.strictObject({ options: CapturedSendOptionsSchema, context: z.array(PromptContextSchema).optional() });
 const LegacySessionSchema = z.object({ directory: z.string().min(1), items: z.array(LegacyItemSchema) });
 const LegacyDirectorySchema = z.object({ directory: z.string().min(1) });
 
@@ -96,6 +97,24 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
   const decode = (row) => {
     try { return StoredItemSchema.parse(JSON.parse(row.payload)); } catch { throw corrupt(); }
   };
+  const scheduledTask = (stored) => {
+    for (const context of stored.request.input.context) {
+      if (context.kind !== 'context' || context.metadata.scheduledTask === undefined) continue;
+      const parsed = ScheduledTaskMetadataSchema.safeParse(context.metadata.scheduledTask);
+      if (!parsed.success) throw corrupt();
+      if (parsed.data.mode === 'existing') return parsed.data;
+    }
+    return null;
+  };
+  const matchingScheduledItems = (query) => {
+    const parsed = ScheduledTaskQuerySchema.parse(query);
+    const matches = [];
+    for (const row of db.prepare('SELECT * FROM prompt_queue_item ORDER BY session_id, position, item_id').all()) {
+      const provenance = scheduledTask(decode(row));
+      if (provenance?.projectId === parsed.projectId && provenance.taskId === parsed.taskId) matches.push({ row, provenance });
+    }
+    return matches;
+  };
   const rows = (sessionId) => db.prepare('SELECT * FROM prompt_queue_item WHERE session_id = ? ORDER BY position, item_id').all(sessionId);
   const state = (scope) => {
     const record = owner(scope);
@@ -153,8 +172,42 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
     if (!item) conflict(scope);
     return item;
   };
+  const restoreScheduledCancellation = (records) => write(() => {
+    const restoredSessions = new Set();
+    for (const record of records) {
+      const scope = ScopeSchema.parse(record.scope);
+      owner(scope, true);
+      if (db.prepare('SELECT 1 FROM prompt_queue_item WHERE session_id = ? AND item_id = ?').get(scope.sessionId, record.row.item_id)) continue;
+      db.prepare('INSERT INTO prompt_queue_item (session_id, item_id, position, created_at, payload, lease_id, lease_expires_at) VALUES (?, ?, ?, ?, ?, NULL, NULL)')
+        .run(scope.sessionId, record.row.item_id, record.row.position, record.row.created_at, record.row.payload);
+      restoredSessions.add(scope.sessionId);
+    }
+    for (const sessionId of restoredSessions) {
+      const row = db.prepare('SELECT * FROM prompt_queue_owner WHERE session_id = ?').get(sessionId);
+      if (row) db.prepare('UPDATE prompt_queue_owner SET revision = ? WHERE session_id = ?').run((BigInt(row.revision) + 1n).toString(), sessionId);
+    }
+  });
+  const scheduledTaskProvenance = (request) => scheduledTask({ request: PromptRequestSchema.parse(request) });
   return {
     getDeliveryCapture,
+    scheduledTaskProvenance,
+    hasScheduledTask: (query) => read(() => matchingScheduledItems(query).length > 0),
+    cancelScheduledTask: (query) => write(() => {
+      const matches = matchingScheduledItems(query).filter(({ row }) => row.lease_id === null);
+      const cancelled = [];
+      const sessions = new Set();
+      for (const match of matches) {
+        const scopeRow = db.prepare('SELECT project_id, workspace_id FROM prompt_queue_owner WHERE session_id = ?').get(match.row.session_id);
+        if (!scopeRow) throw corrupt();
+        const scope = { sessionId: match.row.session_id, projectId: scopeRow.project_id, workspaceId: scopeRow.workspace_id };
+        db.prepare('DELETE FROM prompt_queue_item WHERE session_id = ? AND item_id = ? AND lease_id IS NULL').run(match.row.session_id, match.row.item_id);
+        cancelled.push({ scope, provenance: match.provenance, row: match.row });
+        sessions.add(scope.sessionId);
+      }
+      for (const sessionId of sessions) bump({ sessionId, projectId: db.prepare('SELECT project_id FROM prompt_queue_owner WHERE session_id = ?').get(sessionId).project_id, workspaceId: db.prepare('SELECT workspace_id FROM prompt_queue_owner WHERE session_id = ?').get(sessionId).workspace_id });
+      return { cancelled, queue: cancelled.map(({ scope }) => ({ scope, state: state(scope) })) };
+    }),
+    restoreScheduledCancellation,
     list: () => read(() => {
       const items = [], errors = [];
       for (const row of db.prepare('SELECT * FROM prompt_queue_owner').all()) {
@@ -174,6 +227,8 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
         if (receipt.payload_hash !== fingerprint) throw new PromptQueueError('IDEMPOTENCY_CONFLICT', 400, 'Command key already identifies another queue request');
         try { return QueueStateSchema.parse(JSON.parse(receipt.response)); } catch { throw corrupt(); }
       }
+      const provenance = scheduledTaskProvenance(request.request);
+      if (provenance && matchingScheduledItems(provenance).length > 0) throw new PromptQueueError('QUEUE_CONFLICT', 409, 'task is already queued');
       checkRevision(scope, request.expectedRevision);
       owner(scope, true);
       if (request.content.length > 200_000 || request.request.input.text.length > 200_000) throw new PromptQueueError('PAYLOAD_TOO_LARGE', 413, 'Queued text exceeds its limit');
@@ -297,13 +352,24 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
           const captured = [];
           for (const item of legacy.items) {
             const attachments = await Promise.all(item.attachments.map((attachment) => importAttachment(scope, attachment)));
-            const send = item.scheduledTask ? await resolveScheduledTask(scope, item.scheduledTask) : item.sendConfig;
-            const input = { text: item.text ?? item.content, attachments, context: item.context };
-            if (item.agentMention) input.agentMention = { agentId: item.agentMention };
-            const request = PromptRequestSchema.parse({
-              input,
-              options: { providerId: send.providerID ?? null, modelId: send.modelID ?? null, agentId: send.agent ?? null, variant: send.variant ?? null, reasoningEffort: null },
+            let options = CapturedSendOptionsSchema.parse({
+              providerId: item.sendConfig.providerID ?? null,
+              modelId: item.sendConfig.modelID ?? null,
+              agentId: item.sendConfig.agent ?? null,
+              variant: item.sendConfig.variant ?? null,
+              reasoningEffort: null,
             });
+            let context = item.context;
+            if (item.scheduledTask) {
+              const resolved = LegacyScheduledResolutionSchema.parse(await resolveScheduledTask(scope, item.scheduledTask));
+              options = resolved.options;
+              context = resolved.context ?? context;
+              const hasProvenance = context.some((entry) => entry.kind === 'context' && entry.metadata.scheduledTask !== undefined);
+              if (!hasProvenance) context = [...context, { kind: 'context', text: '', metadata: { scheduledTask: { mode: 'existing', ...item.scheduledTask } } }];
+            }
+            const input = { text: item.text ?? item.content, attachments, context };
+            if (item.agentMention) input.agentMention = { agentId: item.agentMention };
+            const request = PromptRequestSchema.parse({ input, options });
             captured.push({ id: item.id, createdAt: item.createdAt, stored: StoredItemSchema.parse({ content: item.content, contextPreview: preview(item.contextPreview), request }) });
           }
           withTransaction(db, () => {
