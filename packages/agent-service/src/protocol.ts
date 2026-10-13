@@ -19,7 +19,7 @@ export const WorkerBootstrapSchema = z.strictObject({
   rootSessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
   cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema,
   sessionsDirectory: PrivatePathSchema.optional(), sessionFile: PrivatePathSchema.optional(),
-  options: CapturedSendOptionsSchema.optional(), env: z.record(z.string(), z.string()).optional(),
+  mcpConfigPath: PrivatePathSchema.optional(), options: CapturedSendOptionsSchema.optional(), env: z.record(z.string(), z.string()).optional(),
   agentDirectoryId: EntityIdSchema.optional(), observationEpoch: EpochSchema.optional(),
   catalogRevision: CounterSchema.optional(), mcpConfiguration: MCPConfigurationStateSchema.optional(),
   skillSources: SkillSourceRevisionsSchema.optional(),
