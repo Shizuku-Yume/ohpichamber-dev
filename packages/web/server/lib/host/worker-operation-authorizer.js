@@ -12,10 +12,10 @@ import { isPermissionMode } from '../permission-auto-accept/modes.js';
 const denied = (code = 'UNAUTHORIZED', status = 403) => ({ allowed: false, code, status });
 const allowed = { allowed: true };
 
-const OAuthEndpointSchema = z.string().url().refine(value => {
+const OAuthEndpointSchema = z.string().url().pipe(z.string().refine(value => {
   const endpoint = new URL(value);
   return ['http:', 'https:'].includes(endpoint.protocol) && !endpoint.username && !endpoint.password && !endpoint.hash;
-});
+}));
 const OAuthPolicyConfigurationSchema = z.strictObject({
   authorizationUrl: OAuthEndpointSchema.optional(), tokenUrl: OAuthEndpointSchema.optional(),
   issuerUrl: OAuthEndpointSchema.optional(), registrationUrl: OAuthEndpointSchema.optional(),
