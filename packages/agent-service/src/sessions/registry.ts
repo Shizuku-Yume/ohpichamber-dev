@@ -4,21 +4,21 @@ import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema } from '
 import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema } from '../protocol.ts';
 import type { WorkerInteraction, WorkerOperation } from '../protocol.ts';
+import { HostSessionBootstrapSchema } from '../supervisor/host-authorization-protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError, SessionJournal } from '../projection/journal.ts';
 import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { WorkerOperationError, WorkerRegistry } from '../supervisor/workers.ts';
 import { SessionReferenceError, SessionReferences } from './references.ts';
 import type { SessionReference } from './references.ts';
-export const PrivateSessionBootstrapSchema = WorkerBootstrapSchema.merge(z.strictObject({}).merge(RuntimeSessionSchema).pick({ displayPath: true }));
-export type PrivateSessionBootstrap = z.infer<typeof PrivateSessionBootstrapSchema>;
+type SessionBootstrap = z.infer<typeof HostSessionBootstrapSchema>;
 export interface SessionList { items: RuntimeSession[]; errors: { sessionId: string; code: ProblemCode }[]; }
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' }>;
 type Opened = { generation: string; sessionFile: string; journal: SessionJournal };
 type Entry =
   | { state: 'unloaded'; reference: SessionReference; runtime: RuntimeSession }
-  | { state: 'opening'; input: PrivateSessionBootstrap; opened?: Opened }
-  | { state: 'live'; input: PrivateSessionBootstrap; opened: Opened };
+  | { state: 'opening'; input: SessionBootstrap; opened?: Opened }
+  | { state: 'live'; input: SessionBootstrap; opened: Opened };
 
 export class SessionRegistry {
   private readonly references: SessionReferences;
@@ -46,9 +46,9 @@ export class SessionRegistry {
     }
   }
 
-  open(input: PrivateSessionBootstrap, replace = false): Promise<RuntimeSession> {
+  open(input: SessionBootstrap, replace = false): Promise<RuntimeSession> {
     this.ensureOpen();
-    const parsed = PrivateSessionBootstrapSchema.parse(input);
+    const parsed = HostSessionBootstrapSchema.parse(input);
     if (this.deleting.has(parsed.rootSessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
     const existing = this.entries.get(parsed.rootSessionId);
     const scope = existing?.state === 'unloaded' ? existing.reference : existing?.input;
@@ -222,7 +222,7 @@ export class SessionRegistry {
     await this.references.close();
   }
 
-  private async openResolved(input: PrivateSessionBootstrap, replace: boolean): Promise<RuntimeSession> {
+  private async openResolved(input: SessionBootstrap, replace: boolean): Promise<RuntimeSession> {
     const previous = this.entries.get(input.rootSessionId);
     const reference = this.references.get(input.rootSessionId);
     if (!replace && previous?.state === 'live' && previous.opened.journal.runtime().runtimeStatus !== 'unavailable') return previous.opened.journal.runtime();

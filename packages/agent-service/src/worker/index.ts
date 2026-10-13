@@ -7,6 +7,16 @@ import { StatelessWorker } from './stateless.ts';
 import { WorkerPolicy } from './policy.ts';
 import { NativeMcpError } from './mcp.ts';
 
+function nativeMcpStatus(error: NativeMcpError): number {
+  switch (error.code) {
+    case 'CATALOG_CONFLICT': case 'WORKER_GENERATION_CONFLICT': case 'MCP_OAUTH_CANCELLED': return 409;
+    case 'MCP_OAUTH_NOT_FOUND': return 404;
+    case 'MCP_CREDENTIAL_UNAVAILABLE': return 422;
+    case 'MCP_OAUTH_FAILED': return error.retryable ? 502 : 422;
+    default: return 503;
+  }
+}
+
 let bootstrap: WorkerBootstrapMessage | CompletionWorkerBootstrap | undefined;
 let initialization: Promise<void> | undefined;
 let resources: WorkerSession | StatelessWorker | undefined;
@@ -67,7 +77,7 @@ process.on('message', raw => {
     }).catch(error => {
       const nativeCode = error instanceof NativeMcpError ? ProblemCodeSchema.safeParse(error.code) : undefined;
       send({ type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId,
-        status: error instanceof ProjectionError ? error.status : error instanceof NativeMcpError && error.code === 'CATALOG_CONFLICT' ? 409 : 503,
+        status: error instanceof ProjectionError ? error.status : error instanceof NativeMcpError ? nativeMcpStatus(error) : 503,
         code: error instanceof ProjectionError ? error.code : nativeCode?.success ? nativeCode.data : 'SERVICE_UNAVAILABLE' });
     });
     return;

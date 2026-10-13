@@ -44,7 +44,7 @@ export interface WorkerRegistryOptions {
   prepareBootstrap?: (input: WorkerBootstrap) => Promise<WorkerBootstrap>;
 }
 function defaultWorkerRuntime(): string {
-  if (typeof Bun !== 'undefined' && process.execPath.includes('bun')) return process.execPath;
+  if (process.execPath.includes('bun')) return process.execPath;
   return Bun.which('bun') ?? process.execPath;
 }
 
@@ -87,7 +87,7 @@ export class WorkerRegistry {
     const entry = this.entries.get(rootSessionId);
     if (this.closing || !entry || !entry.child.connected || (entry.info.state !== 'starting' && entry.info.state !== 'ready')) return undefined;
     const { projectId, workspaceId, cwd, agentDirectory, agentDirectoryId } = entry.input;
-    return { rootSessionId, workerGeneration: entry.info.workerGeneration, projectId, workspaceId, cwd, agentDirectory, ...(agentDirectoryId === undefined ? {} : { agentDirectoryId }) };
+    return { rootSessionId, workerGeneration: entry.info.workerGeneration, projectId, workspaceId, cwd, agentDirectory, agentDirectoryId };
   }
 
   async request(rootSessionId: string, operation: WorkerOperation, expectedGeneration?: string): Promise<WorkerOperationResult> {

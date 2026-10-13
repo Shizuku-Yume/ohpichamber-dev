@@ -8,14 +8,16 @@ import {
   MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema,
   SkillsApplyRequestSchema, SkillExpandRequestSchema,
   MCPWorkerApplyOutcomeSchema, SkillsWorkerApplyOutcomeSchema,
+  MCPOAuthRequestSchema, MCPOAuthResultSchema,
 } from '@openchamber/agent-contract';
 import type {
   CatalogWorkerIdentity as ContractCatalogWorkerIdentity, MCPConfigurationState,
   MCPConfigureRequest, MCPApplyRequest, MCPReconnectRequest, MCPCatalogRead,
   MCPWorkerApplyOutcome, MCPApplyResult, SkillsCatalogState, SkillsApplyResult,
   SkillsWorkerApplyOutcome, SkillExpandRequest, SkillExpandResult, SkillSourceRevisions,
-  SkillInstallResult, SkillSourceScope, CatalogOperationError,
+  SkillInstallResult, SkillSourceScope, CatalogOperationError, MCPOAuthRequest, MCPOAuthResult,
 } from '@openchamber/agent-contract';
+import { WorkerOperationError } from './workers.ts';
 
 const CatalogWorkerIdentityWithOwnerSchema = CatalogWorkerIdentitySchema.extend({ agentDirectoryId: EntityIdSchema });
 export type CatalogWorkerIdentity = z.infer<typeof CatalogWorkerIdentityWithOwnerSchema>;
@@ -27,6 +29,8 @@ export interface CatalogWorker {
     read(configuration: MCPConfigurationState): Promise<MCPCatalogRead>;
     apply(request: MCPApplyRequest, configuration: MCPConfigurationState): Promise<MCPWorkerApplyOutcome>;
     reconnect(serverId: string, request: MCPReconnectRequest, configuration: MCPConfigurationState): Promise<MCPCatalogRead>;
+    oauthStatus(serverId: string, configuration: MCPConfigurationState): Promise<MCPOAuthResult>;
+    oauth(serverId: string, request: MCPOAuthRequest, configuration: MCPConfigurationState): Promise<MCPOAuthResult>;
   };
   skills: {
     read(sources: SkillSourceRevisions): Promise<SkillsCatalogState>;
@@ -56,7 +60,7 @@ export interface CatalogBootstrapInput {
 
 export type CatalogCoordinatorErrorCode =
   | 'CATALOG_CONFLICT' | 'MCP_CONFIG_WRITE_FAILED' | 'MCP_APPLY_FAILED'
-  | 'MCP_RECONNECT_FAILED' | 'SKILL_APPLY_FAILED' | 'SERVICE_UNAVAILABLE';
+  | 'MCP_RECONNECT_FAILED' | 'SKILL_APPLY_FAILED' | 'SERVICE_UNAVAILABLE' | 'WORKER_GENERATION_CONFLICT';
 
 export class CatalogCoordinatorError extends Error {
   constructor(
@@ -99,10 +103,9 @@ function ownerIdentity(worker: CatalogWorker): ContractCatalogWorkerIdentity {
   };
 }
 
-function operationError(error: unknown, fallbackCode: string, detail: string): CatalogOperationError {
-  if (error && typeof error === 'object') {
-    const candidate = error as { code?: unknown; retryable?: unknown };
-    if (typeof candidate.code === 'string') return { code: candidate.code, detail, retryable: candidate.retryable === true };
+function operationError(error: Error | undefined, fallbackCode: string, detail: string): CatalogOperationError {
+  if (error instanceof WorkerOperationError || error instanceof CatalogCoordinatorError) {
+    return { code: error.code, detail, retryable: error.status >= 500 };
   }
   return { code: fallbackCode, detail, retryable: true };
 }
@@ -321,6 +324,54 @@ export class CatalogCoordinator {
     });
   }
 
+  async oauthStatus(rootSessionId: string, serverId: string): Promise<MCPOAuthResult> {
+    const target = await this.oauthTarget(rootSessionId, serverId);
+    const result = await target.worker.mcp.oauthStatus(serverId, target.configuration);
+    return this.finishOAuth(target.worker, target.configuration, serverId, result);
+  }
+
+  async oauth(rootSessionId: string, serverId: string, request: MCPOAuthRequest): Promise<MCPOAuthResult> {
+    const input = MCPOAuthRequestSchema.parse(request);
+    const target = await this.oauthTarget(rootSessionId, serverId, input);
+    // Browser callbacks must not prevent cancellation, configuration changes or root admission.
+    const result = await target.worker.mcp.oauth(serverId, input, target.configuration);
+    return this.finishOAuth(target.worker, target.configuration, serverId, result);
+  }
+
+  private oauthTarget(rootSessionId: string, serverId: string, request?: MCPOAuthRequest) {
+    return this.serial(async () => {
+      EntityIdSchema.parse(serverId);
+      const captured = this.workers.get(rootSessionId);
+      if (request && (!captured || request.workerGeneration !== captured.identity.workerGeneration || !await this.live(captured))) {
+        throw new CatalogCoordinatorError(409, 'WORKER_GENERATION_CONFLICT', {});
+      }
+      const worker = await this.resolveWorker(rootSessionId);
+      const configuration = this.workspace(worker.identity.workspaceId).configuration;
+      if (request && request.persistedRevision !== configuration.persistedRevision) {
+        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: configuration.persistedRevision });
+      }
+      return { worker, configuration };
+    });
+  }
+
+  private finishOAuth(worker: CatalogWorker, configuration: MCPConfigurationState, serverId: string, result: MCPOAuthResult): Promise<MCPOAuthResult> {
+    return this.serial(async () => {
+      if (!await this.live(worker)) throw new CatalogCoordinatorError(409, 'WORKER_GENERATION_CONFLICT', {});
+      const current = this.workspace(worker.identity.workspaceId).configuration;
+      if (current.persistedRevision !== configuration.persistedRevision) {
+        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: current.persistedRevision });
+      }
+      const parsed = MCPOAuthResultSchema.parse(result);
+      if (parsed.serverId !== serverId || parsed.persistedRevision !== configuration.persistedRevision
+        || parsed.worker.rootSessionId !== worker.identity.rootSessionId || parsed.worker.workspaceId !== worker.identity.workspaceId
+        || parsed.worker.workerGeneration !== worker.identity.workerGeneration) {
+        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+      }
+      return parsed;
+    });
+  }
+
+
   async publishSources(workspaceId: string, input: {
     scope: 'workspace' | 'agent'; sourceRevision: string; expectedSourceRevision: string; agentDirectoryId?: string;
   }): Promise<SkillInstallResult> {
@@ -499,7 +550,7 @@ export class CatalogCoordinator {
       }
       return MCPWorkerApplyOutcomeSchema.parse({ worker: ownerIdentity(worker), outcome: 'failed',
         revisions: { runtimeStatus: previous.workerCatalog.runtimeStatus, appliedRevision: previous.workerCatalog.appliedRevision, catalogRevision: previous.workerCatalog.catalogRevision },
-        error: operationError(error, 'MCP_APPLY_FAILED', 'MCP runtime application failed; the prior catalog is retained.') });
+        error: operationError(error instanceof Error ? error : undefined, 'MCP_APPLY_FAILED', 'MCP runtime application failed; the prior catalog is retained.') });
     }
   }
 
@@ -540,7 +591,7 @@ export class CatalogCoordinator {
         persistedSources: sources,
         appliedSources: previous.appliedSources,
         catalogRevision: previous.catalogRevision,
-      }, error: operationError(error, 'SKILL_APPLY_FAILED', 'Skill application failed; the prior catalog is retained.') });
+      }, error: operationError(error instanceof Error ? error : undefined, 'SKILL_APPLY_FAILED', 'Skill application failed; the prior catalog is retained.') });
     }
   }
 

@@ -42,6 +42,10 @@ const skillFailed = { worker: sibling, outcome: 'failed', revisions: oldSkillRev
 const scope = { kind: 'workspace', workspaceId: 'workspace_1' };
 const skillResult = { kind: 'skills', status: 'partial', scope, sourceRevision: '2', workers: [skillApplied, skillFailed] };
 const install = { scope, sourceRevision: '2', persistence: 'committed', apply: skillResult };
+const oauthConfiguration = { authorizationUrl: 'https://auth.example/authorize?audience=mcp', tokenUrl: 'https://auth.example/token', clientId: 'client_1', scopes: 'mcp:tools' };
+const oauthFlow = { flowId: 'flow_1', authorizationUrl: 'https://auth.example/authorize?state=opaque&code_challenge=challenge' };
+const oauthOwner = { persistedRevision: '2', workerGeneration: 'generation_a1' };
+const oauthPending = { serverId: 'server_1', worker, persistedRevision: '2', status: 'pending', authenticated: false, pendingFlow: oauthFlow };
 
 const boundaries = [
   { name: 'ModelSelection', schema: Catalog.ModelSelectionSchema, valid: selection, invalid: [{ providerId: 'provider_1' }, { ...selection, modelId: '' }] },
@@ -87,6 +91,11 @@ const boundaries = [
   { name: 'MCPConfigureRequest', schema: Catalog.MCPConfigureRequestSchema, valid: { expectedPersistedRevision: '1', config }, invalid: [{ expectedPersistedRevision: '01', config }, { config }] },
   { name: 'MCPApplyRequest', schema: Catalog.MCPApplyRequestSchema, valid: { persistedRevision: '2' }, invalid: [{ persistedRevision: 2 }, { persistedRevision: '2', workerGeneration: 'generation_a1' }] },
   { name: 'MCPReconnectRequest', schema: Catalog.MCPReconnectRequestSchema, valid: { persistedRevision: '2', expectedCatalogRevision: '5', workerGeneration: 'generation_a1' }, invalid: [{ persistedRevision: '2', expectedCatalogRevision: '5' }, { persistedRevision: '2', expectedCatalogRevision: '-1', workerGeneration: 'generation_a1' }] },
+  { name: 'MCPOAuthPublicConfiguration', schema: Catalog.MCPOAuthPublicConfigurationSchema, valid: oauthConfiguration, invalid: [{ ...oauthConfiguration, clientSecret: 'private-secret' }, { ...oauthConfiguration, fetch: 'custom-fetch' }, { ...oauthConfiguration, tokenUrl: 'https://user:secret@auth.example/token' }] },
+  { name: 'MCPOAuthConfigInput', schema: Catalog.MCPOAuthConfigInputSchema, valid: { ...oauthConfiguration, clientSecret: 'intentional-secret-input' }, invalid: [{ authorizationUrl: oauthConfiguration.authorizationUrl }, { ...oauthConfiguration, callbackPort: 0 }, { ...oauthConfiguration, callbackPath: 'callback' }] },
+  { name: 'MCPOAuthPendingFlow', schema: Catalog.MCPOAuthPendingFlowSchema, valid: oauthFlow, invalid: [{ ...oauthFlow, flowId: '' }, { ...oauthFlow, accessToken: 'private-token' }] },
+  { name: 'MCPOAuthRequest', schema: Catalog.MCPOAuthRequestSchema, valid: { action: 'start', ...oauthOwner, oauth: oauthConfiguration }, invalid: [{ action: 'start', persistedRevision: '2' }, { action: 'cancel', ...oauthOwner }, { action: 'disconnect', ...oauthOwner, flowId: 'flow_1' }] },
+  { name: 'MCPOAuthResult', schema: Catalog.MCPOAuthResultSchema, valid: oauthPending, invalid: [{ ...oauthPending, pendingFlow: undefined }, { ...oauthPending, status: 'authenticated', authenticated: false }, { serverId: 'server_1', worker, persistedRevision: '2', status: 'authenticated', authenticated: true, accessToken: 'private-token' }] },
   { name: 'SkillInstallRequest', schema: Catalog.SkillInstallRequestSchema, valid: { sourceId: 'source_1', skillId: 'skill_1', scope: 'workspace', expectedSourceRevision: '1' }, invalid: [{ sourceId: 'source_1', skillId: 'skill_1', scope: 'workspace' }, { sourceId: 'source_1', skillId: 'skill_1', scope: '/private/skills', expectedSourceRevision: '1' }] },
   { name: 'SkillsApplyRequest', schema: Catalog.SkillsApplyRequestSchema, valid: { scope: 'agent', sourceRevision: '3' }, invalid: [{ scope: 'agent', sourceRevision: '03' }, { scope: 'agent', sourceRevision: '3', workerGeneration: 'generation_a1' }] },
   { name: 'SkillExpandRequest', schema: Catalog.SkillExpandRequestSchema, valid: { skillId: 'skill_1', catalogRevision: '7', workerGeneration: 'generation_a1', arguments: 'the current diff' }, invalid: [{ skillId: 'skill_1', catalogRevision: '7', arguments: 'diff' }, { skillId: 'skill_1', catalogRevision: '7', workerGeneration: 'generation_a1', arguments: 42 }] },
@@ -100,6 +109,25 @@ describe('Canonical catalogs and scoped operations', () => {
       for (const invalid of boundary.invalid) expect(boundary.schema.safeParse(invalid).success).toBe(false);
     });
   }
+
+  test('OAuth discovery and exact-flow completion remain distinct from credential observation', () => {
+    expect(Catalog.MCPOAuthPublicConfigurationSchema.parse({})).toEqual({});
+    expect(Catalog.MCPOAuthRequestSchema.parse({ action: 'start', ...oauthOwner }).action).toBe('start');
+    for (const callbackInput of [undefined, 'http://127.0.0.1/callback?code=code&state=state']) {
+      expect(Catalog.MCPOAuthRequestSchema.parse({ action: 'complete', ...oauthOwner, flowId: oauthFlow.flowId, callbackInput }).action).toBe('complete');
+    }
+    expect(Catalog.MCPOAuthRequestSchema.parse({ action: 'cancel', ...oauthOwner, flowId: oauthFlow.flowId }).action).toBe('cancel');
+    expect(Catalog.MCPOAuthRequestSchema.parse({ action: 'disconnect', ...oauthOwner }).action).toBe('disconnect');
+    const resultOwner = { serverId: 'server_1', worker, persistedRevision: '2' };
+    expect(Catalog.MCPOAuthResultSchema.parse({ ...resultOwner, status: 'authenticated', authenticated: true }).status).toBe('authenticated');
+    expect(Catalog.MCPOAuthResultSchema.parse({ ...resultOwner, status: 'unauthenticated', authenticated: false }).status).toBe('unauthenticated');
+    expect(Catalog.MCPOAuthResultSchema.safeParse({ ...resultOwner, status: 'authenticated', authenticated: true, pendingFlow: oauthFlow }).success).toBe(false);
+    for (const field of ['authorizationUrl', 'tokenUrl', 'issuerUrl', 'registrationUrl', 'resourceMetadataUrl', 'redirectUri', 'resource']) {
+      for (const url of ['ftp://auth.example', 'https://user:secret@auth.example', 'https://auth.example#private']) {
+        expect(Catalog.MCPOAuthPublicConfigurationSchema.safeParse({ [field]: url }).success).toBe(false);
+      }
+    }
+  });
 
   test('MCP persistence, active publication and sibling failure remain independent', () => {
     const parsed = Catalog.MCPApplyResultSchema.parse(mcpResult);

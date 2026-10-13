@@ -8,7 +8,7 @@ import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manage
 import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
 import { buildSkillPromptMessage } from '@oh-my-pi/pi-coding-agent/extensibility/skills';
-import { JsonObjectSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run } from '@openchamber/agent-contract';
+import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run } from '@openchamber/agent-contract';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -107,7 +107,11 @@ export class WorkerSession {
       // authorizeServer already checked the Host-resolved command before this resolver is called.
       resolveCommand: async transport => transport.command,
       authorizeServer: server => authorize({ type: 'mcp-server', server }),
-      authorizeOAuth: (server, configuration) => authorize({ type: 'mcp-oauth', server, configuration: JsonObjectSchema.parse(configuration) }),
+      authorizeOAuth: (server, configuration) => {
+        const publicConfiguration = MCPOAuthPublicConfigurationSchema.parse(configuration);
+        const present = Object.fromEntries(Object.entries(publicConfiguration).filter(([, value]) => value !== undefined));
+        return authorize({ type: 'mcp-oauth', server, configuration: JsonObjectSchema.parse(present) });
+      },
       sanitizeTool: tool => ({ ...tool, description: tool.description.split(input.cwd).join('[workspace]').split(input.agentDirectory).join('[agent-directory]') }),
       onCatalog: state => publish([{ timestamp: Date.now(), event: { type: 'catalog.updated', catalog: { kind: 'mcp', state } } }]),
       onRuntimeFailure: error => { process.stderr.write(`${JSON.stringify({ type: 'mcp.runtime.failure', error })}\n`); },
@@ -306,6 +310,8 @@ export class WorkerSession {
           case 'persist': return { type: 'mcp', result: { type: 'persisted', configuration: await this.mcp.persist(request.request, request.configuration) } };
           case 'apply': return { type: 'mcp', result: { type: 'applied', result: await this.mcp.apply(request.request, request.configuration) } };
           case 'reconnect': return { type: 'mcp', result: { type: 'catalog', catalog: await this.mcp.reconnect(request.serverId, request.request, request.configuration) } };
+          case 'oauth.status': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthRead(request.serverId, request.configuration) } };
+          case 'oauth': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthExecute(request.serverId, request.request, request.configuration) } };
         }
       }
       case 'shell':

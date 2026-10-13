@@ -5,12 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema } from '@openchamber/agent-contract';
+import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema } from '@openchamber/agent-contract';
 import type { CanonicalEvent, JsonObject, ProblemCode, ProblemDetails, StreamInvalidated } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
-import { PrivateSessionBootstrapSchema, SessionRegistry } from '../sessions/registry.ts';
+import { SessionRegistry } from '../sessions/registry.ts';
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
 import { WorkerOperationError, WorkerRegistry } from './workers.ts';
@@ -18,7 +18,7 @@ import { CatalogCoordinator, CatalogCoordinatorError } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
 import { WorkspaceRoutes } from './workspace-routes.ts';
 import { ShellCoordinator } from './shell.ts';
-import { HostAuthorizationScopeSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
+import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
 interface ServiceOptions {
   workerEntrypoint: string;
   workerRuntime?: string;
@@ -37,8 +37,7 @@ const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port:
 class RequestError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
 }
-type JsonResponse = unknown;
-function respondJson(response: ServerResponse, status: number, body: JsonResponse): void {
+function respondJson(response: ServerResponse, status: number, body: object): void {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(body));
 }
@@ -165,6 +164,16 @@ export class AgentService {
           const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'reconnect', serverId, request, configuration } }, generation);
           if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
           return result.result.catalog;
+        },
+        oauthStatus: async (serverId, configuration) => {
+          const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'oauth.status', serverId, configuration } }, generation);
+          if (result.type !== 'mcp' || result.result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result.result;
+        },
+        oauth: async (serverId, request, configuration) => {
+          const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'oauth', serverId, request, configuration } }, generation);
+          if (result.type !== 'mcp' || result.result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result.result;
         },
       },
       skills: {
@@ -306,7 +315,7 @@ export class AgentService {
         respondJson(response, 200, await this.catalog.publishSources(workspaceId, input)); return;
       }
       if (request.method === 'POST' && url.pathname === '/internal/sessions') {
-        const { displayPath, ...input } = await readBody(request, PrivateSessionBootstrapSchema);
+        const { displayPath, ...input } = await readBody(request, HostSessionBootstrapSchema);
         respondJson(response, 201, await this.admit(input, bootstrap => this.sessions.open({ ...bootstrap, displayPath }))); return;
       }
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/sessions') {
@@ -360,6 +369,14 @@ export class AgentService {
       if (workspaceResponse) { respondJson(response, workspaceResponse.status, workspaceResponse.body); return; }
       const shellResponse = await this.shell.handle(request, url, readBody);
       if (shellResponse) { respondJson(response, shellResponse.status, shellResponse.body); return; }
+      const oauthRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/mcp\/servers\/([^/]+)\/oauth$/.exec(url.pathname);
+      if (oauthRoute) {
+        const addressedId = identity(oauthRoute[1]);
+        const rootSessionId = this.workers.bootstrap(addressedId) ? addressedId : this.sessions.runtime(addressedId).rootSessionId;
+        const serverId = identity(oauthRoute[2]);
+        if (request.method === 'GET') { respondJson(response, 200, await this.catalog.oauthStatus(rootSessionId, serverId)); return; }
+        if (request.method === 'POST') { respondJson(response, 200, await this.catalog.oauth(rootSessionId, serverId, await readBody(request, MCPOAuthRequestSchema))); return; }
+      }
       const catalogRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/(mcp|skills)\/(catalog|config|apply|expand|servers\/([^/]+)\/reconnect)$/.exec(url.pathname);
       if (catalogRoute) {
         const addressedId = identity(catalogRoute[1]);

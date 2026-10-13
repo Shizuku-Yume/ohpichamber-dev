@@ -12,9 +12,15 @@ const codes = [
   'PROVIDER_UNAVAILABLE', 'PROVIDER_FAILURE', 'CONTEXT_LIMIT', 'STRUCTURED_OUTPUT_INVALID',
   'COMPLETION_NOT_FOUND', 'PROVIDER_CONFIG_WRITE_FAILED', 'MODEL_CONFIG_WRITE_FAILED',
   'CREDENTIAL_WRITE_FAILED', 'SHELL_NOT_FOUND', 'SHELL_OUTPUT_UNAVAILABLE', 'SHELL_STOP_TIMEOUT',
+  'MCP_CONFIG_READ_FAILED', 'MCP_CREDENTIAL_UNAVAILABLE', 'WORKER_GENERATION_CONFLICT',
+  'MCP_OAUTH_FAILED', 'MCP_OAUTH_CANCELLED', 'MCP_OAUTH_NOT_FOUND',
 ];
 const statusFor = (code: typeof codes[number]): number => {
   if (['APPROVAL_CONFLICT', 'QUESTION_CONFLICT', 'METADATA_CONFLICT', 'QUEUE_CONFLICT', 'CATALOG_CONFLICT', 'COMMAND_IN_FLIGHT'].includes(code)) return 409;
+  if (['WORKER_GENERATION_CONFLICT', 'MCP_OAUTH_CANCELLED'].includes(code)) return 409;
+  if (code === 'MCP_OAUTH_NOT_FOUND') return 404;
+  if (['MCP_CREDENTIAL_UNAVAILABLE', 'MCP_OAUTH_FAILED'].includes(code)) return 422;
+  if (code === 'MCP_CONFIG_READ_FAILED') return 503;
   if (['APPROVAL_EXPIRED', 'QUESTION_EXPIRED', 'RESYNC_REQUIRED'].includes(code)) return 410;
   if (['INVALID_CURSOR', 'IDEMPOTENCY_CONFLICT'].includes(code)) return 400;
   if (code === 'APPROVAL_POLICY_WRITE_FAILED') return 503;
@@ -42,6 +48,13 @@ describe('error schemas', () => {
     for (const [code, status] of failures) {
       const problem = { type: `urn:ohpichamber:problem:${code}`, title: 'Host request failed', status, detail: 'Operation unavailable', code, retryable: false };
       expect(ProblemDetailsSchema.parse(problem)).toEqual(problem);
+    }
+  });
+  test('OAuth upstream failures and owner conflicts retain their actual HTTP status', () => {
+    for (const [code, status] of [['MCP_OAUTH_FAILED', 422], ['MCP_OAUTH_FAILED', 502], ['MCP_OAUTH_CANCELLED', 409], ['WORKER_GENERATION_CONFLICT', 409], ['MCP_OAUTH_NOT_FOUND', 404], ['MCP_CREDENTIAL_UNAVAILABLE', 422], ['MCP_CONFIG_READ_FAILED', 503]] as const) {
+      const problem = { type: `urn:ohpichamber:problem:${code}`, title: 'OAuth operation refused', detail: 'Operation unavailable', code, status, retryable: status >= 500 };
+      expect(ProblemDetailsSchema.parse(problem)).toEqual(problem);
+      expect(ProblemDetailsSchema.safeParse({ ...problem, status: 500 }).success).toBe(false);
     }
   });
   test('rejects invalid identity, status mappings, and non-JSON context', () => {

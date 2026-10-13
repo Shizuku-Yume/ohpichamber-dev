@@ -448,6 +448,63 @@ export const MCPReconnectRequestSchema = z.strictObject({
   persistedRevision: CounterSchema, expectedCatalogRevision: CounterSchema, workerGeneration: EntityIdSchema,
 });
 export type MCPReconnectRequest = z.infer<typeof MCPReconnectRequestSchema>;
+
+const MCPOAuthUrlSchema = z.url({ protocol: /^https?$/ }).refine(endpoint => {
+  const url = new URL(endpoint);
+  return url.username === '' && url.password === '' && url.hash === '';
+}, 'OAuth URLs contain no embedded credentials or fragments');
+
+/** Public configuration used by Host authorization; token material never crosses this boundary. */
+export const MCPOAuthPublicConfigurationSchema = z.strictObject({
+  authorizationUrl: MCPOAuthUrlSchema.optional(),
+  tokenUrl: MCPOAuthUrlSchema.optional(),
+  issuerUrl: MCPOAuthUrlSchema.optional(),
+  registrationUrl: MCPOAuthUrlSchema.optional(),
+  resourceMetadataUrl: MCPOAuthUrlSchema.optional(),
+  clientId: z.string().min(1).optional(),
+  scopes: z.string().optional(),
+  prompt: z.string().optional(),
+  redirectUri: MCPOAuthUrlSchema.optional(),
+  callbackPort: z.number().int().min(1).max(65_535).optional(),
+  callbackPath: z.string().startsWith('/').optional(),
+  resource: MCPOAuthUrlSchema.optional(),
+  stripSameOriginResource: z.boolean().optional(),
+});
+export type MCPOAuthPublicConfiguration = z.infer<typeof MCPOAuthPublicConfigurationSchema>;
+
+export const MCPOAuthConfigInputSchema = MCPOAuthPublicConfigurationSchema.extend({
+  clientSecret: z.string().min(1).optional(),
+}).refine(input => (input.authorizationUrl === undefined) === (input.tokenUrl === undefined),
+  'OAuth authorization and token endpoints are supplied together or discovered together');
+export type MCPOAuthConfigInput = z.infer<typeof MCPOAuthConfigInputSchema>;
+
+export const MCPOAuthPendingFlowSchema = z.strictObject({
+  flowId: EntityIdSchema,
+  authorizationUrl: MCPOAuthUrlSchema,
+  launchUrl: MCPOAuthUrlSchema.optional(),
+  instructions: z.string().optional(),
+});
+export type MCPOAuthPendingFlow = z.infer<typeof MCPOAuthPendingFlowSchema>;
+
+const MCPOAuthOwnerFields = { persistedRevision: CounterSchema, workerGeneration: EntityIdSchema };
+export const MCPOAuthRequestSchema = z.discriminatedUnion('action', [
+  z.strictObject({ action: z.literal('start'), ...MCPOAuthOwnerFields, oauth: MCPOAuthConfigInputSchema.optional() }),
+  z.strictObject({ action: z.literal('complete'), ...MCPOAuthOwnerFields, flowId: EntityIdSchema, callbackInput: z.string().min(1).optional() }),
+  z.strictObject({ action: z.literal('cancel'), ...MCPOAuthOwnerFields, flowId: EntityIdSchema }),
+  z.strictObject({ action: z.literal('disconnect'), ...MCPOAuthOwnerFields }),
+]);
+export type MCPOAuthRequest = z.infer<typeof MCPOAuthRequestSchema>;
+
+const MCPOAuthResultOwnerFields = {
+  serverId: EntityIdSchema, worker: CatalogWorkerIdentitySchema, persistedRevision: CounterSchema,
+};
+export const MCPOAuthResultSchema = z.discriminatedUnion('status', [
+  z.strictObject({ ...MCPOAuthResultOwnerFields, status: z.literal('pending'), authenticated: z.boolean(), pendingFlow: MCPOAuthPendingFlowSchema }),
+  z.strictObject({ ...MCPOAuthResultOwnerFields, status: z.literal('authenticated'), authenticated: z.literal(true) }),
+  z.strictObject({ ...MCPOAuthResultOwnerFields, status: z.literal('unauthenticated'), authenticated: z.literal(false) }),
+]);
+export type MCPOAuthResult = z.infer<typeof MCPOAuthResultSchema>;
+
 export const SkillInstallRequestSchema = z.strictObject({
   sourceId: EntityIdSchema, skillId: EntityIdSchema, scope: z.enum(['workspace', 'agent']), expectedSourceRevision: CounterSchema,
 });
