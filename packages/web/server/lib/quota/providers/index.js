@@ -194,9 +194,14 @@ const pendingFetches = new Map();
  * Provider selections are supplied by the Host's selected workspace catalog.
  * This registry never enumerates or reads a credential store itself.
  */
-export const listConfiguredQuotaProviders = async ({ selections = [] } = {}) => selections
-  .filter((selection) => registry[selection?.quotaProviderId ?? selection?.providerId])
-  .map((selection) => selection.quotaProviderId ?? selection.providerId);
+export const listConfiguredQuotaProviders = async ({ selections = [] } = {}) => {
+  const providerIds = new Set();
+  for (const selection of selections) {
+    const providerId = selection?.quotaProviderId ?? selection?.providerId;
+    if (Object.hasOwn(registry, providerId)) providerIds.add(providerId);
+  }
+  return [...providerIds];
+};
 
 const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
   const provider = registry[providerId];

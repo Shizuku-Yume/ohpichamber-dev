@@ -8,7 +8,7 @@ import { ProviderCatalogSchema, EntityIdSchema } from '@openchamber/agent-contra
 const SAFE_CODES = {
   SERVICE_UNAVAILABLE: true, UNAUTHORIZED: true, CREDENTIAL_UNAVAILABLE: true,
   OAUTH_REAUTH_REQUIRED: true, CREDENTIAL_WRITE_FAILED: true, CATALOG_CONFLICT: true,
-  PROVIDER_UNAVAILABLE: true, enterprise_mode: true,
+  PROVIDER_UNAVAILABLE: true, INVALID_REQUEST: true, enterprise_mode: true,
 };
 
 function credentialFailure(code = 'SERVICE_UNAVAILABLE', status = 503) {
@@ -116,5 +116,120 @@ export function createSelectedCredentialHandoff({ service, resolveWorkspaceScope
       }
     }
     return SelectedCredentialHandoffResultSchema.parse({ workspaceId: scope.workspaceId, results });
+  };
+}
+
+// Logical quota products are not interchangeable native authentication providers.
+const QUOTA_PROVIDER_RELATIONS = {
+  claude: { providers: ['anthropic'], methods: ['oauth'] },
+  codex: { providers: ['openai-codex'], methods: ['oauth'] },
+  google: { providers: ['google-gemini-cli', 'google-antigravity'], methods: ['oauth'] },
+  'github-copilot-addon': { providers: ['github-copilot'] },
+  hyper: { providers: ['charm-hyper'] },
+  'zai-coding-plan': { providers: ['zai'] },
+  'zhipuai-coding-plan': { providers: ['zhipu-coding-plan'] },
+  'kimi-for-coding': { providers: ['kimi-code'] },
+  'nano-gpt': { providers: ['nanogpt'] },
+  'minimax-coding-plan': { providers: ['minimax-code'] },
+  'minimax-cn-coding-plan': { providers: ['minimax-code-cn'] },
+  wafer: { providers: ['wafer-serverless'] },
+  xai: { providers: ['xai-oauth'], methods: ['oauth'] },
+};
+const QUOTA_IDS_BY_NATIVE_PROVIDER = new Map();
+for (const [logicalId, relation] of Object.entries(QUOTA_PROVIDER_RELATIONS)) {
+  for (const nativeId of relation.providers) {
+    const logicalIds = QUOTA_IDS_BY_NATIVE_PROVIDER.get(nativeId) ?? [];
+    logicalIds.push(logicalId);
+    QUOTA_IDS_BY_NATIVE_PROVIDER.set(nativeId, logicalIds);
+  }
+}
+
+function catalogSelectionRequest(req, requireProvider = false) {
+  const selection = {};
+  for (const field of ['workspaceId', 'agentDirectoryId', 'providerId', 'credentialRef']) {
+    const queryValue = req?.query && Object.hasOwn(req.query, field) ? req.query[field] : undefined;
+    const bodyValue = req?.body && Object.hasOwn(req.body, field) ? req.body[field] : undefined;
+    if (queryValue !== undefined && bodyValue !== undefined && queryValue !== bodyValue)
+      throw credentialFailure('INVALID_REQUEST', 400);
+    const value = bodyValue !== undefined ? bodyValue : queryValue;
+    if (value === undefined && (field === 'credentialRef' || (field === 'providerId' && !requireProvider))) continue;
+    const parsed = EntityIdSchema.safeParse(value);
+    if (!parsed.success) throw credentialFailure('INVALID_REQUEST', 400);
+    selection[field] = parsed.data;
+  }
+  return selection;
+}
+
+function publicCredentialSelection(scope, provider) {
+  return { ...scope, providerId: provider.providerId, credentialRef: provider.auth.credentialRef };
+}
+
+/** Public catalogs select exact native records; these callbacks never read or return secret material. */
+export function createCatalogCredentialSelections({ service, resolveWorkspaceScope, getQuotaProviders }) {
+  requireDependencies(service, resolveWorkspaceScope);
+  if (typeof getQuotaProviders !== 'function') throw new TypeError('Catalog selections require the quota registry owner');
+
+  const readCatalog = async (req, requireProvider = false) => {
+    try {
+      const request = catalogSelectionRequest(req, requireProvider);
+      const scope = await selectedScope(service, resolveWorkspaceScope, request.workspaceId, request.agentDirectoryId);
+      const catalog = await readPrivateResponse(await service.request(
+        `/api/agent/v1/workspaces/${encodeURIComponent(scope.workspaceId)}/providers`), ProviderCatalogSchema);
+      if (catalog.workspaceId !== scope.workspaceId) throw credentialFailure('UNAUTHORIZED', 403);
+      return { request, scope, catalog };
+    } catch (error) {
+      throw credentialFailure(SAFE_CODES[error?.code] === true ? error.code : 'SERVICE_UNAVAILABLE',
+        Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599 ? error.status : 503);
+    }
+  };
+
+  const quotaSelections = async ({ request, scope, catalog }) => {
+    const selections = [];
+    for (const provider of catalog.providers) {
+      if (provider.auth.status !== 'configured' || (request.providerId && request.providerId !== provider.providerId)) continue;
+      if (request.credentialRef && request.credentialRef !== provider.auth.credentialRef) continue;
+      const logicalIds = QUOTA_IDS_BY_NATIVE_PROVIDER.get(provider.providerId) ?? [];
+      if (!Object.hasOwn(QUOTA_PROVIDER_RELATIONS, provider.providerId)) {
+        selections.push({ ...publicCredentialSelection(scope, provider), quotaProviderId: provider.providerId });
+      }
+      for (const logicalId of logicalIds) {
+        const relation = QUOTA_PROVIDER_RELATIONS[logicalId];
+        if (!relation.methods || relation.methods.includes(provider.auth.method))
+          selections.push({ ...publicCredentialSelection(scope, provider), quotaProviderId: logicalId });
+      }
+    }
+    if ((request.providerId || request.credentialRef) && selections.length === 0) throw credentialFailure('CREDENTIAL_UNAVAILABLE', 422);
+    try {
+      const registry = await getQuotaProviders();
+      if (typeof registry?.listConfiguredQuotaProviders !== 'function') throw credentialFailure();
+      const supportedIds = await registry.listConfiguredQuotaProviders({ selections });
+      if (!Array.isArray(supportedIds) || supportedIds.some(id => !EntityIdSchema.safeParse(id).success)) throw credentialFailure();
+      const supported = new Set(supportedIds);
+      return selections.filter(selection => supported.has(selection.quotaProviderId));
+    } catch { throw credentialFailure(); }
+  };
+
+  return {
+    async resolveQuotaSelection(req, logicalQuotaProviderId) {
+      if (!EntityIdSchema.safeParse(logicalQuotaProviderId).success) throw credentialFailure('INVALID_REQUEST', 400);
+      const candidates = (await quotaSelections(await readCatalog(req)))
+        .filter(selection => selection.quotaProviderId === logicalQuotaProviderId);
+      if (candidates.length === 0) throw credentialFailure('CREDENTIAL_UNAVAILABLE', 422);
+      if (candidates.length !== 1) throw credentialFailure('INVALID_REQUEST', 400);
+      const { workspaceId, agentDirectoryId, providerId, credentialRef } = candidates[0];
+      return { workspaceId, agentDirectoryId, providerId, credentialRef };
+    },
+    async listQuotaSelections(req) {
+      return quotaSelections(await readCatalog(req));
+    },
+    async resolveTtsSelection(req) {
+      const { request, scope, catalog } = await readCatalog(req, true);
+      const provider = catalog.providers.find(candidate => candidate.providerId === request.providerId);
+      if (!provider || provider.auth.status !== 'configured' || provider.auth.method !== 'api-key'
+        || !['chat-completions', 'responses'].includes(provider.protocol) || !provider.endpoint
+        || (request.credentialRef && request.credentialRef !== provider.auth.credentialRef))
+        throw credentialFailure('CREDENTIAL_UNAVAILABLE', 422);
+      return { ...publicCredentialSelection(scope, provider), baseURL: provider.endpoint };
+    },
   };
 }

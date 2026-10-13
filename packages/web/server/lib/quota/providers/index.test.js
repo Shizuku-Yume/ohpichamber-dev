@@ -6,6 +6,14 @@ describe('selected quota dispatcher', () => {
   it('lists public selections without secret resolution', async () => {
     expect(await listConfiguredQuotaProviders({ selections: [{ providerId: 'deepseek' }, { providerId: 'not-supported' }] })).toEqual(['deepseek']);
   });
+  it('lists one logical product for multiple explicit native owners and rejects inherited registry keys', async () => {
+    expect(await listConfiguredQuotaProviders({ selections: [
+      { quotaProviderId: 'google', providerId: 'google-gemini-cli' },
+      { quotaProviderId: 'google', providerId: 'google-antigravity' },
+      { providerId: 'constructor' }, { providerId: 'github-copilot' },
+      { quotaProviderId: 'github-copilot-addon', providerId: 'github-copilot' },
+    ] })).toEqual(['google', 'github-copilot', 'github-copilot-addon']);
+  });
   it('passes only the exact selected ownership and quota purpose to the resolver', async () => {
     const resolveCredential = vi.fn(async () => ({ type: 'api_key', key: 'selected-key' }));
     const result = await fetchQuotaForProvider('cline-pass', { ...selection, resolveCredential, fetchImpl: async (_url, options) => {
