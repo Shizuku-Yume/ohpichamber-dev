@@ -6,7 +6,7 @@
 
 **Delivers:** Retained settings/sidebar/Board/Guest Shell and Guest SDK surfaces consume the canonical catalogs, queue, shell and session contracts while host-owned capabilities remain on their existing APIs.
 
-**Blocked by:** 12, 13, 14
+**Blocked by:** 12, 13
 **Files:** `packages/ui/src/`, `packages/sdk/`, `packages/web/`, Board/Guest/settings modules, focused tests and nearest documentation
 
 **Read first:** `.workflow/specs/omp-through-m3.md` M3/W6/W9; `packages/sdk/DOCUMENTATION.md`; UI stores/sync docs; `packages/ui/src/components/sourceBoard/SourceBoardView.tsx`; `packages/ui/src/lib/guests/shells.ts`; contracts catalog/shell/queue sections; locale skill; `packages/ui/src/lib/theme/STYLING.md` and `packages/ui/src/components/sections/PATTERNS.md` for affected styling/Settings

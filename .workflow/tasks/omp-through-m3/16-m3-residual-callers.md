@@ -6,7 +6,7 @@
 
 **Delivers:** Utility generation, multi-run and residual agent-facing callers use canonical session/model/queue contracts; no old client or hidden dual-engine selector remains in retained surfaces.
 
-**Blocked by:** 12, 13, 14
+**Blocked by:** 12, 13
 **Files:** `packages/ui/src/`, `packages/web/`, utility/multi-run modules, tests and docs
 
 **Read first:** `.workflow/specs/omp-through-m3.md` M3/W9/W10; contracts; current remaining `@opencode/client`/`@opencode/schema` references from code search; `packages/ui/src/lib/multirun/`; Host small-model owner; performance and UI API skills
