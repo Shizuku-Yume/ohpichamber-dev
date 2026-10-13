@@ -152,7 +152,8 @@ function catalogSelectionRequest(req, requireProvider = false) {
     if (queryValue !== undefined && bodyValue !== undefined && queryValue !== bodyValue)
       throw credentialFailure('INVALID_REQUEST', 400);
     const value = bodyValue !== undefined ? bodyValue : queryValue;
-    if (value === undefined && (field === 'credentialRef' || (field === 'providerId' && !requireProvider))) continue;
+    if (value === undefined && (field === 'agentDirectoryId' || field === 'credentialRef'
+      || (field === 'providerId' && !requireProvider))) continue;
     const parsed = EntityIdSchema.safeParse(value);
     if (!parsed.success) throw credentialFailure('INVALID_REQUEST', 400);
     selection[field] = parsed.data;

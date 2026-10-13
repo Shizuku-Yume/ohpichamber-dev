@@ -112,7 +112,7 @@ describe('Host-owned public catalog credential selections', () => {
   });
   it('rejects missing, conflicting and mismatched identities before any catalog or secret request', async () => {
     const owner = catalogFixture([]);
-    for (const req of [{}, { query: { workspaceId: 'workspace_1' } }, catalogRequest({ workspaceId: ['workspace_1'] }),
+    for (const req of [{}, { query: { agentDirectoryId: 'agent_1' } }, catalogRequest({ workspaceId: ['workspace_1'] }),
       { ...catalogRequest(), body: { workspaceId: 'sibling' } }, catalogRequest({ providerId: null })]) {
       await expect(owner.listQuotaSelections(req)).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
     }
@@ -120,6 +120,15 @@ describe('Host-owned public catalog credential selections', () => {
     owner.service.getState = () => ({ phase: 'failed' });
     await expect(owner.listQuotaSelections(catalogRequest())).rejects.toMatchObject({ status: 503, code: 'SERVICE_UNAVAILABLE' });
     expect(owner.paths).toHaveLength(0);
+  });
+  it('derives the mandatory consumer directory identity from the admitted Host mapping, not public discovery fields', async () => {
+    const owner = catalogFixture([publicProvider('deepseek'), publicProvider('proxy')]);
+    expect(await owner.resolveQuotaSelection({ query: { workspaceId: 'workspace_1' } }, 'deepseek')).toEqual({
+      workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', providerId: 'deepseek', credentialRef: 'credential_deepseek',
+    });
+    expect(await owner.resolveTtsSelection({ body: { workspaceId: 'workspace_1', providerId: 'proxy' } })).toMatchObject({
+      workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', providerId: 'proxy', credentialRef: 'credential_proxy',
+    });
   });
   it('uses real quota registry relations and exact current native credential references without secret reads', async () => {
     const owner = catalogFixture([
