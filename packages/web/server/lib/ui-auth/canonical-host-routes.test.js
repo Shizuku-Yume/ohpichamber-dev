@@ -138,8 +138,9 @@ describe('canonical Host authenticated real-service boundary', () => {
     servicePhase = 'ready';
     await request(app).get('/api/agent/v1/ready').expect(200, { ready: true, engine: 'omp', version: '1.0.0' });
     const caps = await request(app).get('/api/agent/v1/capabilities').set('Authorization', `Bearer ${token}`).expect(200);
-    expect(caps.body.capabilities).toMatchObject({ streaming: true, followUpQueue: true, credentialHandoff: true });
+    expect(caps.body.capabilities).toMatchObject({ streaming: true, followUpQueue: true, credentialHandoff: true, documentExtraction: false });
     expect(caps.body.capabilities.subagents).toBe(false);
+    expect(caps.body.capabilities.attachments).toBeUndefined();
     expect(JSON.stringify(caps.body)).not.toContain(privateDir);
     expect(JSON.stringify(caps.body)).not.toContain(token);
   });

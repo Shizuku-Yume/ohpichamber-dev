@@ -11,6 +11,10 @@ const ScopeSchema = z.strictObject({
   workspaceId: C.EntityIdSchema, projectId: C.EntityIdSchema, agentDirectoryId: C.EntityIdSchema,
   cwd: z.string().refine(isAbsolute), agentDirectory: z.string().refine(isAbsolute),
 });
+const NativeServiceCapabilitiesSchema = C.RuntimeCapabilitiesSchema.extend({
+  capabilities: C.RuntimeCapabilitiesSchema.shape.capabilities.omit({ documentExtraction: true, credentialHandoff: true })
+    .extend({ attachments: z.boolean() }),
+});
 const RunResponseSchema = z.strictObject({ run: C.RunSchema });
 // Only SDK-owned operations appear here. Host session admission, metadata and delivery have their own routers.
 const AGENT_ROUTES = [
@@ -120,9 +124,10 @@ export function registerCanonicalHostRoutes(app, {
     try {
       const response = await service.request(`${PREFIX}/capabilities`);
       if (!response.ok) return problem(res, 503, 'SERVICE_UNAVAILABLE', 'Agent capabilities are unavailable.');
-      const capabilities = C.RuntimeCapabilitiesSchema.parse(await response.json());
+      const capabilities = NativeServiceCapabilitiesSchema.parse(await response.json());
+      delete capabilities.capabilities.attachments;
       return res.json(C.RuntimeCapabilitiesSchema.parse({ ...capabilities,
-        capabilities: { ...capabilities.capabilities, followUpQueue: true, credentialHandoff: true } }));
+        capabilities: { ...capabilities.capabilities, followUpQueue: true, credentialHandoff: true, documentExtraction: false } }));
     } catch { return problem(res, 503, 'SERVICE_UNAVAILABLE', 'Agent capabilities are unavailable.'); }
   });
   router.get('/projects', async (_req, res) => {
