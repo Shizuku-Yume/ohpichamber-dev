@@ -148,11 +148,15 @@ describe('service-owned interaction CAS', () => {
     let committedTarget: { toolName: string; pattern: string } | undefined;
     const events: ProjectionInput[] = [];
     const operations: WorkerOperation[] = [];
+    const secondDispatch = Promise.withResolvers<WorkerOperation>();
     const manager = new InteractionManager(60_000, async write => {
       committedTarget = write.target;
       return { policyId: 'policy-1', revision: '1' };
     });
-    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async op => { operations.push(op); }, input => { events.push(input); });
+    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async op => {
+      operations.push(op);
+      if (op.type === 'approval.resolve' && op.approvalId === 'approval-sec-2') secondDispatch.resolve(op);
+    }, input => { events.push(input); });
 
     const credentialMarker = 'super-secret-token-12345';
     const privateRootMarker = '/private/root/secret-workspace';
@@ -231,7 +235,11 @@ describe('service-owned interaction CAS', () => {
       toolCallId: 'call-sec-2',
     };
     manager.onRequest('session-1', 'worker-1', secondApproval);
+    expect(await secondDispatch.promise).toEqual({ type: 'approval.resolve', approvalId: 'approval-sec-2', decision: 'approve' });
+    await Promise.resolve();
     expect(manager.approvals('session-1')).toHaveLength(0);
+    expect(events.at(-1)?.event).toMatchObject({ type: 'approval.resolved', approval: { approvalId: 'approval-sec-2', status: 'approved' } });
+    expect(committedTarget).toEqual(privateTarget);
     manager.closeSession('session-1');
   });
 
