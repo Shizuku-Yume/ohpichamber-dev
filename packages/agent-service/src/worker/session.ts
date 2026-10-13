@@ -24,7 +24,7 @@ import { createHostToolExtension } from './host-tool.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
-import type { HostNativePolicySnapshot } from '../native-policy-protocol.ts';
+import type { HostNativePolicySnapshot, NativePolicyContext } from '../native-policy-protocol.ts';
 import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
 import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
 
@@ -116,7 +116,12 @@ export class WorkerSession {
       const profile = admission.profile;
       if (profile && !profile.allowedTools.includes(toolName)) throw new ProjectionError(403, 'UNAUTHORIZED', 'Selected agent profile does not permit this tool');
       const model = session?.model;
-      const nativeContext = { editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined), ...(model ? { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl } : {}) };
+      const nativeContext: NativePolicyContext = { editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined) };
+      if (model) {
+        nativeContext.providerId = model.provider;
+        nativeContext.modelId = model.id;
+        nativeContext.endpoint = model.baseUrl;
+      }
       return hostAuthorize({ type: 'tool', toolName, input: toolInput, agentId: profile?.agentId, permissionPresetId: profile?.permissionPresetId, ...approval }, nativeContext);
     };
     const worker = { workspaceId: input.workspaceId, rootSessionId: input.rootSessionId, workerGeneration: input.workerGeneration };

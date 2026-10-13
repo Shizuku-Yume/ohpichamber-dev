@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { JsonObjectSchema, type ApprovalRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
+import { z } from 'zod';
+import { JsonValueSchema, type ApprovalRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
 import { cfgBashPatterns } from '@oh-my-pi/pi-coding-agent/exec/settings';
 import { cfgToolsApprovalMode } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
@@ -19,8 +20,12 @@ const rootSessionId = 'native-root';
 const generation = 'native-generation';
 const options = { providerId: 'native-fixture', modelId: 'native-model', agentId: null, variant: null, reasoningEffort: null };
 const prompt = (text: string): PromptRequest => ({ input: { text, context: [], attachments: [] }, options });
+const ProviderRequestSchema = z.object({
+  messages: z.array(z.object({ role: z.enum(['system', 'developer', 'user', 'assistant', 'tool']) }).catchall(JsonValueSchema)),
+}).catchall(JsonValueSchema);
+type ProviderRequest = z.infer<typeof ProviderRequestSchema>;
 
-function expectContextOrder(request: JsonObject | undefined, markers: string[]): void {
+function expectContextOrder(request: ProviderRequest | undefined, markers: string[]): void {
   if (!request) throw new Error('Native provider request was not captured');
   const messages = JSON.stringify(request.messages);
   let previous = -1;
@@ -40,7 +45,7 @@ function completion(tool?: { name: string; input: JsonObject; id: string }): Res
 }
 
 async function fixture({ respond, invoke, machineCommands = [] }: {
-  respond: (payload: JsonObject, root: string) => Promise<Response> | Response;
+  respond: (payload: ProviderRequest, root: string) => Promise<Response> | Response;
   invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
   machineCommands?: string[];
 }) {
@@ -52,7 +57,7 @@ async function fixture({ respond, invoke, machineCommands = [] }: {
   await mkdir(cwd);
   await mkdir(agentDirectory);
   const events: ProjectionInput[] = [];
-  const requests: JsonObject[] = [];
+  const requests: ProviderRequest[] = [];
   const grants: string[] = [];
   const pendingApprovals: ApprovalRequest[] = [];
   let approvalWaiter: ((approval: ApprovalRequest) => void) | undefined;
@@ -61,7 +66,7 @@ async function fixture({ respond, invoke, machineCommands = [] }: {
   let fatal = false;
   const interactions = new InteractionManager();
   const provider = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
-    const payload = JsonObjectSchema.parse(await request.json());
+    const payload = ProviderRequestSchema.parse(await request.json());
     requests.push(payload);
     return respond(payload, cwd);
   } });
@@ -79,7 +84,8 @@ async function fixture({ respond, invoke, machineCommands = [] }: {
     }, () => { fatal = true; }, async request => {
       if (request.type === 'tool' && ['openchamber', 'web', 'memory', 'notify'].includes(request.toolName)) throw new Error('Host tools must use their domain capability owner, not generic tool grants');
       if (request.type !== 'tool' || request.toolName !== 'bash') return;
-      if (typeof request.input.command === 'string' && machineCommands.includes(request.input.command)) return;
+      const command = z.string().parse(request.input.command);
+      if (machineCommands.includes(command)) return;
       const grant = request.approvalId && request.toolCallId
         ? interactions.consumeApprovalGrant(rootSessionId, generation, request.approvalId, request.toolCallId, request.toolName, request.input) : undefined;
       if (!grant) throw new NativeApprovalRequired();
@@ -133,7 +139,7 @@ for (const approvalMode of ['always-ask', 'yolo'] as const) {
     test(`actual SDK Bash ${approvalMode} waits for source-bound ${decision} before execution`, async () => {
       let toolCalls = 0;
       const harness = await fixture({ respond(payload, root) {
-        const messages = payload.messages as JsonObject[];
+        const messages = payload.messages;
         if (messages.at(-1)?.role === 'tool') return completion();
         return completion({ name: 'bash', id: `native-bash-${++toolCalls}`, input: { command: `printf GRANTED >> '${join(root, 'proof.txt')}'` } });
       } });
@@ -165,7 +171,7 @@ for (const decision of ['allow', 'deny'] as const) {
   test(`actual native Bash pattern ${decision} remains authoritative without an extra Host approval`, async () => {
     const command = 'printf PATTERN';
     const harness = await fixture({ machineCommands: [command], respond(payload) {
-      const messages = payload.messages as JsonObject[];
+      const messages = payload.messages;
       return messages.at(-1)?.role === 'tool' ? completion() : completion({ name: 'bash', id: 'pattern-call', input: { command } });
     } });
     const terminal = Promise.withResolvers<void>();
@@ -199,7 +205,7 @@ for (const decision of ['allow', 'deny'] as const) {
 test('actual SDK Host tool reaches the captured capability owner and returns its real file result', async () => {
   let invoked: HostActionRequest | undefined;
   const harness = await fixture({ respond(payload) {
-    const messages = payload.messages as JsonObject[];
+    const messages = payload.messages;
     return messages.at(-1)?.role === 'tool' ? completion() : completion({ name: 'memory', id: 'host-memory', input: { action: 'memory.save', input: { key: 'proof', content: 'HOST_MEMORY_WRITTEN' } } });
   }, async invoke(request, signal, root) {
     signal.throwIfAborted();
