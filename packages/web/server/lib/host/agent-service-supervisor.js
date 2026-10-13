@@ -1,6 +1,9 @@
 import { spawn as nodeSpawn } from 'node:child_process';
 import crypto from 'node:crypto';
-import path from 'node:path';
+import fs from 'node:fs/promises';
+import { isDeepStrictEqual } from 'node:util';
+import { CapturedHostBootstrapScopeSchema, HostSessionBootstrapSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema, WorkerBootstrapSchema } from '@openchamber/agent-service/private-protocol';
+import { createHostWorkerAuthorizationChannel } from './worker-authorization-channel.js';
 
 import { openApprovalPolicyStore } from './approval-policy-store.js';
 import { AgentServiceReadySchema } from '@openchamber/agent-contract';
@@ -52,20 +55,32 @@ export const createAgentServiceSupervisor = ({
   stopTimeoutMs = STOP_TIMEOUT_MS, spawn = nodeSpawn, fetchImpl = globalThis.fetch,
   registry = { registerManagedProcess, unregisterManagedProcess }, randomBytes = crypto.randomBytes,
   approvalPolicyStore = null,
+  authorizeWorkerOperation,
 } = {}) => {
   let phase = 'stopped'; let child = null; let port = null; let secret = null;
   let startupPromise = null; let stopPromise = null; let lifecycle = 0; let startupController = null; let accepting = false;
   const scopes = new Map();
+  const workspaceScopes = new Map();
+  const authorization = createHostWorkerAuthorizationChannel({
+    isCurrentChild: launched => child === launched && accepting && phase === 'ready',
+    capturedScope: rootSessionId => scopes.get(rootSessionId),
+    readLiveScope: async (launched, rootSessionId, signal) => {
+      if (child !== launched || !secret || !port) throw new Error('Agent service authorization unavailable');
+      const response = await fetchImpl(`http://127.0.0.1:${port}/internal/authorizations/${encodeURIComponent(rootSessionId)}`, { headers: { [SECRET_HEADER]: secret }, signal });
+      if (!response.ok) throw new Error('Agent worker authorization scope unavailable');
+      return response.json();
+    },
+    authorizeWorkerOperation,
+  });
   let policyStore = approvalPolicyStore;
   let ownsPolicyStore = false;
   const state = () => ({ phase, pid: child?.pid ?? null, port });
   const assertAdmitted = () => { if (!accepting || phase !== 'ready' || !child) throw new Error('Agent service is not accepting requests'); };
-  const captureScope = (body) => {
-    if (![body?.rootSessionId, body?.projectId, body?.workspaceId].every(value => typeof value === 'string' && value.length > 0)) throw new Error('Invalid Host bootstrap scope');
-    const captured = { sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: body.projectId, workspaceId: body.workspaceId };
-    const prior = scopes.get(captured.sessionId);
-    if (prior && (prior.projectId !== captured.projectId || prior.workspaceId !== captured.workspaceId)) throw new Error('Host bootstrap scope cannot change');
-    scopes.set(captured.sessionId, captured);
+  const captureScope = body => {
+    const captured = Object.freeze(CapturedHostBootstrapScopeSchema.parse({ rootSessionId: body.rootSessionId, projectId: body.projectId, workspaceId: body.workspaceId, cwd: body.cwd, agentDirectory: body.agentDirectory, ...(body.agentDirectoryId === undefined ? {} : { agentDirectoryId: body.agentDirectoryId }) }));
+    const prior = scopes.get(captured.rootSessionId);
+    if (prior && !isDeepStrictEqual(prior, captured)) throw new Error('Host bootstrap scope cannot change');
+    scopes.set(captured.rootSessionId, captured);
     return { captured, prior };
   };
   const handlePolicyMessage = (launched, message) => {
@@ -75,7 +90,8 @@ export const createAgentServiceSupervisor = ({
       const captured = scopes.get(message.request?.sessionId);
       if (child !== launched || !policyStore) throw new Error('Approval policy store unavailable');
       if (!captured || captured.workspaceId !== message.request?.workspaceId) throw new Error('Unauthorized approval policy scope');
-      const result = message.type === 'approval.policy.commit' ? policyStore.commit({ scope: message.request.scope, decision: message.request.decision, target: message.request.target, ...captured }) : { policies: policyStore.list(captured) };
+      const approvalScope = { sessionId: captured.rootSessionId, rootSessionId: captured.rootSessionId, projectId: captured.projectId, workspaceId: captured.workspaceId };
+      const result = message.type === 'approval.policy.commit' ? policyStore.commit({ scope: message.request.scope, decision: message.request.decision, target: message.request.target, ...approvalScope }) : { policies: policyStore.list(approvalScope) };
       send(message.type === 'approval.policy.commit'
         ? { type: 'approval.policy.committed', requestId: message.requestId, policyId: result.policyId, revision: result.revision }
         : { type: 'approval.policy.listed', requestId: message.requestId, policies: result.policies });
@@ -126,9 +142,10 @@ export const createAgentServiceSupervisor = ({
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       });
       child = launched;
-      const onPolicyMessage = message => handlePolicyMessage(launched, message);
+      const onPolicyMessage = message => { handlePolicyMessage(launched, message); authorization.handleMessage(launched, message); };
       launched.on('message', onPolicyMessage);
-      launched.once('close', () => launched.removeListener('message', onPolicyMessage));
+      launched.once('disconnect', () => authorization.closeChild(launched));
+      launched.once('close', () => { launched.removeListener('message', onPolicyMessage); authorization.closeChild(launched); });
       launched.stderr?.on('data', () => {});
       let announcement = '';
       const announced = new Promise((resolve, reject) => {
@@ -147,6 +164,7 @@ export const createAgentServiceSupervisor = ({
           finish(reject, new Error(`Agent service exited before listening (${code ?? signal ?? 'unknown'})`));
           if (child === launched && phase !== 'stopping') {
             phase = 'failed';
+            scopes.clear(); workspaceScopes.clear(); authorization.closeChild(launched);
             accepting = false;
           }
         };
@@ -180,6 +198,7 @@ export const createAgentServiceSupervisor = ({
   const stop = async () => {
     lifecycle += 1;
     accepting = false;
+    authorization.close();
     startupController?.abort();
     if (stopPromise) return stopPromise;
     stopPromise = (async () => {
@@ -189,6 +208,7 @@ export const createAgentServiceSupervisor = ({
       secret = null;
       port = null;
       scopes.clear();
+      workspaceScopes.clear();
       if (ownsPolicyStore) { policyStore.close(); policyStore = null; ownsPolicyStore = false; }
       phase = 'stopped';
     })().finally(() => { stopPromise = null; });
@@ -198,20 +218,50 @@ export const createAgentServiceSupervisor = ({
   const request = async (requestPath, init = {}) => {
     assertAdmitted();
     if (!requestPath.startsWith('/')) throw new Error('Agent service request requires an absolute path');
-    let capture;
-    if (requestPath === '/internal/sessions' && String(init.method ?? 'GET').toUpperCase() === 'POST') capture = captureScope(JSON.parse(init.body));
+    const requestedChild = child; const requestedLifecycle = lifecycle;
+    const method = String(init.method ?? 'GET').toUpperCase();
+    let capture; let workspaceCapture;
+    const workspace = /^\/internal\/workspaces\/([^/]+)$/.exec(requestPath);
+    const restartWorker = /^\/internal\/workers\/([^/]+)\/restart$/.exec(requestPath);
+    const rootBootstrap = method === 'POST' && (requestPath === '/internal/sessions' || requestPath === '/internal/workers' || restartWorker);
+    if (rootBootstrap || (workspace && method === 'POST')) {
+      const schema = workspace ? HostWorkspaceBootstrapSchema : requestPath === '/internal/sessions' ? HostSessionBootstrapSchema : WorkerBootstrapSchema;
+      const parsed = schema.safeParse(JSON.parse(init.body));
+      if (!parsed.success) throw new Error('Invalid Host bootstrap');
+      const body = { ...parsed.data, cwd: await fs.realpath(parsed.data.cwd), agentDirectory: await fs.realpath(parsed.data.agentDirectory) };
+      if (restartWorker && decodeURIComponent(restartWorker[1]) !== body.rootSessionId) throw new Error('Invalid Host restart scope');
+      if (workspace) {
+        const workspaceId = decodeURIComponent(workspace[1]);
+        const captured = Object.freeze({ projectId: body.projectId, workspaceId, cwd: body.cwd, agentDirectory: body.agentDirectory, agentDirectoryId: body.agentDirectoryId });
+        const prior = workspaceScopes.get(workspaceId);
+        if (prior && !isDeepStrictEqual(prior.scope, captured)) throw new Error('Host workspace scope cannot change');
+        workspaceCapture = { scope: captured, prior };
+      } else capture = captureScope(body);
+      init = { ...init, body: JSON.stringify(body) };
+    }
     const rollback = () => {
-      if (!capture || scopes.get(capture.captured.sessionId) !== capture.captured) return;
-      if (capture.prior) scopes.set(capture.captured.sessionId, capture.prior);
-      else scopes.delete(capture.captured.sessionId);
+      if (!capture || scopes.get(capture.captured.rootSessionId) !== capture.captured) return;
+      if (capture.prior) scopes.set(capture.captured.rootSessionId, capture.prior);
+      else scopes.delete(capture.captured.rootSessionId);
     };
     const headers = new Headers(init.headers ?? {}); headers.set(SECRET_HEADER, secret);
     try {
+      assertAdmitted();
+      if (child !== requestedChild || lifecycle !== requestedLifecycle) throw new Error('Agent service request scope expired');
       const response = await fetchImpl(`http://127.0.0.1:${port}${requestPath}`, { ...init, headers });
       if (!response.ok) rollback();
-      if (response.ok && String(init.method).toUpperCase() === 'DELETE') {
-        const deleted = /^\/api\/agent\/v1\/sessions\/([^/]+)$/.exec(requestPath);
-        if (deleted) scopes.delete(decodeURIComponent(deleted[1]));
+      if (response.ok && workspaceCapture) {
+        const registered = HostWorkspaceRegisteredSchema.safeParse(await response.clone().json());
+        if (!registered.success || registered.data.workspaceId !== workspaceCapture.scope.workspaceId
+          || registered.data.projectId !== workspaceCapture.scope.projectId || registered.data.agentDirectoryId !== workspaceCapture.scope.agentDirectoryId
+          || (workspaceCapture.prior && registered.data.authorizationRootId !== workspaceCapture.prior.rootSessionId)
+          || child !== requestedChild || lifecycle !== requestedLifecycle || !accepting) throw new Error('Invalid Host workspace admission');
+        const captured = captureScope({ ...workspaceCapture.scope, rootSessionId: registered.data.authorizationRootId });
+        workspaceScopes.set(workspaceCapture.scope.workspaceId, { scope: workspaceCapture.scope, rootSessionId: captured.captured.rootSessionId });
+      }
+      if (response.ok && method === 'DELETE') {
+        const deleted = /^\/(?:api\/agent\/v1\/sessions|internal\/workers)\/([^/]+)$/.exec(requestPath);
+        if (deleted && child === requestedChild && lifecycle === requestedLifecycle) scopes.delete(decodeURIComponent(deleted[1]));
       }
       return response;
     } catch (error) { rollback(); throw error; }
