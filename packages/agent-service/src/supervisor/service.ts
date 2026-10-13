@@ -32,7 +32,7 @@ const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port:
 class RequestError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
 }
-type JsonResponse = AgentServiceReady | WorkerInfo | { workers: WorkerInfo[] } | RuntimeSession | SessionSnapshot | HistoryPage | { run: Run } | SessionDeleteAck | ApprovalRequest[] | QuestionRequest[] | ApprovalRequest | QuestionRequest | SessionList | Record<string, unknown>;
+type JsonResponse = unknown;
 function respondJson(response: ServerResponse, status: number, body: JsonResponse): void {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(body));
@@ -74,6 +74,7 @@ export class AgentService {
   private server: ReturnType<typeof createServer> | undefined;
   private ready = false;
   private closing = false;
+  private stopping: Promise<void> | undefined;
   constructor(private readonly options: ServiceOptions) {
     this.secret = Buffer.from(InternalSecretSchema.parse(options.internalSecret), 'hex');
     this.catalog = new CatalogCoordinator(options.stateDirectory, options.catalogWorkspaceId ?? 'workspace');
