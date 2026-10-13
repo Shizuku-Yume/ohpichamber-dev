@@ -36,7 +36,7 @@ const ShellObservationFields = {
   startedAt: TimestampSchema,
   outputCursor: CounterSchema,
 };
-const RunningShellSchema = z.strictObject({ ...ShellObservationFields, status: z.literal('running') });
+export const RunningShellSchema = z.strictObject({ ...ShellObservationFields, status: z.literal('running') });
 const EndedShellSchema = z.strictObject({
   ...ShellObservationFields,
   status: z.literal('ended'),

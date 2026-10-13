@@ -1,0 +1,144 @@
+diff --git a/node_modules/@oh-my-pi/pi-coding-agent/.bun-tag-91290e669a687a1f b/.bun-tag-91290e669a687a1f
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/src/async/job-manager.ts b/src/async/job-manager.ts
+index e6bb504d1d7905c102d238853a432eaa48db01eb..7b74f083b38e7a0a047227bd13082f2bc6c2be67 100644
+--- a/src/async/job-manager.ts
++++ b/src/async/job-manager.ts
+@@ -45,6 +45,12 @@ export const ASYNC_JOB_MANAGER_SHUTDOWN_REASON = Symbol("AsyncJobManager shutdow
+ /** Kind of work a managed job runs; drives job-row badges and delivery labels. */
+ export type AsyncJobType = "bash" | "task" | "eval";
+ 
++/** Executor observations; terminal publication still waits for the managed job promise. */
++export type BashJobEvent =
++	| { type: "started"; jobId: string; sessionKey: string }
++	| { type: "chunk"; jobId: string; chunk: string }
++	| { type: "finished"; jobId: string; exitCode: number | undefined; cancelled: boolean; timedOut: boolean };
++
+ /** Settled job-body payload: delivery text plus its parsed structured output. */
+ export interface AsyncJobRunResult {
+ 	text: string;
+@@ -267,6 +273,7 @@ export class AsyncJobManager {
+ 	}
+ 
+ 	readonly #jobs = new Map<string, AsyncJob>();
++	readonly #bashJobObservers = new Set<(event: BashJobEvent) => void>();
+ 	readonly #deliveries: AsyncJobDelivery[] = [];
+ 	readonly #inFlightDeliveries: AsyncJobDelivery[] = [];
+ 	readonly #suppressedDeliveries = new Set<string>();
+@@ -317,6 +324,20 @@ export class AsyncJobManager {
+ 		);
+ 	}
+ 
++	observeBashJobs(listener: (event: BashJobEvent) => void): () => void {
++		if (this.#disposed) throw new Error("Async job manager is disposed");
++		this.#bashJobObservers.add(listener);
++		return () => { this.#bashJobObservers.delete(listener); };
++	}
++
++	get hasBashJobObservers(): boolean {
++		return this.#bashJobObservers.size > 0;
++	}
++
++	emitBashJobEvent(event: BashJobEvent): void {
++		for (const observer of this.#bashJobObservers) observer(event);
++	}
++
+ 	/** Effective running-job cap (at least 1), resolved at check time. */
+ 	get #maxRunningJobs(): number {
+ 		const option = this.#maxRunningJobsOption;
+@@ -799,6 +820,7 @@ export class AsyncJobManager {
+ 		this.#consumedJobResults.clear();
+ 		this.#releasedForegroundJobs.clear();
+ 		this.#deliverySinks.clear();
++		this.#bashJobObservers.clear();
+ 		return jobsSettled && drained;
+ 	}
+ 
+diff --git a/src/sdk.ts b/src/sdk.ts
+index 2eb7529f4e39dbffa14a57946684bef4363e77ed..d63673226d59bbc8ef76f5624f14a65c89e5b6ce 100644
+--- a/src/sdk.ts
++++ b/src/sdk.ts
+@@ -31,6 +31,7 @@ import { prewarmOpenAICodexResponses } from "@oh-my-pi/pi-ai/providers/openai-co
+ import { isOpenAICodexWebSocketPreferred } from "@oh-my-pi/pi-ai/providers/openai-codex-transport";
+ import { withCredentialRedaction } from "@oh-my-pi/pi-ai/providers/transform-messages";
+ import { FALLBACK_DIALECT, preferredDialect } from "@oh-my-pi/pi-catalog/identity";
++import type { ModelRefreshStrategy } from "@oh-my-pi/pi-catalog/model-manager";
+ import type { Component } from "@oh-my-pi/pi-tui";
+ import { $env } from "@oh-my-pi/pi-utils/env";
+ import { getAgentDir, getModelDbPath, getProjectDir } from "@oh-my-pi/pi-utils/dirs";
+@@ -546,6 +547,11 @@ export interface CreateAgentSessionOptions {
+ 	/** Auth storage for credentials. Default: discoverAuthStorage(agentDir) */
+ 	authStorage?: AuthStorage;
+ 	/** Model registry. Default: discoverModels(authStorage, agentDir) */
++	/**
++	 * Refresh strategy for the initial default-model discovery fallback only.
++	 * Defaults to "online-if-uncached"; later explicit discovery remains unchanged.
++	 */
++	initialModelRefreshStrategy?: ModelRefreshStrategy;
+ 	modelRegistry?: ModelRegistry;
+ 	/**
+ 	 * Request credential resolver. Defaults to the model registry's normal
+@@ -3192,7 +3198,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 					(defaultRoleConfigured || !pick) &&
+ 					modelRegistry.getDiscoverableProviders().length > 0
+ 				) {
+-					await logger.time("resolveModelDiscoveryFallback", () => modelRegistry.refresh("online-if-uncached"));
++					await logger.time("resolveModelDiscoveryFallback", () =>
++						modelRegistry.refresh(options.initialModelRefreshStrategy ?? "online-if-uncached"),
++					);
+ 					if (!(await tryResolveDefaultRole()) && !model) {
+ 						const refreshedCandidates = await resolveAllowedModels(
+ 							modelRegistry,
+diff --git a/src/tools/bash.ts b/src/tools/bash.ts
+index 5f8c5d56ff804254856c639d528c99e4e7e0ec24..91d1be6e4ff2503076cf8e4d8773cd5af44561c9 100644
+--- a/src/tools/bash.ts
++++ b/src/tools/bash.ts
+@@ -838,6 +838,7 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+ 		let latestProgressDetails: BashProgressDetails | undefined;
+ 		let forwardUpdates = options.foreground;
+ 		const completion = Promise.withResolvers<ManagedBashJobCompletion>();
++		const sessionId = this.session.getSessionId?.() ?? "";
+ 
+ 		const jobId = manager.register(
+ 			"bash",
+@@ -848,7 +849,7 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+ 				try {
+ 					const result = await executeBash(options.command, {
+ 						cwd: options.commandCwd,
+-						sessionKey: `${this.session.getSessionId?.() ?? ""}:async:${jobId}`,
++						sessionKey: `${sessionId}:async:${jobId}`,
+ 						timeout: options.timeoutMs ?? 0,
+ 						signal: runSignal,
+ 						gitGuard: cfgBashGitGuard.get(this.session.settings),
+@@ -856,6 +857,9 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+ 						filesystem: this.#urlFilesystem(runSignal, options.approvalTier).shellFilesystem(),
+ 						artifactPath,
+ 						artifactId,
++						onChunk: manager.hasBashJobObservers
++							? chunk => manager.emitBashJobEvent({ type: "chunk", jobId, chunk })
++							: undefined,
+ 						onPreview: text => {
+ 							latestText = text;
+ 							void reportProgress(text, {
+@@ -870,6 +874,10 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+ 					}).finally(() => {
+ 						pids = NO_PIDS;
+ 					});
++					if (manager.hasBashJobObservers) {
++						manager.emitBashJobEvent({ type: "finished", jobId, exitCode: result.exitCode,
++							cancelled: result.cancelled, timedOut: result.timedOut === true });
++					}
+ 					if (result.artifactError) latestProgressDetails = { meta: { artifactError: result.artifactError } };
+ 					const wallTimeMs = performance.now() - wallTimeStart;
+ 					const finalResult = await this.#buildCompletedResult(result, options.timeoutSec, {
+@@ -924,6 +932,9 @@ export class BashTool implements AgentTool<BashToolSchema, BashToolDetails> {
+ 				},
+ 			},
+ 		);
++		if (manager.hasBashJobObservers) {
++			manager.emitBashJobEvent({ type: "started", jobId, sessionKey: `${sessionId}:async:${jobId}` });
++		}
+ 
+ 		return {
+ 			jobId,

@@ -124,6 +124,7 @@ export class WorkerSession {
         : SessionManager.create(input.cwd, directory);
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
+        initialModelRefreshStrategy: 'offline',
         enableMCP: mcp !== undefined, mcpManager: mcp, enableLsp: false, disableExtensionDiscovery: true,
         hasUI: true, interactivePrompts: true, extensions: [observer],
         extensionRoots: () => nativeExtensionRoots(settings),

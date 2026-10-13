@@ -49,7 +49,7 @@
     "changelog-card": "node scripts/changelog-card/generate.mjs",
     "changelog:build": "node scripts/changelog/build.mjs",
     "changelog:check": "node scripts/changelog/build.mjs --check",
-    "postinstall": "node ./fix-deprecation.js && bun run --cwd packages/sdk build && bun run extensions:build && node ./packages/electron/scripts/ensure-electron.mjs --best-effort",
+    "postinstall": "node ./fix-deprecation.js && bun run --cwd packages/agent-contract build && bun run --cwd packages/agent-service build && bun run --cwd packages/sdk build && bun run extensions:build && node ./packages/electron/scripts/ensure-electron.mjs --best-effort",
     "dev:web": "bun run --cwd packages/web build:watch",
     "dev:web:server": "bun run --cwd packages/web dev:server:watch",
     "dev:web:full": "node ./scripts/dev-web-full.mjs",
@@ -449,6 +449,7 @@
     "happy-dom@18.0.1": "bun-patches/happy-dom@18.0.1.patch",
     "@legendapp/list@3.6.0": "bun-patches/@legendapp%2Flist@3.6.0.patch",
     "@ark/schema@0.56.2": "vendor/omp/c9de2b02/patches/@ark%2Fschema@0.56.2.patch",
-    "puppeteer-core@25.3.0": "vendor/omp/c9de2b02/patches/puppeteer-core@25.3.0.patch"
+    "puppeteer-core@25.3.0": "vendor/omp/c9de2b02/patches/puppeteer-core@25.3.0.patch",
+    "@oh-my-pi/pi-coding-agent@vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-coding-agent-18.8.9.tgz": "vendor/omp/c9de2b02/patches/@oh-my-pi%2Fpi-coding-agent@vendor%2Fomp%2Fc9de2b02%2Ftarballs%2Foh-my-pi-pi-coding-agent-18.8.9.tgz.patch"
   }
 }

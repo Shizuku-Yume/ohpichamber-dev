@@ -356,6 +356,7 @@
         "@gitbeaker/rest": "43.8.0",
         "@octokit/rest": "^22.0.1",
         "@openchamber/agent-contract": "workspace:*",
+        "@openchamber/agent-service": "workspace:*",
         "@openchamber/sdk": "workspace:*",
         "@opencode/client": "2.0.25",
         "@opencode/schema": "2.0.25",
@@ -439,11 +440,12 @@
     "electron",
   ],
   "patchedDependencies": {
+    "bun-pty@0.4.8": "bun-patches/bun-pty@0.4.8.patch",
+    "@legendapp/list@3.6.0": "bun-patches/@legendapp%2Flist@3.6.0.patch",
     "@tanstack/virtual-core@3.17.11": "bun-patches/@tanstack+virtual-core+3.17.11.patch",
     "happy-dom@18.0.1": "bun-patches/happy-dom@18.0.1.patch",
     "puppeteer-core@25.3.0": "vendor/omp/c9de2b02/patches/puppeteer-core@25.3.0.patch",
-    "bun-pty@0.4.8": "bun-patches/bun-pty@0.4.8.patch",
-    "@legendapp/list@3.6.0": "bun-patches/@legendapp%2Flist@3.6.0.patch",
+    "@oh-my-pi/pi-coding-agent@vendor/omp/c9de2b02/tarballs/oh-my-pi-pi-coding-agent-18.8.9.tgz": "vendor/omp/c9de2b02/patches/@oh-my-pi%2Fpi-coding-agent@vendor%2Fomp%2Fc9de2b02%2Ftarballs%2Foh-my-pi-pi-coding-agent-18.8.9.tgz.patch",
   },
   "overrides": {
     "@anush008/tokenizers@0.0.0": {

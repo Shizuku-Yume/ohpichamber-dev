@@ -15,6 +15,8 @@ const exportSchema = z.union([
 const packageSchema = z.object({
   name: z.string(), types: z.string().optional(),
   exports: z.record(z.string(), exportSchema).optional(),
+  dependencies: z.record(z.string(), z.string()).optional(),
+  optionalDependencies: z.record(z.string(), z.string()).optional(),
 });
 const root = rootSchema.parse(JSON.parse(await readFile(join(repository, 'package.json'), 'utf8')));
 const packageNames = Object.entries(root.overrides)
@@ -22,15 +24,24 @@ const packageNames = Object.entries(root.overrides)
   .map(([name]) => name);
 const sdkEntry = Bun.resolveSync('@oh-my-pi/pi-coding-agent/sdk', packageDirectory);
 const installations = [];
-for (const name of packageNames) {
-  const entry = Bun.resolveSync(name, dirname(sdkEntry));
+const resolvedNames = new Set();
+const pending = [{ name: '@oh-my-pi/pi-coding-agent', entry: sdkEntry }];
+for (const { name, entry } of pending) {
+  if (resolvedNames.has(name)) continue;
   let directory = dirname(entry);
   while (!await Bun.file(join(directory, 'package.json')).exists()) directory = dirname(directory);
   const manifest = packageSchema.parse(JSON.parse(await readFile(join(directory, 'package.json'), 'utf8')));
   if (manifest.name !== name) throw new Error('SDK declaration package identity mismatch');
   installations.push({ name, directory, manifest });
+  resolvedNames.add(name);
+  for (const dependency of Object.keys({ ...manifest.dependencies, ...manifest.optionalDependencies })) {
+    if (packageNames.includes(dependency) && !resolvedNames.has(dependency)) {
+      pending.push({ name: dependency, entry: Bun.resolveSync(dependency, directory) });
+    }
+  }
 }
-const sourceRoot = join(repository, 'node_modules/.bun');
+if (installations.length !== packageNames.length) throw new Error('SDK declaration dependency owners are incomplete');
+const sourceRoot = repository;
 const roots = installations.flatMap(({ directory }) => ts.sys.readDirectory(join(directory, 'src'), ['.ts', '.tsx'], ['**/*.test.ts', '**/test/**'], ['**/*']));
 const sourcePaths = {};
 for (const { name, directory, manifest } of installations) {
