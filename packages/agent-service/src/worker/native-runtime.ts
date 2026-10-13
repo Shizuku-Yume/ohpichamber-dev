@@ -69,13 +69,14 @@ export async function openNativeRuntime(input: { cwd: string; agentDirectory: st
   try {
     const modelsPath = join(input.agentDirectory, 'models.yml');
     let currentNativeSessionId = () => '';
-    const modelRegistry = new NativeModelRegistry(
+    const modelRegistry: ModelRegistry = new NativeModelRegistry(
       authStorage,
       modelsPath,
       settings,
-      (providerId, sessionId, options) => models.resolveProviderCredential(providerId, sessionId, options),
+      (providerId, sessionId, options): Promise<BoundProviderCredentialResolution> =>
+        models.resolveProviderCredential(providerId, sessionId, options),
     );
-    const models = new NativeModels({
+    const models: NativeModels = new NativeModels({
       modelRegistry,
       authStorage,
       settings,

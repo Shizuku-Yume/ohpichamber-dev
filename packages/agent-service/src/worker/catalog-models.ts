@@ -248,8 +248,7 @@ export class NativeModels {
     const first = this.context.modelRegistry.getProviderModels(providerId)[0];
     const rawEndpoint = configured?.endpoint ?? this.context.modelRegistry.getProviderBaseUrl(providerId) ?? null;
     const source = this.context.authStorage.keys.source(providerId);
-    const rows = this.context.authStorage.credentials.list(providerId)
-      .filter(row => row.disabledCause === null && !this.context.authStorage.keys.isKeylessFallback(providerId, row.credential));
+    const rows = this.context.authStorage.credentials.list(providerId).filter(row => row.disabledCause === null);
     const supportedOAuth = this.context.oauthProviderIds().has(providerId) || rows.some(row => row.credential.type === 'oauth');
     const authMethods: Provider['authMethods'] = supportedOAuth ? ['api-key', 'oauth'] : ['api-key'];
     let auth: Provider['auth'] = { status: 'missing' };
@@ -292,7 +291,6 @@ export class NativeModels {
     if (cfgDisabledProviders.get(this.context.settings).includes(providerId)) return undefined;
     const row = this.context.authStorage.credentials.list(providerId)
       .find(candidate => candidate.disabledCause === null
-        && !this.context.authStorage.keys.isKeylessFallback(providerId, candidate.credential)
         && credentialReference(providerId, candidate.id) === reference);
     if (!row) return undefined;
     if (row.credential.type === 'api_key') {

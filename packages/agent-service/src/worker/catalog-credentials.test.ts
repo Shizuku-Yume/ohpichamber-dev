@@ -1,11 +1,19 @@
-import { expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { NativeCredentials } from './catalog-credentials.ts';
 import { credentialReference } from './catalog-models.ts';
 import { nativeModelsContext, openNativeRuntime } from './native-runtime.ts';
 
+beforeEach(() => {
+  resetSettingsForTest();
+});
+
+afterEach(() => {
+  resetSettingsForTest();
+});
 test('bound API-key credentialRef selects the exact stored row across multiple keys and fails closed on disable or delete', async () => {
   const root = await mkdtemp(join(tmpdir(), 'catalog-credentials-'));
   const cwd = join(root, 'workspace');
@@ -166,6 +174,7 @@ test('bound API-key credentialRef selects the exact stored row across multiple k
     expect(await runtime.modelRegistry.resolver(selectedBeforeDelete.nativeModel, oddSessionId)({ lastChance: false, error: undefined })).toBeUndefined();
   } finally {
     runtime.authStorage.close();
+    resetSettingsForTest();
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -249,6 +258,7 @@ test('bound OAuth credentialRef pins session affinity to the selected row withou
     expect(await runtime.modelRegistry.getApiKeyWithCredentialForProvider(providerId, 'oauth-session-1')).toBeUndefined();
   } finally {
     runtime.authStorage.close();
+    resetSettingsForTest();
     await rm(root, { recursive: true, force: true });
   }
 });
