@@ -65,7 +65,8 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
     );
   `);
   const lifecycle = createMetadataLifecycle(db, closeDatabase);
-  let conversionStatus = fs.existsSync(path.join(dataDir, 'message-queue.json')) ? 'pending' : 'missing';
+  const legacyPath = dataDir === undefined ? null : path.join(dataDir, 'message-queue.json');
+  let conversionStatus = legacyPath !== null && fs.existsSync(legacyPath) ? 'pending' : 'missing';
   const conversionErrors = new Set();
   const read = (work) => lifecycle.run(() => {
     try { return work(); } catch (error) {
@@ -140,20 +141,26 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
     if (!record) throw new PromptQueueError('QUEUE_CONFLICT', 409, 'Prompt delivery claim is no longer current', { queue: state(scope) });
     return record;
   };
+  const getDeliveryCapture = (scope, leaseId) => read(() => {
+    const record = delivery(ScopeSchema.parse(scope), leaseId);
+    const item = db.prepare('SELECT * FROM prompt_queue_item WHERE session_id = ? AND item_id = ?').get(scope.sessionId, record.item_id);
+    if (!item) throw new PromptQueueError('QUEUE_CONFLICT', 409, 'Prompt delivery capture is no longer available');
+    const stored = decode(item);
+    return { queueItemId: record.item_id, leaseId: record.lease_id, runId: record.run_id, epoch: record.epoch, request: stored.request };
+  });
   const activeItem = (scope, record) => {
     const item = db.prepare('SELECT * FROM prompt_queue_item WHERE session_id = ? AND item_id = ? AND lease_id = ?').get(scope.sessionId, record.item_id, record.lease_id);
     if (!item) conflict(scope);
     return item;
   };
-
   return {
-    getState: (scope) => read(() => state(ScopeSchema.parse(scope))),
+    getDeliveryCapture,
     list: () => read(() => {
       const items = [], errors = [];
       for (const row of db.prepare('SELECT * FROM prompt_queue_owner').all()) {
         const scope = { sessionId: row.session_id, projectId: row.project_id, workspaceId: row.workspace_id };
         try { items.push({ scope, queue: state(scope) }); }
-        catch { errors.push({ scope, code: 'INTERNAL_ERROR', storage: 'corrupt' }); }
+        catch { errors.push({ sessionId: row.session_id, code: 'INTERNAL_ERROR', storage: 'corrupt' }); }
       }
       return { items, errors };
     }),
@@ -264,8 +271,9 @@ export function createPromptQueueStore({ dataDir, database, closeDatabase = data
       return state(scope);
     }),
     convertLegacy: ({ resolveScope, importAttachment, resolveScheduledTask }) => lifecycle.run(async () => {
+      if (legacyPath === null) return { status: 'missing', errors: [] };
       let source;
-      try { source = fs.readFileSync(path.join(dataDir, 'message-queue.json'), 'utf8'); }
+      try { source = fs.readFileSync(legacyPath, 'utf8'); }
       catch (error) {
         conversionStatus = error.code === 'ENOENT' ? 'missing' : 'failed';
         if (conversionStatus === 'missing') return { status: 'missing', errors: [] };
