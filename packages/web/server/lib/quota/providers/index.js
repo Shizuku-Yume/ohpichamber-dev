@@ -5,8 +5,8 @@
  * @module quota/providers
  */
 
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
 import { buildResult } from '../utils/index.js';
+import { requireSelectedCredential } from './selected-credential.js';
 
 import * as claude from './claude/index.js';
 import * as clinePass from './cline-pass.js';
@@ -191,61 +191,43 @@ const pendingFetches = new Map();
 
 
 /**
- * Providers with a usable credential. OpenCode's stored credentials are read
- * once and handed to every provider; when OpenCode cannot be asked this
- * throws, so a transient failure does not look like "nothing configured".
+ * Provider selections are supplied by the Host's selected workspace catalog.
+ * This registry never enumerates or reads a credential store itself.
  */
-export const listConfiguredQuotaProviders = async () => {
-  const auth = await readOpenCodeCredentials();
-  const configured = [];
+export const listConfiguredQuotaProviders = async ({ selections = [] } = {}) => selections
+  .filter((selection) => registry[selection?.providerId])
+  .map((selection) => selection.providerId);
 
-  for (const [id, provider] of Object.entries(registry)) {
-    try {
-      if (provider.isConfigured(auth)) {
-        configured.push(id);
-      }
-    } catch {
-      // Ignore provider-specific config errors in list API.
-    }
-  }
-
-  return configured;
-};
-
-const fetchQuotaForProviderUncoalesced = async (providerId) => {
+const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
   const provider = registry[providerId];
 
   if (!provider) {
-    return buildResult({
-      providerId,
-      providerName: providerId,
-      ok: false,
-      configured: false,
-      error: 'Unsupported provider'
-    });
+    return buildResult({ providerId, providerName: providerId, ok: false, configured: false, error: 'Unsupported provider' });
   }
 
   try {
-    return await provider.fetchQuota();
+    const credential = await requireSelectedCredential({ ...options, providerId, purpose: 'quota' });
+    return await provider.fetchQuota({ ...options, credential });
   } catch (error) {
     return buildResult({
       providerId: provider.providerId,
       providerName: provider.providerName,
       ok: false,
-      configured: true,
+      configured: false,
       error: error instanceof Error ? error.message : 'Request failed'
     });
   }
 };
 
-export const fetchQuotaForProvider = (providerId) => {
-  const existing = pendingFetches.get(providerId);
+export const fetchQuotaForProvider = (providerId, options = {}) => {
+  const requestKey = `${providerId}:${options.workspaceId}:${options.agentDirectoryId}:${options.credentialRef}`;
+  const existing = pendingFetches.get(requestKey);
   if (existing) return existing;
 
-  const pending = fetchQuotaForProviderUncoalesced(providerId).finally(() => {
-    if (pendingFetches.get(providerId) === pending) pendingFetches.delete(providerId);
+  const pending = fetchQuotaForProviderUncoalesced(providerId, options).finally(() => {
+    if (pendingFetches.get(requestKey) === pending) pendingFetches.delete(requestKey);
   });
-  pendingFetches.set(providerId, pending);
+  pendingFetches.set(requestKey, pending);
   return pending;
 };
 

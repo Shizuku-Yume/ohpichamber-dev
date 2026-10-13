@@ -1,7 +1,5 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   asObject,
   asNonEmptyString,
   buildResult,
@@ -24,15 +22,12 @@ const WINDOW_KINDS = new Map([
   ['monthly', { key: 'monthly', windowSeconds: null }]
 ]);
 
-const getApiKey = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return asNonEmptyString(entry?.key) ?? asNonEmptyString(entry?.token);
-};
+const getApiKey = (credential) => credentialAccessToken(credential);
 
 export const isConfigured = (auth) => Boolean(getApiKey(auth));
 
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
-  const apiKey = getApiKey(await readAuth());
+export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
+  const apiKey = getApiKey(credential);
 
   if (!apiKey) {
     return buildResult({
