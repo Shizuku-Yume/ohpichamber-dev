@@ -60,8 +60,8 @@ function terminalResolution(decision: ApprovalReply['decision'], policy: { polic
   if (decision === 'approve' || decision === 'reject') return { decision };
   if (!policy) throw new ProjectionError(503, 'APPROVAL_POLICY_WRITE_FAILED', 'Approval policy persistence did not return a committed revision');
   return decision === 'always-allow'
-    ? { decision, policy: { ...policy, scope: 'session', persistence: 'committed' } }
-    : { decision, policy: { ...policy, scope: 'workspace', persistence: 'committed' } };
+    ? { decision, policy: { policyId: policy.policyId, revision: policy.revision, scope: 'session', persistence: 'committed' } }
+    : { decision, policy: { policyId: policy.policyId, revision: policy.revision, scope: 'workspace', persistence: 'committed' } };
 }
 
 export class InteractionManager {
