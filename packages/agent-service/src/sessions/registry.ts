@@ -62,6 +62,12 @@ export class SessionRegistry {
     void operation.finally(() => { this.openings.delete(parsed.rootSessionId); }).catch(() => {});
     return operation;
   }
+  async reopen(input: SessionBootstrap): Promise<RuntimeSession> {
+    this.ensureOpen();
+    const parsed = HostSessionBootstrapSchema.parse(input);
+    if (!this.references.get(parsed.rootSessionId)) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+    return this.open(parsed);
+  }
   async restart(input: z.infer<typeof WorkerBootstrapSchema>): Promise<boolean> {
     const pending = this.openings.get(input.rootSessionId);
     if (pending) await pending;
@@ -275,7 +281,13 @@ export class SessionRegistry {
     const previous = this.entries.get(input.rootSessionId);
     const reference = this.references.get(input.rootSessionId);
     if (!replace && previous?.state === 'live' && previous.opened.journal.runtime().runtimeStatus !== 'unavailable') return previous.opened.journal.runtime();
-    const resolved = reference ? { ...input, sessionFile: reference.sessionFile } : input;
+    const resolved = reference ? {
+      ...input,
+      sessionFile: reference.sessionFile,
+      ...(input.sessionsDirectory === undefined && reference.sessionsDirectory !== undefined ? { sessionsDirectory: reference.sessionsDirectory } : {}),
+      ...(input.mcpConfigPath === undefined && reference.mcpConfigPath !== undefined ? { mcpConfigPath: reference.mcpConfigPath } : {}),
+      ...(input.options === undefined && reference.options !== undefined ? { options: reference.options } : {}),
+    } : input;
     const entry: Extract<Entry, { state: 'opening' }> = { state: 'opening', input: resolved };
     if (previous?.state === 'live') entry.opened = previous.opened;
     this.entries.set(input.rootSessionId, entry);

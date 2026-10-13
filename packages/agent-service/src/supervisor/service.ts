@@ -29,6 +29,7 @@ import { ShellCoordinator } from './shell.ts';
 import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
 import type { PrivateCredentialResolveResult, PrivateCredentialHandoffResult } from '../catalogs/private-credentials.ts';
 const SessionForkRequestSchema = z.strictObject({ sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']) }).refine(input => input.mode === 'full' || input.entryId !== null, { message: 'Selected forks require an entry identity', path: ['entryId'] });
+const SessionReopenRequestSchema = HostSessionBootstrapSchema.omit({ sessionFile: true });
 const SessionForkAckSchema = z.strictObject({ sessionId: EntityIdSchema, rootSessionId: EntityIdSchema, sessionFile: z.string().min(1), sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']) });
 interface ServiceOptions {
   workerEntrypoint: string;
@@ -342,6 +343,14 @@ export class AgentService {
         const owner = this.workspaceCatalogs.get(workspaceId);
         if (input.agentDirectoryId !== undefined && !owner.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
         respondJson(response, 200, await this.catalog.publishSources(workspaceId, input)); return;
+      }
+      const privateReopen = /^\/internal\/sessions\/([^/]+)\/reopen$/.exec(url.pathname);
+      if (privateReopen && request.method === 'POST') {
+        const rootSessionId = identity(privateReopen[1]);
+        const { displayPath, ...input } = await readBody(request, SessionReopenRequestSchema);
+        if (input.rootSessionId !== rootSessionId) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity does not match the route');
+        respondJson(response, 200, await this.admit(input, bootstrap => this.sessions.reopen({ ...bootstrap, displayPath })));
+        return;
       }
       if (request.method === 'POST' && url.pathname === '/internal/sessions') {
         const { displayPath, ...input } = await readBody(request, HostSessionBootstrapSchema);
