@@ -1,5 +1,4 @@
 import { CounterSchema, PositiveCounterSchema, type MCPConfigurationState } from '@openchamber/agent-contract';
-import { lstat } from 'node:fs/promises';
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
 import { CatalogOperationSchema, CatalogResultSchema, type CatalogOperation, type CatalogResult } from '../catalogs/protocol.ts';
 import type { CompletionWorkerBootstrap, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
@@ -8,7 +7,7 @@ import { WorkerCompletion } from './completion.ts';
 import type { NativeModels } from './catalog-models.ts';
 import { NativeAgents } from './catalog-agents.ts';
 import { NativeCredentials } from './catalog-credentials.ts';
-import { NativeMcpError, readNativeMcpConfiguration, writeNativeMcpConfiguration } from './mcp.ts';
+import { NativeMcpError, readNativeMcpConfigurationIfPresent, writeNativeMcpConfiguration } from './mcp.ts';
 import { nativeExtensionRoots, nativeModelsContext, openNativeRuntime, type NativeWorkerRuntime } from './native-runtime.ts';
 import type { WorkerAuthorize } from './policy.ts';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
@@ -91,12 +90,7 @@ export class StatelessWorker {
   private async readConfiguration(): Promise<MCPConfigurationState | null> {
     const path = this.input.mcpConfigPath;
     if (!path) throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP storage ownership is unavailable.', true);
-    try { await lstat(path); }
-    catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
-      throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration could not be read.', true);
-    }
-    return readNativeMcpConfiguration(path, this.input.workspaceId);
+    return readNativeMcpConfigurationIfPresent(path, this.input.workspaceId);
   }
 
   private async catalog(input: CatalogOperation, revision: string): Promise<CatalogResult> {

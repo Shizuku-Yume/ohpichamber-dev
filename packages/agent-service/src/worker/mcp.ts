@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { lstat } from 'node:fs/promises';
 import { z } from 'zod';
 import {
   CatalogWorkerIdentitySchema, CounterSchema, EntityIdSchema, JsonObjectSchema,
@@ -86,6 +87,16 @@ export async function writeNativeMcpConfiguration(configPath: string, captured: 
     throw new NativeMcpError('MCP_CONFIG_WRITE_FAILED', 'MCP configuration could not be committed.', true);
   }
   return configuration;
+}
+
+/** First-use storage may be absent; malformed or unreadable configured files still fail closed. */
+export async function readNativeMcpConfigurationIfPresent(configPath: string, workspaceId: string): Promise<MCPConfigurationState | null> {
+  try { await lstat(configPath); }
+  catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
+    throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration could not be read.', true);
+  }
+  return readNativeMcpConfiguration(configPath, workspaceId);
 }
 
 export async function readNativeMcpConfiguration(configPath: string, workspaceId: string): Promise<MCPConfigurationState> {

@@ -15,7 +15,7 @@ import { ProjectionError } from '../projection/journal.ts';
 import { WorkerInteraction as NativeInteraction } from './interaction.ts';
 import { WorkerProjection } from './projection.ts';
 import { WorkerCatalogs, credentialReference } from './catalogs.ts';
-import { WorkerMcp, readNativeMcpConfiguration } from './mcp.ts';
+import { WorkerMcp, readNativeMcpConfigurationIfPresent } from './mcp.ts';
 import { WorkerShell } from './shell.ts';
 import { WorkerCompletion } from './completion.ts';
 import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
@@ -225,7 +225,7 @@ export class WorkerSession {
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
       owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize);
       capturePolicy = async () => {
-        const configuration = input.mcpConfigPath ? await readNativeMcpConfiguration(input.mcpConfigPath, input.workspaceId) : null;
+        const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId) : null;
         publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
       };
       await capturePolicy();

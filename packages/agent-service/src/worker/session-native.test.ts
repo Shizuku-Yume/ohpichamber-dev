@@ -54,6 +54,7 @@ async function fixture({ respond, invoke, machineCommands = [] }: {
   process.env.HOME = root;
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
+  const mcpConfigPath = join(agentDirectory, 'mcp.json');
   await mkdir(cwd);
   await mkdir(agentDirectory);
   const events: ProjectionInput[] = [];
@@ -72,7 +73,7 @@ async function fixture({ respond, invoke, machineCommands = [] }: {
   } });
   try {
     worker = await WorkerSession.open({ type: 'bootstrap', rootSessionId, workerGeneration: generation,
-      projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'source', cwd, agentDirectory, sessionsDirectory: join(root, 'sessions') }, inputs => {
+      projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'source', cwd, agentDirectory, mcpConfigPath, sessionsDirectory: join(root, 'sessions') }, inputs => {
       events.push(...inputs);
       journal?.append(inputs);
     }, interaction => {
@@ -104,7 +105,7 @@ async function fixture({ respond, invoke, machineCommands = [] }: {
       modelId: 'native-model', provider: 'native-fixture', name: 'Native model', modalities: ['text'], contextWindow: 65536, maxOutputTokens: 128,
       reasoningEffortSupported: false, reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null,
     } } } });
-    return { root: cwd, worker, events, requests, grants, interactions, journal,
+    return { root: cwd, worker, events, requests, grants, interactions, journal, mcpConfigPath,
       waitApproval: () => {
         const approval = pendingApprovals.shift();
         if (approval) return Promise.resolve(approval);
@@ -202,7 +203,7 @@ for (const decision of ['allow', 'deny'] as const) {
   }, 30000);
 }
 
-test('actual SDK Host tool reaches the captured capability owner and returns its real file result', async () => {
+test('actual SDK Host tool executes with Host-supplied first-use MCP storage and returns its real file result', async () => {
   let invoked: HostActionRequest | undefined;
   const harness = await fixture({ respond(payload) {
     const messages = payload.messages;
@@ -217,6 +218,7 @@ test('actual SDK Host tool reaches the captured capability owner and returns its
   const terminal = Promise.withResolvers<void>();
   const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
   try {
+    await expect(readFile(harness.mcpConfigPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
     cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
     expect(harness.worker.session.getAllToolInfos().map(tool => tool.name)).toEqual(expect.arrayContaining(['openchamber', 'web', 'memory', 'notify']));
     await harness.worker.operation({ type: 'prompt', runId: 'host-run', request: prompt('Store the marker with the memory tool.') });
