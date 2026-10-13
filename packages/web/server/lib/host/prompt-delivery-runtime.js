@@ -28,14 +28,16 @@ export function createHostPromptDeliveryRuntime({
   resolveSessionScope,
   routingRuntime,
   sessionKnowledgeRuntime,
-  contextObligatoryRuntime,
+
   scheduledTasksRuntime,
   sessionRuntime,
 }) {
   if (typeof resolveSessionScope !== 'function') throw new TypeError('prompt delivery requires resolveSessionScope');
   if (!routingRuntime || typeof routingRuntime.resolveAutoSelection !== 'function') throw new TypeError('prompt delivery requires routing runtime');
   if (!sessionKnowledgeRuntime || typeof sessionKnowledgeRuntime.resolvePendingForSession !== 'function') throw new TypeError('prompt delivery requires session knowledge runtime');
-  const accepted = new Set();
+  if (!sessionRuntime || typeof sessionRuntime.markUserMessageSent !== 'function') throw new TypeError('prompt delivery requires session runtime activity');
+  const accepted = new Map();
+  const completed = new Set();
 
   const requireScope = async (scope, identity = {}) => {
     const sessionId = scope?.sessionId || identity.sessionId;
@@ -60,36 +62,42 @@ export function createHostPromptDeliveryRuntime({
     }
     const knowledge = await sessionKnowledgeRuntime.resolvePendingForSession(fresh.sessionId, fresh.cwd);
     const context = [...(parsed.input.context ?? [])];
-    if (knowledge.text) context.push({ kind: 'context', text: knowledge.text, metadata: { knowledge: { signature: knowledge.signature } } });
-    return { request: PromptRequestSchema.parse({ input: { ...parsed.input, context }, options }), scope: scopeIdentity(fresh), knowledgeSignature: knowledge.signature, knowledgeText: knowledge.text };
+    const scheduledEntry = context.find((entry) => entry?.kind === 'context' && entry?.metadata?.scheduledTask);
+    const scheduledTask = scheduledEntry?.metadata?.scheduledTask;
+    const deliveryReceiptId = scheduledEntry?.deliveryReceiptId;
+    const metadata = { ...(knowledge.text ? { knowledge: { signature: knowledge.signature } } : {}), ...(scheduledTask ? { scheduledTask } : {}), ...(deliveryReceiptId ? { deliveryReceiptId } : {}) };
+    if (Object.keys(metadata).length > 0) context.push({ kind: 'context', text: knowledge.text || '', metadata });
+    return PromptRequestSchema.parse({ input: { ...parsed.input, context }, options });
   };
 
   const beforeDispatch = async (scope, capture) => {
-    const fresh = await requireScope(scope, capture);
-    if (!capture?.request) throw asError('Prompt capture is required');
-    if (capture.scheduledTask && scheduledTasksRuntime?.validateTarget) {
-      await scheduledTasksRuntime.validateTarget(fresh.sessionId, fresh.cwd, capture.scheduledTask);
-    }
+    const fresh = await requireScope(scope);
+    const request = PromptRequestSchema.parse(capture);
+    const scheduled = request.input.context?.find((entry) => entry?.kind === 'context' && entry?.metadata?.scheduledTask)?.metadata?.scheduledTask;
+    if (scheduled && scheduledTasksRuntime?.beforeScheduledTaskSend) await scheduledTasksRuntime.beforeScheduledTaskSend(fresh, { request, scheduledTask: scheduled });
     return fresh;
   };
 
-  const onPromptAccepted = async (scope, capture, receipt = capture?.receipt) => {
-    const fresh = await requireScope(scope, capture);
-    const identity = receipt?.deliveryRunId || receipt?.runId || receipt?.followUpId
-      || capture?.deliveryRunId || capture?.runId;
+  const onPromptAccepted = async (scope, capture, receipt = {}) => {
+    const fresh = await requireScope(scope);
+    const request = PromptRequestSchema.parse(capture);
+    const contexts = request.input.context ?? [];
+    const identity = receipt.deliveryRunId || receipt.runId || receipt.followUpId || contexts.find((entry) => entry?.deliveryReceiptId)?.deliveryReceiptId;
     if (!identity) throw asError('Prompt acceptance receipt has no stable identity', 502, 'INTERNAL_ERROR');
     const key = `${fresh.sessionId}:${identity}`;
-    if (accepted.has(key)) return { duplicate: true, identity };
-    accepted.add(key);
-    const delivery = capture?.knowledgeText ? capture : null;
-    if (delivery?.knowledgeText && delivery.knowledgeSignature) {
-      await sessionKnowledgeRuntime.recordDelivered(fresh.sessionId, fresh.cwd, delivery.knowledgeSignature);
-    }
-    sessionRuntime?.markUserMessageSent?.(fresh.sessionId);
-    if (capture?.scheduledTask && scheduledTasksRuntime?.onScheduledTaskResult) {
-      await scheduledTasksRuntime.onScheduledTaskResult(capture.scheduledTask, 'accepted');
-    }
-    return { duplicate: false, identity };
+    if (completed.has(key)) return { duplicate: true, identity };
+    const previous = accepted.get(key);
+    if (previous) return previous;
+    const operation = (async () => {
+      const knowledge = contexts.find((entry) => entry?.kind === 'context' && entry?.metadata?.knowledge);
+      if (knowledge?.metadata?.knowledge?.signature) await sessionKnowledgeRuntime.recordDelivered(fresh.sessionId, fresh.cwd, knowledge.metadata.knowledge.signature);
+      sessionRuntime.markUserMessageSent(fresh.sessionId);
+      const scheduled = contexts.find((entry) => entry?.kind === 'context' && entry?.metadata?.scheduledTask)?.metadata?.scheduledTask;
+      if (scheduled && scheduled.mode === 'existing' && scheduledTasksRuntime?.onScheduledTaskResult) await scheduledTasksRuntime.onScheduledTaskResult(scheduled, 'accepted');
+      return { duplicate: false, identity };
+    })();
+    accepted.set(key, operation);
+    try { const result = await operation; accepted.delete(key); completed.add(key); if (completed.size > 1024) completed.delete(completed.values().next().value); return result; } catch (error) { accepted.delete(key); throw error; }
   };
 
   return { capturePrompt, beforeDispatch, onPromptAccepted };
