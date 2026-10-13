@@ -43,7 +43,7 @@ export const WorkerPolicyRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp-server'), server: MCPServerConfigSchema }),
   z.strictObject({ type: z.literal('mcp-oauth'), server: MCPServerConfigSchema, configuration: JsonObjectSchema }),
   z.strictObject({ type: z.literal('shell'), request: ShellStartRequestSchema }),
-  z.strictObject({ type: z.literal('tool'), toolName: z.string().min(1), input: JsonObjectSchema }),
+  z.strictObject({ type: z.literal('tool'), toolName: z.string().min(1), input: JsonObjectSchema, agentId: EntityIdSchema.optional(), permissionPresetId: EntityIdSchema.optional() }),
 ]);
 export type WorkerPolicyRequest = z.infer<typeof WorkerPolicyRequestSchema>;
 export const WorkerPolicyResultSchema = z.discriminatedUnion('allowed', [
