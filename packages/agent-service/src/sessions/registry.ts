@@ -46,22 +46,32 @@ export class SessionRegistry {
     }
   }
 
-  open(input: PrivateSessionBootstrap): Promise<RuntimeSession> {
+  open(input: PrivateSessionBootstrap, replace = false): Promise<RuntimeSession> {
     this.ensureOpen();
     const parsed = PrivateSessionBootstrapSchema.parse(input);
     if (this.deleting.has(parsed.rootSessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
     const existing = this.entries.get(parsed.rootSessionId);
     const scope = existing?.state === 'unloaded' ? existing.reference : existing?.input;
-    if (scope && (scope.projectId !== parsed.projectId || scope.workspaceId !== parsed.workspaceId)) {
+    if (scope && (scope.projectId !== parsed.projectId || scope.workspaceId !== parsed.workspaceId || scope.cwd !== parsed.cwd || scope.agentDirectory !== parsed.agentDirectory || (scope.agentDirectoryId !== undefined && scope.agentDirectoryId !== parsed.agentDirectoryId) || (scope.mcpConfigPath !== undefined && scope.mcpConfigPath !== parsed.mcpConfigPath))) {
       throw new SessionReferenceError(409, 'INVALID_REQUEST', 'Session scope cannot be changed');
     }
     const pending = this.openings.get(parsed.rootSessionId);
     if (pending) return pending;
-    const operation = this.openResolved(parsed);
+    const operation = this.openResolved(parsed, replace);
     this.openings.set(parsed.rootSessionId, operation);
     void operation.finally(() => { this.openings.delete(parsed.rootSessionId); }).catch(() => {});
     return operation;
   }
+  async restart(input: z.infer<typeof WorkerBootstrapSchema>): Promise<boolean> {
+    const pending = this.openings.get(input.rootSessionId);
+    if (pending) await pending;
+    const entry = this.entries.get(input.rootSessionId);
+    if (!entry) return false;
+    const displayPath = entry.state === 'unloaded' ? entry.reference.displayPath : entry.input.displayPath;
+    await this.open({ ...input, displayPath }, true);
+    return true;
+  }
+
 
   runtime(sessionId: string): RuntimeSession {
     const entry = this.get(sessionId);
@@ -212,10 +222,10 @@ export class SessionRegistry {
     await this.references.close();
   }
 
-  private async openResolved(input: PrivateSessionBootstrap): Promise<RuntimeSession> {
+  private async openResolved(input: PrivateSessionBootstrap, replace: boolean): Promise<RuntimeSession> {
     const previous = this.entries.get(input.rootSessionId);
     const reference = this.references.get(input.rootSessionId);
-    if (previous?.state === 'live' && previous.opened.journal.runtime().runtimeStatus !== 'unavailable') return previous.opened.journal.runtime();
+    if (!replace && previous?.state === 'live' && previous.opened.journal.runtime().runtimeStatus !== 'unavailable') return previous.opened.journal.runtime();
     const resolved = reference ? { ...input, sessionFile: reference.sessionFile } : input;
     const entry: Extract<Entry, { state: 'opening' }> = { state: 'opening', input: resolved };
     if (previous?.state === 'live') entry.opened = previous.opened;
@@ -224,12 +234,13 @@ export class SessionRegistry {
       const { displayPath, ...bootstrap } = resolved;
       const policies = this.policyLoad ? await this.policyLoad({ sessionId: input.rootSessionId, workspaceId: input.workspaceId }) : [];
       this.interactions.loadPolicies(input.rootSessionId, input.workspaceId, policies);
-      await this.workers.start(bootstrap, previous?.state === 'live', policies);
+      await this.workers.start(bootstrap, replace || previous?.state === 'live', policies);
       if (!entry.opened) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
       const runtime = entry.opened.journal.runtime();
       await this.references.put({
         rootSessionId: bootstrap.rootSessionId, projectId: bootstrap.projectId, workspaceId: bootstrap.workspaceId,
         cwd: bootstrap.cwd, agentDirectory: bootstrap.agentDirectory,
+        agentDirectoryId: bootstrap.agentDirectoryId, mcpConfigPath: bootstrap.mcpConfigPath,
         sessionsDirectory: bootstrap.sessionsDirectory, options: bootstrap.options,
         sessionFile: entry.opened.sessionFile, displayPath,
         createdAt: runtime.createdAt, updatedAt: runtime.updatedAt,

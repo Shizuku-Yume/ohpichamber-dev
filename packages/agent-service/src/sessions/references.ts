@@ -6,7 +6,7 @@ import type { JsonValue, ProblemCode } from '@openchamber/agent-contract';
 import { z } from 'zod';
 import { WorkerBootstrapSchema } from '../protocol.ts';
 
-const SessionReferenceSchema = WorkerBootstrapSchema.omit({ env: true }).required({ sessionFile: true })
+const SessionReferenceSchema = WorkerBootstrapSchema.omit({ env: true, observationEpoch: true, catalogRevision: true, mcpConfiguration: true, skillSources: true }).required({ sessionFile: true })
   .merge(z.strictObject({}).merge(RuntimeSessionSchema).pick({ displayPath: true }))
   .extend({ createdAt: TimestampSchema, updatedAt: TimestampSchema });
 export type SessionReference = Readonly<z.infer<typeof SessionReferenceSchema>>;
@@ -25,6 +25,8 @@ function referenceJson(reference: SessionReference): JsonValue {
     displayPath: reference.displayPath, createdAt: reference.createdAt, updatedAt: reference.updatedAt,
   };
   if (reference.sessionsDirectory !== undefined) value.sessionsDirectory = reference.sessionsDirectory;
+  if (reference.agentDirectoryId !== undefined) value.agentDirectoryId = reference.agentDirectoryId;
+  if (reference.mcpConfigPath !== undefined) value.mcpConfigPath = reference.mcpConfigPath;
   if (reference.options !== undefined) value.options = reference.options;
   return value;
 }

@@ -35,6 +35,7 @@ export const CompletionWorkerBootstrapSchema = z.strictObject({
   workspaceId: EntityIdSchema, projectId: EntityIdSchema, cwd: PrivatePathSchema,
   agentDirectory: PrivatePathSchema, agentDirectoryId: EntityIdSchema,
   catalogRevision: CounterSchema,
+  mcpConfigPath: PrivatePathSchema.optional(),
 });
 export type CompletionWorkerBootstrap = z.infer<typeof CompletionWorkerBootstrapSchema>;
 
@@ -63,6 +64,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp'), operation: McpOperationSchema }),
   z.strictObject({ type: z.literal('shell'), operation: ShellOperationSchema }),
   z.strictObject({ type: z.literal('completion'), operation: CompletionOperationSchema }),
+  z.strictObject({ type: z.literal('mcp.configuration.read') }),
 ]);
 export type WorkerOperation = z.infer<typeof WorkerOperationSchema>;
 const WorkerApprovalInteractionSchema = z.strictObject({
@@ -87,6 +89,7 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp'), result: McpResultSchema }),
   z.strictObject({ type: z.literal('shell'), result: ShellResultSchema }),
   z.strictObject({ type: z.literal('completion'), result: CompletionResultSchema }),
+  z.strictObject({ type: z.literal('mcp.configuration'), configuration: MCPConfigurationStateSchema.nullable() }),
 ]);
 export type WorkerOperationResult = z.infer<typeof WorkerOperationResultSchema>;
 const WorkerOperationCommandSchema = z.strictObject({

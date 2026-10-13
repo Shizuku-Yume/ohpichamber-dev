@@ -285,6 +285,8 @@ export class WorkerSession {
           return { type: 'catalog', result };
         } finally { if (applying) this.skillsApplying = false; }
       }
+      case 'mcp.configuration.read':
+        throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Configuration hydration belongs to the workspace worker');
       case 'mcp': {
         if (!this.mcp) throw new ProjectionError(503, 'MCP_APPLY_FAILED', 'MCP runtime ownership is unavailable');
         const request = operation.operation;

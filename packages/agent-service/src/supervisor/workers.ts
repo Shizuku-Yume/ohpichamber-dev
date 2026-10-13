@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema, WorkerPolicyResultSchema } from '../protocol.ts';
-import type { WorkerApprovalPolicy, WorkerBootstrap, WorkerInfo, WorkerInteraction, WorkerOperation, WorkerOperationResult, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
+import { CompletionWorkerBootstrapSchema, WorkerBootstrapSchema, WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema, WorkerPolicyResultSchema } from '../protocol.ts';
+import type { CompletionWorkerBootstrap, WorkerApprovalPolicy, WorkerBootstrap, WorkerInfo, WorkerInteraction, WorkerOperation, WorkerOperationResult, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
-import type { ProblemCode } from '@openchamber/agent-contract';
+import type { JsonObject, ProblemCode } from '@openchamber/agent-contract';
 
 export class WorkerOperationError extends Error {
-  constructor(readonly status: number, readonly code: ProblemCode) { super('SDK worker operation failed'); }
+  constructor(readonly status: number, readonly code: ProblemCode, readonly details?: JsonObject) { super('SDK worker operation failed'); }
 }
 
 interface WorkerLifecycleCallbacks {
@@ -16,9 +16,15 @@ interface WorkerLifecycleCallbacks {
   onExit?: (rootSessionId: string, generation: string) => void;
 }
 
+export type StatelessWorkerInput = Omit<CompletionWorkerBootstrap, 'type' | 'workerGeneration'> & {
+  rootSessionId: string;
+  env?: Record<string, string>;
+};
+export type RegisteredWorkerInfo = WorkerInfo & { kind: 'session' | 'stateless' };
+export type WorkerAuthorizationScope = Pick<WorkerBootstrap, 'rootSessionId' | 'projectId' | 'workspaceId' | 'cwd' | 'agentDirectory' | 'agentDirectoryId'> & { workerGeneration: string };
 
-interface WorkerEntry {
-  input: WorkerBootstrap;
+type WorkerInput = { kind: 'session'; input: WorkerBootstrap } | { kind: 'stateless'; input: StatelessWorkerInput };
+type WorkerEntry = WorkerInput & {
   info: WorkerInfo;
   child: ChildProcess;
   ready: Promise<void>;
@@ -26,7 +32,7 @@ interface WorkerEntry {
   exited: Promise<void>;
   stopping?: Promise<boolean>;
   pending: Map<string, { resolve: (result: WorkerOperationResult) => void; reject: (error: Error) => void }>;
-}
+};
 
 export interface WorkerRegistryOptions {
   workerEntrypoint: string;
@@ -35,6 +41,7 @@ export interface WorkerRegistryOptions {
   stopTimeoutMs?: number;
   callbacks?: WorkerLifecycleCallbacks;
   policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest) => Promise<WorkerPolicyResult>;
+  prepareBootstrap?: (input: WorkerBootstrap) => Promise<WorkerBootstrap>;
 }
 function defaultWorkerRuntime(): string {
   if (typeof Bun !== 'undefined' && process.execPath.includes('bun')) return process.execPath;
@@ -62,13 +69,31 @@ export class WorkerRegistry {
 
   constructor(private readonly options: WorkerRegistryOptions) {}
 
-  list(): WorkerInfo[] {
-    return [...this.entries.values()].map(entry => ({ ...entry.info }));
+  list(): RegisteredWorkerInfo[] {
+    return [...this.entries.values()].map(entry => ({ ...entry.info, kind: entry.kind }));
   }
 
-  async request(rootSessionId: string, operation: WorkerOperation): Promise<WorkerOperationResult> {
+  info(rootSessionId: string): WorkerInfo | undefined {
+    const entry = this.entries.get(rootSessionId);
+    return entry === undefined ? undefined : { ...entry.info };
+  }
+
+  bootstrap(rootSessionId: string): WorkerBootstrap | undefined {
+    const entry = this.entries.get(rootSessionId);
+    return entry?.kind === 'session' ? structuredClone(entry.input) : undefined;
+  }
+
+  authorizationScope(rootSessionId: string): WorkerAuthorizationScope | undefined {
+    const entry = this.entries.get(rootSessionId);
+    if (this.closing || !entry || !entry.child.connected || (entry.info.state !== 'starting' && entry.info.state !== 'ready')) return undefined;
+    const { projectId, workspaceId, cwd, agentDirectory, agentDirectoryId } = entry.input;
+    return { rootSessionId, workerGeneration: entry.info.workerGeneration, projectId, workspaceId, cwd, agentDirectory, ...(agentDirectoryId === undefined ? {} : { agentDirectoryId }) };
+  }
+
+  async request(rootSessionId: string, operation: WorkerOperation, expectedGeneration?: string): Promise<WorkerOperationResult> {
     const parsed = WorkerOperationSchema.parse(operation);
     const entry = this.entries.get(rootSessionId);
+    if (entry && expectedGeneration !== undefined && expectedGeneration !== entry.info.workerGeneration) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
     if (this.closing || !entry || entry.info.state !== 'ready' || !entry.child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     const commandId = randomUUID();
     const result = new Promise<WorkerOperationResult>((resolve, reject) => entry.pending.set(commandId, { resolve, reject }));
@@ -78,16 +103,31 @@ export class WorkerRegistry {
     });
     return result;
   }
-  async catalog(rootSessionId: string, operation: WorkerOperation): Promise<WorkerOperationResult> { return this.request(rootSessionId, operation); }
 
   async start(input: WorkerBootstrap, replace = false, approvalPolicies?: WorkerApprovalPolicy[]): Promise<WorkerInfo> {
     return this.withRoot(input.rootSessionId, async () => {
-      if (this.closing) throw new Error('Worker admission is closed');
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       const previous = this.entries.get(input.rootSessionId);
+      if (previous?.kind === 'stateless') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
       if (previous?.info.state === 'ready' && !replace) return { ...previous.info };
       if (previous) await this.stopEntry(previous);
-      if (this.closing) throw new Error('Worker admission is closed');
-      return this.launch(input, approvalPolicies);
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      const prepared = WorkerBootstrapSchema.parse(this.options.prepareBootstrap ? await this.options.prepareBootstrap(input) : input);
+      if (prepared.rootSessionId !== input.rootSessionId) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      return this.launch({ kind: 'session', input: prepared }, approvalPolicies);
+    });
+  }
+
+  async startStateless(input: StatelessWorkerInput, replace = false): Promise<WorkerInfo> {
+    return this.withRoot(input.rootSessionId, async () => {
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      const previous = this.entries.get(input.rootSessionId);
+      if (previous?.kind === 'session') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (previous?.info.state === 'ready' && !replace) return { ...previous.info };
+      if (previous) await this.stopEntry(previous);
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      return this.launch({ kind: 'stateless', input: structuredClone(input) });
     });
   }
 
@@ -117,11 +157,17 @@ export class WorkerRegistry {
     }
   }
 
-  private async launch(input: WorkerBootstrap, approvalPolicies?: WorkerApprovalPolicy[]): Promise<WorkerInfo> {
+  private async launch(owner: WorkerInput, approvalPolicies?: WorkerApprovalPolicy[]): Promise<WorkerInfo> {
+    const { input } = owner;
     const workerGeneration = randomUUID();
+    const { env: privateEnvironment, ...bootstrap } = input;
+    const { rootSessionId: authorizationRootId, ...statelessBootstrap } = bootstrap;
+    const command = owner.kind === 'session'
+      ? WorkerBootstrapMessageSchema.parse({ ...bootstrap, type: 'bootstrap', workerGeneration, approvalPolicies })
+      : CompletionWorkerBootstrapSchema.parse({ ...statelessBootstrap, type: 'completion.bootstrap', workerGeneration });
     const ready = Promise.withResolvers<void>();
     const exited = Promise.withResolvers<void>();
-    const env: NodeJS.ProcessEnv = { ...process.env, ...input.env, PI_CODING_AGENT_DIR: input.agentDirectory };
+    const env: NodeJS.ProcessEnv = { ...process.env, ...privateEnvironment, PI_CODING_AGENT_DIR: input.agentDirectory };
     delete env.OHPICHAMBER_INTERNAL_SECRET;
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
     const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
@@ -129,12 +175,11 @@ export class WorkerRegistry {
       cwd: input.cwd,
       env,
       windowsHide: true,
-      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     });
-    child.stderr?.on('data', chunk => { process.stderr.write(`Agent worker startup: ${String(chunk).replace(/(?:\/[^\s]+|[A-Za-z0-9_-]{20,})/g, '[redacted]')}`); });
     const entry: WorkerEntry = {
-      input,
-      info: { rootSessionId: input.rootSessionId, projectId: input.projectId, workspaceId: input.workspaceId, workerGeneration, state: 'starting' },
+      ...owner,
+      info: { rootSessionId: authorizationRootId, projectId: input.projectId, workspaceId: input.workspaceId, workerGeneration, state: 'starting' },
       child,
       ready: ready.promise,
       rejectReady: ready.reject,
@@ -144,7 +189,6 @@ export class WorkerRegistry {
     this.entries.set(input.rootSessionId, entry);
     child.on('message', raw => {
       const reply = WorkerReplySchema.safeParse(raw);
-      process.stderr.write(reply.success ? `worker-reply ${reply.data.type}\n` : 'worker-reply invalid\n');
       if (!reply.success || reply.data.workerGeneration !== workerGeneration) return;
       if (this.entries.get(input.rootSessionId) !== entry) return;
       if (entry.info.state !== 'starting' && entry.info.state !== 'ready') return;
@@ -158,19 +202,22 @@ export class WorkerRegistry {
         const pending = entry.pending.get(reply.data.commandId);
         if (pending) { entry.pending.delete(reply.data.commandId); pending.reject(new WorkerOperationError(reply.data.status, reply.data.code)); }
       } else if (reply.data.type === 'opened') {
-        this.options.callbacks?.onOpened?.(input.rootSessionId, workerGeneration, reply.data.sessionFile, reply.data.seed);
+        if (entry.kind === 'session') {
+          entry.input.sessionFile = reply.data.sessionFile;
+          this.options.callbacks?.onOpened?.(input.rootSessionId, workerGeneration, reply.data.sessionFile, reply.data.seed);
+        }
       } else if (reply.data.type === 'events') {
-        this.options.callbacks?.onEvents?.(input.rootSessionId, workerGeneration, reply.data.inputs);
+        if (entry.kind === 'session') this.options.callbacks?.onEvents?.(input.rootSessionId, workerGeneration, reply.data.inputs);
       } else if (reply.data.type === 'interaction') {
-        this.options.callbacks?.onInteraction?.(input.rootSessionId, workerGeneration, reply.data.request);
+        if (entry.kind === 'session') this.options.callbacks?.onInteraction?.(input.rootSessionId, workerGeneration, reply.data.request);
       } else if (reply.data.type === 'policy.request') {
         const check = this.options.policyCheck;
         const requestId = reply.data.requestId;
         const request = reply.data.request;
         void (check ? check(input.rootSessionId, request) : Promise.resolve({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const)).then(result => {
-          if (entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: WorkerPolicyResultSchema.parse(result) });
+          if (this.entries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: WorkerPolicyResultSchema.parse(result) });
         }).catch(() => {
-          if (entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
+          if (this.entries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
         });
       } else if (reply.data.type === 'result') {
         const pending = entry.pending.get(reply.data.commandId);
@@ -179,26 +226,19 @@ export class WorkerRegistry {
     });
     child.once('error', () => ready.reject(new Error('SDK worker could not start')));
     child.once('close', () => {
-      process.stderr.write(`Agent worker exited before readiness: code=${child.exitCode ?? 'none'} signal=${child.signalCode ?? 'none'}\n`);
       const wasStarting = entry.info.state === 'starting';
       if (entry.info.state !== 'stopping') entry.info.state = 'crashed';
       if (wasStarting) ready.reject(new Error('SDK worker exited before initialization'));
-      for (const pending of entry.pending.values()) pending.reject(new Error('SDK worker exited'));
+      for (const pending of entry.pending.values()) pending.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
       entry.pending.clear();
       this.options.callbacks?.onExit?.(input.rootSessionId, workerGeneration);
       exited.resolve();
     });
-    const command = WorkerBootstrapMessageSchema.parse({
-      type: 'bootstrap', rootSessionId: input.rootSessionId, workerGeneration,
-      projectId: input.projectId, workspaceId: input.workspaceId,
-      cwd: input.cwd, agentDirectory: input.agentDirectory,
-      sessionsDirectory: input.sessionsDirectory, sessionFile: input.sessionFile, mcpConfigPath: input.mcpConfigPath, options: input.options,
-      approvalPolicies,
-    });
-    if (!child.connected) throw new Error('SDK worker IPC channel is unavailable');
-    child.send(command, error => { if (error) ready.reject(error); });
     try {
+      if (!child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      child.send(command, error => { if (error) ready.reject(error); });
       await waitWithin(entry.ready, this.options.startupTimeoutMs ?? 15_000);
+      if (this.closing || this.entries.get(input.rootSessionId) !== entry || entry.info.state !== 'ready' || !child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       return { ...entry.info };
     } catch (error) {
       await this.stopEntry(entry);

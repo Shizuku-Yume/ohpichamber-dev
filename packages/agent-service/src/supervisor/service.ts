@@ -5,18 +5,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { AgentServiceReadySchema, ApprovalReplySchema, EntityIdSchema, HistoryPageRequestSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, ProviderCredentialWriteRequestSchema, ProviderCredentialDeleteRequestSchema } from '@openchamber/agent-contract';
-import type { AgentServiceReady, ApprovalRequest, CanonicalEvent, HistoryPage, ProblemCode, ProblemDetails, QuestionRequest, Run, RuntimeSession, SessionDeleteAck, SessionSnapshot, StreamInvalidated } from '@openchamber/agent-contract';
+import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema } from '@openchamber/agent-contract';
+import type { CanonicalEvent, JsonObject, ProblemCode, ProblemDetails, StreamInvalidated } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
-import type { WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
+import type { WorkerBootstrap, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { PrivateSessionBootstrapSchema, SessionRegistry } from '../sessions/registry.ts';
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
-import type { SessionList } from '../sessions/registry.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
 import { WorkerOperationError, WorkerRegistry } from './workers.ts';
-import { CatalogResultSchema } from '../catalogs/protocol.ts';
-import { CatalogCoordinator } from './catalog.ts';
+import { CatalogCoordinator, CatalogCoordinatorError } from './catalog.ts';
+import { WorkspaceCatalogs } from './workspaces.ts';
+import { WorkspaceRoutes } from './workspace-routes.ts';
+import { ShellCoordinator } from './shell.ts';
+import { HostAuthorizationScopeSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
 interface ServiceOptions {
   workerEntrypoint: string;
   workerRuntime?: string;
@@ -25,10 +27,12 @@ interface ServiceOptions {
   port?: number;
   approvalPolicyCommit?: ApprovalPolicyCommit;
   approvalPolicyLoad?: ApprovalPolicyLoad;
-  catalogWorkspaceId?: string;
   policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest) => Promise<WorkerPolicyResult>;
 }
 const InternalSecretSchema = z.string().regex(/^[a-f0-9]{64}$/i);
+const HostSkillSourcePublicationSchema = z.strictObject({
+  scope: z.enum(['workspace', 'agent']), sourceRevision: CounterSchema, expectedSourceRevision: CounterSchema, agentDirectoryId: EntityIdSchema.optional(),
+}).refine(input => (input.scope === 'agent') === (input.agentDirectoryId !== undefined), 'Agent source publication selects its captured owner');
 const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port: z.number().int().min(1).max(65_535) });
 class RequestError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
@@ -41,10 +45,10 @@ function respondJson(response: ServerResponse, status: number, body: JsonRespons
 function respondHealth(response: ServerResponse, ready: boolean): void {
   respondJson(response, 200, { status: ready ? 'ready' : 'starting', engine: 'omp', version: '1.0.0' });
 }
-function respondProblem(response: ServerResponse, status: number, code: ProblemCode, detail: string): void {
+function respondProblem(response: ServerResponse, status: number, code: ProblemCode, detail: string, details?: JsonObject): void {
   const problem: ProblemDetails = ProblemDetailsSchema.parse({
     type: `urn:ohpichamber:problem:${code}`, title: status >= 500 ? 'Agent Service unavailable' : 'Request refused',
-    status, code, detail, retryable: status >= 500,
+    status, code, detail, retryable: status >= 500, details,
   });
   response.writeHead(status, { 'Content-Type': 'application/problem+json', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(problem));
@@ -72,28 +76,119 @@ export class AgentService {
   private readonly workers: WorkerRegistry;
   private readonly sessions: SessionRegistry;
   private readonly catalog: CatalogCoordinator;
+  private readonly workspaceCatalogs: WorkspaceCatalogs;
+  private readonly workspaceRoutes: WorkspaceRoutes;
+  private readonly shell: ShellCoordinator;
+  private readonly observationEpoch = randomUUID();
   private server: ReturnType<typeof createServer> | undefined;
   private ready = false;
   private closing = false;
   private stopping: Promise<void> | undefined;
   constructor(private readonly options: ServiceOptions) {
     this.secret = Buffer.from(InternalSecretSchema.parse(options.internalSecret), 'hex');
-    this.catalog = new CatalogCoordinator(options.stateDirectory, options.catalogWorkspaceId ?? 'workspace');
-    this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, policyCheck: options.policyCheck, callbacks: {
-      onOpened: (...args) => {
-        this.sessions.onOpened(...args);
-        const rootSessionId = args[0];
-        const generation = args[1];
-        this.catalog.register({ identity: { rootSessionId, workspaceId: this.options.catalogWorkspaceId ?? 'workspace', workerGeneration: generation }, mcp: { read: async configuration => { const result = await this.workers.request(rootSessionId, { type: 'mcp', operation: { type: 'read', configuration } }); if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return result.result.catalog; }, apply: async (request, configuration) => { const result = await this.workers.request(rootSessionId, { type: 'mcp', operation: { type: 'apply', request, configuration } }); if (result.type !== 'mcp' || result.result.type !== 'applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return result.result.result; }, reconnect: async (serverId, request, configuration) => { const result = await this.workers.request(rootSessionId, { type: 'mcp', operation: { type: 'reconnect', serverId, request, configuration } }); if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return result.result.catalog; } }, skills: { read: async sources => { const result = await this.workers.request(rootSessionId, { type: 'catalog', revision: this.catalog.revision(), operation: { type: 'skills.read', persistedSources: sources } }); if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); const parsed = CatalogResultSchema.parse(result.result); if (parsed.type !== 'skills.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return parsed.catalog; }, apply: async sources => { const result = await this.workers.request(rootSessionId, { type: 'catalog', revision: this.catalog.revision(), operation: { type: 'skills.apply', request: { scope: 'workspace', sourceRevision: sources.workspace }, sources, catalogRevision: this.catalog.revision() } }); if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); const parsed = CatalogResultSchema.parse(result.result); if (parsed.type !== 'skills.applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return parsed.result; }, expand: async request => { const result = await this.workers.request(rootSessionId, { type: 'catalog', revision: request.catalogRevision, operation: { type: 'skills.expand', request } }); if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); const parsed = CatalogResultSchema.parse(result.result); if (parsed.type !== 'skills.expanded') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return parsed.result; } } });
+    this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, policyCheck: options.policyCheck,
+      prepareBootstrap: async input => {
+        if (!this.ready) return input;
+        if (!this.workspaceCatalogs.matches(input)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+        const workspace = this.workspaceCatalogs.get(input.workspaceId);
+        const agentDirectoryId = input.agentDirectoryId ?? workspace.agentDirectoryId;
+        return { ...input, agentDirectoryId, catalogRevision: this.workspaceCatalogs.revision(input.workspaceId, agentDirectoryId), observationEpoch: this.observationEpoch };
+      }, callbacks: {
+        onOpened: (...args) => this.sessions.onOpened(...args),
+        onEvents: (...args) => this.sessions.onEvents(...args),
+        onInteraction: (...args) => this.sessions.onInteraction(...args),
+        onExit: (...args) => { this.sessions.onExit(...args); this.catalog.retire(args[0], args[1]); },
       },
-      onEvents: (...args) => this.sessions.onEvents(...args),
-      onInteraction: (...args) => this.sessions.onInteraction(...args),
-      onExit: (...args) => { this.sessions.onExit(...args); this.catalog.retire(args[0], args[1]); },
-    } });
+    });
+    this.workspaceCatalogs = new WorkspaceCatalogs(options.stateDirectory, this.workers);
+    this.catalog = new CatalogCoordinator(options.stateDirectory, {
+      readMcpConfiguration: async workspaceId => {
+        const root = await this.workspaceCatalogs.stateless(workspaceId);
+        const result = await this.workers.request(root, { type: 'mcp.configuration.read' });
+        if (result.type !== 'mcp.configuration') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        return result.configuration;
+      },
+      commitMcp: async (workspaceId, request, configuration) => {
+        const root = await this.workspaceCatalogs.stateless(workspaceId);
+        const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'persist', request, configuration } });
+        if (result.type !== 'mcp' || result.result.type !== 'persisted' || result.result.configuration.persistedRevision !== configuration.persistedRevision) throw new WorkerOperationError(503, 'MCP_CONFIG_WRITE_FAILED');
+      },
+    });
     this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad);
+    this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers);
+    this.shell = new ShellCoordinator(this.workers, this.sessions, this.observationEpoch, rootSessionId => {
+      const input = this.workers.bootstrap(rootSessionId);
+      return input !== undefined && this.workspaceCatalogs.matches(input);
+    });
+  }
+  authorizationScope(rootSessionId: string) {
+    const scope = this.workers.authorizationScope(rootSessionId);
+    return scope === undefined ? undefined : HostAuthorizationScopeSchema.parse(scope);
+  }
+  private async admit<T>(input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<T>): Promise<T> {
+    const captured = this.workers.bootstrap(input.rootSessionId);
+    if (captured && (captured.workspaceId !== input.workspaceId || captured.projectId !== input.projectId || captured.cwd !== input.cwd || captured.agentDirectory !== input.agentDirectory || (input.agentDirectoryId !== undefined && captured.agentDirectoryId !== input.agentDirectoryId))) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    const agentDirectoryId = await this.workspaceCatalogs.registerRoot(input);
+    await this.catalog.registerWorkspace(input.workspaceId, agentDirectoryId);
+    return this.catalog.admit({ workspaceId: input.workspaceId, agentDirectoryId, catalogRevision: this.workspaceCatalogs.revision(input.workspaceId, agentDirectoryId) }, async authority => {
+      const bootstrap = WorkerBootstrapSchema.parse({ ...input, ...authority, agentDirectoryId, observationEpoch: this.observationEpoch, mcpConfigPath: join(input.cwd, '.omp', 'mcp.json') });
+      const result = await launch(bootstrap);
+      try {
+        const scope = this.workers.authorizationScope(bootstrap.rootSessionId);
+        if (!scope || scope.agentDirectoryId !== agentDirectoryId) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        await this.registerCatalogWorker(bootstrap, scope.workerGeneration);
+        return result;
+      } catch (error) {
+        await this.workers.stop(bootstrap.rootSessionId);
+        throw error;
+      }
+    });
+  }
+  private async registerCatalogWorker(input: WorkerBootstrap, generation: string): Promise<void> {
+    const root = input.rootSessionId;
+    if (input.agentDirectoryId === undefined) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    await this.catalog.register({
+      identity: { rootSessionId: root, workspaceId: input.workspaceId, agentDirectoryId: input.agentDirectoryId, workerGeneration: generation },
+      isLive: () => this.workers.authorizationScope(root)?.workerGeneration === generation,
+      mcp: {
+        read: async configuration => {
+          const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'read', configuration } }, generation);
+          if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result.catalog;
+        },
+        apply: async (request, configuration) => {
+          const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'apply', request, configuration } }, generation);
+          if (result.type !== 'mcp' || result.result.type !== 'applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result.result;
+        },
+        reconnect: async (serverId, request, configuration) => {
+          const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'reconnect', serverId, request, configuration } }, generation);
+          if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result.catalog;
+        },
+      },
+      skills: {
+        read: async persistedSources => {
+          const result = await this.workers.request(root, { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.read', persistedSources } }, generation);
+          if (result.type !== 'catalog' || result.result.type !== 'skills.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result.catalog;
+        },
+        apply: async (sources, catalogRevision) => {
+          const result = await this.workers.request(root, { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.apply', request: { scope: 'workspace', sourceRevision: sources.workspace }, sources, catalogRevision } }, generation);
+          if (result.type !== 'catalog' || result.result.type !== 'skills.applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result.result;
+        },
+        expand: async request => {
+          const result = await this.workers.request(root, { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.expand', request } }, generation);
+          if (result.type !== 'catalog' || result.result.type !== 'skills.expanded') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result.result;
+        },
+      },
+    });
   }
   async start(): Promise<void> {
     await this.catalog.initialize();
+    await this.workspaceCatalogs.initialize();
     await this.sessions.initialize();
     const server = createServer((request, response) => { void this.handle(request, response); });
     this.server = server;
@@ -184,12 +279,35 @@ export class AgentService {
         return;
       }
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/capabilities') {
-        respondJson(response, 200, { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: false, followUpQueue: false, subagents: false, attachments: false, models: true, mcp: true, skills: true } });
+        respondJson(response, 200, { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: false, followUpQueue: false, subagents: false, attachments: false, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true } });
         return;
       }
       if (!this.ready || this.closing) { respondProblem(response, 503, 'SERVICE_UNAVAILABLE', 'Agent Service is not admitting work'); return; }
+      const authorization = /^\/internal\/authorizations\/([^/]+)$/.exec(url.pathname);
+      if (authorization && request.method === 'GET') {
+        const scope = this.authorizationScope(identity(authorization[1]));
+        if (!scope) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        respondJson(response, 200, scope); return;
+      }
+      const workspace = /^\/internal\/workspaces\/([^/]+)$/.exec(url.pathname);
+      if (workspace && request.method === 'POST') {
+        const workspaceId = identity(workspace[1]);
+        const input = await readBody(request, HostWorkspaceBootstrapSchema);
+        const registered = await this.workspaceCatalogs.register(workspaceId, input);
+        await this.catalog.registerWorkspace(workspaceId, input.agentDirectoryId);
+        respondJson(response, 201, HostWorkspaceRegisteredSchema.parse(registered)); return;
+      }
+      const skillSources = /^\/internal\/workspaces\/([^/]+)\/skill-sources$/.exec(url.pathname);
+      if (skillSources && request.method === 'PUT') {
+        const workspaceId = identity(skillSources[1]);
+        const input = await readBody(request, HostSkillSourcePublicationSchema);
+        const owner = this.workspaceCatalogs.get(workspaceId);
+        if (input.agentDirectoryId !== undefined && !owner.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+        respondJson(response, 200, await this.catalog.publishSources(workspaceId, input)); return;
+      }
       if (request.method === 'POST' && url.pathname === '/internal/sessions') {
-        respondJson(response, 201, await this.sessions.open(await readBody(request, PrivateSessionBootstrapSchema))); return;
+        const { displayPath, ...input } = await readBody(request, PrivateSessionBootstrapSchema);
+        respondJson(response, 201, await this.admit(input, bootstrap => this.sessions.open({ ...bootstrap, displayPath }))); return;
       }
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/sessions') {
         const workspaceId = EntityIdSchema.safeParse(url.searchParams.get('workspaceId'));
@@ -238,75 +356,39 @@ export class AgentService {
           respondJson(response, 202, { run: await this.sessions.prompt(sessionId, { type: 'prompt', runId: randomUUID(), request: prompt }) }); return;
         }
       }
-      const shellRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/shell$/.exec(url.pathname);
-      if (shellRoute && request.method === 'POST') {
-        const sessionId = identity(shellRoute[1]);
-        const operation = await readBody(request, z.object({ type: z.enum(['start','output','snapshot','stop']), request: z.unknown().optional() }));
-        const result = await this.workers.request(sessionId, { type: 'shell', operation: operation as never });
-        if (result.type !== 'shell') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-        respondJson(response, 200, result.result); return;
-      }
-      const completionRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/completion$/.exec(url.pathname);
-      if (completionRoute && request.method === 'POST') {
-        const sessionId = identity(completionRoute[1]);
-        const operation = await readBody(request, z.object({ type: z.enum(['complete','cancel']), request: z.unknown().optional() }));
-        const result = await this.workers.request(sessionId, { type: 'completion', operation: operation as never });
-        if (result.type !== 'completion') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-        respondJson(response, 200, result.result); return;
-      }
-      const credentialRoute = /^\/api\/agent\/v1\/providers\/([^/]+)\/credentials$/.exec(url.pathname);
-      if (credentialRoute && request.method === 'PUT') {
-        const sessionId = url.searchParams.get('sessionId');
-        if (!sessionId) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity is required');
-        const body = await readBody(request, ProviderCredentialWriteRequestSchema);
-        const result = await this.workers.request(identity(sessionId), { type: 'catalog', revision: body.expectedRevision, operation: { type: 'credential.write', request: { ...body, providerId: identity(credentialRoute[1]) } } as never });
-        if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-        respondJson(response, 200, result.result); return;
-      }
-      const credentialDelete = /^\/api\/agent\/v1\/providers\/([^/]+)\/credentials\/([^/]+)$/.exec(url.pathname);
-      if (credentialDelete && request.method === 'DELETE') {
-        const sessionId = url.searchParams.get('sessionId');
-        if (!sessionId) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity is required');
-        const body = await readBody(request, ProviderCredentialDeleteRequestSchema);
-        const result = await this.workers.request(identity(sessionId), { type: 'catalog', revision: body.expectedRevision, operation: { type: 'credential.delete', request: { ...body, providerId: identity(credentialDelete[1]), credentialRef: identity(credentialDelete[2]) } } as never });
-        if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-        respondJson(response, 200, result.result); return;
-      }
-      const catalogCrud = /^\/api\/agent\/v1\/(models|providers|agents)(?:\/([^/]+))?$/.exec(url.pathname);
-      if (catalogCrud) {
-        const sessionId = url.searchParams.get('sessionId');
-        if (!sessionId) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity is required');
-        const rootSessionId = identity(sessionId);
-        let type: string;
-        if (catalogCrud[1] === 'models') type = request.method === 'GET' ? 'models.read' : catalogCrud[2] ? 'model.configure' : 'model.configure';
-        else if (catalogCrud[1] === 'providers') type = request.method === 'GET' ? 'providers.read' : catalogCrud[2] ? 'provider.configure' : 'provider.configure';
-        else type = 'agents.read';
-        const body = request.method === 'GET' ? undefined : await readBody(request, z.unknown());
-        const operation = body === undefined ? { type } : { type, request: body };
-        const result = await this.workers.request(rootSessionId, { type: 'catalog', operation: operation as never, revision: url.searchParams.get('revision') ?? '0' });
-        if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-        respondJson(response, 200, result.result); return;
-      }
-      const catalogRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/(mcp|skills)(?:\/(catalog|config|apply|install|expand|servers\/([^/]+)\/reconnect))?$/.exec(url.pathname);
+      const workspaceResponse = await this.workspaceRoutes.handle(request, url, readBody);
+      if (workspaceResponse) { respondJson(response, workspaceResponse.status, workspaceResponse.body); return; }
+      const shellResponse = await this.shell.handle(request, url, readBody);
+      if (shellResponse) { respondJson(response, shellResponse.status, shellResponse.body); return; }
+      const catalogRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/(mcp|skills)\/(catalog|config|apply|expand|servers\/([^/]+)\/reconnect)$/.exec(url.pathname);
       if (catalogRoute) {
-        const sessionId = identity(catalogRoute[1]);
+        const addressedId = identity(catalogRoute[1]);
+        const sessionId = this.workers.bootstrap(addressedId) ? addressedId : this.sessions.runtime(addressedId).rootSessionId;
         const kind = catalogRoute[2];
-        const action = catalogRoute[3] ?? 'catalog';
+        const action = catalogRoute[3];
         if (kind === 'mcp' && action === 'catalog' && request.method === 'GET') { respondJson(response, 200, await this.catalog.readMcp(sessionId)); return; }
-        if (kind === 'mcp' && action === 'config' && request.method === 'PUT') { respondJson(response, 200, await this.catalog.configure(await readBody(request, MCPConfigureRequestSchema))); return; }
-        if (kind === 'mcp' && action === 'apply' && request.method === 'POST') { respondJson(response, 200, await this.catalog.applyMcp(await readBody(request, MCPApplyRequestSchema))); return; }
+        if (kind === 'mcp' && action === 'config' && request.method === 'PUT') { respondJson(response, 200, await this.catalog.configure(sessionId, await readBody(request, MCPConfigureRequestSchema))); return; }
+        if (kind === 'mcp' && action === 'apply' && request.method === 'POST') { respondJson(response, 200, await this.catalog.applyMcp(sessionId, await readBody(request, MCPApplyRequestSchema))); return; }
         if (kind === 'mcp' && catalogRoute[4] !== undefined && request.method === 'POST') { respondJson(response, 200, await this.catalog.reconnect(sessionId, identity(catalogRoute[4]), await readBody(request, MCPReconnectRequestSchema))); return; }
         if (kind === 'skills' && action === 'catalog' && request.method === 'GET') { respondJson(response, 200, await this.catalog.readSkills(sessionId)); return; }
-        if (kind === 'skills' && action === 'apply' && request.method === 'POST') { respondJson(response, 200, await this.catalog.applySkills(await readBody(request, SkillsApplyRequestSchema))); return; }
+        if (kind === 'skills' && action === 'apply' && request.method === 'POST') { respondJson(response, 200, await this.catalog.applySkills(sessionId, await readBody(request, SkillsApplyRequestSchema))); return; }
         if (kind === 'skills' && action === 'expand' && request.method === 'POST') { respondJson(response, 200, await this.catalog.expand(sessionId, await readBody(request, SkillExpandRequestSchema))); return; }
       }
       if (request.method === 'GET' && url.pathname === '/internal/workers') { respondJson(response, 200, { workers: this.workers.list() }); return; }
-      if (request.method === 'POST' && url.pathname === '/internal/workers') { respondJson(response, 201, await this.workers.start(await readBody(request, WorkerBootstrapSchema))); return; }
+      if (request.method === 'POST' && url.pathname === '/internal/workers') {
+        const input = await readBody(request, WorkerBootstrapSchema);
+        respondJson(response, 201, await this.admit(input, bootstrap => this.workers.start(bootstrap))); return;
+      }
       const restart = /^\/internal\/workers\/([^/]+)\/restart$/.exec(url.pathname);
       if (restart && request.method === 'POST') {
         const input = await readBody(request, WorkerBootstrapSchema);
         if (input.rootSessionId !== identity(restart[1])) throw new RequestError(400, 'INVALID_REQUEST', 'Worker identity does not match the route');
-        respondJson(response, 200, await this.workers.start(input, true)); return;
+        respondJson(response, 200, await this.admit(input, async bootstrap => {
+          if (!await this.sessions.restart(bootstrap)) return this.workers.start(bootstrap, true);
+          const info = this.workers.info(bootstrap.rootSessionId);
+          if (!info || info.state !== 'ready') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+          return info;
+        })); return;
       }
       const stop = /^\/internal\/workers\/([^/]+)$/.exec(url.pathname);
       if (stop && request.method === 'DELETE') { await this.workers.stop(identity(stop[1])); response.writeHead(204, { 'Cache-Control': 'no-store' }); response.end(); return; }
@@ -314,8 +396,10 @@ export class AgentService {
     } catch (error) {
       if (response.destroyed || response.writableEnded) return;
       if (response.headersSent) { response.destroy(); return; }
-      if (error instanceof RequestError || error instanceof ProjectionError || error instanceof SessionReferenceError || error instanceof WorkerOperationError) {
-        respondProblem(response, error.status, error.code, error.message);
+      if (error instanceof CatalogCoordinatorError) {
+        respondProblem(response, error.status, error.code, 'Catalog operation failed', JsonObjectSchema.parse(error.details));
+      } else if (error instanceof RequestError || error instanceof ProjectionError || error instanceof SessionReferenceError || error instanceof WorkerOperationError) {
+        respondProblem(response, error.status, error.code, error.message, error instanceof WorkerOperationError ? error.details : undefined);
       } else respondProblem(response, 503, 'SERVICE_UNAVAILABLE', 'Session operation failed');
     }
   }
