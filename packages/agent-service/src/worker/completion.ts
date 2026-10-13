@@ -67,13 +67,17 @@ export async function executeCompletion(request: CompletionRequest, registry: Co
     }
     const contextTokens = systemTokens + tokenizer.countTokens(prompt, 'strict') + toolTokens;
     if (contextTokens + outputLimit > contextWindow) return failed('CONTEXT_LIMIT', 'Completion exceeds the selected model context limit');
-    const context: Context = { messages: [{ role: 'user', content: prompt, timestamp: Date.now() }], ...(parsed.system === undefined ? {} : { systemPrompt: [parsed.system] }), ...(parsed.format.kind === 'json' ? { tools: [structuredTool] } : {}) };
+    const context: Context = { messages: [{ role: 'user', content: prompt, timestamp: Date.now() }] };
+    if (parsed.system !== undefined) context.systemPrompt = [parsed.system];
     const options: SimpleStreamOptions = {
       signal: controller.signal, maxTokens: outputLimit,
       apiKey: registry.resolver(model, resolved.nativeCredentialSessionId ?? parsed.completionId),
-      ...(effort === null ? {} : { reasoning: effort }),
-      ...(parsed.format.kind === 'json' ? { toolChoice: { type: 'function', name: 'respond' } as const } : {}),
     };
+    if (effort !== null) options.reasoning = effort;
+    if (parsed.format.kind === 'json') {
+      context.tools = [structuredTool];
+      options.toolChoice = { type: 'function', name: 'respond' };
+    }
     const message = await completeSimple(model, context, options);
     if (timedOut) return cancelled('timeout');
     if (signal.aborted) return cancelled('requested');
