@@ -794,7 +794,7 @@ export class WorkerMcp extends MCPManager {
     server: RemoteServerConfig,
     input: MCPOAuthConfigInput | undefined,
     discovered: OAuthEndpoints | null,
-  ): { publicConfig: MCPOAuthPublicConfiguration; flowConfig: MCPOAuthConfig; requiresCallbackInput: boolean } {
+  ) {
     const authorizationUrl = input?.authorizationUrl ?? discovered?.authorizationUrl;
     const tokenUrl = input?.tokenUrl ?? discovered?.tokenUrl;
     if (!authorizationUrl || !tokenUrl) {
@@ -855,10 +855,7 @@ export class WorkerMcp extends MCPManager {
       && !(redirect.protocol === 'http:' && (redirect.hostname === 'localhost' || redirect.hostname === '127.0.0.1' || redirect.hostname === '[::1]'));
     return { publicConfig, flowConfig, requiresCallbackInput };
   }
-  #createManualInputController(flowSignal: AbortSignal): {
-    submit: (input: string) => void;
-    waitForInput: (waitSignal?: AbortSignal) => Promise<string>;
-  } {
+  #createManualInputController(flowSignal: AbortSignal) {
     let queued: string | undefined;
     let waiter: ((value: string) => void) | undefined;
     return {

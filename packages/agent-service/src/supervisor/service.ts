@@ -6,14 +6,22 @@ import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
 import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema } from '@openchamber/agent-contract';
-import type { CanonicalEvent, JsonObject, ProblemCode, ProblemDetails, StreamInvalidated } from '@openchamber/agent-contract';
+import type {
+  AgentCatalog, AgentMutationResult, AgentServiceReady, ApprovalRequest, CanonicalEvent,
+  CompletionCancelResult, CompletionResult, HistoryPage, JsonObject, MCPCatalogRead,
+  MCPApplyResult, MCPOAuthResult, ModelCatalog, ModelMutationResult, ProblemCode,
+  ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
+  QuestionRequest, Run, RuntimeSession, SessionDeleteAck, SessionSnapshot,
+  ShellJob, ShellOutput, ShellSnapshot, ShellStopResult, SkillExpandResult,
+  SkillInstallResult, SkillsApplyResult, SkillsCatalogState, StreamInvalidated,
+} from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
-import type { WorkerBootstrap, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
+import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
-import { SessionRegistry } from '../sessions/registry.ts';
+import { SessionRegistry, type SessionList } from '../sessions/registry.ts';
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
-import { WorkerOperationError, WorkerRegistry } from './workers.ts';
+import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo } from './workers.ts';
 import { CatalogCoordinator, CatalogCoordinatorError } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
 import { WorkspaceRoutes } from './workspace-routes.ts';
@@ -37,7 +45,24 @@ const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port:
 class RequestError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
 }
-function respondJson(response: ServerResponse, status: number, body: object): void {
+const capabilitiesResponse = { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: false, followUpQueue: false, subagents: false, attachments: false, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true } };
+type ServiceHealthObservation = Pick<AgentServiceReady, 'engine' | 'version'> & { status: 'ready' | 'starting' };
+type ServiceResponse =
+  | ServiceHealthObservation
+  | typeof capabilitiesResponse
+  | AgentServiceReady
+  | z.infer<typeof HostAuthorizationScopeSchema | typeof HostWorkspaceRegisteredSchema>
+  | WorkerInfo | { workers: RegisteredWorkerInfo[] }
+  | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck
+  | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run }
+  | MCPCatalogRead | MCPApplyResult | MCPOAuthResult
+  | SkillsCatalogState | SkillsApplyResult | SkillExpandResult | SkillInstallResult
+  | ModelCatalog | ProviderCatalog | AgentCatalog
+  | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
+  | CompletionResult | CompletionCancelResult
+  | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult;
+
+function respondJson(response: ServerResponse, status: number, body: ServiceResponse): void {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(body));
 }
@@ -288,7 +313,7 @@ export class AgentService {
         return;
       }
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/capabilities') {
-        respondJson(response, 200, { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: false, followUpQueue: false, subagents: false, attachments: false, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true } });
+        respondJson(response, 200, capabilitiesResponse);
         return;
       }
       if (!this.ready || this.closing) { respondProblem(response, 503, 'SERVICE_UNAVAILABLE', 'Agent Service is not admitting work'); return; }
