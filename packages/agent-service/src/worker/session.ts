@@ -52,6 +52,7 @@ export class WorkerSession {
     private readonly completion: WorkerCompletion,
     private readonly admission: NativeAdmission,
     private readonly authorize: WorkerAuthorize,
+    private readonly manager: SessionManager,
   ) {
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
     this.defaultToolNames = session.getActiveToolNames();
@@ -64,6 +65,15 @@ export class WorkerSession {
         }
       } catch { this.fail(); }
     });
+  }
+
+  fork(entryId: string, mode: 'selected' | 'full'): { sessionFile: string; sessionId: string } {
+    if (mode === 'selected') {
+      const sessionFile = this.manager.createBranchedSession(entryId, { copyArtifacts: true });
+      if (!sessionFile) throw new ProjectionError(409, 'INVALID_REQUEST', 'Native session is not persisted');
+      return { sessionFile, sessionId: this.manager.getSessionId() };
+    }
+    throw new ProjectionError(501, 'NOT_IMPLEMENTED', 'Full native fork requires supervisor-owned source resolution');
   }
 
   static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, authorize: WorkerAuthorize): Promise<WorkerSession> {
@@ -168,7 +178,7 @@ export class WorkerSession {
       await manager.ensureOnDisk();
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, manager);
       projection = owned.projection;
       if (input.mcpConfiguration && mcp) {
         const applied = await mcp.apply({ persistedRevision: input.mcpConfiguration.persistedRevision }, input.mcpConfiguration);
