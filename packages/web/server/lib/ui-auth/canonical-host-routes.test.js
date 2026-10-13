@@ -55,6 +55,7 @@ let requestService;
 let projectCatalog;
 let workspaceCatalog;
 let resolveScope;
+let localRegistrations;
 
 function createApp() {
   const originSecurity = createRequestSecurityRuntime({ readSettingsFromDiskMigrated: async () => ({}) });
@@ -74,13 +75,16 @@ function createApp() {
     listProjects: async () => projectCatalog,
     listWorkspaces: async () => workspaceCatalog,
     resolveCredentialHandoff: createSelectedCredentialHandoff({ service, resolveWorkspaceScope: async id => resolveScope(id) }),
-    queueRoutes: express.Router(), sessionRoutes: express.Router(), attachmentRoutes: express.Router(),
+    queueRoutes: router => { localRegistrations.queue++; router.get('/sessions/:sessionId/queue', (_req, res) => res.sendStatus(204)); },
+    sessionRoutes: router => { localRegistrations.session++; router.get('/:sessionId/history', (_req, res) => res.sendStatus(204)); },
+    attachmentRoutes: router => { localRegistrations.attachment++; router.get('/:attachmentId', (_req, res) => res.sendStatus(204)); },
   });
   composed.use('/api', auth.requireAuth);
   composed.get('/api/private-retained-route', (_req, res) => res.json({ private: true }));
   return composed;
 }
 beforeEach(async () => {
+  localRegistrations = { queue: 0, session: 0, attachment: 0 };
   privateDir = fs.mkdtempSync(path.join(root, 'case-'));
   clients = createRemoteClientAuthRuntime({ fsPromises: fs.promises, path, crypto, storePath: path.join(privateDir, 'clients.json') });
   const created = await clients.createClient({ label: 'test client' });
@@ -126,6 +130,16 @@ async function loginCookie() {
 }
 
 describe('canonical Host authenticated real-service boundary', () => {
+  it('registers local owners once and mounts their relative routes behind authentication before native forwarding', async () => {
+    expect(localRegistrations).toEqual({ queue: 1, session: 1, attachment: 1 });
+    const paths = ['/api/agent/v1/sessions/session_1/queue', '/api/agent/v1/sessions/session_1/history', '/api/agent/v1/attachments/attachment_1'];
+    for (const path of paths) {
+      assertProblem(await request(app).get(path), 401, 'UNAUTHORIZED');
+      await request(app).get(path).set('Authorization', `Bearer ${token}`).expect(204);
+    }
+    expect(localRegistrations).toEqual({ queue: 1, session: 1, attachment: 1 });
+    expect(requests).toHaveLength(0);
+  });
   it('keeps Host liveness separate from actual service readiness and capabilities', async () => {
     const health = await request(app).get('/api/agent/v1/health');
     expect(health.body).toEqual({ status: 'ok', engine: 'omp', agent: { status: 'failed', ready: false } });

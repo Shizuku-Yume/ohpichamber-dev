@@ -142,9 +142,13 @@ export function registerCanonicalHostRoutes(app, {
     } catch { return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Host workspace catalog could not be read.'); }
   });
   // Queue routes address /sessions/:sessionId/queue and run delivery before any SDK proxy.
-  router.use(queueRoutes);
-  router.use('/sessions', sessionRoutes);
-  router.use('/attachments', attachmentRoutes);
+  queueRoutes(router);
+  const sessionRouter = express.Router();
+  sessionRoutes(sessionRouter);
+  router.use('/sessions', sessionRouter);
+  const attachmentRouter = express.Router();
+  attachmentRoutes(attachmentRouter);
+  router.use('/attachments', attachmentRouter);
   router.post('/credentials/preflight', (_req, res, next) => {
     if (isEnterpriseMode(enterprisePolicyOptions)) return problem(res, 403, 'enterprise_mode', 'Credential handoff is not available in enterprise mode.');
     if (service.getState().phase !== 'ready') return problem(res, 503, 'SERVICE_UNAVAILABLE', 'No credentials were read because the Agent Service is not ready.');
