@@ -156,10 +156,12 @@ export class WorkerRegistry {
         this.options.callbacks?.onInteraction?.(input.rootSessionId, workerGeneration, reply.data.request);
       } else if (reply.data.type === 'policy.request') {
         const check = this.options.policyCheck;
-        void (check ? check(input.rootSessionId, reply.data.request) : Promise.resolve({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const)).then(result => {
-          if (entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId: reply.data.requestId, result: WorkerPolicyResultSchema.parse(result) });
+        const requestId = reply.data.requestId;
+        const request = reply.data.request;
+        void (check ? check(input.rootSessionId, request) : Promise.resolve({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const)).then(result => {
+          if (entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: WorkerPolicyResultSchema.parse(result) });
         }).catch(() => {
-          if (entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId: reply.data.requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
+          if (entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
         });
       } else if (reply.data.type === 'result') {
         const pending = entry.pending.get(reply.data.commandId);
