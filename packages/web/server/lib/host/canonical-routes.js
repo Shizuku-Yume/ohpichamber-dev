@@ -11,12 +11,12 @@ const HostScopeSchema = z.strictObject({
   workspaceId: C.EntityIdSchema, projectId: C.EntityIdSchema, agentDirectoryId: C.EntityIdSchema,
   cwd: z.string().refine(isAbsolute), agentDirectory: z.string().refine(isAbsolute),
 });
-const ScopeSchema = HostScopeSchema;
 const NativeServiceCapabilitiesSchema = C.RuntimeCapabilitiesSchema.extend({
   capabilities: C.RuntimeCapabilitiesSchema.shape.capabilities.omit({ documentExtraction: true, credentialHandoff: true })
     .extend({ attachments: z.boolean() }),
 });
 const RunResponseSchema = z.strictObject({ run: C.RunSchema });
+const EmptyRequestBodySchema = z.strictObject({});
 // Only SDK-owned operations appear here. Host session admission, metadata and delivery have their own routers.
 const AGENT_ROUTES = [
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/models$/, response: C.ModelCatalogSchema },
@@ -75,7 +75,7 @@ function credentialProblem(res, error) {
 function capturedScope(value, expectedWorkspaceId) {
   if (!value || (expectedWorkspaceId !== undefined && value.workspaceId !== expectedWorkspaceId)) return null;
   const { workspaceId, projectId, agentDirectoryId, cwd, agentDirectory } = value;
-  const parsed = ScopeSchema.safeParse({ workspaceId, projectId, agentDirectoryId, cwd, agentDirectory });
+  const parsed = HostScopeSchema.safeParse({ workspaceId, projectId, agentDirectoryId, cwd, agentDirectory });
   return parsed.success ? parsed.data : null;
 }
 
@@ -215,14 +215,15 @@ export function registerCanonicalHostRoutes(app, {
         if ('workspaceId' in parsed.data && parsed.data.workspaceId !== scope?.workspaceId)
           return problem(res, 403, 'UNAUTHORIZED', 'The request does not match the selected workspace.');
         body = JSON.stringify(parsed.data);
-      } else if (req.body !== undefined && (typeof req.body !== 'object' || Object.keys(req.body).length > 0)) {
+      } else if (req.body !== undefined && !EmptyRequestBodySchema.safeParse(req.body).success) {
         return problem(res, 400, 'INVALID_REQUEST', 'This canonical operation accepts no body.');
       }
       const headers = { Accept: route.stream ? 'text/event-stream' : 'application/json' };
       if (body !== undefined) headers['Content-Type'] = 'application/json';
       if (route.stream && req.headers['last-event-id'] !== undefined) {
-        if (typeof req.headers['last-event-id'] !== 'string') return problem(res, 400, 'INVALID_CURSOR', 'Only one event cursor is accepted.');
-        headers['Last-Event-ID'] = req.headers['last-event-id'];
+        const cursor = z.string().safeParse(req.headers['last-event-id']);
+        if (!cursor.success) return problem(res, 400, 'INVALID_CURSOR', 'Only one event cursor is accepted.');
+        headers['Last-Event-ID'] = cursor.data;
       }
       const response = await service.request(`${PREFIX}${req.path}${url.search}`, {
         method: req.method, headers, body, signal: controller.signal,

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   PrivateCredentialResolveRequestSchema, PrivateCredentialResolveResultSchema,
   PrivateCredentialHandoffRequestSchema, PrivateCredentialHandoffResultSchema,
