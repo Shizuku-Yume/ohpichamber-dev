@@ -19,19 +19,21 @@ const within = (candidate, root) => {
   return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 };
 const invalid = () => new MetadataReadError('Legacy attachment could not be converted');
-
-/** The Host-resolved workspace is the only legacy file root; no shared root grants. */
-export function createLegacyAttachmentImporter({ store, resolveWorkspaceScope, maxBytes, fsPromises = fs }) {
-  if (typeof store?.upload !== 'function' || typeof resolveWorkspaceScope !== 'function' || !Number.isSafeInteger(maxBytes) || maxBytes < 1) {
-    throw new TypeError('store, trusted workspace resolver and maxBytes are required');
-  }
+const ScopeSchema = z.strictObject({ projectId: z.string().min(1), workspaceId: z.string().min(1), agentDirectoryId: z.string().min(1) });
+const RootSchema = z.string().min(1).refine((value) => path.isAbsolute(value));
+const StoreSchema = z.object({ upload: z.function() });
+const DependenciesSchema = z.object({ store: StoreSchema, resolveWorkspaceScope: z.function(), maxBytes: z.number().int().positive() });
+const validScope = (value) => ScopeSchema.safeParse(value).success;
+export function createLegacyAttachmentImporter(dependencies) {
+  const parsedDependencies = DependenciesSchema.parse(dependencies);
+  const { store, resolveWorkspaceScope, maxBytes, fsPromises = fs } = parsedDependencies;
   return async function importAttachment(scope, legacy) {
     const parsed = LegacyAttachmentSchema.safeParse(legacy);
     if (!parsed.success || parsed.data.size > maxBytes) throw invalid();
     const attachment = parsed.data;
     let privateScope;
     try { privateScope = await resolveWorkspaceScope(scope?.workspaceId); } catch { throw invalid(); }
-    if (!privateScope || !scope || ['projectId', 'workspaceId'].some((key) => typeof scope[key] !== 'string' || !scope[key] || scope[key] !== privateScope[key]) || typeof privateScope.agentDirectoryId !== 'string' || !privateScope.agentDirectoryId || (scope.agentDirectoryId !== undefined && scope.agentDirectoryId !== privateScope.agentDirectoryId)) throw invalid();
+    if (!validScope(privateScope) || !validScope(scope) || privateScope.projectId !== scope.projectId || privateScope.workspaceId !== scope.workspaceId || (scope.agentDirectoryId !== undefined && privateScope.agentDirectoryId !== scope.agentDirectoryId)) throw invalid();
     let bytes;
     if (attachment.source === 'local') {
       // FileReader's retained representation is a base64 data URL. Never fetch URLs.
@@ -44,9 +46,9 @@ export function createLegacyAttachmentImporter({ store, resolveWorkspaceScope, m
       if (!attachment.serverPath || !path.isAbsolute(attachment.serverPath) || attachment.serverPath.includes('\0')) throw invalid();
       let handle;
       try {
-        if (typeof privateScope.cwd !== 'string' || !path.isAbsolute(privateScope.cwd)) throw invalid();
+        const ownedRootResult = RootSchema.safeParse(privateScope.cwd); if (!ownedRootResult.success) throw invalid();
         const candidate = path.resolve(attachment.serverPath);
-        const ownedRoot = path.resolve(privateScope.cwd);
+        const ownedRoot = path.resolve(ownedRootResult.data);
         if (!within(candidate, ownedRoot)) throw invalid();
         const target = await fsPromises.realpath(candidate);
         const canonicalRoot = await fsPromises.realpath(ownedRoot);
