@@ -38,6 +38,7 @@ describe('service-owned interaction CAS', () => {
     manager.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async () => {}, input => { events.push(input); });
     const stale: ApprovalReply = { decision: 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' };
     await expect(manager.resolveApproval('session-1', 'approval-1', stale)).rejects.toMatchObject({ status: 410, code: 'APPROVAL_EXPIRED' });
+    await expect(manager.resolveApproval('session-1', 'unknown-approval', stale)).rejects.toMatchObject({ status: 410, code: 'APPROVAL_EXPIRED' });
     expect(events.at(-1)?.event).toMatchObject({ type: 'approval.resolved', approval: { status: 'expired' } });
   });
 
@@ -52,6 +53,14 @@ describe('service-owned interaction CAS', () => {
       },
     };
     manager.onRequest('session-1', 'worker-1', question);
+    await expect(manager.resolveQuestion('session-1', 'question-1', {
+      action: 'answer', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1', response: {
+        results: [
+          { id: 'colors', selectedOptions: [] },
+          { id: 'note', selectedOptions: ['Other'], customInput: 'both' },
+        ],
+      },
+    })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
     const reply: QuestionReply = {
       action: 'answer', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1', response: {
         results: [

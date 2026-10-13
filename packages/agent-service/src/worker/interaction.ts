@@ -11,7 +11,7 @@ import type {
   ToolApprovalRequestedEvent,
   ToolCallEvent,
 } from '@oh-my-pi/pi-coding-agent/sdk';
-import type { Theme } from '@oh-my-pi/pi-tui/theme';
+import { ensureThemeSync, theme, type Theme } from '@oh-my-pi/pi-tui/theme';
 import { JsonObjectSchema } from '@openchamber/agent-contract';
 import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 import type { WorkerInteraction as WorkerInteractionMessage } from '../protocol.ts';
@@ -42,7 +42,9 @@ export class WorkerInteraction {
   private readonly questionHandles = new Map<string, PendingQuestion>();
   private closed = false;
 
-  constructor(private readonly callbacks: WorkerInteractionCallbacks) {}
+  constructor(private readonly callbacks: WorkerInteractionCallbacks) {
+    ensureThemeSync();
+  }
 
   observeToolCall(event: ToolCallEvent): void {
     if (!this.closed) this.inputs.set(event.toolCallId, JsonObjectSchema.parse(JSON.parse(JSON.stringify(event.input))));
@@ -82,7 +84,7 @@ export class WorkerInteraction {
     editor: async () => { throw new Error('Terminal editor UI is unavailable in the Agent Service worker'); },
     addAutocompleteProvider: () => {},
     setEditorComponent: () => {},
-    get theme(): Theme { throw new Error('Terminal theme UI is unavailable in the Agent Service worker'); },
+    get theme(): Theme { ensureThemeSync(); return theme; },
     getAllThemes: async () => [],
     getTheme: async () => undefined,
     setTheme: async () => ({ success: false, error: 'Theme UI is unavailable in the Agent Service worker' }),
@@ -190,9 +192,8 @@ export class WorkerInteraction {
       const labels = question.options.map(option => option.label);
       if (item.selectedOptions.some(label => !labels.includes(label))) return false;
       if (new Set(item.selectedOptions).size !== item.selectedOptions.length) return false;
-      if (!question.multi && item.selectedOptions.length > 1) return false;
       if (item.customInput !== undefined && item.customInput.trim().length === 0) return false;
-      if (item.selectedOptions.length === 0 && item.customInput === undefined) return false;
+      if (!question.multi && item.selectedOptions.length + (item.customInput === undefined ? 0 : 1) !== 1) return false;
     }
     const results = parsed.data.results.map((item, index): ExtensionAskDialogResultItem => {
       const question = pending.questions[index]!;

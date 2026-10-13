@@ -154,8 +154,8 @@ export class InteractionManager {
   async resolveApproval(sessionId: string, approvalId: string, input: ApprovalReply, resolvedBy = 'agent-service'): Promise<ApprovalRequest> {
     const reply = ApprovalReplySchema.parse(input);
     const record = this.records.get(approvalId);
-    if (!record) throw new ProjectionError(404, 'APPROVAL_NOT_FOUND', 'Request was not found');
     const state = this.assertOwner(sessionId, reply.epoch, reply.workerGeneration, record, 'approval');
+    if (!record || record.kind !== 'approval') throw new ProjectionError(404, 'APPROVAL_NOT_FOUND', 'Request was not found');
     const request = ApprovalRequestSchema.parse(record.request);
     this.assertCas(request, reply.version, 'approval');
     if (this.reservations.has(approvalId)) throw new ProjectionError(409, 'APPROVAL_CONFLICT', 'Approval request is being resolved');
@@ -197,8 +197,8 @@ export class InteractionManager {
   async resolveQuestion(sessionId: string, questionId: string, input: QuestionReply, resolvedBy = 'agent-service'): Promise<QuestionRequest> {
     const reply = QuestionReplySchema.parse(input);
     const record = this.records.get(questionId);
-    if (!record) throw new ProjectionError(404, 'QUESTION_NOT_FOUND', 'Request was not found');
     const state = this.assertOwner(sessionId, reply.epoch, reply.workerGeneration, record, 'question');
+    if (!record || record.kind !== 'question') throw new ProjectionError(404, 'QUESTION_NOT_FOUND', 'Request was not found');
     const request = QuestionRequestSchema.parse(record.request);
     this.assertCas(request, reply.version, 'question');
     if (this.reservations.has(questionId)) throw new ProjectionError(409, 'QUESTION_CONFLICT', 'Question request is being resolved');
@@ -281,10 +281,11 @@ export class InteractionManager {
       if (question.id !== result.id) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response order does not match the request');
       const labels = question.options.map(option => option.label);
       if (result.selectedOptions.some(option => !labels.includes(option))) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response contains an unknown option');
-      if (!question.multi && result.selectedOptions.length > 1) throw new ProjectionError(400, 'INVALID_REQUEST', 'Single-choice question has multiple selections');
       if (new Set(result.selectedOptions).size !== result.selectedOptions.length) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response contains duplicate selections');
       if (result.customInput !== undefined && result.customInput.trim().length === 0) throw new ProjectionError(400, 'INVALID_REQUEST', 'Custom question input must not be blank');
-      if (result.selectedOptions.length === 0 && result.customInput === undefined) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response must contain a selection or custom input');
+      if (!question.multi && result.selectedOptions.length + (result.customInput === undefined ? 0 : 1) !== 1) {
+        throw new ProjectionError(400, 'INVALID_REQUEST', result.selectedOptions.length === 0 ? 'Question response must contain a selection or custom input' : 'Single-choice question has multiple selections');
+      }
     }
     return JsonValueSchema.parse(parsed.data);
   }
