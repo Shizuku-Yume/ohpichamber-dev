@@ -190,7 +190,7 @@ export class NativeAgents {
     const fields = agent.model
       ? { ...baseFields, model: `${agent.model.providerId}/${agent.model.modelId}` }
       : baseFields;
-    const content = `---\n${YAML.stringify(fields)}---\n\n${agent.systemPromptOverride ?? ''}\n`;
+    const content = `---\n${YAML.stringify(fields)}\n---\n\n${agent.systemPromptOverride ?? ''}\n`;
     const path = existing?.source === 'project' && existing.filePath && resolve(dirname(existing.filePath)) === resolve(this.context.cwd, '.omp', 'agents')
       ? existing.filePath : profilePath(this.context.cwd, agent.agentId);
     try { parseAgent(path, content, 'project', 'fatal'); }
