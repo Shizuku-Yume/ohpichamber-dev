@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { CompletionWorkerBootstrapSchema, WorkerBootstrapSchema, WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema, WorkerPolicyResultSchema } from '../protocol.ts';
-import type { CompletionWorkerBootstrap, WorkerApprovalPolicy, WorkerBootstrap, WorkerInfo, WorkerInteraction, WorkerOperation, WorkerOperationResult, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
-import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
+import type { NativeOperationDescriptor } from './host-authorization-protocol.ts';
 import type { JsonObject, ProblemCode } from '@openchamber/agent-contract';
 
 export class WorkerOperationError extends Error {
@@ -39,9 +38,7 @@ export interface WorkerRegistryOptions {
   workerRuntime?: string;
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
-  callbacks?: WorkerLifecycleCallbacks;
-  policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest) => Promise<WorkerPolicyResult>;
-  prepareBootstrap?: (input: WorkerBootstrap) => Promise<WorkerBootstrap>;
+  policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;
 }
 function defaultWorkerRuntime(): string {
   if (process.execPath.includes('bun')) return process.execPath;
@@ -214,7 +211,7 @@ export class WorkerRegistry {
         const check = this.options.policyCheck;
         const requestId = reply.data.requestId;
         const request = reply.data.request;
-        void (check ? check(input.rootSessionId, request) : Promise.resolve({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const)).then(result => {
+        void (check ? check(input.rootSessionId, request, undefined) : Promise.resolve({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const)).then(result => {
           if (this.entries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: WorkerPolicyResultSchema.parse(result) });
         }).catch(() => {
           if (this.entries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
