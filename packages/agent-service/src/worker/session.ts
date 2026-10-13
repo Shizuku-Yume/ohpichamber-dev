@@ -7,7 +7,6 @@ import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
-import { buildSkillPromptMessage } from '@oh-my-pi/pi-coding-agent/extensibility/skills';
 import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run } from '@openchamber/agent-contract';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
@@ -246,7 +245,7 @@ export class WorkerSession {
     await this.selectOptions(input.agentMention ? { ...options, agentId: input.agentMention.agentId } : options);
     let text = input.text;
     const invocation = /^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
-    if (invocation) text = (await buildSkillPromptMessage(this.catalogs.skills.nativeSkill(invocation[1]!), { args: invocation[2] ?? '' }, 'user')).message;
+    if (invocation) text = await this.catalogs.skills.preparePrompt(invocation[1]!, invocation[2] ?? '');
     for (const context of input.context) {
       if (context.kind === 'instruction' || context.kind === 'synthetic') {
         const message = context.kind === 'instruction'
@@ -298,7 +297,7 @@ export class WorkerSession {
         if (applying) this.skillsApplying = true;
         try {
           const result = await this.catalogs.operation(operation.operation, operation.revision);
-          if (operation.operation.type === 'skills.apply') this.emit([{ timestamp: Date.now(), event: { type: 'catalog.updated', catalog: { kind: 'skills', state: this.catalogs.skills.read(operation.operation.sources) } } }]);
+          if (operation.operation.type === 'skills.apply' && result.type === 'skills.applied' && result.result.outcome === 'applied') this.emit([{ timestamp: Date.now(), event: { type: 'catalog.updated', catalog: { kind: 'skills', state: this.catalogs.skills.read(operation.operation.sources) } } }]);
           return { type: 'catalog', result };
         } finally { if (applying) this.skillsApplying = false; }
       }

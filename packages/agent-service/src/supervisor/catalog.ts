@@ -412,10 +412,16 @@ export class CatalogCoordinator {
         ? { kind: 'workspace', workspaceId: root.identity.workspaceId }
         : { kind: 'agent', agentDirectoryId: root.identity.agentDirectoryId };
       const outcomes: SkillsWorkerApplyOutcome[] = [];
-      for (const worker of await this.snapshotWorkers(item => input.scope === 'workspace'
+      const targets = await this.snapshotWorkers(item => input.scope === 'workspace'
         ? item.identity.workspaceId === root.identity.workspaceId
-        : item.identity.agentDirectoryId === root.identity.agentDirectoryId)) {
-        outcomes.push(await this.applySkillsWorker(worker));
+        : item.identity.agentDirectoryId === root.identity.agentDirectoryId);
+      for (const worker of targets) outcomes.push(await this.applySkillsWorker(worker));
+      const lifetimes = await Promise.all(targets.map(worker => this.live(worker)));
+      for (const [index, worker] of targets.entries()) {
+        if (!lifetimes[index] || this.workers.get(worker.identity.rootSessionId)?.identity.workerGeneration !== worker.identity.workerGeneration) {
+          this.dropWorker(worker);
+          outcomes[index] = { worker: ownerIdentity(worker), outcome: 'retired' };
+        }
       }
       const result = { kind: 'skills' as const, status: aggregate(outcomes), scope, sourceRevision: input.sourceRevision, workers: outcomes } satisfies SkillsApplyResult;
       if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'SKILL_APPLY_FAILED', { result });

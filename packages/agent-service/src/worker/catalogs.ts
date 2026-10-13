@@ -1,6 +1,6 @@
 import {
   CounterSchema, PositiveCounterSchema,
-  type CompletionRequest, type ModelSelection, type SkillExpandRequest, type SkillExpandResult,
+  type CompletionRequest, type ModelSelection,
 } from '@openchamber/agent-contract';
 import {
   CatalogOperationSchema, CatalogResultSchema, type CatalogOperation, type CatalogResult,
@@ -87,11 +87,6 @@ export class WorkerCatalogs {
     return this.models.selection(selection, controls);
   }
 
-
-  prepareSkill(request: SkillExpandRequest): Promise<SkillExpandResult> {
-    return this.skills.expand(request);
-  }
 }
 
 export { resolveModelSelection, publicModel, credentialReference } from './catalog-models.ts';
-export { expandNativeSkill } from './catalog-skills.ts';

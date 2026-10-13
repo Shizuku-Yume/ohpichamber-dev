@@ -8,7 +8,7 @@ import { findRepoRoot } from '@oh-my-pi/pi-coding-agent/capability/fs';
 import { isProviderEnabled, isUserSourceEnabled } from '@oh-my-pi/pi-coding-agent/capability';
 import { getAncestorDirs } from '@oh-my-pi/pi-coding-agent/discovery/builtin';
 import { getUserPathCandidates, getProjectPathCandidates } from '@oh-my-pi/pi-coding-agent/discovery/agents';
-import { resolveUserPath, getProjectPath, listClaudePluginRoots, clearClaudePluginRootsCache, type ClaudePluginRoot } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
+import { resolveUserPath, getUserPath, getProjectPath, listClaudePluginRoots, clearClaudePluginRootsCache, type ClaudePluginRoot } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
 import { listOmpExtensionRoots } from '@oh-my-pi/pi-coding-agent/discovery/omp-extension-roots';
 import { getManagedSkillsDir } from '@oh-my-pi/pi-coding-agent/autolearn/managed-skills';
 import { expandTilde } from '@oh-my-pi/pi-coding-agent/tools/path-utils';
@@ -77,7 +77,7 @@ export class WorkerSkills {
       persistedSources: parsedSources,
       appliedSources: this.appliedSources,
       catalogRevision: this.catalogRevision,
-      skills: this.appliedSources ? this.skills.map(skill => ({ skillId: skill.name, name: skill.name, description: skill.description, scope: publicScope(skill) })) : [],
+      skills: this.appliedSources ? this.skills.map(skill => ({ skillId: skill.name, name: skill.name, description: this.sanitizeRoots(skill, skill.description), scope: publicScope(skill) })) : [],
     });
   }
 
@@ -191,6 +191,13 @@ export class WorkerSkills {
         const root = getProjectPath(ctx, source, 'skills'); if (root) roots.add(root);
       }
     }
+    for (const source of ['github', 'opencode'] as const) {
+      if (!isProviderEnabled(source)) continue;
+      const projectRoot = getProjectPath(ctx, source, 'skills');
+      if (projectRoot) roots.add(projectRoot);
+      const userRoot = getUserPath(ctx, source, 'skills');
+      if (userRoot) roots.add(userRoot);
+    }
     if (isProviderEnabled('omp-plugins') || isProviderEnabled('agent-plugins')) {
       const extensions = await listOmpExtensionRoots({ ...ctx, extensionRoots: options.extensionRoots });
       for (const root of extensions) roots.add(join(root.path, 'skills'));
@@ -232,7 +239,7 @@ export class WorkerSkills {
       }
       SkillsCatalogStateSchema.parse({ worker: this.context.worker, agentDirectoryId: this.context.agentDirectoryId,
         runtimeStatus: 'ready', persistedSources: parsedSources, appliedSources: parsedSources, catalogRevision,
-        skills: result.skills.map(skill => ({ skillId: skill.name, name: skill.name, description: skill.description, scope: publicScope(skill) })) });
+        skills: result.skills.map(skill => ({ skillId: skill.name, name: skill.name, description: this.sanitizeRoots(skill, skill.description), scope: publicScope(skill) })) });
       const outcome = SkillsWorkerApplyOutcomeSchema.parse({ worker: this.context.worker, outcome: 'applied',
         revisions: { runtimeStatus: 'ready', persistedSources: parsedSources, appliedSources: parsedSources, catalogRevision } });
       publishing = true;
@@ -267,21 +274,19 @@ export class WorkerSkills {
     const skill = this.skills.find(candidate => candidate.name === parsedRequest.skillId);
     if (!skill) throw new ProjectionError(404, 'INVALID_REQUEST', 'Skill is not in the published catalog');
     const built = await buildSkillPromptMessage({ ...skill, baseDir: `skill://${skill.name}` }, { args: parsedRequest.arguments }, 'user');
-    let message = built.message;
+    return SkillExpandResultSchema.parse({ worker: this.context.worker, skillId: skill.name, catalogRevision: this.catalogRevision,
+      message: this.sanitizeRoots(skill, built.message) });
+  }
+
+  async preparePrompt(skillId: string, args: string): Promise<string> {
+    return (await this.expand({ skillId, arguments: args, workerGeneration: this.context.worker.workerGeneration,
+      catalogRevision: this.catalogRevision })).message;
+  }
+
+  private sanitizeRoots(skill: Skill, text: string): string {
     const roots = [skill.filePath, skill.baseDir, skill.containRoot, this.context.cwd, this.context.agentDirectory]
       .filter((root): root is string => root !== undefined && root.length > 0).sort((a, b) => b.length - a.length);
-    for (const root of roots) message = message.split(root).join('[skill-root]');
-    return SkillExpandResultSchema.parse({ worker: this.context.worker, skillId: skill.name, catalogRevision: this.catalogRevision, message });
+    for (const root of roots) text = text.split(root).join('[skill-root]');
+    return text;
   }
-
-  nativeSkill(skillId: string): Skill {
-    if (this.runtimeStatus !== 'ready') throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill runtime is unavailable until successful reapplication');
-    const skill = this.skills.find(candidate => candidate.name === skillId);
-    if (!skill) throw new ProjectionError(404, 'INVALID_REQUEST', 'Skill is not in the published catalog');
-    return skill;
-  }
-}
-
-export async function expandNativeSkill(skill: Skill, args: string): Promise<string> {
-  return (await buildSkillPromptMessage({ ...skill, baseDir: `skill://${skill.name}` }, { args }, 'user')).message;
 }
