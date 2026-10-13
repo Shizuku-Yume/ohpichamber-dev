@@ -18,7 +18,7 @@ import type {
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
-import { SessionRegistry, type SessionList } from '../sessions/registry.ts';
+import { SessionRegistry, type NativeEntryResult, type SessionForkResult, type SessionList } from '../sessions/registry.ts';
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
 import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo } from './workers.ts';
@@ -60,7 +60,7 @@ type ServiceResponse =
   | AgentServiceReady
   | z.infer<typeof HostAuthorizationScopeSchema | typeof HostWorkspaceRegisteredSchema>
   | WorkerInfo | { workers: RegisteredWorkerInfo[] }
-  | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck
+  | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck | SessionForkResult | NativeEntryResult
   | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run }
   | SteerAck | FollowUpAck
   | MCPCatalogRead | MCPApplyResult | MCPOAuthResult

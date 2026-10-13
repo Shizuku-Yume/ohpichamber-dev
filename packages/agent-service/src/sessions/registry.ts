@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { z } from 'zod';
 import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema } from '@openchamber/agent-contract';
@@ -16,6 +17,8 @@ type SessionBootstrap = z.infer<typeof HostSessionBootstrapSchema>;
 export interface SessionList { items: RuntimeSession[]; errors: { sessionId: string; code: ProblemCode }[]; }
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' }>;
 type Opened = { generation: string; sessionFile: string; journal: SessionJournal };
+export interface SessionForkResult { sessionId: string; rootSessionId: string; sessionFile: string; sourceSessionId: string; entryId: string | null; mode: 'selected' | 'full' }
+export interface NativeEntryResult { entryId: string }
 type Entry =
   | { state: 'unloaded'; reference: SessionReference; runtime: RuntimeSession }
   | { state: 'opening'; input: SessionBootstrap; opened?: Opened }
@@ -120,7 +123,7 @@ export class SessionRegistry {
       return result.run;
     } finally { this.pendingRuns.delete(sessionId); }
   }
-  async fork(sessionId: string, entryId: string | null, mode: 'selected' | 'full') {
+  async fork(sessionId: string, entryId: string | null, mode: 'selected' | 'full'): Promise<SessionForkResult> {
     this.ensureOpen();
     const entry = this.get(sessionId);
     const source = entry.state === 'unloaded' ? entry.reference : entry.input;
@@ -153,7 +156,7 @@ export class SessionRegistry {
       await manager?.close();
     }
   }
-  async resolveNativeEntry(sessionId: string, messageId: string): Promise<{ entryId: string }> {
+  async resolveNativeEntry(sessionId: string, messageId: string): Promise<NativeEntryResult> {
     this.ensureOpen();
     const entry = this.get(sessionId);
     const source = entry.state === 'unloaded' ? entry.reference : entry.input;

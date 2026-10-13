@@ -27,7 +27,7 @@ export class WorkerCatalogs {
     this.models = context.models;
     this.agents = new NativeAgents(context);
     this.skills = new WorkerSkills(context);
-    this.credentials = new NativeCredentials(context.authStorage, this.models, context.worker.workspaceId, context.worker.agentDirectoryId);
+    this.credentials = new NativeCredentials(context.authStorage, this.models, context.worker.workspaceId, context.agentDirectoryId);
   }
 
   // Reads receive their current owning revision; mutations receive the next committed revision.

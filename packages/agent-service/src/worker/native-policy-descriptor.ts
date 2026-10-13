@@ -21,7 +21,7 @@ function localPath(raw: string, cwd: string): string {
 async function fileTargets(raw: string, cwd: string, read: boolean): Promise<string[]> {
   const normalized = unwrapHashlineHeaderPath(normalizePathLikeInput(raw));
   const targets = new Set<string>();
-  const parts = read ? await splitDelimitedPathEntry(normalized, cwd, { splitter: splitPathAndSel }) ?? [normalized] : [normalized];
+  const parts = read ? await splitDelimitedPathEntry(normalized, cwd, { splitter: item => ({ basePath: splitPathAndSel(item).path }) }) ?? [normalized] : [normalized];
   for (const part of parts) {
     const split = read ? await splitPathAndSelPreferringLiteral(part, cwd) : { path: part };
     targets.add(localPath(split.path, cwd));

@@ -42,6 +42,7 @@ export type CatalogOperation = z.infer<typeof CatalogOperationSchema>;
 
 export const CatalogResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('catalog.models'), catalog: ModelCatalogSchema }),
+  z.strictObject({ type: z.literal('skills.catalog'), catalog: SkillsCatalogStateSchema }),
   z.strictObject({ type: z.literal('catalog.providers'), catalog: ProviderCatalogSchema }),
   z.strictObject({ type: z.literal('catalog.agents'), catalog: AgentCatalogSchema }),
   z.strictObject({ type: z.literal('catalog.provider.mutated'), result: ProviderMutationResultSchema }),

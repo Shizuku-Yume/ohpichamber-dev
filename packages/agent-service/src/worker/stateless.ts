@@ -29,7 +29,7 @@ export class StatelessWorker {
     nativeModelsContext(runtime, () => this.credentialScopeId);
     const models = runtime.models;
     this.models = models;
-    this.credentials = new NativeCredentials(runtime.authStorage, models, input.workspaceId);
+    this.credentials = new NativeCredentials(runtime.authStorage, models, input.workspaceId, input.agentDirectoryId);
     this.agents = new NativeAgents({
       cwd: input.cwd, agentDirectory: input.agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
@@ -130,6 +130,8 @@ export class StatelessWorker {
       case 'catalog.agent.delete': result = { type: 'catalog.agent.mutated', result: await this.agents.delete(operation.request, revision) }; break;
       case 'skills.read': case 'skills.apply': case 'skills.expand':
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Skills require a live session runtime');
+      default:
+        throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Catalog operation is unavailable');
     }
     return CatalogResultSchema.parse(result);
   }

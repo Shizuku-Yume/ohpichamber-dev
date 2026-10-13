@@ -1,7 +1,6 @@
 import type { ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
-import { z } from 'zod';
 import { JsonObjectSchema, type JsonValue } from '@openchamber/agent-contract';
-import { HostActionRequestSchema, HostToolActions, type HostActionRequest } from '../native-policy-protocol.ts';
+import { HostActionRequestSchema, type HostActionRequest } from '../native-policy-protocol.ts';
 
 export interface HostToolScope { sessionId: string; rootSessionId: string; workspaceId: string }
 export interface HostToolInvocation extends HostToolScope { request: HostActionRequest; signal: AbortSignal }
@@ -15,14 +14,20 @@ export function createHostToolExtension({ scope, invoke }: { scope: HostToolScop
       notify: 'Invoke notify.send for an authorized OpenChamber notification.',
     };
     for (const toolName of ['openchamber', 'web', 'memory', 'notify'] as const) {
-      const parameters = z.strictObject({ action: z.enum(HostToolActions[toolName]), input: JsonObjectSchema });
-      api.registerTool({
+      const parameters = api.typebox.Object({
+        action: api.typebox.String(),
+        input: api.typebox.Record(api.typebox.String(), api.typebox.Unknown()),
+      });
+      api.registerTool<typeof parameters>({
         name: toolName, label: toolName, description: descriptions[toolName], parameters, approval: 'exec',
         async execute(_toolCallId, params, signal) {
           const cancellation = signal ?? new AbortController().signal;
           cancellation.throwIfAborted();
-          const request = HostActionRequestSchema.parse({ sessionId: captured.sessionId, toolName, action: params.action, input: params.input });
-          const value = await invoke({ ...captured, request, signal: cancellation });
+          const input = JsonObjectSchema.parse(params);
+          const action = typeof input.action === 'string' ? input.action : '';
+          const toolInput = JsonObjectSchema.parse(input.input);
+          const parsed = HostActionRequestSchema.parse({ sessionId: captured.sessionId, toolName, action, input: toolInput });
+          const value = await invoke({ ...captured, request: parsed, signal: cancellation });
           cancellation.throwIfAborted();
           return { content: [{ type: 'text', text: JSON.stringify(value) }], details: value };
         },
