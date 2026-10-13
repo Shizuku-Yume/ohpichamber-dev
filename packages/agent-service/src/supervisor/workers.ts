@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema } from '../protocol.ts';
-import type { WorkerApprovalPolicy, WorkerBootstrap, WorkerInfo, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
+import { WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema, WorkerPolicyResultSchema } from '../protocol.ts';
+import type { WorkerApprovalPolicy, WorkerBootstrap, WorkerInfo, WorkerInteraction, WorkerOperation, WorkerOperationResult, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import type { ProblemCode } from '@openchamber/agent-contract';
 
@@ -33,6 +33,7 @@ export interface WorkerRegistryOptions {
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
   callbacks?: WorkerLifecycleCallbacks;
+  policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest) => Promise<WorkerPolicyResult>;
 }
 
 async function waitWithin(operation: Promise<void>, milliseconds: number): Promise<void> {
@@ -63,19 +64,16 @@ export class WorkerRegistry {
   async request(rootSessionId: string, operation: WorkerOperation): Promise<WorkerOperationResult> {
     const parsed = WorkerOperationSchema.parse(operation);
     const entry = this.entries.get(rootSessionId);
-    if (this.closing || !entry || entry.info.state !== 'ready' || !entry.child.connected) {
-      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-    }
+    if (this.closing || !entry || entry.info.state !== 'ready' || !entry.child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     const commandId = randomUUID();
     const result = new Promise<WorkerOperationResult>((resolve, reject) => entry.pending.set(commandId, { resolve, reject }));
     entry.child.send({ type: 'operation', workerGeneration: entry.info.workerGeneration, commandId, operation: parsed }, error => {
       if (!error) return;
-      const pending = entry.pending.get(commandId);
-      entry.pending.delete(commandId);
-      pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
+      const pending = entry.pending.get(commandId); entry.pending.delete(commandId); pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
     });
     return result;
   }
+  async catalog(rootSessionId: string, operation: WorkerOperation): Promise<WorkerOperationResult> { return this.request(rootSessionId, operation); }
 
   async start(input: WorkerBootstrap, replace = false, approvalPolicies?: WorkerApprovalPolicy[]): Promise<WorkerInfo> {
     return this.withRoot(input.rootSessionId, async () => {
@@ -156,6 +154,13 @@ export class WorkerRegistry {
         this.options.callbacks?.onEvents?.(input.rootSessionId, workerGeneration, reply.data.inputs);
       } else if (reply.data.type === 'interaction') {
         this.options.callbacks?.onInteraction?.(input.rootSessionId, workerGeneration, reply.data.request);
+      } else if (reply.data.type === 'policy.request') {
+        const check = this.options.policyCheck;
+        void (check ? check(input.rootSessionId, reply.data.request) : Promise.resolve({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const)).then(result => {
+          if (entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId: reply.data.requestId, result: WorkerPolicyResultSchema.parse(result) });
+        }).catch(() => {
+          if (entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId: reply.data.requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
+        });
       } else if (reply.data.type === 'result') {
         const pending = entry.pending.get(reply.data.commandId);
         if (pending) { entry.pending.delete(reply.data.commandId); pending.resolve(reply.data.result); }
@@ -175,7 +180,7 @@ export class WorkerRegistry {
       type: 'bootstrap', rootSessionId: input.rootSessionId, workerGeneration,
       projectId: input.projectId, workspaceId: input.workspaceId,
       cwd: input.cwd, agentDirectory: input.agentDirectory,
-      sessionsDirectory: input.sessionsDirectory, sessionFile: input.sessionFile, options: input.options,
+      sessionsDirectory: input.sessionsDirectory, sessionFile: input.sessionFile, mcpConfigPath: input.mcpConfigPath, options: input.options,
       approvalPolicies,
     });
     if (child.connected) child.send(command);
