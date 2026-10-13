@@ -69,7 +69,7 @@ export const createWorkerOperationAuthorizer = ({
         const target = FilePathInputSchema.safeParse(rawPath);
         if (!target.success) return false;
         const relative = path.isAbsolute(target.data) ? path.relative(directory.directory, target.data) : target.data;
-        const resolved = await resolveGuestFilePath({ path: relative, projectDirectory: directory.directory, patterns: [], homeDir: os.homedir() });
+        const resolved = await resolveGuestFilePath({ path: relative || '.', projectDirectory: directory.directory, patterns: [], homeDir: os.homedir() });
         return resolved.ok && resolved.scope === 'project';
       };
       if (request.type === 'provider-entry') {

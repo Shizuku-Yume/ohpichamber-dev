@@ -141,3 +141,5 @@ Regression tests in `../ui-auth/canonical-host-routes.test.js` preserve historic
 `approval-policy-store.js` owns `host-approval-policies.sqlite`. It persists exact native tool-input targets with stable opaque IDs and monotonic decimal revisions. The Node supervisor captures root, project, and workspace scope from Host session bootstrap before forwarding, rejecting scope changes.
 
 Child IPC uses `approval.policy.commit` and `approval.policy.list`. The service reserves request CAS, awaits a committed revision, and resolves the worker handle. Failed writes return `APPROVAL_POLICY_WRITE_FAILED`, leaving requests pending. Policies load before reopening a session and apply to future exact native targets, with workspace denial taking precedence over session allowance.
+
+Native Bash descriptors include their working directory as a source path. The Host represents the exact workspace root as `.` for containment validation, so a command at that root reaches the consent decision rather than failing as an empty path. An ungranted command still requires approval; outside paths and symlink escapes remain refused.

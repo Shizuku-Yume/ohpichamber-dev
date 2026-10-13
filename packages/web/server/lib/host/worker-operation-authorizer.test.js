@@ -112,14 +112,15 @@ describe('Host-owned native descriptor authority', () => {
     } finally { await harness.close(); }
   });
 
-  it('requires exact consent unless machine policy already grants the command', async () => {
+  it('requires exact consent for the native workspace-root command descriptor unless machine policy grants it', async () => {
     const harness = await nativeHarness();
     try {
       const command = 'printf harmless';
       const request = { type: 'tool', toolName: 'bash', input: { command }, approvalId: 'approval', toolCallId: 'call' };
-      const descriptor = { toolName: 'bash', sourcePaths: [], destinationPaths: [], fileOps: [], command };
+      const descriptor = { toolName: 'bash', sourcePaths: [harness.scope.cwd], destinationPaths: [], fileOps: [], command };
       const approvalGrant = { approvalId: 'approval', toolCallId: 'call', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch', command };
       expect(await harness.authorize(harness.scope, request, descriptor)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
+      expect(await harness.authorize(harness.scope, request, { ...descriptor, sourcePaths: [harness.outside] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, request, { ...descriptor, approvalGrant })).toEqual({ allowed: true });
       for (const mismatch of [{ command: 'printf other' }, { toolCallId: 'other-call' }, { rootSessionId: 'foreign-root' }, { workerGeneration: 'retired-generation' }]) {
         expect(await harness.authorize(harness.scope, request, { ...descriptor, approvalGrant: { ...approvalGrant, ...mismatch } })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
