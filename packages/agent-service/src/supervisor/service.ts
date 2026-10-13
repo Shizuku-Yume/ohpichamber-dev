@@ -19,6 +19,7 @@ import { CatalogResultSchema } from '../catalogs/protocol.ts';
 import { CatalogCoordinator } from './catalog.ts';
 interface ServiceOptions {
   workerEntrypoint: string;
+  workerRuntime?: string;
   internalSecret: string;
   stateDirectory: string;
   port?: number;
@@ -78,7 +79,7 @@ export class AgentService {
   constructor(private readonly options: ServiceOptions) {
     this.secret = Buffer.from(InternalSecretSchema.parse(options.internalSecret), 'hex');
     this.catalog = new CatalogCoordinator(options.stateDirectory, options.catalogWorkspaceId ?? 'workspace');
-    this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, policyCheck: options.policyCheck, callbacks: {
+    this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, policyCheck: options.policyCheck, callbacks: {
       onOpened: (...args) => {
         this.sessions.onOpened(...args);
         const rootSessionId = args[0];
