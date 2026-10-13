@@ -15,9 +15,9 @@ const scopeIdentity = (scope) => ({
 });
 const validScope = (scope, sessionId) => Boolean(scope
   && scope.sessionId === sessionId
-  && typeof scope.projectId === 'string'
-  && typeof scope.workspaceId === 'string'
-  && typeof scope.cwd === 'string');
+  && scope.projectId
+  && scope.workspaceId
+  && scope.cwd);
 
 /**
  * Single delivery owner for direct and durable Host prompts. Capture is done
@@ -32,10 +32,10 @@ export function createHostPromptDeliveryRuntime({
   scheduledTasksRuntime,
   sessionRuntime,
 }) {
-  if (typeof resolveSessionScope !== 'function') throw new TypeError('prompt delivery requires resolveSessionScope');
-  if (!routingRuntime || typeof routingRuntime.resolveAutoSelection !== 'function') throw new TypeError('prompt delivery requires routing runtime');
-  if (!sessionKnowledgeRuntime || typeof sessionKnowledgeRuntime.resolvePendingForSession !== 'function') throw new TypeError('prompt delivery requires session knowledge runtime');
-  if (!sessionRuntime || typeof sessionRuntime.markUserMessageSent !== 'function') throw new TypeError('prompt delivery requires session runtime activity');
+  if (!resolveSessionScope) throw new TypeError('prompt delivery requires resolveSessionScope');
+  if (!routingRuntime?.resolveAutoSelection) throw new TypeError('prompt delivery requires routing runtime');
+  if (!sessionKnowledgeRuntime?.resolvePendingForSession) throw new TypeError('prompt delivery requires session knowledge runtime');
+  if (!sessionRuntime?.markUserMessageSent) throw new TypeError('prompt delivery requires session runtime activity');
   const accepted = new Map();
   const completed = new Set();
 
