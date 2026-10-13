@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
+import type { Message } from '@openchamber/agent-contract';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { SessionJournal } from '../projection/journal.ts';
@@ -11,6 +12,8 @@ import { WorkerSession } from './session.ts';
 
 beforeEach(resetSettingsForTest);
 afterEach(resetSettingsForTest);
+
+const stableUserMessages = (messages: Message[]) => messages.map(({ messageId, sessionId, turnId, role, parts }) => ({ messageId, sessionId, turnId, role, parts }));
 
 test('native skill submission and catalog descriptions hide roots, and failed discovery emits no success', async () => {
   const root = await mkdtemp(join(tmpdir(), 'session-skills-'));
@@ -81,7 +84,8 @@ test('native skill submission and catalog descriptions hide roots, and failed di
     if (history.type !== 'history') throw new Error('Skill history was not returned');
     const liveUser = journal.snapshot().messages.filter(message => message.role === 'user');
     const historyUser = history.history.messages.filter(message => message.role === 'user');
-    expect(historyUser).toEqual(liveUser);
+    expect(liveUser).toHaveLength(1);
+    expect(stableUserMessages(historyUser)).toEqual(stableUserMessages(liveUser));
     const entrySchema = z.object({ type: z.string(), message: z.object({ role: z.string(), content: z.unknown() }).optional() });
     const transcriptUsers = (await readFile(worker.sessionFile, 'utf8')).split('\n').filter(Boolean)
       .map(line => entrySchema.parse(JSON.parse(line))).filter(entry => entry.type === 'message' && entry.message?.role === 'user');
@@ -106,7 +110,7 @@ test('native skill submission and catalog descriptions hide roots, and failed di
     await worker.close();
     worker = undefined;
     reopened = await SessionManager.open(sessionFile, join(root, 'sessions'), undefined, { initialCwd: cwd, throwIfMissing: true });
-    expect(new WorkerProjection(reopened, 'skill-root').seed().messages.filter(message => message.role === 'user')).toEqual(historyUser);
+    expect(stableUserMessages(new WorkerProjection(reopened, 'skill-root').seed().messages.filter(message => message.role === 'user'))).toEqual(stableUserMessages(historyUser));
     expect(fatal).toBe(false);
   } finally {
     await reopened?.close();

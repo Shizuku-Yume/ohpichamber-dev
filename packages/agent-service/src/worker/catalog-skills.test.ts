@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getAgentDir, setAgentDir } from '@oh-my-pi/pi-utils';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
-import { disableProvider, disableUserSource, enableUserSource, initializeWithSettings, reset } from '@oh-my-pi/pi-coding-agent/capability';
+import { disableProvider, disableUserSource, initializeWithSettings, isProviderEnabled, isUserSourceEnabled, reset } from '@oh-my-pi/pi-coding-agent/capability';
 import { setActiveSkills, type Skill } from '@oh-my-pi/pi-coding-agent/extensibility/skills';
+import { getUserPath } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
 import { WorkerSkills } from './catalog-skills.ts';
 
 beforeEach(resetSettingsForTest);
@@ -29,10 +30,17 @@ for (const source of ['native', 'agents', 'github', 'opencode', 'opencode-user']
       const file = join(directory, 'root-proof', 'SKILL.md');
       await mkdir(join(directory, 'root-proof'), { recursive: true });
       await writeFile(file, '---\nname: root-proof\ndescription: Readable native skill\n---\nLAST_GOOD_BODY\n');
+      // Initialize native discovery from its real profile config, rather than a later global toggle.
+      await writeFile(join(agentDirectory, 'config.yml'), source === 'opencode-user' ? 'enabledProviders:\n  - opencode\n' : '');
       setAgentDir(agentDirectory);
       const settings = await Settings.init({ cwd, agentDir: agentDirectory });
       release = initializeWithSettings(settings);
-      if (source === 'opencode-user') enableUserSource('opencode');
+      if (source === 'opencode-user') {
+        expect(homedir()).toBe(root);
+        expect(isProviderEnabled('opencode')).toBe(true);
+        expect(isUserSourceEnabled('opencode')).toBe(true);
+        expect(getUserPath({ cwd, home: homedir(), repoRoot: cwd }, 'opencode', 'skills')).toBe(directory);
+      }
       const publications: Skill[][] = [];
       let available = false;
       const skills = new WorkerSkills({ worker: { workspaceId: 'workspace', rootSessionId: 'root', workerGeneration: 'generation' },
