@@ -65,6 +65,12 @@ function modelKey(selection: ModelSelection): string {
   return JSON.stringify([selection.providerId, selection.modelId]);
 }
 
+function enabledModelSelectors(selectors: ReadonlySet<string>): string[] {
+  // [] means unrestricted to OMP. A nonmatching glob keeps an explicit empty allowlist
+  // on the native selector path without its fuzzy/substring fallback.
+  return selectors.size > 0 ? [...selectors] : ['__openchamber_no_enabled_models__/*'];
+}
+
 export function credentialReference(providerId: string, id: number): string {
   return `credential_${createHash('sha256').update(`${providerId}\0${id}`).digest('hex').slice(0, 24)}`;
 }
@@ -198,6 +204,8 @@ export class NativeModels {
   }
 
   private async load(): Promise<ConfigState> {
+    try { await this.context.settings.reloadFromDisk(); }
+    catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native settings could not be read'); }
     const file = ModelsConfigFile.relocate(this.context.modelsPath);
     file.invalidate();
     const loaded = file.tryLoad();
@@ -218,7 +226,7 @@ export class NativeModels {
 
   async readModels(workspaceId: string, revision: string): Promise<ModelCatalog> {
     await this.load();
-    await this.context.modelRegistry.refresh('offline');
+    await this.context.modelRegistry.reapplyModelPolicies();
     const all = this.context.modelRegistry.getAll('all');
     const allowed = new Set(filterAvailableModelsByEnabledPatterns(all, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
     const disabledProviders = new Set(cfgDisabledProviders.get(this.context.settings));
@@ -233,7 +241,7 @@ export class NativeModels {
   async readProviders(workspaceId: string, revision: string): Promise<ProviderCatalog> {
     const state = await this.load();
     await this.context.authStorage.credentials.reload();
-    await this.context.modelRegistry.refresh('offline');
+    await this.context.modelRegistry.reapplyModelPolicies();
     const ids = new Set([
       ...this.context.modelRegistry.getAll('all').map(model => model.provider),
       ...Object.keys(state.config.providers ?? {}), ...Object.keys(state.metadata.providers),
@@ -349,7 +357,7 @@ export class NativeModels {
 
   async selection(input: ModelSelection, controls?: Pick<CompletionRequest, 'variant' | 'reasoningEffort'>): Promise<ResolvedModelSelection> {
     await this.load();
-    await this.context.modelRegistry.refresh('offline');
+    await this.context.modelRegistry.reapplyModelPolicies();
     await this.context.authStorage.credentials.reload();
     if (cfgDisabledProviders.get(this.context.settings).includes(input.providerId)) {
       throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider is disabled');
@@ -405,7 +413,7 @@ export class NativeModels {
       published = true;
       project();
       await this.context.settings.flush();
-      await this.context.modelRegistry.refresh('offline');
+      await this.context.modelRegistry.reapplyModelPolicies();
       this.metadata = state.metadata;
       return result();
     } catch (error) {
@@ -415,7 +423,7 @@ export class NativeModels {
           cfgEnabledModels.set(this.context.settings, oldEnabled);
           cfgDisabledProviders.set(this.context.settings, oldDisabled);
           await this.context.settings.flush();
-          await this.context.modelRegistry.refresh('offline');
+          await this.context.modelRegistry.reapplyModelPolicies();
           this.metadata = oldMetadata;
         } catch {
           throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native catalog mutation failed and previous configuration could not be restored');
@@ -437,6 +445,19 @@ export class NativeModels {
       throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Provider credential reference is not available');
     }
     state.config.providers ??= {};
+    const previousProvider = state.config.providers[configuration.providerId];
+    const previousApi = previousProvider?.api ?? (state.metadata.providers[configuration.providerId]
+      ? nativeApi(state.metadata.providers[configuration.providerId].protocol) : undefined);
+    if (previousApi !== nativeApi(configuration.protocol)) {
+      for (const model of previousProvider?.models ?? []) {
+        const key = modelKey({ providerId: configuration.providerId, modelId: model.id });
+        // Older canonical writes copied the provider API onto chat models. External
+        // definitions and differing explicit transports remain native-owned overrides.
+        if (state.metadata.models[key] && (model.kind === undefined || model.kind === 'chat') && model.api === previousApi) {
+          delete model.api;
+        }
+      }
+    }
     state.config.providers[configuration.providerId] = {
       ...state.config.providers[configuration.providerId], baseUrl: configuration.endpoint, api: nativeApi(configuration.protocol),
     };
@@ -462,6 +483,7 @@ export class NativeModels {
     const request = ModelConfigureRequestSchema.parse(input);
     PositiveCounterSchema.parse(revision);
     const state = await this.load();
+    await this.context.modelRegistry.reapplyModelPolicies();
     const model = request.model;
     const existing = this.context.modelRegistry.find(model.provider, model.modelId);
     const providerBase = this.context.modelRegistry.getProviderBaseUrl(model.provider);
@@ -485,10 +507,15 @@ export class NativeModels {
     state.config.providers ??= {};
     const provider: NativeProviderConfigInput = { ...configuredProvider, api: nativeProviderApi(api), baseUrl };
     const raw: NativeModelDefinitionInput = {
-      id: model.modelId, name: model.name, api,
+      id: model.modelId, name: model.name,
       input: nativeInput, reasoning: model.reasoningEffortSupported,
       contextWindow: model.contextWindow, maxTokens: model.maxOutputTokens,
     };
+    const previousDefinition = configuredProvider?.models?.find(row => row.id === model.modelId);
+    const previouslyGenerated = state.metadata.models[modelKey({ providerId: model.provider, modelId: model.modelId })]
+      && (previousDefinition?.kind === undefined || previousDefinition.kind === 'chat') && previousDefinition?.api === configuredProvider?.api;
+    if (previousDefinition?.api && !previouslyGenerated) raw.api = previousDefinition.api;
+    else if (existing?.kind && existing.kind !== 'chat') raw.api = existing.api;
     if (existing?.kind) {
       if (existing.kind === 'search') {
         throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model or provider configuration is invalid');
@@ -512,7 +539,7 @@ export class NativeModels {
       if (model.enabled !== undefined) {
         const selectors = new Set(allowed.filter(row => row.provider !== model.provider || row.id !== model.modelId).map(row => `${row.provider}/${row.id}`));
         if (model.enabled) selectors.add(`${model.provider}/${model.modelId}`);
-        cfgEnabledModels.set(this.context.settings, [...selectors]);
+        cfgEnabledModels.set(this.context.settings, enabledModelSelectors(selectors));
       }
     }, () => {
       const published = this.context.modelRegistry.find(model.provider, model.modelId);
@@ -525,15 +552,23 @@ export class NativeModels {
     const request = ModelDeleteRequestSchema.parse(input);
     PositiveCounterSchema.parse(revision);
     const state = await this.load();
+    await this.context.modelRegistry.reapplyModelPolicies();
+    const patterns = cfgEnabledModels.get(this.context.settings);
+    const allowed = filterAvailableModelsByEnabledPatterns(this.context.modelRegistry.getAll('all'), patterns, this.context.settings);
+    const selectors = new Set(allowed.filter(model => model.provider !== request.selection.providerId || model.id !== request.selection.modelId)
+      .map(model => `${model.provider}/${model.id}`));
     const provider = state.config.providers?.[request.selection.providerId];
     if (provider) {
       provider.models = provider.models?.filter(model => model.id !== request.selection.modelId);
       if (provider.modelOverrides) delete provider.modelOverrides[request.selection.modelId];
     }
     delete state.metadata.models[modelKey(request.selection)];
-    return ModelMutationResultSchema.parse(await this.commit(state, () => {}, () => {
+    return ModelMutationResultSchema.parse(await this.commit(state, () => {
+      if (patterns.length > 0) cfgEnabledModels.set(this.context.settings, enabledModelSelectors(selectors));
+    }, () => {
       const restored = this.context.modelRegistry.find(request.selection.providerId, request.selection.modelId);
-      return ModelMutationResultSchema.parse({ revision, selection: request.selection, model: restored ? publicModel(restored) : null });
+      return ModelMutationResultSchema.parse({ revision, selection: request.selection, model: restored ? publicModel(restored, undefined,
+        !cfgDisabledProviders.get(this.context.settings).includes(restored.provider) && (patterns.length === 0 || selectors.has(`${restored.provider}/${restored.id}`))) : null });
     }));
   }
 }

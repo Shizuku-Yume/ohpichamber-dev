@@ -67,6 +67,9 @@ export class NativeAgents {
   }
 
   private async discover(includeDisabled = false): Promise<AgentDefinition[]> {
+    try { await this.context.settings.reloadFromDisk(); }
+    catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native settings could not be read'); }
+    await this.context.modelRegistry.reapplyModelPolicies();
     // Use the native discovery roots and precedence, but select this worker's authorized user directory.
     // Native discoverAgents uses the process-global default user directory and masks filesystem failures.
     const project = findAllNearestProjectConfigDirs('agents', this.context.cwd).find(entry => entry.source === '.omp');
