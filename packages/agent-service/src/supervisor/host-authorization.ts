@@ -3,6 +3,7 @@ import type { Serializable } from 'node:child_process';
 import { isDeepStrictEqual } from 'node:util';
 import {
   HostAuthorizationScopeSchema,
+  HostWorkerAuthorizationReplySchema,
   HostWorkerAuthorizationRequestSchema,
   nativeEditDescriptor,
   type HostAuthorizationScope,
@@ -10,6 +11,7 @@ import {
   type NativePolicyResolver,
 } from './host-authorization-protocol.ts';
 import type { WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
+
 const unavailable = (): WorkerPolicyResult => ({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 });
 
 /** This process owns no permission authority; only its captured Node Host can grant work. */
@@ -46,6 +48,7 @@ export class HostWorkerAuthorization {
     });
     if (!message.success) return { allowed: false, code: 'UNAUTHORIZED', status: 403 };
     const requestId = message.data.requestId;
+    const descriptor = this.describe(message.data.request);
     if (descriptor && this.resolvePolicy) return this.resolvePolicy(scope.data, descriptor);
     if (descriptor) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 };
     return new Promise<WorkerPolicyResult>(resolve => {
