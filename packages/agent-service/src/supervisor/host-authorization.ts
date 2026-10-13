@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Serializable } from 'node:child_process';
 import { isDeepStrictEqual } from 'node:util';
 import { HostAuthorizationScopeSchema, HostWorkerAuthorizationReplySchema, HostWorkerAuthorizationRequestSchema } from './host-authorization-protocol.ts';
 import type { HostAuthorizationScope } from './host-authorization-protocol.ts';
@@ -10,7 +11,7 @@ const unavailable = (): WorkerPolicyResult => ({ allowed: false, code: 'SERVICE_
 export class HostWorkerAuthorization {
   private closed = false;
   private readonly pending = new Map<string, { scope: HostAuthorizationScope; resolve: (result: WorkerPolicyResult) => void; timer: NodeJS.Timeout }>();
-  private readonly onMessage = (raw: unknown): void => {
+  private readonly onMessage = (raw: Serializable): void => {
     const reply = HostWorkerAuthorizationReplySchema.safeParse(raw);
     if (!reply.success) return;
     const pending = this.pending.get(reply.data.requestId);

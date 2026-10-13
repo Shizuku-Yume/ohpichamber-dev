@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { z } from 'zod';
 import { HostAuthorizationScopeSchema, HostWorkspacePolicySchema, WorkerPolicyRequestSchema } from '@openchamber/agent-service/private-protocol';
 import { resolveGuestFilePath } from '../guests/files.js';
 import { unsupportedRepositoryRootReason } from '../git/repository-root.js';
@@ -10,6 +11,20 @@ import { isPermissionMode } from '../permission-auto-accept/modes.js';
 
 const denied = (code = 'UNAUTHORIZED', status = 403) => ({ allowed: false, code, status });
 const allowed = { allowed: true };
+
+const OAuthEndpointSchema = z.string().url().refine(value => {
+  const endpoint = new URL(value);
+  return ['http:', 'https:'].includes(endpoint.protocol) && !endpoint.username && !endpoint.password && !endpoint.hash;
+});
+const OAuthPolicyConfigurationSchema = z.strictObject({
+  authorizationUrl: OAuthEndpointSchema.optional(), tokenUrl: OAuthEndpointSchema.optional(),
+  issuerUrl: OAuthEndpointSchema.optional(), registrationUrl: OAuthEndpointSchema.optional(),
+  resourceMetadataUrl: OAuthEndpointSchema.optional(), redirectUri: OAuthEndpointSchema.optional(),
+  resource: OAuthEndpointSchema.optional(), clientId: z.string().min(1).optional(),
+  scopes: z.string().min(1).optional(), prompt: z.string().optional(),
+  callbackPort: z.number().int().min(1).max(65_535).optional(),
+  callbackPath: z.string().startsWith('/').optional(), stripSameOriginResource: z.boolean().optional(),
+});
 
 /** Host configuration grants and native approval consent are independent authorities.
  * Shell grants authorize exact machine commands; a workspace cwd is not an OS sandbox.
@@ -54,7 +69,10 @@ export const createWorkerOperationAuthorizer = ({
         return policy.providerEntry ? allowed : denied();
       }
       if (request.type === 'mcp-server' || request.type === 'mcp-oauth') {
-        return policy.mcpServers.some(server => isDeepStrictEqual(server, request.server)) ? allowed : denied();
+        if (!policy.mcpServers.some(server => isDeepStrictEqual(server, request.server))) return denied();
+        if (request.type === 'mcp-oauth' && (request.server.transport.type === 'stdio'
+          || !OAuthPolicyConfigurationSchema.safeParse(request.configuration).success)) return denied('INVALID_REQUEST', 400);
+        return allowed;
       }
       if (request.type === 'shell') return commandGranted(request.request.command) ? allowed : denied();
       if (request.type !== 'tool') return denied();

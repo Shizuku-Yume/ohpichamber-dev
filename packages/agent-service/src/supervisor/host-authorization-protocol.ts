@@ -11,7 +11,7 @@ export const CapturedHostBootstrapScopeSchema = z.strictObject({
 export type CapturedHostBootstrapScope = z.infer<typeof CapturedHostBootstrapScopeSchema>;
 export const HostAuthorizationScopeSchema = CapturedHostBootstrapScopeSchema.extend({ workerGeneration: EntityIdSchema });
 export type HostAuthorizationScope = z.infer<typeof HostAuthorizationScopeSchema>;
-export const HostSessionBootstrapSchema = WorkerBootstrapSchema.extend(RuntimeSessionSchema.pick({ displayPath: true }).shape);
+export const HostSessionBootstrapSchema = WorkerBootstrapSchema.merge(RuntimeSessionSchema.pick({ displayPath: true }));
 export const HostWorkspaceBootstrapSchema = z.strictObject({
   projectId: EntityIdSchema, cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema,
   agentDirectoryId: EntityIdSchema, env: z.record(z.string(), z.string()).optional(),
