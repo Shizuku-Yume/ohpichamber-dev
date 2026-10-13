@@ -10,6 +10,7 @@ const scopeForWorkspace = {
   agentDirectory: '/repo/.omp/agents',
   agentDirectoryId: 'agent-directory-1',
 };
+const otherScope = { ...scopeForWorkspace, workspaceId: 'workspace-2', cwd: '/repo/other' };
 
 const createHarness = (settings = {
   agentControlToolEnabled: true,
@@ -54,8 +55,8 @@ const createHarness = (settings = {
     service,
     sessionService,
     resolveSessionScope: async (sessionId) => sessionScopes.get(sessionId) ?? null,
-    resolveWorkspaceScope: async (workspaceId) => workspaceId === 'workspace-1' ? scopeForWorkspace : null,
-    listWorkspaceScopes: async () => ({ items: [{ workspaceId: 'workspace-1' }], errors: {} }),
+    resolveWorkspaceScope: async (workspaceId) => workspaceId === 'workspace-1' ? scopeForWorkspace : workspaceId === 'workspace-2' ? otherScope : null,
+    listWorkspaceScopes: async () => ({ items: [{ workspaceId: 'workspace-1' }, { workspaceId: 'workspace-2' }], errors: {} }),
     listProjects: async () => ({ items: [{ projectId: 'project-1', name: 'App', workspaceIds: ['workspace-1'] }], errors: {} }),
     scheduledTaskService: {
       status: async () => ({ enabledScheduledTasksCount: 0 }),
@@ -115,7 +116,9 @@ describe('OpenChamber control service canonical consumers', () => {
       .rejects.toMatchObject({ statusCode: 400 });
     await expect(control.execute('session.create', { model: 'not-a-model' }, '/repo/app'))
       .rejects.toMatchObject({ statusCode: 400 });
-    await expect(control.execute('session.send', { sessionId: 'session-1', directory: '/other', prompt: 'Nope' }, '/repo/app'))
+    await expect(control.execute('session.send', { sessionId: 'session-1', directory: '/other', prompt: 'Unknown' }, '/repo/app'))
+      .rejects.toMatchObject({ statusCode: 404 });
+    await expect(control.execute('session.send', { sessionId: 'session-1', workspaceId: 'workspace-2', prompt: 'Cross-scope' }, '/repo/app'))
       .rejects.toMatchObject({ statusCode: 403 });
 
     expect(created).toHaveLength(0);

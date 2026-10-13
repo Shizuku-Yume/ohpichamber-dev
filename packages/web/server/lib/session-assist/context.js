@@ -194,6 +194,7 @@ export async function loadAssistContext({ readPage, signal }) {
       ids.add(id);
       older.push(readMessage(record));
     }
+    older.reverse();
     messages = older.concat(messages);
     const next = typeof page.nextCursor === 'string' ? page.nextCursor : null;
     // A successful turn ends with an `idle` marker after the answer; look past
