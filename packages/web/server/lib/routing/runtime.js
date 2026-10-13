@@ -12,7 +12,6 @@
  * and is swallowed, and every prompt in that session is routed until a real
  * model is selected.
  */
-import { OpenCode } from '@opencode/client';
 import { z } from 'zod';
 import { AUTO_MODEL_REF, BUILTIN_CATEGORIES, ZEN_JEV_PROMOTION_ACTIVE, isAutoModel } from './defaults.js';
 import { createRoutingStore, parseEffectiveConfig } from './store.js';
@@ -27,7 +26,6 @@ import {
 } from './classifier.js';
 import { loadRoutingHistory } from './history.js';
 import { PROMPT_CACHE_TTL_MS, cacheHoldCategory, warmWindowMs } from './cache.js';
-import { readOpenCodeCredentials } from '../opencode/auth.js';
 import { ENTERPRISE_MODE_ERROR, isEnterpriseMode } from '../enterprise-mode.js';
 
 const HISTORY_TIMEOUT_MS = 2500;
@@ -78,47 +76,17 @@ const toModelRef = (model, variant) => {
   return ref;
 };
 
-/**
- * The API keys the user saved in OpenCode for the providers that serve Jev. An
- * OpenCode account sign-in is an OAuth credential, which Zen rejects as a key,
- * so only `api` entries count.
- */
-const apiKeySchema = z.object({ type: z.literal('api'), key: z.string().min(1) });
-const envKeySchema = z.string().trim().min(1);
-
-/**
- * OpenCode also connects OpenRouter and AI Gateway from these variables, read
- * live and never stored in its database. A managed OpenCode inherits this
- * server's environment, so the same variable is the same key. A saved key
- * wins over the variable; Zen has no variable.
- */
-const PROVIDER_ENV_KEYS = { openrouter: 'OPENROUTER_API_KEY', vercel: 'AI_GATEWAY_API_KEY' };
-
-export const readOpenCodeKeys = async ({ readAuth = readOpenCodeCredentials, env = process.env } = {}) => {
-  let auth = {};
-  try {
-    auth = await readAuth();
-  } catch {
-    // An unreadable credential store still leaves the environment.
-  }
-  const saved = (providerId) => apiKeySchema.safeParse(auth[providerId]).data?.key ?? null;
-  const fromEnv = (providerId) => envKeySchema.safeParse(env[PROVIDER_ENV_KEYS[providerId]]).data ?? null;
-  return {
-    zenKey: saved('opencode'),
-    openrouterKey: saved('openrouter') ?? fromEnv('openrouter'),
-    vercelKey: saved('vercel') ?? fromEnv('vercel'),
-  };
-};
 
 export function createRoutingRuntime({
   dataDir,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  service,
+  resolveWorkspaceScope,
+  resolveSelectedCredential,
   broadcastGlobalUiEvent,
   fetchImpl = fetch,
   store = createRoutingStore({ dataDir }),
   jev = createJevClient({ fetchImpl }),
-  readProviderKeys = () => readOpenCodeKeys(),
+  readProviderKeys = async () => ({}),
   zenPromotionActive = ZEN_JEV_PROMOTION_ACTIVE,
   enterpriseMode = isEnterpriseMode,
   readPinnedEndpoint = readPinnedCustomEndpoint,
@@ -127,6 +95,8 @@ export function createRoutingRuntime({
   readConfigEntries = null,
   now = Date.now,
 }) {
+  if (!service || typeof service.request !== 'function') throw new Error('routing requires the Agent service');
+  if (typeof resolveWorkspaceScope !== 'function' || typeof resolveSelectedCredential !== 'function') throw new Error('routing requires Host scope and credential resolvers');
   const permissionDecisions = new Map();
   // Sessions the user put on Auto. The sentinel never reaches OpenCode, so
   // nothing upstream remembers the choice for us.
@@ -213,29 +183,17 @@ export function createRoutingRuntime({
     return state;
   };
 
-  const openCodeClient = (directory) => {
-    const headers = { ...getOpenCodeAuthHeaders() };
-    // v2 scopes by header and rejects non-ASCII header values.
-    const scope = z.string().trim().min(1).safeParse(directory);
-    if (scope.success) headers['x-opencode-directory'] = encodeURIComponent(scope.data);
-    return OpenCode.make({ baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''), headers });
+  const requestAgent = async (path, init = {}) => {
+    const response = await service.request(path, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) throw Object.assign(new Error(body?.detail || body?.error || 'Agent service request failed'), { status: response.status });
+    return body;
   };
-
-  const readHistory = readSessionHistory ?? (async ({ sessionId, directory }) => {
-    const client = openCodeClient(directory);
-    const signal = AbortSignal.timeout(HISTORY_TIMEOUT_MS);
-    return loadRoutingHistory({
-      signal,
-      // v2 pages a session's messages newest first and returns `{ data, cursor }`.
-      readPage: ({ limit, cursor }) => client.message.list(
-        { sessionID: sessionId, limit, ...(cursor ? { cursor } : { order: 'desc' }) },
-        { signal },
-      ),
-    });
-  });
-
-  // v2 answers the effective config as its documents, lowest priority first.
-  const readConfig = readConfigEntries ?? ((directory) => openCodeClient(directory).config.get());
+  const readHistory = readSessionHistory ?? (async ({ sessionId }) => loadRoutingHistory({
+    signal: AbortSignal.timeout(HISTORY_TIMEOUT_MS),
+    readPage: async ({ limit, cursor }) => requestAgent(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/history?${new URLSearchParams({ limit: String(limit), ...(cursor ? { cursor } : {}) })}`),
+  }));
+  const readConfig = readConfigEntries ?? ((workspaceId) => requestAgent(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/config`));
 
   /**
    * "Try to preserve cache usage": the category to stay on instead of a lower
@@ -273,8 +231,10 @@ export function createRoutingRuntime({
     };
   };
 
-  const readCatalog = listCatalogModels
-    ?? (async (directory) => catalogResponseSchema.parse(await openCodeClient(directory).model.list()).data);
+  const readCatalog = listCatalogModels ?? (async (workspaceId) => {
+    const body = await requestAgent(`/api/agent/v1/catalog/models?workspaceId=${encodeURIComponent(workspaceId)}`);
+    return catalogResponseSchema.parse({ data: body?.items || body?.data || [] }).data;
+  });
 
   /**
    * Drops a variant the model does not list, so the reply runs on the model's
@@ -383,10 +343,8 @@ export function createRoutingRuntime({
   const isAutoSession = (sessionId) => Boolean(sessionId) && autoSessions.has(sessionId);
 
   /** Switches the session onto a resolved selection, the way a v2 send does. */
-  const applySessionSelection = async (sessionId, directory, selection) => {
-    const client = openCodeClient(directory);
-    await client.session.switchModel({ sessionID: sessionId, model: selection.model });
-    if (selection.agent) await client.session.switchAgent({ sessionID: sessionId, agent: selection.agent });
+  const applySessionSelection = async (sessionId, _directory, selection) => {
+    await requestAgent(`/internal/sessions/${encodeURIComponent(sessionId)}/selection`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: selection.model, ...(selection.agent ? { agent: selection.agent } : {}) }) });
   };
 
   /**

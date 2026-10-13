@@ -683,6 +683,7 @@ export const registerGuestRoutes = (app, {
           prompt: parsed.data.prompt,
           system: parsed.data.system,
           maxOutputTokens: parsed.data.maxOutputTokens,
+          workspaceId: req.get('x-openchamber-workspace-id') || parsed.data.workspaceId,
           directory: directory || undefined,
           preferredProviderID: provider.success ? provider.data : undefined,
           preferredModelID: provider.success && composerModel.success ? composerModel.data : undefined,

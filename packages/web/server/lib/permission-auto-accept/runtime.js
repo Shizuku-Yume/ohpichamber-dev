@@ -39,24 +39,19 @@ const normalizePolicy = (value, legacyEnabledMode = 'auto') => {
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function createPermissionAutoAcceptRuntime({
-  globalEventHub,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  service,
+  resolveSessionScope,
   readSettingsFromDiskMigrated,
   persistSettings,
   broadcastGlobalUiEvent,
-  // The routing safety net, asked once per request in a `safety` session.
-  // `accept` replies; anything else leaves the request for the user. Absent
-  // means `safety` sessions wait for the user on every request.
   evaluatePermission = null,
   onPermissionReplied = null,
-  // What a pre-modes `true` becomes: `safety` when the old global safety-net
-  // switch was on, else `auto`. Asked only while converting such a policy.
   resolveLegacyEnabledMode = async () => 'auto',
-  fetchImpl = fetch,
   retryDelaysMs = RETRY_DELAYS_MS,
   requestTimeoutMs = REQUEST_TIMEOUT_MS,
 }) {
+  if (!service || typeof service.request !== 'function') throw new Error('permission auto-accept requires the Agent service');
+  if (typeof resolveSessionScope !== 'function') throw new Error('permission auto-accept requires resolveSessionScope');
   let policy = normalizePolicy().policy;
   let loaded = false;
   let loadPromise = null;
@@ -174,34 +169,18 @@ export function createPermissionAutoAcceptRuntime({
     }
   };
 
-  const request = async (path, { directory, method = 'GET', body } = {}) => {
-    const url = new URL(buildOpenCodeUrl(path, ''));
-    const response = await fetchImpl(url, {
-      method,
-      headers: {
-        Accept: 'application/json',
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-        // OpenCode 2.x scopes a request to a directory through this header;
-        // the pending-permission list and services behind it are per location.
-        ...(directory ? { 'x-opencode-directory': encodeURIComponent(directory) } : {}),
-        ...getOpenCodeAuthHeaders(),
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(requestTimeoutMs),
-    });
-    if (!response.ok) {
-      const error = new Error(`OpenCode request failed (${response.status})`);
-      error.status = response.status;
-      throw error;
-    }
-    return response.json().catch(() => null);
+  const request = async (path, { method = 'GET', body, signal } = {}) => {
+    const response = await service.request(path, { method, headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}), signal: signal || AbortSignal.timeout(requestTimeoutMs) });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) { const error = new Error(payload?.detail || payload?.error || `Agent service request failed (${response.status})`); error.status = response.status; throw error; }
+    return payload;
   };
 
   const getSession = async (sessionId, directory) => {
     const cached = sessions.get(sessionId);
     if (cached) return cached;
-    const info = await request(`/api/session/${encodeURIComponent(sessionId)}`, { directory });
-    rememberSession(info?.data ?? info, directory);
+    const info = await request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/snapshot`);
+    rememberSession(info?.session ?? info, directory);
     return sessions.get(sessionId) ?? null;
   };
 
@@ -219,12 +198,13 @@ export function createPermissionAutoAcceptRuntime({
       seen.add(current);
       let info;
       try {
-        info = await getSession(current, currentDirectory);
+        info = await request(`/api/agent/v1/sessions/${encodeURIComponent(current)}/snapshot`);
+        info = info?.session ?? info;
       } catch {
         return 'ask';
       }
-      current = info?.parentID ?? null;
-      currentDirectory = info?.directory ?? currentDirectory;
+      current = info?.parentSessionId ?? info?.parentID ?? null;
+      currentDirectory = info?.cwd ?? info?.directory ?? currentDirectory;
     }
     return 'ask';
   };
@@ -241,11 +221,9 @@ export function createPermissionAutoAcceptRuntime({
       if (verdict?.action !== 'accept') return 'held';
     }
     // v2 scopes a permission reply under its session.
-    await request(`/api/session/${encodeURIComponent(permission.sessionID)}/permission/${encodeURIComponent(permission.id)}/reply`, {
-      directory,
+    await request(`/api/agent/v1/sessions/${encodeURIComponent(permission.sessionID)}/approvals/${encodeURIComponent(permission.id)}/respond`, {
       method: 'POST',
-      // OpenCode 2.0.8 renamed the reply body field `reply` to `decision`.
-      body: { decision: 'once' },
+      body: { decision: 'accept' },
     });
     return 'replied';
   };
@@ -305,11 +283,9 @@ export function createPermissionAutoAcceptRuntime({
   // already has started. A list without a directory would answer for
   // OpenCode's own working directory only, and start it, MCP servers included.
   const runningSessionDirectories = async () => {
-    const payload = await request('/api/session/active');
-    const sessionIds = Object.keys(payload?.data ?? {});
-    const directories = await Promise.all(sessionIds.map((sessionId) =>
-      getSession(sessionId).then((session) => session?.directory ?? null, () => null)));
-    return directories.filter((directory) => directory);
+    const payload = await request('/api/agent/v1/sessions?status=active');
+    const sessionsList = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.sessions) ? payload.sessions : [];
+    return sessionsList.map((entry) => entry?.cwd || entry?.directory).filter((directory) => typeof directory === 'string' && directory);
   };
 
   async function reconcilePending({ directories = [] } = {}) {
@@ -328,7 +304,7 @@ export function createPermissionAutoAcceptRuntime({
       for (const directory of scopes) {
         let payload;
         try {
-          payload = await request('/api/permission/request', { directory });
+          payload = await request('/api/agent/v1/permissions/pending');
         } catch {
           continue;
         }
@@ -376,17 +352,10 @@ export function createPermissionAutoAcceptRuntime({
   };
 
   const start = () => {
-    const unsubscribeEvent = globalEventHub.subscribeEvent(processEvent);
-    const unsubscribeStatus = globalEventHub.subscribeStatus((status) => {
-      if (status?.type === 'connect') void reconcilePending();
-    });
     void load().then(() => reconcilePending()).catch((error) => {
       console.warn('[permission-auto-accept] failed to load policy:', error?.message ?? error);
     });
-    return () => {
-      unsubscribeEvent();
-      unsubscribeStatus();
-    };
+    return () => {};
   };
 
   return {
@@ -397,7 +366,7 @@ export function createPermissionAutoAcceptRuntime({
     isSessionAutoAccepting,
     isPermissionAutoAnswered,
     processPermission,
-    reconcilePending,
+    processEvent,
     start,
   };
 }

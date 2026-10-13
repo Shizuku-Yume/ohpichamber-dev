@@ -410,7 +410,7 @@ function computeReadiness({ model, digest, files, fileCount, hunkCount, generate
  * which also means returning to a previous state of the working tree costs
  * nothing.
  */
-export async function generateWalkthrough({ directory, source: rawSource, force = false, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
+export async function generateWalkthrough({ workspaceId, directory, source: rawSource, force = false, model: explicitModel, providerID, modelID, language: rawLanguage, readContext: rawReadContext }, deps = {}) {
   const source = parseSource(rawSource);
   const readContext = readContextForSource(source, rawReadContext);
   const repoRoot = await getRepositoryRoot(directory);
@@ -423,7 +423,7 @@ export async function generateWalkthrough({ directory, source: rawSource, force 
   if (existing) return existing.promise;
 
   const controller = new AbortController();
-  const promise = runGeneration({ directory, source, repoRoot, key, force, explicitModel, providerID, modelID, language, readContext, signal: controller.signal }, deps)
+  const promise = runGeneration({ workspaceId, directory, source, repoRoot, key, force, explicitModel, providerID, modelID, language, readContext, signal: controller.signal }, deps)
     .finally(() => {
       if (jobs.get(jobKey(repoRoot, key, readContext))?.controller === controller) {
         jobs.delete(jobKey(repoRoot, key, readContext));
@@ -434,7 +434,7 @@ export async function generateWalkthrough({ directory, source: rawSource, force 
   return promise;
 }
 
-async function runGeneration({ directory, source, repoRoot, key, force, explicitModel, providerID, modelID, language, readContext, signal }, deps) {
+async function runGeneration({ workspaceId, directory, source, repoRoot, key, force, explicitModel, providerID, modelID, language, readContext, signal }, deps) {
 
   const model = await resolveModel(directory, explicitModel, providerID, modelID);
   if (!model) {
@@ -518,6 +518,7 @@ async function runGeneration({ directory, source, repoRoot, key, force, explicit
     prompt: options.prompt,
     system: options.system,
     directory,
+    workspaceId,
     sessionID: `openchamber-walkthrough-${cacheKey}`,
     model: `${model.providerID}/${model.modelID}`,
     responseSchema: options.responseSchema,

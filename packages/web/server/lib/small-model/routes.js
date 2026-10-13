@@ -3,7 +3,7 @@ export function registerSmallModelRoutes(app, { getSmallModelService }) {
     try {
       const { describeSmallModel, listAuthenticatedProviders } = await getSmallModelService();
       const resolved = await describeSmallModel({
-        directory: typeof req.query.directory === 'string' ? req.query.directory : undefined,
+        workspaceId: typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined,
         preferredProviderID: typeof req.query.providerID === 'string' ? req.query.providerID : undefined,
         preferredModelID: typeof req.query.modelID === 'string' ? req.query.modelID : undefined,
       });
@@ -21,12 +21,13 @@ export function registerSmallModelRoutes(app, { getSmallModelService }) {
   app.post('/api/small-model/generate', async (req, res) => {
     try {
       const { generateSmallModelText } = await getSmallModelService();
-      const { prompt, system, maxOutputTokens, model, directory, preferredProviderID, preferredModelID } = req.body || {};
+      const { prompt, system, maxOutputTokens, model, workspaceId, directory, preferredProviderID, preferredModelID } = req.body || {};
       const result = await generateSmallModelText({
         prompt,
         system,
         maxOutputTokens,
         model,
+        workspaceId,
         directory,
         preferredProviderID,
         preferredModelID,

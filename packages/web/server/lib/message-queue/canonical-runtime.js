@@ -10,6 +10,8 @@ const LEASE_MS = 30_000;
 
 /** One Host queue dispatcher; service acknowledgements never mean a run is terminal. */
 export function createCanonicalQueueRuntime({ store, service, resolveAttachments, publishQueue, reportFailure, now = Date.now }) {
+  if (!store || !service || typeof service.request !== 'function') throw new TypeError('canonical queue requires store and Agent service');
+  if (typeof resolveAttachments !== 'function' || typeof publishQueue !== 'function' || typeof reportFailure !== 'function') throw new TypeError('canonical queue requires attachments and publication callbacks');
   const timers = new Map();
   const operations = new Map();
   const holds = new Map();

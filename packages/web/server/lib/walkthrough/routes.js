@@ -151,7 +151,7 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
   // request below.
   app.post('/api/walkthrough/generate', async (req, res) => {
     try {
-      const { directory, source, force, model, providerID, modelID, language } = req.body || {};
+      const { workspaceId, directory, source, force, model, providerID, modelID, language } = req.body || {};
       if (!directory || typeof directory !== 'string') {
         return res.status(400).json({ error: 'directory is required' });
       }
@@ -160,6 +160,7 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
       const { generateWalkthrough, getPullRequestDiff } = await getWalkthroughService();
       const result = await generateWalkthrough(
         {
+          workspaceId,
           directory: readContext?.directory ?? directory,
           source,
           force: force === true,

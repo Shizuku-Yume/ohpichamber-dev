@@ -1,14 +1,15 @@
-import fs from 'fs';
+import { randomUUID } from 'node:crypto';
 import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import os from 'os';
 import path from 'path';
 import { readMergedSettingsSync } from '../host/settings-files.js';
 import {
+  completeSmallModel,
   findModelInfo,
+  getAgentService,
   getConfiguredSmallModelRef,
   getDefaultModelInfo,
-  getSmallModelClient,
   listModelInfos,
   listProviderInfos,
 } from './client.js';
@@ -176,7 +177,7 @@ const pickSmallModel = (models, accept) => {
  * happens to be connected: the content (diffs, replies, session text) goes
  * only where the user sent their own work or configured on purpose.
  */
-const resolveSmallModel = async ({ client, directory, model, preferredProviderID, preferredModelID }) => {
+const resolveSmallModel = async ({ client, directory, workspaceId, model, preferredProviderID, preferredModelID }) => {
   const explicit = parseModelRef(model);
   if (explicit) return { ...explicit, source: 'request' };
 
@@ -188,12 +189,12 @@ const resolveSmallModel = async ({ client, directory, model, preferredProviderID
   // one it does not list (a plugin model still loading) is kept.
   const fromConfig = await getConfiguredSmallModelRef(client);
   if (fromConfig) {
-    const info = findModelInfo(await listModelInfos(client, directory), fromConfig.providerID, fromConfig.modelID);
+    const info = findModelInfo(await listModelInfos(client, workspaceId || directory), fromConfig.providerID, fromConfig.modelID);
     if (info?.enabled !== false) return { ...fromConfig, source: 'config' };
   }
 
   if (preferredProviderID) {
-    const small = pickSmallModelInProvider(await listModelInfos(client, directory), preferredProviderID);
+    const small = pickSmallModelInProvider(await listModelInfos(client, workspaceId || directory), preferredProviderID);
     if (small) return { ...small, source: 'session-provider-small' };
     // OpenCode's own titles end here too: the model the user works with.
     if (preferredModelID) return { providerID: preferredProviderID, modelID: preferredModelID, source: 'session-model' };
@@ -269,17 +270,18 @@ const requestOptions = ({ timeoutMs, signal }) => {
  * Generates text with the user's small model through the running OpenCode.
  * Credentials stay inside OpenCode; this server only sends a prompt.
  */
-export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, directory, preferredProviderID, preferredModelID, responseSchema, timeoutMs, signal, onOverflow = 'truncate' }) {
+export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, workspaceId, directory, preferredProviderID, preferredModelID, responseSchema, timeoutMs, signal, onOverflow = 'truncate' }) {
   if (typeof prompt !== 'string' || !prompt.trim()) {
     throw Object.assign(new Error('prompt is required'), { statusCode: 400 });
   }
-
-  const client = getSmallModelClient(directory);
+  if (typeof workspaceId !== 'string' || !workspaceId.trim()) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400 });
+  const client = getAgentService();
   if (!client) throw noClientError();
 
   const resolved = await resolveSmallModel({
     client,
     directory,
+    workspaceId,
     model,
     preferredProviderID,
     preferredModelID,
@@ -294,7 +296,7 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
     );
   }
 
-  const models = await listModelInfos(client, directory);
+  const models = await listModelInfos(client, workspaceId);
   const modelInfo = findModelInfo(models, resolved.providerID, resolved.modelID);
 
   const outputTokens = resolveOutputTokens({ modelInfo, maxOutputTokens });
@@ -318,11 +320,20 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
   const generationOptions = requestOptions({ timeoutMs, signal });
   const unavailableMessage = `Model unavailable: ${resolved.providerID}/${resolved.modelID}`;
   const send = async () => {
-    const result = await client.generate.text(
-      { prompt: fullPrompt, model: { id: resolved.modelID, providerID: resolved.providerID } },
-      generationOptions,
-    );
-    return typeof result?.text === 'string' ? result.text : '';
+    const result = await completeSmallModel({
+      completionId: randomUUID(),
+      workspaceId,
+      selection: { providerId: resolved.providerID, modelId: resolved.modelID },
+      prompt: fullPrompt,
+      format: responseSchema ? { type: 'json', schema: responseSchema } : { type: 'text' },
+      overflow: onOverflow,
+      variant: resolved.variant ?? null,
+      reasoningEffort: null,
+      ...(outputTokens ? { maxOutputTokens: outputTokens } : {}),
+      ...(timeoutMs ? { timeoutMs } : {}),
+      ...(typeof system === 'string' && system.trim() ? { system: system.trim() } : {}),
+    }, { signal: generationOptions.signal });
+    return typeof result?.text === 'string' ? result.text : (typeof result === 'string' ? result : '');
   };
 
   const sendWithCatalogRetry = async () => {
@@ -384,7 +395,7 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
  * provider list only contributes names.
  */
 export async function listAuthenticatedProviders() {
-  const client = getSmallModelClient();
+  const client = getAgentService();
   if (!client) return [];
   try {
     const [providers, models] = await Promise.all([
@@ -427,8 +438,8 @@ const resolveReserveTokens = (outputReserveTokens, limits) => (
  * must read `null` as "try it", which is exactly right here — the verdict
  * comes from the reply, not from a capability flag.
  */
-export async function describeSmallModel({ directory, preferredProviderID, preferredModelID, outputReserveTokens, overrideModel } = {}) {
-  const client = getSmallModelClient(directory);
+export async function describeSmallModel({ workspaceId, directory, preferredProviderID, preferredModelID, outputReserveTokens, overrideModel } = {}) {
+  const client = getAgentService();
   if (!client) return null;
 
   // A caller with its own model setting (the diff walkthrough) outranks the
@@ -436,13 +447,14 @@ export async function describeSmallModel({ directory, preferredProviderID, prefe
   const resolved = await resolveSmallModel({
     client,
     directory,
+    workspaceId,
     model: overrideModel,
     preferredProviderID,
     preferredModelID,
   });
   if (!resolved) return null;
 
-  const models = await listModelInfos(client, directory);
+  const models = await listModelInfos(client, workspaceId);
   const modelInfo = findModelInfo(models, resolved.providerID, resolved.modelID);
   const outputTokenLimit = Number(modelInfo?.limit?.output) > 0 ? Number(modelInfo.limit.output) : null;
 
