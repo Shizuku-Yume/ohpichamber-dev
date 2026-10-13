@@ -220,7 +220,7 @@ export function createPermissionAutoAcceptRuntime({
     if (outcomes.size > OUTCOME_CACHE_LIMIT) outcomes.delete(outcomes.keys().next().value);
   };
 
-  /** Resolves to whether the request was handled here (replied to, or deliberately held). */
+  let accepting = true;
   const processPermission = (permission, directory) => {
     const parsed = ApprovalRequestSchema.safeParse(permission);
     if (!parsed.success) return Promise.resolve(false);
@@ -228,6 +228,7 @@ export function createPermissionAutoAcceptRuntime({
     const key = approval.approvalId;
     const existing = inFlight.get(key);
     if (existing) return existing;
+    if (!accepting) return Promise.resolve(false);
     const outcome = (async () => {
       for (const delay of retryDelaysMs) {
         if (delay > 0) await wait(delay);
@@ -279,14 +280,17 @@ export function createPermissionAutoAcceptRuntime({
   };
 
   async function reconcilePending({ directories = [] } = {}) {
+    if (!accepting) return;
     const normalizedDirectories = Array.from(new Set(directories.filter((directory) => typeof directory === 'string' && directory.trim()).map((directory) => directory.trim())));
     const key = normalizedDirectories.length > 0 ? normalizedDirectories.join('\n') : 'all';
     const existing = reconcilePromises.get(key);
     if (existing) return existing;
     const task = (async () => {
       await load();
+      if (!accepting) return;
       const pendingById = new Map();
       for (const session of await listActiveSessions()) {
+        if (!accepting) return;
         const scope = await resolveSessionScope(session.sessionId).catch(() => null);
         const directory = scope?.cwd ?? sessions.get(session.sessionId)?.directory;
         if (normalizedDirectories.length > 0 && (!directory || !normalizedDirectories.includes(directory))) continue;
@@ -300,17 +304,19 @@ export function createPermissionAutoAcceptRuntime({
           // A failed snapshot is not an empty approval set; leave it for the next reconciliation.
         }
       }
+      if (!accepting) return;
       await Promise.all(Array.from(pendingById.values()).map(({ approval, directory }) => processPermission(approval, directory)));
     })().finally(() => { reconcilePromises.delete(key); });
     reconcilePromises.set(key, task);
     return task;
   }
 
-  const processEvent = (event) => {
-    const parsed = CanonicalEventSchema.safeParse(event?.payload ?? event);
+  const processEvent = (event, scope) => {
+    if (!accepting) return;
+    const parsed = CanonicalEventSchema.safeParse(event);
     if (!parsed.success) return;
     const payload = parsed.data;
-    const directory = typeof event?.directory === 'string' && event.directory !== 'global' ? event.directory : undefined;
+    const directory = typeof scope?.cwd === 'string' && scope.cwd ? scope.cwd : undefined;
     if (payload.type === 'session.updated' && payload.session) {
       rememberSession(payload.session, directory);
       if (!payload.session.parentSessionId) void applyDefaultMode(payload.session.sessionId).catch((error) => console.warn('[permission-auto-accept] failed to apply the default mode:', error?.message ?? error));
@@ -328,16 +334,29 @@ export function createPermissionAutoAcceptRuntime({
   let started = false;
   let unsubscribeEvent;
   let unsubscribeStatus;
+  let drainingPromise = null;
   const stop = () => {
-    if (!started) return;
+    accepting = false;
     started = false;
     unsubscribeEvent?.();
     unsubscribeStatus?.();
     unsubscribeEvent = undefined;
     unsubscribeStatus = undefined;
+    if (drainingPromise) return drainingPromise;
+    drainingPromise = (async () => {
+      while (true) {
+        const observedWrite = writePromise;
+        const pending = [observedWrite, ...inFlight.values(), ...reconcilePromises.values()];
+        await Promise.allSettled(pending);
+        if (observedWrite === writePromise && inFlight.size === 0 && reconcilePromises.size === 0) return;
+      }
+    })().finally(() => { drainingPromise = null; });
+    return drainingPromise;
   };
   const start = () => {
     if (started) return stop;
+    if (drainingPromise) throw new Error('permission auto-accept is draining');
+    accepting = true;
     started = true;
     unsubscribeEvent = globalEventHub.subscribeEvent(processEvent);
     unsubscribeStatus = globalEventHub.subscribeStatus((status) => {
