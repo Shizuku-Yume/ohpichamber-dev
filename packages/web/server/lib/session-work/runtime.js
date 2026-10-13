@@ -145,8 +145,7 @@ export function createSessionWorkRuntime({
     if (session?.id === sessionId) lineage?.remember(sessionId, session.parentID ?? null);
     if (session?.id !== sessionId || session.parentID) return null;
     if (isChatDirectory(session.location?.directory ?? session.directory)) return null;
-    const metadata = await readMetadata(sessionId, session.location?.directory ?? session.directory);
-    if (reviewSessionSchema.safeParse(metadata).success) return null;
+    if (reviewSessionSchema.safeParse(session.metadata).success) return null;
     if (await isSessionArchived(sessionId)) return null;
     return session;
   };
