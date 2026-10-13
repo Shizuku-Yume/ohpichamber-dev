@@ -20,17 +20,15 @@ describe('session goal creation', () => {
     generateSmallModelTextMock.mockReset().mockResolvedValue({ text: '' });
   });
 
-  it('saves the goal in OpenChamber\'s own store, never through OpenCode', async () => {
+  it('saves the goal in OpenChamber\'s own store without an OpenCode request', async () => {
     const fetchMock = vi.fn();
     const persistSessionGoal = vi.fn(async () => undefined);
     const originalFetch = globalThis.fetch;
     globalThis.fetch = fetchMock;
     try {
       const goal = await createSessionGoal({
-        baseUrl: 'http://opencode.test',
-        authHeaders: { Authorization: 'Bearer test' },
+        scope: { workspaceId: 'ws_123', cwd: '/repo/app' },
         sessionID: 'ses_123',
-        directory: '/repo/app',
         objective: 'Finish and verify the migration',
         tokenBudget: 200_000,
         providerID: 'openai',
@@ -41,7 +39,6 @@ describe('session goal creation', () => {
       expect(writeObjectiveMock).toHaveBeenCalledWith('ses_123', 'Finish and verify the migration');
       expect(goal).toMatchObject({ objective: '', objectiveFile: true, status: 'active', tokenBudget: 200_000 });
       expect(persistSessionGoal).toHaveBeenCalledWith('ses_123', '/repo/app', goal);
-      // v2 has no session-metadata route; nothing may be sent to OpenCode.
       expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;
@@ -53,8 +50,8 @@ describe('session goal creation', () => {
     const persistSessionGoal = vi.fn(async () => undefined);
 
     await createSessionGoal({
+      scope: { workspaceId: 'ws_123', cwd: '/repo/app' },
       sessionID: 'ses_123',
-      directory: '/repo/app',
       objective: 'Finish the migration',
       onWarning: vi.fn(),
       persistSessionGoal,
@@ -64,12 +61,28 @@ describe('session goal creation', () => {
     expect(goal).toMatchObject({ objective: 'Finish the migration', objectiveFile: false });
   });
 
-  it('refuses to report a goal it has nowhere to save', async () => {
+  it('requires a Host scope before writing a goal', async () => {
     await expect(createSessionGoal({
       sessionID: 'ses_123',
-      directory: '/repo/app',
       objective: 'Finish the migration',
-    })).rejects.toThrow(/needs a session metadata store/);
+    })).rejects.toThrow(/Host session scope with cwd/);
+  });
+
+  it('passes workspace identity, never cwd, to canonical small-model distillation', async () => {
+    generateSmallModelTextMock.mockResolvedValueOnce({ text: 'distilled criteria' });
+    const persistSessionGoal = vi.fn(async () => undefined);
+
+    await createSessionGoal({
+      scope: { workspaceId: 'ws_123', cwd: '/repo/app' },
+      sessionID: 'ses_123',
+      objective: 'x'.repeat(5_001),
+      persistSessionGoal,
+    });
+
+    expect(generateSmallModelTextMock).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceId: 'ws_123', sessionID: 'ses_123',
+    }));
+    expect(generateSmallModelTextMock.mock.calls[0][0].directory).toBeUndefined();
   });
 
   it('builds the same goal intro with an optional budget', () => {

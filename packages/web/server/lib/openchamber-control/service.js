@@ -1,6 +1,4 @@
 import { asNonEmptyString } from '../shared/guards.js';
-import path from 'node:path';
-import { OpenCode } from '@opencode/client';
 import { OpenChamberControlError, asControlError } from './error.js';
 import { OPENCHAMBER_ALL_ACTIONS } from './actions.js';
 import { writeScreenshot } from './screenshots.js';
@@ -76,6 +74,25 @@ const parseModel = (value) => {
   }
   return { providerID: model.slice(0, slashIndex), modelID: model.slice(slashIndex + 1) };
 };
+const sessionOptions = (input) => {
+  const model = input.model === undefined ? null : parseModel(input.model);
+  return {
+    providerId: model?.providerID ?? null,
+    modelId: model?.modelID ?? null,
+    agentId: asNonEmptyString(input.agent) || null,
+    variant: asNonEmptyString(input.variant) || null,
+    reasoningEffort: null,
+  };
+};
+
+const sessionPromptRequest = (input) => ({
+  input: {
+    text: typeof input.prompt === 'string' ? input.prompt.trim() : '',
+    attachments: [],
+    context: [],
+  },
+  options: sessionOptions(input),
+});
 
 const parseWeekdays = (value) => {
   const raw = asNonEmptyString(value);
@@ -206,12 +223,12 @@ const patchScheduledTask = (existing, input) => {
 
 export const createOpenChamberControlService = (dependencies) => {
   const {
-    readSettingsFromDiskMigrated,
-    sanitizeProjects,
-    buildOpenCodeUrl,
-    getOpenCodeAuthHeaders,
-    waitForOpenCodeReady,
+    service,
     sessionService,
+    resolveSessionScope,
+    resolveWorkspaceScope,
+    listWorkspaceScopes,
+    listProjects,
     scheduledTaskService,
     browserControl = null,
     fileOpen = null,
@@ -221,13 +238,22 @@ export const createOpenChamberControlService = (dependencies) => {
     // Delivers a dispatched session's result back to the session that asked
     // (`returnResult`); absent means the server cannot offer it.
     dispatchResults = null,
-    // Archive lives in OpenChamber's own store now — v2 has no route that sets
-    // Session.time.archived — so an unwired store simply means nothing is archived.
+    // Archive lives in OpenChamber's own store now.
     archiveStore = null,
-    createClient = OpenCode.make,
     sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
     now = Date.now,
   } = dependencies;
+
+  if (!service || typeof service.request !== 'function') throw new Error('control service requires the Agent service');
+  if (!sessionService || typeof sessionService.open !== 'function' || typeof sessionService.history !== 'function') {
+    throw new Error('control service requires the canonical session service');
+  }
+  if (typeof resolveSessionScope !== 'function' || typeof resolveWorkspaceScope !== 'function') {
+    throw new Error('control service requires Host session and workspace scope resolvers');
+  }
+  if (typeof listWorkspaceScopes !== 'function' || typeof listProjects !== 'function') {
+    throw new Error('control service requires canonical workspace and project listings');
+  }
 
   const wait = (duration, signal) => {
     if (!signal) return sleep(duration);
@@ -248,151 +274,183 @@ export const createOpenChamberControlService = (dependencies) => {
     });
   };
 
-  // Every v2 route lives under /api and the client appends it, so it only
-  // wants the origin. Per-directory scoping is a request header.
-  const getClient = async (directory = '') => {
-    if (typeof waitForOpenCodeReady === 'function') await waitForOpenCodeReady(10_000, 250);
-    return createClient({
-      baseUrl: new URL(buildOpenCodeUrl('/api/info', '')).origin,
-      headers: {
-        ...getOpenCodeAuthHeaders(),
-        ...(directory ? { 'x-opencode-directory': encodeURIComponent(directory) } : {}),
-      },
-      fetch,
+  const agentRequest = async (pathname, init = {}) => {
+    const response = await service.request(pathname, {
+      ...init,
+      headers: { accept: 'application/json', ...(init.headers || {}) },
     });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new OpenChamberControlError(body?.detail || body?.error || 'Agent service request failed', response.status);
+    }
+    return body;
   };
 
-  // The store answers asynchronously; its archive timestamp, or null.
   const archivedAt = async (sessionID) => {
     if (!archiveStore) return null;
     return (await archiveStore.archivedAt(sessionID)) ?? null;
   };
 
   const projects = async () => {
-    const settings = await readSettingsFromDiskMigrated();
-    return sanitizeProjects(settings?.projects || []).map((project) => ({
-      id: project.id,
-      path: path.resolve(project.path),
-      label: asNonEmptyString(project.label) || path.basename(project.path) || project.path,
-    }));
-  };
-
-  // projectId and directory are two names for one scope. Accepting both let
-  // one silently win over the other, so every session action refuses the pair.
-  const assertSingleScope = (input) => {
-    if (asNonEmptyString(input.projectId) && asNonEmptyString(input.directory)) {
-      throw new OpenChamberControlError('Provide only one of projectId or directory', 400);
+    const result = await listProjects();
+    if (!result || !Array.isArray(result.items) || !result.errors || typeof result.errors !== 'object') {
+      throw new OpenChamberControlError('Invalid project listing', 500);
     }
+    return result;
   };
 
-  // An explicit projectId scopes a session read to that project's directory,
-  // resolved the same way create/send/fork resolve it. An unknown project is
-  // an error, never a silent read of the caller's directory or of every project.
-  const resolveReadDirectory = async (input, contextDirectory) => {
+  const workspaceScopes = async () => {
+    const result = await listWorkspaceScopes();
+    if (!result || !Array.isArray(result.items) || !result.errors || typeof result.errors !== 'object') {
+      throw new OpenChamberControlError('Invalid workspace scope listing', 500);
+    }
+    return result;
+  };
+
+  const resolveWorkspaceFor = async (input = {}, contextSessionId = '', contextDirectory = '') => {
     assertSingleScope(input);
-    const projectID = asNonEmptyString(input.projectId);
-    if (!projectID) return asNonEmptyString(input.directory) || asNonEmptyString(contextDirectory);
-    return sessionService.resolveDirectory({ projectId: projectID });
-  };
-
-  const models = async () => {
-    const settings = await readSettingsFromDiskMigrated();
-    return {
-      defaultModel: asNonEmptyString(settings?.defaultModel),
-      defaultVariant: asNonEmptyString(settings?.defaultVariant),
-      defaultAgent: asNonEmptyString(settings?.defaultAgent),
-      favoriteModels: Array.isArray(settings?.favoriteModels) ? settings.favoriteModels : [],
-      recentModels: Array.isArray(settings?.recentModels) ? settings.recentModels : [],
-    };
-  };
-
-  // /api/session/active is global in v2 and reports only `{ type: 'running' }`.
-  // The action contract stays busy/idle, so running is reported as busy.
-  const activeSessions = async (client) => {
-    const statuses = await client.session.active();
-    if (!statuses || typeof statuses !== 'object' || Array.isArray(statuses)) {
-      throw new OpenChamberControlError('Invalid session status response', 500);
+    const explicitWorkspaceId = asNonEmptyString(input.workspaceId);
+    if (explicitWorkspaceId) {
+      const scope = await resolveWorkspaceScope(explicitWorkspaceId);
+      if (!scope) throw new OpenChamberControlError('Workspace was not found', 404);
+      return scope;
     }
-    return statuses;
+    const sessionId = asNonEmptyString(contextSessionId);
+    const explicitProjectId = asNonEmptyString(input.projectId);
+    const explicitDirectory = asNonEmptyString(input.directory);
+    if (sessionId && !explicitProjectId && !explicitDirectory) {
+      const scope = await resolveSessionScope(sessionId);
+      if (!scope) throw new OpenChamberControlError('Session scope was not found', 404);
+      return scope;
+    }
+    const directory = explicitDirectory || asNonEmptyString(contextDirectory);
+    const listed = await workspaceScopes();
+    let workspaceIds = listed.items.map((item) => item.workspaceId).filter((id) => typeof id === 'string');
+    if (explicitProjectId) {
+      const projectListing = await projects();
+      const project = projectListing?.items?.find((item) => item?.projectId === explicitProjectId);
+      workspaceIds = Array.isArray(project?.workspaceIds) ? project.workspaceIds : [];
+    }
+    for (const workspaceId of workspaceIds) {
+      const scope = await resolveWorkspaceScope(workspaceId);
+      if (scope && (!explicitProjectId || scope.projectId === explicitProjectId) && (!directory || scope.cwd === directory)) return scope;
+    }
+    throw new OpenChamberControlError('Workspace scope was not found', 404);
   };
 
-  const asPublicStatus = (active) => (active ? { type: 'busy' } : { type: 'idle' });
-
-  const sessionStatus = async (client, sessionID) => {
-    const statuses = await activeSessions(client);
-    return asPublicStatus(statuses[sessionID]);
+  // Scope selectors are mutually exclusive so one cannot silently override another.
+  const assertSingleScope = (input) => {
+    const projectId = asNonEmptyString(input.projectId);
+    const directory = asNonEmptyString(input.directory);
+    const workspaceId = asNonEmptyString(input.workspaceId);
+    if ((projectId && directory) || (workspaceId && (projectId || directory))) {
+      throw new OpenChamberControlError('Provide only one workspaceId, projectId, or directory', 400);
+    }
   };
 
-  // The message list is cursor-paginated and `order: 'desc'` puts the newest
-  // messages in the page, so a single call returns only the recent tail.
-  // `all: true` walks `cursor.next` until the history is exhausted; a bounded
-  // `limit` stops once enough text messages are collected. Later pages carry
-  // the order inside the cursor, and OpenCode rejects a cursor combined with
-  // `order`, so only the first page sends it. An empty page or a repeated
-  // cursor ends the walk. `extractTextMessages` sorts the gathered records
-  // oldest-first for the caller.
+  const resolveReadScope = async (input, contextDirectory, contextSessionId, sessionID = '') => {
+    assertSingleScope(input);
+    const actual = sessionID ? await resolveSessionScope(sessionID) : null;
+    if (sessionID && !actual) throw new OpenChamberControlError('Session scope was not found', 404);
+    if (sessionID && !asNonEmptyString(input.projectId) && !asNonEmptyString(input.directory) && !asNonEmptyString(input.workspaceId)) return actual;
+    const requested = await resolveWorkspaceFor(input, contextSessionId, contextDirectory);
+    if (!sessionID) return requested;
+    if ((asNonEmptyString(input.projectId) && actual.projectId !== input.projectId)
+      || (asNonEmptyString(input.directory) && actual.cwd !== input.directory)
+      || (requested.workspaceId && actual.workspaceId !== requested.workspaceId)) {
+      throw new OpenChamberControlError('Session is outside the requested scope', 403);
+    }
+    return actual;
+  };
+
+  const models = async (input, contextSessionId, contextDirectory) => {
+    const scope = await resolveWorkspaceFor(input, contextSessionId, contextDirectory);
+    const workspaceId = asNonEmptyString(scope?.workspaceId);
+    if (!workspaceId) throw new OpenChamberControlError('Workspace scope is missing workspaceId', 500);
+    const [modelCatalog, providerCatalog] = await Promise.all([
+      agentRequest(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/models`),
+      agentRequest(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/providers`),
+    ]);
+    return { workspaceId, models: modelCatalog?.models ?? modelCatalog, providers: providerCatalog?.providers ?? providerCatalog };
+  };
+
+  const asPublicStatus = (runtimeStatus) => {
+    if (runtimeStatus === 'running' || runtimeStatus === 'awaiting_approval' || runtimeStatus === 'awaiting_input') return { type: 'busy' };
+    if (runtimeStatus === 'idle') return { type: 'idle' };
+    return { type: 'unknown' };
+  };
+
+  const sessionStatus = async (sessionID) => {
+    const snapshot = await sessionService.open(sessionID);
+    return asPublicStatus(snapshot?.session?.runtimeStatus);
+  };
+
+  const messageText = (message) => (Array.isArray(message?.parts) ? message.parts : [])
+    .filter((part) => part?.type === 'text' && typeof part.content === 'string')
+    .map((part) => part.content)
+    .join('')
+    .trim();
+
   const MESSAGE_PAGE_LIMIT = 200;
-  const sessionMessages = async (client, sessionID, role, limit) => {
-    const fetchLimit = limit === undefined ? undefined : Math.max(100, limit * 4);
+  const sessionMessages = async (sessionID, role, limit) => {
     const collected = [];
+    const turns = new Map();
     const seenCursors = new Set();
     let cursor;
-    for (;;) {
-      const response = await client.message.list({
-        sessionID,
-        limit: fetchLimit ?? MESSAGE_PAGE_LIMIT,
-        ...(cursor ? { cursor } : fetchLimit ? { order: 'desc' } : {}),
-      });
-      const raw = Array.isArray(response?.data) ? response.data : [];
-      collected.push(...raw);
-      const next = asNonEmptyString(response?.cursor?.next);
-      if (!next || raw.length === 0 || seenCursors.has(next)) break;
-      // A bounded read only needs enough pages to project `limit` text messages.
-      if (limit !== undefined && extractTextMessages(collected, role).length >= limit) break;
+    for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+      const query = new URLSearchParams({ limit: String(MESSAGE_PAGE_LIMIT), ...(cursor ? { cursor } : {}) });
+      const page = await sessionService.history(sessionID, query.toString());
+      for (const turn of Array.isArray(page?.turns) ? page.turns : []) turns.set(turn.turnId, turn);
+      const messages = Array.isArray(page?.messages) ? page.messages : [];
+      collected.push(...messages);
+      const next = asNonEmptyString(page?.nextCursor);
+      if (!next || messages.length === 0 || seenCursors.has(next)) break;
       seenCursors.add(next);
       cursor = next;
+      if (limit !== undefined && collected.filter((message) => role === 'all' || message.role === role).length >= limit) break;
     }
-    const messages = extractTextMessages(collected, role);
-    return limit === undefined ? messages : messages.slice(-limit);
+    const result = collected
+      .filter((message) => (message.role === 'user' || message.role === 'assistant') && (role === 'all' || message.role === role))
+      .map((message) => {
+        const turn = turns.get(message.turnId);
+        return {
+          id: asNonEmptyString(message.messageId) || '',
+          role: message.role,
+          createdAt: Number.isFinite(message.createdAt) ? message.createdAt : null,
+          completedAt: Number.isFinite(turn?.finishedAt) ? turn.finishedAt : null,
+          model: message.providerId && message.modelId ? `${message.providerId}/${message.modelId}` : null,
+          text: messageText(message),
+        };
+      })
+      .filter((message) => message.text)
+      .sort((left, right) => (left.createdAt || 0) - (right.createdAt || 0));
+    return limit === undefined ? result : result.slice(-limit);
   };
 
-  const waitForIdle = async ({ client, sessionID, directory, timeoutMs, requireActivity, baselineMessageID, startedAt, signal }) => {
+  const waitForIdle = async ({ sessionID, timeoutMs, requireActivity, baselineMessageID, startedAt, signal }) => {
     const deadline = now() + timeoutMs;
     let observedActivity = false;
     while (true) {
       if (signal?.aborted) throw new OpenChamberControlError('OpenChamber action was cancelled', 499);
-      const status = await sessionStatus(client, sessionID);
+      const status = await sessionStatus(sessionID);
       if (status.type === 'busy') {
         observedActivity = true;
-      } else if (!requireActivity || observedActivity) {
+      } else if (status.type === 'idle' && (!requireActivity || observedActivity)) {
         return status;
-      } else {
-        const messages = await sessionMessages(client, sessionID, 'assistant', 1);
-        const message = messages[0];
-        if (message?.completedAt && (baselineMessageID ? message.id !== baselineMessageID : message.completedAt >= startedAt)) {
-          return status;
-        }
+      } else if (status.type === 'idle') {
+        const message = (await sessionMessages(sessionID, 'assistant', 1))[0];
+        if (message?.completedAt && (baselineMessageID ? message.id !== baselineMessageID : message.completedAt >= startedAt)) return status;
       }
       const remaining = deadline - now();
-      if (remaining <= 0) {
-        throw new OpenChamberControlError(`Session did not become idle within ${Math.ceil(timeoutMs / 1000)} seconds`, 500);
-      }
+      if (remaining <= 0) throw new OpenChamberControlError(`Session did not become idle within ${Math.ceil(timeoutMs / 1000)} seconds`, 500);
       await wait(Math.min(WAIT_POLL_INTERVAL_MS, remaining), signal);
     }
   };
 
-  // session.send/fork default the directory to the caller's context directory,
-  // which is wrong for sessions living in other worktrees: the prompt then
-  // targets an instance that does not hold the session and the run dies with
-  // UnknownError. Resolve the target session's directory from the global
-  // session list when the caller did not scope explicitly.
   const resolveSessionDirectory = async (sessionID) => {
     try {
-      const client = await getClient();
-      const response = await client.session.list({});
-      const sessions = Array.isArray(response?.data) ? response.data : [];
-      const session = sessions.find((item) => item?.id === sessionID);
-      return asNonEmptyString(session?.location?.directory) || null;
+      const scope = await resolveSessionScope(sessionID);
+      return asNonEmptyString(scope?.cwd) || null;
     } catch {
       return null;
     }
@@ -447,7 +505,6 @@ export const createOpenChamberControlService = (dependencies) => {
     if (input.timeout !== undefined && input.wait !== true) throw new OpenChamberControlError('timeout requires wait', 400);
     if (input.lastAssistant === true && input.wait !== true) throw new OpenChamberControlError('lastAssistant requires wait', 400);
     assertSingleScope(input);
-    // Only a new session gets a worktree; elsewhere the number would be ignored.
     if (input.pullRequest !== undefined && action !== 'session.create') {
       throw new OpenChamberControlError('pullRequest applies only to session.create', 400);
     }
@@ -455,51 +512,54 @@ export const createOpenChamberControlService = (dependencies) => {
     const parentSessionID = asNonEmptyString(contextSessionId);
     const returnResult = input.returnResult === true;
     if (returnResult) assertReturnResult(action, input, parentSessionID);
-    let directory = asNonEmptyString(input.directory) || (!input.projectId ? asNonEmptyString(contextDirectory) : null);
-    if (sessionID && action !== 'session.create' && !asNonEmptyString(input.directory) && !input.projectId) {
-      const resolvedSessionDirectory = await resolveSessionDirectory(sessionID);
-      if (resolvedSessionDirectory) directory = resolvedSessionDirectory;
-    }
-    const payload = {
-      ...(directory ? { directory } : {}),
-      ...(asNonEmptyString(input.projectId) ? { projectId: input.projectId.trim() } : {}),
-      ...(asNonEmptyString(input.title) ? { title: input.title.trim() } : {}),
-      ...(asNonEmptyString(input.prompt) ? { prompt: input.prompt.trim() } : {}),
-      ...(asNonEmptyString(input.model) ? { model: input.model.trim() } : {}),
-      ...(asNonEmptyString(input.agent) ? { agent: input.agent.trim() } : {}),
-      ...(asNonEmptyString(input.variant) ? { variant: input.variant.trim() } : {}),
-      ...(input.goal === true ? { goal: true } : {}),
-      ...(input.goalTokenBudget !== undefined ? { goalTokenBudget: input.goalTokenBudget } : {}),
-      ...(asNonEmptyString(input.worktree) ? { worktree: {
-        name: input.worktree.trim(),
-        ...(asNonEmptyString(input.branch) ? { branchName: input.branch.trim() } : {}),
-        ...(asNonEmptyString(input.startRef) ? { startRef: input.startRef.trim() } : {}),
-      } } : {}),
-      ...(typeof input.setUpstream === 'boolean' ? { setUpstream: input.setUpstream } : {}),
-      ...(asNonEmptyString(input.messageId) ? { messageId: input.messageId.trim() } : {}),
-    };
-    // A pull request makes a worktree of its own, so its branch name (and a
-    // start ref the session service refuses) travel without a worktree name.
-    if (input.pullRequest !== undefined) {
-      payload.pullRequest = input.pullRequest;
-      if (!payload.worktree) {
-        payload.worktree = {};
-        if (asNonEmptyString(input.branch)) payload.worktree.branchName = input.branch.trim();
-        if (asNonEmptyString(input.startRef)) payload.worktree.startRef = input.startRef.trim();
-      }
-    }
     const startedAt = now();
     let result;
     if (action === 'session.create') {
-      result = await sessionService.create(payload);
+      const scope = await resolveWorkspaceFor(input, contextSessionId, contextDirectory);
+      if (input.worktree !== undefined || input.branch !== undefined || input.startRef !== undefined || input.setUpstream !== undefined || input.pullRequest !== undefined) {
+        throw new OpenChamberControlError('Worktree and pull-request session creation are not supported by the native session manager', 400);
+      }
+      const created = await sessionService.create({
+        projectId: scope.projectId,
+        workspaceId: scope.workspaceId,
+        options: sessionOptions(input),
+        ...(asNonEmptyString(input.title) ? { metadata: { title: input.title.trim() } } : {}),
+      });
+      const canonicalSessionID = asNonEmptyString(created?.sessionId)
+        || asNonEmptyString(created?.session?.sessionId)
+        || asNonEmptyString(created?.session?.id)
+        || asNonEmptyString(created?.id);
+      if (!canonicalSessionID) throw new OpenChamberControlError('Agent service returned no session id', 502);
+      result = { ...created, sessionId: canonicalSessionID, promptDispatched: false };
+      if (asNonEmptyString(input.prompt)) {
+        const sent = await sessionService.send(canonicalSessionID, sessionPromptRequest(input));
+        result = { ...result, ...sent, sessionId: canonicalSessionID, promptDispatched: true };
+      }
     } else {
       if (!sessionID) throw new OpenChamberControlError('sessionId is required', 400);
+      await resolveReadScope(input, contextDirectory, contextSessionId, sessionID);
       if (action === 'session.send') {
-        result = await sessionService.send(sessionID, payload);
+        result = await sessionService.send(sessionID, sessionPromptRequest(input));
       } else {
-        result = await sessionService.fork(sessionID, payload);
+        result = await sessionService.fork(sessionID, asNonEmptyString(input.messageId) ? { messageId: input.messageId.trim() } : {});
+        const childSessionID = asNonEmptyString(result?.sessionId)
+          || asNonEmptyString(result?.session?.sessionId)
+          || asNonEmptyString(result?.session?.id)
+          || asNonEmptyString(result?.id);
+        if (!childSessionID) throw new OpenChamberControlError('Agent service returned no forked session id', 502);
+        result = { ...result, sessionId: childSessionID, promptDispatched: false };
+        if (asNonEmptyString(input.prompt)) {
+          const sent = await sessionService.send(childSessionID, sessionPromptRequest(input));
+          result = { ...result, ...sent, sessionId: childSessionID, promptDispatched: true };
+        }
       }
     }
+    const canonicalSessionID = asNonEmptyString(result?.sessionId)
+      || asNonEmptyString(result?.run?.sessionId)
+      || asNonEmptyString(result?.session?.sessionId)
+      || asNonEmptyString(result?.session?.id);
+    if (!canonicalSessionID) throw new OpenChamberControlError('Agent service returned no session id', 502);
+    result = { ...result, sessionId: canonicalSessionID, promptDispatched: result.promptDispatched === true };
     if (returnResult) {
       const publicResult = { ...result, resultDelivery: await scheduleResultDelivery(result, parentSessionID, startedAt) };
       delete publicResult.baselineAssistantMessageId;
@@ -512,11 +572,8 @@ export const createOpenChamberControlService = (dependencies) => {
       delete publicResult.baselineIdleRecordId;
       return publicResult;
     }
-    const client = await getClient(result.directory);
     const status = await waitForIdle({
-      client,
-      sessionID: result.sessionId,
-      directory: result.directory,
+      sessionID: canonicalSessionID,
       timeoutMs: normalizeWaitTimeoutMs(input.timeout),
       requireActivity: result.promptDispatched === true,
       baselineMessageID: result.baselineAssistantMessageId,
@@ -527,7 +584,7 @@ export const createOpenChamberControlService = (dependencies) => {
     delete publicResult.baselineAssistantMessageId;
     delete publicResult.baselineIdleRecordId;
     if (input.lastAssistant === true) {
-      publicResult.lastAssistantMessage = (await sessionMessages(client, result.sessionId, 'assistant', 1))[0] || null;
+      publicResult.lastAssistantMessage = (await sessionMessages(canonicalSessionID, 'assistant', 1))[0] || null;
     }
     return publicResult;
   };
@@ -716,23 +773,19 @@ export const createOpenChamberControlService = (dependencies) => {
           sessionId: asNonEmptyString(options.contextSessionId),
         });
       }
-      if (action === 'projects.list') return { projects: await projects() };
-      if (action === 'models.list') return models();
+      if (action === 'projects.list') return projects();
+      if (action === 'models.list') return models(input, options.contextSessionId, contextDirectory);
       if (action === 'schedule.status') return scheduledTaskService.status();
       if (action.startsWith('schedule.')) {
         const taskID = asNonEmptyString(input.taskId);
         if (SCHEDULE_TASK_ID_ACTIONS.has(action) && !taskID) {
           throw new OpenChamberControlError('taskId is required', 400);
         }
-        const explicitProjectID = asNonEmptyString(input.projectId);
-        const explicitDirectory = asNonEmptyString(input.directory);
-        const contextDirectoryFallback = explicitProjectID
-          ? undefined
-          : asNonEmptyString(contextDirectory) || undefined;
-        const projectID = await scheduledTaskService.resolveProjectID({
-          projectId: explicitProjectID || undefined,
-          directory: explicitDirectory || contextDirectoryFallback,
-        });
+        assertSingleScope(input);
+        const scope = await resolveWorkspaceFor(input, options.contextSessionId, contextDirectory);
+        const hostProjectID = asNonEmptyString(scope.hostProjectId);
+        if (!hostProjectID) throw new OpenChamberControlError('Workspace scope is missing hostProjectId', 500);
+        const projectID = await scheduledTaskService.resolveProjectID({ projectId: hostProjectID });
         switch (action) {
           case 'schedule.list':
             return { scheduler: await scheduledTaskService.status(), tasks: await scheduledTaskService.list(projectID) };
@@ -781,32 +834,27 @@ export const createOpenChamberControlService = (dependencies) => {
       if (action.startsWith('session.')) {
         const sessionID = asNonEmptyString(input.sessionId);
         if (action !== 'session.list' && !sessionID) throw new OpenChamberControlError('sessionId is required', 400);
-        const directory = await resolveReadDirectory(input, contextDirectory);
-        const client = await getClient(directory);
         if (action === 'session.list') {
           const limit = positiveInteger(input.limit, 10, 'limit');
-          const response = await client.session.list(directory ? { directory } : {});
-          // Archive is OpenChamber state; overlay it so callers keep reading
-          // it off the session the way OpenCode used to report it.
-          let sessions = await Promise.all((Array.isArray(response?.data) ? response.data : []).map(async (session) => {
-            const archived = await archivedAt(session?.id);
-            return archived ? { ...session, time: { ...session.time, archived } } : session;
+          const scope = await resolveWorkspaceFor(input, options.contextSessionId, contextDirectory);
+          const listing = await sessionService.list(scope.workspaceId);
+          let sessions = Array.isArray(listing?.items) ? listing.items : [];
+          sessions = await Promise.all(sessions.map(async (session) => {
+            const archived = await archivedAt(session?.sessionId || session?.id);
+            return archived ? { ...session, archivedAt: archived } : session;
           }));
-          if (input.all !== true) sessions = sessions.filter((session) => !session?.time?.archived);
+          if (input.all !== true) sessions = sessions.filter((session) => !session?.archivedAt);
           sessions = sessions.slice(0, limit);
-          if (input.withStatus === true) {
-            // One global call now: v2 reports active sessions across directories.
-            const statuses = await activeSessions(client).catch(() => null);
-            sessions = sessions.map((session) => ({
-              ...session,
-              status: statuses ? asPublicStatus(statuses[session.id]) : { type: 'unknown' },
-            }));
-          }
-          return { sessions, limit, directory, archived: input.all === true ? 'included' : 'excluded' };
+          if (input.withStatus === true) sessions = sessions.map((session) => ({
+            ...session,
+            status: asPublicStatus(session.runtimeStatus),
+          }));
+          return { sessions, limit, archived: input.all === true ? 'included' : 'excluded' };
         }
-        if (!directory) throw new OpenChamberControlError('directory is required', 400);
+        const scope = await resolveReadScope(input, contextDirectory, options.contextSessionId, sessionID);
+        if (!scope?.cwd) throw new OpenChamberControlError('Session scope is missing cwd', 500);
         if (action === 'session.status') {
-          return { sessionId: sessionID, directory, sessionStatus: await sessionStatus(client, sessionID) };
+          return { sessionId: sessionID, sessionStatus: await sessionStatus(sessionID) };
         }
         if (action === 'session.messages') {
           if (input.timeout !== undefined && input.wait !== true) throw new OpenChamberControlError('timeout requires wait', 400);
@@ -816,10 +864,10 @@ export const createOpenChamberControlService = (dependencies) => {
           if (input.all === true && (last || input.limit !== undefined)) throw new OpenChamberControlError('all cannot be combined with last or limit', 400);
           if (last && input.limit !== undefined) throw new OpenChamberControlError('last cannot be combined with limit', 400);
           const currentStatus = input.wait === true
-            ? await waitForIdle({ client, sessionID, directory, timeoutMs: normalizeWaitTimeoutMs(input.timeout), requireActivity: false, startedAt: now(), signal: options.signal })
-            : await sessionStatus(client, sessionID);
+            ? await waitForIdle({ sessionID, timeoutMs: normalizeWaitTimeoutMs(input.timeout), requireActivity: false, startedAt: now(), signal: options.signal })
+            : await sessionStatus(sessionID);
           const limit = input.all === true ? undefined : (last ? 1 : positiveInteger(input.limit, 10, 'limit'));
-          return { sessionId: sessionID, directory, role, sessionStatus: currentStatus, messages: await sessionMessages(client, sessionID, role, limit) };
+          return { sessionId: sessionID, role, sessionStatus: currentStatus, messages: await sessionMessages(sessionID, role, limit) };
         }
       }
       throw new OpenChamberControlError(`Unsupported OpenChamber action: ${action || 'missing'}`, 400);
@@ -827,9 +875,39 @@ export const createOpenChamberControlService = (dependencies) => {
       throw asControlError(error, `Failed to execute ${action || 'OpenChamber action'}`);
     }
   };
+  const invokeHostAction = async (scope, request, signal) => {
+    const fail = (code, status) => ({ ok: false, code, status });
+    if (!scope || typeof scope !== 'object' || typeof scope.rootSessionId !== 'string' || !scope.rootSessionId
+      || typeof scope.projectId !== 'string' || !scope.projectId || typeof scope.workspaceId !== 'string' || !scope.workspaceId
+      || typeof scope.cwd !== 'string' || !scope.cwd || typeof scope.agentDirectory !== 'string' || !scope.agentDirectory
+      || (scope.agentDirectoryId !== undefined && (typeof scope.agentDirectoryId !== 'string' || !scope.agentDirectoryId))) {
+      return fail('INVALID_SCOPE', 400);
+    }
+    if (!request || typeof request !== 'object' || Array.isArray(request) || typeof request.toolName !== 'string' || !request.toolName
+      || typeof request.action !== 'string' || !request.action || request.sessionId !== scope.rootSessionId
+      || (request.input !== undefined && (typeof request.input !== 'object' || request.input === null || Array.isArray(request.input)))) {
+      return fail('INVALID_REQUEST', 400);
+    }
+    if (typeof resolveSessionScope !== 'function') return fail('INTERNAL_ERROR', 503);
+    try {
+      const resolved = await resolveSessionScope(request.sessionId);
+      if (!resolved || resolved.rootSessionId !== scope.rootSessionId || resolved.projectId !== scope.projectId
+        || resolved.workspaceId !== scope.workspaceId || resolved.cwd !== scope.cwd
+        || resolved.agentDirectory !== scope.agentDirectory
+        || (scope.agentDirectoryId !== undefined && resolved.agentDirectoryId !== scope.agentDirectoryId)) {
+        return fail('SCOPE_MISMATCH', 403);
+      }
+      const input = request.input ?? {};
+      const value = await execute(request.action, input, scope.cwd, { signal, contextSessionId: request.sessionId });
+      return { ok: true, value: value === undefined ? null : value };
+    } catch (error) {
+      const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+      const code = typeof error?.code === 'string' && error.code
+        ? error.code
+        : (status === 400 ? 'INVALID_REQUEST' : status === 404 ? 'NOT_FOUND' : status === 499 ? 'CANCELLED' : status === 503 ? 'UNAVAILABLE' : 'INTERNAL_ERROR');
+      return fail(code, status);
+    }
+  };
 
-  // The managed agent-tool plugin can no longer report the session's directory
-  // (v2 dropped `context.directory` from a tool call), so it sends the session
-  // id and the directory is resolved here, where it is authoritative.
-  return { execute, resolveSessionDirectory };
+  return { execute, invokeHostAction, resolveSessionDirectory };
 };

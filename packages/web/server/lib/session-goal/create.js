@@ -14,7 +14,7 @@ export const buildGoalIntroText = (tokenBudget) => {
     + '\n</system-reminder>';
 };
 
-const fitObjective = async ({ objective, directory, sessionID, providerID, modelID, warn }) => {
+const fitObjective = async ({ objective, workspaceId, sessionID, providerID, modelID, warn }) => {
   if (objective.length <= GOAL_OBJECTIVE_CHAR_LIMIT) return objective;
 
   let distilled = null;
@@ -30,7 +30,7 @@ const fitObjective = async ({ objective, directory, sessionID, providerID, model
         'Stay under 4000 characters.',
         'Write in the same language as the task text.',
       ].join('\n'),
-      directory,
+      workspaceId,
       sessionID,
       preferredProviderID: providerID,
       preferredModelID: modelID,
@@ -46,10 +46,9 @@ const fitObjective = async ({ objective, directory, sessionID, providerID, model
 };
 
 export const createSessionGoal = async ({
-  baseUrl,
-  authHeaders,
+  scope,
+  workspaceId,
   sessionID,
-  directory,
   objective,
   tokenBudget = null,
   providerID,
@@ -57,6 +56,10 @@ export const createSessionGoal = async ({
   onWarning,
   persistSessionGoal,
 }) => {
+  const trustedScope = scope && typeof scope === 'object' ? scope : null;
+  const resolvedWorkspaceId = typeof trustedScope?.workspaceId === 'string' ? trustedScope.workspaceId : workspaceId;
+  const resolvedDirectory = typeof trustedScope?.cwd === 'string' ? trustedScope.cwd : null;
+  if (!resolvedDirectory) throw new Error('goal mode needs a Host session scope with cwd');
   const warn = (message, error) => {
     if (typeof onWarning === 'function') {
       onWarning(message, error);
@@ -66,7 +69,7 @@ export const createSessionGoal = async ({
   };
   const objectiveText = await fitObjective({
     objective: String(objective ?? '').trim(),
-    directory,
+    workspaceId: resolvedWorkspaceId,
     sessionID,
     providerID,
     modelID,
@@ -98,13 +101,9 @@ export const createSessionGoal = async ({
     createdAt: now,
     updatedAt: now,
   };
-  // OpenCode 2.x accepts session metadata only at create time, so the goal
-  // record lives in OpenChamber's own store next to the objective text.
-  void baseUrl;
-  void authHeaders;
   if (typeof persistSessionGoal !== 'function') {
     throw new Error('goal mode needs a session metadata store to save the goal in');
   }
-  await persistSessionGoal(sessionID, directory, goal);
+  await persistSessionGoal(sessionID, resolvedDirectory, goal);
   return goal;
 };
