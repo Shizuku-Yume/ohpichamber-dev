@@ -1,6 +1,5 @@
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { editInspect, type EditFileOpIntent, type EditInspection } from '@oh-my-pi/pi-natives';
 import { CounterSchema, DisplayPathSchema, EntityIdSchema, MCPServerConfigSchema } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema, WorkerPolicyRequestSchema, WorkerPolicyResultSchema } from '../protocol.ts';
 
