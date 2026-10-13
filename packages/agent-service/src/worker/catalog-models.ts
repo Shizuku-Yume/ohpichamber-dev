@@ -162,7 +162,7 @@ export class NativeModels {
     const file = ModelsConfigFile.relocate(this.context.modelsPath);
     file.invalidate();
     const loaded = file.tryLoad();
-    if (loaded.status === 'error') throw new ProjectionError(503, 'CATALOG_READ_FAILED', 'Native model configuration could not be read');
+    if (loaded.status === 'error') throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native model configuration could not be read');
     let content: string | null = null;
     let metadata: CatalogMetadata = { providers: {}, models: {} };
     if (loaded.status === 'ok') {
@@ -170,7 +170,7 @@ export class NativeModels {
         content = await readFile(file.path(), 'utf8');
         metadata = FileMetadataSchema.parse(file.path().endsWith('.json') || file.path().endsWith('.jsonc') ? JSONC.parse(content) : YAML.parse(content)).openchamber;
       } catch {
-        throw new ProjectionError(503, 'CATALOG_READ_FAILED', 'Native catalog metadata could not be read');
+        throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native catalog metadata could not be read');
       }
     }
     this.metadata = metadata;
@@ -255,10 +255,10 @@ export class NativeModels {
 
   private validate(config: ModelsConfig): ModelsConfig {
     const parsed = ModelsConfigSchema(config);
-    if (parsed instanceof Error) throw new ProjectionError(422, 'CATALOG_CONFIG_INVALID', 'Native model configuration is invalid');
+    if (parsed instanceof Error) throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model configuration is invalid');
     for (const [providerId, provider] of Object.entries(parsed.providers ?? {})) {
       try { validateProviderConfiguration(providerId, { ...provider, models: provider.models ?? [] }, 'models-config'); }
-      catch { throw new ProjectionError(422, 'CATALOG_CONFIG_INVALID', 'Native provider configuration is invalid'); }
+      catch { throw new ProjectionError(422, 'INVALID_REQUEST', 'Native provider configuration is invalid'); }
     }
     return parsed;
   }
@@ -299,11 +299,11 @@ export class NativeModels {
           await this.context.modelRegistry.refresh('offline');
           this.metadata = oldMetadata;
         } catch {
-          throw new ProjectionError(503, 'CATALOG_ROLLBACK_FAILED', 'Native catalog mutation failed and previous configuration could not be restored');
+          throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native catalog mutation failed and previous configuration could not be restored');
         }
       }
       if (error instanceof ProjectionError) throw error;
-      throw new ProjectionError(503, 'CATALOG_WRITE_FAILED', 'Native catalog configuration could not be committed');
+      throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native catalog configuration could not be committed');
     }
   }
 
@@ -352,10 +352,10 @@ export class NativeModels {
     if (!api || !baseUrl) throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Configure the native provider before configuring this model');
     if (model.modalities.some(modality => modality === 'audio' && existing?.kind !== 'tts' && existing?.kind !== 'stt'
       || modality === 'embedding' && existing?.kind !== 'embedding')) {
-      throw new ProjectionError(422, 'CATALOG_CONFIG_INVALID', 'Requested modalities do not match the native provider runner');
+      throw new ProjectionError(422, 'INVALID_REQUEST', 'Requested modalities do not match the native provider runner');
     }
     const nativeInput = model.modalities.filter((modality): modality is 'text' | 'image' => modality === 'text' || modality === 'image');
-    if (nativeInput.length === 0) throw new ProjectionError(422, 'CATALOG_CONFIG_INVALID', 'Native model requires a supported input modality');
+    if (nativeInput.length === 0) throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model requires a supported input modality');
     const reasoning = model.reasoningOptions.length > 0 ? { mode: existing?.thinking?.mode ?? 'effort', efforts: model.reasoningOptions.map(option => option.reasoningEffort) } : undefined;
     const cost = model.pricing === null ? existing?.cost : {
       input: model.pricing.inputPerMillionTokens, output: model.pricing.outputPerMillionTokens,

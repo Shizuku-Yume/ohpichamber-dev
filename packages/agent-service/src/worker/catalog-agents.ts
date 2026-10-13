@@ -52,7 +52,7 @@ export class NativeAgents {
     try { files = await readdir(directory, { withFileTypes: true }); }
     catch (error) {
       if (error instanceof Error && missing(error)) return [];
-      throw new ProjectionError(503, 'CATALOG_READ_FAILED', 'Native agent definitions could not be read');
+      throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native agent definitions could not be read');
     }
     const definitions: AgentDefinition[] = [];
     for (const file of files.sort((a, b) => a.name.localeCompare(b.name))) {
@@ -61,7 +61,7 @@ export class NativeAgents {
         const definition = parseAgent(join(directory, file.name), await readFile(join(directory, file.name), 'utf8'), source, 'fatal');
         if (ignoreModel) definition.model = undefined;
         definitions.push(definition);
-      } catch { throw new ProjectionError(503, 'CATALOG_READ_FAILED', 'A native agent definition could not be parsed'); }
+      } catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'A native agent definition could not be parsed'); }
     }
     return definitions;
   }
@@ -105,7 +105,7 @@ export class NativeAgents {
         const content = await readFile(definition.filePath, 'utf8');
         const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
         if (match) metadata = ProfileMetadataSchema.parse(YAML.parse(match[1]));
-      } catch { throw new ProjectionError(503, 'CATALOG_READ_FAILED', 'Agent profile metadata could not be read'); }
+      } catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Agent profile metadata could not be read'); }
     }
     const selector = definition.model?.[0];
     const resolved = selector ? resolveCliModel({ cliModel: selector, modelRegistry: this.context.modelRegistry, settings: this.context.settings }).model : undefined;
@@ -131,7 +131,7 @@ export class NativeAgents {
 
   async definition(agentId: string): Promise<AgentDefinition> {
     const definition = (await this.discover()).find(agent => agent.name === agentId);
-    if (!definition) throw new ProjectionError(404, 'AGENT_NOT_FOUND', 'Agent profile is unavailable');
+    if (!definition) throw new ProjectionError(404, 'INVALID_REQUEST', 'Agent profile is unavailable');
     const publicAgent = await this.project(definition);
     if (publicAgent.permissionPresetId) await this.context.permissionPreset(publicAgent.permissionPresetId);
     return { ...definition, ...(publicAgent.systemPromptOverride === undefined ? {} : { systemPrompt: publicAgent.systemPromptOverride }) };
@@ -154,7 +154,7 @@ export class NativeAgents {
     const request = AgentUpdateRequestSchema.parse(input);
     PositiveCounterSchema.parse(revision);
     const existing = (await this.discover(true)).find(agent => agent.name === request.agent.agentId);
-    if (!existing) throw new ProjectionError(404, 'AGENT_NOT_FOUND', 'Agent profile is unavailable');
+    if (!existing) throw new ProjectionError(404, 'INVALID_REQUEST', 'Agent profile is unavailable');
     return this.write(request.agent, revision, existing);
   }
 
@@ -164,12 +164,12 @@ export class NativeAgents {
     while (true) {
       try {
         const escape = relative(root, await realpath(ancestor));
-        if (escape.startsWith('..') || isAbsolute(escape)) throw new ProjectionError(403, 'FORBIDDEN', 'Agent definition leaves the authorized workspace');
+        if (escape.startsWith('..') || isAbsolute(escape)) throw new ProjectionError(403, 'UNAUTHORIZED', 'Agent definition leaves the authorized workspace');
         return;
       } catch (error) {
         if (!(error instanceof Error) || !missing(error)) throw error;
         const parent = dirname(ancestor);
-        if (parent === ancestor) throw new ProjectionError(403, 'FORBIDDEN', 'Agent definition has no authorized workspace parent');
+        if (parent === ancestor) throw new ProjectionError(403, 'UNAUTHORIZED', 'Agent definition has no authorized workspace parent');
         ancestor = parent;
       }
     }
@@ -188,16 +188,16 @@ export class NativeAgents {
     const path = existing?.source === 'project' && existing.filePath && resolve(dirname(existing.filePath)) === resolve(this.context.cwd, '.omp', 'agents')
       ? existing.filePath : profilePath(this.context.cwd, agent.agentId);
     try { parseAgent(path, content, 'project', 'fatal'); }
-    catch { throw new ProjectionError(422, 'CATALOG_CONFIG_INVALID', 'Agent profile is not a valid native definition'); }
+    catch { throw new ProjectionError(422, 'INVALID_REQUEST', 'Agent profile is not a valid native definition'); }
     const directory = dirname(path);
     await this.assertWorkspacePath(path);
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const escape = relative(await realpath(this.context.cwd), await realpath(directory));
-    if (escape.startsWith('..') || isAbsolute(escape)) throw new ProjectionError(403, 'FORBIDDEN', 'Agent definition directory leaves the authorized workspace');
+    if (escape.startsWith('..') || isAbsolute(escape)) throw new ProjectionError(403, 'UNAUTHORIZED', 'Agent definition directory leaves the authorized workspace');
     let previousContent: string | null = null;
     try {
       const fileEscape = relative(await realpath(this.context.cwd), await realpath(path));
-      if (fileEscape.startsWith('..') || isAbsolute(fileEscape)) throw new ProjectionError(403, 'FORBIDDEN', 'Agent definition leaves the authorized workspace');
+      if (fileEscape.startsWith('..') || isAbsolute(fileEscape)) throw new ProjectionError(403, 'UNAUTHORIZED', 'Agent definition leaves the authorized workspace');
       previousContent = await readFile(path, 'utf8');
     } catch (error) { if (!(error instanceof Error) || !missing(error)) throw error; }
     const previousDisabled = [...cfgTaskDisabledAgents.get(this.context.settings)];
@@ -219,9 +219,9 @@ export class NativeAgents {
           cfgTaskDisabledAgents.set(this.context.settings, previousDisabled);
           cfgTaskAgentModelOverrides.set(this.context.settings, previousOverrides);
           await this.context.settings.flush();
-        } catch { throw new ProjectionError(503, 'CATALOG_ROLLBACK_FAILED', 'Previous agent profile could not be restored'); }
+        } catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Previous agent profile could not be restored'); }
       }
-      throw new ProjectionError(503, 'CATALOG_WRITE_FAILED', 'Agent profile could not be committed');
+      throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Agent profile could not be committed');
     }
     return result;
   }
@@ -239,7 +239,7 @@ export class NativeAgents {
     const request = AgentDeleteRequestSchema.parse(input);
     PositiveCounterSchema.parse(revision);
     const existing = (await this.discover()).find(agent => agent.name === request.agentId);
-    if (!existing) throw new ProjectionError(404, 'AGENT_NOT_FOUND', 'Agent profile is unavailable');
+    if (!existing) throw new ProjectionError(404, 'INVALID_REQUEST', 'Agent profile is unavailable');
     const previous = [...cfgTaskDisabledAgents.get(this.context.settings)];
     const definitionPath = existing.source === 'project' && existing.filePath && resolve(dirname(existing.filePath)) === resolve(this.context.cwd, '.omp', 'agents')
       ? existing.filePath : profilePath(this.context.cwd, request.agentId);
@@ -256,8 +256,8 @@ export class NativeAgents {
     } catch {
       cfgTaskDisabledAgents.set(this.context.settings, previous);
       try { await this.context.settings.flush(); }
-      catch { throw new ProjectionError(503, 'CATALOG_ROLLBACK_FAILED', 'Previous agent visibility could not be restored'); }
-      throw new ProjectionError(503, 'CATALOG_WRITE_FAILED', 'Agent profile could not be deleted');
+      catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Previous agent visibility could not be restored'); }
+      throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Agent profile could not be deleted');
     }
     return result;
   }

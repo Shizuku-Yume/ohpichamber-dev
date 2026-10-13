@@ -50,7 +50,7 @@ function publicScope(skill: Skill): 'workspace' | 'agent' {
   switch (skill._source?.level) {
     case 'project': return 'workspace';
     case 'user': case 'native': return 'agent';
-    default: throw new ProjectionError(503, 'SKILLS_LOAD_FAILED', 'Native skill source scope is unavailable');
+    default: throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill source scope is unavailable');
   }
 }
 
@@ -83,7 +83,7 @@ export class WorkerSkills {
     try { await readFile(path, 'utf8'); }
     catch (error) {
       if (error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return;
-      throw new ProjectionError(503, 'SKILLS_LOAD_FAILED', 'A native skill file could not be read');
+      throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'A native skill file could not be read');
     }
   }
 
@@ -92,7 +92,7 @@ export class WorkerSkills {
     try { entries = await readdir(directory, { withFileTypes: true }); }
     catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return;
-      throw new ProjectionError(503, 'SKILLS_LOAD_FAILED', 'A native skill directory could not be read');
+      throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'A native skill directory could not be read');
     }
     // Native scanSkillsFromDir examines the root and direct child SKILL.md files, not asset trees.
     await this.checkSkillFile(join(directory, 'SKILL.md'));
@@ -107,7 +107,7 @@ export class WorkerSkills {
     try { return JsonObjectSchema.parse(JSON.parse(await readFile(path, 'utf8'))); }
     catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
-      throw new ProjectionError(503, 'SKILLS_LOAD_FAILED', 'A native plugin skill manifest could not be read');
+      throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'A native plugin skill manifest could not be read');
     }
   }
 
@@ -129,7 +129,7 @@ export class WorkerSkills {
         if (typeof path !== 'string' || !path.trim()) continue;
         const target = resolve(root.path, path.trim());
         const escape = relative(root.path, target);
-        if (escape.startsWith('..') || isAbsolute(escape)) throw new ProjectionError(503, 'SKILLS_LOAD_FAILED', 'A native plugin skill directory leaves its package');
+        if (escape.startsWith('..') || isAbsolute(escape)) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'A native plugin skill directory leaves its package');
         configured.push(target);
       }
     }
@@ -141,9 +141,9 @@ export class WorkerSkills {
     const lock = await readSkillsLock(path);
     for (const [id, entry] of Object.entries(lock.skills)) {
       const parsed = parseSkillId(id);
-      if (!parsed) throw new ProjectionError(503, 'SKILLS_LOAD_FAILED', 'A native locked skill identity is invalid');
+      if (!parsed) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'A native locked skill identity is invalid');
       const directory = getSkillStorePath(parsed.scope, parsed.name, entry.version);
-      if (await readStoredIntegrity(directory) !== entry.integrity) throw new ProjectionError(503, 'SKILLS_LOAD_FAILED', 'A native locked skill package is unavailable');
+      if (await readStoredIntegrity(directory) !== entry.integrity) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'A native locked skill package is unavailable');
       await readFile(join(directory, 'SKILL.md'), 'utf8');
     }
   }
@@ -154,7 +154,7 @@ export class WorkerSkills {
     const ctx = { cwd: this.context.cwd, home: homedir(), repoRoot: await findRepoRoot(this.context.cwd) };
     const selectedNativeRoot = join(this.context.agentDirectory, 'skills');
     if (resolve(resolveUserPath(ctx, 'native', 'skills')!) !== resolve(selectedNativeRoot)) {
-      throw new ProjectionError(503, 'SKILLS_LOAD_FAILED', 'Native skill discovery is not scoped to this worker agent directory');
+      throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill discovery is not scoped to this worker agent directory');
     }
     const roots = new Set<string>();
     if (isProviderEnabled('native')) {
@@ -189,7 +189,7 @@ export class WorkerSkills {
     }
     if (isProviderEnabled('claude-plugins') || isProviderEnabled('agent-plugins')) {
       const plugins = await listClaudePluginRoots(ctx.home, ctx.cwd);
-      if (plugins.warnings.length > 0) throw new ProjectionError(503, 'SKILLS_LOAD_FAILED', 'Native skill plugin roots could not be loaded');
+      if (plugins.warnings.length > 0) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill plugin roots could not be loaded');
       for (const root of plugins.roots) {
         if (root.scope !== 'project' && root.origin === 'claude' && !options.enableClaudeUser && !isUserSourceEnabled('claude') && !isUserSourceEnabled('claude-plugins')) continue;
         if (isProviderEnabled('claude-plugins') && await legacyProviderAllowed(root.path, 'skills')) {
@@ -220,7 +220,7 @@ export class WorkerSkills {
       await this.preflight();
       const result = await loadSkills({ ...this.context.options, cwd: this.context.cwd });
       if (result.warnings.some(warning => !warning.message.startsWith('name collision:'))) {
-        throw new ProjectionError(503, 'SKILLS_LOAD_FAILED', 'A native skill provider could not be loaded');
+        throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'A native skill provider could not be loaded');
       }
       SkillsCatalogStateSchema.parse({ worker: this.context.worker, agentDirectoryId: this.context.agentDirectoryId,
         runtimeStatus: 'ready', persistedSources: parsedSources, appliedSources: parsedSources, catalogRevision,
@@ -255,9 +255,9 @@ export class WorkerSkills {
     if (parsedRequest.workerGeneration !== this.context.worker.workerGeneration || parsedRequest.catalogRevision !== this.catalogRevision || !this.appliedSources) {
       throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Skill expansion refers to an obsolete worker catalog');
     }
-    if (this.runtimeStatus !== 'ready') throw new ProjectionError(503, 'SKILLS_UNAVAILABLE', 'Native skill runtime is unavailable until successful reapplication');
+    if (this.runtimeStatus !== 'ready') throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill runtime is unavailable until successful reapplication');
     const skill = this.skills.find(candidate => candidate.name === parsedRequest.skillId);
-    if (!skill) throw new ProjectionError(404, 'SKILL_NOT_FOUND', 'Skill is not in the published catalog');
+    if (!skill) throw new ProjectionError(404, 'INVALID_REQUEST', 'Skill is not in the published catalog');
     const built = await buildSkillPromptMessage({ ...skill, baseDir: `skill://${skill.name}` }, { args: parsedRequest.arguments }, 'user');
     let message = built.message;
     const roots = [skill.filePath, skill.baseDir, skill.containRoot, this.context.cwd, this.context.agentDirectory]
@@ -267,9 +267,9 @@ export class WorkerSkills {
   }
 
   nativeSkill(skillId: string): Skill {
-    if (this.runtimeStatus !== 'ready') throw new ProjectionError(503, 'SKILLS_UNAVAILABLE', 'Native skill runtime is unavailable until successful reapplication');
+    if (this.runtimeStatus !== 'ready') throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill runtime is unavailable until successful reapplication');
     const skill = this.skills.find(candidate => candidate.name === skillId);
-    if (!skill) throw new ProjectionError(404, 'SKILL_NOT_FOUND', 'Skill is not in the published catalog');
+    if (!skill) throw new ProjectionError(404, 'INVALID_REQUEST', 'Skill is not in the published catalog');
     return skill;
   }
 }
