@@ -1,8 +1,6 @@
 import { z } from 'zod';
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -38,17 +36,11 @@ const NANO_GPT_DAILY_WINDOW_SECONDS = 86400;
 
 export const providerId = 'nano-gpt';
 export const providerName = 'NanoGPT';
-const aliases = ['nano-gpt', 'nanogpt', 'nano_gpt'];
 
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
+export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
-  const auth = await readAuth();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
+export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
+  const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {
     return buildResult({
@@ -144,7 +136,7 @@ export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
+      error: 'Request failed'
     });
   }
 };

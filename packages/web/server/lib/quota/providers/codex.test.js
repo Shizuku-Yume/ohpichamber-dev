@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../opencode/auth.js', () => ({
-  readOpenCodeCredentials: async () => ({ openai: { access: 'test-token' } }),
-}));
+const credential = { type: 'oauth', access: 'test-token', refresh: 'test-refresh', expires: Date.now() + 3600000 };
 
 import { fetchQuota } from './codex.js';
 
@@ -31,7 +29,7 @@ describe('Codex quota windows', () => {
   ])('displays credit balance $balance with unlimited=$unlimited as $expected', async ({ balance, unlimited, expected }) => {
     vi.stubGlobal('fetch', async () => Response.json({ credits: { balance, unlimited } }));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.credits_balance.valueLabel).toBe(expected);
@@ -41,7 +39,7 @@ describe('Codex quota windows', () => {
   it('omits the balance window when credits are absent', async () => {
     mockUsage(null);
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.credits_balance).toBeUndefined();
@@ -57,7 +55,7 @@ describe('Codex quota windows', () => {
       secondary_window: null,
     });
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.usage.windows.weekly.usedPercent).toBe(3);
     expect(result.usage.windows['5h']).toBeUndefined();
@@ -69,7 +67,7 @@ describe('Codex quota windows', () => {
       secondary_window: { used_percent: 20, limit_window_seconds: 604800 },
     });
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.usage.windows['5h'].usedPercent).toBe(10);
     expect(result.usage.windows.weekly.usedPercent).toBe(20);
@@ -95,7 +93,7 @@ describe('Codex quota windows', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.credits.usedPercent).toBe(36);

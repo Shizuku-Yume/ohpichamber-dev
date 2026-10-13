@@ -1,7 +1,5 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -10,18 +8,13 @@ import {
 
 export const providerId = 'deepinfra';
 export const providerName = 'DeepInfra';
-const aliases = ['deepinfra', 'deep-infra', 'deep_infra'];
+
 const DEEPINFRA_ME_URL = 'https://api.deepinfra.com/v1/me?checklist=true';
 
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
+export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async ({ readCredentials = readOpenCodeCredentials } = {}) => {
-  const auth = await readCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
+export const fetchQuota = async ({ credential } = {}) => {
+  const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {
     return buildResult({
@@ -109,7 +102,7 @@ export const fetchQuota = async ({ readCredentials = readOpenCodeCredentials } =
         ? 'Request timed out'
         : isParseError
           ? 'Invalid response from provider'
-          : (error instanceof Error ? error.message : 'Request failed')
+          : ('Request failed')
     });
   }
 };

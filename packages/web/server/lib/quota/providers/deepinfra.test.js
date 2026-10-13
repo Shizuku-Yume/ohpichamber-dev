@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchQuota as fetchDeepinfraQuota } from './deepinfra.js';
 
-const readCredentials = async () => ({ deepinfra: { type: 'api', key: 'test-token' } });
-const fetchQuota = () => fetchDeepinfraQuota({ readCredentials });
+const fetchQuota = () => fetchDeepinfraQuota({ credential: { type: 'api_key', key: 'test-token' } });
 
 afterEach(() => {
   vi.unstubAllGlobals();

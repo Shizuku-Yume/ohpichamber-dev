@@ -1,55 +1,25 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import { readConfig } from '../../opencode/shared.js';
-import {
-  getAuthEntry,
-  normalizeAuthEntry,
-  buildResult,
-  toUsageWindow,
-  toNumber,
-  formatMoney,
-  asObject,
-  asNonEmptyString
-} from '../utils/index.js';
+import { credentialAccessToken } from './selected-credential.js';
+import { buildResult, toUsageWindow, toNumber, formatMoney, asNonEmptyString } from '../utils/index.js';
 
 export const providerId = 'kilo';
 export const providerName = 'Kilo Code';
-const aliases = ['kilo', 'kilocode', 'kilo-code'];
+
 const KILO_BALANCE_URL = 'https://api.kilo.ai/api/profile/balance';
 
-const getAuthEntryForKilo = (auth) => normalizeAuthEntry(getAuthEntry(auth, aliases));
+const getApiKey = (credential) => credentialAccessToken(credential);
 
-const getApiKey = (auth) => {
-  const entry = getAuthEntryForKilo(auth);
-  return asNonEmptyString(entry?.key)
-    ?? asNonEmptyString(entry?.token)
-    ?? asNonEmptyString(entry?.access);
-};
 
-const organizationIdFromEntry = (entry) => asNonEmptyString(entry?.kilocodeOrganizationId)
-  ?? asNonEmptyString(entry?.organizationId)
-  ?? asNonEmptyString(entry?.accountId);
 
-const organizationIdFromConfig = (config) => {
-  const provider = asObject(asObject(config)?.provider);
-  const kilo = asObject(provider?.kilo) ?? asObject(provider?.kilocode);
-  const options = asObject(kilo?.options);
-  return asNonEmptyString(options?.kilocodeOrganizationId)
-    ?? asNonEmptyString(options?.organizationId);
-};
+
 
 const parseBalance = (value) => toNumber(asNonEmptyString(value)
   ?? (Number.isFinite(value) ? value : null));
 
 export const isConfigured = (auth) => Boolean(getApiKey(auth));
 
-export const fetchQuota = async ({
-  readAuth = readOpenCodeCredentials,
-  readOpencodeConfig = readConfig,
-  fetchImpl = fetch
-} = {}) => {
-  const auth = await readAuth();
-  const entry = getAuthEntryForKilo(auth);
-  const apiKey = getApiKey(auth);
+export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
+  
+  const apiKey = getApiKey(credential);
 
   if (!apiKey) {
     return buildResult({
@@ -61,14 +31,7 @@ export const fetchQuota = async ({
     });
   }
 
-  let organizationId = organizationIdFromEntry(entry);
-  if (!organizationId) {
-    try {
-      organizationId = organizationIdFromConfig(readOpencodeConfig());
-    } catch {
-      organizationId = null;
-    }
-  }
+  
 
   const timeoutSignal = AbortSignal.timeout(15_000);
 
@@ -78,9 +41,7 @@ export const fetchQuota = async ({
       'Content-Type': 'application/json',
       'Accept-Encoding': 'identity'
     };
-    if (organizationId) {
-      headers['x-kilocode-organizationid'] = organizationId;
-    }
+    
 
     const response = await fetchImpl(KILO_BALANCE_URL, {
       method: 'GET',
@@ -143,7 +104,7 @@ export const fetchQuota = async ({
         ? 'Request timed out'
         : isParseError
           ? 'Invalid response from provider'
-          : (error instanceof Error ? error.message : 'Request failed')
+          : ('Request failed')
     });
   }
 };

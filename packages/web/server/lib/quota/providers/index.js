@@ -195,35 +195,24 @@ const pendingFetches = new Map();
  * This registry never enumerates or reads a credential store itself.
  */
 export const listConfiguredQuotaProviders = async ({ selections = [] } = {}) => selections
-  .filter((selection) => registry[selection?.providerId])
-  .map((selection) => selection.providerId);
+  .filter((selection) => registry[selection?.quotaProviderId ?? selection?.providerId])
+  .map((selection) => selection.quotaProviderId ?? selection.providerId);
 
 const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
   const provider = registry[providerId];
-
-  if (!provider) {
-    return buildResult({ providerId, providerName: providerId, ok: false, configured: false, error: 'Unsupported provider' });
-  }
-
+  if (!provider) return buildResult({ providerId, providerName: providerId, ok: false, configured: false, error: 'Unsupported provider' });
   try {
-    const credential = await requireSelectedCredential({ ...options, providerId, purpose: 'quota' });
+    const credential = await requireSelectedCredential({ ...options, purpose: 'quota' });
     return await provider.fetchQuota({ ...options, credential });
   } catch (error) {
-    return buildResult({
-      providerId: provider.providerId,
-      providerName: provider.providerName,
-      ok: false,
-      configured: false,
-      error: error instanceof Error ? error.message : 'Request failed'
-    });
+    return buildResult({ providerId: provider.providerId, providerName: provider.providerName, ok: false, configured: false, error: 'Request failed' });
   }
 };
 
 export const fetchQuotaForProvider = (providerId, options = {}) => {
-  const requestKey = `${providerId}:${options.workspaceId}:${options.agentDirectoryId}:${options.credentialRef}`;
+  const requestKey = JSON.stringify([providerId, options.providerId, options.workspaceId, options.agentDirectoryId, options.credentialRef]);
   const existing = pendingFetches.get(requestKey);
   if (existing) return existing;
-
   const pending = fetchQuotaForProviderUncoalesced(providerId, options).finally(() => {
     if (pendingFetches.get(requestKey) === pending) pendingFetches.delete(requestKey);
   });
@@ -244,7 +233,6 @@ export const fetchCopilotAddonQuota = copilot.fetchQuotaAddon;
 export const fetchKimiQuota = kimi.fetchQuota;
 export const fetchOpenRouterQuota = openrouter.fetchQuota;
 export const fetchZaiQuota = zai.fetchQuota;
-const fetchZhipuaiCodingPlanQuota = zhipuaiCodingPlan.fetchQuota;
 export const fetchNanoGptQuota = nanogpt.fetchQuota;
 export const fetchMinimaxCodingPlanQuota = minimaxCodingPlan.fetchQuota;
 export const fetchMinimaxCnCodingPlanQuota = minimaxCnCodingPlan.fetchQuota;

@@ -1,7 +1,5 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -12,21 +10,15 @@ import {
 
 export const providerId = 'wafer';
 export const providerName = 'Wafer.ai';
-const aliases = ['wafer', 'wafer-ai', 'wafer_ai', 'wafer.ai'];
+
 
 const WAFER_QUOTA_URL = 'https://pass.wafer.ai/v1/inference/quota';
 const WAFER_WINDOW_SECONDS = 5 * 3600;
 
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
+export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
-
+export const fetchQuota = async ({ credential } = {}) => {
+  const apiKey = credentialAccessToken(credential);
   if (!apiKey) {
     return buildResult({
       providerId,
@@ -124,7 +116,7 @@ export const fetchQuota = async () => {
         ? 'Request timed out'
         : isParseError
           ? 'Invalid response from provider'
-          : (error instanceof Error ? error.message : 'Request failed')
+          : ('Request failed')
     });
   }
 };

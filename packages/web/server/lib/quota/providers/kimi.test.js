@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { fetchQuota, isConfigured } from './kimi.js';
 
-const readAuth = () => ({ 'kimi-for-coding': { key: 'test-token' } });
+const credential = { type: 'api_key', key: 'test-token' };
 
 const mockResponse = (body, init = {}) => ({
   ok: true,
@@ -27,7 +27,7 @@ describe('Kimi for Coding quota provider', () => {
       })
     );
 
-    const result = await fetchQuota({ readAuth, fetchImpl });
+    const result = await fetchQuota({ credential, fetchImpl });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.weekly.usedPercent).toBe(100);
@@ -42,7 +42,7 @@ describe('Kimi for Coding quota provider', () => {
       })
     );
 
-    const result = await fetchQuota({ readAuth, fetchImpl });
+    const result = await fetchQuota({ credential, fetchImpl });
 
     expect(result.usage.windows.weekly.usedPercent).toBe(75);
   });
@@ -55,7 +55,7 @@ describe('Kimi for Coding quota provider', () => {
       })
     );
 
-    const result = await fetchQuota({ readAuth, fetchImpl });
+    const result = await fetchQuota({ credential, fetchImpl });
 
     expect(result.usage.windows.weekly.usedPercent).toBe(30);
   });
@@ -68,28 +68,28 @@ describe('Kimi for Coding quota provider', () => {
       })
     );
 
-    const result = await fetchQuota({ readAuth, fetchImpl });
+    const result = await fetchQuota({ credential, fetchImpl });
 
     expect(result.usage.windows.weekly.usedPercent).toBeNull();
   });
 
   it('reports not configured when no credentials are stored', async () => {
-    const result = await fetchQuota({ readAuth: () => ({}), fetchImpl: async () => { throw new Error('Unexpected fetch'); } });
+    const result = await fetchQuota({ credential: ({}), fetchImpl: async () => { throw new Error('Unexpected fetch'); } });
 
     expect(result.ok).toBe(false);
     expect(result.configured).toBe(false);
     expect(result.error).toBe('Not configured');
   });
 
-  it('skips a blank key and uses the token next to it', async () => {
-    const auth = { 'kimi-code-plan-cn': { key: '  ', token: 'cn-token' } };
+  it('uses the exact selected native OAuth access token', async () => {
+    const auth = { type: 'oauth', access: 'cn-token', refresh: 'refresh', expires: Date.now() + 3600000 };
     let authorization;
     const fetchImpl = async (_url, init) => {
       authorization = init.headers.Authorization;
       return mockResponse({ usage: null, limits: [] });
     };
 
-    await fetchQuota({ readAuth: () => auth, fetchImpl });
+    await fetchQuota({ credential: auth, fetchImpl });
 
     expect(isConfigured(auth)).toBe(true);
     expect(authorization).toBe('Bearer cn-token');
@@ -98,7 +98,7 @@ describe('Kimi for Coding quota provider', () => {
   it('surfaces API errors with status', async () => {
     const fetchImpl = async () => ({ ok: false, status: 401, json: async () => ({}) });
 
-    const result = await fetchQuota({ readAuth, fetchImpl });
+    const result = await fetchQuota({ credential, fetchImpl });
 
     expect(result.ok).toBe(false);
     expect(result.configured).toBe(true);
@@ -114,7 +114,7 @@ describe('Kimi for Coding quota provider', () => {
         : new Response('{}', { status: 401 });
     };
 
-    const result = await fetchQuota({ readAuth, fetchImpl });
+    const result = await fetchQuota({ credential, fetchImpl });
 
     expect(urls.map((call) => call.url)).toEqual([
       'https://api.kimi.com/coding/v1/usages',
@@ -134,7 +134,7 @@ describe('Kimi for Coding quota provider', () => {
       return new Response('{}', { status: 401 });
     };
 
-    const result = await fetchQuota({ readAuth, fetchImpl });
+    const result = await fetchQuota({ credential, fetchImpl });
 
     expect(urls).toEqual(['https://api.kimi.com/coding/v1/usages', 'https://api.moonshot.ai/v1/users/me/balance']);
     expect(result.ok).toBe(false);
@@ -148,7 +148,7 @@ describe('Kimi for Coding quota provider', () => {
         : new Response('{}', { status: 403 })
     );
 
-    const result = await fetchQuota({ readAuth, fetchImpl });
+    const result = await fetchQuota({ credential, fetchImpl });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.credits_balance.valueLabel).toBe('$5.00');
@@ -161,7 +161,7 @@ describe('Kimi for Coding quota provider', () => {
       return new Response('{}', { status: 500 });
     };
 
-    const result = await fetchQuota({ readAuth, fetchImpl });
+    const result = await fetchQuota({ credential, fetchImpl });
 
     expect(urls).toEqual(['https://api.kimi.com/coding/v1/usages']);
     expect(result.error).toBe('API error: 500');
@@ -185,7 +185,7 @@ describe('Kimi for Coding quota provider', () => {
       },
     };
 
-    const run = (body) => fetchQuota({ readAuth, fetchImpl: async () => mockResponse(body) });
+    const run = (body) => fetchQuota({ credential, fetchImpl: async () => mockResponse(body) });
 
     it('reads the 5h and monthly ratios and ignores the duplicate limits[] entry', async () => {
       const result = await run(migratedPlan);
@@ -228,49 +228,14 @@ describe('Kimi for Coding quota provider', () => {
     });
   });
 
-  describe('credential lookup', () => {
-    const sentKey = async (auth) => {
-      let authorization;
-      const fetchImpl = async (_url, init) => {
-        authorization = init.headers.Authorization;
-        return mockResponse({ usage: null, limits: [] });
-      };
-      const result = await fetchQuota({ readAuth: () => auth, fetchImpl });
-      return { result, authorization };
-    };
-
-    it('finds a China plan credential stored under kimi-code-plan-cn', async () => {
-      const auth = { 'kimi-code-plan-cn': { type: 'api', key: 'cn-key' } };
-
-      const { result, authorization } = await sentKey(auth);
-
-      expect(isConfigured(auth)).toBe(true);
-      expect(result.ok).toBe(true);
-      expect(authorization).toBe('Bearer cn-key');
-    });
-
-    it('prefers the China plan credential over a leftover pre-split kimi-for-coding key', async () => {
-      const { authorization } = await sentKey({
-        'kimi-for-coding': { type: 'api', key: 'stale-key' },
-        kimi: { type: 'api', key: 'older-key' },
-        'kimi-code-plan-cn': { type: 'api', key: 'cn-key' },
-      });
-
-      expect(authorization).toBe('Bearer cn-key');
-    });
-
-    it('still reads the global plan and the pre-split ids when they are the only credential', async () => {
-      expect((await sentKey({ 'kimi-code-plan-global': { key: 'global-key' } })).authorization).toBe('Bearer global-key');
-      expect((await sentKey({ 'kimi-for-coding': { key: 'legacy-key' } })).authorization).toBe('Bearer legacy-key');
-    });
-
-    it('keeps a pre-split key ahead of the global plan, as before', async () => {
-      const { authorization } = await sentKey({
-        'kimi-code-plan-global': { key: 'global-key' },
-        'kimi-for-coding': { key: 'legacy-key' },
-      });
-
-      expect(authorization).toBe('Bearer legacy-key');
+  describe('selected credential lookup', () => {
+    it('does not search China, global, or legacy aliases', async () => {
+      const auth = { 'kimi-code-plan-cn': { key: 'cn-key' }, 'kimi-for-coding': { key: 'stale-key' } };
+      let requested = false;
+      const result = await fetchQuota({ credential: auth, fetchImpl: async () => { requested = true; } });
+      expect(isConfigured(auth)).toBe(false);
+      expect(result.configured).toBe(false);
+      expect(requested).toBe(false);
     });
   });
 });

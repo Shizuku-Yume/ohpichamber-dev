@@ -1,4 +1,4 @@
-import { readManagedCredential } from '../credentials/providers.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
   buildResult,
   toUsageWindow,
@@ -10,23 +10,18 @@ import {
 
 export const providerId = 'zenmux';
 export const providerName = 'ZenMux';
-const aliases = ['zenmux'];
+
 const ZENMUX_BALANCE_URL = 'https://zenmux.ai/api/v1/management/payg/balance';
 
-const readStoredCredential = () => readManagedCredential(providerId);
-
-const getPlatformApiKey = (credential) => asNonEmptyString(credential?.platformApiKey);
+const getPlatformApiKey = (credential) => credentialAccessToken(credential);
 
 const parseCredits = (value) => toNumber(asNonEmptyString(value)
   ?? (Number.isFinite(value) ? value : null));
 
-export const isConfigured = (readCredential = readStoredCredential) => Boolean(getPlatformApiKey(readCredential()));
+export const isConfigured = (credential) => Boolean(getPlatformApiKey(credential));
 
-export const fetchQuota = async ({
-  readCredential = readStoredCredential,
-  fetchImpl = fetch
-} = {}) => {
-  const apiKey = getPlatformApiKey(readCredential());
+export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
+  const apiKey = getPlatformApiKey(credential);
 
   if (!apiKey) {
     return buildResult({
@@ -106,7 +101,7 @@ export const fetchQuota = async ({
         ? 'Request timed out'
         : isParseError
           ? 'Invalid response from provider'
-          : (error instanceof Error ? error.message : 'Request failed')
+          : ('Request failed')
     });
   }
 };

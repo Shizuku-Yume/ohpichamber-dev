@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../opencode/auth.js', () => ({
-  readOpenCodeCredentials: async () => ({ 'zhipuai-coding-plan': { key: 'test-token' } }),
-}));
+const credential = { type: 'api_key', key: 'test-token' };
 
 import { fetchQuota } from './zhipuai-coding-plan.js';
 
@@ -32,7 +30,7 @@ describe('Zhipu AI Coding Plan quota provider', () => {
       },
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const windows = result.usage.windows;
 
     expect(result.ok).toBe(true);
@@ -67,7 +65,7 @@ describe('Zhipu AI Coding Plan quota provider', () => {
       },
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows['5h']).toMatchObject({
@@ -88,7 +86,7 @@ describe('Zhipu AI Coding Plan quota provider', () => {
       },
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows['5h'].usedPercent).toBe(45);
@@ -102,11 +100,11 @@ describe('Zhipu AI Coding Plan quota provider', () => {
       success: false,
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(false);
     expect(result.configured).toBe(true);
-    expect(result.error).toBe('令牌已过期或验证不正确');
+    expect(result.error).toBe('API error: 401');
     expect(result.usage).toBeNull();
   });
 
@@ -116,7 +114,7 @@ describe('Zhipu AI Coding Plan quota provider', () => {
       success: false,
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('API error: 1001');

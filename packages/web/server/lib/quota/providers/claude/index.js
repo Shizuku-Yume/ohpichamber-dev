@@ -11,12 +11,11 @@
 import { createHash } from 'crypto';
 
 import { buildResult } from '../../utils/index.js';
-import { findClaudeCredential, loadClaudeCredential } from './auth.js';
+import { credentialAccessToken, credentialRefreshToken } from '../selected-credential.js';
 import { toClaudeUsage } from './transforms.js';
 
 export const providerId = 'claude';
 export const providerName = 'Claude';
-const aliases = ['anthropic', 'claude'];
 
 const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
@@ -32,7 +31,7 @@ const MAX_COOLDOWN_MS = 60 * 60 * 1000;
  */
 let cachedUsage = null;
 let cooldownUntil = 0;
-let pendingFetch = null;
+const pendingFetches = new Map();
 
 const fingerprintOf = (credential) =>
   createHash('sha256').update(`${credential.accessToken}\0${credential.refreshToken ?? ''}`).digest('hex');
@@ -65,13 +64,15 @@ const cachedResultFor = (fingerprint, planLabel) => {
 const failure = (error, { configured = true } = {}) =>
   buildResult({ providerId, providerName, ok: false, configured, error });
 
-export const isConfigured = (auth) => Boolean(findClaudeCredential(auth));
+export const isConfigured = (credential) => credential?.type === 'oauth' && Boolean(credentialAccessToken(credential));
 
-const fetchQuotaUncoalesced = async () => {
-  const credential = await loadClaudeCredential();
+const fetchQuotaUncoalesced = async ({ credential: selectedCredential } = {}) => {
+  const accessToken = isConfigured(selectedCredential) ? credentialAccessToken(selectedCredential) : null;
+  const credential = accessToken ? { accessToken, refreshToken: credentialRefreshToken(selectedCredential) } : null;
   if (!credential) {
     return failure('Not configured', { configured: false });
   }
+  if (Number.isFinite(selectedCredential.expires) && selectedCredential.expires <= Date.now()) return failure('Selected Claude OAuth credential requires re-authentication');
 
   const fingerprint = fingerprintOf(credential);
   if (cachedUsage && cachedUsage.fingerprint !== fingerprint) {
@@ -94,7 +95,7 @@ const fetchQuotaUncoalesced = async () => {
       }
     });
   } catch (error) {
-    return failure(error instanceof Error ? error.message : 'Request failed');
+    return failure('Request failed');
   }
 
   if (response.status === 429) {
@@ -132,20 +133,19 @@ const fetchQuotaUncoalesced = async () => {
   });
 };
 
-export const fetchQuota = () => {
-  if (pendingFetch) return pendingFetch;
-
-  const request = fetchQuotaUncoalesced();
-  const pending = request.finally(() => {
-    if (pendingFetch === pending) pendingFetch = null;
+export const fetchQuota = (options = {}) => {
+  const key = credentialAccessToken(options.credential);
+  if (pendingFetches.has(key)) return pendingFetches.get(key);
+  const pending = fetchQuotaUncoalesced(options).finally(() => {
+    if (pendingFetches.get(key) === pending) pendingFetches.delete(key);
   });
-  pendingFetch = pending;
-  return pendingFetch;
+  pendingFetches.set(key, pending);
+  return pending;
 };
 
 /** Test seam: clears the rate-limit cache between cases. */
 export const resetClaudeQuotaCache = () => {
   cachedUsage = null;
   cooldownUntil = 0;
-  pendingFetch = null;
+  pendingFetches.clear();
 };

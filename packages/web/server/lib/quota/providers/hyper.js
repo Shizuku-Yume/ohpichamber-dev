@@ -1,7 +1,5 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -12,19 +10,16 @@ import {
 
 export const providerId = 'hyper';
 export const providerName = 'Charm Hyper';
-const aliases = ['hyper'];
+
 const HYPER_QUOTA_URL = 'https://hyper.charm.land/v1/credits';
 const CREDIT_TO_USD = 0.05;
 
-const getApiKey = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return asNonEmptyString(entry?.key) ?? asNonEmptyString(entry?.token);
-};
+const getApiKey = (credential) => credentialAccessToken(credential);
 
-export const isConfigured = (auth) => Boolean(getApiKey(auth));
+export const isConfigured = (credential) => Boolean(getApiKey(credential));
 
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
-  const apiKey = getApiKey(await readAuth());
+export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
+  const apiKey = getApiKey(credential);
 
   if (!apiKey) {
     return buildResult({
@@ -112,7 +107,7 @@ export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl
         ? 'Request timed out'
         : isParseError
           ? 'Invalid response from provider'
-          : (error instanceof Error ? error.message : 'Request failed')
+          : ('Request failed')
     });
   }
 };

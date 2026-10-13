@@ -6,8 +6,8 @@
 
 /** @public */
 export {
-  ttsService,
   TTSService,
+  createTTSService,
   TTS_VOICES,
 } from './service.js';
 

@@ -1,9 +1,5 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import { readConfigLayers } from '../../opencode/shared.js';
-import { isRecord, toProviderEntity } from '../../opencode/config-v2.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -14,31 +10,10 @@ import {
 
 export const providerId = 'openrouter';
 export const providerName = 'OpenRouter';
-const aliases = ['openrouter'];
+
 const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1';
 const PERIOD_SECONDS = { daily: 86400, weekly: 604800, monthly: 30 * 86400 };
 
-// The stored key is valid for whichever gateway the configured baseURL points
-// at, so the usage lookup must ride the same base as chat. The endpoint shape
-// stays `<base>/key`; with nothing configured the base is OpenRouter itself.
-// OpenCode takes the address from `settings.baseURL`, legacy `options.baseURL`
-// or legacy `api`, and toProviderEntity folds all three. Each section is read
-// on its own so a v2 entry without an address cannot hide a v1 address that
-// another config file sets.
-const resolveQuotaBase = () => {
-  try {
-    const { mergedConfig } = readConfigLayers();
-    const readBaseURL = (sectionKey) => {
-      const section = mergedConfig?.[sectionKey];
-      return isRecord(section) ? asNonEmptyString(toProviderEntity(section.openrouter).settings?.baseURL) : null;
-    };
-    const base = readBaseURL('providers') ?? readBaseURL('provider');
-    return base?.replace(/\/+$/, '') || null;
-  } catch {
-    // A config read failure must not take the default-endpoint lookup down.
-    return null;
-  }
-};
 
 export const resolveResetAt = (limitReset, nowMs) => {
   const now = new Date(nowMs);
@@ -55,15 +30,10 @@ export const resolveResetAt = (limitReset, nowMs) => {
   return null;
 };
 
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
+export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
+export const fetchQuota = async ({ credential } = {}) => {
+  const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {
     return buildResult({
@@ -78,7 +48,7 @@ export const fetchQuota = async () => {
   const timeoutSignal = AbortSignal.timeout(15_000);
 
   try {
-    const response = await fetch(`${resolveQuotaBase() ?? OPENROUTER_API_BASE}/key`, {
+    const response = await fetch(`${OPENROUTER_API_BASE}/key`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -205,7 +175,7 @@ export const fetchQuota = async () => {
         ? 'Request timed out'
         : isParseError
           ? 'Invalid response from provider'
-          : (error instanceof Error ? error.message : 'Request failed')
+          : ('Request failed')
     });
   }
 };

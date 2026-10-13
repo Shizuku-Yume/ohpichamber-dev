@@ -1,7 +1,5 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -11,18 +9,13 @@ import {
 
 export const providerId = 'codex';
 export const providerName = 'Codex';
-const aliases = ['openai', 'codex', 'chatgpt'];
 
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.access || entry?.token);
-};
 
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const accessToken = entry?.access ?? entry?.token;
-  const accountId = entry?.accountId;
+export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+
+export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
+  const accessToken = credentialAccessToken(credential);
+  const accountId = credential?.accountId;
 
   if (!accessToken) {
     return buildResult({
@@ -40,7 +33,7 @@ export const fetchQuota = async () => {
       'Content-Type': 'application/json',
       ...(accountId ? { 'ChatGPT-Account-Id': accountId } : {})
     };
-    const response = await fetch('https://chatgpt.com/backend-api/wham/usage', {
+    const response = await fetchImpl('https://chatgpt.com/backend-api/wham/usage', {
       method: 'GET',
       headers
     });
@@ -126,7 +119,7 @@ export const fetchQuota = async () => {
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
+      error: 'Request failed'
     });
   }
 };

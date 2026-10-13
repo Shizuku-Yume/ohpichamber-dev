@@ -1,4 +1,4 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
+import { credentialAccessToken, credentialRefreshToken } from './selected-credential.js';
 import { buildResult, toUsageWindow } from '../utils/index.js';
 
 export const providerId = 'xai';
@@ -15,20 +15,6 @@ const nonEmptyString = (value) => {
   return trimmed ? trimmed : null;
 };
 
-const xaiEntryOf = (auth) => {
-  const entry = auth?.xai;
-  if (entry?.type !== 'oauth') return null;
-  if (!nonEmptyString(entry.access) && !nonEmptyString(entry.refresh)) return null;
-  return entry;
-};
-
-const readXaiAuth = async (readAuth) => {
-  try {
-    return { entry: xaiEntryOf(await readAuth()), error: null };
-  } catch {
-    return { entry: null, error: 'Failed to read xAI OAuth credentials' };
-  }
-};
 
 const decodeJwtClaims = (token) => {
   try {
@@ -52,11 +38,8 @@ const accessTokenExpired = (entry) => {
   return Number.isFinite(jwtExpiry) && jwtExpiry <= expiryDeadline;
 };
 
-// xAI rotates (and rejects the previous) refresh token on every exchange, and
-// OpenCode 2.x owns the credential store without exposing a refresh route. A
-// quota read that refreshed here would burn the token OpenCode still holds and
-// sign the user out. Claude's provider makes the same call; wait for OpenCode
-// to refresh and surface the stale state instead.
+// Native AuthStorage owns OAuth refresh and refresh-token rotation. Quota reads
+// consume its exact selected access token without mutating the native credential.
 const requireFreshAccess = (entry) => {
   const access = nonEmptyString(entry.access);
   if (!access || accessTokenExpired(entry)) {
@@ -281,19 +264,10 @@ const fetchUsage = async (accessToken, fetchImpl) => {
   return parseUsage(new Uint8Array(await response.arrayBuffer()));
 };
 
-export const isConfigured = (auth) => Boolean(xaiEntryOf(auth));
+export const isConfigured = (credential) => credential?.type === 'oauth' && Boolean(credentialAccessToken(credential) || credentialRefreshToken(credential));
 
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
-  const { entry, error: authError } = await readXaiAuth(readAuth);
-  if (authError) {
-    return buildResult({
-      providerId,
-      providerName,
-      ok: false,
-      configured: true,
-      error: authError
-    });
-  }
+export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
+  const entry = isConfigured(credential) ? credential : null;
   if (!entry) {
     return buildResult({
       providerId,
@@ -303,6 +277,7 @@ export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl
       error: 'Not configured'
     });
   }
+  if (accessTokenExpired(entry)) return buildResult({ providerId, providerName, ok: false, configured: true, error: 'Selected xAI OAuth credential expired; re-authentication required' });
 
   try {
     const accessToken = requireFreshAccess(entry);
@@ -329,7 +304,7 @@ export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
+      error: 'Request failed'
     });
   }
 };

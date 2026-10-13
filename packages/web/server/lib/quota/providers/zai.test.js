@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../opencode/auth.js', () => ({
-  readOpenCodeCredentials: async () => ({ 'zai-coding-plan': { key: 'test-token' } }),
-}));
+const credential = { type: 'api_key', key: 'test-token' };
 
 import { fetchQuota, useZaiGiftReset } from './zai.js';
 
@@ -20,11 +18,11 @@ describe('Z.ai quota provider', () => {
   it('reports a business failure sent inside an HTTP 200 body instead of an empty card', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse({ code: 1001, msg: 'Token expired', success: false })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
 
     expect(result.ok).toBe(false);
     expect(result.configured).toBe(true);
-    expect(result.error).toBe('Token expired');
+    expect(result.error).toBe('API error: 1001');
   });
 
   it('surfaces 5-hour, weekly, and MCP quota windows', async () => {
@@ -38,7 +36,7 @@ describe('Z.ai quota provider', () => {
       },
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const windows = result.usage.windows;
 
     expect(result.ok).toBe(true);
@@ -74,7 +72,7 @@ describe('Z.ai quota provider', () => {
       },
     })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const windows = result.usage.windows;
 
     expect(result.ok).toBe(true);
@@ -125,7 +123,7 @@ describe('Z.ai quota provider', () => {
       }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const windows = result.usage.windows;
 
     expect(result.ok).toBe(true);
@@ -156,7 +154,7 @@ describe('Z.ai quota provider', () => {
         json: async () => ({}),
       }));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const windows = result.usage.windows;
 
     expect(result.ok).toBe(true);
@@ -187,7 +185,7 @@ describe('Z.ai quota provider', () => {
         },
       })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const windows = result.usage.windows;
 
     expect(result.ok).toBe(true);
@@ -217,7 +215,7 @@ describe('Z.ai quota provider', () => {
         },
       })));
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential });
     const windows = result.usage.windows;
 
     expect(result.ok).toBe(true);
@@ -235,7 +233,7 @@ describe('Z.ai gift reset activation', () => {
     }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(useZaiGiftReset({ recordId: 462029, resetType: 'FIVE_HOUR' })).resolves.toBe(true);
+    await expect(useZaiGiftReset({ recordId: 462029, resetType: 'FIVE_HOUR', credential })).resolves.toBe(true);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
@@ -251,21 +249,21 @@ describe('Z.ai gift reset activation', () => {
     expect(body.requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   });
 
-  it('throws the API message when activation is rejected', async () => {
+  it('projects only the safe business code when activation is rejected', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({ code: 400, msg: 'reset already used', success: false }),
     }));
 
-    await expect(useZaiGiftReset({ recordId: 1, resetType: 'WEEK' })).rejects.toThrow('reset already used');
+    await expect(useZaiGiftReset({ recordId: 1, resetType: 'WEEK', credential })).rejects.toThrow('API error: 400');
   });
 
   it('rejects an invalid reset type before any request', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(useZaiGiftReset({ recordId: 1, resetType: 'FOREVER' })).rejects.toThrow('Invalid gift reset request');
+    await expect(useZaiGiftReset({ recordId: 1, resetType: 'FOREVER', credential })).rejects.toThrow('Invalid gift reset request');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -5,8 +5,9 @@ import { TTSService } from './service.js';
 import { transcribeAudio } from './stt.js';
 
 describe('OpenAI audio SDK compatibility', () => {
+  const selection = { workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', providerId: 'openai', credentialRef: 'credential_1' };
+  const createService = () => new TTSService({ resolveCredential: async () => ({ type: 'api_key', key: 'test-key' }) });
   let server;
-
   afterEach(async () => {
     if (server) {
       await new Promise((resolve, reject) => {
@@ -35,7 +36,7 @@ describe('OpenAI audio SDK compatibility', () => {
       response.end(audio);
     });
 
-    const result = await new TTSService().generateSpeechStream({
+    const result = await createService().generateSpeechStream({ ...selection,
       text: 'Hello', model: 'custom-tts', voice: 'coral', speed: 1.2, baseURL,
     });
 
@@ -55,7 +56,7 @@ describe('OpenAI audio SDK compatibility', () => {
       response.end(audio);
     });
 
-    const result = await new TTSService().generateSpeechStream({
+    const result = await createService().generateSpeechStream({ ...selection,
       text: 'Hello', model: 'custom-tts', voice: 'coral', speed: 1, baseURL,
     });
 
@@ -68,7 +69,7 @@ describe('OpenAI audio SDK compatibility', () => {
       response.end(audio);
     });
 
-    const result = await new TTSService().generateSpeechStream({
+    const result = await createService().generateSpeechStream({ ...selection,
       text: 'Hello', model: 'custom-tts', voice: 'coral', speed: 1, baseURL,
     });
 
@@ -103,5 +104,19 @@ describe('OpenAI audio SDK compatibility', () => {
       format: 'json', filename: 'audio.webm', audio,
     });
     expect(result).toBe('Hello from transcription');
+  });
+  it('never exposes upstream errors containing the selected credential', async () => {
+    const baseURL = await listen(async (_request, response) => {
+      response.writeHead(401, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ error: { message: 'test-key', type: 'authentication_error' } }));
+    });
+    await expect(createService().generateSpeechStream({ ...selection, text: 'Hello', baseURL })).rejects.toThrow('Failed to generate speech');
+  });
+
+  it('requires all exact selected ownership fields before resolving', async () => {
+    let called = false;
+    const service = new TTSService({ resolveCredential: async () => { called = true; } });
+    await expect(service.generateSpeechStream({ ...selection, providerId: undefined, text: 'Hello' })).rejects.toThrow('Selected credential context is required');
+    expect(called).toBe(false);
   });
 });

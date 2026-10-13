@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchQuota } from './cursor.js';
 
@@ -32,13 +32,10 @@ const enterpriseRoutes = {
   GetMe: ok({ userId: 424242, email: 'me@example.com', teamId: 424242, isEnterpriseUser: true })
 };
 
-beforeEach(() => {
-  process.env.CURSOR_TOKEN = futureToken();
-});
+const selectedCredential = () => ({ type: 'oauth', access: futureToken(), refresh: 'native-refresh', expires: Date.now() + 3600000 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  delete process.env.CURSOR_TOKEN;
 });
 
 describe('Cursor quota', () => {
@@ -49,7 +46,7 @@ describe('Cursor quota', () => {
       GetCreditGrantsBalance: ok({})
     });
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential: selectedCredential() });
 
     expect(result.ok).toBe(true);
     expect(result.providerName).toBe('Cursor Pro');
@@ -60,7 +57,7 @@ describe('Cursor quota', () => {
   it('falls back to auth/usage and team-scoped GetHardLimit for enterprise accounts', async () => {
     const fetchMock = mockResponses(enterpriseRoutes);
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential: selectedCredential() });
 
     expect(result.ok).toBe(true);
     expect(result.providerName).toBe('Cursor Enterprise');
@@ -81,7 +78,7 @@ describe('Cursor quota', () => {
       })
     });
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential: selectedCredential() });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.billing_cycle.valueLabel).toBe('829 / 1000');
@@ -98,7 +95,7 @@ describe('Cursor quota', () => {
       })
     });
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential: selectedCredential() });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.on_demand.valueLabel).toBe('$6.72 / $250.00');
@@ -117,7 +114,7 @@ describe('Cursor quota', () => {
       GetMe: notFound()
     });
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential: selectedCredential() });
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('No active Cursor subscription');
@@ -129,7 +126,7 @@ describe('Cursor quota', () => {
       GetTeamSpend: notFound()
     });
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential: selectedCredential() });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.billing_cycle.valueLabel).toBe('590 / 1000');
@@ -143,7 +140,7 @@ describe('Cursor quota', () => {
       GetCreditGrantsBalance: notFound()
     });
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential: selectedCredential() });
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('No active Cursor subscription');
@@ -159,7 +156,7 @@ describe('Cursor quota', () => {
       GetHardLimit: notFound()
     });
 
-    const result = await fetchQuota();
+    const result = await fetchQuota({ credential: selectedCredential() });
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('No active Cursor subscription');

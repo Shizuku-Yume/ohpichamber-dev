@@ -2,19 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const credential = vi.fn();
 
-vi.mock('./auth.js', () => ({
-  findClaudeCredential: () => credential(),
-  loadClaudeCredential: async () => credential(),
-}));
 
-import { fetchQuota, isConfigured, resetClaudeQuotaCache } from './index.js';
+import { fetchQuota as fetchSelectedQuota, isConfigured, resetClaudeQuotaCache } from './index.js';
+const fetchQuota = () => fetchSelectedQuota({ credential: credential() });
 
 const CREDENTIAL = {
-  accessToken: 'access-a',
-  refreshToken: 'refresh-a',
-  expiresAt: Date.now() + 3_600_000,
-  planLabel: 'max',
-  source: 'keychain',
+  type: 'oauth',
+  access: 'access-a',
+  refresh: 'refresh-a',
+  expires: Date.now() + 3_600_000,
 };
 
 const PAYLOAD = {
@@ -58,13 +54,13 @@ describe('Claude quota provider', () => {
     expect(result.usage).toBeNull();
   });
 
-  it('returns windows and the plan label from the credential', async () => {
+  it('returns quota windows without inventing native plan metadata', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(PAYLOAD)));
 
     const result = await fetchQuota();
 
     expect(result.ok).toBe(true);
-    expect(result.planLabel).toBe('max');
+    expect(result.planLabel).toBeUndefined();
     expect(result.usage.windows['5h'].usedPercent).toBe(5);
   });
 
@@ -119,7 +115,7 @@ describe('Claude quota provider', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await fetchQuota();
-    credential.mockReturnValue({ ...CREDENTIAL, accessToken: 'access-b', refreshToken: 'refresh-b', planLabel: null });
+    credential.mockReturnValue({ ...CREDENTIAL, access: 'access-b', refresh: 'refresh-b' });
     const afterSwitch = await fetchQuota();
 
     expect(afterSwitch.ok).toBe(false);
@@ -143,6 +139,6 @@ describe('Claude quota provider', () => {
 
     expect(result.ok).toBe(false);
     expect(result.usage).toBeNull();
-    expect(result.error).toBe('socket hang up');
+    expect(result.error).toBe('Request failed');
   });
 });

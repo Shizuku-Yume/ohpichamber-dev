@@ -12,13 +12,13 @@ const usageResponse = (usedPercent) => {
   return new Response(new Uint8Array(bytes));
 };
 
-const authWith = (entry) => () => ({ xai: { type: 'oauth', ...entry } });
+const authWith = (entry) => ({ type: 'oauth', ...entry });
 
 describe('xAI quota provider', () => {
   it('reads usage with the stored access token while it is still valid', async () => {
     const requests = [];
     const result = await fetchQuota({
-      readAuth: authWith({ access: 'valid-access', refresh: 'rotating-1', expires: Date.now() + 3_600_000 }),
+      credential: authWith({ access: 'valid-access', refresh: 'rotating-1', expires: Date.now() + 3_600_000 }),
       fetchImpl: async (url) => {
         requests.push(String(url));
         return usageResponse(42);
@@ -33,15 +33,14 @@ describe('xAI quota provider', () => {
   it('never exchanges the rotating refresh token when the access token is expired', async () => {
     const requests = [];
     const result = await fetchQuota({
-      readAuth: authWith({ access: 'stale-access', refresh: 'rotating-1', expires: Date.now() - 1_000 }),
+      credential: authWith({ access: 'stale-access', refresh: 'rotating-1', expires: Date.now() - 1_000 }),
       fetchImpl: async (url) => {
         requests.push(String(url));
         return usageResponse(42);
       },
     });
 
-    // The bug: the quota module POSTed the rotating refresh token to auth.x.ai,
-    // which xAI invalidates on use, leaving OpenCode with a consumed token.
+    // Native AuthStorage alone owns rotating refresh tokens.
     expect(requests.filter((url) => url.includes('auth.x.ai'))).toEqual([]);
     expect(result.ok).toBe(false);
     expect(result.configured).toBe(true);
@@ -51,7 +50,7 @@ describe('xAI quota provider', () => {
   it('reports a missing credential as unconfigured without contacting xAI', async () => {
     let requests = 0;
     const result = await fetchQuota({
-      readAuth: () => ({}),
+      credential: null,
       fetchImpl: async () => {
         requests += 1;
         return usageResponse(42);

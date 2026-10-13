@@ -1,7 +1,5 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -12,7 +10,7 @@ import {
 
 export const providerId = 'neuralwatt';
 export const providerName = 'NeuralWatt';
-const aliases = ['neuralwatt'];
+
 const NEURALWATT_QUOTA_URL = 'https://api.neuralwatt.com/v1/quota';
 
 // 30d month / 365d year are fixed approximations; real calendars vary but the
@@ -25,16 +23,9 @@ const periodToWindowSeconds = (period) => {
   return null;
 };
 
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
-
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
-
+export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+export const fetchQuota = async ({ credential } = {}) => {
+  const apiKey = credentialAccessToken(credential);
   if (!apiKey) {
     return buildResult({
       providerId,
@@ -164,7 +155,7 @@ export const fetchQuota = async () => {
         ? 'Request timed out'
         : isParseError
           ? 'Invalid response from provider'
-          : (error instanceof Error ? error.message : 'Request failed')
+          : ('Request failed')
     });
   }
 };

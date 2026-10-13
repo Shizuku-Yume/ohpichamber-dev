@@ -16,24 +16,17 @@
  *
  * `data.level` is the plan tier (for example "lite") and becomes `planLabel`.
  */
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import { readConfigLayers } from '../../opencode/shared.js';
-import {
-  resolveConfigApiKey,
-  getAuthEntry,
-  normalizeAuthEntry,
-  buildResult,
-  toUsageWindow,
-  toNumber,
-  asNonEmptyString,
-  resolveWindowSeconds,
-  resolveWindowLabel,
-  normalizeTimestamp
-} from '../utils/index.js';
+import { credentialAccessToken } from './selected-credential.js';
+import { buildResult,
+toUsageWindow,
+toNumber,
+resolveWindowSeconds,
+resolveWindowLabel,
+normalizeTimestamp } from '../utils/index.js'
 
 export const providerId = 'zhipuai-coding-plan';
 export const providerName = 'Zhipu AI Coding Plan';
-const aliases = ['zhipuai-coding-plan', 'zhipuai', 'zhipu'];
+
 
 // Mirrors the Z.ai credit label (same monitor API family): `usage` is the
 // total, `currentValue` the consumed amount.
@@ -68,40 +61,14 @@ export const envelopeError = (payload) => {
   if (payload?.success !== false && !(code !== undefined && code !== null && code !== 200)) {
     return null;
   }
-  const msg = asNonEmptyString(payload?.msg);
-  return msg ?? `API error: ${code ?? 'unknown'}`;
+  return Number.isSafeInteger(code) ? `API error: ${code}` : 'Provider request failed';
 };
 
-function getApiKey(auth) {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKeyFromAuth = entry?.key ?? entry?.token;
 
-  if (apiKeyFromAuth) {
-    return apiKeyFromAuth;
-  }
+export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
-  try {
-    const { mergedConfig } = readConfigLayers();
-
-    for (const alias of aliases) {
-      const providerConfig = mergedConfig?.provider?.[alias];
-      if (providerConfig?.options?.apiKey) {
-        return resolveConfigApiKey(providerConfig.options.apiKey);
-      }
-    }
-  } catch {
-    // Ignore config read errors; the provider will be treated as not configured.
-  }
-
-  return null;
-}
-
-export const isConfigured = (auth) => {
-  return Boolean(getApiKey(auth));
-};
-
-export const fetchQuota = async () => {
-  const apiKey = getApiKey(await readOpenCodeCredentials());
+export const fetchQuota = async ({ credential } = {}) => {
+  const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {
     return buildResult({
@@ -194,7 +161,7 @@ export const fetchQuota = async () => {
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
+      error: 'Request failed'
     });
   }
 };

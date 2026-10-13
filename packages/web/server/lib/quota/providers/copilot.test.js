@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../opencode/auth.js', () => ({
-  readOpenCodeCredentials: async () => ({ 'github-copilot': { access: 'test-token' } }),
-}));
+const credential = { type: 'oauth', access: 'test-token', refresh: 'test-refresh', expires: Date.now() + 3600000 };
 
 import { fetchQuota, fetchQuotaAddon } from './copilot.js';
 
@@ -32,7 +30,7 @@ describe('GitHub Copilot quota provider', () => {
   ])('exposes only premium interactions for the %s', async (_name, fetchProviderQuota) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse()));
 
-    const result = await fetchProviderQuota();
+    const result = await fetchProviderQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(Object.keys(result.usage.windows)).toEqual(['premium_interactions']);
@@ -51,7 +49,7 @@ describe('GitHub Copilot quota provider', () => {
       },
     })));
 
-    const result = await fetchProviderQuota();
+    const result = await fetchProviderQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.premium_interactions.usedPercent).toBeNull();
@@ -69,7 +67,7 @@ describe('GitHub Copilot quota provider', () => {
       },
     })));
 
-    const result = await fetchProviderQuota();
+    const result = await fetchProviderQuota({ credential });
 
     expect(result.ok).toBe(true);
     expect(result.usage.windows.premium_interactions.usedPercent).toBeCloseTo(24.5);

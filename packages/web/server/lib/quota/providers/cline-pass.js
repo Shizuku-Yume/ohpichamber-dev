@@ -10,7 +10,7 @@ import {
 
 export const providerId = 'cline-pass';
 export const providerName = 'ClinePass';
-const aliases = ['cline-pass'];
+
 const CLINE_USAGE_URL = 'https://api.cline.bot/api/v1/users/me/plan/usage-limits';
 
 // Cline reports a rolling five-hour window, a rolling weekly window, and a
@@ -114,7 +114,7 @@ export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
         ? 'Request timed out'
         : isParseError
           ? 'Invalid response from provider'
-          : (error instanceof Error ? error.message : 'Request failed')
+          : ('Request failed')
     });
   }
 };

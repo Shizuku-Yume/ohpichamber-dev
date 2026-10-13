@@ -1,13 +1,11 @@
-import { readOpenCodeCredentials } from '../../../opencode/auth.js';
 import { buildResult } from '../../utils/index.js';
+import { credentialAccessToken } from '../selected-credential.js';
 import {
   resolveGoogleAuthSources,
-  resolveGoogleOAuthClient,
   DEFAULT_PROJECT_ID
 } from './auth.js';
 import { transformQuotaBucket, transformModelData } from './transforms.js';
 import {
-  refreshGoogleAccessToken,
   fetchGoogleQuotaBuckets,
   fetchGoogleModels
 } from './api.js';
@@ -16,19 +14,18 @@ export { resolveGoogleAuthSources } from './auth.js';
 
 export const providerId = 'google';
 export const providerName = 'Google';
-const aliases = ['google', 'google.oauth'];
 
-export const isConfigured = (auth) => resolveGoogleAuthSources(auth).length > 0;
+export const isConfigured = (credential) => credential?.type === 'oauth' && Boolean(credentialAccessToken(credential));
 
-export const fetchGoogleQuota = async () => {
-  const authSources = resolveGoogleAuthSources(await readOpenCodeCredentials());
+export const fetchGoogleQuota = async ({ credential } = {}) => {
+  const authSources = resolveGoogleAuthSources(credential);
   if (!authSources.length) {
     return buildResult({
       providerId,
       providerName,
       ok: false,
-      configured: false,
-      error: 'Not configured'
+      configured: isConfigured(credential),
+      error: isConfigured(credential) ? 'Selected native Google OAuth credential lacks supported quota project metadata' : 'Not configured'
     });
   }
 
@@ -36,20 +33,9 @@ export const fetchGoogleQuota = async () => {
   const sourceErrors = [];
 
   for (const source of authSources) {
-    const now = Date.now();
-    let accessToken = source.accessToken;
-
-    if (!accessToken || (typeof source.expires === 'number' && source.expires <= now)) {
-      if (!source.refreshToken) {
-        sourceErrors.push(`${source.sourceLabel}: Missing refresh token`);
-        continue;
-      }
-      const { clientId, clientSecret } = resolveGoogleOAuthClient(source.sourceId);
-      accessToken = await refreshGoogleAccessToken(source.refreshToken, clientId, clientSecret);
-    }
-
-    if (!accessToken) {
-      sourceErrors.push(`${source.sourceLabel}: Failed to refresh OAuth token`);
+    const accessToken = source.accessToken;
+    if (!accessToken || (typeof source.expires === 'number' && source.expires <= Date.now())) {
+      sourceErrors.push('Selected Google OAuth credential requires re-authentication');
       continue;
     }
 

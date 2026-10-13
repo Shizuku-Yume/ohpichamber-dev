@@ -1,9 +1,8 @@
-import { readManagedCredential } from '../credentials/providers.js';
 import { asObject, buildResult, formatMoney, toNumber, toTimestamp, toUsageWindow } from '../utils/index.js';
 
 export const providerId = 'exe-dev';
 export const providerName = 'exe.dev';
-const aliases = ['exe-dev'];
+
 const EXEC_URL = 'https://exe.dev/exec';
 const USAGE_COMMAND = 'billing credits usage --group=day --json';
 
@@ -52,24 +51,12 @@ export const fetchExeDevUsage = async (credential, fetchImpl = fetch) => {
   return windows;
 };
 
-export const isConfigured = () => Boolean(readManagedCredential(providerId));
+export const isConfigured = () => false;
 
-export const fetchQuota = async () => {
-  const credential = readManagedCredential(providerId);
-  if (!credential) {
-    return buildResult({ providerId, providerName, ok: false, configured: false, error: 'Not configured' });
-  }
-
-  try {
-    const windows = await fetchExeDevUsage(credential);
-    return buildResult({ providerId, providerName, ok: true, configured: true, usage: { windows } });
-  } catch (error) {
-    return buildResult({
-      providerId,
-      providerName,
-      ok: false,
-      configured: true,
-      error: error instanceof Error ? error.message : 'Request failed',
-    });
-  }
-};
+export const fetchQuota = async () => buildResult({
+  providerId,
+  providerName,
+  ok: false,
+  configured: false,
+  error: 'Selected credential quota is unsupported for exe.dev'
+});

@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { fetchQuota } from './nanogpt.js';
 
-const run = (payload) => fetchQuota({
-  readAuth: () => ({ 'nano-gpt': { key: 'test-token' } }),
-  fetchImpl: async (url, options) => {
-    expect(url).toBe('https://nano-gpt.com/api/subscription/v1/usage');
-    expect(options.headers.Authorization).toBe('Bearer test-token');
-    return Response.json(payload);
-  },
-});
+const run = (payload) => fetchQuota({ credential: { type: 'api_key', key: 'test-token' }, fetchImpl: async (url, options) => {
+  expect(url).toBe('https://nano-gpt.com/api/subscription/v1/usage');
+  expect(options.headers.Authorization).toBe('Bearer test-token');
+  return Response.json(payload);
+}, });
 
 describe('NanoGPT quota provider', () => {
 
@@ -80,10 +77,7 @@ describe('NanoGPT quota provider', () => {
   });
 
   it('reports HTTP failures rather than empty success', async () => {
-    const result = await fetchQuota({
-      readAuth: () => ({ 'nano-gpt': { key: 'test-token' } }),
-      fetchImpl: async () => new Response(null, { status: 401 }),
-    });
+    const result = await fetchQuota({ credential: { type: 'api_key', key: 'test-token' }, fetchImpl: async () => new Response(null, { status: 401 }), });
     expect(result.ok).toBe(false);
     expect(result.error).toBe('API error: 401');
   });

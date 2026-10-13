@@ -1,7 +1,5 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -49,7 +47,7 @@ export const providerName = 'Kimi for Coding';
 // works at the api.kimi.com usage address, and a pre-split `kimi-for-coding`
 // key left behind with a dead credential must not shadow it. The global plan
 // stays last, as before, since its key is not known to work at that address.
-const aliases = ['kimi-code-plan-cn', 'kimi-for-coding', 'kimi', 'kimi-code-plan-global'];
+
 
 // The ratio-based `usages` block, in the order Kimi's own CLI renders it.
 // `limit_month_code` is not read: it is the code-typed share of
@@ -128,15 +126,12 @@ const legacyWindows = (payload) => {
   return windows;
 };
 
-const getApiKey = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return asNonEmptyString(entry?.key) ?? asNonEmptyString(entry?.token);
-};
+const getApiKey = (credential) => credentialAccessToken(credential);
 
-export const isConfigured = (auth) => Boolean(getApiKey(auth));
+export const isConfigured = (credential) => Boolean(getApiKey(credential));
 
-export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
-  const apiKey = getApiKey(await readAuth());
+export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
+  const apiKey = credentialAccessToken(credential);
 
   if (!apiKey) {
     return buildResult({
@@ -199,7 +194,7 @@ export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
+      error: 'Request failed'
     });
   }
 };

@@ -1,7 +1,5 @@
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
+import { credentialAccessToken } from './selected-credential.js';
 import {
-  getAuthEntry,
-  normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -59,17 +57,12 @@ const buildCopilotWindows = (payload) => {
 
 export const providerId = 'github-copilot';
 export const providerName = 'GitHub Copilot';
-const aliases = ['github-copilot', 'copilot'];
 
-export const isConfigured = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.access || entry?.token);
-};
 
-export const fetchQuota = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const accessToken = entry?.access ?? entry?.token;
+export const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
+
+export const fetchQuota = async ({ credential } = {}) => {
+  const accessToken = credentialAccessToken(credential);
 
   if (!accessToken) {
     return buildResult({
@@ -116,7 +109,7 @@ export const fetchQuota = async () => {
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
+      error: 'Request failed'
     });
   }
 };
@@ -124,10 +117,8 @@ export const fetchQuota = async () => {
 export const providerIdAddon = 'github-copilot-addon';
 export const providerNameAddon = 'GitHub Copilot Add-on';
 
-export const fetchQuotaAddon = async () => {
-  const auth = await readOpenCodeCredentials();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const accessToken = entry?.access ?? entry?.token;
+export const fetchQuotaAddon = async ({ credential } = {}) => {
+  const accessToken = credentialAccessToken(credential);
 
   if (!accessToken) {
     return buildResult({
@@ -174,7 +165,7 @@ export const fetchQuotaAddon = async () => {
       providerName: providerNameAddon,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
+      error: 'Request failed'
     });
   }
 };

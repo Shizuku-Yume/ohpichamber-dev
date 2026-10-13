@@ -3,14 +3,18 @@ import express from 'express';
 import request from 'supertest';
 
 import { registerTtsRoutes, speechVoiceHeaderValue } from './routes.js';
+import { TTSService } from './service.js';
 import { normalizeCustomOpenAIBaseURL } from './base-url.js';
 
-const createApp = (sayTTSCapability = null) => {
+const createApp = (sayTTSCapability = null, overrides = {}) => {
   const app = express();
   app.use(express.json());
+  const selection = { workspaceId: 'workspace_1', agentDirectoryId: 'agent_1', providerId: 'openai', credentialRef: 'credential_1' };
   registerTtsRoutes(app, {
-    resolveZenModel: async () => 'gpt-5-nano',
     sayTTSCapability,
+    ttsService: new TTSService({ resolveCredential: async () => ({ type: 'api_key', key: 'test-key' }) }),
+    resolveTtsSelection: async () => selection,
+    ...overrides,
   });
   return app;
 };
@@ -115,6 +119,20 @@ describe('tts routes', () => {
       summarized: false,
       reason: 'Model summarization provider unavailable',
     });
+  });
+  it('rejects an arbitrary browser endpoint before selecting a secret', async () => {
+    let called = false;
+    const response = await request(createApp(null, { ttsService: { isAvailable: async () => true, generateSpeechStream: async () => { called = true; } } }))
+      .post('/api/tts/speak').send({ text: 'Hello', baseURL: 'http://127.0.0.1:8888/v1' });
+    expect(response.status).toBe(400);
+    expect(called).toBe(false);
+  });
+
+  it('does not serialize selected upstream speech errors', async () => {
+    const response = await request(createApp(null, { ttsService: { isAvailable: async () => true, generateSpeechStream: async () => { throw new Error('selected-secret echoed upstream'); } } }))
+      .post('/api/tts/speak').send({ text: 'Hello' });
+    expect(response.status).toBe(503);
+    expect(JSON.stringify(response.body)).not.toContain('selected-secret');
   });
 });
 

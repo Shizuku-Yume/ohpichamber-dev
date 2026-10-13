@@ -21,24 +21,24 @@ describe('voice keys store', () => {
   });
 
   it('keeps keys in an owner-only file and answers only whether each is set', () => {
-    expect(updateVoiceKeys({ openai: ' sk-openai ', stt: 'sk-stt' })).toEqual({ openai: true, openaiCompatible: false, stt: true });
-    expect(readVoiceKey('openai')).toBe('sk-openai');
+    expect(updateVoiceKeys({ stt: ' sk-stt ' })).toEqual({ stt: true });
+    expect(readVoiceKey('stt')).toBe('sk-stt');
     expect(JSON.stringify(describeVoiceKeys())).not.toContain('sk-');
     if (process.platform !== 'win32') {
       expect(fs.statSync(path.join(dataDir, 'voice-keys.json')).mode & 0o777).toBe(0o600);
     }
   });
 
-  it('removes a key on null and leaves the others alone', () => {
-    updateVoiceKeys({ openai: 'sk-openai', openaiCompatible: 'sk-compat' });
-    expect(updateVoiceKeys({ openai: null })).toEqual({ openai: false, openaiCompatible: true, stt: false });
-    expect(readVoiceKey('openaiCompatible')).toBe('sk-compat');
+  it('removes the custom transcription key on null', () => {
+    updateVoiceKeys({ stt: 'sk-stt' });
+    expect(updateVoiceKeys({ stt: null })).toEqual({ stt: false });
+    expect(readVoiceKey('stt')).toBeUndefined();
   });
 
   it('refuses a malformed patch without touching what is stored', () => {
-    updateVoiceKeys({ openai: 'sk-openai' });
-    expect(() => updateVoiceKeys({ openai: 42 })).toThrow();
-    expect(() => updateVoiceKeys({ somethingElse: 'x' })).toThrow();
-    expect(readVoiceKey('openai')).toBe('sk-openai');
+    updateVoiceKeys({ stt: 'sk-stt' });
+    expect(() => updateVoiceKeys({ stt: 42 })).toThrow();
+    expect(() => updateVoiceKeys({ openai: 'must-not-persist', openaiCompatible: 'must-not-persist' })).toThrow();
+    expect(readVoiceKey('stt')).toBe('sk-stt');
   });
 });

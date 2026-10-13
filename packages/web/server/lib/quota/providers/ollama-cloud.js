@@ -1,9 +1,8 @@
 import { buildResult, toUsageWindow, toNumber } from '../utils/index.js';
-import { readManagedCredential } from '../credentials/providers.js';
 
 export const providerId = 'ollama-cloud';
 export const providerName = 'Ollama Cloud';
-const aliases = ['ollama-cloud', 'ollamacloud'];
+
 
 export const parseOllamaSettingsHtml = (html) => {
   const windows = {};
@@ -69,9 +68,7 @@ export const parseOllamaSettingsHtml = (html) => {
   return windows;
 };
 
-export const isConfigured = () => {
-  return Boolean(readManagedCredential(providerId));
-};
+export const isConfigured = () => false;
 
 export const fetchOllamaCloudUsage = async (credential, fetchImpl = fetch) => {
   const response = await fetchImpl('https://ollama.com/settings', {
@@ -89,36 +86,10 @@ export const fetchOllamaCloudUsage = async (credential, fetchImpl = fetch) => {
   return windows;
 };
 
-export const fetchQuota = async () => {
-  const credential = readManagedCredential(providerId);
-
-  if (!credential) {
-    return buildResult({
-      providerId,
-      providerName,
-      ok: false,
-      configured: false,
-      error: 'Not configured'
-    });
-  }
-
-  try {
-    const windows = await fetchOllamaCloudUsage(credential);
-
-    return buildResult({
-      providerId,
-      providerName,
-      ok: true,
-      configured: true,
-      usage: { windows }
-    });
-  } catch (error) {
-    return buildResult({
-      providerId,
-      providerName,
-      ok: false,
-      configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
-    });
-  }
-};
+export const fetchQuota = async () => buildResult({
+  providerId,
+  providerName,
+  ok: false,
+  configured: false,
+  error: 'Selected credential quota is unsupported for Ollama Cloud cookie authentication'
+});
