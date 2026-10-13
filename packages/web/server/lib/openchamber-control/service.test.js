@@ -147,7 +147,7 @@ describe('OpenChamber control service canonical consumers', () => {
       toolName: 'openchamber', action: 'session.status', sessionId: 'other-session', input: {},
     })).resolves.toEqual({ ok: false, code: 'INVALID_REQUEST', status: 400 });
     await expect(control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
-      toolName: 'openchamber_web', action: 'browser.open', sessionId: 'session-1', input: { url: 'https://example.com' },
+      toolName: 'web', action: 'browser.open', sessionId: 'session-1', input: { url: 'https://example.com' },
     })).resolves.toMatchObject({ ok: false, code: 'UNAVAILABLE', status: 503 });
     await expect(control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
       toolName: 'openchamber', action: 'unsupported.action', sessionId: 'session-1', input: {},
@@ -157,7 +157,7 @@ describe('OpenChamber control service canonical consumers', () => {
       toolName: 'openchamber', action: 'session.status', sessionId: 'session-1', input: { sessionId: 'session-1' },
     })).resolves.toEqual({ ok: false, code: 'FEATURE_DISABLED', status: 403 });
     await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
-      toolName: 'openchamber_notify', action: 'notify.send', sessionId: 'session-1', input: { title: 't' },
+      toolName: 'notify', action: 'notify.send', sessionId: 'session-1', input: { title: 't' },
     })).resolves.toEqual({ ok: false, code: 'FEATURE_DISABLED', status: 403 });
   });
 });

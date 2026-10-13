@@ -16,9 +16,9 @@ const WAIT_POLL_INTERVAL_MS = 500;
 const CONTROL_ACTIONS = new Set(OPENCHAMBER_ALL_ACTIONS);
 const TOOL_ACTIONS = new Map([
   ['openchamber', new Set(OPENCHAMBER_AGENT_TOOL_ACTIONS)],
-  ['openchamber_web', new Set(OPENCHAMBER_WEB_ACTIONS)],
-  ['openchamber_memory', new Set(OPENCHAMBER_MEMORY_ACTIONS)],
-  ['openchamber_notify', new Set(OPENCHAMBER_NOTIFY_ACTIONS)],
+  ['web', new Set(OPENCHAMBER_WEB_ACTIONS)],
+  ['memory', new Set(OPENCHAMBER_MEMORY_ACTIONS)],
+  ['notify', new Set(OPENCHAMBER_NOTIFY_ACTIONS)],
 ]);
 const SCHEDULE_TASK_ID_ACTIONS = new Set([
   'schedule.update',
@@ -900,9 +900,9 @@ export const createOpenChamberControlService = (dependencies) => {
     }
     const enabled = toolName === 'openchamber'
       ? settings?.agentControlToolEnabled !== false
-      : toolName === 'openchamber_web'
+      : toolName === 'web'
         ? settings?.agentWebToolEnabled !== false
-        : toolName === 'openchamber_memory'
+        : toolName === 'memory'
           ? settings?.agentMemoryToolEnabled === true
           : settings?.agentNotifyToolEnabled === true;
     return enabled ? null : { code: 'FEATURE_DISABLED', status: 403 };
