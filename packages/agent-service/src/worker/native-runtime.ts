@@ -9,6 +9,8 @@ import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capabili
 import { cfgDisabledExtensions, cfgExtensions, cfgSkills } from '@oh-my-pi/pi-coding-agent/extensibility/settings';
 import type { LoadSkillsOptions } from '@oh-my-pi/pi-coding-agent/extensibility/skills';
 import { NativeModels, type BoundProviderCredentialResolution, type NativeCatalogModel, type NativeModelsContext } from './catalog-models.ts';
+import { resolveEditMode } from '@oh-my-pi/pi-coding-agent/utils/edit-mode';
+import type { NativePolicyContext } from '../native-policy-protocol.ts';
 
 type BoundCredentialResolver = (
   providerId: string,
@@ -60,7 +62,7 @@ export interface NativeWorkerRuntime {
   settings: Settings;
   modelsPath: string;
   bindSessionId: (currentNativeSessionId: () => string) => void;
-  effectiveEditMode: () => string;
+  effectiveEditMode: (activeModel?: string) => NativePolicyContext['editMode'];
 }
 
 export async function openNativeRuntime(input: { cwd: string; agentDirectory: string }): Promise<NativeWorkerRuntime> {
@@ -93,10 +95,7 @@ export async function openNativeRuntime(input: { cwd: string; agentDirectory: st
       models,
       settings,
       modelsPath,
-      effectiveEditMode: () => {
-        const configured = settings.get('editMode');
-        return typeof configured === 'string' && configured.length > 0 ? configured : 'replace';
-      },
+      effectiveEditMode: activeModel => resolveEditMode({ settings, getActiveModelString: () => activeModel }),
       bindSessionId: next => { currentNativeSessionId = next; },
     };
   } catch (error) { authStorage.close(); throw error; }

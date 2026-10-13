@@ -1,4 +1,4 @@
-import type { HostAuthorizationScope, HostWorkspacePolicy, WorkerPolicyRequest, WorkerPolicyResult } from '@openchamber/agent-service/private-protocol';
+import type { HostAuthorizationScope, HostWorkspacePolicy, WorkerPolicyRequest, WorkerPolicyResult, NativeOperationDescriptor } from '@openchamber/agent-service/private-protocol';
 
 export interface HostDirectoryValidation {
   ok: boolean;
@@ -17,4 +17,4 @@ export interface WorkerOperationAuthorizerOptions {
   enterprisePolicyOptions?: object;
   approvalPolicyStore?: { list(scope: { sessionId: string; projectId: string; workspaceId: string }): HostApprovalPolicy[] };
 }
-export function createWorkerOperationAuthorizer(options: WorkerOperationAuthorizerOptions): (scope: HostAuthorizationScope, request: WorkerPolicyRequest) => Promise<WorkerPolicyResult>;
+export function createWorkerOperationAuthorizer(options: WorkerOperationAuthorizerOptions): (scope: HostAuthorizationScope, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;

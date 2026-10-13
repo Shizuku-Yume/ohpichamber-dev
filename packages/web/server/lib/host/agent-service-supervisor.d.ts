@@ -1,6 +1,6 @@
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import type { registerManagedProcess, unregisterManagedProcess } from './managed-process-registry.js';
-import type { HostAuthorizationScope, WorkerPolicyRequest, WorkerPolicyResult } from '@openchamber/agent-service/private-protocol';
+import type { HostAuthorizationScope, WorkerPolicyRequest, WorkerPolicyResult, NativeOperationDescriptor, HostActionRequest, HostActionResult } from '@openchamber/agent-service/private-protocol';
 
 export interface AgentServiceSupervisorState {
   phase: 'stopped' | 'starting' | 'ready' | 'stopping' | 'failed';
@@ -22,7 +22,8 @@ export interface AgentServiceSupervisorOptions {
   fetchImpl?: typeof fetch;
   registry?: AgentServiceRegistry;
   randomBytes?: (size: number) => Uint8Array;
-  authorizeWorkerOperation?: (scope: HostAuthorizationScope, request: WorkerPolicyRequest) => Promise<WorkerPolicyResult>;
+  authorizeWorkerOperation?: (scope: HostAuthorizationScope, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;
+  invokeHostAction: (scope: HostAuthorizationScope, request: HostActionRequest, signal: AbortSignal) => Promise<HostActionResult>;
 }
 export interface AgentServiceSupervisor {
   start(): Promise<AgentServiceSupervisorState>;

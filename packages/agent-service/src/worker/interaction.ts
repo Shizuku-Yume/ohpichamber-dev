@@ -16,7 +16,7 @@ import { JsonObjectSchema } from '@openchamber/agent-contract';
 import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 import type { WorkerInteraction as WorkerInteractionMessage } from '../protocol.ts';
 
-type PendingApproval = { resolve: (choice: string | undefined) => void; approve: string; reject: string };
+type PendingApproval = { toolCallId: string; resolve: (choice: string | undefined) => void; approve: string; reject: string };
 type PendingQuestion = { questions: ExtensionAskDialogQuestion[]; resolve: (result: ExtensionAskDialogResult | undefined) => void };
 
 export interface WorkerInteractionCallbacks {
@@ -39,6 +39,7 @@ export class WorkerInteraction {
   private readonly observed = new Map<string, ToolApprovalRequestedEvent>();
   private readonly inputs = new Map<string, JsonObject>();
   private readonly approvalHandles = new Map<string, PendingApproval>();
+  private readonly executionReceipts = new Map<string, string>();
   private readonly questionHandles = new Map<string, PendingQuestion>();
   private closed = false;
 
@@ -53,9 +54,21 @@ export class WorkerInteraction {
   observeApproval(event: ToolApprovalRequestedEvent): void {
     if (!this.closed) this.observed.set(event.toolCallId, event);
   }
-  forgetToolCall(toolCallId: string): void {
+  forgetToolCall(toolCallId: string, forgetReceipt = true): void {
     this.inputs.delete(toolCallId);
     this.observed.delete(toolCallId);
+    if (forgetReceipt) this.executionReceipts.delete(toolCallId);
+  }
+  takeApprovalReceipt(toolCallId: string): string | undefined {
+    const receipt = this.executionReceipts.get(toolCallId);
+    this.executionReceipts.delete(toolCallId);
+    return receipt;
+  }
+  async approveBash(toolCallId: string, input: JsonObject, signal?: AbortSignal): Promise<boolean> {
+    const captured = this.inputs.get(toolCallId);
+    const turnId = this.callbacks.currentTurn();
+    if (this.closed || !turnId || !captured || JSON.stringify(captured) !== JSON.stringify(input)) return false;
+    return await this.requestApproval(turnId, toolCallId, 'bash', captured, 'Host policy requires approval for this exact command', ['Approve', 'Reject'], signal) === 'Approve';
   }
 
   readonly ui: ExtensionUIContext = {
@@ -113,25 +126,26 @@ export class WorkerInteraction {
     const approve = labels[0];
     const reject = labels[1];
     if (labels.length !== 2 || approve === undefined || reject === undefined) throw new Error('Native approval choices are invalid');
+    return this.requestApproval(turnId, observer.toolCallId, observer.toolName, input, observer.reason ?? '', [approve, reject], dialogOptions?.signal);
+  }
+
+  private async requestApproval(turnId: string, toolCallId: string, toolName: string, input: JsonObject, reason: string, choices: [string, string], signal?: AbortSignal): Promise<string | undefined> {
     const approvalId = randomUUID();
-    const details = JsonObjectSchema.parse({
-      reason: observer.reason ?? '', options: labels, approvalMode: observer.approvalMode, input,
-    });
+    const [approve, reject] = choices;
     const interaction: WorkerInteractionMessage = {
-      kind: 'approval', approvalId, toolCallId: observer.toolCallId, toolName: observer.toolName,
-      actionType: actionType(observer.toolName), commandSummary: title, details,
-      policyTarget: { toolName: observer.toolName, pattern: JSON.stringify(input) }, turnId,
+      kind: 'approval', approvalId, toolCallId, toolName, actionType: actionType(toolName),
+      commandSummary: 'Native tool operation requires approval', details: JsonObjectSchema.parse({ reason, options: choices, input }),
+      policyTarget: { toolName, pattern: JSON.stringify(input) }, turnId,
     };
-    return new Promise<string | undefined>(resolve => {
-      const pending: PendingApproval = { resolve, approve, reject };
-      this.approvalHandles.set(approvalId, pending);
-      this.callbacks.request(interaction);
-      if (dialogOptions?.signal) {
-        const abort = () => { this.approvalHandles.delete(approvalId); resolve(undefined); };
-        if (dialogOptions.signal.aborted) abort();
-        else dialogOptions.signal.addEventListener('abort', abort, { once: true });
-      }
-    });
+    const { promise, resolve } = Promise.withResolvers<string | undefined>();
+    this.approvalHandles.set(approvalId, { toolCallId, resolve, approve, reject });
+    const abort = () => { this.approvalHandles.delete(approvalId); this.executionReceipts.delete(toolCallId); resolve(undefined); };
+    signal?.addEventListener('abort', abort, { once: true });
+    try {
+      if (signal?.aborted) abort();
+      else this.callbacks.request(interaction);
+      return await promise;
+    } finally { signal?.removeEventListener('abort', abort); }
   }
 
   private async askDialog(questions: ExtensionAskDialogQuestion[], dialogOptions?: { signal?: AbortSignal }): Promise<ExtensionAskDialogResult | undefined> {
@@ -172,6 +186,7 @@ export class WorkerInteraction {
     const pending = this.approvalHandles.get(approvalId);
     if (!pending) return false;
     this.approvalHandles.delete(approvalId);
+    if (decision === 'approve') this.executionReceipts.set(pending.toolCallId, approvalId);
     pending.resolve(decision === 'approve' ? pending.approve : pending.reject);
     return true;
   }
@@ -220,6 +235,7 @@ export class WorkerInteraction {
     this.questionHandles.clear();
     this.observed.clear();
     this.inputs.clear();
+    this.executionReceipts.clear();
   }
 
   close(): void {

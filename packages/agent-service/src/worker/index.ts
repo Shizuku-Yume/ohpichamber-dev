@@ -6,6 +6,7 @@ import { WorkerSession } from './session.ts';
 import { StatelessWorker } from './stateless.ts';
 import { WorkerPolicy } from './policy.ts';
 import { NativeMcpError } from './mcp.ts';
+import { WorkerHostActions } from './host-actions.ts';
 
 function nativeMcpStatus(error: NativeMcpError): number {
   switch (error.code) {
@@ -21,6 +22,7 @@ let bootstrap: WorkerBootstrapMessage | CompletionWorkerBootstrap | undefined;
 let initialization: Promise<void> | undefined;
 let resources: WorkerSession | StatelessWorker | undefined;
 let policy: WorkerPolicy | undefined;
+let hostActions: WorkerHostActions | undefined;
 let stopping = false;
 let shutdown: Promise<void> | undefined;
 
@@ -33,6 +35,7 @@ function stop(exitCode: number): Promise<void> {
   if (shutdown) return shutdown;
   stopping = true;
   policy?.close();
+  hostActions?.close();
   shutdown = (async () => {
     const deadline = setTimeout(() => process.exit(1), 5_000);
     deadline.unref();
@@ -60,6 +63,10 @@ process.on('message', raw => {
     if (command.workerGeneration === bootstrap?.workerGeneration) policy?.settle(command.requestId, command.result);
     return;
   }
+  if (command.type === 'action.result') {
+    if (command.workerGeneration === bootstrap?.workerGeneration) hostActions?.settle(command.requestId, command.result);
+    return;
+  }
   if (command.type === 'stop') {
     if (command.workerGeneration === bootstrap?.workerGeneration) void stop(0);
     return;
@@ -72,7 +79,12 @@ process.on('message', raw => {
       return;
     }
     // Deliberately not serialized: cancel/abort/interactive replies must interrupt active work.
-    void owned.operation(command.operation).then(result => {
+    void (async () => {
+      if (owned instanceof StatelessWorker) send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot: await owned.authorizationPolicy() });
+      const result = await owned.operation(command.operation);
+      if (owned instanceof StatelessWorker) send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot: await owned.authorizationPolicy() });
+      return result;
+    })().then(result => {
       send({ type: 'result', workerGeneration: command.workerGeneration, commandId: command.commandId, result });
     }).catch(error => {
       const nativeCode = error instanceof NativeMcpError ? ProblemCodeSchema.safeParse(error.code) : undefined;
@@ -86,8 +98,10 @@ process.on('message', raw => {
   bootstrap = command;
   const authorization = new WorkerPolicy(command.workerGeneration, send);
   policy = authorization;
+  hostActions = new WorkerHostActions(command.workerGeneration, send);
   if (command.type === 'completion.bootstrap') {
-    initialization = StatelessWorker.open(command, authorization.authorize).then(owned => {
+    initialization = StatelessWorker.open(command, authorization.authorize).then(async owned => {
+      send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot: await owned.authorizationPolicy() });
       resources = owned;
       if (stopping) return;
       send({ type: 'lifecycle', workerGeneration: command.workerGeneration, state: 'initialized' });
@@ -98,7 +112,9 @@ process.on('message', raw => {
       send({ type: 'events', workerGeneration: command.workerGeneration, inputs });
     }, interaction => {
       send({ type: 'interaction', workerGeneration: command.workerGeneration, request: interaction });
-    }, () => { void stop(1); }, authorization.authorize).then(owned => {
+    }, () => { void stop(1); }, authorization.authorize, hostActions.invoke, snapshot => {
+      send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot });
+    }).then(owned => {
       resources = owned;
       if (stopping) return;
       send({ type: 'opened', workerGeneration: command.workerGeneration, sessionFile: owned.sessionFile, seed: owned.seed() });

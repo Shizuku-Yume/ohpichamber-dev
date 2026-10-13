@@ -14,13 +14,20 @@ import { ProjectionError } from '../projection/journal.ts';
 import { WorkerInteraction as NativeInteraction } from './interaction.ts';
 import { WorkerProjection } from './projection.ts';
 import { WorkerCatalogs, credentialReference } from './catalogs.ts';
-import { WorkerMcp } from './mcp.ts';
+import { WorkerMcp, readNativeMcpConfiguration } from './mcp.ts';
 import { WorkerShell } from './shell.ts';
 import { WorkerCompletion } from './completion.ts';
 import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
 import type { WorkerAuthorize } from './policy.ts';
+import { createHostToolExtension } from './host-tool.ts';
+import type { WorkerHostInvoke } from './host-actions.ts';
+import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
+import { captureNativePolicy } from './native-policy-snapshot.ts';
+import type { HostNativePolicySnapshot } from '../native-policy-protocol.ts';
+import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
+import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
 
-type PromptOperation = Extract<WorkerOperation, { type: 'prompt' }>;
+type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'follow-up' }>;
 type PreparedPrompt = { text: string; options: PromptOptions };
 type NativeAdmission = { skillsAvailable: boolean; profile: Agent | null };
 
@@ -52,7 +59,6 @@ export class WorkerSession {
     private readonly completion: WorkerCompletion,
     private readonly admission: NativeAdmission,
     private readonly authorize: WorkerAuthorize,
-    private readonly manager: SessionManager,
   ) {
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
     this.defaultToolNames = session.getActiveToolNames();
@@ -67,16 +73,7 @@ export class WorkerSession {
     });
   }
 
-  fork(entryId: string, mode: 'selected' | 'full'): { sessionFile: string; sessionId: string } {
-    if (mode === 'selected') {
-      const sessionFile = this.manager.createBranchedSession(entryId, { copyArtifacts: true });
-      if (!sessionFile) throw new ProjectionError(409, 'INVALID_REQUEST', 'Native session is not persisted');
-      return { sessionFile, sessionId: this.manager.getSessionId() };
-    }
-    throw new ProjectionError(501, 'NOT_IMPLEMENTED', 'Full native fork requires supervisor-owned source resolution');
-  }
-
-  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, authorize: WorkerAuthorize): Promise<WorkerSession> {
+  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void): Promise<WorkerSession> {
     if (input.mcpConfiguration && !input.mcpConfigPath) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'MCP storage ownership is missing');
     if (input.skillSources && !input.agentDirectoryId) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Skill source ownership is missing');
     const runtime = await openNativeRuntime(input);
@@ -87,11 +84,18 @@ export class WorkerSession {
     let projection: WorkerProjection | undefined;
     let owned: WorkerSession | undefined;
     const admission: NativeAdmission = { skillsAvailable: !input.skillSources, profile: null };
-    const effectiveEditMode = runtime.effectiveEditMode();
-    const authorizeTool = (toolName: string, toolInput: JsonObject): Promise<void> => {
+    let capturePolicy: (() => Promise<void>) | undefined;
+    const authorize: WorkerAuthorize = async (request, context) => {
+      await capturePolicy?.();
+      await hostAuthorize(request, context);
+    };
+    const authorizeTool = async (toolName: string, toolInput: JsonObject, approval?: { approvalId?: string; toolCallId: string }): Promise<void> => {
+      await capturePolicy?.();
       const profile = admission.profile;
-      const input = toolName === 'edit' ? { ...toolInput, mode: effectiveEditMode } : toolInput;
-      return authorize({ type: 'tool', toolName, input, agentId: profile?.agentId, permissionPresetId: profile?.permissionPresetId });
+      if (profile && !profile.allowedTools.includes(toolName)) throw new ProjectionError(403, 'UNAUTHORIZED', 'Selected agent profile does not permit this tool');
+      const model = session?.model;
+      const nativeContext = { editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined), ...(model ? { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl } : {}) };
+      return hostAuthorize({ type: 'tool', toolName, input: toolInput, agentId: profile?.agentId, permissionPresetId: profile?.permissionPresetId, ...approval }, nativeContext);
     };
     const worker = { workspaceId: input.workspaceId, rootSessionId: input.rootSessionId, workerGeneration: input.workerGeneration };
     const interaction = new NativeInteraction({ request: onInteraction, currentTurn: () => projection?.currentTurn()?.turnId });
@@ -99,13 +103,14 @@ export class WorkerSession {
       api.on('tool_call', async event => {
         interaction.observeToolCall(event);
         if (admission.profile && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
+        if (['bash', 'openchamber', 'web', 'memory', 'notify'].includes(event.toolName)) return;
         try { await authorizeTool(event.toolName, JsonObjectSchema.parse(event.input)); }
         catch { return { block: true, reason: 'Host policy refused the tool operation' }; }
       });
       api.on('before_agent_start', () => admission.profile?.systemPromptOverride === undefined ? undefined : { systemPrompt: [admission.profile.systemPromptOverride] });
       api.on('tool_approval_requested', event => { interaction.observeApproval(event); });
       api.on('tool_result', event => { interaction.forgetToolCall(event.toolCallId); });
-      api.on('tool_approval_resolved', event => { interaction.forgetToolCall(event.toolCallId); });
+      api.on('tool_approval_resolved', event => { interaction.forgetToolCall(event.toolCallId, false); });
     };
     const mcp = input.mcpConfigPath ? new WorkerMcp({
       cwd: input.cwd, configPath: input.mcpConfigPath, worker, authStorage,
@@ -133,11 +138,22 @@ export class WorkerSession {
       manager = input.sessionFile
         ? await SessionManager.open(input.sessionFile, directory, undefined, { initialCwd: input.cwd, throwIfMissing: true })
         : SessionManager.create(input.cwd, directory);
+      const nativeManager = manager;
+      const bashPolicy = new BashTool({ cwd: input.cwd, hasUI: true, settings,
+        getSessionFile: () => nativeManager.getSessionFile() ?? null,
+        // This factory does not override SDK spawns; retain its actual default policy context.
+        getSessionSpawns: () => '*',
+      });
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
         enableMCP: mcp !== undefined, mcpManager: mcp, enableLsp: false, disableExtensionDiscovery: true,
-        hasUI: true, interactivePrompts: true, extensions: [observer],
+        hasUI: true, interactivePrompts: true, extensions: [observer, createNativeBashPolicyExtension({ interaction, approval: bashPolicy.approval,
+          authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
+        }), createHostToolExtension({
+          scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
+          invoke: invocation => invokeHostAction(invocation.request, invocation.signal),
+        })],
         extensionRoots: () => nativeExtensionRoots(settings),
         getApiKey: async model => {
           await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
@@ -180,7 +196,12 @@ export class WorkerSession {
       await manager.ensureOnDisk();
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, manager);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize);
+      capturePolicy = async () => {
+        const configuration = input.mcpConfigPath ? await readNativeMcpConfiguration(input.mcpConfigPath, input.workspaceId) : null;
+        publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
+      };
+      await capturePolicy();
       projection = owned.projection;
       if (input.mcpConfiguration && mcp) {
         const applied = await mcp.apply({ persistedRevision: input.mcpConfiguration.persistedRevision }, input.mcpConfiguration);
@@ -332,6 +353,40 @@ export class WorkerSession {
         return { type: 'shell', result: await this.shell.operation(operation.operation) };
       case 'completion':
         return { type: 'completion', result: await this.completion.operation(operation.operation) };
+      case 'steer': case 'follow-up': {
+        const requestedRunId = this.projection.activeRun()?.runId;
+        const assertStreaming = () => {
+          if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
+          if (!requestedRunId || this.projection.activeRun()?.runId !== requestedRunId || !this.session.isStreaming) throw new ProjectionError(404, 'RUN_NOT_FOUND', 'A live streaming run is required');
+        };
+        assertStreaming();
+        if (this.preparation) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Prompt preparation is already in progress');
+        if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills must be applied before streaming admission');
+        this.preparation = this.prepare(operation);
+        try {
+          const prepared = await this.preparation;
+          assertStreaming();
+          let acceptedAt: number | undefined;
+          let messageId: string | undefined;
+          const streamingBehavior = operation.type === 'steer' ? 'steer' : 'followUp';
+          const dispatched = await this.session.prompt(prepared.text, {
+            ...prepared.options, streamingBehavior,
+            // prompt() yields before dispatch; this option is read synchronously at native dispatch.
+            // Enforce the live-run contract there too instead of accidentally starting an idle turn.
+            get expandPromptTemplates() { assertStreaming(); return false; },
+            onPromptAdmitted: () => {
+              const queued = (streamingBehavior === 'steer' ? this.session.agent.peekSteeringQueue() : this.session.agent.peekFollowUpQueue()).at(-1);
+              if (!queued || queued.role !== 'user') throw new ProjectionError(503, 'INTERNAL_ERROR', 'Native queued user message is unavailable');
+              messageId = this.projection.admitQueuedPrompt(queued, operation.request.input.attachments);
+              acceptedAt = Date.now();
+            },
+          });
+          if (!dispatched || acceptedAt === undefined || !messageId) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native streaming prompt was not admitted');
+          return operation.type === 'steer'
+            ? { type: 'steer', ack: { sessionId: this.sessionId, runId: requestedRunId!, acceptedAt } }
+            : { type: 'follow-up', ack: { sessionId: this.sessionId, followUpId: messageId, acceptedAt } };
+        } finally { this.preparation = undefined; }
+      }
       case 'prompt': {
         if (this.preparation || this.projection.activeRun()) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills must be successfully applied before prompt admission');

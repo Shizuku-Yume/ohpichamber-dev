@@ -11,11 +11,11 @@ import type {
   CompletionCancelResult, CompletionResult, HistoryPage, JsonObject, MCPCatalogRead,
   MCPApplyResult, MCPOAuthResult, ModelCatalog, ModelMutationResult, ProblemCode,
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
-  QuestionRequest, Run, RuntimeSession, SessionDeleteAck, SessionSnapshot,
+  QuestionRequest, Run, RuntimeSession, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck,
   ShellJob, ShellOutput, ShellSnapshot, ShellStopResult, SkillExpandResult,
   SkillInstallResult, SkillsApplyResult, SkillsCatalogState, StreamInvalidated,
 } from '@openchamber/agent-contract';
-import { WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
+import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { SessionRegistry, type SessionList } from '../sessions/registry.ts';
@@ -31,6 +31,7 @@ import type { PrivateCredentialResolveResult, PrivateCredentialHandoffResult } f
 const SessionForkRequestSchema = z.strictObject({ sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']) }).refine(input => input.mode === 'full' || input.entryId !== null, { message: 'Selected forks require an entry identity', path: ['entryId'] });
 const SessionReopenRequestSchema = HostSessionBootstrapSchema.omit({ sessionFile: true });
 const SessionForkAckSchema = z.strictObject({ sessionId: EntityIdSchema, rootSessionId: EntityIdSchema, sessionFile: z.string().min(1), sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']) });
+import type { NativeOperationDescriptor, HostActionRequest, HostActionResult, HostNativePolicySnapshot } from './host-authorization-protocol.ts';
 interface ServiceOptions {
   workerEntrypoint: string;
   workerRuntime?: string;
@@ -39,7 +40,8 @@ interface ServiceOptions {
   port?: number;
   approvalPolicyCommit?: ApprovalPolicyCommit;
   approvalPolicyLoad?: ApprovalPolicyLoad;
-  policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest) => Promise<WorkerPolicyResult>;
+  policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;
+  invokeHostAction?: (rootSessionId: string, request: HostActionRequest, signal: AbortSignal) => Promise<HostActionResult>;
 }
 const InternalSecretSchema = z.string().regex(/^[a-f0-9]{64}$/i);
 const HostSkillSourcePublicationSchema = z.strictObject({
@@ -49,16 +51,18 @@ const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port:
 class RequestError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
 }
-const capabilitiesResponse = { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: false, followUpQueue: false, subagents: false, attachments: false, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true } };
+const capabilitiesResponse = { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: true, followUpQueue: true, subagents: false, attachments: true, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true } };
 type ServiceHealthObservation = Pick<AgentServiceReady, 'engine' | 'version'> & { status: 'ready' | 'starting' };
 type ServiceResponse =
   | ServiceHealthObservation
   | typeof capabilitiesResponse
+  | HostNativePolicySnapshot
   | AgentServiceReady
   | z.infer<typeof HostAuthorizationScopeSchema | typeof HostWorkspaceRegisteredSchema>
   | WorkerInfo | { workers: RegisteredWorkerInfo[] }
   | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck
   | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run }
+  | SteerAck | FollowUpAck
   | MCPCatalogRead | MCPApplyResult | MCPOAuthResult
   | SkillsCatalogState | SkillsApplyResult | SkillExpandResult | SkillInstallResult
   | ModelCatalog | ProviderCatalog | AgentCatalog
@@ -115,7 +119,8 @@ export class AgentService {
   private stopping: Promise<void> | undefined;
   constructor(private readonly options: ServiceOptions) {
     this.secret = Buffer.from(InternalSecretSchema.parse(options.internalSecret), 'hex');
-    this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, policyCheck: options.policyCheck,
+    this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, policyCheck: options.policyCheck, invokeHostAction: options.invokeHostAction,
+      consumeApprovalGrant: (...args) => this.sessions.consumeApprovalGrant(...args),
       prepareBootstrap: async input => {
         if (!this.ready) return input;
         if (!this.workspaceCatalogs.matches(input)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
@@ -328,6 +333,16 @@ export class AgentService {
         if (!scope) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
         respondJson(response, 200, scope); return;
       }
+      const nativePolicy = /^\/internal\/workspaces\/([^/]+)\/authorization-policy$/.exec(url.pathname);
+      if (nativePolicy && request.method === 'GET') {
+        const workspaceId = identity(nativePolicy[1]);
+        const workspace = this.workspaceCatalogs.get(workspaceId);
+        const selectedAgentDirectoryId = url.searchParams.get('agentDirectoryId');
+        const agentDirectoryId = selectedAgentDirectoryId === null ? workspace.agentDirectoryId : identity(selectedAgentDirectoryId);
+        if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+        const selectedRoot = url.searchParams.get('rootSessionId');
+        respondJson(response, 200, this.workers.authorizationPolicy(workspaceId, agentDirectoryId, selectedRoot === null ? undefined : identity(selectedRoot))); return;
+      }
       const workspace = /^\/internal\/workspaces\/([^/]+)$/.exec(url.pathname);
       if (workspace && request.method === 'POST') {
         const workspaceId = identity(workspace[1]);
@@ -375,6 +390,12 @@ export class AgentService {
       if (privateRun && request.method === 'POST') {
         const operation = await readBody(request, WorkerOperationSchema.options[0]);
         respondJson(response, 202, { run: await this.sessions.prompt(identity(privateRun[1]), operation) }); return;
+      }
+      const streamingPrompt = /^\/internal\/sessions\/([^/]+)\/(steer|follow-up)$/.exec(url.pathname);
+      if (streamingPrompt && request.method === 'POST') {
+        const input = await readBody(request, HostStreamingPromptRequestSchema);
+        const operation = streamingPrompt[2] === 'steer' ? { type: 'steer' as const, ...input } : { type: 'follow-up' as const, ...input };
+        respondJson(response, 202, await this.sessions.streamingPrompt(identity(streamingPrompt[1]), operation)); return;
       }
       const approvalList = /^\/api\/agent\/v1\/sessions\/([^/]+)\/approvals$/.exec(url.pathname);
       if (approvalList && request.method === 'GET') { respondJson(response, 200, this.sessions.approvals(identity(approvalList[1]))); return; }

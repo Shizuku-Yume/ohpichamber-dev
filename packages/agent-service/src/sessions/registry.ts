@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema } from '@openchamber/agent-contract';
 import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema } from '../protocol.ts';
-import type { WorkerInteraction, WorkerOperation } from '../protocol.ts';
+import type { WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
 import { HostSessionBootstrapSchema } from '../supervisor/host-authorization-protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError, SessionJournal } from '../projection/journal.ts';
@@ -11,6 +11,7 @@ import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad 
 import { WorkerOperationError, WorkerRegistry } from '../supervisor/workers.ts';
 import { SessionReferenceError, SessionReferences } from './references.ts';
 import type { SessionReference } from './references.ts';
+import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
 type SessionBootstrap = z.infer<typeof HostSessionBootstrapSchema>;
 export interface SessionList { items: RuntimeSession[]; errors: { sessionId: string; code: ProblemCode }[]; }
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' }>;
@@ -76,6 +77,10 @@ export class SessionRegistry {
     const displayPath = entry.state === 'unloaded' ? entry.reference.displayPath : entry.input.displayPath;
     await this.open({ ...input, displayPath }, true);
     return true;
+  }
+  consumeApprovalGrant(sessionId: string, generation: string, request: Extract<WorkerPolicyRequest, { type: 'tool' }>): NativeApprovalGrant | undefined {
+    if (!request.approvalId || !request.toolCallId) return undefined;
+    return this.interactions.consumeApprovalGrant(sessionId, generation, request.approvalId, request.toolCallId, request.toolName, request.input);
   }
 
 
@@ -163,6 +168,17 @@ export class SessionRegistry {
       }
     } finally { await manager.close(); }
     throw new WorkerOperationError(404, 'RUN_NOT_FOUND');
+  }
+  async streamingPrompt(sessionId: string, operation: Extract<WorkerOperation, { type: 'steer' | 'follow-up' }>) {
+    this.ensureOpen();
+    const runtime = this.runtime(sessionId);
+    if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    if (runtime.activeRunId === null) throw new WorkerOperationError(404, 'RUN_NOT_FOUND');
+    const result = await this.workers.request(sessionId, operation);
+    if (result.type !== 'steer' && result.type !== 'follow-up') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    if (result.type !== operation.type || result.ack.sessionId !== sessionId) throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    if (result.type === 'steer' && result.ack.runId !== runtime.activeRunId) throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result.ack;
   }
 
   async abort(sessionId: string, runId: string) {

@@ -71,6 +71,7 @@ export class WorkerProjection {
   private message: LiveMessage | undefined;
   private readonly pending: LiveMessage[] = [];
   private attachments: PromptAttachment[] = [];
+  private readonly queuedPrompts = new WeakMap<NativeMessage, { messageId: string; attachments: PromptAttachment[] }>();
   private entryOffset: number;
   private stopReason: 'error' | 'aborted' | undefined;
 
@@ -81,6 +82,11 @@ export class WorkerProjection {
   seed(): ProjectionSeed { return this.readHistory(); }
   activeRun(): Run | null { return this.run; }
   currentTurn(): { turnId: string } | undefined { return this.turn?.open ? { turnId: this.turn.turnId } : undefined; }
+  admitQueuedPrompt(message: Extract<NativeMessage, { role: 'user' }>, attachments: PromptAttachment[]): string {
+    const messageId = randomUUID();
+    this.queuedPrompts.set(message, { messageId, attachments });
+    return messageId;
+  }
 
   beginRun(runId: string, timestamp: number, attachments: PromptAttachment[] = []): ProjectionInput[] {
     if (this.run) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
@@ -93,10 +99,11 @@ export class WorkerProjection {
   }
 
   consume(event: AgentSessionEvent): ProjectionInput[] {
-    const run = this.run;
-    if (!run) return [];
+    const queued = event.type === 'message_start' && event.message.role === 'user' ? this.queuedPrompts.get(event.message) : undefined;
     const timestamp = Date.now();
-    const result: ProjectionInput[] = [];
+    const result: ProjectionInput[] = !this.run && queued ? this.beginRun(randomUUID(), timestamp) : [];
+    const run = this.run;
+    if (!run) return result;
     const emit = (payload: ProjectionEvent): void => { result.push({ timestamp, event: payload }); };
     switch (event.type) {
       case 'message_start': {
@@ -104,7 +111,7 @@ export class WorkerProjection {
         const native = event.message;
         if (native.role === 'user' || !this.turn?.open) {
           const turnId = randomUUID();
-          const userMessageId = randomUUID();
+          const userMessageId = queued?.messageId ?? randomUUID();
           const virtualUser = native.role !== 'user';
           this.turn = { turnId, userMessageId, virtualUser, open: true, startedAt: timestamp };
           emit({ type: 'turn.started', turnId, runId: run.runId, userMessageId });
@@ -117,8 +124,9 @@ export class WorkerProjection {
         const current: LiveMessage = { messageId, turnId: turn.turnId, runId: run.runId,
           userMessageId: turn.userMessageId, virtualUser: turn.virtualUser,
           nativeRole: native.role, timestamp: native.timestamp,
-          attachments: native.role === 'user' ? this.attachments : [], started: new Set(), ...nativeMetadata,
+          attachments: native.role === 'user' ? queued?.attachments ?? this.attachments : [], started: new Set(), ...nativeMetadata,
         };
+        if (native.role === 'user') { this.queuedPrompts.delete(native); this.attachments = []; }
         this.message = current;
         this.pending.push(current);
         emit({ type: 'message.created', messageId, turnId: turn.turnId,

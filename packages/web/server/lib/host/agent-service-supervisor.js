@@ -55,7 +55,7 @@ export const createAgentServiceSupervisor = ({
   stopTimeoutMs = STOP_TIMEOUT_MS, spawn = nodeSpawn, fetchImpl = globalThis.fetch,
   registry = { registerManagedProcess, unregisterManagedProcess }, randomBytes = crypto.randomBytes,
   approvalPolicyStore = null,
-  authorizeWorkerOperation,
+  authorizeWorkerOperation, invokeHostAction,
 } = {}) => {
   let phase = 'stopped'; let child = null; let port = null; let secret = null;
   let startupPromise = null; let stopPromise = null; let lifecycle = 0; let startupController = null; let accepting = false;
@@ -70,7 +70,7 @@ export const createAgentServiceSupervisor = ({
       if (!response.ok) throw new Error('Agent worker authorization scope unavailable');
       return response.json();
     },
-    authorizeWorkerOperation,
+    authorizeWorkerOperation, invokeHostAction,
   });
   let policyStore = approvalPolicyStore;
   let ownsPolicyStore = false;
@@ -80,6 +80,7 @@ export const createAgentServiceSupervisor = ({
     const captured = Object.freeze(CapturedHostBootstrapScopeSchema.parse({ rootSessionId: body.rootSessionId, projectId: body.projectId, workspaceId: body.workspaceId, cwd: body.cwd, agentDirectory: body.agentDirectory, ...(body.agentDirectoryId === undefined ? {} : { agentDirectoryId: body.agentDirectoryId }) }));
     const prior = scopes.get(captured.rootSessionId);
     if (prior && !isDeepStrictEqual(prior, captured)) throw new Error('Host bootstrap scope cannot change');
+    if (prior) return { captured: prior, prior };
     scopes.set(captured.rootSessionId, captured);
     return { captured, prior };
   };
@@ -223,13 +224,15 @@ export const createAgentServiceSupervisor = ({
     let capture; let workspaceCapture;
     const workspace = /^\/internal\/workspaces\/([^/]+)$/.exec(requestPath);
     const restartWorker = /^\/internal\/workers\/([^/]+)\/restart$/.exec(requestPath);
-    const rootBootstrap = method === 'POST' && (requestPath === '/internal/sessions' || requestPath === '/internal/workers' || restartWorker);
+    const reopenSession = /^\/internal\/sessions\/([^/]+)\/reopen$/.exec(requestPath);
+    const rootBootstrap = method === 'POST' && (requestPath === '/internal/sessions' || requestPath === '/internal/workers' || restartWorker || reopenSession);
     if (rootBootstrap || (workspace && method === 'POST')) {
-      const schema = workspace ? HostWorkspaceBootstrapSchema : requestPath === '/internal/sessions' ? HostSessionBootstrapSchema : WorkerBootstrapSchema;
+      const schema = workspace ? HostWorkspaceBootstrapSchema : reopenSession ? HostSessionBootstrapSchema.omit({ sessionFile: true }) : requestPath === '/internal/sessions' ? HostSessionBootstrapSchema : WorkerBootstrapSchema;
       const parsed = schema.safeParse(JSON.parse(init.body));
       if (!parsed.success) throw new Error('Invalid Host bootstrap');
       const body = { ...parsed.data, cwd: await fs.realpath(parsed.data.cwd), agentDirectory: await fs.realpath(parsed.data.agentDirectory) };
       if (restartWorker && decodeURIComponent(restartWorker[1]) !== body.rootSessionId) throw new Error('Invalid Host restart scope');
+      if (reopenSession && decodeURIComponent(reopenSession[1]) !== body.rootSessionId) throw new Error('Invalid Host reopen scope');
       if (workspace) {
         const workspaceId = decodeURIComponent(workspace[1]);
         const captured = Object.freeze({ projectId: body.projectId, workspaceId, cwd: body.cwd, agentDirectory: body.agentDirectory, agentDirectoryId: body.agentDirectoryId });

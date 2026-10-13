@@ -11,6 +11,8 @@ import { NativeCredentials } from './catalog-credentials.ts';
 import { NativeMcpError, readNativeMcpConfiguration, writeNativeMcpConfiguration } from './mcp.ts';
 import { nativeExtensionRoots, nativeModelsContext, openNativeRuntime, type NativeWorkerRuntime } from './native-runtime.ts';
 import type { WorkerAuthorize } from './policy.ts';
+import { captureNativePolicy } from './native-policy-snapshot.ts';
+import type { HostNativePolicySnapshot } from '../native-policy-protocol.ts';
 
 /** A workspace process owns native catalogs and completion, never a session or transcript. */
 export class StatelessWorker {
@@ -45,6 +47,10 @@ export class StatelessWorker {
     const runtime = await openNativeRuntime(input);
     try { return new StatelessWorker(runtime, input, authorize); }
     catch (error) { runtime.authStorage.close(); throw error; }
+  }
+  async authorizationPolicy(): Promise<HostNativePolicySnapshot> {
+    const configuration = this.input.mcpConfigPath ? await this.readConfiguration() : null;
+    return captureNativePolicy({ projectId: this.input.projectId, workspaceId: this.input.workspaceId, cwd: this.input.cwd, agentDirectory: this.input.agentDirectory, agentDirectoryId: this.input.agentDirectoryId }, this.runtime, this.agents, configuration?.config.servers ?? []);
   }
 
   operation(operation: WorkerOperation): Promise<WorkerOperationResult> {

@@ -10,6 +10,7 @@ import { ProjectionInputSchema } from '../projection/protocol.ts';
 import type { ProjectionInput } from '../projection/protocol.ts';
 import type { WorkerInteraction, WorkerOperation } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
+import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
 
 type RequestKind = 'approval' | 'question';
 type ApprovalRecordState = { kind: 'approval'; request: ApprovalRequest; target: ApprovalPolicyWrite['target']; timer?: NodeJS.Timeout };
@@ -68,6 +69,7 @@ export class InteractionManager {
   private readonly sessions = new Map<string, SessionState>();
   private readonly records = new Map<string, RecordState>();
   private readonly reservations = new Set<string>();
+  private readonly executionGrants = new Map<string, { request: ApprovalRequest; target: ApprovalPolicyWrite['target']; expiresAt: number; timer: NodeJS.Timeout }>();
   private readonly policies = new Map<string, ApprovalPolicyRecord>();
 
   constructor(private readonly timeoutMs = 300_000, private readonly policyCommit?: ApprovalPolicyCommit) {}
@@ -97,6 +99,11 @@ export class InteractionManager {
   invalidate(sessionId: string, generation?: string): void {
     const state = this.sessions.get(sessionId);
     if (!state || (generation !== undefined && state.generation !== generation)) return;
+    for (const [id, grant] of this.executionGrants) {
+      if (grant.request.sessionId !== sessionId) continue;
+      clearTimeout(grant.timer);
+      this.executionGrants.delete(id);
+    }
     for (const [id, record] of this.records) {
       if (record.request.sessionId !== sessionId || record.request.status !== 'pending') continue;
       clearTimeout(record.timer);
@@ -153,6 +160,19 @@ export class InteractionManager {
     return [...this.records.values()].flatMap(record => record.request.sessionId === sessionId && record.kind === 'question' && record.request.status === 'pending' ? [record.request] : []);
   }
 
+  consumeApprovalGrant(sessionId: string, generation: string, approvalId: string, toolCallId: string, toolName: string, input: Record<string, unknown>): NativeApprovalGrant | undefined {
+    const grant = this.executionGrants.get(approvalId);
+    const state = this.sessions.get(sessionId);
+    if (!grant || !state || grant.expiresAt <= Date.now() || state.generation !== generation
+      || grant.request.sessionId !== sessionId || grant.request.workerGeneration !== generation || grant.request.epoch !== state.epoch
+      || grant.request.toolCallId !== toolCallId || toolName !== 'bash' || grant.target.toolName !== toolName
+      || grant.target.pattern !== JSON.stringify(input) || typeof input.command !== 'string'
+      || this.matchingPolicy(sessionId, state.workspaceId, grant.target)?.decision === 'deny') return undefined;
+    clearTimeout(grant.timer);
+    this.executionGrants.delete(approvalId);
+    return { approvalId, toolCallId, rootSessionId: sessionId, workerGeneration: generation, epoch: state.epoch, command: input.command };
+  }
+
   async resolveApproval(sessionId: string, approvalId: string, input: ApprovalReply, resolvedBy = 'agent-service'): Promise<ApprovalRequest> {
     const reply = ApprovalReplySchema.parse(input);
     const record = this.records.get(approvalId);
@@ -181,6 +201,11 @@ export class InteractionManager {
       }
       this.assertOwner(sessionId, reply.epoch, reply.workerGeneration, this.records.get(approvalId), 'approval');
       this.assertCas(this.records.get(approvalId)!.request, reply.version, 'approval');
+      if ((reply.decision === 'approve' || reply.decision === 'always-allow') && record.target.toolName === 'bash'
+        && this.matchingPolicy(sessionId, state.workspaceId, record.target)?.decision !== 'deny') {
+        const expiresAt = Date.now() + this.timeoutMs;
+        this.executionGrants.set(approvalId, { request, target: record.target, expiresAt, timer: setTimeout(() => this.executionGrants.delete(approvalId), this.timeoutMs) });
+      }
       await state.dispatch({ type: 'approval.resolve', approvalId, decision: reply.decision === 'reject' || reply.decision === 'always-deny' ? 'reject' : 'approve' });
       this.assertOwner(sessionId, reply.epoch, reply.workerGeneration, this.records.get(approvalId), 'approval');
       this.assertCas(this.records.get(approvalId)!.request, reply.version, 'approval');
@@ -193,6 +218,11 @@ export class InteractionManager {
     } finally {
       this.reservations.delete(approvalId);
       if (this.records.get(approvalId) === record) record.timer = setTimeout(() => { void this.expirePending(sessionId, approvalId); }, Math.max(0, request.requestedAt + this.timeoutMs - Date.now()));
+      if (this.records.get(approvalId)?.request.status !== 'approved') {
+        const grant = this.executionGrants.get(approvalId);
+        clearTimeout(grant?.timer);
+        this.executionGrants.delete(approvalId);
+      }
     }
   }
 

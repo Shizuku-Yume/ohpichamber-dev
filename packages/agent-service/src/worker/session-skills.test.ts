@@ -56,7 +56,7 @@ test('native skill submission and catalog descriptions hide roots, and failed di
         if (input.event.type === 'catalog.updated' && input.event.catalog.kind === 'skills') catalogEvents.push(JSON.stringify(input.event.catalog.state));
         if (input.event.type === 'run.failed' || input.event.type === 'run.completed') terminal.resolve();
       }
-    }, () => { throw new Error('This skill must not ask for interaction'); }, () => { fatal = true; }, async () => {});
+    }, () => { throw new Error('This skill must not ask for interaction'); }, () => { fatal = true; }, async () => {}, async () => { throw new Error('This skill must not invoke Host actions'); }, () => {});
     journal = new SessionJournal({ sessionId: 'skill-root', rootSessionId: 'skill-root', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, worker.seed());
     await worker.operation({ type: 'catalog', revision: '1', operation: { type: 'catalog.provider.configure', request: {
       expectedRevision: '0', configuration: { providerId: 'skill-fixture', name: 'Skill fixture', endpoint: `http://127.0.0.1:${provider.port}/v1`, protocol: 'chat-completions', credentialRef: null },

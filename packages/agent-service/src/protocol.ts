@@ -1,4 +1,4 @@
-import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema } from '@openchamber/agent-contract';
+import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { ProjectionInputSchema, ProjectionSeedSchema } from './projection/protocol.ts';
@@ -6,9 +6,11 @@ import { CatalogOperationSchema, CatalogResultSchema } from './catalogs/protocol
 import { McpOperationSchema, McpResultSchema } from './worker/mcp/protocol.ts';
 import { ShellOperationSchema, ShellResultSchema } from './shell/protocol.ts';
 import { CompletionOperationSchema, CompletionResultSchema } from './completion/protocol.ts';
+import { NativePolicyContextSchema, HostActionRequestSchema, HostActionResultSchema, HostNativePolicySnapshotSchema } from './native-policy-protocol.ts';
 
 const PrivatePathSchema = z.string().min(1).refine(isAbsolute);
 const AttachmentReferenceSchema = z.strictObject({ attachmentId: EntityIdSchema, path: PrivatePathSchema });
+export const HostStreamingPromptRequestSchema = z.strictObject({ request: PromptRequestSchema, attachments: z.array(AttachmentReferenceSchema).optional() });
 export const WorkerApprovalPolicySchema = z.strictObject({
   policyId: EntityIdSchema, revision: z.string().regex(/^(0|[1-9][0-9]*)$/),
   scope: z.enum(['session', 'workspace']), decision: z.enum(['allow', 'deny']),
@@ -44,17 +46,19 @@ export const WorkerPolicyRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp-server'), server: MCPServerConfigSchema }),
   z.strictObject({ type: z.literal('mcp-oauth'), server: MCPServerConfigSchema, configuration: JsonObjectSchema }),
   z.strictObject({ type: z.literal('shell'), request: ShellStartRequestSchema }),
-  z.strictObject({ type: z.literal('tool'), toolName: z.string().min(1), input: JsonObjectSchema, agentId: EntityIdSchema.optional(), permissionPresetId: EntityIdSchema.optional() }),
+  z.strictObject({ type: z.literal('tool'), toolName: z.string().min(1), input: JsonObjectSchema, agentId: EntityIdSchema.optional(), permissionPresetId: EntityIdSchema.optional(), approvalId: EntityIdSchema.optional(), toolCallId: EntityIdSchema.optional() }),
 ]);
 export type WorkerPolicyRequest = z.infer<typeof WorkerPolicyRequestSchema>;
 export const WorkerPolicyResultSchema = z.discriminatedUnion('allowed', [
   z.strictObject({ allowed: z.literal(true) }),
-  z.strictObject({ allowed: z.literal(false), code: ProblemCodeSchema, status: z.number().int().min(400).max(599) }),
+  z.strictObject({ allowed: z.literal(false), code: ProblemCodeSchema, status: z.number().int().min(400).max(599), approvalRequired: z.literal(true).optional() }),
 ]);
 export type WorkerPolicyResult = z.infer<typeof WorkerPolicyResultSchema>;
 
 export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('prompt'), runId: EntityIdSchema, request: PromptRequestSchema, attachments: z.array(AttachmentReferenceSchema).optional() }),
+  HostStreamingPromptRequestSchema.extend({ type: z.literal('steer') }),
+  HostStreamingPromptRequestSchema.extend({ type: z.literal('follow-up') }),
   z.strictObject({ type: z.literal('abort'), runId: EntityIdSchema }),
   z.strictObject({ type: z.literal('approval.resolve'), approvalId: EntityIdSchema, decision: z.enum(['approve', 'reject']), policy: WorkerApprovalPolicySchema.optional() }),
   z.strictObject({ type: z.literal('question.resolve'), questionId: EntityIdSchema, action: z.enum(['answer', 'cancel']), response: JsonValueSchema.optional() }),
@@ -80,6 +84,8 @@ export const WorkerInteractionSchema = z.discriminatedUnion('kind', [WorkerAppro
 export type WorkerInteraction = z.infer<typeof WorkerInteractionSchema>;
 const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('prompt'), run: RunSchema }),
+  z.strictObject({ type: z.literal('steer'), ack: SteerAckSchema }),
+  z.strictObject({ type: z.literal('follow-up'), ack: FollowUpAckSchema }),
   z.strictObject({ type: z.literal('abort'), run: RunSchema }),
   z.strictObject({ type: z.literal('approval.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('question.resolve'), resolved: z.literal(true) }),
@@ -99,6 +105,7 @@ export const WorkerCommandSchema = z.discriminatedUnion('type', [
   WorkerBootstrapMessageSchema,
   CompletionWorkerBootstrapSchema,
   z.strictObject({ type: z.literal('policy.result'), workerGeneration: EntityIdSchema, requestId: EntityIdSchema, result: WorkerPolicyResultSchema }),
+  z.strictObject({ type: z.literal('action.result'), workerGeneration: EntityIdSchema, requestId: EntityIdSchema, result: HostActionResultSchema }),
   z.strictObject({ type: z.literal('stop'), workerGeneration: EntityIdSchema }),
   WorkerOperationCommandSchema,
 ]);
@@ -110,7 +117,10 @@ export const WorkerReplySchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('opened'), workerGeneration: EntityIdSchema, sessionFile: PrivatePathSchema, seed: ProjectionSeedSchema }),
   z.strictObject({ type: z.literal('events'), workerGeneration: EntityIdSchema, inputs: z.array(ProjectionInputSchema) }),
   z.strictObject({ type: z.literal('interaction'), workerGeneration: EntityIdSchema, request: WorkerInteractionSchema }),
-  z.strictObject({ type: z.literal('policy.request'), workerGeneration: EntityIdSchema, requestId: EntityIdSchema, request: WorkerPolicyRequestSchema }),
+  z.strictObject({ type: z.literal('policy.snapshot'), workerGeneration: EntityIdSchema, snapshot: HostNativePolicySnapshotSchema }),
+  z.strictObject({ type: z.literal('policy.request'), workerGeneration: EntityIdSchema, requestId: EntityIdSchema, request: WorkerPolicyRequestSchema, nativeContext: NativePolicyContextSchema.optional() }),
+  z.strictObject({ type: z.literal('action.request'), workerGeneration: EntityIdSchema, requestId: EntityIdSchema, request: HostActionRequestSchema }),
+  z.strictObject({ type: z.literal('action.cancel'), workerGeneration: EntityIdSchema, requestId: EntityIdSchema }),
   z.strictObject({ type: z.literal('result'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, result: WorkerOperationResultSchema }),
 ]);
 export type WorkerReply = z.infer<typeof WorkerReplySchema>;

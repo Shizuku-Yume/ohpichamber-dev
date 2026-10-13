@@ -247,5 +247,45 @@ describe('service-owned interaction CAS', () => {
     manager.closeSession('session-1');
   });
 
+  test('an approved native command is available during dispatch, bound to exact input, and consumed once', async () => {
+    const input = { command: 'printf approved' };
+    const target = { toolName: 'bash', pattern: JSON.stringify(input) };
+    let manager: InteractionManager;
+    const consumed: unknown[] = [];
+    manager = new InteractionManager(60_000);
+    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => {
+      if (operation.type !== 'approval.resolve') throw new Error('Unexpected dispatch');
+      expect(manager.consumeApprovalGrant('other-session', 'worker-1', operation.approvalId, 'call-1', 'bash', input)).toBeUndefined();
+      expect(manager.consumeApprovalGrant('session-1', 'worker-2', operation.approvalId, 'call-1', 'bash', input)).toBeUndefined();
+      expect(manager.consumeApprovalGrant('session-1', 'worker-1', operation.approvalId, 'other-call', 'bash', input)).toBeUndefined();
+      expect(manager.consumeApprovalGrant('session-1', 'worker-1', operation.approvalId, 'call-1', 'bash', { command: 'printf other' })).toBeUndefined();
+      consumed.push(manager.consumeApprovalGrant('session-1', 'worker-1', operation.approvalId, 'call-1', 'bash', input));
+      expect(manager.consumeApprovalGrant('session-1', 'worker-1', operation.approvalId, 'call-1', 'bash', input)).toBeUndefined();
+    }, () => {});
+    try {
+      manager.onRequest('session-1', 'worker-1', { ...approval, policyTarget: target });
+      expect(manager.consumeApprovalGrant('session-1', 'worker-1', 'approval-1', 'call-1', 'bash', input)).toBeUndefined();
+      const resolved = await manager.resolveApproval('session-1', 'approval-1', { decision: 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' });
+      expect(resolved.status).toBe('approved');
+      expect(consumed).toEqual([{ approvalId: 'approval-1', toolCallId: 'call-1', rootSessionId: 'session-1', workerGeneration: 'worker-1', epoch: 'epoch-1', command: input.command }]);
+    } finally { manager.closeSession('session-1'); }
+  });
+
+  test('rejection, invalidation and failed native dispatch never leave execution consent', async () => {
+    const input = { command: 'printf denied' };
+    for (const scenario of ['reject', 'invalidate', 'dispatch-failed'] as const) {
+      const manager = new InteractionManager(60_000);
+      manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async () => { if (scenario === 'dispatch-failed') throw new Error('Native handle disappeared'); }, () => {});
+      try {
+        manager.onRequest('session-1', 'worker-1', { ...approval, policyTarget: { toolName: 'bash', pattern: JSON.stringify(input) } });
+        const resolving = manager.resolveApproval('session-1', 'approval-1', { decision: scenario === 'reject' ? 'reject' : 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' });
+        if (scenario === 'dispatch-failed') await expect(resolving).rejects.toThrow('Native handle disappeared');
+        else await resolving;
+        if (scenario === 'invalidate') manager.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async () => {}, () => {});
+        expect(manager.consumeApprovalGrant('session-1', 'worker-1', 'approval-1', 'call-1', 'bash', input)).toBeUndefined();
+      } finally { manager.closeSession('session-1'); }
+    }
+  });
+
 
 });

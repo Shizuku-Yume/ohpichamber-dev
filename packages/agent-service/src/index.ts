@@ -28,6 +28,7 @@ async function main(): Promise<void> {
       approvalPolicyCommit: policies.commit,
       approvalPolicyLoad: policies.load,
       policyCheck: authorization.authorize,
+      invokeHostAction: authorization.invoke,
     });
     const owned = service;
     const stop = () => {

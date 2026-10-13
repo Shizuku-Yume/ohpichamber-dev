@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
-import { HostAuthorizationScopeSchema, HostWorkspacePolicySchema, WorkerPolicyRequestSchema } from '@openchamber/agent-service/private-protocol';
+import { HostAuthorizationScopeSchema, HostWorkspacePolicySchema, WorkerPolicyRequestSchema, NativeOperationDescriptorSchema } from '@openchamber/agent-service/private-protocol';
 import { resolveGuestFilePath } from '../guests/files.js';
 import { unsupportedRepositoryRootReason } from '../git/repository-root.js';
 import { isEnterpriseMode } from '../enterprise-mode.js';
@@ -25,23 +25,15 @@ const OAuthPolicyConfigurationSchema = z.strictObject({
   callbackPort: z.number().int().min(1).max(65_535).optional(),
   callbackPath: z.string().startsWith('/').optional(), stripSameOriginResource: z.boolean().optional(),
 });
-const ProviderUseInputSchema = z.object({
-  providerId: z.string(), modelId: z.string(),
-  endpoint: z.string().url().pipe(z.string().refine(value => {
-    const endpoint = new URL(value);
-    return ['http:', 'https:'].includes(endpoint.protocol) && !endpoint.username && !endpoint.password;
-  })).optional(),
-});
-const BashInputSchema = z.object({ command: z.string(), cwd: z.string().optional() });
-const FilePathInputSchema = z.string().refine(value => !/[:;?*\u0000]/.test(value));
+const FilePathInputSchema = z.string().min(1).refine(value => path.isAbsolute(value) && !value.includes('\u0000'));
 
-/** Host configuration grants and native approval consent are independent authorities.
- * Shell grants authorize exact machine commands; a workspace cwd is not an OS sandbox.
+/** Host machine policy and source-bound consent authorize exact native operations.
+ * A workspace cwd is not an OS sandbox; yolo does not confer a machine command grant.
  */
 export const createWorkerOperationAuthorizer = ({
   resolvePolicy, validateDirectoryPath, enterprisePolicyOptions, approvalPolicyStore,
 }) => {
-  return async (rawScope, rawRequest) => {
+  return async (rawScope, rawRequest, rawDescriptor) => {
     try {
       const scopeResult = HostAuthorizationScopeSchema.safeParse(rawScope);
       const requestResult = WorkerPolicyRequestSchema.safeParse(rawRequest);
@@ -60,10 +52,19 @@ export const createWorkerOperationAuthorizer = ({
       const policies = approvalPolicyStore?.list({ sessionId: scope.rootSessionId, projectId: scope.projectId, workspaceId: scope.workspaceId }) ?? [];
       const toolName = request.type === 'tool' ? request.toolName : request.type === 'shell' ? 'bash' : null;
       const input = request.type === 'tool' ? request.input : request.type === 'shell' ? request.request : null;
+      const nativeTool = toolName !== null && ['read', 'write', 'edit', 'grep', 'glob', 'bash', 'provider.use'].includes(toolName);
+      const descriptorResult = rawDescriptor === undefined ? null : NativeOperationDescriptorSchema.safeParse(rawDescriptor);
+      if (nativeTool && (!descriptorResult?.success || descriptorResult.data.toolName !== toolName)) return denied('INVALID_REQUEST', 400);
+      const descriptor = descriptorResult?.success ? descriptorResult.data : null;
       const exactPolicies = toolName === null ? [] : policies.filter(row => row.target.toolName === toolName && row.target.pattern === JSON.stringify(input));
-      if (exactPolicies.some(row => row.scope === 'workspace' && row.decision === 'deny')) return denied();
+      if (exactPolicies.some(row => row.decision === 'deny')) return denied();
       const commandGranted = command => policy.shellCommands.includes(command)
-        || exactPolicies.some(row => row.scope === 'session' && row.decision === 'allow');
+        || exactPolicies.some(row => row.decision === 'allow')
+        || (descriptor?.approvalGrant?.command === command
+          && descriptor.approvalGrant.rootSessionId === scope.rootSessionId
+          && descriptor.approvalGrant.workerGeneration === scope.workerGeneration
+          && request.type === 'tool' && descriptor.approvalGrant.approvalId === request.approvalId
+          && descriptor.approvalGrant.toolCallId === request.toolCallId);
       const pathAllowed = async rawPath => {
         const target = FilePathInputSchema.safeParse(rawPath);
         if (!target.success) return false;
@@ -81,31 +82,29 @@ export const createWorkerOperationAuthorizer = ({
           || !OAuthPolicyConfigurationSchema.safeParse(request.configuration).success)) return denied('INVALID_REQUEST', 400);
         return allowed;
       }
-      if (request.type === 'shell') return commandGranted(request.request.command) ? allowed : denied();
+      if (request.type === 'shell') return descriptor?.command !== undefined && commandGranted(descriptor.command) ? allowed : denied();
       if (request.type !== 'tool') return denied();
       if (request.agentId !== undefined && !policy.agentIds.includes(request.agentId)) return denied();
       if (request.permissionPresetId !== undefined && (!isPermissionMode(request.permissionPresetId)
         || !policy.permissionPresetIds.includes(request.permissionPresetId))) return denied();
       if (request.toolName === 'provider.use') {
-        const inputResult = ProviderUseInputSchema.safeParse(request.input);
-        if (!inputResult.success) return denied();
-        const input = inputResult.data;
-        return policy.providers.some(provider => provider.providerId === input.providerId
-          && provider.modelId === input.modelId && provider.endpoint === input.endpoint) ? allowed : denied();
+        return descriptor !== null && policy.providers.some(provider => provider.providerId === descriptor.providerId
+          && provider.modelId === descriptor.modelId && provider.endpoint === descriptor.endpoint) ? allowed : denied();
       }
       if (request.toolName === 'permission.preset') {
         return request.input.presetId === request.permissionPresetId && isPermissionMode(request.input.presetId)
           && policy.permissionPresetIds.includes(request.input.presetId) ? allowed : denied();
       }
-      if (request.toolName === 'bash') {
-        const inputResult = BashInputSchema.safeParse(request.input);
-        if (!inputResult.success || (inputResult.data.cwd !== undefined && !await pathAllowed(inputResult.data.cwd))) return denied();
-        return commandGranted(inputResult.data.command) ? allowed : denied();
-      }
-      if (['read', 'write', 'edit'].includes(request.toolName)) {
-        // Selector and patch-text formats need their owning parser, not guessed path extraction.
-        if (!await pathAllowed(request.input.path) || (request.toolName === 'edit' && request.input.edits !== undefined)) return denied();
-        if (policy.fileTools.includes(request.toolName)) return allowed;
+      if (nativeTool && descriptor) {
+        for (const target of [...descriptor.sourcePaths, ...descriptor.destinationPaths, ...descriptor.fileOps.flatMap(operation => operation.to === undefined ? [operation.path] : [operation.path, operation.to])]) {
+          if (!await pathAllowed(target)) return denied();
+        }
+        if (request.toolName === 'bash') return descriptor.command !== undefined && commandGranted(descriptor.command)
+          ? allowed : { ...denied(), approvalRequired: true };
+        const capability = ['write', 'edit'].includes(request.toolName) ? 'write' : 'read';
+        if (request.toolName === 'edit' && descriptor.effectiveMode === undefined) return denied();
+        const targets = capability === 'write' ? descriptor.destinationPaths : descriptor.sourcePaths;
+        return targets.length > 0 && policy.fileTools.includes(capability) ? allowed : denied();
       }
       return policy.toolRequests.some(candidate => isDeepStrictEqual(candidate, request)) ? allowed : denied();
     } catch { return denied('SERVICE_UNAVAILABLE', 503); }

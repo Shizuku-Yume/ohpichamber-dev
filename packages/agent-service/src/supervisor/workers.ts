@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { CompletionWorkerBootstrapSchema, WorkerBootstrapSchema, WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema, WorkerPolicyResultSchema } from '../protocol.ts';
-import type { NativeOperationDescriptor } from './host-authorization-protocol.ts';
+import type { CompletionWorkerBootstrap, WorkerBootstrap, WorkerApprovalPolicy, WorkerInfo, WorkerOperation, WorkerOperationResult, WorkerPolicyRequest, WorkerPolicyResult, WorkerInteraction } from '../protocol.ts';
+import type { ProjectionSeed, ProjectionInput } from '../projection/protocol.ts';
+import type { NativeOperationDescriptor, HostActionRequest, HostActionResult, HostNativePolicySnapshot } from './host-authorization-protocol.ts';
+import { describeNativeOperation } from '../worker/native-policy-descriptor.ts';
 import type { JsonObject, ProblemCode } from '@openchamber/agent-contract';
+import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
 
 export class WorkerOperationError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, readonly details?: JsonObject) { super('SDK worker operation failed'); }
@@ -31,7 +35,9 @@ type WorkerEntry = WorkerInput & {
   exited: Promise<void>;
   stopping?: Promise<boolean>;
   pending: Map<string, { resolve: (result: WorkerOperationResult) => void; reject: (error: Error) => void }>;
+  policySnapshot?: HostNativePolicySnapshot;
 };
+type ActionHandle = { entry: WorkerEntry; controller: AbortController };
 
 export interface WorkerRegistryOptions {
   workerEntrypoint: string;
@@ -39,6 +45,10 @@ export interface WorkerRegistryOptions {
   startupTimeoutMs?: number;
   stopTimeoutMs?: number;
   policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;
+  invokeHostAction?: (rootSessionId: string, request: HostActionRequest, signal: AbortSignal) => Promise<HostActionResult>;
+  consumeApprovalGrant?: (rootSessionId: string, generation: string, request: Extract<WorkerPolicyRequest, { type: 'tool' }>) => NativeApprovalGrant | undefined;
+  prepareBootstrap?: (input: WorkerBootstrap) => Promise<WorkerBootstrap>;
+  callbacks?: WorkerLifecycleCallbacks;
 }
 function defaultWorkerRuntime(): string {
   if (process.execPath.includes('bun')) return process.execPath;
@@ -62,6 +72,7 @@ async function waitWithin(operation: Promise<void>, milliseconds: number): Promi
 export class WorkerRegistry {
   private readonly entries = new Map<string, WorkerEntry>();
   private readonly mutations = new Map<string, Promise<void>>();
+  private readonly actions = new Map<string, ActionHandle>();
   private closing = false;
 
   constructor(private readonly options: WorkerRegistryOptions) {}
@@ -78,6 +89,12 @@ export class WorkerRegistry {
   bootstrap(rootSessionId: string): WorkerBootstrap | undefined {
     const entry = this.entries.get(rootSessionId);
     return entry?.kind === 'session' ? structuredClone(entry.input) : undefined;
+  }
+  authorizationPolicy(workspaceId: string, agentDirectoryId: string, rootSessionId?: string): HostNativePolicySnapshot {
+    const candidates = rootSessionId === undefined ? [...this.entries.values()] : [this.entries.get(rootSessionId)];
+    const entry = candidates.find(candidate => candidate?.input.workspaceId === workspaceId && candidate.input.agentDirectoryId === agentDirectoryId && candidate.child.connected && (candidate.info.state === 'starting' || candidate.info.state === 'ready') && candidate.policySnapshot !== undefined);
+    if (!entry?.policySnapshot) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    return structuredClone(entry.policySnapshot);
   }
 
   authorizationScope(rootSessionId: string): WorkerAuthorizationScope | undefined {
@@ -207,15 +224,41 @@ export class WorkerRegistry {
         if (entry.kind === 'session') this.options.callbacks?.onEvents?.(input.rootSessionId, workerGeneration, reply.data.inputs);
       } else if (reply.data.type === 'interaction') {
         if (entry.kind === 'session') this.options.callbacks?.onInteraction?.(input.rootSessionId, workerGeneration, reply.data.request);
+      } else if (reply.data.type === 'policy.snapshot') {
+        const snapshot = reply.data.snapshot;
+        if (snapshot.projectId !== input.projectId || snapshot.workspaceId !== input.workspaceId || snapshot.cwd !== input.cwd || snapshot.agentDirectory !== input.agentDirectory || (input.agentDirectoryId !== undefined && snapshot.agentDirectoryId !== input.agentDirectoryId)) return;
+        entry.policySnapshot = snapshot;
       } else if (reply.data.type === 'policy.request') {
         const check = this.options.policyCheck;
         const requestId = reply.data.requestId;
         const request = reply.data.request;
-        void (check ? check(input.rootSessionId, request, undefined) : Promise.resolve({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const)).then(result => {
+        void (async () => {
+          const descriptor = await describeNativeOperation(input.cwd, request, reply.data.type === 'policy.request' ? reply.data.nativeContext : undefined);
+          if (this.entries.get(input.rootSessionId) !== entry || entry.info.workerGeneration !== workerGeneration) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const;
+          if (descriptor && request.type === 'tool' && request.toolName === 'bash' && request.approvalId && request.toolCallId) {
+            descriptor.approvalGrant = this.options.consumeApprovalGrant?.(input.rootSessionId, workerGeneration, request);
+          }
+          return check ? check(input.rootSessionId, request, descriptor) : { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const;
+        })().then(result => {
           if (this.entries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: WorkerPolicyResultSchema.parse(result) });
         }).catch(() => {
           if (this.entries.get(input.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
         });
+      } else if (reply.data.type === 'action.cancel') {
+        const handle = this.actions.get(reply.data.requestId);
+        if (handle?.entry === entry) { this.actions.delete(reply.data.requestId); handle.controller.abort(); }
+      } else if (reply.data.type === 'action.request') {
+        const { requestId, request } = reply.data;
+        if (this.actions.has(requestId) || request.sessionId !== input.rootSessionId) return;
+        const handle = { entry, controller: new AbortController() };
+        this.actions.set(requestId, handle);
+        const invoke = this.options.invokeHostAction;
+        void (invoke ? invoke(input.rootSessionId, request, handle.controller.signal) : Promise.resolve({ ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const)).then(result => {
+          if (this.actions.get(requestId) !== handle || handle.controller.signal.aborted) return;
+          if (this.entries.get(input.rootSessionId) === entry && entry.child.connected && entry.info.state === 'ready') entry.child.send({ type: 'action.result', workerGeneration, requestId, result });
+        }).catch(() => {
+          if (this.actions.get(requestId) === handle && this.entries.get(input.rootSessionId) === entry && entry.child.connected) entry.child.send({ type: 'action.result', workerGeneration, requestId, result: { ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
+        }).finally(() => { if (this.actions.get(requestId) === handle) this.actions.delete(requestId); });
       } else if (reply.data.type === 'result') {
         const pending = entry.pending.get(reply.data.commandId);
         if (pending) { entry.pending.delete(reply.data.commandId); pending.resolve(reply.data.result); }
@@ -223,6 +266,7 @@ export class WorkerRegistry {
     });
     child.once('error', () => ready.reject(new Error('SDK worker could not start')));
     child.once('close', () => {
+      for (const [requestId, handle] of this.actions) if (handle.entry === entry) { this.actions.delete(requestId); handle.controller.abort(); }
       const wasStarting = entry.info.state === 'starting';
       if (entry.info.state !== 'stopping') entry.info.state = 'crashed';
       if (wasStarting) ready.reject(new Error('SDK worker exited before initialization'));
@@ -247,6 +291,7 @@ export class WorkerRegistry {
     if (entry.stopping) return entry.stopping;
     entry.stopping = (async () => {
       entry.info.state = 'stopping';
+      for (const [requestId, handle] of this.actions) if (handle.entry === entry) { this.actions.delete(requestId); handle.controller.abort(); }
       entry.rejectReady(new Error('SDK worker is stopping'));
       if (entry.child.connected) entry.child.send({ type: 'stop', workerGeneration: entry.info.workerGeneration });
       try {
