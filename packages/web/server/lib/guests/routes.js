@@ -103,6 +103,7 @@ const fileBodySchema = z.object({
 }).refine((value) => value.op !== 'write' || typeof value.content === 'string', { path: ['content'] });
 
 const generateBodySchema = z.object({
+  workspaceId: z.string().trim().min(1).max(200),
   prompt: z.string().trim().min(1).max(GUEST_GENERATE_PROMPT_MAX),
   system: z.string().trim().min(1).max(GUEST_GENERATE_SYSTEM_MAX).optional(),
   maxOutputTokens: z.number().int().min(1).max(GUEST_GENERATE_OUTPUT_TOKENS_MAX).optional(),
@@ -211,10 +212,12 @@ export const registerGuestRoutes = (app, {
   openchamberVersion,
   resolveGitBinaryForSpawn,
   resolveOptionalProjectDirectory,
+  resolveWorkspaceScope,
   getSmallModelService,
   onGuestDeactivated = async () => false,
   surfaceViewerHeaders = () => null,
 }) => {
+  if (typeof resolveWorkspaceScope !== 'function') throw new TypeError('Guest workspace scope resolver is required');
   const persistPath = extensionsPersistPath(openchamberDataDir);
   const authPath = guestAuthPersistPath(openchamberDataDir);
   const versionOptions = { openchamberVersion };
@@ -671,9 +674,12 @@ export const registerGuestRoutes = (app, {
       if (!parsed.success) {
         return res.status(400).json({ error: 'invalid-request' });
       }
-      const { directory } = await resolveOptionalProjectDirectory(req);
-      // The host names the composer's provider, which the model stays on, and
-      // its model, used when that provider has no small one.
+      const workspace = await resolveWorkspaceScope(parsed.data.workspaceId);
+      if (!workspace || workspace.workspaceId !== parsed.data.workspaceId) {
+        return res.status(404).json({ error: 'WORKSPACE_NOT_FOUND' });
+      }
+      const directory = workspace.cwd;
+      // The host names provider/model preferences; workspace scope authorizes the completion.
       const provider = providerHeaderSchema.safeParse(req.get('x-openchamber-provider'));
       const composerModel = providerHeaderSchema.safeParse(req.get('x-openchamber-model'));
       const { generateSmallModelText } = await getSmallModelService();
@@ -683,8 +689,8 @@ export const registerGuestRoutes = (app, {
           prompt: parsed.data.prompt,
           system: parsed.data.system,
           maxOutputTokens: parsed.data.maxOutputTokens,
-          workspaceId: req.get('x-openchamber-workspace-id') || parsed.data.workspaceId,
-          directory: directory || undefined,
+          workspaceId: parsed.data.workspaceId,
+          directory,
           preferredProviderID: provider.success ? provider.data : undefined,
           preferredModelID: provider.success && composerModel.success ? composerModel.data : undefined,
         });

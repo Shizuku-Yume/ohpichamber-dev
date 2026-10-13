@@ -91,6 +91,7 @@ const readWalkthroughResult = async (
 
 interface WalkthroughQuery {
   [key: string]: string | undefined;
+  workspaceId?: string;
   directory: string;
   source: string;
   provider?: string;
@@ -113,6 +114,7 @@ interface WalkthroughReadContextBody {
 }
 
 interface GenerateWalkthroughBody extends WalkthroughReadContextBody {
+  workspaceId?: string;
   directory: string;
   source: WalkthroughTarget['source'];
   force: boolean;
@@ -153,9 +155,10 @@ export const buildTargetQuery = (directory: string, target: WalkthroughTarget): 
 export async function fetchWalkthrough(
   directory: string,
   target: WalkthroughTarget,
-  options: { model?: string; providerID?: string; modelID?: string; language?: string; signal?: AbortSignal } = {}
+  options: { workspaceId?: string; model?: string; providerID?: string; modelID?: string; language?: string; signal?: AbortSignal } = {}
 ): Promise<WalkthroughResult> {
   const query = buildTargetQuery(directory, target);
+  if (options.workspaceId) query.workspaceId = options.workspaceId;
   if (options.model) query.model = options.model;
   if (options.providerID) query.providerID = options.providerID;
   if (options.modelID) query.modelID = options.modelID;
@@ -173,9 +176,10 @@ export async function fetchWalkthrough(
 export async function generateWalkthrough(
   directory: string,
   target: WalkthroughTarget,
-  options: { force?: boolean; model?: string; providerID?: string; modelID?: string; language?: string; signal?: AbortSignal } = {}
+  options: { workspaceId?: string; force?: boolean; model?: string; providerID?: string; modelID?: string; language?: string; signal?: AbortSignal } = {}
 ): Promise<WalkthroughResult> {
   const body: GenerateWalkthroughBody = {
+    ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
     directory,
     source: target.source,
     force: options.force === true,
@@ -203,9 +207,10 @@ export async function generateWalkthrough(
  */
 export async function cancelWalkthroughGeneration(
   directory: string,
-  target: WalkthroughTarget
+  target: WalkthroughTarget,
+  options: { workspaceId?: string } = {},
 ): Promise<void> {
-  const body: CancelWalkthroughBody = { directory, source: target.source };
+  const body: CancelWalkthroughBody = { ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}), directory, source: target.source };
   if (isPullRequestTarget(target)) Object.assign(body, readContextFields(target.context));
   const response = await runtimeFetch(`${BASE}/cancel`, {
     method: 'POST',
@@ -231,10 +236,11 @@ export async function cancelWalkthroughGeneration(
 export async function fetchWalkthroughStage(
   directory: string,
   target: WalkthroughTarget,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  workspaceId?: string,
 ): Promise<WalkthroughStage | null> {
   const response = await runtimeFetch(`${BASE}/progress`, {
-    query: buildTargetQuery(directory, target),
+    query: { ...buildTargetQuery(directory, target), ...(workspaceId ? { workspaceId } : {}) },
     signal,
   });
   if (!response.ok) return null;

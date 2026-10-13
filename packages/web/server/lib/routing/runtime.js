@@ -54,12 +54,12 @@ export const requestTextOf = (body) => {
 
 const agentBodySchema = z.object({ agent: z.string().trim().min(1) });
 
-// v2 serves one flat model catalogue; a model's thinking levels are `{ id }[]`.
+// Canonical workspace catalogs expose provider/model identities and variants.
 const catalogResponseSchema = z.object({
-  data: z.array(z.object({
-    providerID: z.string(),
-    modelID: z.string(),
-    variants: z.array(z.object({ id: z.string() })).default([]),
+  workspaceId: z.string().min(1),
+  revision: z.string().min(1),
+  models: z.array(z.object({
+    modelId: z.string().min(1), provider: z.string().min(1), variants: z.array(z.object({ variant: z.string().min(1) })),
   })),
 });
 
@@ -81,7 +81,7 @@ export function createRoutingRuntime({
   dataDir,
   service,
   resolveWorkspaceScope,
-  resolveSelectedCredential,
+  resolveSessionScope,
   broadcastGlobalUiEvent,
   fetchImpl = fetch,
   store = createRoutingStore({ dataDir }),
@@ -96,7 +96,7 @@ export function createRoutingRuntime({
   now = Date.now,
 }) {
   if (!service || typeof service.request !== 'function') throw new Error('routing requires the Agent service');
-  if (typeof resolveWorkspaceScope !== 'function' || typeof resolveSelectedCredential !== 'function') throw new Error('routing requires Host scope and credential resolvers');
+  if (typeof resolveWorkspaceScope !== 'function' || typeof resolveSessionScope !== 'function') throw new Error('routing requires Host scope resolvers');
   const permissionDecisions = new Map();
   // Sessions the user put on Auto. The sentinel never reaches OpenCode, so
   // nothing upstream remembers the choice for us.
@@ -189,11 +189,19 @@ export function createRoutingRuntime({
     if (!response.ok) throw Object.assign(new Error(body?.detail || body?.error || 'Agent service request failed'), { status: response.status });
     return body;
   };
-  const readHistory = readSessionHistory ?? (async ({ sessionId }) => loadRoutingHistory({
-    signal: AbortSignal.timeout(HISTORY_TIMEOUT_MS),
-    readPage: async ({ limit, cursor }) => requestAgent(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/history?${new URLSearchParams({ limit: String(limit), ...(cursor ? { cursor } : {}) })}`),
-  }));
-  const readConfig = readConfigEntries ?? ((workspaceId) => requestAgent(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/config`));
+  const scopeForSession = async (sessionId) => {
+    const scope = await resolveSessionScope(sessionId);
+    if (!scope) throw Object.assign(new Error('Session scope was not found'), { status: 404, code: 'SESSION_NOT_FOUND' });
+    return scope;
+  };
+  const readHistory = readSessionHistory ?? (async ({ sessionId }) => {
+    await scopeForSession(sessionId);
+    return loadRoutingHistory({
+      signal: AbortSignal.timeout(HISTORY_TIMEOUT_MS),
+      readPage: async ({ limit, cursor }) => requestAgent(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/history?${new URLSearchParams({ limit: String(limit), ...(cursor ? { cursor } : {}) })}`),
+    });
+  });
+  const readConfig = readConfigEntries;
 
   /**
    * "Try to preserve cache usage": the category to stay on instead of a lower
@@ -209,10 +217,11 @@ export function createRoutingRuntime({
     if (!held) return null;
     const idle = now() - lastAnswer.completed;
     if (idle < PROMPT_CACHE_TTL_MS) return held;
+    if (!readConfig) return null;
     try {
       return idle < warmWindowMs(await readConfig(directory)) ? held : null;
     } catch (error) {
-      console.warn('[routing] OpenCode config unavailable, treating the prompt cache as cold:', errorMessage(error));
+      console.warn('[routing] cache-warming configuration unavailable; treating the prompt cache as cold:', errorMessage(error));
       return null;
     }
   };
@@ -232,8 +241,9 @@ export function createRoutingRuntime({
   };
 
   const readCatalog = listCatalogModels ?? (async (workspaceId) => {
-    const body = await requestAgent(`/api/agent/v1/catalog/models?workspaceId=${encodeURIComponent(workspaceId)}`);
-    return catalogResponseSchema.parse({ data: body?.items || body?.data || [] }).data;
+    const scope = await resolveWorkspaceScope(workspaceId);
+    if (!scope || scope.workspaceId !== workspaceId) throw Object.assign(new Error('Workspace scope was not found'), { status: 404, code: 'SESSION_NOT_FOUND' });
+    return catalogResponseSchema.parse(await requestAgent(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/models`)).models;
   });
 
   /**
@@ -242,25 +252,20 @@ export function createRoutingRuntime({
    * before #4133 saved list positions ("0", "1", "2") as variants. A catalog
    * that cannot be read, or does not know the model yet, keeps the variant.
    */
-  const withKnownVariant = async (selection, directory) => {
+  const withKnownVariant = async (selection, workspaceId) => {
     const variant = selection.model.variant;
     if (!variant) return selection;
     let models;
-    try {
-      models = await readCatalog(directory);
-    } catch (error) {
+    try { models = await readCatalog(workspaceId); }
+    catch (error) {
       console.warn('[routing] model catalog unavailable, keeping the saved variant:', errorMessage(error));
       return selection;
     }
     const { providerID, id } = selection.model;
-    const entry = models.find((model) => model.providerID === providerID && model.modelID === id);
-    if (!entry || entry.variants.some((known) => known.id === variant)) return selection;
+    const entry = models.find((model) => model.provider === providerID && model.modelId === id);
+    if (!entry || entry.variants.some((known) => known.variant === variant)) return selection;
     console.warn(`[routing] ${providerID}/${id} has no "${variant}" thinking level; using its default`);
-    return {
-      ...selection,
-      model: { providerID, id },
-      decision: { ...selection.decision, variant: null },
-    };
+    return { ...selection, model: { providerID, id }, decision: { ...selection.decision, variant: null } };
   };
 
   /**
@@ -275,8 +280,11 @@ export function createRoutingRuntime({
    * Throws only when Auto cannot be honoured at all (no fallback configured):
    * the sentinel must never reach OpenCode.
    */
-  const resolveAutoSelection = async ({ sessionId, directory, model, agent, requestText }) => {
+  const resolveAutoSelection = async ({ sessionId, directory, workspaceId: requestedWorkspaceId, model, agent, requestText }) => {
     if (!isAutoModel(model)) return null;
+    const sessionScope = await scopeForSession(sessionId);
+    const workspaceId = requestedWorkspaceId ?? sessionScope.workspaceId;
+    if (sessionScope.workspaceId !== workspaceId) throw Object.assign(new Error('Session workspace does not match routing workspace'), { status: 403, code: 'UNAUTHORIZED' });
     const state = await describe();
     const config = state.config;
     if (!config?.fallback) {
@@ -318,7 +326,7 @@ export function createRoutingRuntime({
     } else {
       selection = chooseSelection(config, null, agent);
     }
-    selection = await withKnownVariant(selection, directory);
+    selection = await withKnownVariant(selection, workspaceId);
     Object.assign(decision, selection.decision);
     broadcast('openchamber:routing.decision', decision);
     return { model: selection.model, agent: selection.agent, decision };

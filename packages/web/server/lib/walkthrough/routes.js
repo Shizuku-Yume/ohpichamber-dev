@@ -11,7 +11,14 @@ const modelIdSchema = z.string().trim().min(1).max(200).optional().catch(undefin
 // client is still there.
 const clientIsGone = (res) => res.writableEnded || res.destroyed;
 
-export function registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext }) {
+export function registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext, resolveWorkspaceScope }) {
+  if (typeof resolveWorkspaceScope !== 'function') throw new TypeError('Walkthrough workspace scope resolver is required');
+  const workspaceFor = async (workspaceId) => {
+    if (typeof workspaceId !== 'string' || !workspaceId.trim()) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400, code: 'INVALID_REQUEST' });
+    const scope = await resolveWorkspaceScope(workspaceId);
+    if (!scope || scope.workspaceId !== workspaceId) throw Object.assign(new Error('Workspace scope was not found'), { statusCode: 404, code: 'SESSION_NOT_FOUND' });
+    return scope;
+  };
   const respondWithError = (res, error, fallback) => {
     let bindingStatus = 0;
     if (error?.code === 'INVALID_SOURCE_CONTROL_BINDING' || error?.code === 'INVALID_SOURCE_CONTROL_READ_CONTEXT') {
@@ -69,16 +76,15 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
 
   app.get('/api/walkthrough', async (req, res) => {
     try {
-      const directory = typeof req.query.directory === 'string' ? req.query.directory : '';
-      if (!directory) {
-        return res.status(400).json({ error: 'directory parameter is required' });
-      }
-
+      const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : '';
+      const workspace = await workspaceFor(workspaceId);
+      const directory = workspace.cwd;
       const source = readSource(req.query.source);
       const readContext = await validatePullRequestContext(source, req.query, directory);
       const { getWalkthrough, getPullRequestDiff } = await getWalkthroughService();
       const result = await getWalkthrough(
         {
+          workspaceId,
           directory: readContext?.directory ?? directory,
           source,
           model: typeof req.query.model === 'string' ? req.query.model : undefined,
@@ -100,13 +106,10 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
   app.get('/api/walkthrough/pr-diff', async (req, res) => {
     try {
       const query = new URL(req.originalUrl, 'http://localhost').searchParams;
-      const directory = query.get('directory')?.trim() ?? '';
-      if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
+      const workspace = await workspaceFor(query.get('workspaceId') ?? '');
+      const directory = workspace.cwd;
       const source = parseSource(readSource(query.get('source')));
       if (source.kind !== 'pr') return res.status(400).json({ error: 'A pull request source is required' });
-      // Same exact binding authority as the walkthrough routes: the repository
-      // and account come from the checkout's binding, and a named source
-      // repository is only checked against it.
       const readContext = await validatePullRequestContext(source, Object.fromEntries(query), directory);
       const { getPullRequestDiff } = await getWalkthroughService();
       const { patch } = await getPullRequestDiff(readContext?.directory ?? directory, source.number, readContext, {
@@ -124,8 +127,8 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
   app.get('/api/walkthrough/pr-file', async (req, res) => {
     try {
       const query = new URL(req.originalUrl, 'http://localhost').searchParams;
-      const directory = query.get('directory')?.trim() ?? '';
-      if (!directory) return res.status(400).json({ error: 'directory parameter is required' });
+      const workspace = await workspaceFor(query.get('workspaceId') ?? '');
+      const directory = workspace.cwd;
       const source = parseSource(readSource(query.get('source')));
       if (source.kind !== 'pr') return res.status(400).json({ error: 'A pull request source is required' });
       const path = query.get('path')?.trim() ?? '';
@@ -151,10 +154,9 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
   // request below.
   app.post('/api/walkthrough/generate', async (req, res) => {
     try {
-      const { workspaceId, directory, source, force, model, providerID, modelID, language } = req.body || {};
-      if (!directory || typeof directory !== 'string') {
-        return res.status(400).json({ error: 'directory is required' });
-      }
+      const { workspaceId, source, force, model, providerID, modelID, language } = req.body || {};
+      const workspace = await workspaceFor(workspaceId);
+      const directory = workspace.cwd;
 
       const readContext = await validatePullRequestContext(source, req.body, directory);
       const { generateWalkthrough, getPullRequestDiff } = await getWalkthroughService();
@@ -184,11 +186,9 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
   // re-runs the whole git pipeline and must not be used for this.
   app.get('/api/walkthrough/progress', async (req, res) => {
     try {
-      const directory = typeof req.query.directory === 'string' ? req.query.directory : '';
-      if (!directory) {
-        return res.status(400).json({ error: 'directory parameter is required' });
-      }
-
+      const workspaceId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : '';
+      const workspace = await workspaceFor(workspaceId);
+      const directory = workspace.cwd;
       const source = readSource(req.query.source);
       const readContext = await validatePullRequestContext(source, req.query, directory);
       const { getGenerationStage, getRepositoryRootFor } = await getWalkthroughService();
@@ -203,10 +203,9 @@ export function registerWalkthroughRoutes(app, { getWalkthroughService, validate
 
   app.post('/api/walkthrough/cancel', async (req, res) => {
     try {
-      const { directory, source } = req.body || {};
-      if (!directory || typeof directory !== 'string') {
-        return res.status(400).json({ error: 'directory is required' });
-      }
+      const { workspaceId, source } = req.body || {};
+      const workspace = await workspaceFor(workspaceId);
+      const directory = workspace.cwd;
 
       const readContext = await validatePullRequestContext(source, req.body, directory);
       const { cancelWalkthroughGeneration } = await getWalkthroughService();

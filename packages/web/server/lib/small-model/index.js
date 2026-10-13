@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import net from 'node:net';
-import { setTimeout as delay } from 'node:timers/promises';
 import os from 'os';
 import path from 'path';
 import { readMergedSettingsSync } from '../host/settings-files.js';
@@ -8,25 +6,10 @@ import {
   completeSmallModel,
   findModelInfo,
   getAgentService,
-  getConfiguredSmallModelRef,
-  getDefaultModelInfo,
   listModelInfos,
   listProviderInfos,
 } from './client.js';
 
-const DEFAULT_TIMEOUT_MS = 60_000;
-
-// Waits between retries of `Model unavailable`, ~31 s in total. Right after
-// OpenCode starts, plugin-provided models (claude-code) stay unavailable for
-// 20-40 s while plugins for the global location load lazily. The rejection
-// precedes provider dispatch, so a retry costs no tokens.
-const UNAVAILABLE_RETRY_DELAYS_MS = [500, 1_000, 2_000, 4_000, 8_000, 16_000];
-let unavailableRetryDelaysMs = UNAVAILABLE_RETRY_DELAYS_MS;
-
-/** Test hook: replace the backoff schedule; no argument restores the default. */
-export const setUnavailableRetryDelaysForTest = (delays = UNAVAILABLE_RETRY_DELAYS_MS) => {
-  unavailableRetryDelaysMs = delays;
-};
 
 const OPENCHAMBER_SETTINGS_FILE = path.join(
   process.env.OPENCHAMBER_DATA_DIR
@@ -67,7 +50,7 @@ const OUTPUT_RESERVE_TOKENS = 4_000;
  * will actually request, or the two disagree and the model overruns its context.
  */
 export const getModelInputCharBudget = ({ modelInfo, outputReserveTokens }) => {
-  const context = Number(modelInfo?.limit?.context);
+  const context = Number(modelInfo?.contextWindow);
   const known = context > 0;
   const contextTokens = known ? context : DEFAULT_CONTEXT_TOKENS;
   const reserve = Number(outputReserveTokens) > 0 ? Number(outputReserveTokens) : OUTPUT_RESERVE_TOKENS;
@@ -86,7 +69,7 @@ export const getModelInputCharBudget = ({ modelInfo, outputReserveTokens }) => {
 const resolveOutputTokens = ({ modelInfo, maxOutputTokens }) => {
   const requested = Number(maxOutputTokens) > 0 ? Number(maxOutputTokens) : 0;
   if (!requested) return undefined;
-  const limit = Number(modelInfo?.limit?.output);
+  const limit = Number(modelInfo?.maxOutputTokens);
   return limit > 0 ? Math.min(requested, limit) : requested;
 };
 
@@ -107,10 +90,6 @@ const clampPromptToModelLimit = ({ prompt, modelInfo, providerID, modelID, onOve
   return { prompt: `${prompt.slice(0, maxChars)}…`, truncated: true };
 };
 
-const noClientError = () => Object.assign(
-  new Error('No small model available — OpenCode is not reachable'),
-  { statusCode: 404 },
-);
 
 /**
  * The model families that count as "small", most preferred first. The same
@@ -127,7 +106,7 @@ export const SMALL_MODEL_FAMILY_PRIORITY = ['gpt-luna', 'gemini-flash-lite', 'ge
  */
 export const familyOf = (model) => {
   if (model?.family) return String(model.family);
-  const id = String(model?.id ?? '').toLowerCase();
+  const id = String(model?.modelId ?? '').toLowerCase();
   if (id.includes('luna')) return 'gpt-luna';
   if (id.includes('flash-lite') || id.includes('flash_lite')) return 'gemini-flash-lite';
   if (id.includes('flash')) return 'gemini-flash';
@@ -140,249 +119,93 @@ export const familyOf = (model) => {
  * text-out model of the first family in `SMALL_MODEL_FAMILY_PRIORITY` that the
  * provider has. Null when the provider has none of those families.
  */
-export const pickSmallModelInProvider = (models, providerID) => pickSmallModel(models, (model) => model.providerID === providerID);
+export const pickSmallModelInProvider = (models, providerID) => pickSmallModel(models, (model) => model.provider === providerID);
 
 const pickSmallModel = (models, accept) => {
   const candidates = models
     .filter((model) => model && accept(model)
       && model.enabled !== false
-      && (model.status === undefined || model.status === 'active')
-      && (model.capabilities?.input ?? ['text']).some((item) => String(item).startsWith('text'))
-      && (model.capabilities?.output ?? ['text']).some((item) => String(item).startsWith('text')))
-    .sort((a, b) => (Number(b.time?.released) || 0) - (Number(a.time?.released) || 0));
+      && (model.status === undefined || ['active', 'alpha', 'beta'].includes(model.status))
+      && model.modalities.includes('text'));
   for (const family of SMALL_MODEL_FAMILY_PRIORITY) {
     const found = candidates.find((model) => familyOf(model) === family);
-    if (found) return { providerID: found.providerID, modelID: found.id };
+    if (found) return { providerID: found.provider, modelID: found.modelId };
   }
   return null;
 };
 
-/**
- * Which model this call runs on, in order:
- *
- * 1. An explicit request model.
- * 2. OpenChamber's settings override (Settings → Sessions → Small Model).
- * 3. The small model configured for OpenCode itself: the `title` agent's
- *    model (`agents.title.model`, or v1 `small_model`) — `config`.
- * 4. The small model of the caller's provider — the session's, or the one
- *    in the composer (family scan above) — `session-provider-small`. Without
- *    one the caller's own model (`session-model`): costlier, but never
- *    someone else's subscription.
- * 5. `GET /api/model/default`: OpenCode's default model — `default`, only
- *    when the caller named no provider or it is on that provider. This is
- *    the chat default, not a small model; OpenCode's own family scan is not
- *    reachable over HTTP, which is why step 4 lives here.
- *
- * There is no step that picks a small model from whichever other provider
- * happens to be connected: the content (diffs, replies, session text) goes
- * only where the user sent their own work or configured on purpose.
- */
-const resolveSmallModel = async ({ client, directory, workspaceId, model, preferredProviderID, preferredModelID }) => {
+/** Resolve only from explicit intent and the authorized workspace catalog. */
+const resolveSmallModel = async ({ client, workspaceId, model, preferredProviderID, preferredModelID }) => {
   const explicit = parseModelRef(model);
   if (explicit) return { ...explicit, source: 'request' };
 
+  const models = await listModelInfos(client, workspaceId);
   const fromSettings = parseModelRef(readSmallModelSettingsOverride());
-  if (fromSettings) return { ...fromSettings, source: 'settings' };
-
-  // A config can outlive the login behind it. OpenCode's own titles then move
-  // on to another model, so a model it lists as disabled is skipped here too;
-  // one it does not list (a plugin model still loading) is kept.
-  const fromConfig = await getConfiguredSmallModelRef(client);
-  if (fromConfig) {
-    const info = findModelInfo(await listModelInfos(client, workspaceId || directory), fromConfig.providerID, fromConfig.modelID);
-    if (info?.enabled !== false) return { ...fromConfig, source: 'config' };
+  if (fromSettings) {
+    const info = findModelInfo(models, fromSettings.providerID, fromSettings.modelID);
+    if (info?.enabled !== false) return { ...fromSettings, source: 'settings' };
   }
 
   if (preferredProviderID) {
-    const small = pickSmallModelInProvider(await listModelInfos(client, workspaceId || directory), preferredProviderID);
+    const small = pickSmallModelInProvider(models, preferredProviderID);
     if (small) return { ...small, source: 'session-provider-small' };
-    // OpenCode's own titles end here too: the model the user works with.
-    if (preferredModelID) return { providerID: preferredProviderID, modelID: preferredModelID, source: 'session-model' };
-  }
-
-  const fallback = await getDefaultModelInfo(client);
-  if (!fallback) return null;
-  // Without a configured default, OpenCode answers with its first available
-  // model, from any provider. A caller that named its provider stays on it.
-  if (preferredProviderID && fallback.providerID !== preferredProviderID) return null;
-  return { providerID: fallback.providerID, modelID: fallback.id, source: 'default' };
-};
-
-const LOCAL_NETWORKS = new net.BlockList();
-for (const [address, prefix] of [['0.0.0.0', 32], ['127.0.0.0', 8], ['10.0.0.0', 8], ['172.16.0.0', 12], ['192.168.0.0', 16], ['169.254.0.0', 16], ['100.64.0.0', 10]]) {
-  LOCAL_NETWORKS.addSubnet(address, prefix, 'ipv4');
-}
-for (const [address, prefix] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10]]) {
-  LOCAL_NETWORKS.addSubnet(address, prefix, 'ipv6');
-}
-const LOCAL_HOST_SUFFIXES = ['.localhost', '.local', '.lan', '.internal', '.home.arpa'];
-
-/**
- * Whether the model is served from this machine or the local network, read
- * from the endpoint OpenCode reports for it (`settings.baseURL`). Covers
- * loopback, private and CGNAT (Tailscale) ranges, and LAN-style host names.
- * A model whose endpoint OpenCode does not report is not local.
- */
-const isLocalModelEndpoint = (modelInfo) => {
-  const endpoint = modelInfo?.settings?.baseURL ?? modelInfo?.settings?.endpoint;
-  if (typeof endpoint !== 'string' || !endpoint) return false;
-  let host;
-  try {
-    host = new URL(endpoint).hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  } catch {
-    return false;
-  }
-  const family = net.isIP(host);
-  if (family) return LOCAL_NETWORKS.check(host, family === 6 ? 'ipv6' : 'ipv4');
-  return host === 'localhost' || !host.includes('.') || LOCAL_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
-};
-
-const JSON_FENCE = /^```(?:json)?\s*\n?([\s\S]*?)\n?```$/;
-
-/**
- * `/api/experimental/generate` has no structured-output mode, so the schema travels in the
- * prompt and the reply is parsed here.
- */
-const buildSchemaInstruction = (responseSchema) =>
-  `Reply with JSON matching this schema and nothing else: ${JSON.stringify(responseSchema)}`;
-
-const extractJsonText = (raw) => {
-  const trimmed = typeof raw === 'string' ? raw.trim() : '';
-  if (!trimmed) return null;
-  const fenced = JSON_FENCE.exec(trimmed);
-  const candidate = (fenced ? fenced[1] : trimmed).trim();
-  try {
-    JSON.parse(candidate);
-    return candidate;
-  } catch {
+    if (preferredModelID && findModelInfo(models, preferredProviderID, preferredModelID)) {
+      return { providerID: preferredProviderID, modelID: preferredModelID, source: 'session-model' };
+    }
     return null;
   }
+
+  const fallback = pickSmallModel(models, () => true);
+  return fallback ? { ...fallback, source: 'catalog-small' } : null;
 };
+
 
 const requestOptions = ({ timeoutMs, signal }) => {
   const timeout = Number(timeoutMs) > 0 ? Number(timeoutMs) : DEFAULT_TIMEOUT_MS;
-  const signals = [AbortSignal.timeout(timeout)];
-  if (signal) signals.push(signal);
-  return { signal: AbortSignal.any(signals) };
+  const timeoutSignal = AbortSignal.timeout(timeout);
+  return { signal: signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal };
 };
 
-/**
- * Generates text with the user's small model through the running OpenCode.
- * Credentials stay inside OpenCode; this server only sends a prompt.
- */
-export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, workspaceId, directory, preferredProviderID, preferredModelID, responseSchema, timeoutMs, signal, onOverflow = 'truncate' }) {
-  if (typeof prompt !== 'string' || !prompt.trim()) {
-    throw Object.assign(new Error('prompt is required'), { statusCode: 400 });
-  }
+const completionError = (result, resolved) => {
+  const detail = result.error?.detail || 'Small-model completion failed';
+  const statusCode = result.error?.code === 'CONTEXT_LIMIT' ? 413
+    : result.error?.code === 'STRUCTURED_OUTPUT_INVALID' ? 422
+      : result.error?.code === 'MODEL_UNAVAILABLE' ? 404 : 502;
+  return Object.assign(new Error(detail), {
+    statusCode,
+    code: result.error?.code?.toLowerCase().replaceAll('_', '-'),
+    providerID: resolved.providerID,
+    modelID: resolved.modelID,
+  });
+};
+
+/** Generate through the canonical stateless completion route. */
+export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, workspaceId, preferredProviderID, preferredModelID, responseSchema, timeoutMs, signal, onOverflow = 'truncate' }) {
+  if (typeof prompt !== 'string' || !prompt.trim()) throw Object.assign(new Error('prompt is required'), { statusCode: 400 });
   if (typeof workspaceId !== 'string' || !workspaceId.trim()) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400 });
   const client = getAgentService();
-  if (!client) throw noClientError();
+  if (!client) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
 
-  const resolved = await resolveSmallModel({
-    client,
-    directory,
-    workspaceId,
-    model,
-    preferredProviderID,
-    preferredModelID,
-  });
-
-  if (!resolved) {
-    throw Object.assign(
-      new Error(preferredProviderID
-        ? 'No small model available within the session provider'
-        : 'No small model available — OpenCode reports no default model'),
-      { statusCode: 404 },
-    );
-  }
+  const resolved = await resolveSmallModel({ client, workspaceId, model, preferredProviderID, preferredModelID });
+  if (!resolved) throw Object.assign(new Error(preferredProviderID ? 'No small model available within the session provider' : 'No small model is available in the workspace catalog'), { statusCode: 404, code: 'MODEL_UNAVAILABLE' });
 
   const models = await listModelInfos(client, workspaceId);
   const modelInfo = findModelInfo(models, resolved.providerID, resolved.modelID);
-
   const outputTokens = resolveOutputTokens({ modelInfo, maxOutputTokens });
-
-  const clamped = clampPromptToModelLimit({
-    prompt: prompt.trim(),
-    modelInfo,
-    providerID: resolved.providerID,
-    modelID: resolved.modelID,
-    onOverflow,
-    outputReserveTokens: outputTokens,
-  });
-
-  // `/api/experimental/generate` takes a single prompt, so the system instructions lead it.
-  const sections = [];
-  if (typeof system === 'string' && system.trim()) sections.push(system.trim());
-  sections.push(clamped.prompt);
-  if (responseSchema) sections.push(buildSchemaInstruction(responseSchema));
-  const fullPrompt = sections.join('\n\n');
-
-  const generationOptions = requestOptions({ timeoutMs, signal });
-  const unavailableMessage = `Model unavailable: ${resolved.providerID}/${resolved.modelID}`;
-  const send = async () => {
-    const result = await completeSmallModel({
-      completionId: randomUUID(),
-      workspaceId,
-      selection: { providerId: resolved.providerID, modelId: resolved.modelID },
-      prompt: fullPrompt,
-      format: responseSchema ? { type: 'json', schema: responseSchema } : { type: 'text' },
-      overflow: onOverflow,
-      variant: resolved.variant ?? null,
-      reasoningEffort: null,
-      ...(outputTokens ? { maxOutputTokens: outputTokens } : {}),
-      ...(timeoutMs ? { timeoutMs } : {}),
-      ...(typeof system === 'string' && system.trim() ? { system: system.trim() } : {}),
-    }, { signal: generationOptions.signal });
-    return typeof result?.text === 'string' ? result.text : (typeof result === 'string' ? result : '');
-  };
-
-  const sendWithCatalogRetry = async () => {
-    for (let attempt = 0; ; attempt += 1) {
-      try {
-        return await send();
-      } catch (error) {
-        if (error?._tag !== 'InvalidRequestError' || error.message !== unavailableMessage) throw error;
-        // OpenCode 2 can resolve a cold catalog before its models arrive.
-        // This rejection precedes provider dispatch; other failures must not retry.
-        if (attempt < unavailableRetryDelaysMs.length) {
-          await delay(unavailableRetryDelaysMs[attempt], undefined, { signal: generationOptions.signal });
-          continue;
-        }
-        throw Object.assign(new Error(unavailableMessage), {
-          statusCode: 503,
-          code: 'small-model-unavailable',
-        });
-      }
-    }
-  };
-
-  let text = await sendWithCatalogRetry();
-
-  if (responseSchema) {
-    // One retry: a model that ignored the shape once often honours it on a
-    // second pass, and the alternative is failing a walkthrough over a stray
-    // sentence of preamble.
-    let json = extractJsonText(text);
-    if (json === null) {
-      text = await sendWithCatalogRetry();
-      json = extractJsonText(text);
-    }
-    if (json === null) {
-      throw Object.assign(
-        new Error(`${resolved.providerID}/${resolved.modelID} did not return JSON matching the requested schema`),
-        { statusCode: 422, code: 'structured-output-unsupported', providerID: resolved.providerID, modelID: resolved.modelID },
-      );
-    }
-    text = json;
-  }
-
-  return {
-    text: text.trim(),
-    providerID: resolved.providerID,
-    modelID: resolved.modelID,
-    source: resolved.source,
-    ...(clamped.truncated ? { inputTruncated: true } : {}),
-  };
+  const clamped = clampPromptToModelLimit({ prompt: prompt.trim(), modelInfo, providerID: resolved.providerID, modelID: resolved.modelID, onOverflow, outputReserveTokens: outputTokens });
+  const result = await completeSmallModel({
+    completionId: randomUUID(), workspaceId,
+    selection: { providerId: resolved.providerID, modelId: resolved.modelID },
+    prompt: clamped.prompt, format: responseSchema ? { kind: 'json', schema: responseSchema } : { kind: 'text' },
+    overflow: onOverflow, variant: null, reasoningEffort: null,
+    ...(outputTokens ? { maxOutputTokens: outputTokens } : {}),
+    ...(timeoutMs ? { timeoutMs } : {}),
+    ...(typeof system === 'string' && system.trim() ? { system: system.trim() } : {}),
+  }, { signal: requestOptions({ timeoutMs, signal }).signal });
+  if (result.status === 'cancelled') throw Object.assign(new Error(`Small-model completion ${result.reason}`), { statusCode: 499, code: `completion-${result.reason}` });
+  if (result.status === 'failed') throw completionError(result, resolved);
+  const text = result.output.kind === 'json' ? JSON.stringify(result.output.value) : result.output.text;
+  return { text: text.trim(), providerID: resolved.providerID, modelID: resolved.modelID, source: resolved.source, ...(clamped.truncated ? { inputTruncated: true } : {}) };
 }
 
 /**
@@ -394,28 +217,12 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
  * models are perfectly usable, so the model list is the authority and the
  * provider list only contributes names.
  */
-export async function listAuthenticatedProviders() {
+export async function listAuthenticatedProviders(workspaceId) {
   const client = getAgentService();
-  if (!client) return [];
-  try {
-    const [providers, models] = await Promise.all([
-      listProviderInfos(client),
-      listModelInfos(client),
-    ]);
-    const enabled = new Set();
-    for (const model of models) {
-      if (model?.enabled === false) continue;
-      if (typeof model?.providerID === 'string' && model.providerID) enabled.add(model.providerID);
-    }
-    const ids = new Set();
-    for (const provider of providers) {
-      if (typeof provider?.id === 'string' && enabled.has(provider.id)) ids.add(provider.id);
-    }
-    for (const id of enabled) ids.add(id);
-    return Array.from(ids);
-  } catch {
-    return [];
-  }
+  if (!client) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
+  const [providers, models] = await Promise.all([listProviderInfos(client, workspaceId), listModelInfos(client, workspaceId)]);
+  const enabled = new Set(models.filter((model) => model?.enabled !== false).map((model) => model.provider));
+  return providers.filter((provider) => enabled.has(provider.providerId)).map((provider) => provider.providerId);
 }
 
 /**
@@ -433,54 +240,24 @@ const resolveReserveTokens = (outputReserveTokens, limits) => (
 /**
  * Reports which model would be used, without calling it.
  *
- * `structuredOutput` stays `null`: `/api/experimental/generate` has no structured-output
- * mode for any model, and this module emulates it through the prompt. Callers
- * must read `null` as "try it", which is exactly right here — the verdict
- * comes from the reply, not from a capability flag.
  */
-export async function describeSmallModel({ workspaceId, directory, preferredProviderID, preferredModelID, outputReserveTokens, overrideModel } = {}) {
+export async function describeSmallModel({ workspaceId, preferredProviderID, preferredModelID, outputReserveTokens, overrideModel } = {}) {
   const client = getAgentService();
-  if (!client) return null;
-
-  // A caller with its own model setting (the diff walkthrough) outranks the
-  // small-model chain entirely — it asked for this model on purpose.
-  const resolved = await resolveSmallModel({
-    client,
-    directory,
-    workspaceId,
-    model: overrideModel,
-    preferredProviderID,
-    preferredModelID,
-  });
+  if (!client) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
+  const resolved = await resolveSmallModel({ client, workspaceId, model: overrideModel, preferredProviderID, preferredModelID });
   if (!resolved) return null;
-
   const models = await listModelInfos(client, workspaceId);
   const modelInfo = findModelInfo(models, resolved.providerID, resolved.modelID);
-  const outputTokenLimit = Number(modelInfo?.limit?.output) > 0 ? Number(modelInfo.limit.output) : null;
-
-  // Two passes: the first only to learn the context, which a caller-supplied
-  // reserve function needs before it can answer.
+  const outputTokenLimit = Number(modelInfo?.maxOutputTokens) > 0 ? Number(modelInfo.maxOutputTokens) : null;
   const { contextTokens, contextKnown } = getModelInputCharBudget({ modelInfo });
   const reserveTokens = resolveReserveTokens(outputReserveTokens, { contextTokens, outputTokenLimit });
   const { maxChars } = getModelInputCharBudget({ modelInfo, outputReserveTokens: reserveTokens });
-
-  // An override can name a model OpenCode has no credential for. It reports
-  // that as a disabled model, and readiness refuses before the user pays for
-  // a failed request. A model we cannot find at all is not evidence either
-  // way, so it counts as usable.
-  const hasLogin = modelInfo ? modelInfo.enabled !== false : true;
-
   return {
     ...resolved,
-    hasLogin,
-    localEndpoint: isLocalModelEndpoint(modelInfo),
     inputCharBudget: maxChars,
     contextTokens,
     contextKnown,
-    // What the caller should ask for, so the request and the reserve above
-    // cannot drift apart.
     outputTokens: Number(reserveTokens) > 0 ? Number(reserveTokens) : null,
-    structuredOutput: null,
     outputTokenLimit,
   };
 }

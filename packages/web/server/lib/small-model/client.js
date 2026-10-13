@@ -1,48 +1,77 @@
-let service = null;
+import { ModelCatalogSchema, ProviderCatalogSchema, CompletionRequestSchema, CompletionResultSchema } from '@openchamber/agent-contract';
 
-export function configureAgentService(next) {
+let service = null;
+let resolveWorkspaceScope = null;
+
+export function configureAgentService(next, options = {}) {
   if (!next || typeof next.request !== 'function') throw new TypeError('Agent service is required');
+  if (typeof options.resolveWorkspaceScope !== 'function') throw new TypeError('Workspace scope resolver is required');
   service = next;
+  resolveWorkspaceScope = options.resolveWorkspaceScope;
+  modelCache.clear();
+  providerCache.clear();
 }
-export function resetAgentService() { service = null; modelCache = null; modelCacheKey = ''; modelCacheAt = 0; }
+
+export function resetAgentService() {
+  service = null;
+  resolveWorkspaceScope = null;
+  modelCache.clear();
+  providerCache.clear();
+}
+
 export const getAgentService = () => service;
 
+const modelCache = new Map();
+const providerCache = new Map();
 const MODEL_CACHE_TTL_MS = 30_000;
-let modelCache = null;
-let modelCacheKey = '';
-let modelCacheAt = 0;
 
-const request = async (path, init = {}) => {
-  if (!service) return null;
-  const response = await service.request(path, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
+const workspace = async (workspaceId) => {
+  if (typeof workspaceId !== 'string' || !workspaceId.trim()) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400, code: 'INVALID_REQUEST' });
+  if (!resolveWorkspaceScope) throw Object.assign(new Error('Workspace scope resolver is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
+  const scope = await resolveWorkspaceScope(workspaceId);
+  if (!scope || scope.workspaceId !== workspaceId) throw Object.assign(new Error('Workspace scope is unavailable'), { statusCode: 404, code: 'SESSION_NOT_FOUND' });
+  return scope;
+};
+
+const request = async (pathname, init = {}) => {
+  if (!service) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
+  const response = await service.request(pathname, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
   const body = await response.json().catch(() => null);
-  if (!response.ok) { const error = new Error(body?.detail || body?.error || 'Agent service request failed'); error.statusCode = response.status; error.code = body?.code; throw error; }
+  if (!response.ok) {
+    const error = new Error(body?.detail || 'Agent service request failed');
+    error.statusCode = response.status;
+    error.code = body?.code;
+    throw error;
+  }
   return body;
 };
 
 export async function listModelInfos(_service, workspaceId) {
-  const key = typeof workspaceId === 'string' ? workspaceId : '';
-  if (modelCache && modelCacheKey === key && Date.now() - modelCacheAt < MODEL_CACHE_TTL_MS) return modelCache;
-  try {
-    const body = await request(`/api/agent/v1/catalog/models${key ? `?workspaceId=${encodeURIComponent(key)}` : ''}`);
-    const models = Array.isArray(body?.items) ? body.items : Array.isArray(body?.data) ? body.data : [];
-    modelCache = models; modelCacheKey = key; modelCacheAt = Date.now(); return models;
-  } catch { return modelCacheKey === key && modelCache ? modelCache : []; }
+  await workspace(workspaceId);
+  const cached = modelCache.get(workspaceId);
+  if (cached && Date.now() - cached.at < MODEL_CACHE_TTL_MS) return cached.models;
+  const body = ModelCatalogSchema.parse(await request(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/models`));
+  modelCache.set(workspaceId, { models: body.models, at: Date.now() });
+  return body.models;
 }
-export async function listProviderInfos() {
-  try { const body = await request('/api/agent/v1/catalog/providers'); return Array.isArray(body?.items) ? body.items : Array.isArray(body?.data) ? body.data : []; } catch { return []; }
+
+export async function listProviderInfos(_service, workspaceId) {
+  await workspace(workspaceId);
+  const cached = providerCache.get(workspaceId);
+  if (cached && Date.now() - cached.at < MODEL_CACHE_TTL_MS) return cached.providers;
+  const body = ProviderCatalogSchema.parse(await request(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/providers`));
+  providerCache.set(workspaceId, { providers: body.providers, at: Date.now() });
+  return body.providers;
 }
-export async function getDefaultModelInfo() {
-  try { const body = await request('/api/agent/v1/catalog/default'); const info = body?.model || body?.data || body; return info && typeof info.id === 'string' ? info : null; } catch { return null; }
-}
-export async function getConfiguredSmallModelRef() {
-  try { const body = await request('/api/agent/v1/settings/small-model'); const model = body?.model || body; return model?.providerID && (model.modelID || model.id) ? { providerID: model.providerID, modelID: model.modelID || model.id } : null; } catch { return null; }
-}
+
 export async function completeSmallModel(input, { signal } = {}) {
-  const body = await request('/api/agent/v1/completions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input), signal });
-  return body?.completion || body;
+  const parsed = CompletionRequestSchema.parse(input);
+  return CompletionResultSchema.parse(await request(
+    `/api/agent/v1/workspaces/${encodeURIComponent(parsed.workspaceId)}/completions`,
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(parsed), signal },
+  ));
 }
+
 export function findModelInfo(models, providerID, modelID) {
-  const ofProvider = models.filter((model) => model?.providerID === providerID);
-  return ofProvider.find((model) => model.id === modelID) ?? ofProvider.find((model) => model.modelID === modelID) ?? null;
+  return models.find((model) => model?.provider === providerID && model?.modelId === modelID) ?? null;
 }
