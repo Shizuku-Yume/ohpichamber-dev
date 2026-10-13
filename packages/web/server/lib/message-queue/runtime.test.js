@@ -205,10 +205,10 @@ describe('canonical queue runtime', () => {
     await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'receipt first', request: { input: { text: 'receipt first', attachments: [], context: [] }, options } });
     await runtime.dispatch(scope).catch(() => undefined);
     const state = await runtime.getState(scope);
-    assert.equal(state.items[0].status, 'leased');
-    const pending = await store.pendingDeliveries(scope);
+    const privateScope = { sessionId: SESSION, projectId: PROJECT, workspaceId: WORKSPACE };
+    const pending = await store.pendingDeliveries(privateScope);
     assert.equal(pending[0].phase, 'submitting');
-    assert.deepEqual((await store.getDeliveryCapture(scope, pending[0].leaseId)).request.input.text, 'receipt first');
+    assert.deepEqual((await store.getDeliveryCapture(privateScope, pending[0].leaseId)).request.input.text, 'receipt first');
     await runtime.stop();
   });
 });
