@@ -219,6 +219,24 @@ describe('canonical Host authenticated real-service boundary', () => {
     ]);
     expect(requests).toHaveLength(0);
   });
+  it('admits known ready operations before parsing provider secrets and never parses unknown routes', async () => {
+    const malformedCredential = () => request(app)
+      .put('/api/agent/v1/workspaces/workspace_1/providers/custom-proxy/credential')
+      .set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json')
+      .send('{"credential":"private-marker"');
+    assertProblem(await malformedCredential(), 503, 'SERVICE_UNAVAILABLE');
+    servicePhase = 'ready';
+    policyEnabled = true;
+    assertProblem(await malformedCredential(), 403, 'enterprise_mode');
+    policyEnabled = false;
+    const invalid = await malformedCredential();
+    assertProblem(invalid, 400, 'INVALID_REQUEST');
+    expect(invalid.text).not.toContain('private-marker');
+    assertProblem(await request(app).post('/api/agent/v1/internal/credentials')
+      .set('Authorization', `Bearer ${token}`).set('Content-Type', 'application/json')
+      .send('{"credential":"private-marker"'), 404, 'NOT_IMPLEMENTED');
+    expect(requests).toHaveLength(0);
+  });
   it('awaits and repacks Host scopes, never forwards caller private headers or unknown routes', async () => {
     servicePhase = 'ready';
     const models = await request(app).get('/api/agent/v1/workspaces/workspace_1/models').set('Authorization', `Bearer ${token}`)

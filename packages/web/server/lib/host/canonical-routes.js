@@ -154,13 +154,20 @@ export function registerCanonicalHostRoutes(app, {
       return res.status(207).json(SelectedCredentialHandoffResultSchema.parse(await resolveCredentialHandoff(parsed.data)));
     } catch { return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The selected credential owner is unavailable.'); }
   });
-  router.use(express.json({ limit: '1mb', strict: true }));
-  router.use(async (req, res) => {
+  router.use((req, res, next) => {
     const route = AGENT_ROUTES.find(candidate => candidate.method === req.method && candidate.pattern.test(req.path));
     if (!route) return problem(res, 404, 'NOT_IMPLEMENTED', 'No canonical operation matches this route.');
     if (service.getState().phase !== 'ready') return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Agent Service is not ready.');
     if (route.providerEntry && isEnterpriseMode(enterprisePolicyOptions))
       return problem(res, 403, 'enterprise_mode', 'Provider entry is not available in enterprise mode.');
+    if (route.request && !req.is('application/json'))
+      return problem(res, 415, 'UNSUPPORTED_MEDIA_TYPE', 'Send an application/json request body.');
+    res.locals.canonicalProxyRoute = route;
+    next();
+  });
+  router.use(express.json({ limit: '1mb', strict: true }));
+  router.use(async (req, res) => {
+    const route = res.locals.canonicalProxyRoute;
     const controller = new AbortController();
     const disconnect = () => controller.abort();
     req.once('aborted', disconnect);
@@ -188,7 +195,6 @@ export function registerCanonicalHostRoutes(app, {
       }
       let body;
       if (route.request) {
-        if (!req.is('application/json')) return problem(res, 415, 'UNSUPPORTED_MEDIA_TYPE', 'Send an application/json request body.');
         const parsed = route.request.safeParse(req.body);
         if (!parsed.success) return problem(res, 400, 'INVALID_REQUEST', 'The canonical request is invalid.');
         if ('workspaceId' in parsed.data && parsed.data.workspaceId !== scope?.workspaceId)
