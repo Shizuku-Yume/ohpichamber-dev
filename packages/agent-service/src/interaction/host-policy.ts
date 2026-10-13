@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Serializable } from 'node:child_process';
 import { z } from 'zod';
 import { CounterSchema, EntityIdSchema } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
@@ -18,7 +19,7 @@ type Reply = z.infer<typeof ReplySchema>;
 /** Only the Node Host can acknowledge a committed policy. No worker owns this IPC channel. */
 export class HostApprovalPolicies {
   private readonly pending = new Map<string, { resolve: (reply: Reply) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
-  private readonly onMessage = (raw: unknown): void => {
+  private readonly onMessage = (raw: Serializable): void => {
     const reply = ReplySchema.safeParse(raw);
     if (!reply.success) return;
     const pending = this.pending.get(reply.data.requestId);

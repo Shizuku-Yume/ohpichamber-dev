@@ -12,7 +12,9 @@ import type { WorkerInteraction, WorkerOperation } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 
 type RequestKind = 'approval' | 'question';
-type RecordState = { kind: RequestKind; request: ApprovalRequest | QuestionRequest; timer?: ReturnType<typeof setTimeout> };
+type RecordState =
+  | { kind: 'approval'; request: ApprovalRequest; timer?: NodeJS.Timeout }
+  | { kind: 'question'; request: QuestionRequest; timer?: NodeJS.Timeout };
 type SessionState = { epoch: string; generation: string; workspaceId: string; dispatch: (operation: WorkerOperation) => Promise<void>; append: (input: ProjectionInput) => void };
 
 export interface ApprovalPolicyWrite {
@@ -40,6 +42,19 @@ const QuestionAnswerSchema = z.strictObject({
   results: z.array(z.strictObject({
     id: z.string().min(1), selectedOptions: z.array(z.string()), customInput: z.string().optional(), note: z.string().optional(),
   })),
+});
+const QuestionOptionSchema = z.object({
+  label: z.string(),
+  description: z.string().optional(),
+  preview: z.string().optional(),
+});
+const QuestionItemSchema = z.object({
+  id: z.string(),
+  question: z.string().optional(),
+  header: z.string().optional(),
+  options: z.array(QuestionOptionSchema),
+  multi: z.boolean().optional(),
+  recommended: z.number().optional(),
 });
 function increment(version: string): string { return (BigInt(version) + 1n).toString(); }
 function terminalResolution(decision: ApprovalReply['decision'], policy: { policyId: string; revision: string } | undefined): ApprovalResolution {
@@ -86,9 +101,14 @@ export class InteractionManager {
     for (const [id, record] of this.records) {
       if (record.request.sessionId !== sessionId || record.request.status !== 'pending') continue;
       clearTimeout(record.timer);
-      const expired = this.expire(record.request);
-      this.records.set(id, { ...record, request: expired, timer: undefined });
-      state.append(ProjectionInputSchema.parse({ timestamp: expired.resolvedAt, event: 'approvalId' in expired ? { type: 'approval.resolved', approval: expired } : { type: 'question.resolved', question: expired } }));
+      const expired = this.expire(record);
+      this.records.set(id, expired);
+      state.append(ProjectionInputSchema.parse({
+        timestamp: expired.request.resolvedAt,
+        event: expired.kind === 'approval'
+          ? { type: 'approval.resolved', approval: expired.request }
+          : { type: 'question.resolved', question: expired.request },
+      }));
     }
   }
 
@@ -125,10 +145,10 @@ export class InteractionManager {
   }
 
   approvals(sessionId: string): ApprovalRequest[] {
-    return [...this.records.values()].flatMap(record => record.request.sessionId === sessionId && record.kind === 'approval' && record.request.status === 'pending' ? [record.request as ApprovalRequest] : []);
+    return [...this.records.values()].flatMap(record => record.request.sessionId === sessionId && record.kind === 'approval' && record.request.status === 'pending' ? [record.request] : []);
   }
   questions(sessionId: string): QuestionRequest[] {
-    return [...this.records.values()].flatMap(record => record.request.sessionId === sessionId && record.kind === 'question' && record.request.status === 'pending' ? [record.request as QuestionRequest] : []);
+    return [...this.records.values()].flatMap(record => record.request.sessionId === sessionId && record.kind === 'question' && record.request.status === 'pending' ? [record.request] : []);
   }
 
   async resolveApproval(sessionId: string, approvalId: string, input: ApprovalReply, resolvedBy = 'agent-service'): Promise<ApprovalRequest> {
@@ -165,7 +185,7 @@ export class InteractionManager {
       clearTimeout(record.timer);
       const resolvedAt = Date.now();
       const terminal = ApprovalRequestSchema.parse({ ...request, status: reply.decision === 'approve' || reply.decision === 'always-allow' ? 'approved' : 'rejected', version: increment(request.version), resolvedAt, resolvedBy: EntityIdSchema.parse(resolvedBy), resolution: terminalResolution(reply.decision, policy) });
-      this.records.set(approvalId, { ...record, request: terminal, timer: undefined });
+      this.records.set(approvalId, { kind: 'approval', request: terminal, timer: undefined });
       state.append({ timestamp: resolvedAt, event: { type: 'approval.resolved', approval: terminal } });
       return terminal;
     } finally {
@@ -185,15 +205,23 @@ export class InteractionManager {
     this.reservations.add(questionId);
     clearTimeout(record.timer);
     try {
-      let response: JsonValue | undefined;
-      if (reply.action === 'answer') response = this.validateAnswer(request, reply.response);
-      await state.dispatch({ type: 'question.resolve', questionId, action: reply.action, ...(response === undefined ? {} : { response }) });
+      const answered = reply.action === 'answer' ? { response: this.validateAnswer(request, reply.response) } : undefined;
+      await state.dispatch(
+        answered
+          ? { type: 'question.resolve', questionId, action: 'answer', response: answered.response }
+          : { type: 'question.resolve', questionId, action: 'cancel' },
+      );
       this.assertOwner(sessionId, reply.epoch, reply.workerGeneration, this.records.get(questionId), 'question');
       this.assertCas(this.records.get(questionId)!.request, reply.version, 'question');
       clearTimeout(record.timer);
       const resolvedAt = Date.now();
-      const terminal = QuestionRequestSchema.parse({ ...request, status: reply.action === 'answer' ? 'answered' : 'cancelled', version: increment(request.version), ...(response === undefined ? {} : { response, answeredAt: resolvedAt }), resolvedAt, resolvedBy: EntityIdSchema.parse(resolvedBy) });
-      this.records.set(questionId, { ...record, request: terminal, timer: undefined });
+      const resolvedById = EntityIdSchema.parse(resolvedBy);
+      const terminal = QuestionRequestSchema.parse(
+        answered
+          ? { ...request, status: 'answered', version: increment(request.version), response: answered.response, answeredAt: resolvedAt, resolvedAt, resolvedBy: resolvedById }
+          : { ...request, status: 'cancelled', version: increment(request.version), resolvedAt, resolvedBy: resolvedById },
+      );
+      this.records.set(questionId, { kind: 'question', request: terminal, timer: undefined });
       state.append({ timestamp: resolvedAt, event: { type: 'question.resolved', question: terminal } });
       return terminal;
     } finally {
@@ -207,17 +235,24 @@ export class InteractionManager {
     const state = this.sessions.get(sessionId);
     if (!record || !state || record.request.status !== 'pending' || record.request.epoch !== state.epoch) return;
     clearTimeout(record.timer);
-    const expired = this.expire(record.request);
-    this.records.set(id, { ...record, request: expired, timer: undefined });
-    state.append(ProjectionInputSchema.parse({ timestamp: expired.resolvedAt, event: record.kind === 'approval' ? { type: 'approval.resolved', approval: expired } : { type: 'question.resolved', question: expired } }));
+    const expired = this.expire(record);
+    this.records.set(id, expired);
+    state.append(ProjectionInputSchema.parse({
+      timestamp: expired.request.resolvedAt,
+      event: expired.kind === 'approval'
+        ? { type: 'approval.resolved', approval: expired.request }
+        : { type: 'question.resolved', question: expired.request },
+    }));
     try {
       await state.dispatch(record.kind === 'approval' ? { type: 'approval.resolve', approvalId: id, decision: 'reject' } : { type: 'question.resolve', questionId: id, action: 'cancel' });
     } catch { this.invalidate(sessionId, state.generation); }
   }
 
-  private expire(request: ApprovalRequest | QuestionRequest): ApprovalRequest | QuestionRequest {
-    const terminal = { ...request, status: 'expired' as const, version: increment(request.version), resolvedAt: Date.now(), resolvedBy: 'agent-service' };
-    return 'approvalId' in request ? ApprovalRequestSchema.parse(terminal) : QuestionRequestSchema.parse(terminal);
+  private expire(record: RecordState): RecordState {
+    const terminal = { ...record.request, status: 'expired' as const, version: increment(record.request.version), resolvedAt: Date.now(), resolvedBy: 'agent-service' };
+    return record.kind === 'approval'
+      ? { kind: 'approval', request: ApprovalRequestSchema.parse(terminal), timer: undefined }
+      : { kind: 'question', request: QuestionRequestSchema.parse(terminal), timer: undefined };
   }
 
   private assertOwner(sessionId: string, epoch: string, generation: string, record: RecordState | undefined, kind: RequestKind): SessionState {
@@ -240,14 +275,13 @@ export class InteractionManager {
     const questions = schema && Array.isArray(schema.questions) ? schema.questions : [];
     if (parsed.data.results.length !== questions.length) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response count does not match the request');
     for (const [index, result] of parsed.data.results.entries()) {
-      const question = questions[index];
-      if (!question || typeof question !== 'object' || Array.isArray(question)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question schema is invalid');
-      if (!('id' in question) || question.id !== result.id) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response order does not match the request');
-      const options = 'options' in question && Array.isArray(question.options) ? question.options : [];
-      const labels = options.flatMap(option => option && typeof option === 'object' && !Array.isArray(option) && 'label' in option && typeof option.label === 'string' ? [option.label] : []);
+      const parsedQuestion = QuestionItemSchema.safeParse(questions[index]);
+      if (!parsedQuestion.success) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question schema is invalid');
+      const question = parsedQuestion.data;
+      if (question.id !== result.id) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response order does not match the request');
+      const labels = question.options.map(option => option.label);
       if (result.selectedOptions.some(option => !labels.includes(option))) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response contains an unknown option');
-      const multi = 'multi' in question && question.multi === true;
-      if (!multi && result.selectedOptions.length > 1) throw new ProjectionError(400, 'INVALID_REQUEST', 'Single-choice question has multiple selections');
+      if (!question.multi && result.selectedOptions.length > 1) throw new ProjectionError(400, 'INVALID_REQUEST', 'Single-choice question has multiple selections');
       if (new Set(result.selectedOptions).size !== result.selectedOptions.length) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response contains duplicate selections');
       if (result.customInput !== undefined && result.customInput.trim().length === 0) throw new ProjectionError(400, 'INVALID_REQUEST', 'Custom question input must not be blank');
       if (result.selectedOptions.length === 0 && result.customInput === undefined) throw new ProjectionError(400, 'INVALID_REQUEST', 'Question response must contain a selection or custom input');

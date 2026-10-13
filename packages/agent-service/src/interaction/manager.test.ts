@@ -102,4 +102,17 @@ describe('service-owned interaction CAS', () => {
     manager.closeSession('session-1');
     manager.closeSession('session-2');
   });
+
+  test('an unanswered request expires when its timeout elapses and rejects late replies', async () => {
+    const dispatched = Promise.withResolvers<WorkerOperation>();
+    const events: ProjectionInput[] = [];
+    const manager = new InteractionManager(10);
+    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { dispatched.resolve(operation); }, input => { events.push(input); });
+    manager.onRequest('session-1', 'worker-1', approval);
+    expect(await dispatched.promise).toEqual({ type: 'approval.resolve', approvalId: 'approval-1', decision: 'reject' });
+    expect(manager.approvals('session-1')).toHaveLength(0);
+    expect(events.at(-1)?.event).toMatchObject({ type: 'approval.resolved', approval: { approvalId: 'approval-1', status: 'expired', version: '2' } });
+    await expect(manager.resolveApproval('session-1', 'approval-1', { decision: 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' })).rejects.toMatchObject({ status: 410, code: 'APPROVAL_EXPIRED' });
+    manager.closeSession('session-1');
+  });
 });

@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { getExtensionUISelectOptionLabel } from '@oh-my-pi/pi-coding-agent/extensibility/extensions';
 import type {
+  ExtensionAskDialogOption,
   ExtensionAskDialogQuestion,
   ExtensionAskDialogResult,
+  ExtensionAskDialogResultItem,
   ExtensionUIContext,
   ExtensionUISelectItem,
   ToolApprovalRequestedEvent,
@@ -93,14 +96,18 @@ export class WorkerInteraction {
     if (!turnId) return undefined;
     const observer = [...this.observed.values()][0];
     if (!observer) {
-      const result = await this.askDialog([{ id: 'select', question: title, options: options.map(option => typeof option === 'string' ? { label: option } : option) }], dialogOptions);
+      const result = await this.askDialog([{
+        id: 'select',
+        question: title,
+        options: options.map(option => option instanceof Object ? option : { label: option }),
+      }], dialogOptions);
       return result?.kind === 'submit' ? result.results[0]?.selectedOptions[0] : undefined;
     }
     this.observed.delete(observer.toolCallId);
     const input = this.inputs.get(observer.toolCallId);
     if (!input) throw new Error('Native approval has no captured execution input');
     this.inputs.delete(observer.toolCallId);
-    const labels = options.map(option => typeof option === 'string' ? option : option.label);
+    const labels = options.map(getExtensionUISelectOptionLabel);
     const approve = labels[0];
     const reject = labels[1];
     if (labels.length !== 2 || approve === undefined || reject === undefined) throw new Error('Native approval choices are invalid');
@@ -130,17 +137,23 @@ export class WorkerInteraction {
     const turnId = this.callbacks.currentTurn();
     if (!turnId || questions.length === 0) return undefined;
     const questionId = randomUUID();
-    const safeQuestions = questions.map(question => ({
-      id: question.id, question: question.question,
-      ...(question.header === undefined ? {} : { header: question.header }),
-      options: question.options.map(option => ({
-        label: option.label,
-        ...(option.description === undefined ? {} : { description: option.description }),
-        ...(option.preview === undefined ? {} : { preview: option.preview }),
-      })),
-      ...(question.multi === undefined ? {} : { multi: question.multi }),
-      ...(question.recommended === undefined ? {} : { recommended: question.recommended }),
-    }));
+    const safeQuestions = questions.map((question): ExtensionAskDialogQuestion => {
+      const options = question.options.map((option): ExtensionAskDialogOption => {
+        const safeOption: ExtensionAskDialogOption = { label: option.label };
+        if (option.description !== undefined) safeOption.description = option.description;
+        if (option.preview !== undefined) safeOption.preview = option.preview;
+        return safeOption;
+      });
+      const safeQuestion: ExtensionAskDialogQuestion = {
+        id: question.id,
+        question: question.question,
+        options,
+      };
+      if (question.header !== undefined) safeQuestion.header = question.header;
+      if (question.multi !== undefined) safeQuestion.multi = question.multi;
+      if (question.recommended !== undefined) safeQuestion.recommended = question.recommended;
+      return safeQuestion;
+    });
     const schema = JsonObjectSchema.parse({ type: 'omp.ask', questions: safeQuestions });
     return new Promise<ExtensionAskDialogResult | undefined>(resolve => {
       this.questionHandles.set(questionId, { questions, resolve });
@@ -181,15 +194,18 @@ export class WorkerInteraction {
       if (item.customInput !== undefined && item.customInput.trim().length === 0) return false;
       if (item.selectedOptions.length === 0 && item.customInput === undefined) return false;
     }
-    const results = parsed.data.results.map((item, index) => {
+    const results = parsed.data.results.map((item, index): ExtensionAskDialogResultItem => {
       const question = pending.questions[index]!;
-      return {
-        id: item.id, question: question.question,
-        options: question.options.map(option => option.label), multi: question.multi ?? false,
+      const result: ExtensionAskDialogResultItem = {
+        id: item.id,
+        question: question.question,
+        options: question.options.map(option => option.label),
+        multi: question.multi ?? false,
         selectedOptions: item.selectedOptions,
-        ...(item.customInput === undefined ? {} : { customInput: item.customInput }),
-        ...(item.note === undefined ? {} : { note: item.note }),
       };
+      if (item.customInput !== undefined) result.customInput = item.customInput;
+      if (item.note !== undefined) result.note = item.note;
+      return result;
     });
     this.questionHandles.delete(questionId);
     pending.resolve({ kind: 'submit', results });
