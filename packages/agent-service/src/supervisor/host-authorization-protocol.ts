@@ -1,6 +1,5 @@
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { editInspect, type EditFileOpIntent, type EditInspection } from '@oh-my-pi/pi-natives';
 import { CounterSchema, DisplayPathSchema, EntityIdSchema, MCPServerConfigSchema } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema, WorkerPolicyRequestSchema, WorkerPolicyResultSchema } from '../protocol.ts';
 
@@ -12,15 +11,6 @@ export const NativeOperationDescriptorSchema = z.strictObject({
   providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
 });
 export type NativeOperationDescriptor = z.infer<typeof NativeOperationDescriptorSchema>;
-export function nativeEditDescriptor(mode: string, input: unknown): NativeOperationDescriptor {
-  let inspection: EditInspection;
-  try { inspection = editInspect(mode, JSON.stringify(input ?? {})); } catch { throw new Error('Native edit input is invalid'); }
-  const fileOps = inspection.fileOps.map((operation: EditFileOpIntent) => ({ kind: operation.kind, path: operation.path, ...(operation.to === undefined ? {} : { to: operation.to }) }));
-  return NativeOperationDescriptorSchema.parse({ toolName: 'edit', effectiveMode: mode,
-    sourcePaths: [...inspection.paths, ...fileOps.map(operation => operation.path)],
-    destinationPaths: fileOps.flatMap(operation => operation.to === undefined ? [] : [operation.to]), fileOps });
-}
-
 export const CapturedHostBootstrapScopeSchema = z.strictObject({
   rootSessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
   cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema, agentDirectoryId: EntityIdSchema.optional(),
@@ -29,35 +19,14 @@ export type CapturedHostBootstrapScope = z.infer<typeof CapturedHostBootstrapSco
 export const HostAuthorizationScopeSchema = CapturedHostBootstrapScopeSchema.extend({ workerGeneration: EntityIdSchema });
 export type HostAuthorizationScope = z.infer<typeof HostAuthorizationScopeSchema>;
 export const HostSessionBootstrapSchema = WorkerBootstrapSchema.extend({ displayPath: DisplayPathSchema });
-export const HostWorkspaceBootstrapSchema = z.strictObject({
-  projectId: EntityIdSchema, cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema,
-  agentDirectoryId: EntityIdSchema, env: z.record(z.string(), z.string()).optional(),
-});
-export const HostWorkspaceRegisteredSchema = z.strictObject({
-  workspaceId: EntityIdSchema, projectId: EntityIdSchema, agentDirectoryId: EntityIdSchema,
-  authorizationRootId: EntityIdSchema, catalogRevision: CounterSchema,
-});
-export const HostWorkerAuthorizationRequestSchema = z.strictObject({
-  type: z.literal('worker.authorization.request'), requestId: EntityIdSchema,
-  scope: HostAuthorizationScopeSchema, request: WorkerPolicyRequestSchema,
-});
-export const HostWorkerAuthorizationReplySchema = z.strictObject({
-  type: z.literal('worker.authorization.result'), requestId: EntityIdSchema, result: WorkerPolicyResultSchema,
-});
-export const HostWorkerAuthorizationCancelSchema = z.strictObject({
-  type: z.literal('worker.authorization.cancel'), requestId: EntityIdSchema,
-});
-export const HostWorkspacePolicySchema = z.strictObject({
-  projectId: EntityIdSchema, workspaceId: EntityIdSchema, agentDirectoryId: EntityIdSchema,
-  cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema,
-  providers: z.array(z.strictObject({ providerId: EntityIdSchema, modelId: EntityIdSchema, endpoint: z.string().url().optional() })),
-  mcpServers: z.array(MCPServerConfigSchema), fileTools: z.array(z.enum(['read', 'write'])), shellCommands: z.array(z.string().min(1)),
-  agentIds: z.array(EntityIdSchema), permissionPresetIds: z.array(EntityIdSchema), providerEntry: z.boolean(),
-  toolRequests: z.array(WorkerPolicyRequestSchema).refine(requests => requests.every(request => request.type === 'tool')),
-});
+export const HostWorkspaceBootstrapSchema = z.strictObject({ projectId: EntityIdSchema, cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema, agentDirectoryId: EntityIdSchema, env: z.record(z.string(), z.string()).optional() });
+export const HostWorkspaceRegisteredSchema = z.strictObject({ workspaceId: EntityIdSchema, projectId: EntityIdSchema, agentDirectoryId: EntityIdSchema, authorizationRootId: EntityIdSchema, catalogRevision: CounterSchema });
+export const HostWorkerAuthorizationRequestSchema = z.strictObject({ type: z.literal('worker.authorization.request'), requestId: EntityIdSchema, scope: HostAuthorizationScopeSchema, request: WorkerPolicyRequestSchema, descriptor: NativeOperationDescriptorSchema.optional() });
+export const HostWorkerAuthorizationReplySchema = z.strictObject({ type: z.literal('worker.authorization.result'), requestId: EntityIdSchema, result: WorkerPolicyResultSchema });
+export const HostWorkerAuthorizationCancelSchema = z.strictObject({ type: z.literal('worker.authorization.cancel'), requestId: EntityIdSchema });
+export const HostWorkspacePolicySchema = z.strictObject({ projectId: EntityIdSchema, workspaceId: EntityIdSchema, agentDirectoryId: EntityIdSchema, cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema, providers: z.array(z.strictObject({ providerId: EntityIdSchema, modelId: EntityIdSchema, endpoint: z.string().url().optional() })), mcpServers: z.array(MCPServerConfigSchema), fileTools: z.array(z.enum(['read', 'write'])), shellCommands: z.array(z.string().min(1)), agentIds: z.array(EntityIdSchema), permissionPresetIds: z.array(EntityIdSchema), providerEntry: z.boolean(), toolRequests: z.array(WorkerPolicyRequestSchema).refine(requests => requests.every(request => request.type === 'tool')) });
 export type HostWorkspacePolicy = z.infer<typeof HostWorkspacePolicySchema>;
 export { WorkerBootstrapSchema, WorkerPolicyRequestSchema, WorkerPolicyResultSchema };
 export type { WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 export * from '../catalogs/private-credentials.ts';
-
 export type NativePolicyResolver = (scope: HostAuthorizationScope, descriptor: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;

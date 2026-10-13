@@ -4,12 +4,11 @@ import { isDeepStrictEqual } from 'node:util';
 import {
   HostAuthorizationScopeSchema,
   HostWorkerAuthorizationReplySchema,
-  HostWorkerAuthorizationRequestSchema,
-  nativeEditDescriptor,
   type HostAuthorizationScope,
   type NativeOperationDescriptor,
   type NativePolicyResolver,
 } from './host-authorization-protocol.ts';
+import { nativeEditDescriptor } from '../worker/native-policy-descriptor.ts';
 import type { WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 
 const unavailable = (): WorkerPolicyResult => ({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 });
@@ -47,10 +46,11 @@ export class HostWorkerAuthorization {
       type: 'worker.authorization.request', requestId: randomUUID(), scope: scope.data, request,
     });
     if (!message.success) return { allowed: false, code: 'UNAUTHORIZED', status: 403 };
-    const requestId = message.data.requestId;
     const descriptor = this.describe(message.data.request);
+    const envelope = { ...message.data, ...(descriptor === undefined ? {} : { descriptor }) };
+    const requestId = envelope.requestId;
     if (descriptor && this.resolvePolicy) return this.resolvePolicy(scope.data, descriptor);
-    if (descriptor) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 };
+    if (descriptor && !this.resolvePolicy) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 };
     return new Promise<WorkerPolicyResult>(resolve => {
       const fail = (): void => {
         const pending = this.pending.get(requestId);
@@ -61,13 +61,14 @@ export class HostWorkerAuthorization {
         pending.resolve(unavailable());
       };
       this.pending.set(requestId, { scope: scope.data, resolve, timer: setTimeout(fail, 5_000) });
-      process.send!(message.data, error => { if (error) fail(); });
+      process.send!(envelope, error => { if (error) fail(); });
     });
   };
   private describe(request: WorkerPolicyRequest): NativeOperationDescriptor | undefined {
     if (request.type !== 'tool') return undefined;
-    if (request.toolName !== 'edit') return { toolName: request.toolName, sourcePaths: [], destinationPaths: [], fileOps: [] };
-    const mode = typeof request.input.mode === 'string' ? request.input.mode : 'replace';
+    if (request.toolName !== 'edit') return undefined;
+    const mode = typeof request.input.mode === 'string' ? request.input.mode : undefined;
+    if (mode === undefined) return undefined;
     return nativeEditDescriptor(mode, request.input);
   }
 
