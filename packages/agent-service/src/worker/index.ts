@@ -100,8 +100,9 @@ process.on('message', raw => {
     });
   }
   void initialization.catch(error => {
-    if (!stopping) send({ type: 'error', workerGeneration: command.workerGeneration,
-      code: error instanceof ProjectionError ? error.code : command.type === 'bootstrap' && command.sessionFile ? 'SESSION_RESTORE_FAILED' : 'SERVICE_UNAVAILABLE' });
+    const code = error instanceof ProjectionError ? error.code : command.type === 'bootstrap' && command.sessionFile ? 'SESSION_RESTORE_FAILED' : 'SERVICE_UNAVAILABLE';
+    process.stderr.write(`worker-error ${code}\n`);
+    if (!stopping) send({ type: 'error', workerGeneration: command.workerGeneration, code });
     void stop(1);
   });
 });
