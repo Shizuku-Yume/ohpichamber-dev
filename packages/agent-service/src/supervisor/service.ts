@@ -5,17 +5,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { AgentServiceReadySchema, ApprovalReplySchema, EntityIdSchema, HistoryPageRequestSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema } from '@openchamber/agent-contract';
+import { AgentServiceReadySchema, ApprovalReplySchema, EntityIdSchema, HistoryPageRequestSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, ProviderCredentialWriteRequestSchema, ProviderCredentialDeleteRequestSchema } from '@openchamber/agent-contract';
 import type { AgentServiceReady, ApprovalRequest, CanonicalEvent, HistoryPage, ProblemCode, ProblemDetails, QuestionRequest, Run, RuntimeSession, SessionDeleteAck, SessionSnapshot, StreamInvalidated } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
-import type { WorkerInfo } from '../protocol.ts';
+import type { WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { PrivateSessionBootstrapSchema, SessionRegistry } from '../sessions/registry.ts';
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import type { SessionList } from '../sessions/registry.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
 import { WorkerOperationError, WorkerRegistry } from './workers.ts';
-
+import { CatalogResultSchema } from '../catalogs/protocol.ts';
+import { CatalogCoordinator } from './catalog.ts';
 interface ServiceOptions {
   workerEntrypoint: string;
   internalSecret: string;
@@ -23,16 +24,21 @@ interface ServiceOptions {
   port?: number;
   approvalPolicyCommit?: ApprovalPolicyCommit;
   approvalPolicyLoad?: ApprovalPolicyLoad;
+  catalogWorkspaceId?: string;
+  policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest) => Promise<WorkerPolicyResult>;
 }
 const InternalSecretSchema = z.string().regex(/^[a-f0-9]{64}$/i);
 const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port: z.number().int().min(1).max(65_535) });
 class RequestError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
 }
-type JsonResponse = AgentServiceReady | WorkerInfo | { workers: WorkerInfo[] } | RuntimeSession | SessionSnapshot | HistoryPage | { run: Run } | SessionDeleteAck | ApprovalRequest[] | QuestionRequest[] | ApprovalRequest | QuestionRequest | SessionList;
+type JsonResponse = AgentServiceReady | WorkerInfo | { workers: WorkerInfo[] } | RuntimeSession | SessionSnapshot | HistoryPage | { run: Run } | SessionDeleteAck | ApprovalRequest[] | QuestionRequest[] | ApprovalRequest | QuestionRequest | SessionList | Record<string, unknown>;
 function respondJson(response: ServerResponse, status: number, body: JsonResponse): void {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(body));
+}
+function respondHealth(response: ServerResponse, ready: boolean): void {
+  respondJson(response, 200, { status: ready ? 'ready' : 'starting', engine: 'omp', version: '1.0.0' });
 }
 function respondProblem(response: ServerResponse, status: number, code: ProblemCode, detail: string): void {
   const problem: ProblemDetails = ProblemDetailsSchema.parse({
@@ -64,21 +70,28 @@ export class AgentService {
   private readonly secret: Buffer;
   private readonly workers: WorkerRegistry;
   private readonly sessions: SessionRegistry;
+  private readonly catalog: CatalogCoordinator;
   private server: ReturnType<typeof createServer> | undefined;
   private ready = false;
   private closing = false;
-  private stopping: Promise<void> | undefined;
   constructor(private readonly options: ServiceOptions) {
     this.secret = Buffer.from(InternalSecretSchema.parse(options.internalSecret), 'hex');
-    this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, callbacks: {
-      onOpened: (...args) => this.sessions.onOpened(...args),
+    this.catalog = new CatalogCoordinator(options.stateDirectory, options.catalogWorkspaceId ?? 'workspace');
+    this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, policyCheck: options.policyCheck, callbacks: {
+      onOpened: (...args) => {
+        this.sessions.onOpened(...args);
+        const rootSessionId = args[0];
+        const generation = args[1];
+        this.catalog.register({ identity: { rootSessionId, workspaceId: this.options.catalogWorkspaceId ?? 'workspace', workerGeneration: generation }, mcp: { read: async configuration => { const result = await this.workers.request(rootSessionId, { type: 'mcp', operation: { type: 'read', configuration } }); if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return result.result.catalog; }, apply: async (request, configuration) => { const result = await this.workers.request(rootSessionId, { type: 'mcp', operation: { type: 'apply', request, configuration } }); if (result.type !== 'mcp' || result.result.type !== 'applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return result.result.result; }, reconnect: async (serverId, request, configuration) => { const result = await this.workers.request(rootSessionId, { type: 'mcp', operation: { type: 'reconnect', serverId, request, configuration } }); if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return result.result.catalog; } }, skills: { read: async sources => { const result = await this.workers.request(rootSessionId, { type: 'catalog', revision: this.catalog.revision(), operation: { type: 'skills.read', persistedSources: sources } }); if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); const parsed = CatalogResultSchema.parse(result.result); if (parsed.type !== 'skills.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return parsed.catalog; }, apply: async sources => { const result = await this.workers.request(rootSessionId, { type: 'catalog', revision: this.catalog.revision(), operation: { type: 'skills.apply', request: { scope: 'workspace', sourceRevision: sources.workspace }, sources, catalogRevision: this.catalog.revision() } }); if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); const parsed = CatalogResultSchema.parse(result.result); if (parsed.type !== 'skills.applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return parsed.result; }, expand: async request => { const result = await this.workers.request(rootSessionId, { type: 'catalog', revision: request.catalogRevision, operation: { type: 'skills.expand', request } }); if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); const parsed = CatalogResultSchema.parse(result.result); if (parsed.type !== 'skills.expanded') throw new WorkerOperationError(503, 'INTERNAL_ERROR'); return parsed.result; } } });
+      },
       onEvents: (...args) => this.sessions.onEvents(...args),
       onInteraction: (...args) => this.sessions.onInteraction(...args),
-      onExit: (...args) => this.sessions.onExit(...args),
+      onExit: (...args) => { this.sessions.onExit(...args); this.catalog.retire(args[0], args[1]); },
     } });
     this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad);
   }
   async start(): Promise<void> {
+    await this.catalog.initialize();
     await this.sessions.initialize();
     const server = createServer((request, response) => { void this.handle(request, response); });
     this.server = server;
@@ -162,9 +175,14 @@ export class AgentService {
     if (!this.authenticated(request)) { respondProblem(response, 403, 'UNAUTHORIZED', 'Private loopback authentication is required'); return; }
     try {
       const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+      if (request.method === 'GET' && url.pathname === '/api/agent/v1/health') { respondHealth(response, this.ready && !this.closing); return; }
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/ready') {
         if (!this.ready) respondProblem(response, 503, 'SERVICE_UNAVAILABLE', 'SDK initialization is unavailable');
         else respondJson(response, 200, AgentServiceReadySchema.parse({ ready: true, engine: 'omp', version: '1.0.0' }));
+        return;
+      }
+      if (request.method === 'GET' && url.pathname === '/api/agent/v1/capabilities') {
+        respondJson(response, 200, { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: false, followUpQueue: false, subagents: false, attachments: false, models: true, mcp: true, skills: true } });
         return;
       }
       if (!this.ready || this.closing) { respondProblem(response, 503, 'SERVICE_UNAVAILABLE', 'Agent Service is not admitting work'); return; }
@@ -217,6 +235,68 @@ export class AgentService {
           const prompt = await readBody(request, PromptRequestSchema);
           respondJson(response, 202, { run: await this.sessions.prompt(sessionId, { type: 'prompt', runId: randomUUID(), request: prompt }) }); return;
         }
+      }
+      const shellRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/shell$/.exec(url.pathname);
+      if (shellRoute && request.method === 'POST') {
+        const sessionId = identity(shellRoute[1]);
+        const operation = await readBody(request, z.object({ type: z.enum(['start','output','snapshot','stop']), request: z.unknown().optional() }));
+        const result = await this.workers.request(sessionId, { type: 'shell', operation: operation as never });
+        if (result.type !== 'shell') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        respondJson(response, 200, result.result); return;
+      }
+      const completionRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/completion$/.exec(url.pathname);
+      if (completionRoute && request.method === 'POST') {
+        const sessionId = identity(completionRoute[1]);
+        const operation = await readBody(request, z.object({ type: z.enum(['complete','cancel']), request: z.unknown().optional() }));
+        const result = await this.workers.request(sessionId, { type: 'completion', operation: operation as never });
+        if (result.type !== 'completion') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        respondJson(response, 200, result.result); return;
+      }
+      const credentialRoute = /^\/api\/agent\/v1\/providers\/([^/]+)\/credentials$/.exec(url.pathname);
+      if (credentialRoute && request.method === 'PUT') {
+        const sessionId = url.searchParams.get('sessionId');
+        if (!sessionId) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity is required');
+        const body = await readBody(request, ProviderCredentialWriteRequestSchema);
+        const result = await this.workers.request(identity(sessionId), { type: 'catalog', revision: body.expectedRevision, operation: { type: 'credential.write', request: { ...body, providerId: identity(credentialRoute[1]) } } as never });
+        if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        respondJson(response, 200, result.result); return;
+      }
+      const credentialDelete = /^\/api\/agent\/v1\/providers\/([^/]+)\/credentials\/([^/]+)$/.exec(url.pathname);
+      if (credentialDelete && request.method === 'DELETE') {
+        const sessionId = url.searchParams.get('sessionId');
+        if (!sessionId) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity is required');
+        const body = await readBody(request, ProviderCredentialDeleteRequestSchema);
+        const result = await this.workers.request(identity(sessionId), { type: 'catalog', revision: body.expectedRevision, operation: { type: 'credential.delete', request: { ...body, providerId: identity(credentialDelete[1]), credentialRef: identity(credentialDelete[2]) } } as never });
+        if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        respondJson(response, 200, result.result); return;
+      }
+      const catalogCrud = /^\/api\/agent\/v1\/(models|providers|agents)(?:\/([^/]+))?$/.exec(url.pathname);
+      if (catalogCrud) {
+        const sessionId = url.searchParams.get('sessionId');
+        if (!sessionId) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity is required');
+        const rootSessionId = identity(sessionId);
+        let type: string;
+        if (catalogCrud[1] === 'models') type = request.method === 'GET' ? 'models.read' : catalogCrud[2] ? 'model.configure' : 'model.configure';
+        else if (catalogCrud[1] === 'providers') type = request.method === 'GET' ? 'providers.read' : catalogCrud[2] ? 'provider.configure' : 'provider.configure';
+        else type = 'agents.read';
+        const body = request.method === 'GET' ? undefined : await readBody(request, z.unknown());
+        const operation = body === undefined ? { type } : { type, request: body };
+        const result = await this.workers.request(rootSessionId, { type: 'catalog', operation: operation as never, revision: url.searchParams.get('revision') ?? '0' });
+        if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        respondJson(response, 200, result.result); return;
+      }
+      const catalogRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/(mcp|skills)(?:\/(catalog|config|apply|install|expand|servers\/([^/]+)\/reconnect))?$/.exec(url.pathname);
+      if (catalogRoute) {
+        const sessionId = identity(catalogRoute[1]);
+        const kind = catalogRoute[2];
+        const action = catalogRoute[3] ?? 'catalog';
+        if (kind === 'mcp' && action === 'catalog' && request.method === 'GET') { respondJson(response, 200, await this.catalog.readMcp(sessionId)); return; }
+        if (kind === 'mcp' && action === 'config' && request.method === 'PUT') { respondJson(response, 200, await this.catalog.configure(await readBody(request, MCPConfigureRequestSchema))); return; }
+        if (kind === 'mcp' && action === 'apply' && request.method === 'POST') { respondJson(response, 200, await this.catalog.applyMcp(await readBody(request, MCPApplyRequestSchema))); return; }
+        if (kind === 'mcp' && catalogRoute[4] !== undefined && request.method === 'POST') { respondJson(response, 200, await this.catalog.reconnect(sessionId, identity(catalogRoute[4]), await readBody(request, MCPReconnectRequestSchema))); return; }
+        if (kind === 'skills' && action === 'catalog' && request.method === 'GET') { respondJson(response, 200, await this.catalog.readSkills(sessionId)); return; }
+        if (kind === 'skills' && action === 'apply' && request.method === 'POST') { respondJson(response, 200, await this.catalog.applySkills(await readBody(request, SkillsApplyRequestSchema))); return; }
+        if (kind === 'skills' && action === 'expand' && request.method === 'POST') { respondJson(response, 200, await this.catalog.expand(sessionId, await readBody(request, SkillExpandRequestSchema))); return; }
       }
       if (request.method === 'GET' && url.pathname === '/internal/workers') { respondJson(response, 200, { workers: this.workers.list() }); return; }
       if (request.method === 'POST' && url.pathname === '/internal/workers') { respondJson(response, 201, await this.workers.start(await readBody(request, WorkerBootstrapSchema))); return; }
