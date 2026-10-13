@@ -1,362 +1,78 @@
-import { z } from 'zod';
-import { summarizeText as summarizeSharedText } from '../text/summarization.js';
-import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
+import path from 'node:path';
+import { HistoryPageSchema, SessionMetadataSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 
-const HostTitleSchema = z.object({ title: z.string().optional() }).passthrough().nullable();
-const EventTitleSchema = z.string();
+const BODY_MAX_CHARS = 1000;
+const textFromParts = (parts, maxLength = BODY_MAX_CHARS) => {
+  const text = (parts ?? []).filter((part) => part.type === 'text').map((part) => part.content).filter(Boolean).join('\n').trim();
+  return maxLength > 0 ? text.slice(0, maxLength) : text;
+};
 
-export const createNotificationTemplateRuntime = (deps) => {
-  const {
-    readSettingsFromDisk,
-    readSessionMetadata,
-    buildOpenCodeUrl,
-    getOpenCodeAuthHeaders,
-    resolveGitBinaryForSpawn,
-  } = deps;
+export const createNotificationTemplateRuntime = ({
+  sessionService, resolveSessionScope, readSessionMetadata, readSettingsFromDisk, resolveGitBinaryForSpawn,
+}) => {
+  if (typeof sessionService?.open !== 'function' || typeof sessionService?.history !== 'function'
+    || typeof resolveSessionScope !== 'function' || typeof readSessionMetadata !== 'function') {
+    throw new TypeError('Canonical session reader and Host scope/metadata readers are required');
+  }
+  const resolveNotificationTemplate = (template, variables) => typeof template === 'string'
+    ? template.replace(/\{(\w+)\}/g, (_match, key) => String(variables[key] ?? '')) : '';
+  const shouldApplyResolvedTemplateMessage = (template, resolved, variables) => Boolean(resolved)
+    && (!template?.includes('{last_message}') || Boolean(variables?.last_message?.trim()));
+  const extractLastMessageText = (message, maxLength = BODY_MAX_CHARS) => textFromParts(message?.parts, maxLength);
 
-  const NOTIFICATION_BODY_MAX_CHARS = 1000;
-  const SESSION_INFO_CACHE_TTL_MS = 60 * 1000;
-
-  const cachedZenModels = { models: [] };
-
-  const sessionTitleCache = new Map();
-  const sessionInfoCache = new Map();
-
-  const createTimeoutSignal = (timeoutMs) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    return {
-      signal: controller.signal,
-      cleanup: () => clearTimeout(timer),
-    };
-  };
-
-  const formatProjectLabel = (label) => {
-    if (!label || typeof label !== 'string') return '';
-    // Folder names are shown exactly as they are on disk — no title-casing.
-    return label.trim();
-  };
-
-  const resolveNotificationTemplate = (template, variables) => {
-    if (!template || typeof template !== 'string') return '';
-    return template.replace(/\{(\w+)\}/g, (_match, key) => {
-      const value = variables[key];
-      if (value === undefined || value === null) return '';
-      return String(value);
-    });
-  };
-
-  const shouldApplyResolvedTemplateMessage = (template, resolved, variables) => {
-    if (!resolved) {
-      return false;
-    }
-
-    if (typeof template !== 'string') {
-      return true;
-    }
-
-    if (template.includes('{last_message}')) {
-      return typeof variables?.last_message === 'string' && variables.last_message.trim().length > 0;
-    }
-
-    return true;
-  };
-
-  const fetchFreeZenModels = async () => [];
-
-  const resolveZenModel = async (override) => {
-    const overrideModel = typeof override === 'string' ? override.trim() : '';
-    if (overrideModel) return overrideModel;
-    const settings = await readSettingsFromDisk().catch(() => ({}));
-    return typeof settings?.zenModel === 'string' && settings.zenModel.trim().length > 0
-      ? settings.zenModel.trim()
-      : '';
-  };
-
-  const validateZenModelAtStartup = async () => {};
-
-  const summarizeText = async (text, targetLength, zenModel) => {
-    if (!text || typeof text !== 'string' || text.trim().length === 0) return text;
-    const result = await summarizeSharedText({
-      text,
-      threshold: 0,
-      maxLength: targetLength,
-        zenModel,
-      mode: 'notification',
-    });
-    return typeof result?.summary === 'string' && result.summary.trim().length > 0
-      ? result.summary
-      : text;
-  };
-
-  const isNotificationTextPart = (part) => {
-    if (!part || typeof part !== 'object') return false;
-    if (part.type !== 'text') return false;
-    return typeof part.text === 'string' || typeof part.content === 'string';
-  };
-
-  const extractTextFromParts = (parts, maxLength = NOTIFICATION_BODY_MAX_CHARS) => {
-    if (!Array.isArray(parts) || parts.length === 0) return '';
-
-    const textParts = parts
-      .filter(isNotificationTextPart)
-      .map((part) => part.text || part.content || '')
-      .filter(Boolean);
-
-    let text = textParts.length > 0 ? textParts.join('\n').trim() : '';
-
-    if (maxLength > 0 && text.length > maxLength) {
-      text = text.slice(0, maxLength);
-    }
-
-    return text;
-  };
-
-  const extractLastMessageText = (payload, maxLength = NOTIFICATION_BODY_MAX_CHARS) => {
-    const info = payload?.properties?.info;
-    if (!info) return '';
-
-    const parts = info.parts || payload?.properties?.parts;
-    const text = extractTextFromParts(parts, maxLength);
-    if (text) return text;
-
-    const content = info.content;
-    if (Array.isArray(content)) {
-      const textContent = content
-        .filter(isNotificationTextPart)
-        .map((entry) => entry.text || '')
-        .filter(Boolean);
-      if (textContent.length > 0) {
-        let result = textContent.join('\n').trim();
-        if (maxLength > 0 && result.length > maxLength) {
-          result = result.slice(0, maxLength);
-        }
-        return result;
-      }
-    }
-
+  const fetchLastAssistantMessageText = async (sessionId, messageId, maxLength = BODY_MAX_CHARS) => {
+    await resolveSessionScope(sessionId);
+    const snapshot = SessionSnapshotSchema.parse(await sessionService.open(sessionId));
+    if (snapshot.session.sessionId !== sessionId) throw new Error('Canonical snapshot scope mismatch');
+    const settled = new Set(snapshot.turns.filter((turn) => ['completed', 'failed', 'cancelled'].includes(turn.status)).map((turn) => turn.turnId));
+    const target = messageId
+      ? snapshot.messages.find((message) => message.messageId === messageId && message.role === 'assistant' && settled.has(message.turnId))
+      : snapshot.messages.findLast((message) => message.role === 'assistant' && settled.has(message.turnId));
+    if (target) return textFromParts(target.parts, maxLength);
+    if (!messageId) return '';
+    let cursor;
+    do {
+      const query = new URLSearchParams({ limit: '100', ...(cursor ? { cursor } : {}) });
+      const page = HistoryPageSchema.parse(await sessionService.history(sessionId, query.toString()));
+      const turnStatus = new Map(page.turns.map((turn) => [turn.turnId, turn.status]));
+      const message = page.messages.find((record) => record.messageId === messageId && record.role === 'assistant'
+        && ['completed', 'failed', 'cancelled'].includes(turnStatus.get(record.turnId)));
+      if (message) return textFromParts(message.parts, maxLength);
+      cursor = page.nextCursor;
+    } while (cursor);
     return '';
   };
 
-  const fetchLastAssistantMessageText = async (sessionId, messageId, maxLength = NOTIFICATION_BODY_MAX_CHARS) => {
-    if (!sessionId) return '';
-
-    try {
-      const url = buildOpenCodeUrl(`/api/session/${encodeURIComponent(sessionId)}/message`, '');
-      const response = await fetch(`${url}?limit=5`, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          ...getOpenCodeAuthHeaders(),
-        },
-        signal: AbortSignal.timeout(3000),
-      });
-
-      if (!response.ok) return '';
-
-      // v2 pages messages as `{ data, cursor }`, newest first, and a message is
-      // a flat record: an assistant one carries `content[]`, not `parts`.
-      const page = await response.json().catch(() => null);
-      const messages = Array.isArray(page?.data) ? page.data : null;
-      if (!messages) return '';
-
-      let target = null;
-      if (messageId) {
-        target = messages.find((message) => message?.id === messageId && message?.type === 'assistant');
-      }
-      if (!target) {
-        target = messages.find((message) => message?.type === 'assistant' && message?.finish === 'stop') ?? null;
-      }
-
-      if (!target || !Array.isArray(target.content)) return '';
-
-      return extractTextFromParts(target.content, maxLength);
-    } catch {
-      return '';
+  const buildTemplateVariables = async (event, sessionId, scope) => {
+    const resolved = await resolveSessionScope(sessionId);
+    if (!resolved?.cwd || (scope && (scope.workspaceId !== resolved.workspaceId || scope.rootSessionId !== resolved.rootSessionId))) {
+      throw new Error('Host session scope is unavailable');
     }
-  };
-
-  const cacheSessionTitle = (sessionId, title) => {
-    if (typeof sessionId === 'string' && sessionId.length > 0 && typeof title === 'string' && title.length > 0) {
-      sessionTitleCache.set(sessionId, title);
-    }
-  };
-
-  const getCachedSessionTitle = (sessionId) => {
-    return sessionTitleCache.get(sessionId) ?? null;
-  };
-
-  const maybeCacheSessionInfoFromEvent = (payload) => {
-    if (!payload || typeof payload !== 'object') return;
-    const type = payload.type;
-    if (type !== 'session.updated' && type !== 'session.created') return;
-    const info = payload.properties?.info;
-    if (!info || typeof info !== 'object') return;
-    cacheSessionTitle(info.id, info.title);
-  };
-
-  const fetchSessionInfo = async (sessionId) => {
-    if (!sessionId) return null;
-
-    const cached = sessionInfoCache.get(sessionId);
-    if (cached && Date.now() - cached.at < SESSION_INFO_CACHE_TTL_MS) {
-      return cached.data;
-    }
-
-    try {
-      const url = buildOpenCodeUrl(`/api/session/${encodeURIComponent(sessionId)}`, '');
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          ...getOpenCodeAuthHeaders(),
-        },
-        signal: AbortSignal.timeout(2000),
-      });
-      if (!response.ok) {
-        console.warn(`[Notification] fetchSessionInfo: ${response.status} for session ${sessionId}`);
-        return null;
-      }
-      const data = unwrapOpenCodeResponse(await response.json().catch(() => null));
-      if (data && typeof data === 'object') {
-        sessionInfoCache.set(sessionId, { data, at: Date.now() });
-        return data;
-      }
-      return null;
-    } catch (error) {
-      console.warn(`[Notification] fetchSessionInfo failed for ${sessionId}:`, error?.message || error);
-      return null;
-    }
-  };
-
-  const buildTemplateVariables = async (payload, sessionId) => {
-    const info = payload?.properties?.info || {};
-
-    const metadata = sessionId ? HostTitleSchema.parse(await readSessionMetadata(sessionId)) : null;
-    const eventTitle = EventTitleSchema.safeParse(info.sessionTitle);
-    let sessionTitle = metadata?.title ?? (payload?.properties?.sessionTitle || payload?.properties?.session?.title || (eventTitle.success ? eventTitle.data : '') || '');
-
-    if (!sessionTitle && sessionId) {
-      const cached = getCachedSessionTitle(sessionId);
-      if (cached) {
-        sessionTitle = cached;
-      }
-    }
-
-    let sessionInfo = null;
-    if (!sessionTitle && sessionId) {
-      sessionInfo = await fetchSessionInfo(sessionId);
-      if (sessionInfo && typeof sessionInfo.title === 'string') {
-        sessionTitle = sessionInfo.title;
-        cacheSessionTitle(sessionId, sessionTitle);
-      }
-    }
-
-    const agentName = (() => {
-      const mode = typeof info.agent === 'string' && info.agent.trim().length > 0
-        ? info.agent.trim()
-        : (typeof info.mode === 'string' ? info.mode.trim() : '');
-      if (!mode) return 'Agent';
-      return mode.split(/[-_\s]+/).filter(Boolean)
-        .map((token) => token.charAt(0).toUpperCase() + token.slice(1)).join(' ');
-    })();
-
-    const modelName = (() => {
-      const raw = typeof info.modelID === 'string' ? info.modelID.trim()
-        : (typeof info.model?.modelID === 'string' ? info.model.modelID.trim() : '');
-      if (!raw) return 'Assistant';
-      return raw.split(/[-_]+/).filter(Boolean)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
-    })();
-
-    let projectName = '';
+    // The Host custom title is read at use time. A failed read never substitutes
+    // another owner's title or clears the existing authoritative metadata.
+    const metadata = SessionMetadataSchema.nullable().parse(await readSessionMetadata(sessionId));
+    const snapshot = SessionSnapshotSchema.parse(await sessionService.open(sessionId));
+    if (snapshot.session.sessionId !== sessionId || snapshot.session.workspaceId !== resolved.workspaceId
+      || snapshot.session.rootSessionId !== resolved.rootSessionId) throw new Error('Canonical snapshot scope mismatch');
+    const settings = await readSettingsFromDisk();
+    const project = settings.projects?.find((entry) => entry.id === resolved.projectId);
     let branch = '';
-    let worktreeDir = '';
-
-    const infoPath = info.path;
-    if (typeof infoPath?.root === 'string' && infoPath.root.length > 0) {
-      worktreeDir = infoPath.root;
-    } else if (typeof infoPath?.cwd === 'string' && infoPath.cwd.length > 0) {
-      worktreeDir = infoPath.cwd;
-    }
-
     try {
-      const settings = await readSettingsFromDisk();
-      const projects = Array.isArray(settings.projects) ? settings.projects : [];
-
-      if (worktreeDir) {
-        const normalizedDir = worktreeDir.replace(/\/+$/, '');
-        const matchedProject = projects.find((project) => {
-          if (!project || typeof project.path !== 'string') return false;
-          return project.path.replace(/\/+$/, '') === normalizedDir;
-        });
-        if (matchedProject && typeof matchedProject.label === 'string' && matchedProject.label.trim().length > 0) {
-          projectName = matchedProject.label.trim();
-        } else {
-          projectName = normalizedDir.split('/').filter(Boolean).pop() || '';
-        }
-      } else {
-        const activeId = typeof settings.activeProjectId === 'string' ? settings.activeProjectId : '';
-        const activeProject = activeId ? projects.find((project) => project && project.id === activeId) : projects[0];
-        if (activeProject) {
-          projectName = typeof activeProject.label === 'string' && activeProject.label.trim().length > 0
-            ? activeProject.label.trim()
-            : typeof activeProject.path === 'string'
-              ? activeProject.path.split('/').pop() || ''
-              : '';
-          worktreeDir = typeof activeProject.path === 'string' ? activeProject.path : '';
-        }
-      }
-    } catch {
-      if (worktreeDir && !projectName) {
-        projectName = worktreeDir.split('/').filter(Boolean).pop() || '';
-      }
-    }
-
-    if (worktreeDir) {
-      try {
-        const { simpleGit } = await import('simple-git');
-        const git = simpleGit({
-          baseDir: worktreeDir,
-          spawnOptions: { windowsHide: true },
-          binary: resolveGitBinaryForSpawn(),
-        });
-        branch = await Promise.race([
-          git.revparse(['--abbrev-ref', 'HEAD']),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('git timeout')), 3000)),
-        ]).catch(() => '');
-      } catch {
-      }
-    }
-
+      const { simpleGit } = await import('simple-git');
+      const git = simpleGit({ baseDir: resolved.cwd, spawnOptions: { windowsHide: true }, binary: resolveGitBinaryForSpawn(), timeout: { block: 3000 } });
+      branch = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim();
+    } catch { /* A workspace need not be a Git repository. */ }
     return {
-      project_name: formatProjectLabel(projectName),
-      worktree: worktreeDir,
-      branch: typeof branch === 'string' ? branch.trim() : '',
-      session_name: sessionTitle,
-      agent_name: agentName,
-      model_name: modelName,
+      project_name: project?.label?.trim() || path.basename(resolved.cwd),
+      // Templates are public notification content; never expose the private cwd.
+      worktree: snapshot.session.displayPath,
+      branch,
+      session_name: metadata?.title ?? 'Session',
+      agent_name: 'Agent',
+      model_name: 'Assistant',
       last_message: '',
-      session_id: sessionId || '',
+      session_id: sessionId,
     };
   };
-
-  const getCachedZenModels = () => cachedZenModels;
-
-  return {
-    createTimeoutSignal,
-    formatProjectLabel,
-    resolveNotificationTemplate,
-    shouldApplyResolvedTemplateMessage,
-    fetchFreeZenModels,
-    resolveZenModel,
-    validateZenModelAtStartup,
-    summarizeText,
-    extractTextFromParts,
-    extractLastMessageText,
-    fetchLastAssistantMessageText,
-    maybeCacheSessionInfoFromEvent,
-    buildTemplateVariables,
-    getCachedZenModels,
-  };
+  return { resolveNotificationTemplate, shouldApplyResolvedTemplateMessage, extractLastMessageText, fetchLastAssistantMessageText, buildTemplateVariables };
 };

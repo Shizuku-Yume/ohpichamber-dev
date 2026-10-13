@@ -1,244 +1,244 @@
 import { randomUUID } from 'node:crypto';
+import { CanonicalEventSchema, CursorSchema, EntityIdSchema, SessionSnapshotSchema, StreamInvalidatedSchema } from '@openchamber/agent-contract';
 
-import { createUpstreamSseReader } from './upstream-reader.js';
-import { serializeMessageStreamWsEvent } from './protocol.js';
-import { translateWireEvent } from './translate-v2.js';
-import { createDeltaCoalescer, DELTA_COALESCE_WINDOW_MS } from './delta-coalescer.js';
-
-// Raised from 512 → 2048 to improve recovery after brief disconnects during
-// long-running agent sessions where many events accumulate quickly.
-const MESSAGE_STREAM_GLOBAL_REPLAY_LIMIT = 2048;
-const MESSAGE_STREAM_GLOBAL_REPLAY_BYTES = 8 * 1024 * 1024;
+const REPLAY_LIMIT = 2048;
+const REPLAY_BYTES = 8 * 1024 * 1024;
 
 export function createGlobalMessageStreamHub({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
-  fetchImpl = fetch,
-  upstreamStallTimeoutMs,
-  upstreamReconnectDelayMs,
-  replayLimit = MESSAGE_STREAM_GLOBAL_REPLAY_LIMIT,
-  replayByteLimit = MESSAGE_STREAM_GLOBAL_REPLAY_BYTES,
-  deltaCoalesceWindowMs = DELTA_COALESCE_WINDOW_MS,
+  service, resolveSessionScope, now = Date.now, replayLimit = REPLAY_LIMIT, replayByteLimit = REPLAY_BYTES,
 }) {
+  if (typeof service?.request !== 'function' || typeof resolveSessionScope !== 'function') {
+    throw new TypeError('Agent Service and Host session scope resolver are required');
+  }
   if (!Number.isSafeInteger(replayLimit) || replayLimit < 0 || !Number.isSafeInteger(replayByteLimit) || replayByteLimit < 0) {
     throw new RangeError('Replay limits must be nonnegative safe integers');
   }
+  const sessions = new Map();
   const eventSubscribers = new Set();
-  // The event subscribers that also take the events of isolated spaces.
-  const spaceSubscribers = new Set();
+  const snapshotSubscribers = new Set();
+  const frameSubscribers = new Set();
   const statusSubscribers = new Set();
   const replay = [];
+  const prefix = `hub-${randomUUID()}-`;
+  let sequence = 0n;
   let replayBytes = 0;
   let latestEventId;
-  // OpenCode's event stream carries no SSE ids (verified on 1.18.30: not one
-  // frame in a full response), and an event without an id never entered the
-  // replay buffer, so a reconnecting browser had no cursor and every event in
-  // the gap was gone. The replay log is this hub's own, so the hub numbers
-  // what upstream leaves unnumbered. The per-process prefix makes a cursor
-  // from before a restart miss instead of matching an unrelated sequence
-  // number, which reports `replayReset` and sends the client to repair.
-  const replayIdPrefix = `oc-${randomUUID().slice(0, 8)}-`;
-  let replaySequence = 0;
-
-  let controller = null;
-  let reader = null;
-  let connected = false;
+  let started = false;
   let everConnected = false;
-  let buildUrlFailed = false;
+  let stopping = null;
+  let replayNeedsReset = false;
+  // All consumers see one committed order, including asynchronous handlers.
+  let delivery = Promise.resolve();
 
-  const notifySubscriber = (kind, subscriber, payload) => {
-    try {
-      const result = subscriber(payload);
-      if (result && typeof result.catch === 'function') {
-        result.catch((error) => {
-          console.warn(`Global message stream ${kind} subscriber failed:`, error);
-        });
+  const notify = async (subscribers, ...args) => {
+    for (const subscriber of [...subscribers]) {
+      if (!subscribers.has(subscriber)) continue;
+      try { await subscriber(...args); }
+      catch { console.warn('Canonical event subscriber failed'); }
+    }
+  };
+  const status = (entry, type, extra = {}) => notify(statusSubscribers, {
+    type, sessionId: entry.sessionId, timestamp: now(), ...extra,
+  });
+  const clearReplay = () => { replay.length = 0; replayBytes = 0; latestEventId = undefined; };
+  const commit = (entry, event) => {
+    const run = delivery.then(async () => {
+      if (entry.controller.signal.aborted || sessions.get(entry.sessionId) !== entry) return;
+      await notify(eventSubscribers, event, entry.scope);
+      if (entry.controller.signal.aborted || sessions.get(entry.sessionId) !== entry) return;
+      const eventId = `${prefix}${++sequence}`;
+      const serializedFrame = JSON.stringify({ type: 'event', eventId, payload: event });
+      const bytes = Buffer.byteLength(serializedFrame);
+      latestEventId = eventId;
+      if (bytes > replayByteLimit) {
+        replay.length = 0; replayBytes = 0;
+      } else {
+        replay.push({ eventId, sessionId: event.sessionId, serializedFrame, bytes });
+        replayBytes += bytes;
+        while (replay.length > replayLimit || replayBytes > replayByteLimit) replayBytes -= replay.shift().bytes;
       }
-    } catch (error) {
-      console.warn(`Global message stream ${kind} subscriber failed:`, error);
-    }
-  };
-
-  const notifyStatus = (status) => {
-    for (const subscriber of Array.from(statusSubscribers)) {
-      notifySubscriber('status', subscriber, status);
-    }
-  };
-
-  const normalizeEvent = ({ envelope, payload }) => {
-    const directory =
-      typeof envelope?.directory === 'string' && envelope.directory.length > 0 ? envelope.directory : 'global';
-    const eventId = typeof envelope?.eventId === 'string' && envelope.eventId.length > 0
-      ? envelope.eventId
-      : `${replayIdPrefix}${String(++replaySequence).padStart(12, '0')}`;
-    // An event of an isolated space carries the space's id; subscribers see it only when they
-    // asked for space events, because a consumer that acts on the host's OpenCode by
-    // directory must never act on a space's directory.
-    const spaceId = typeof envelope?.spaceId === 'string' && envelope.spaceId.length > 0 ? envelope.spaceId : null;
-    let serializedFrame;
-    let translated;
-    return {
-      envelope,
-      payload,
-      directory,
-      eventId,
-      spaceId,
-      serialize() {
-        serializedFrame ??= serializeMessageStreamWsEvent(payload, { directory, eventId });
-        return serializedFrame;
-      },
-      // Browser clients receive the raw wire payload and translate it
-      // themselves; server-side subscribers read this instead. Translating
-      // lazily keeps the cost off the WS fan-out path when nothing listens.
-      translated() {
-        translated ??= translateWireEvent(payload);
-        return translated;
-      },
-    };
-  };
-
-  // Replay and fan-out see the same committed sequence: an event enters the
-  // replay buffer in the same step that delivers it, so a client's cursor
-  // always names a frame the buffer can find.
-  const commitEvent = (event) => {
-    const normalized = normalizeEvent(event);
-    latestEventId = normalized.eventId;
-    const serializedFrame = normalized.serialize();
-    const bytes = Buffer.byteLength(serializedFrame);
-    if (bytes > replayByteLimit) {
-      // An oversized live event creates a hole: retain only a contiguous
-      // suffix after it, never replay an older prefix across the gap.
-      replay.length = 0;
-      replayBytes = 0;
-    } else {
-      replay.push({ eventId: normalized.eventId, serializedFrame, bytes });
-      replayBytes += bytes;
-      while (replay.length > replayLimit || replayBytes > replayByteLimit) {
-        replayBytes -= replay.shift().bytes;
-      }
-    }
-
-    for (const subscriber of Array.from(eventSubscribers)) {
-      if (normalized.spaceId !== null && !spaceSubscribers.has(subscriber)) continue;
-      notifySubscriber('event', subscriber, normalized);
-    }
-  };
-
-  const coalescer = createDeltaCoalescer({ emit: commitEvent, windowMs: deltaCoalesceWindowMs });
-
-  const start = () => {
-    if (reader) {
-      return;
-    }
-
-    controller = new AbortController();
-    reader = createUpstreamSseReader({
-      signal: controller.signal,
-      stallTimeoutMs: upstreamStallTimeoutMs,
-      reconnectDelayMs: upstreamReconnectDelayMs,
-      fetchImpl,
-      buildUrl: () => {
-        buildUrlFailed = false;
+      // Replay insertion and synchronous transport fanout are one boundary:
+      // a client cannot replay an event whose live fanout is still pending.
+      for (const subscriber of [...frameSubscribers]) {
+        if (!frameSubscribers.has(subscriber)) continue;
         try {
-          return new URL(buildOpenCodeUrl('/api/event', ''));
-        } catch {
-          buildUrlFailed = true;
-          throw new Error('OpenCode service unavailable');
-        }
-      },
-      getHeaders: getOpenCodeAuthHeaders,
-      onConnect() {
-        connected = true;
-        const wasReady = everConnected;
-        everConnected = true;
-        notifyStatus({ type: 'connect', wasReady });
-      },
-      onDisconnect({ reason }) {
-        connected = false;
-        notifyStatus({ type: 'disconnect', reason });
-      },
-      onEvent(event) {
-        coalescer.push(event);
-      },
-      onError(error) {
-        if (controller?.signal.aborted) {
-          return;
-        }
-
-        notifyStatus({
-          type: everConnected ? 'error' : 'initial-error',
-          error,
-          buildUrlFailed,
-        });
-      },
-    });
-
-    void reader.start();
-  };
-
-  const stop = () => {
-    connected = false;
-    // Text that already arrived belongs in the retained replay suffix.
-    coalescer.flush();
-    reader?.stop();
-    if (controller && !controller.signal.aborted) {
-      controller.abort();
-    }
-    reader = null;
-    controller = null;
-    everConnected = false;
-    buildUrlFailed = false;
-  };
-
-  return {
-    start,
-    stop,
-    isConnected() {
-      return connected;
-    },
-    hasConnected() {
-      return everConnected;
-    },
-    /**
-     * `spaces: true` also delivers the events of isolated spaces, which carry `spaceId`.
-     * Without it a subscriber sees the host's events only, as every consumer did before spaces.
-     */
-    subscribeEvent(subscriber, { spaces = false } = {}) {
-      eventSubscribers.add(subscriber);
-      if (spaces) spaceSubscribers.add(subscriber);
-      return () => {
-        eventSubscribers.delete(subscriber);
-        spaceSubscribers.delete(subscriber);
-      };
-    },
-    /**
-     * One event of an isolated space, from that space's own connection, entered here as if it
-     * had arrived upstream: numbered, coalesced, replayed and fanned out with the host's, so
-     * a client keeps one cursor for everything. `directory` is the space's, `spaceId` marks it.
-     */
-    injectEvent({ payload, directory, spaceId }) {
-      coalescer.push({ envelope: { directory, spaceId }, payload });
-    },
-    subscribeStatus(subscriber) {
-      statusSubscribers.add(subscriber);
-      return () => {
-        statusSubscribers.delete(subscriber);
-      };
-    },
-    // A client that becomes ready must not receive text from before it was
-    // ready merged into its first live delta, so the bridge commits pending
-    // deltas before it reads the replay tail.
-    flushPending() {
-      coalescer.flush();
-    },
-    replayAfter(eventId) {
-      if (!eventId) {
-        return [];
+          const result = subscriber({ eventId, serializedFrame, event });
+          if (result?.catch) result.catch(() => console.warn('Canonical frame subscriber failed'));
+        } catch { console.warn('Canonical frame subscriber failed'); }
       }
+    });
+    delivery = run.catch(() => {});
+    return run;
+  };
 
+  const open = (entry) => {
+    entry.ready = (async () => {
+      entry.scope = await resolveSessionScope(entry.sessionId);
+      if (![entry.scope?.projectId, entry.scope?.workspaceId, entry.scope?.cwd, entry.scope?.agentDirectoryId,
+        entry.scope?.agentDirectory, entry.scope?.rootSessionId].every((value) => typeof value === 'string' && value.length > 0)) {
+        throw new Error('HOST_SCOPE_UNAVAILABLE');
+      }
+      if (entry.controller.signal.aborted) return;
+      const base = `/api/agent/v1/sessions/${encodeURIComponent(entry.sessionId)}`;
+      if (!entry.cursor) {
+        const response = await service.request(`${base}/snapshot`, { signal: entry.controller.signal });
+        if (!response.ok) throw Object.assign(new Error('SNAPSHOT_UNAVAILABLE'), { status: response.status });
+        const snapshot = SessionSnapshotSchema.parse(await response.json());
+        if (snapshot.session.sessionId !== entry.sessionId || snapshot.session.workspaceId !== entry.scope.workspaceId
+          || snapshot.session.rootSessionId !== entry.scope.rootSessionId) throw new Error('HOST_SCOPE_MISMATCH');
+        entry.cursor = snapshot.cursor;
+        if (entry.controller.signal.aborted) return;
+        await notify(snapshotSubscribers, snapshot, entry.scope);
+      }
+      if (entry.controller.signal.aborted) return;
+      const response = await service.request(`${base}/events`, {
+        method: 'GET', headers: { Accept: 'text/event-stream', 'Last-Event-ID': entry.cursor }, signal: entry.controller.signal,
+      });
+      if (!response.ok || !response.body || response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'text/event-stream') {
+        await response.body?.cancel().catch(() => {});
+        throw Object.assign(new Error('STREAM_UNAVAILABLE'), { status: response.status });
+      }
+      if (entry.controller.signal.aborted) { await response.body.cancel(); return; }
+      entry.reader = response.body.getReader();
+      entry.connected = true;
+      const wasReady = entry.connectedOnce === true;
+      entry.connectedOnce = true;
+      everConnected = true;
+      await status(entry, 'connect', { wasReady, replayReset: entry.replayReset === true });
+      entry.finished = consume(entry);
+    })().catch(async (error) => {
+      if (!entry.controller.signal.aborted) await status(entry, everConnected ? 'error' : 'initial-error', {
+        error: { code: error?.status === 410 ? 'RESYNC_REQUIRED' : 'STREAM_UNAVAILABLE', status: error?.status },
+      });
+      entry.connected = false;
+      throw new Error('Canonical session stream unavailable');
+    });
+    return entry.ready;
+  };
+
+  const consume = async (entry) => {
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let lines = [];
+    let epoch = entry.cursor.slice(0, entry.cursor.lastIndexOf(':'));
+    let head = BigInt(entry.cursor.slice(entry.cursor.lastIndexOf(':') + 1));
+    const frame = async () => {
+      let id; let name; const data = [];
+      for (const line of lines) {
+        if (line.startsWith(':')) continue;
+        const colon = line.indexOf(':');
+        const field = colon < 0 ? line : line.slice(0, colon);
+        const value = colon < 0 ? '' : line.slice(colon + 1).replace(/^ /, '');
+        if (field === 'id') id = value;
+        else if (field === 'event') name = value;
+        else if (field === 'data') data.push(value);
+      }
+      lines = [];
+      if (data.length === 0) return true;
+      const raw = JSON.parse(data.join('\n'));
+      if (name === 'stream.invalidated' || raw?.type === 'stream.invalidated') {
+        const invalidation = StreamInvalidatedSchema.parse(raw);
+        if (invalidation.sessionId !== entry.sessionId || invalidation.epoch !== epoch) throw new Error('INVALID_STREAM_SCOPE');
+        clearReplay();
+        await status(entry, 'invalidated', { invalidation });
+        entry.cursor = undefined;
+        return false;
+      }
+      const event = CanonicalEventSchema.parse(raw);
+      if (event.sessionId !== entry.sessionId || event.epoch !== epoch || name !== event.type || id !== `${event.epoch}:${event.sequence}`) {
+        throw new Error('INVALID_STREAM_EVENT');
+      }
+      const next = BigInt(event.sequence);
+      if (next <= head) return true;
+      if (next !== head + 1n) throw new Error('STREAM_SEQUENCE_GAP');
+      await commit(entry, event);
+      if (entry.controller.signal.aborted) return false;
+      head = next;
+      entry.cursor = id;
+      return true;
+    };
+    try {
+      while (!entry.controller.signal.aborted) {
+        const { done, value } = await entry.reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let newline;
+        while ((newline = buffer.indexOf('\n')) !== -1) {
+          const line = buffer.slice(0, newline).replace(/\r$/, '');
+          buffer = buffer.slice(newline + 1);
+          if (line) lines.push(line);
+          else if (!await frame()) return;
+          if (entry.controller.signal.aborted) return;
+        }
+      }
+      // An incomplete final frame is not an authoritative event.
+    } catch {
+      if (!entry.controller.signal.aborted) {
+        clearReplay();
+        await status(entry, 'error', { error: { code: 'STREAM_INTERRUPTED' } });
+      }
+    } finally {
+      entry.connected = false;
+      await entry.reader.cancel().catch(() => {});
+      entry.reader.releaseLock();
+      entry.reader = null;
+      if (!entry.controller.signal.aborted) await status(entry, 'disconnect');
+    }
+  };
+
+  const subscribeSession = async (sessionId, { cursor } = {}) => {
+    EntityIdSchema.parse(sessionId);
+    if (cursor !== undefined) CursorSchema.parse(cursor);
+    if (stopping) await stopping;
+    const existing = sessions.get(sessionId);
+    if (existing?.connected || (existing && !existing.finished)) return existing.ready;
+    if (existing) await unsubscribeSession(sessionId);
+    const restarting = replayNeedsReset;
+    if (replayNeedsReset) { clearReplay(); replayNeedsReset = false; }
+    started = true;
+    const entry = { sessionId, cursor: cursor ?? existing?.cursor, controller: new AbortController(), connected: false,
+      connectedOnce: existing?.connectedOnce === true || restarting, replayReset: restarting };
+    sessions.set(sessionId, entry);
+    try { await open(entry); }
+    catch (error) { if (sessions.get(sessionId) === entry) sessions.delete(sessionId); throw error; }
+  };
+  const unsubscribeSession = async (sessionId) => {
+    const entry = sessions.get(sessionId);
+    if (!entry) return;
+    sessions.delete(sessionId);
+    entry.controller.abort();
+    await entry.reader?.cancel().catch(() => {});
+    await entry.ready?.catch(() => {});
+    await entry.finished;
+  };
+  const subscribe = (set, subscriber) => {
+    if (typeof subscriber !== 'function') throw new TypeError('Subscriber must be a function');
+    set.add(subscriber);
+    return () => set.delete(subscriber);
+  };
+  return {
+    async start(sessionIds = []) { started = true; await Promise.all(sessionIds.map((id) => subscribeSession(id))); },
+    subscribeSession,
+    unsubscribeSession,
+    stop() {
+      if (stopping) return stopping;
+      started = false;
+      replayNeedsReset = everConnected;
+      stopping = Promise.all([...sessions.keys()].map(unsubscribeSession)).then(() => delivery).finally(() => { stopping = null; });
+      return stopping;
+    },
+    isStarted: () => started,
+    isConnected: () => [...sessions.values()].some((entry) => entry.connected),
+    hasConnected: () => everConnected,
+    subscribeEvent: (subscriber) => subscribe(eventSubscribers, subscriber),
+    subscribeSnapshot: (subscriber) => subscribe(snapshotSubscribers, subscriber),
+    subscribeFrame: (subscriber) => subscribe(frameSubscribers, subscriber),
+    subscribeStatus: (subscriber) => subscribe(statusSubscribers, subscriber),
+    replayAfter(eventId, { sessionId } = {}) {
+      if (!eventId || eventId === latestEventId) return [];
       const index = replay.findIndex((entry) => entry.eventId === eventId);
-      if (eventId === latestEventId) return [];
-      return index === -1 ? null : replay.slice(index + 1);
+      if (index === -1) return null;
+      return replay.slice(index + 1).filter((entry) => !sessionId || entry.sessionId === sessionId);
     },
   };
 }

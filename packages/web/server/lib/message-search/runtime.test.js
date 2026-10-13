@@ -5,8 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createMessageSearchRuntime } from './runtime.js';
 
-// The hub as the runtime sees it: who is listening, nothing else. It stays
-// disconnected so no background walk reaches for an OpenCode.
+// Subscriber lifetime is exercised independently of private stream transport.
 const createHub = () => {
   const listeners = { event: 0, status: 0 };
   return {
@@ -29,8 +28,9 @@ describe('message search runtime', () => {
   const indexFile = () => path.join(dataDir, 'message-search.sqlite');
   const create = (enabled, reasoning = false) => createMessageSearchRuntime({
     dataDir,
-    buildOpenCodeUrl: () => 'http://127.0.0.1:1/',
-    getOpenCodeAuthHeaders: () => ({}),
+    sessionService: { list: async () => ({ items: [], errors: [] }), open: async () => { throw new Error('No session'); }, history: async () => { throw new Error('No session'); } },
+    resolveSessionScope: async () => { throw new Error('No session'); },
+    readSessionMetadata: async () => null,
     globalEventHub: hub,
     readSettings: async () => ({ enabled, reasoning }),
     logger: { warn: () => {} },

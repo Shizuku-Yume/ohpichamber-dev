@@ -1,7 +1,6 @@
 import express from 'express';
 import { constants as fsConstants } from 'node:fs';
-import { mintOutsideFileGrant } from '../fs/routes.js';
-import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
+import { EntityIdSchema, HistoryPageSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGE_SOURCES = 12;
@@ -129,23 +128,15 @@ const parseDefinitionDestination = (value) => {
   return match ? unescapeMarkdownDestination(match[0]) : '';
 };
 
-/**
- * v2 messages are flat records: an assistant one carries `content[]` and a user
- * one a single `text`. Both are read here, because an image link can come from
- * either side of the conversation.
- */
-const messageTextParts = (message) => {
-  if (Array.isArray(message?.content)) return message.content;
-  if (typeof message?.text === 'string') return [{ type: 'text', text: message.text }];
-  return [];
-};
+/** Only finalized canonical assistant text can authorize an image. */
+const messageTextParts = (message) => message.parts;
 
 const collectMarkdownLinesOutsideCode = (message) => {
   const lines = [];
   for (const part of messageTextParts(message)) {
-    if (part?.type !== 'text' || typeof part.text !== 'string') continue;
+    if (part.type !== 'text') continue;
     let fence = null;
-    for (const line of part.text.split('\n')) {
+    for (const line of part.content.split('\n')) {
       const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
       if (fenceMatch) {
         const marker = fenceMatch[1];
@@ -203,26 +194,25 @@ const markdownImageSources = (message) => {
   return sources;
 };
 
-const fetchMessage = async ({ sessionId, messageId, directory, buildOpenCodeUrl, getOpenCodeAuthHeaders }) => {
-  const url = new URL(buildOpenCodeUrl(
-    `/api/session/${encodeURIComponent(sessionId)}/message/${encodeURIComponent(messageId)}`,
-    '',
-  ));
-  url.searchParams.set('directory', directory);
-  const response = await fetch(url, {
-    headers: {
-      accept: 'application/json',
-      // Percent-encoded to match the SDK wire format; raw non-ASCII values
-      // are rejected by OpenCode.
-      'x-opencode-directory': encodeURIComponent(directory),
-      ...getOpenCodeAuthHeaders(),
-    },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`OpenCode returned ${response.status}`);
-  const message = unwrapOpenCodeResponse(await response.json().catch(() => null));
-  return message && typeof message === 'object' && typeof message.id === 'string' ? message : null;
+const fetchMessage = async ({ sessionId, messageId, sessionService }) => {
+  const snapshot = SessionSnapshotSchema.parse(await sessionService.open(sessionId));
+  if (snapshot.session.sessionId !== sessionId) throw new Error('Canonical snapshot scope mismatch');
+  const locate = (selection) => {
+    const settled = new Set(selection.turns.filter((turn) => ['completed', 'failed', 'cancelled'].includes(turn.status)).map((turn) => turn.turnId));
+    return selection.messages.find((message) => message.messageId === messageId && message.role === 'assistant' && settled.has(message.turnId));
+  };
+  const recent = locate(snapshot);
+  if (recent) return recent;
+  let cursor;
+  do {
+    const query = new URLSearchParams({ limit: '100', ...(cursor ? { cursor } : {}) });
+    const page = HistoryPageSchema.parse(await sessionService.history(sessionId, query.toString()));
+    if (page.sessionId !== sessionId) throw new Error('Canonical history scope mismatch');
+    const message = locate(page);
+    if (message) return message;
+    cursor = page.nextCursor;
+  } while (cursor);
+  return null;
 };
 
 const inspectImage = async ({ source, directory, approvedTempRoot, fsPromises, path }) => {
@@ -240,6 +230,12 @@ const inspectImage = async ({ source, directory, approvedTempRoot, fsPromises, p
       fsPromises.realpath(sourcePath),
     ]);
     if (!isWithin(canonicalPath, canonicalRoot, path)) return { status: 'error' };
+    // Native image, browser and computer tools write these direct temp files.
+    // A Host-approved temp root is not permission to read unrelated temp data.
+    if (outsideWorkspace && (path.dirname(canonicalPath) !== canonicalRoot
+      || !/^omp-(?:image|sshots|screenshot-diff|computer)-[A-Za-z0-9_-]+\.(?:png|jpe?g|gif|webp)$/i.test(path.basename(canonicalPath)))) {
+      return { status: 'error' };
+    }
     const handle = await fsPromises.open(canonicalPath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
     try {
       const stats = await handle.stat();
@@ -249,7 +245,7 @@ const inspectImage = async ({ source, directory, approvedTempRoot, fsPromises, p
       if (!hasImageSignature(header.subarray(0, bytesRead))) return { status: 'error' };
       return {
         status: 'ready',
-        path: outsideWorkspace ? canonicalPath : path.resolve(sourcePath),
+        path: canonicalPath,
         outsideWorkspace,
       };
     } finally {
@@ -265,91 +261,88 @@ const inspectImage = async ({ source, directory, approvedTempRoot, fsPromises, p
 };
 
 export const registerMarkdownImageGrantRoutes = (app, dependencies) => {
-  const {
-    fsPromises,
-    path,
-    os,
-    crypto,
-    validateDirectoryPath,
-    buildOpenCodeUrl,
-    getOpenCodeAuthHeaders,
-    approvedTempRoot = path.join(os.tmpdir(), 'opencode'),
-  } = dependencies;
-
-  app.post(
-    '/api/openchamber/sessions/:sessionId/markdown-image-grants',
-    express.json({ limit: '32kb' }),
-    async (req, res) => {
-      const sessionId = asString(req.params.sessionId);
-      const messageId = asString(req.body?.messageId);
-      const sources = Array.isArray(req.body?.sources)
-        ? [...new Set(req.body.sources.map(asString).filter(Boolean))]
-        : [];
-      if (!sessionId || !messageId || sources.length === 0 || sources.length > MAX_IMAGE_SOURCES) {
-        return res.status(400).json({ error: 'sessionId, messageId, and 1-12 sources are required' });
+  const { fsPromises, path, crypto, sessionService, resolveSessionScope, approvedTempRoot, now = Date.now } = dependencies;
+  if (typeof sessionService?.open !== 'function' || typeof sessionService?.history !== 'function'
+    || typeof resolveSessionScope !== 'function' || !approvedTempRoot) {
+    throw new TypeError('Canonical session reader, Host scope resolver and approved image root are required');
+  }
+  const grants = new Map();
+  const ttl = 10 * 60 * 1000;
+  const prune = () => {
+    for (const [id, grant] of grants) if (grant.expiresAt <= now()) grants.delete(id);
+    while (grants.size >= 256) grants.delete(grants.keys().next().value);
+  };
+  const route = '/api/openchamber/sessions/:sessionId/markdown-image-grants';
+  app.post(route, express.json({ limit: '32kb' }), async (req, res) => {
+    const sessionId = asString(req.params.sessionId);
+    const messageId = asString(req.body?.messageId);
+    const sources = req.body?.sources;
+    if (!EntityIdSchema.safeParse(sessionId).success || !EntityIdSchema.safeParse(messageId).success
+      || !Array.isArray(sources) || sources.length === 0 || sources.length > MAX_IMAGE_SOURCES
+      || sources.some((source) => typeof source !== 'string' || !source.trim())) {
+      return res.status(400).json({ error: 'sessionId, messageId, and 1-12 sources are required' });
+    }
+    try {
+      // Client directories never authorize filesystem reads or message access.
+      const scope = await resolveSessionScope(sessionId);
+      if (!scope?.cwd || !scope?.workspaceId) return res.status(403).json({ error: 'Session scope unavailable' });
+      const message = await fetchMessage({ sessionId, messageId, sessionService });
+      if (!message) return res.status(404).json({ error: 'Assistant message not found' });
+      const referenced = markdownImageSources(message);
+      const results = [];
+      for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
+        const source = sources[sourceIndex].trim();
+        if (!referenced.has(source)) { results.push({ sourceIndex, status: 'error' }); continue; }
+        try {
+          const inspected = await inspectImage({ source, directory: scope.cwd, approvedTempRoot, fsPromises, path });
+          if (inspected.status !== 'ready') { results.push({ sourceIndex, status: inspected.status }); continue; }
+          prune();
+          const grantId = crypto.randomUUID();
+          const expiresAt = now() + ttl;
+          grants.set(grantId, { path: inspected.path, source, sessionId, workspaceId: scope.workspaceId,
+            rootSessionId: scope.rootSessionId, cwd: scope.cwd, expiresAt });
+          results.push({ sourceIndex, status: 'ready', expiresAt,
+            assetPath: `/api/openchamber/sessions/${encodeURIComponent(sessionId)}/markdown-image-grants/${grantId}/raw` });
+        } catch { results.push({ sourceIndex, status: 'error' }); }
       }
-      const validatedDirectory = await validateDirectoryPath(asString(req.body?.directory));
-      if (!validatedDirectory.ok) {
-        return res.status(400).json({ error: validatedDirectory.error || 'Invalid directory' });
+      return res.json({ results });
+    } catch {
+      return res.status(503).json({ error: 'Failed to prepare session images' });
+    }
+  });
+  app.get(`${route}/:grantId/raw`, async (req, res) => {
+    const grant = grants.get(req.params.grantId);
+    if (!grant || grant.expiresAt <= now() || grant.sessionId !== req.params.sessionId) {
+      if (grant?.expiresAt <= now()) grants.delete(req.params.grantId);
+      return res.status(404).json({ error: 'Image grant unavailable' });
+    }
+    try {
+      const scope = await resolveSessionScope(grant.sessionId);
+      if (scope.workspaceId !== grant.workspaceId || scope.rootSessionId !== grant.rootSessionId || scope.cwd !== grant.cwd) {
+        return res.status(403).json({ error: 'Session scope changed' });
       }
-
+      // Recheck realpath containment, size and signature at use time. Hold the
+      // no-follow descriptor while reading so a replaced symlink cannot escape.
+      const inspected = await inspectImage({ source: grant.source, directory: scope.cwd, approvedTempRoot, fsPromises, path });
+      if (inspected.status !== 'ready' || inspected.path !== grant.path) return res.status(404).json({ error: 'Image unavailable' });
+      const handle = await fsPromises.open(grant.path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
       try {
-        const message = await fetchMessage({
-          sessionId,
-          messageId,
-          directory: validatedDirectory.directory,
-          buildOpenCodeUrl,
-          getOpenCodeAuthHeaders,
-        });
-        // v2 messages are flat records with a `type` discriminator.
-        if (!message || message.id !== messageId || message.type !== 'assistant') {
-          return res.status(404).json({ error: 'Assistant message not found' });
+        const stats = await handle.stat();
+        if (!stats.isFile() || stats.size > MAX_IMAGE_BYTES) return res.status(404).json({ error: 'Image unavailable' });
+        const buffer = Buffer.alloc(stats.size + 1);
+        let length = 0;
+        while (length < buffer.length) {
+          const read = await handle.read(buffer, length, buffer.length - length, length);
+          if (read.bytesRead === 0) break;
+          length += read.bytesRead;
         }
-        // Assistant text is authoritative: a remote client cannot mint grants for unreferenced paths.
-        const referenced = markdownImageSources(message);
-        const results = [];
-        for (const source of sources) {
-          if (!referenced.has(source)) {
-            results.push({ source, status: 'error' });
-            continue;
-          }
-          try {
-            const inspected = await inspectImage({
-              source,
-              directory: validatedDirectory.directory,
-              approvedTempRoot,
-              fsPromises,
-              path,
-            });
-            if (inspected.status !== 'ready') {
-              results.push({ source, status: inspected.status });
-              continue;
-            }
-            // Reuse the existing path-bound raw-file grant instead of creating another asset lifecycle.
-            const grant = inspected.outsideWorkspace
-              ? await mintOutsideFileGrant(inspected.path, {
-                scopes: ['raw'],
-                fsPromises,
-                path,
-                crypto,
-              })
-              : null;
-            results.push({
-              source,
-              status: 'ready',
-              path: inspected.path,
-              outsideFileGrant: grant?.outsideFileGrant,
-              expiresAt: grant?.expiresAt,
-            });
-          } catch {
-            results.push({ source, status: 'error' });
-          }
-        }
-        return res.json({ results });
-      } catch (error) {
-        console.warn('[MarkdownImageGrants] failed to prepare images:', error?.message || error);
-        return res.status(503).json({ error: 'Failed to prepare session images' });
-      }
-    },
-  );
+        const bytes = buffer.subarray(0, length);
+        if (length > stats.size || !hasImageSignature(bytes)) return res.status(404).json({ error: 'Image unavailable' });
+        const header = bytes.subarray(0, 12).toString('ascii');
+        const mime = bytes[0] === 0x89 ? 'image/png' : bytes[0] === 0xff ? 'image/jpeg' : header.startsWith('GIF') ? 'image/gif' : 'image/webp';
+        res.set({ 'Content-Type': mime, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+        return res.send(bytes);
+      } finally { await handle.close(); }
+    } catch { return res.status(503).json({ error: 'Image unavailable' }); }
+  });
 };

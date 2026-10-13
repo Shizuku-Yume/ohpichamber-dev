@@ -1,7 +1,5 @@
 import path from 'node:path';
 import fsPromises from 'node:fs/promises';
-import { OpenCode } from '@opencode/client';
-import { z } from 'zod';
 
 import { createMessageSearchIndexer } from './indexer.js';
 import { loadSqliteOpener } from './sqlite.js';
@@ -14,12 +12,9 @@ const REASONING_META_KEY = 'reasoning';
 const INDEX_FILE_SUFFIXES = ['', '-wal', '-shm'];
 const MAX_LIMIT = 200;
 
-// The hub's envelope: `directory` is 'global' for events with no location.
-const envelopeSchema = z.object({ directory: z.string().nullish() });
-const payloadDirectorySchema = z.object({ properties: z.object({ directory: z.string() }) });
 
 /**
- * Owns the search index for this server's OpenCode. Search is opt-in
+ * Owns the derived search index for the canonical Agent Service. Search is opt-in
  * (`messageSearchEnabled`): while it is off nothing runs, no file is opened,
  * no event is looked at. Turning it on opens the index, follows the event
  * stream and walks the session list, which fills in whatever changed while it
@@ -32,8 +27,9 @@ const payloadDirectorySchema = z.object({ properties: z.object({ directory: z.st
  */
 export const createMessageSearchRuntime = ({
   dataDir,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService,
+  resolveSessionScope,
+  readSessionMetadata,
   globalEventHub,
   // () => Promise<{ enabled: boolean, reasoning: boolean }>, from settings.json.
   readSettings,
@@ -55,12 +51,6 @@ export const createMessageSearchRuntime = ({
     return run;
   };
 
-  const createClient = (directory) => {
-    const headers = { ...getOpenCodeAuthHeaders() };
-    // v2 scopes by header and rejects non-ASCII header values.
-    if (directory) headers['x-opencode-directory'] = encodeURIComponent(directory);
-    return OpenCode.make({ baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''), headers });
-  };
 
   // Brings the file in line with the reasoning switch. True when reasoning has
   // to be read in, which the next session walk does.
@@ -83,19 +73,12 @@ export const createMessageSearchRuntime = ({
   const startEngine = () => {
     const store = openMessageSearchStore(open(indexPath));
     reconcileReasoning(store);
-    const indexer = createMessageSearchIndexer({ store, createClient, includeReasoning: () => reasoning, logger });
-    const unsubscribeEvents = globalEventHub.subscribeEvent((event) => {
-      const envelope = envelopeSchema.safeParse(event);
-      const directory = envelope.success && envelope.data.directory !== 'global' ? envelope.data.directory ?? '' : '';
-      for (const payload of event?.translated?.() ?? []) {
-        const own = payloadDirectorySchema.safeParse(payload);
-        indexer.processPayload(payload, directory || (own.success ? own.data.properties.directory : ''));
-      }
-    });
+    const indexer = createMessageSearchIndexer({ store, sessionService, resolveSessionScope, readSessionMetadata, includeReasoning: () => reasoning, logger });
+    const unsubscribeEvents = globalEventHub.subscribeEvent((event, scope) => indexer.processCanonicalEvent(event, scope));
     const unsubscribeStatus = globalEventHub.subscribeStatus((status) => {
-      if (status?.type === 'connect') indexer.onConnected();
+      if (status.type === 'connect') return indexer.onConnected(status.sessionId);
     });
-    if (globalEventHub.isConnected?.()) indexer.onConnected();
+    void indexer.onConnected();
     return {
       store,
       indexer,

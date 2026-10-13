@@ -10,7 +10,7 @@
  * The file is derived data. A schema change drops and rebuilds it.
  */
 
-const MESSAGE_SEARCH_SCHEMA_VERSION = '2';
+const MESSAGE_SEARCH_SCHEMA_VERSION = '3';
 
 // Private-use characters around each match in a snippet. They cannot occur in
 // ordinary text and are not markup, so a snippet is never rendered as HTML.
@@ -26,9 +26,6 @@ const SCHEMA = `
     directory TEXT NOT NULL,
     title TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL DEFAULT 0,
-    revert_id TEXT,
-    user_cursor TEXT,
-    assistant_cursor TEXT,
     synced_updated_at INTEGER
   );
   CREATE TABLE IF NOT EXISTS messages (
@@ -153,20 +150,13 @@ export const openMessageSearchStore = (connection) => {
   connection.run('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', ['schema', MESSAGE_SEARCH_SCHEMA_VERSION]);
 
   const readSession = (sessionId) => connection.get(
-    'SELECT id, directory, title, revert_id, user_cursor, assistant_cursor, synced_updated_at FROM sessions WHERE id = ?',
+    'SELECT id, directory, title, synced_updated_at FROM sessions WHERE id = ?',
     [sessionId],
   );
 
   return {
     readSession,
 
-    upsertSession: ({ id, directory, title, createdAt }) => {
-      connection.run(
-        `INSERT INTO sessions (id, directory, title, created_at) VALUES (?, ?, ?, ?)
-         ON CONFLICT (id) DO UPDATE SET directory = excluded.directory, title = excluded.title`,
-        [id, directory, title ?? '', createdAt ?? 0],
-      );
-    },
 
     renameSession: (sessionId, title) => {
       connection.run('UPDATE sessions SET title = ? WHERE id = ?', [title, sessionId]);
@@ -176,16 +166,6 @@ export const openMessageSearchStore = (connection) => {
       connection.run('UPDATE sessions SET directory = ? WHERE id = ?', [directory, sessionId]);
     },
 
-    /** Forgets what was read, for a session whose history changed under the cursors. */
-    resetSession: (sessionId, revertId) => {
-      connection.transaction(() => {
-        connection.run('DELETE FROM messages WHERE session_id = ?', [sessionId]);
-        connection.run(
-          'UPDATE sessions SET revert_id = ?, user_cursor = NULL, assistant_cursor = NULL, synced_updated_at = NULL WHERE id = ?',
-          [revertId, sessionId],
-        );
-      });
-    },
 
     deleteSession: (sessionId) => {
       connection.transaction(() => {
@@ -194,28 +174,35 @@ export const openMessageSearchStore = (connection) => {
       });
     },
 
-    /** Messages are immutable once settled; a re-read replaces nothing it does not change. */
-    putMessages: (rows) => {
-      if (rows.length === 0) return;
-      connection.transaction(() => {
-        for (const row of rows) {
-          connection.run(
-            `INSERT INTO messages (id, message_id, session_id, role, created_at, text) VALUES (?, ?, ?, ?, ?, ?)
-             ON CONFLICT (id) DO UPDATE SET text = excluded.text WHERE text <> excluded.text`,
-            [row.id, row.messageId ?? row.id, row.sessionId, row.role, row.createdAt, row.text],
-          );
-        }
-      });
-    },
 
-    setCursor: (sessionId, role, cursor) => {
-      const column = role === 'user' ? 'user_cursor' : 'assistant_cursor';
-      connection.run(`UPDATE sessions SET ${column} = ? WHERE id = ?`, [cursor, sessionId]);
+    // A complete canonical selection replaces derived text atomically. Fetch
+    // failures never publish the staged rows or erase the last valid selection.
+    beginSessionSync: () => {
+      connection.exec(`CREATE TEMP TABLE IF NOT EXISTS staged_messages (
+        id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL,
+        role TEXT NOT NULL, created_at INTEGER NOT NULL, text TEXT NOT NULL
+      ); DELETE FROM staged_messages;`);
     },
+    stageMessages: (rows) => connection.transaction(() => {
+      for (const row of rows) connection.run(
+        'INSERT OR REPLACE INTO staged_messages VALUES (?, ?, ?, ?, ?, ?)',
+        [row.id, row.messageId ?? row.id, row.sessionId, row.role, row.createdAt, row.text],
+      );
+    }),
+    commitSessionSync: ({ id, directory, title, createdAt, updatedAt, includeReasoning }) => connection.transaction(() => {
+      if (!includeReasoning) connection.exec("DELETE FROM staged_messages WHERE role = 'reasoning'");
+      connection.run(`INSERT INTO sessions (id, directory, title, created_at, synced_updated_at)
+        VALUES (?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET directory=excluded.directory,
+        title=excluded.title, synced_updated_at=excluded.synced_updated_at`,
+      [id, directory, title, createdAt, updatedAt]);
+      connection.run('DELETE FROM messages WHERE session_id = ? AND id NOT IN (SELECT id FROM staged_messages)', [id]);
+      connection.run(`INSERT INTO messages (id, message_id, session_id, role, created_at, text)
+        SELECT id, message_id, session_id, role, created_at, text FROM staged_messages WHERE true
+        ON CONFLICT (id) DO UPDATE SET text=excluded.text WHERE text <> excluded.text`);
+      connection.exec('DELETE FROM staged_messages');
+    }),
 
-    markSynced: (sessionId, updatedAt) => {
-      connection.run('UPDATE sessions SET synced_updated_at = ? WHERE id = ?', [updatedAt, sessionId]);
-    },
+
 
     readMeta: (key) => connection.get('SELECT value FROM meta WHERE key = ?', [key])?.value ?? null,
 
@@ -229,11 +216,10 @@ export const openMessageSearchStore = (connection) => {
     },
 
     /**
-     * Makes the next walk read every session's agent records again from the
-     * start (user messages keep their cursor): what is indexed from them changed.
+     * Forces a complete canonical branch read when reasoning is enabled.
      */
     rereadAssistantRecords: () => {
-      connection.run('UPDATE sessions SET assistant_cursor = NULL, synced_updated_at = NULL');
+      connection.run('UPDATE sessions SET synced_updated_at = NULL');
     },
 
     sessionIds: () => connection.all('SELECT id FROM sessions').map((row) => row.id),
