@@ -42,11 +42,8 @@ function stop(exitCode: number): Promise<void> {
   return shutdown;
 }
 
-process.stderr.write(`worker-start connected=${String(process.connected)}\n`);
 process.on('message', raw => {
-  process.stderr.write('worker-message\n');
   const parsed = WorkerCommandSchema.safeParse(raw);
-  process.stderr.write(parsed.success ? `worker-command ${parsed.data.type}\n` : 'worker-command invalid\n');
   if (!parsed.success) return;
   const command = parsed.data;
   if (command.type === 'policy.result') {
@@ -101,7 +98,6 @@ process.on('message', raw => {
   }
   void initialization.catch(error => {
     const code = error instanceof ProjectionError ? error.code : command.type === 'bootstrap' && command.sessionFile ? 'SESSION_RESTORE_FAILED' : 'SERVICE_UNAVAILABLE';
-    process.stderr.write(`worker-error ${code}\n`);
     if (!stopping) send({ type: 'error', workerGeneration: command.workerGeneration, code });
     void stop(1);
   });

@@ -340,11 +340,11 @@ export class CatalogCoordinator {
         throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: owner });
       }
       if (input.scope === 'workspace') workspace.workspaceSourceRevision = input.sourceRevision;
-      else this.agent(scope.agentDirectoryId).sourceRevision = input.sourceRevision;
+      else this.agent(selectedAgentDirectoryId).sourceRevision = input.sourceRevision;
       try { await this.persist(); }
       catch (error) {
         if (input.scope === 'workspace') workspace.workspaceSourceRevision = owner;
-        else this.agent(scope.agentDirectoryId).sourceRevision = owner;
+        else this.agent(selectedAgentDirectoryId).sourceRevision = owner;
         throw error;
       }
       return { scope, sourceRevision: input.sourceRevision, persistence: 'committed', apply: null };
