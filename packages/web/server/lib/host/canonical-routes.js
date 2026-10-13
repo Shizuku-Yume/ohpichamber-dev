@@ -12,7 +12,7 @@ const HostScopeSchema = z.strictObject({
   cwd: z.string().refine(isAbsolute), agentDirectory: z.string().refine(isAbsolute),
 });
 const NativeServiceCapabilitiesSchema = C.RuntimeCapabilitiesSchema.extend({
-  capabilities: C.RuntimeCapabilitiesSchema.shape.capabilities.omit({ documentExtraction: true, credentialHandoff: true })
+  capabilities: C.RuntimeCapabilitySetSchema.omit({ documentExtraction: true, credentialHandoff: true })
     .extend({ attachments: z.boolean() }),
 });
 const RunResponseSchema = z.strictObject({ run: C.RunSchema });

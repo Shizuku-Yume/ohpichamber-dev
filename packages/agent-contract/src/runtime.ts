@@ -7,13 +7,15 @@ export const AgentServiceReadySchema = z.strictObject({
 });
 export type AgentServiceReady = z.infer<typeof AgentServiceReadySchema>;
 
+export const RuntimeCapabilitySetSchema = z.strictObject({
+  streaming: z.boolean(), casApprovals: z.boolean(), midTurnSteering: z.boolean(), followUpQueue: z.boolean(),
+  subagents: z.boolean(), documentExtraction: z.boolean(), models: z.boolean(), providers: z.boolean(), agents: z.boolean(),
+  mcp: z.boolean(), skills: z.boolean(), statelessCompletion: z.boolean(), shells: z.boolean(),
+  credentialHandoff: z.boolean().optional(),
+});
+export type RuntimeCapabilitySet = z.infer<typeof RuntimeCapabilitySetSchema>;
+
 export const RuntimeCapabilitiesSchema = z.strictObject({
-  version: z.literal('1.0.0'), engine: z.literal('omp'),
-  capabilities: z.strictObject({
-    streaming: z.boolean(), casApprovals: z.boolean(), midTurnSteering: z.boolean(), followUpQueue: z.boolean(),
-    subagents: z.boolean(), documentExtraction: z.boolean(), models: z.boolean(), providers: z.boolean(), agents: z.boolean(),
-    mcp: z.boolean(), skills: z.boolean(), statelessCompletion: z.boolean(), shells: z.boolean(),
-    credentialHandoff: z.boolean().optional(),
-  }),
+  version: z.literal('1.0.0'), engine: z.literal('omp'), capabilities: RuntimeCapabilitySetSchema,
 });
 export type RuntimeCapabilities = z.infer<typeof RuntimeCapabilitiesSchema>;
