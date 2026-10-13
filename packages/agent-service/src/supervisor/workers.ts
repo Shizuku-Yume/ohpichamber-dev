@@ -178,6 +178,7 @@ export class WorkerRegistry {
     });
     child.once('error', () => ready.reject(new Error('SDK worker could not start')));
     child.once('close', () => {
+      process.stderr.write(`Agent worker exited before readiness: code=${child.exitCode ?? 'none'} signal=${child.signalCode ?? 'none'}\n`);
       const wasStarting = entry.info.state === 'starting';
       if (entry.info.state !== 'stopping') entry.info.state = 'crashed';
       if (wasStarting) ready.reject(new Error('SDK worker exited before initialization'));
