@@ -29,8 +29,14 @@ export const createChatsScope = (chatsRoot) => {
       String(now.getMonth() + 1).padStart(2, '0'),
       String(now.getDate()).padStart(2, '0'),
     ].join('-');
-    const directory = path.join(root, date, `session-${crypto.randomUUID()}`);
-    await fs.mkdir(directory, { recursive: true });
+    await fs.mkdir(root, { recursive: true });
+    const realRoot = await fs.realpath(root);
+    const day = path.join(realRoot, date);
+    await fs.mkdir(day, { recursive: true });
+    const realDay = await fs.realpath(day);
+    if (realDay !== day) throw new Error('Managed chat date directory is not authorized');
+    const directory = path.join(realDay, `session-${crypto.randomUUID()}`);
+    await fs.mkdir(directory);
     return directory;
   };
 

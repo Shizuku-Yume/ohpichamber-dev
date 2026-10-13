@@ -1,12 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import os from 'os';
 import path from 'path';
-import { mkdtemp, rm, mkdir, writeFile, stat, readdir } from 'fs/promises';
+import { mkdtemp, rm, mkdir, writeFile, stat, readdir, symlink } from 'fs/promises';
 import {
   computeNextRunAt,
-  expandCommandGoalObjective,
   formatScheduledSessionTitle,
-  parseScheduledCommandPrompt,
   createScheduledTasksRuntime,
 } from './runtime.js';
 import { createProjectConfigRuntime } from '../projects/project-config.js';
@@ -112,28 +110,6 @@ describe('scheduled-tasks runtime helpers', () => {
     expect(title).toBe('Morning Sync 2025-03-10 07:05');
   });
 
-  it('parses slash command prompt for scheduled command mode', () => {
-    expect(parseScheduledCommandPrompt('/review src/components')).toEqual({
-      command: 'review',
-      arguments: 'src/components',
-    });
-  });
-
-  it('returns null when prompt is not a slash command', () => {
-    expect(parseScheduledCommandPrompt('Summarize open issues')).toBeNull();
-    expect(parseScheduledCommandPrompt('/')).toBeNull();
-  });
-
-  it('expands command arguments into the goal objective', () => {
-    expect(expandCommandGoalObjective(
-      'Run the issue pipeline for $ARGUMENTS. Verify $ARGUMENTS is represented by the PR.',
-      'LIN-123 --draft',
-    )).toBe('Run the issue pipeline for LIN-123 --draft. Verify LIN-123 --draft is represented by the PR.');
-    expect(expandCommandGoalObjective(undefined, 'LIN-123')).toBeNull();
-    expect(expandCommandGoalObjective('Move $1 to $2', '"src old" dist extra')).toBe('Move src old to dist extra');
-    expect(expandCommandGoalObjective('Review the requested scope.', 'auth module'))
-      .toBe('Review the requested scope.\n\nauth module');
-  });
 });
 
 describe('scheduled-tasks runtime syncProject wiring', () => {
@@ -157,12 +133,7 @@ describe('scheduled-tasks runtime syncProject wiring', () => {
     createTaskID: () => 'task-fixed-id',
   });
 
-  const createRuntimeDeps = (overrides = {}) => ({
-    buildOpenCodeUrl: () => 'http://localhost',
-    getOpenCodeAuthHeaders: () => ({}),
-    waitForOpenCodeReady: async () => {},
-    ...overrides,
-  });
+  const createRuntimeDeps = (overrides = {}) => overrides;
 
   it('reconciles discovered loops when the project path is known', async () => {
     const { tempRoot, repoPath, cleanup } = await createTempProject();
@@ -275,9 +246,6 @@ Run daily.
 
       const warnings = [];
       const runtime = createScheduledTasksRuntime({
-        buildOpenCodeUrl: () => 'http://localhost',
-        getOpenCodeAuthHeaders: () => ({}),
-        waitForOpenCodeReady: async () => {},
         projectConfigRuntime,
         listProjects: async () => [
           { id: 'broken', path: brokenPath },
@@ -300,203 +268,100 @@ Run daily.
   });
 });
 
-describe('scheduled-tasks runtime prompt dispatch', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
+describe('canonical scheduled execution', () => {
+  const workspace = { hostProjectId: 'host-project', projectId: 'opaque-project', workspaceId: 'opaque-workspace', cwd: '/repo' };
+  const session = (scope, id = 'session') => ({ sessionId: id, rootSessionId: id, projectId: scope.projectId, workspaceId: scope.workspaceId,
+    displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    metadata: null, metadataRevision: '0', archiveRevision: '0' });
+  const setup = (execution = {}, extra = {}) => {
+    let task = { id: 'task', name: 'Daily', enabled: false, schedule: { kind: 'daily', times: ['09:00'], timezone: 'UTC' },
+      execution: { prompt: 'Do the work', providerID: 'provider', modelID: 'model', agent: 'agent', variant: 'high', ...execution }, state: {} };
+    const sent = [];
+    const created = [];
+    const projectConfigRuntime = {
+      listScheduledTasks: async () => [task], reconcileLoopTasks: async () => [task],
+      updateScheduledTaskState: async (_project, _task, patch) => { task = { ...task, state: { ...task.state, ...patch } }; return { task }; },
+    };
+    const sessionService = {
+      create: async (request) => { created.push(request); return { session: session(workspace) }; },
+      send: async (sessionId, request) => { sent.push(request); return { run: { sessionId, runId: 'run', status: 'running', createdAt: 1 } }; },
+    };
+    const runtime = createScheduledTasksRuntime({ projectConfigRuntime, listProjects: async () => [{ id: 'host-project', path: '/repo' }],
+      listWorkspaceScopes: async () => ({ items: [{ workspaceId: workspace.workspaceId }], errors: {} }),
+      resolveWorkspaceScope: async () => workspace, sessionService, logger: { warn() {}, info() {} }, ...extra });
+    return { runtime, sessionService, created, sent, stored: () => task };
+  };
+
+  it('uses opaque scopes and captures pinned selection without treating acknowledgement as transcript completion', async () => {
+    const h = setup();
+    await h.runtime.syncProject('host-project');
+    const result = await h.runtime.runNow('host-project', 'task');
+    expect(result).toMatchObject({ ok: true, sessionID: 'session' });
+    expect(h.created[0]).toMatchObject({ projectId: 'opaque-project', workspaceId: 'opaque-workspace',
+      options: { providerId: 'provider', modelId: 'model', agentId: 'agent', variant: 'high', reasoningEffort: null } });
+    expect(h.sent[0].input.context[0]).toMatchObject({ kind: 'context', metadata: { scheduledTask: { projectId: 'host-project', taskId: 'task', mode: 'new' } } });
+    expect(h.stored().state.lastStatus).toBe('success');
+    h.runtime.stop();
   });
 
-  it('parks the briefing with resume: false so execution starts on the task prompt', async () => {
-    const posts = [];
-    vi.stubGlobal('fetch', vi.fn(async (input, init = {}) => {
-      const { pathname } = new URL(String(input));
-      if (init.method === 'POST') posts.push({ pathname, body: JSON.parse(init.body) });
-      const data = pathname === '/api/session' ? { id: 'ses_run' } : pathname === '/api/command' ? [] : {};
-      return new Response(JSON.stringify({ location: { directory: '/repo' }, data }), { status: 200, headers: { 'content-type': 'application/json' } });
-    }));
-    const task = {
-      id: 'task-1',
-      name: 'Nightly',
-      enabled: true,
-      schedule: { kind: 'daily', times: ['03:00'], timezone: 'UTC' },
-      execution: { prompt: 'Review open issues', providerID: 'openai', modelID: 'gpt-5', goalEnabled: true, goalTokenBudget: 50_000 },
-      state: { createdAt: 1, updatedAt: 1 },
-    };
-    const runtime = createScheduledTasksRuntime({
-      projectConfigRuntime: {
-        listScheduledTasks: async () => [task],
-        reconcileLoopTasks: async () => [task],
-        updateScheduledTaskState: async () => ({ task, updated: true }),
-        updateScheduledTaskStateIf: async () => ({ task, updated: true }),
-      },
-      listProjects: async () => [{ id: 'proj', path: '/repo' }],
-      buildOpenCodeUrl: () => 'http://127.0.0.1:1/',
-      getOpenCodeAuthHeaders: () => ({}),
-      waitForOpenCodeReady: async () => {},
-      persistSessionGoal: async () => undefined,
-      sessionKnowledgeRuntime: {
-        resolvePendingForSession: async () => ({ text: 'Project background', signature: 'sig' }),
-        recordDelivered: async () => undefined,
-      },
-      logger: { info: () => {}, warn: () => {}, error: () => {} },
-    });
-    await runtime.start();
-    await runtime.runNow('proj', 'task-1');
-    runtime.stop();
-
-    const dispatch = posts.filter((post) => post.pathname.startsWith('/api/session/ses_run/'));
-    expect(dispatch.map((post) => post.pathname.split('/').at(-1))).toEqual(['synthetic', 'synthetic', 'prompt']);
-    expect(dispatch[0].body).toMatchObject({ text: 'Project background', resume: false });
-    expect(dispatch[1].body.resume).toBe(false);
-    expect(dispatch[2].body).toMatchObject({ text: 'Review open issues' });
-    expect(dispatch[2].body.resume).toBeUndefined();
+  it('reports unavailable defaults instead of switching to invented model defaults', async () => {
+    const h = setup({ useDefaults: true }, { readSessionDefaults: async () => { throw new Error('Settings read failed'); } });
+    await h.runtime.syncProject('host-project');
+    expect(await h.runtime.runNow('host-project', 'task')).toMatchObject({ ok: false, error: 'Settings read failed' });
+    expect(h.created).toEqual([]);
+    expect(h.sent).toEqual([]);
   });
 
-  it('points a run that fails after creating its session at that session', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (input, init = {}) => {
-      const { pathname } = new URL(String(input));
-      if (init.method === 'POST' && pathname.endsWith('/prompt')) {
-        return new Response(JSON.stringify({ error: 'provider down' }), { status: 500 });
-      }
-      const data = pathname === '/api/session' ? { id: 'ses_failed' } : pathname === '/api/command' ? [] : {};
-      return new Response(JSON.stringify({ location: { directory: '/repo' }, data }), { status: 200, headers: { 'content-type': 'application/json' } });
-    }));
-    const task = {
-      id: 'task-1',
-      name: 'Nightly',
-      enabled: true,
-      schedule: { kind: 'daily', times: ['03:00'], timezone: 'UTC' },
-      execution: { prompt: 'Review open issues', providerID: 'openai', modelID: 'gpt-5' },
-      state: { createdAt: 1, updatedAt: 1, lastSessionId: 'ses_previous' },
-    };
-    const patches = [];
-    const runtime = createScheduledTasksRuntime({
-      projectConfigRuntime: {
-        listScheduledTasks: async () => [task],
-        reconcileLoopTasks: async () => [task],
-        updateScheduledTaskState: async (_projectID, _taskID, patch) => {
-          patches.push(patch);
-          return { task, updated: true };
-        },
-        updateScheduledTaskStateIf: async () => ({ task, updated: true }),
-      },
-      listProjects: async () => [{ id: 'proj', path: '/repo' }],
-      buildOpenCodeUrl: () => 'http://127.0.0.1:1/',
-      getOpenCodeAuthHeaders: () => ({}),
-      waitForOpenCodeReady: async () => {},
-      logger: { info: () => {}, warn: () => {}, error: () => {} },
-    });
-    await runtime.start();
-    const result = await runtime.runNow('proj', 'task-1');
-    runtime.stop();
+  it('rejects foreign or ambiguous workspaces before session creation', async () => {
+    const h = setup({}, { resolveWorkspaceScope: async () => ({ ...workspace, hostProjectId: 'foreign' }) });
+    await h.runtime.syncProject('host-project');
+    expect(await h.runtime.runNow('host-project', 'task')).toMatchObject({ ok: false });
+    expect(h.created).toEqual([]);
+  });
 
-    expect(result.ok).toBe(false);
-    // The start clears the previous run's session, creation records this one,
-    // and the failure keeps it.
-    const startIndex = patches.findIndex((patch) => patch.lastStatus === 'running');
-    expect(Object.hasOwn(patches[startIndex], 'lastSessionId')).toBe(true);
-    expect(patches[startIndex].lastSessionId).toBeUndefined();
-    expect(patches[startIndex + 1]).toEqual({ lastSessionId: 'ses_failed' });
-    expect(patches.at(-1)).toMatchObject({ lastStatus: 'error', lastSessionId: 'ses_failed' });
+  it('keeps the created session identity when provider dispatch fails', async () => {
+    const h = setup();
+    h.sessionService.send = async () => { throw new Error('Provider unavailable'); };
+    await h.runtime.syncProject('host-project');
+    expect(await h.runtime.runNow('host-project', 'task')).toMatchObject({ ok: false, status: 'error' });
+    expect(h.stored().state).toMatchObject({ lastSessionId: 'session', lastStatus: 'error' });
+  });
+
+  it('uses each real managed-chat workspace and cleans only an empty failed creation directory', async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), 'scheduled-chats-'));
+    const chatsScope = createChatsScope(path.join(temp, 'chats'));
+    const scopes = [];
+    const h = setup({}, { chatsScope, createChatWorkspace: async () => {
+      const scope = { ...workspace, hostProjectId: chatsScope.id, cwd: await chatsScope.createChatDirectory(), workspaceId: `chat-${scopes.length}` };
+      scopes.push(scope); return scope;
+    } });
+    h.sessionService.create = async (request) => ({ session: session(scopes.find((scope) => scope.workspaceId === request.workspaceId)) });
+    try {
+      await h.runtime.syncProject(chatsScope.id);
+      const first = await h.runtime.runNow(chatsScope.id, 'task');
+      const second = await h.runtime.runNow(chatsScope.id, 'task');
+      expect(first.ok).toBe(true);
+      expect(second.directory).not.toBe(first.directory);
+      await expect(stat(first.directory)).resolves.toBeTruthy();
+      h.sessionService.create = async () => { throw new Error('Service unavailable'); };
+      expect(await h.runtime.runNow(chatsScope.id, 'task')).toMatchObject({ ok: false });
+      await expect(stat(scopes.at(-1).cwd)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(stat(first.directory)).resolves.toBeTruthy();
+    } finally { h.runtime.stop(); await rm(temp, { recursive: true, force: true }); }
   });
 });
-
-describe('scheduled-tasks runtime chats scope', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  const task = {
-    id: 'task-1',
-    name: 'Morning digest',
-    enabled: true,
-    schedule: { kind: 'daily', times: ['08:00'], timezone: 'UTC' },
-    execution: { prompt: 'Summarize the news', providerID: 'openai', modelID: 'gpt-5' },
-    state: { createdAt: 1, updatedAt: 1 },
-  };
-
-  const createChatsRuntime = async ({ sessionStatus = 200 } = {}) => {
-    const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'oc-runtime-chats-'));
-    const chatsScope = createChatsScope(path.join(tempRoot, 'chats'));
-    const sessionBodies = [];
-    vi.stubGlobal('fetch', vi.fn(async (input, init = {}) => {
-      const { pathname } = new URL(String(input));
-      if (init.method === 'POST' && pathname === '/api/session') {
-        sessionBodies.push(JSON.parse(init.body));
-        if (sessionStatus !== 200) return new Response(JSON.stringify({ error: 'boom' }), { status: sessionStatus });
-      }
-      const data = pathname === '/api/session' ? { id: 'ses_chat' } : pathname === '/api/command' ? [] : {};
-      return new Response(JSON.stringify({ data }), { status: 200, headers: { 'content-type': 'application/json' } });
-    }));
-    const projectConfigRuntime = {
-      listScheduledTasks: vi.fn(async () => [task]),
-      reconcileLoopTasks: vi.fn(async () => [task]),
-      updateScheduledTaskState: async () => ({ task, updated: true }),
-      updateScheduledTaskStateIf: async () => ({ task, updated: true }),
-    };
-    const runtime = createScheduledTasksRuntime({
-      projectConfigRuntime,
-      listProjects: async () => [{ id: 'proj', path: '/repo' }],
-      chatsScope,
-      buildOpenCodeUrl: () => 'http://127.0.0.1:1/',
-      getOpenCodeAuthHeaders: () => ({}),
-      waitForOpenCodeReady: async () => {},
-      logger: { info: () => {}, warn: () => {}, error: () => {} },
-    });
-    return {
-      runtime,
-      chatsScope,
-      projectConfigRuntime,
-      sessionBodies,
-      cleanup: () => rm(tempRoot, { recursive: true, force: true }),
-    };
-  };
-
-  it('schedules chats without discovering loop files', async () => {
-    const { runtime, chatsScope, projectConfigRuntime, cleanup } = await createChatsRuntime();
+describe('managed chat directory authority', () => {
+  it('rejects a date-directory alias before creating any child outside the managed root', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'scheduled-chat-boundary-'));
+    const chats = path.join(root, 'chats');
+    const outside = path.join(root, 'outside');
+    await mkdir(chats);
+    await mkdir(outside);
+    const scope = createChatsScope(chats);
     try {
-      await runtime.start();
-      runtime.stop();
-      expect(projectConfigRuntime.reconcileLoopTasks).toHaveBeenCalledWith('proj', expect.anything());
-      expect(projectConfigRuntime.reconcileLoopTasks).not.toHaveBeenCalledWith(chatsScope.id, expect.anything());
-      expect(projectConfigRuntime.listScheduledTasks).toHaveBeenCalledWith(chatsScope.id);
-    } finally {
-      await cleanup();
-    }
-  });
-
-  it('starts every run in a new chat directory under the chats root', async () => {
-    const { runtime, chatsScope, sessionBodies, cleanup } = await createChatsRuntime();
-    try {
-      await runtime.start();
-      const first = await runtime.runNow(chatsScope.id, 'task-1');
-      const second = await runtime.runNow(chatsScope.id, 'task-1');
-      runtime.stop();
-
-      expect(first.ok).toBe(true);
-      expect(first.directory).not.toBe(second.directory);
-      for (const result of [first, second]) {
-        expect(path.relative(chatsScope.root, result.directory)).toMatch(/^\d{4}-\d{2}-\d{2}[\\/]session-/);
-        await expect(stat(result.directory)).resolves.toBeTruthy();
-      }
-      expect(sessionBodies.map((body) => body.location.directory)).toEqual([first.directory, second.directory]);
-    } finally {
-      await cleanup();
-    }
-  });
-
-  it('removes the new chat directory when the session cannot be created', async () => {
-    const { runtime, chatsScope, cleanup } = await createChatsRuntime({ sessionStatus: 500 });
-    try {
-      await runtime.start();
-      const result = await runtime.runNow(chatsScope.id, 'task-1');
-      runtime.stop();
-
-      expect(result.ok).toBe(false);
-      const dayDirectories = await readdir(chatsScope.root);
-      expect(dayDirectories).toHaveLength(1);
-      expect(await readdir(path.join(chatsScope.root, dayDirectories[0]))).toEqual([]);
-    } finally {
-      await cleanup();
-    }
+      await symlink(outside, path.join(chats, '2026-10-14'), process.platform === 'win32' ? 'junction' : 'dir');
+      await expect(scope.createChatDirectory(new Date(2026, 9, 14))).rejects.toThrow('not authorized');
+      expect(await readdir(outside)).toEqual([]);
+    } finally { await rm(root, { recursive: true, force: true }); }
   });
 });

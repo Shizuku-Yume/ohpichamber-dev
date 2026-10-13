@@ -1,11 +1,10 @@
-import { OpenCode } from '@opencode/client';
+import path from 'node:path';
 import { DateTime } from 'luxon';
 import { CronExpressionParser } from 'cron-parser';
-import { expandSnippets } from '../opencode/snippets.js';
+import { CapturedSendOptionsSchema, PromptRequestSchema, SessionCreateAckSchema } from '@openchamber/agent-contract';
 import { buildGoalIntroText, createSessionGoal } from '../session-goal/create.js';
 import { discoverLoops } from './loops.js';
-import { assertOpenCodeApiResponse } from '../opencode/prompt-response.js';
-import { createExistingSessionTasks } from './existing-session.js';
+import { createExistingSessionTasks, createScheduledTaskContext } from './existing-session.js';
 
 const DEFAULT_GLOBAL_CONCURRENCY = 4;
 const DEFAULT_PROJECT_CONCURRENCY = 2;
@@ -72,55 +71,6 @@ const safeErrorMessage = (error, maxLength = 2_000) => {
     return 'Unknown error';
   }
   return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
-};
-
-export const parseScheduledCommandPrompt = (prompt) => {
-  if (typeof prompt !== 'string') {
-    return null;
-  }
-
-  const trimmed = prompt.trim();
-  if (!trimmed.startsWith('/')) {
-    return null;
-  }
-
-  const firstLine = trimmed.split(/\r?\n/, 1)[0] || '';
-  const [head, ...tail] = firstLine.split(/\s+/);
-  const commandName = (head || '').slice(1).trim();
-  if (!commandName) {
-    return null;
-  }
-
-  return {
-    command: commandName,
-    arguments: tail.join(' ').trim(),
-  };
-};
-
-export const expandCommandGoalObjective = (template, argumentsText) => {
-  if (typeof template !== 'string' || !template.trim()) {
-    return null;
-  }
-
-  const rawArguments = String(argumentsText ?? '');
-  if (template.includes('$ARGUMENTS')) {
-    return template.replaceAll('$ARGUMENTS', rawArguments);
-  }
-
-  const positions = [...template.matchAll(/\$(\d+)/g)].map((match) => Number(match[1]));
-  if (positions.length > 0) {
-    const parsedArguments = [...rawArguments.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)]
-      .map((match) => match[1] ?? match[2] ?? match[3] ?? '');
-    const lastPosition = Math.max(...positions);
-    return template.replace(/\$(\d+)/g, (_match, value) => {
-      const position = Number(value);
-      return position === lastPosition
-        ? parsedArguments.slice(position - 1).join(' ')
-        : (parsedArguments[position - 1] ?? '');
-    });
-  }
-
-  return rawArguments ? `${template}\n\n${rawArguments}` : template;
 };
 
 export const computeNextRunAt = (task, nowMs = Date.now()) => {
@@ -251,23 +201,17 @@ export const createScheduledTasksRuntime = (deps) => {
   const {
     projectConfigRuntime,
     listProjects,
-    buildOpenCodeUrl,
-    getOpenCodeAuthHeaders,
-    waitForOpenCodeReady,
+    sessionService,
+    resolveWorkspaceScope,
+    resolveSessionScope,
+    listWorkspaceScopes,
+    createChatWorkspace,
     emitTaskRunEvent,
     setSessionAutoAccept,
-    sessionKnowledgeRuntime = null,
-    // The goal record lives in OpenChamber's metadata store (OpenCode 2.x takes
-    // session metadata only at create time); without it goal mode cannot run.
     persistSessionGoal = null,
-    // Chats scope (see chats-scope.js): scheduled like a project, but each run
-    // opens a new chat directory and loop files are not discovered for it.
     chatsScope = null,
-    // The session defaults a task with `useDefaults` runs on:
-    // `(projectID) => { providerID, modelID, variant, agent }`, any of them null.
     readSessionDefaults = null,
     messageQueueRuntime,
-    resolvePrimaryWorktreeRoot,
     isSessionArchived,
     logger = console,
     maxGlobalConcurrency = DEFAULT_GLOBAL_CONCURRENCY,
@@ -275,51 +219,25 @@ export const createScheduledTasksRuntime = (deps) => {
     maxRunDurationMs = DEFAULT_MAX_RUN_MS,
   } = deps;
 
-  // Every OpenCode route lives under /api in v2 and the client appends it, so
-  // the client only wants the origin. Directory scoping is a request header.
-  const openCodeOrigin = () => new URL(buildOpenCodeUrl('/api/info', '')).origin;
-  const createScopedClient = (directory) => OpenCode.make({
-    baseUrl: openCodeOrigin(),
-    headers: {
-      ...getOpenCodeAuthHeaders(),
-      ...(directory ? { 'x-opencode-directory': encodeURIComponent(directory) } : {}),
-    },
-    fetch: async (...args) => {
-      const response = await fetch(...args);
-      assertOpenCodeApiResponse(response);
-      return response;
-    },
+  const existingSessionTasks = createExistingSessionTasks({
+    projectConfigRuntime, messageQueueRuntime, sessionService, resolveSessionScope,
+    isSessionArchived, emitTaskRunEvent,
   });
-
-  const existingSessionTasks = messageQueueRuntime ? createExistingSessionTasks({
-    projectConfigRuntime, messageQueueRuntime, createClient: createScopedClient,
-    listProjects, chatsScope, resolvePrimaryWorktreeRoot, isSessionArchived, emitTaskRunEvent,
-  }) : null;
 
   // A pinned task runs on what it stores; one that follows the session
   // defaults reads them now, so changing a default reaches it on its next run.
   const resolveRunSelection = async (projectID, task) => {
-    const execution = task.execution;
-    if (!execution.useDefaults) {
-      return {
-        providerID: execution.providerID ?? null,
-        modelID: execution.modelID ?? null,
-        variant: execution.variant ?? null,
-        agent: execution.agent ?? null,
-      };
+    if (task.execution.useDefaults) {
+      if (typeof readSessionDefaults !== 'function') throw new Error('Session defaults are unavailable');
+      return CapturedSendOptionsSchema.parse(await readSessionDefaults(projectID));
     }
-    try {
-      const defaults = typeof readSessionDefaults === 'function' ? await readSessionDefaults(projectID) : null;
-      return {
-        providerID: defaults?.providerID ?? null,
-        modelID: defaults?.modelID ?? null,
-        variant: defaults?.variant ?? null,
-        agent: defaults?.agent ?? null,
-      };
-    } catch (error) {
-      logger.warn?.('[scheduled-tasks] session defaults unavailable, using OpenCode defaults:', error?.message ?? error);
-      return { providerID: null, modelID: null, variant: null, agent: null };
-    }
+    return CapturedSendOptionsSchema.parse({
+      providerId: task.execution.providerID ?? null,
+      modelId: task.execution.modelID ?? null,
+      agentId: task.execution.agent ?? null,
+      variant: task.execution.variant ?? null,
+      reasoningEffort: null,
+    });
   };
 
   let started = false;
@@ -534,195 +452,58 @@ export const createScheduledTasksRuntime = (deps) => {
     return projectRunning < maxProjectConcurrency;
   };
 
-  // Never allowed to fail the run: a task that executes without its
-  // background is a lesser loss than a task that does not execute.
-  const resolveKnowledge = (sessionID, projectPath) => (sessionKnowledgeRuntime
-    ? sessionKnowledgeRuntime.resolvePendingForSession(sessionID, projectPath)
-      .catch(() => ({ text: '', signature: '' }))
-    : Promise.resolve({ text: '', signature: '' }));
-
-  // Recorded only after the send is accepted, so a failed dispatch carries
-  // the context again on the next run.
-  const recordKnowledge = async (sessionID, projectPath, knowledge) => {
-    if (knowledge.text && sessionKnowledgeRuntime) {
-      await sessionKnowledgeRuntime.recordDelivered(sessionID, projectPath, knowledge.signature)
-        .catch(() => undefined);
-    }
-  };
-
-  const runPrompt = async ({ client, sessionID, projectPath, task }) => {
-    const knowledge = await resolveKnowledge(sessionID, projectPath);
-
-    // A v2 prompt carries a single authored text. Standing project context and
-    // the goal briefing therefore travel as synthetic messages sent first, so
-    // the model still reads the prompt against them exactly as before. A
-    // synthetic message schedules execution unless `resume: false`: without
-    // it the model would start on the briefing alone, before the task arrived.
-    if (knowledge.text) {
-      await client.session.synthetic({ sessionID, text: knowledge.text, resume: false });
-    }
-    if (task.execution.goalEnabled) {
-      await client.session.synthetic({ sessionID, text: buildGoalIntroText(task.execution.goalTokenBudget), resume: false });
-    }
-
-    await client.session.prompt({
-      sessionID,
-      text: expandSnippets(task.execution.prompt, projectPath),
-    });
-
-    await recordKnowledge(sessionID, projectPath, knowledge);
-  };
-
-  const resolveScheduledCommand = async ({ client, projectPath, task }) => {
-    const parsed = parseScheduledCommandPrompt(task?.execution?.prompt);
-    if (!parsed) {
-      return null;
-    }
-
-    let commands = [];
-    try {
-      const response = await client.command.list({ location: { directory: projectPath } });
-      commands = Array.isArray(response?.data) ? response.data : [];
-    } catch {
-      return null;
-    }
-
-    // v2 CommandInfo carries no template, so a goal objective distilled from
-    // the command body is no longer available; the goal falls back to the
-    // prompt text, which expandCommandGoalObjective already handles.
-    const command = commands.find((candidate) => candidate?.name === parsed.command);
-    return command ? { ...parsed, template: command.template } : null;
-  };
-
-  const runScheduledCommand = async ({ client, sessionID, projectPath, command }) => {
-    // The command route takes no extra parts, so standing context goes in
-    // first as a synthetic message that does not start execution.
-    const knowledge = await resolveKnowledge(sessionID, projectPath);
-    if (knowledge.text) {
-      await client.session.synthetic({ sessionID, text: knowledge.text, resume: false });
-    }
-    // Agent, model and variant are session properties in v2 and were already
-    // set when the run created the session; the command body only carries text.
-    await client.session.command({
-      sessionID,
-      // OpenCode 2.0.8 renamed the command body field `command` to `name`.
-      name: command.command,
-      text: command.arguments,
-    });
-    await recordKnowledge(sessionID, projectPath, knowledge);
+  const resolveProjectWorkspace = async (projectID, projectPath) => {
+    if (typeof listWorkspaceScopes !== 'function' || typeof resolveWorkspaceScope !== 'function') throw new Error('Workspace scope service is unavailable');
+    const page = await listWorkspaceScopes();
+    if (!page || !Array.isArray(page.items) || !page.errors) throw new Error('Workspace scope enumeration failed');
+    const scopes = await Promise.all(page.items.map(async ({ workspaceId }) => {
+      try { return await resolveWorkspaceScope(workspaceId); }
+      catch { return null; }
+    }));
+    const matches = scopes.filter((scope) => scope?.hostProjectId === projectID && path.resolve(scope.cwd) === path.resolve(projectPath));
+    if (matches.length !== 1) throw new Error('Scheduled project workspace is unavailable or ambiguous');
+    return matches[0];
   };
 
   const runTaskWithWatchdog = async (projectID, task, reason, onSessionCreated) => {
     const startedAt = Date.now();
-    const title = formatScheduledSessionTitle(task, startedAt);
-    const projectPath = projectPathByID.get(projectID);
-    if (!projectPath) {
-      throw new Error('project path is unavailable');
-    }
-
-    if (typeof waitForOpenCodeReady === 'function') {
-      await waitForOpenCodeReady(10_000, 250);
-    }
-
-    // A chats-scope run is a new chat, so it gets its own directory the way a
-    // chat started from the UI does; a project run works in the project.
-    const directory = isChatsScope(projectID)
-      ? await chatsScope.createChatDirectory(new Date(startedAt))
-      : projectPath;
-
-    const baseUrl = openCodeOrigin();
-    const authHeaders = getOpenCodeAuthHeaders();
-    const client = createScopedClient(directory);
-    const selection = await resolveRunSelection(projectID, task);
-
-    // Agent, model and variant belong to the session in v2: a scheduled run
-    // fixes them here instead of repeating them on every prompt.
+    const projectPath = await ensureProjectPath(projectID);
+    if (!projectPath) throw new Error('Project path is unavailable');
+    if (typeof sessionService?.create !== 'function' || typeof sessionService?.send !== 'function') throw new Error('Canonical session service is unavailable');
+    const options = await resolveRunSelection(projectID, task);
+    const workspace = isChatsScope(projectID)
+      ? await (typeof createChatWorkspace === 'function' ? createChatWorkspace() : Promise.reject(new Error('Managed chat workspace service is unavailable')))
+      : await resolveProjectWorkspace(projectID, projectPath);
+    if (!workspace?.workspaceId || !workspace.projectId || !workspace.cwd || workspace.hostProjectId !== projectID) throw new Error('Scheduled workspace is not authorized');
     let sessionID;
     try {
-      const session = await client.session.create({
-        title,
-        location: { directory },
-        // No model or agent at all: OpenCode picks its own default.
-        ...(selection.providerID && selection.modelID ? {
-          model: {
-            providerID: selection.providerID,
-            id: selection.modelID,
-            ...(selection.variant ? { variant: selection.variant } : {}),
-          },
-        } : {}),
-        ...(selection.agent ? { agent: selection.agent } : {}),
-      });
-      sessionID = session?.id;
-      if (!sessionID) {
-        throw new Error('failed to create session');
-      }
+      const created = SessionCreateAckSchema.parse(await sessionService.create({
+        projectId: workspace.projectId, workspaceId: workspace.workspaceId, options,
+        metadata: { title: formatScheduledSessionTitle(task, startedAt) },
+      }));
+      sessionID = created.session.sessionId;
+      if (created.session.projectId !== workspace.projectId || created.session.workspaceId !== workspace.workspaceId) throw new Error('Scheduled session scope mismatch');
     } catch (error) {
-      if (directory !== projectPath) {
-        await chatsScope.discardChatDirectory(directory);
-      }
+      if (isChatsScope(projectID)) await chatsScope.discardChatDirectory(workspace.cwd);
       throw error;
     }
-
-    // Before the event, so a UI refreshing on it already sees the session.
     await onSessionCreated?.(sessionID);
-
-    try {
-      emitTaskRunEvent?.({
-        projectID,
-        taskID: task.id,
-        ranAt: startedAt,
-        status: 'running',
-        sessionID,
-      });
-    } catch {
+    emitTaskRunEvent?.({ projectID, taskID: task.id, ranAt: startedAt, status: 'running', sessionID });
+    if (task.execution.permissionAutoAccept) {
+      if (typeof setSessionAutoAccept !== 'function') throw new Error('Permission policy service is unavailable');
+      try { await setSessionAutoAccept(sessionID, true, workspace.cwd); }
+      catch (error) { logger.warn?.('[scheduled-tasks] permission auto-accept enrollment failed; approvals remain manual', sessionID, error?.message ?? error); }
     }
-
-    if (task.execution.permissionAutoAccept && typeof setSessionAutoAccept === 'function') {
-      // Enroll before the prompt goes out so the very first permission request
-      // is already auto-approved. Enrollment failure must not kill the run —
-      // the task still executes, permissions just wait for the user.
-      try {
-        await setSessionAutoAccept(sessionID, true, directory);
-      } catch (error) {
-        logger.warn?.('[scheduled-tasks] failed to enable permission auto-accept for session', sessionID, error?.message ?? error);
-      }
-    }
-
-    const scheduledCommand = await resolveScheduledCommand({ client, projectPath: directory, task });
-
+    const context = [createScheduledTaskContext({ projectId: projectID, taskId: task.id, sessionId: sessionID, workspaceId: workspace.workspaceId, mode: 'new', triggeredAt: startedAt })];
     if (task.execution.goalEnabled) {
-      const commandObjective = scheduledCommand
-        ? expandCommandGoalObjective(scheduledCommand.template, scheduledCommand.arguments)
-        : null;
-      await createSessionGoal({
-        baseUrl,
-        authHeaders,
-        persistSessionGoal,
-        sessionID,
-        directory,
-        objective: commandObjective ?? expandSnippets(task.execution.prompt, directory),
-        tokenBudget: task.execution.goalTokenBudget,
-        providerID: selection.providerID ?? undefined,
-        modelID: selection.modelID ?? undefined,
-        onWarning: (message, error) => console.warn(`[scheduled-tasks] ${message}:`, error?.message || error),
-      });
+      await createSessionGoal({ persistSessionGoal, sessionID, scope: workspace, objective: task.execution.prompt,
+        tokenBudget: task.execution.goalTokenBudget, providerID: options.providerId ?? undefined, modelID: options.modelId ?? undefined });
+      context.push({ kind: 'synthetic', text: buildGoalIntroText(task.execution.goalTokenBudget) });
     }
-
-    if (scheduledCommand) {
-      await runScheduledCommand({ client, sessionID, projectPath: directory, command: scheduledCommand });
-    } else {
-      await runPrompt({ client, sessionID, projectPath: directory, task });
-    }
-
+    const result = await sessionService.send(sessionID, PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context }, options }));
+    if (!result?.run || result.run.sessionId !== sessionID) throw new Error('Scheduled prompt acknowledgement is invalid');
     const finishedAt = Date.now();
-    return {
-      sessionID,
-      directory,
-      durationMs: Math.max(0, finishedAt - startedAt),
-      reason,
-      startedAt,
-      finishedAt,
-    };
+    return { sessionID, directory: workspace.cwd, durationMs: Math.max(0, finishedAt - startedAt), reason, startedAt, finishedAt };
   };
 
   const releaseRunningSlot = (projectID, taskKey) => {
@@ -855,18 +636,7 @@ export const createScheduledTasksRuntime = (deps) => {
 
         let claimResult;
         try {
-          if (typeof projectConfigRuntime.updateScheduledTaskStateIf === 'function') {
-            claimResult = await projectConfigRuntime.updateScheduledTaskStateIf(
-              projectID,
-              taskID,
-              canClaimOccurrence,
-              claimPatch,
-            );
-          } else {
-            // Fallback for older test doubles: unconditional update (single-instance only).
-            claimResult = await projectConfigRuntime.updateScheduledTaskState(projectID, taskID, claimPatch);
-            claimResult = { ...claimResult, updated: Boolean(claimResult?.task) };
-          }
+          claimResult = await projectConfigRuntime.updateScheduledTaskStateIf(projectID, taskID, canClaimOccurrence, claimPatch);
         } catch (claimError) {
           const message = safeErrorMessage(claimError);
           logger.warn?.('[ScheduledTasks] occurrence claim failed', {
@@ -884,35 +654,12 @@ export const createScheduledTasksRuntime = (deps) => {
             updatedAt: Date.now(),
           };
           try {
-            if (typeof projectConfigRuntime.updateScheduledTaskStateIf === 'function') {
-              const recorded = await projectConfigRuntime.updateScheduledTaskStateIf(
-                projectID,
-                taskID,
-                (candidate) => {
-                  const lastScheduledFor = candidate.state?.lastScheduledFor;
-                  if (
-                    Number.isFinite(lastScheduledFor)
-                    && Math.abs(lastScheduledFor - scheduledFor) <= TASK_DUE_SLACK_MS
-                  ) {
-                    return false;
-                  }
-                  return true;
-                },
-                claimFailurePatch,
-              );
-              if (recorded.task) {
-                updateInMemoryTask(projectID, recorded.task);
-              }
-            } else {
-              const recorded = await projectConfigRuntime.updateScheduledTaskState(
-                projectID,
-                taskID,
-                claimFailurePatch,
-              );
-              if (recorded.task) {
-                updateInMemoryTask(projectID, recorded.task);
-              }
-            }
+            const recorded = await projectConfigRuntime.updateScheduledTaskStateIf(
+              projectID, taskID,
+              (candidate) => !Number.isFinite(candidate.state?.lastScheduledFor) || Math.abs(candidate.state.lastScheduledFor - scheduledFor) > TASK_DUE_SLACK_MS,
+              claimFailurePatch,
+            );
+            if (recorded.task) updateInMemoryTask(projectID, recorded.task);
           } catch {
             updateInMemoryTask(projectID, {
               ...task,
@@ -1262,7 +1009,7 @@ export const createScheduledTasksRuntime = (deps) => {
     runNow,
     getStatus,
     validateTarget: (projectID, sessionID) => existingSessionTasks.validateTarget(projectID, sessionID),
-    beforeScheduledTaskSend: (sessionID, directory, item) => existingSessionTasks.beforeSend(sessionID, directory, item),
+    beforeScheduledTaskSend: (scope, capture) => existingSessionTasks.beforeSend(scope, capture),
     onScheduledTaskResult: (provenance, status, error) => existingSessionTasks.result(provenance, status, error),
     cancelWaitingPrompt: (projectID, taskID) => existingSessionTasks?.cancel(projectID, taskID),
   };

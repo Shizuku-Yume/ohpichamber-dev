@@ -1,6 +1,5 @@
 import { asNonEmptyString } from '../shared/guards.js';
 import fs from 'node:fs';
-import path from 'node:path';
 import { OpenChamberControlError } from '../openchamber-control/error.js';
 import { discoverLoopFiles, loopFingerprint, parseLoopDefinition, setLoopFileEnabled } from './loops.js';
 
@@ -15,6 +14,7 @@ export const createScheduledTaskService = (dependencies) => {
     sanitizeProjects,
     projectConfigRuntime,
     scheduledTasksRuntime,
+    resolveWorkspaceScope,
     chatsScope = null,
   } = dependencies;
 
@@ -36,23 +36,15 @@ export const createScheduledTaskService = (dependencies) => {
     throw new OpenChamberControlError('Project not found', 404);
   };
 
-  const resolveProjectID = async ({ projectId, directory } = {}) => {
+  const resolveProjectID = async ({ projectId, workspaceId } = {}) => {
     const requestedProjectID = asNonEmptyString(projectId);
-    const requestedDirectory = asNonEmptyString(directory);
-    if (requestedProjectID && requestedDirectory) {
-      throw new OpenChamberControlError('Provide only one of projectId or directory', 400);
-    }
-    if (requestedProjectID) {
-      return (await findProjectByID(requestedProjectID)).id;
-    }
-    if (!requestedDirectory) throw new OpenChamberControlError('projectId or directory is required', 400);
-    const resolvedDirectory = path.resolve(requestedDirectory);
-    const projects = await listProjects();
-    const project = projects.find((entry) => path.resolve(entry.path) === resolvedDirectory);
-    if (project) return project.id;
-    // An agent working in a chat schedules into the chats scope.
-    if (chatsScope?.contains(resolvedDirectory)) return chatsScope.id;
-    throw new OpenChamberControlError(`Project not found for directory: ${resolvedDirectory}`, 404);
+    const requestedWorkspaceID = asNonEmptyString(workspaceId);
+    if (Boolean(requestedProjectID) === Boolean(requestedWorkspaceID)) throw new OpenChamberControlError('Provide exactly one of projectId or workspaceId', 400);
+    if (requestedProjectID) return (await findProjectByID(requestedProjectID)).id;
+    if (typeof resolveWorkspaceScope !== 'function') throw new OpenChamberControlError('Workspace scope service is unavailable', 503);
+    const scope = await resolveWorkspaceScope(requestedWorkspaceID);
+    if (!scope || scope.workspaceId !== requestedWorkspaceID || !scope.hostProjectId) throw new OpenChamberControlError('Workspace is not authorized', 404);
+    return (await findProjectByID(scope.hostProjectId)).id;
   };
 
   const list = async (projectID) => {

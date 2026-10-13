@@ -27,6 +27,7 @@ const createService = (overrides = {}) => {
     projectConfigRuntime,
     scheduledTasksRuntime,
     chatsScope: overrides.chatsScope ?? null,
+    resolveWorkspaceScope: overrides.resolveWorkspaceScope,
   });
   return { service, projectConfigRuntime, scheduledTasksRuntime };
 };
@@ -312,12 +313,13 @@ describe('scheduled-task service chats scope', () => {
     expect(chatsScope.id).not.toContain(':');
   });
 
-  it('resolves a directory inside a chat to the chats scope, and projects first', async () => {
-    const { service } = createService({ chatsScope });
-
-    await expect(service.resolveProjectID({ directory: `${chatsScope.root}/2026-09-30/session-a` })).resolves.toBe(chatsScope.id);
-    await expect(service.resolveProjectID({ directory: '/repo' })).resolves.toBe('project-test');
-    await expect(service.resolveProjectID({ directory: `${chatsScope.root}-other/session-a` })).rejects.toMatchObject({ statusCode: 404 });
+  it('resolves only authorized opaque workspaces to their Host project or chat scope', async () => {
+    const { service } = createService({ chatsScope, resolveWorkspaceScope: async (workspaceId) => workspaceId === 'chat'
+      ? { workspaceId, hostProjectId: chatsScope.id } : workspaceId === 'repo' ? { workspaceId, hostProjectId: 'project-test' } : null });
+    await expect(service.resolveProjectID({ workspaceId: 'chat' })).resolves.toBe(chatsScope.id);
+    await expect(service.resolveProjectID({ workspaceId: 'repo' })).resolves.toBe('project-test');
+    await expect(service.resolveProjectID({ workspaceId: 'foreign' })).rejects.toMatchObject({ statusCode: 404 });
+    await expect(service.resolveProjectID({ directory: `${chatsScope.root}/child` })).rejects.toMatchObject({ statusCode: 400 });
   });
 
   it('rejects the chats id when the server has no chats scope', async () => {
@@ -394,9 +396,6 @@ ${prompt}
     });
     const listProjects = async () => [{ id: 'proj', path: repoPath }];
     const scheduledTasksRuntime = createScheduledTasksRuntime({
-      buildOpenCodeUrl: () => 'http://localhost',
-      getOpenCodeAuthHeaders: () => ({}),
-      waitForOpenCodeReady: async () => {},
       projectConfigRuntime,
       listProjects,
     });
