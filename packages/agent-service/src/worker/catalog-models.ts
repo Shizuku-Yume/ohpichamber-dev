@@ -69,7 +69,7 @@ function apiProtocol(api: NativeCatalogModel['api'] | undefined): Provider['prot
   }
 }
 
-function nativeApi(protocol: NonNullable<Provider['protocol']>): NativeCatalogModel['api'] {
+function nativeApi(protocol: NonNullable<Provider['protocol']>): NonNullable<NonNullable<ModelsConfig['providers']>[string]['api']> {
   switch (protocol) {
     case 'chat-completions': return 'openai-completions';
     case 'responses': return 'openai-responses';
@@ -253,14 +253,16 @@ export class NativeModels {
     return { ...resolveModelSelection(this.context.modelRegistry, input, configured, controls), nativeCredentialSessionId };
   }
 
-  private validate(config: ModelsConfig): ModelsConfig {
-    const parsed = ModelsConfigSchema(config);
-    if (parsed instanceof Error) throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model configuration is invalid');
-    for (const [providerId, provider] of Object.entries(parsed.providers ?? {})) {
-      try { validateProviderConfiguration(providerId, { ...provider, models: provider.models ?? [] }, 'models-config'); }
-      catch { throw new ProjectionError(422, 'INVALID_REQUEST', 'Native provider configuration is invalid'); }
+  private validate(config: object): ModelsConfig {
+    try {
+      const parsed = ModelsConfigSchema.assert(config);
+      for (const [providerId, provider] of Object.entries(parsed.providers ?? {})) {
+        validateProviderConfiguration(providerId, { ...provider, models: provider.models ?? [] }, 'models-config');
+      }
+      return parsed;
+    } catch {
+      throw new ProjectionError(422, 'INVALID_REQUEST', 'Native model or provider configuration is invalid');
     }
-    return parsed;
   }
 
   private async write(path: string, content: string): Promise<void> {
@@ -371,7 +373,10 @@ export class NativeModels {
     };
     // Native 'none' is a keyless fallback, not a credential override: stored/env auth still wins.
     // It permits custom definitions without copying AuthStorage's secrets into models.yml.
-    state.config.providers[model.provider] = { ...provider, auth: provider.auth ?? 'none', models: [...(provider.models ?? []).filter(row => row.id !== model.modelId), raw] };
+    state.config = this.validate({ ...state.config, providers: {
+      ...state.config.providers,
+      [model.provider]: { ...provider, auth: provider.auth ?? 'none', models: [...(provider.models ?? []).filter(row => row.id !== model.modelId), raw] },
+    } });
     state.metadata.models[modelKey({ providerId: model.provider, modelId: model.modelId })] = model;
     const before = this.context.modelRegistry.getAll('all');
     const allowed = filterAvailableModelsByEnabledPatterns(before, cfgEnabledModels.get(this.context.settings), this.context.settings);

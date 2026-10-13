@@ -17,7 +17,7 @@ import {
   type MCPOAuthConfig, type MCPStoredOAuthCredential,
 } from '@oh-my-pi/pi-coding-agent/mcp/oauth-flow';
 import { refreshStoredManagedMcpOAuthCredential } from '@oh-my-pi/pi-coding-agent/mcp/oauth-credentials';
-import type { MCPConfigFile, MCPServerConfig as SDKMCPServerConfig } from '@oh-my-pi/pi-coding-agent/mcp/types';
+import type { MCPConfigFile, MCPHttpServerConfig, MCPSseServerConfig, MCPServerConfig as SDKMCPServerConfig } from '@oh-my-pi/pi-coding-agent/mcp/types';
 import type { AuthStorage as SDKAuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 
 export * from './mcp/protocol.ts';
@@ -335,7 +335,7 @@ export class WorkerMcp extends MCPManager {
       return { type: 'stdio', command: await this.deps.resolveCommand(server.transport), args: server.transport.args,
         cwd: this.deps.cwd, env, envPolicy: 'literal', enabled: true };
     }
-    const remote: SDKMCPServerConfig = { type: server.transport.type, url: server.transport.url, enabled: true };
+    const remote: MCPHttpServerConfig | MCPSseServerConfig = { type: server.transport.type, url: server.transport.url, enabled: true };
     if (!server.transport.credentialRef) return remote;
     const provider = await this.deps.resolveCredentialRef(server.transport.credentialRef);
     const credential = this.deps.authStorage.credentials.get(provider);

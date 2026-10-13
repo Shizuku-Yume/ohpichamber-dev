@@ -131,7 +131,7 @@ export class WorkerSession {
       mcp?.attachSession(nativeSession);
       result.setToolUIContext(interaction.ui, true);
       const catalogs = new WorkerCatalogs({
-        ...nativeModelsContext(runtime, () => nativeSession.agent.sessionId), worker,
+        ...nativeModelsContext(runtime, () => nativeSession.sessionManager.getSessionId()), worker,
         cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration,
         get extensionRoots() { return nativeExtensionRoots(settings); },
         get options() { return nativeSkillOptions(settings); },
@@ -191,7 +191,7 @@ export class WorkerSession {
     if (selected.reasoningEffort !== null || options.variant !== null || options.reasoningEffort !== null) {
       const effort = this.session.getAvailableEffortSelectors().find(selector => selector === (selected.reasoningEffort ?? 'off'));
       if (effort === undefined && selected.nativeModel.reasoning) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected model effort is unavailable');
-      this.session.setThinkingLevel(effort);
+      if (effort !== undefined) this.session.setThinkingLevel(effort);
     }
     if (profile) {
       const available = this.session.getAllToolInfos();
