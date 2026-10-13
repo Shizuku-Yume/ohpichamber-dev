@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`packages/web/server/lib/host/` owns Host Gateway infrastructure that is retained independently of the OpenCode integration. These modules keep settings, themes, projects, networking, tunnels, startup, static serving, and managed-process cleanup available to Web, PWA, Electron, and hosted mobile surfaces.
+`packages/web/server/lib/host/` owns Host Gateway infrastructure that is retained independently of the OpenCode integration. These modules keep settings, themes, projects, networking, tunnels, startup, static serving, canonical execution routing, and managed-process cleanup available to Web, PWA, Electron, and hosted mobile surfaces.
 
 ## Modules
 
@@ -15,13 +15,20 @@
 - `login-shell-env.js` provides the login-shell environment snapshot used when embedding the server in Electron and when starting host commands.
 - `server-startup-runtime.js`, `startup-pipeline-runtime.js`, and `static-routes-runtime.js` own Host HTTP startup, static assets, SPA fallback, and manifest wiring.
 - `managed-process-registry.js` and its declaration file track managed child processes and reap only verified orphaned processes. `startup-performance.js` records opt-in startup diagnostics shared by lifecycle, proxy, and startup callers.
-- `agent-service-supervisor.js` starts the separate Bun service, discovers its private endpoint, waits for authenticated SDK-factory readiness, and fences requests while stopping or unavailable. This task does not activate production execution; task22 composes it with the canonical gateway.
-- `session-state.js` owns the SQLite connection shared by session metadata, archive state, and session folders. `metadata-sqlite.js` supplies the schema, typed errors, transactions, and admitted-operation lifecycle; `metadata-conversion.js` converts only named operational sidecar sources.
-- `canonical-routes.js` owns minimal canonical Host status and authenticated credential intent/preflight. It has no legacy credential, OMP SDK, staging, or process dependency.
+- `agent-service-supervisor.js` and `agent-service-supervisor.d.ts` start the separate Bun service, discover its loopback endpoint, supervise lifecycle, verify Linux process birth identity, handle worker operation authorization, and route native approval policy IPC.
+- `agent-runtime.js` integrates the supervisor, scope runtime, approval policy store, and worker operation authorizer, resolving authorized workspace and session scopes for Host operations.
+- `agent-scope-store.js` and `agent-scope-runtime.js` manage project, directory, workspace, and session containment in Host SQLite, validating roots against configured projects, Git worktrees, and managed chats.
+- `session-state.js` opens `host-metadata.sqlite` and returns `sessionMetadataStore`, `archiveStore`, `sessionFoldersStore`, `agentScopeStore`, `attachmentStore`, `initialize()`, `flush()`, `close()`, and `databasePath`.
+- `metadata-sqlite.js` supplies the SQLite schema, typed errors, transactions, table management (`session_metadata`, `session_archive`, `session_folders`, `session_folder_scopes`, `host_agent_projects`, `host_agent_directories`, `host_agent_workspaces`, `host_agent_sessions`, `host_attachments`, `metadata_conversion`), and lifecycle admissions.
+- `attachment-store.js` and `attachment-routes.js` store attachment binaries (`0600`) and metadata in SQLite, providing scoped upload, validation, retrieval, and prompt-delivery resolution.
+- `private-credential.js` implements explicit selected credential handoff to Bun `AuthStorage` and private credential resolution for quota, TTS, and routing consumers.
+- `approval-policy-store.js` owns `host-approval-policies.sqlite` for persistent tool-input allow and deny decisions.
+- `worker-operation-authorizer.js` and `worker-authorization-channel.js` authorize worker operations against Host workspace policies and approval store records.
+- `canonical-routes.js` registers `/api/agent/v1` routes: status, ready, capabilities, projects, workspaces, queue, sessions, attachments, credentials preflight, and proxied agent routes with strict schema validation and scope authorization.
 
 ## Ownership boundary
 
-The Host modules do not own OpenCode lifecycle, proxying, SSE watching, snippets, agent configuration, legacy credentials, filesystem APIs, Git, PTY, guest services, or environment stores. Those remain in their existing modules until their coordinated migration tasks. Canonical credential preflight owns refusal and nonsecret descriptors only, not credential reads or import. The OpenCode integration may compose Host routes and inject retained engine dependencies, but Host modules do not provide path aliases or compatibility re-exports for the old directory.
+The Host modules do not own OpenCode lifecycle, proxying, SSE watching, snippets, agent configuration, legacy credentials, filesystem APIs, Git, PTY, or guest services. Those remain in their existing modules until their coordinated migration tasks. Private SDK objects, `SessionManager`, and `AuthStorage` exist inside Bun workers only; the Node Host never imports or loads the OMP SDK. Host SQLite retains authority over opaque root, workspace, and session scopes, operational metadata, attachments, and approval policies. Canonical credential preflight owns explicit user-selected handoff to Bun `AuthStorage` and private lookups for Host consumers, with zero startup import or credential enumeration. The OpenCode integration may compose Host routes and inject retained engine dependencies, but Host modules do not provide path aliases or compatibility re-exports for the old directory.
 
 ## Retained behavior
 
@@ -31,15 +38,27 @@ The agent-service registry records the actual Linux process birth identity when 
 
 ## Operational session state
 
-`createHostSessionState({ dataDir, fsPromises?, path?, now? })` opens `host-metadata.sqlite` under the Host data directory and returns `sessionMetadataStore`, `archiveStore`, `sessionFoldersStore`, `initialize()`, `flush()`, `close()`, and `databasePath`. Composition injects these stores into the sessions service, feature routes, and session projections. Route registration does not create hidden connections.
+`createHostSessionState({ dataDir, fsPromises?, path?, now? })` opens `host-metadata.sqlite` under the Host data directory and returns `sessionMetadataStore`, `archiveStore`, `sessionFoldersStore`, `agentScopeStore`, `attachmentStore`, `initialize()`, `flush()`, `close()`, and `databasePath`. Composition injects these stores into the sessions service, feature routes, canonical gateway, and session projections. Route registration does not create hidden connections.
 
-SQLite is the durable authority for operational metadata, custom titles, workspace associations, archive timestamps, and folder membership. It is not a transcript store. Goal state, assist recaps, delivered-knowledge and obligatory-context markers, project-context pins, linked issues, work lineage, side-thread links, and multirun grouping remain ordinary metadata fields. Goal objective files retain their existing objective-text owner.
+SQLite is the durable authority for operational metadata, custom titles, workspace associations, archive timestamps, folder membership, agent scopes, and attachments. It is not a transcript store. Goal state, assist recaps, delivered-knowledge and obligatory-context markers, project-context pins, linked issues, work lineage, side-thread links, and multirun grouping remain ordinary metadata fields. Goal objective files retain their existing objective-text owner. Metadata archive records remain independent. Legacy `SpaceArchive` remains until task17 retires it; task17 must retire legacy space archive rather than deferring it to M5.
 
 Metadata merge patches are serialized per session. Their read, decision, merge and revision increment commit inside one SQLite transaction. Revisions are decimal strings, independent of wall-clock time. `get(id)` returns metadata or `null`; `getState(id)` returns `{ metadata, revision }` or `null`. Missing is not corrupt: malformed payloads and SQLite read/write failures throw `METADATA_CORRUPT`, `METADATA_READ_FAILED`, or `METADATA_WRITE_FAILED`. Metadata writes return `{ metadata, revision, changed }`; an unchanged conditional decision does not publish a change.
 
 The database file is created at `0600` before SQLite opens it. New database directories use `0700`; existing database, WAL and SHM files are tightened to `0600` on reopen without changing an existing data root's permissions.
 
 Metadata and archive `listAll()` return `{ entries, errors, conversion }`: valid entities remain available beside per-entity error codes. `conversion` carries its status and, for source-wide failure, a code. An absent entry under a source-wide conversion error is unknown, not authoritative empty state. Folder scopes are separate rows; the folder read returns `{ snapshot, revision, errors, conversion }`, so one corrupt scope does not hide valid siblings. Archive `null` timestamps are durable restore tombstones. Folder deletion tombstones keep their existing 30-day retention and merge policy.
+
+### Canonical agent scope and containment
+
+`createHostAgentScopeRuntime` and `createAgentScopeStore` manage directory and session authority in `host-metadata.sqlite`. Configured Host projects (`readSettings().projects`), their registered Git worktrees (`getWorktrees()`), and managed chats (`managedChatsScope`) define canonical containment. Client path hints are unverified.
+
+All directories are resolved through `fsPromises.realpath` and validated through `validateDirectoryPath`. A declared workspace must be contained within its validated project root or registered worktree. Managed chat directories must be contained within `managedChatsScope.root`. Scope mapping records rows in `host_agent_projects`, `host_agent_directories`, `host_agent_workspaces`, and `host_agent_sessions`. Offline known sessions authenticate against pure Host metadata without contacting external runtimes. When a session or workspace is accessed, `createHostAgentRuntime` resolves the scope, resolves environment variables via `getEnvironmentForDirectory(cwd)` (omitted in enterprise mode), and registers the workspace with the supervisor before admitting operations.
+
+### Attachment store and routes
+
+`createAttachmentStore` stores binary files under `attachments/` in the data directory with `0600` permissions (`att_[A-Za-z0-9_-]{24}.bin`). Metadata is committed transactionally to `host_attachments` in `host-metadata.sqlite` with `attachmentId`, `projectId`, `workspaceId`, `agentDirectoryId`, `name`, `mediaType`, `size`, `storageName`, and `createdAt`.
+
+Attachment uploads pass scope validation, media type checks, and byte-length verification against submitted metadata. Downloads verify that the requesting scope matches the recorded row. For prompt delivery, `resolveAttachments` verifies each attachment reference against the authorized scope and resolves absolute filesystem paths for private handoff to Bun workers.
 
 ### Conversion and consent
 
@@ -54,77 +73,71 @@ Each selected directory passes the existing Host directory validator before the 
 Every store read, conversion, explicit import, and write is admitted through its lifecycle owner. `close()` fences new admissions immediately, drains admitted work, and closes the sole connection only after all stores finish. It is idempotent. Composition stops HTTP admission and producers before closing the owner; `flush()` alone does not fence producers.
 
 - Web/PWA uses the Host routes and SQLite owner.
-- Electron uses the same Host routes and owner in its retained server process.
+- Electron uses the same Host routes and owner in its retained server process, without importing the OMP SDK in main or renderer processes.
 - Hosted mobile uses the active Host through shared runtime transport.
-- Capacitor mobile uses the active Host through shared runtime transport and its existing origin allowlist.
+- Capacitor mobile uses the active Host through shared runtime transport and its existing origin allowlist. Local workers and credential stores are absent.
+- Guest scope actions remain capability-scoped; scoped asset tokens do not authorize the canonical gateway namespace, and opaque-origin mutations are refused.
 - VS Code is retired; this change adds no support for it.
 
-These are source contracts, not a claim that runtime checks were executed. The integration owner performs the combined close/reopen, partial-corruption, authorization, and lifecycle proof.
+These describe source contracts, not verified runtime features. Composed Gate 22/23 acceptance remains open pending completion of actual composed scenarios; application activation remains deferred to task 17 after all UI callers migrate.
 
-## Canonical status and credential preflight
+## Canonical gateway and credential handoff
 
-`registerCanonicalHostRoutes(app, { express, uiAuthController, tunnelAuthController, isRequestOriginAllowed, enterprisePolicyOptions })` registers `/api/agent/v1`. Production composition supplies the existing controllers and origin-security operation; `enterprisePolicyOptions` is optional input to the existing enterprise policy reader for isolated policy tests, not a service callback. No readiness, legacy-credential, AuthStorage, staging, or worker callback is accepted.
+`registerCanonicalHostRoutes(app, { express, service, uiAuthController, tunnelAuthController, isRequestOriginAllowed, enterprisePolicyOptions, resolveWorkspaceScope, resolveSessionScope, listProjects, listWorkspaces, resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes })` registers the `/api/agent/v1` namespace.
 
 ### Status and authentication
 
-- `GET /health` within this prefix is optional-auth and returns exactly `{ "status": "ok", "engine": "omp", "agent": { "status": "unavailable", "ready": false } }`. This proves Host liveness only.
-- `GET /ready` is optional-auth and returns HTTP 503 `SERVICE_UNAVAILABLE` Problem Details. The real Agent Service does not exist in M1. Inherited `runtime.isReady()`, an OpenCode health response, or an advertised port cannot make this ready.
-- `GET /capabilities` requires external Host authentication. It returns `version: "1.0.0"`, `engine: "omp"`, the same unavailable agent record, and `capabilities` with `streaming`, `casApprovals`, `midTurnSteering`, `followUpQueue`, `subagents`, `sessionBranching`, `reasoningParts`, `documentExtraction`, and `credentialHandoff` all `false`. It publishes no illustrative limits or SDK claims. `clientFeatures` describes client support, not a demand to enable a service feature. False values do not waive retained implementation gates.
-- All other paths/methods within the prefix require external Host authentication and terminate with HTTP 503 Problem Details while the service is absent. They never fall through to the OpenCode proxy. Unrelated legacy `/api` routes keep their original guard.
+- `GET /health` is optional-auth and returns `{ "status": "ok", "engine": "omp", "agent": { "status": phase, "ready": phase === "ready" } }`, reflecting Host liveness and supervisor phase.
+- `GET /ready` is optional-auth. If the supervisor phase is not `ready`, or the private service `/api/agent/v1/ready` check fails, it returns HTTP 503 `SERVICE_UNAVAILABLE`. When ready, it returns `AgentServiceReadySchema`.
+- `GET /capabilities` requires Host authentication. It queries service capabilities and exposes `RuntimeCapabilitiesSchema`, setting `followUpQueue: true`, `credentialHandoff: true`, `documentExtraction: false`, and omitting internal attachment flags.
+- `GET /projects` returns `listProjects()`.
+- `GET /workspaces` returns `listWorkspaces(projectId)`.
+- Locally owned queue routes are mounted under `/sessions/:sessionId/queue`, running delivery before any SDK proxy.
+- Locally owned session routes are mounted under `/sessions`.
+- Locally owned attachment routes are mounted under `/attachments`.
 
-External authority is a validated UI cookie, paired bearer token, or the tunnel session selected by the existing tunnel request scope. URL/Guest asset tokens and `X-Internal-Secret` are not external credentials. Default passwordless Web/PWA still boots through `/auth/session`, which now issues a signed `ui-passwordless` cookie using the existing jose/JWT-secret owner; arbitrary raw identity cookies are not verified credentials. Canonical protected routes use `allowAnonymousSession: false`: they validate an existing signed cookie without minting one. Password-protected/passkey cookies use `ui-session`, and enabling password protection rejects old `ui-passwordless` cookies. This preserves the passwordless deployment policy, not password authentication where none was configured.
+Authentication requires a validated UI cookie (`ui-session` or signed `ui-passwordless`), a paired bearer token, or a tunnel session. URL/Guest asset tokens and `X-Internal-Secret` are not external credentials. Protected routes use `allowAnonymousSession: false`. Mutations and requests with an explicit `Origin` header require `isRequestOriginAllowed(req)`; disallowed or opaque `Origin: null` headers are refused with 403 `INVALID_ORIGIN`. Enterprise mode policy is read at use time and returns 403 `enterprise_mode` for provider entry operations. Responses use `Cache-Control: no-store`.
 
-### Strict preflight request
+### Explicit credential handoff and private resolution
 
-`POST /api/agent/v1/credentials/preflight` is the sole M1 intent seam. It accepts only `application/json`, at most 16 KiB, with this strict schema:
+`POST /api/agent/v1/credentials/preflight` accepts `application/json` (up to 256 KiB) matching `SelectedCredentialHandoffRequestSchema`:
+- `intent: "credential-handoff"`
+- `consent: true`
+- `workspaceId`: EntityId
+- `selections`: 1–16 unique provider items.
 
-```json
-{
-  "intent": "credential-handoff",
-  "consent": true,
-  "selections": [
-    { "providerId": "anthropic", "source": "stored-credential", "credentialType": "oauth" }
-  ]
-}
-```
+Each selection contains `providerId`, `source`, and `credentialType`. Descriptors use sources `stored-credential`, `managed-environment`, or `external-environment` with types `key` or `oauth`. Selected file inputs use `source: "selected-file"`, `credentialType: "key"`, and a bounded `file: { format: "opencode-auth-entry", content: string }` payload (up to 16 KiB). No unselected file paths, background directory scans, or automatic startup imports are accepted.
 
-`intent` and literal `consent: true` are required. `selections` contains 1–16 unique triples. Each selection contains exactly `providerId` (1–64 characters matching `^[a-z][a-z0-9-]{0,63}$`), `source` (`stored-credential`, `managed-environment`, or `external-environment`), and `credentialType` (`key` or `oauth`). No keys, tokens, account metadata, endpoints, filenames, absolute paths, secret fields, or arbitrary extra fields are accepted. Descriptors are user selections, not verified source discovery. Startup and preflight never enumerate legacy credentials. Historical file selection/import belongs to the real task22 handoff; no file path is accepted by this M1 route.
-
-Cookie and tunnel mutations require an allowed origin using the existing request-security owner, including packaged Electron/Capacitor origins and configured development/public origins. A validated paired bearer client alone may omit `Origin`; an explicit disallowed or opaque `Origin: null` is refused even with a token. Enterprise provider-entry policy is read at use time and refuses preflight with HTTP 403 `enterprise_mode`. These checks run before the bounded JSON parser.
-
-### Refusal result and evidence boundaries
-
-A valid non-enterprise preflight returns HTTP 503 `application/problem+json`, never success or imported. The exact top-level fields are `type`, `title`, `status`, `detail`, `code`, `retryable`, and `details.results`. `type` is `urn:ohpichamber:problem:SERVICE_UNAVAILABLE`, `status` is 503, `code` is `SERVICE_UNAVAILABLE`, and `retryable` is `true` (the same intent can be retried after the real service is implemented). Every result contains only the three parsed selection fields plus `status` and `code`:
+The route validates workspace scope, confirms service readiness, and executes handoff via `createSelectedCredentialHandoff`. It returns HTTP 207 Multi-Status with `SelectedCredentialHandoffResultSchema`. Provider results:
 
 | Selected descriptor | Result status | Result code | Grounding |
 |---|---|---|---|
 | `providerId: opencode` | `unsupported` | `CONSOLE_CREDENTIAL_UNSUPPORTED` | Legacy Console stores server/org metadata; no OMP mapping is established. |
-| Stored OAuth for `anthropic`, `openai-codex`, `github-copilot`, `google-gemini-cli` | `re-auth-required` | `OAUTH_REAUTH_REQUIRED` | M0 syntactic storage is not conversion/refresh/scopes/account-selection proof. This is a refusal policy requiring fresh authentication, not a claim that the selected token was inspected or expired. |
-| Other OAuth provider/source combinations | `unsupported` | `CREDENTIAL_FORMAT_UNSUPPORTED` | No verified M0 conversion shape exists; environment connections in the legacy source are keys, not OAuth records. |
+| Stored OAuth for `anthropic`, `openai-codex`, `github-copilot`, `google-gemini-cli` | `re-auth-required` | `OAUTH_REAUTH_REQUIRED` | Historical OAuth records require fresh authentication; stored tokens are not converted without user re-auth. |
+| Other OAuth provider/source combinations | `unsupported` | `CREDENTIAL_FORMAT_UNSUPPORTED` | No verified conversion shape exists; environment connections are keys, not OAuth records. |
 | External-environment key | `unavailable` | `LEGACY_ENVIRONMENT_UNAVAILABLE` | Legacy Host does not own the external runtime's environment values. |
-| Key for `anthropic`, `openai`, `google` | `unavailable` | `PROVIDER_CONVERSION_UNVERIFIED` | Historical official-provider records remain authentication-unavailable/migration-unknown. |
-| Other key descriptors, including a selected custom proxy | `unavailable` | `AGENT_SERVICE_UNAVAILABLE` | The narrow M0 custom OpenAI-compatible proxy completion is not a Host importer or proof for arbitrary providers. |
+| Key for `anthropic`, `openai`, `google` | `unavailable` | `PROVIDER_CONVERSION_UNVERIFIED` | Historical official-provider records remain unverified and are not claimed as success. |
+| `selected-file` with valid entry | `imported` or `unavailable` | `CREDENTIAL_WRITE_FAILED` / `SERVICE_UNAVAILABLE` | Forwarded privately to Bun Agent Service `/internal/workspaces/:workspaceId/credentials/handoff`, which writes to worker-owned `AuthStorage` and re-reads. Success returns `imported` with `credentialRef`. |
+| Other key descriptors | `unavailable` | `SELECTED_SOURCE_UNAVAILABLE` or `SERVICE_UNAVAILABLE` | Unverified sources or service absence return unavailable; genuine service absence never returns empty success. |
 
-The source semantics are recorded in `lib/opencode/auth.js`: stored API values are `key`; the old projection renamed these to `api`, and stored OAuth has `access`, `refresh`, `expires`, and selected metadata. M1 accepts no projected secret values or optional OAuth fields. Its production Host module does not import that owner. M0 evidence stays in `.workflow/omp-migration/m0/capabilities-real-provider.json` and `provider-oauth-feasibility.json`; all seven historical records remain unchanged.
+For Host consumers (quotas, TTS, routing), `createSelectedCredentialResolver` resolves stored secrets through private `/internal/workspaces/:workspaceId/credentials/resolve`. Secret material is returned directly to the authorized Node caller and is never exposed through browser routes.
 
-Errors use sanitized top-level RFC 7807 Problem Details, without a nested `error` or `message` alias: 401 `UNAUTHORIZED`, 403 `INVALID_ORIGIN`/`enterprise_mode`, 400 `INVALID_REQUEST`, 415 `UNSUPPORTED_MEDIA_TYPE`, 413 `PAYLOAD_TOO_LARGE`, or 500 `INTERNAL_ERROR`. No validation issues, raw exception, path, credential, or input body is echoed. Responses are `Cache-Control: no-store`.
+### Proxied agent routes and Native Host Action bridge
 
-### Composition and retained surfaces
+Authorized requests for models, providers, agent profiles, completions, session history, SSE events, run abort, approvals, questions, MCP, skills, and shell jobs are forwarded to the Bun Agent Service. Path parameters (`workspaceId`, `sessionId`, `projectId`) are validated against authorized Host scopes. Queries and bodies are validated against strict `@openchamber/agent-contract` schemas. SSE event streams use `node:stream/promises` pipeline to preserve backpressure; client disconnect triggers request abort.
 
-`bootstrap-runtime.js` registers these routes after common request middleware and before `registerAuthAndAccessRoutes` installs the legacy `/api` rejection. Canonical JSON is parsed locally; the common urlencoded parser skips only this canonical namespace so body errors remain RFC 7807. The reserved index integration must supply the existing `isRequestOriginAllowed` in `bootstrapRuntime.setupBaseRoutes(app, options)`; no new dependency or service substitute is needed.
+The Native Host Action bridge enables workers to invoke Host capabilities across private child IPC (`action.request`, `action.result`, `action.cancel`):
+- `openchamber`: project/model discovery, session operations, schedules, and `file.open`.
+- `web`: browser navigation, inspection, capture, and interaction. Browser credentials remain with the Host.
+- `memory`: session memory read, list, save, and delete.
+- `notify`: notification delivery.
 
-| Surface | M1 behavior |
-|---|---|
-| Web / PWA | Same Host routes; configured password/passkey cookie or default signed passwordless bootstrap. Allowed-origin explicit intent only; absent service refuses without credential access. |
-| Embedded Electron | Same Node Host routes; signed session or existing desktop-local/paired bearer. Packaged UI origin allowed by the existing owner; no SDK imports in main/renderer. |
-| Hosted mobile | Browser policy is the same as Web/PWA; paired clients keep bearer authentication. No local Agent Service. |
-| Capacitor remote | Existing paired bearer and packaged iOS/Android origins; the remote Host refuses absent service. No local worker or credential store. |
-| Guest | No privileged credential action or Guest bridge method; scoped asset tokens do not authorize this namespace and opaque-origin mutations are refused. |
+Invocations execute through `invokeHostAction` within the captured workspace root.
 
-Task22 must replace the refusal with the actual private Bun service handoff after authoritative internal readiness/authentication. It must obtain only selected secrets, prove AuthStorage write/read-reload and real provider-specific outcomes, and retain zero startup import/staging. Task05 does not waive task22 or gate23. Regression tests in `../ui-auth/canonical-host-routes.test.js` exercise real Host/auth boundaries and instrument the retained legacy source without adding an engine import to `host/`. Private full Node Host runs also verified canonical status, passwordless and password-protected authentication, explicit preflight refusal, origin validation and use-time enterprise policy, with zero observed legacy credential calls. Task05 records the check and cleanup evidence.
+Regression tests in `../ui-auth/canonical-host-routes.test.js` preserve historical M1 baseline verifications for Host authentication, origin validation, and enterprise policy without re-pinning obsolete refusal contracts.
 
 ## Approval policies
 
-`approval-policy-store.js` owns `host-approval-policies.sqlite`; it stores exact native tool-input targets, not dialog copy or transcript data. Session allow and workspace deny decisions commit transactionally with stable opaque IDs and monotonic decimal revisions. The Node supervisor captures root/project/workspace scope from its Host-owned `/internal/sessions` bootstrap before forwarding, rejects scope changes, and rolls capture back if opening fails. Child IPC policy requests cannot supply a different authorized project.
+`approval-policy-store.js` owns `host-approval-policies.sqlite`. It persists exact native tool-input targets with stable opaque IDs and monotonic decimal revisions. The Node supervisor captures root, project, and workspace scope from Host session bootstrap before forwarding, rejecting scope changes.
 
-The private child channel uses `approval.policy.commit` and `approval.policy.list`, with `approval.policy.committed`, `approval.policy.listed`, or `approval.policy.failed` replies. The service reserves request CAS, awaits a committed revision, and only then resolves the native worker handle. Missing Host persistence or a failed write returns `APPROVAL_POLICY_WRITE_FAILED`, leaving the request pending. Reopening loads policies for the captured project/workspace/root; workspace denial wins over session allowance for the same exact target. The supervisor closes its owned connection on stop and reopens it on restart. This introduces no public listener or route; production authorization/composition still belongs to task22.
+Child IPC uses `approval.policy.commit` and `approval.policy.list`. The service reserves request CAS, awaits a committed revision, and resolves the worker handle. Failed writes return `APPROVAL_POLICY_WRITE_FAILED`, leaving requests pending. Policies load before reopening a session and apply to future exact native targets, with workspace denial taking precedence over session allowance.
