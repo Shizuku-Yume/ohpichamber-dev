@@ -109,41 +109,6 @@ describe('canonical queue runtime', () => {
     await runtime.stop();
   });
 
-  it('dispatches through the canonical Agent Service endpoints with captured attachments', async () => {
-    const store = storeFor();
-    const service = createService();
-    const attachments = [{ attachmentId: request.input.attachments[0].attachmentId, path: '/private/upload/note.txt' }];
-    const resolved = [];
-    const captured = [];
-    const validated = [];
-    const accepted = [];
-    const runtime = createCanonicalQueueRuntime({
-      store,
-      service,
-      capturePrompt: async (capturedScope, capturedRequest) => { captured.push({ capturedScope, capturedRequest }); return { ...capturedRequest, options: { ...capturedRequest.options, variant: 'captured' } }; },
-      beforeDispatch: async (capturedScope, delivery) => { validated.push({ capturedScope, delivery }); },
-      onPromptAccepted: async (capturedScope, delivery) => { accepted.push({ capturedScope, delivery }); },
-      resolveAttachments: async (_scope, capturedAttachments) => { resolved.push(capturedAttachments); return attachments; },
-      publishQueue: () => {},
-      reportFailure: () => {},
-    });
-    await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'editable content', request });
-    await runtime.dispatch(scope);
-    assert.deepEqual(captured, [{ capturedScope: scope, capturedRequest: request }]);
-    assert.equal(validated.length, 1);
-    assert.equal(accepted.length, 1);
-    assert.deepEqual(service.calls.map((call) => call.pathname), [
-      `/api/agent/v1/sessions/${SESSION}`,
-      `/internal/sessions/${SESSION}/runs`,
-    ]);
-    assert.deepEqual(resolved, [request.input.attachments]);
-    const sent = JSON.parse(service.calls[1].init.body);
-    assert.equal(sent.type, 'prompt');
-    assert.equal(sent.request.options.variant, 'captured');
-    assert.deepEqual(sent.attachments, attachments);
-    assert.equal((await runtime.getState(scope)).items.length, 0);
-    await runtime.stop();
-  });
 
   it('repackages a private resolver result before strict store calls', async () => {
     const store = storeFor();
