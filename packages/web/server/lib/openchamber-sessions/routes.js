@@ -106,14 +106,21 @@ const createCanonicalSessionService = (dependencies) => {
         const workspace = await resolveWorkspaceScope(id);
         if (!workspace) throw new OpenChamberControlError('Workspace scope is unavailable during global session listing', workspaceId ? 404 : 503, { code: workspaceId ? 'SESSION_NOT_FOUND' : 'SERVICE_UNAVAILABLE' });
         const raw = z.strictObject({ items: z.array(RuntimeSessionSchema), errors: z.array(z.strictObject({ sessionId: z.string().min(1), code: ProblemCodeSchema })) }).parse(await request(`/api/agent/v1/sessions?workspaceId=${encodeURIComponent(id)}`));
-        const items = await Promise.all(raw.items.map(async session => {
-          if (session.projectId !== workspace.projectId || session.workspaceId !== id) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502, { code: 'INTERNAL_ERROR' });
-          const metadataState = await sessionMetadataStore.getState(session.sessionId);
-          const archiveState = await archiveStore.getState(session.sessionId);
-          if (!await registerSessionScope(session)) throw new OpenChamberControlError('Session scope registration failed', 500, { code: 'INTERNAL_ERROR' });
-          return SessionSchema.parse({ ...session, metadata: metadataState?.metadata ?? null, metadataRevision: metadataState?.revision ?? '0', ...(archiveState?.archivedAt === undefined ? {} : { archivedAt: archiveState.archivedAt }), archiveRevision: archiveState?.revision ?? '0' });
+        const sessionResults = await Promise.all(raw.items.map(async session => {
+          try {
+            if (session.projectId !== workspace.projectId || session.workspaceId !== id) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502, { code: 'INTERNAL_ERROR' });
+            const metadataState = await sessionMetadataStore.getState(session.sessionId);
+            const archiveState = await archiveStore.getState(session.sessionId);
+            if (!await registerSessionScope(session)) throw new OpenChamberControlError('Session scope registration failed', 500, { code: 'INTERNAL_ERROR' });
+            return { item: SessionSchema.parse({ ...session, metadata: metadataState?.metadata ?? null, metadataRevision: metadataState?.revision ?? '0', ...(archiveState?.archivedAt === undefined ? {} : { archivedAt: archiveState.archivedAt }), archiveRevision: archiveState?.revision ?? '0' }) };
+          } catch (error) {
+            const code = ProblemCodeSchema.safeParse(error?.code);
+            return { error: { sessionId: session.sessionId, code: code.success ? code.data : 'SERVICE_UNAVAILABLE' } };
+          }
         }));
-        return { items, errors: Object.fromEntries(raw.errors.map(error => [error.sessionId, error.code])) };
+        const items = sessionResults.flatMap(result => result.item ? [result.item] : []);
+        const sessionErrors = sessionResults.flatMap(result => result.error ? [result.error] : []);
+        return { items, errors: Object.fromEntries([...raw.errors, ...sessionErrors].map(error => [error.sessionId, error.code])) };
       } catch (error) {
         const code = ProblemCodeSchema.safeParse(error?.code);
         return { items: [], errors: { [id]: code.success ? code.data : 'SERVICE_UNAVAILABLE' } };
