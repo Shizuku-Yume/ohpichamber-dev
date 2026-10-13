@@ -230,7 +230,8 @@ export function createGlobalMessageStreamHub({
       return stopping;
     },
     isStarted: () => started,
-    isConnected: () => [...sessions.values()].some((entry) => entry.connected),
+    isConnected() { for (const entry of sessions.values()) if (entry.connected) return true; return false; },
+    isSessionConnected: (sessionId) => sessions.get(sessionId)?.connected === true,
     hasConnected: () => everConnected,
     subscribeEvent: (subscriber) => subscribe(eventSubscribers, subscriber),
     subscribeSnapshot: (subscriber) => subscribe(snapshotSubscribers, subscriber),

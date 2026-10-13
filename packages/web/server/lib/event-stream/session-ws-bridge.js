@@ -9,8 +9,12 @@ export function acceptSessionMessageStreamWsConnection({ socket, sessionId, requ
   }
   let closed = false;
   let ready = false;
-  const markReady = () => {
-    if (closed || ready) return;
+  const markReady = ({ reconnecting = false, replayReset = false } = {}) => {
+    if (closed) return;
+    if (ready) {
+      if (reconnecting && !sendMessageStreamWsFrame(socket, { type: 'ready', scope: 'session', sessionId, ...(replayReset ? { replayReset: true } : {}) })) socket.close();
+      return;
+    }
     const replay = globalHub.replayAfter(requestedLastEventId, { sessionId });
     if (!sendMessageStreamWsFrame(socket, { type: 'ready', scope: 'session', sessionId, ...(replay === null ? { replayReset: true } : {}) })) {
       socket.close(); return;
@@ -23,12 +27,13 @@ export function acceptSessionMessageStreamWsConnection({ socket, sessionId, requ
   });
   const unsubscribeStatus = globalHub.subscribeStatus((status) => {
     if (status.sessionId !== sessionId) return;
-    if (status.type === 'connect') markReady();
+    if (status.type === 'connect') markReady({ reconnecting: status.wasReady, replayReset: status.replayReset });
     if (status.type === 'invalidated') sendMessageStreamWsFrame(socket, status.invalidation);
     if (status.type === 'error' || status.type === 'initial-error') sendMessageStreamWsFrame(socket, { type: 'error', code: status.error.code, sessionId });
   });
   const heartbeat = setInterval(() => { if (socket.readyState === 1) { try { socket.ping(); } catch { socket.close(); } } }, heartbeatIntervalMs);
   socket.on('close', () => { closed = true; clearInterval(heartbeat); unsubscribeFrame(); unsubscribeStatus(); wsClients.delete(socket); });
+  if (globalHub.isSessionConnected(sessionId)) markReady();
   void globalHub.subscribeSession(sessionId).then(markReady).catch(() => {
     if (!closed) { sendMessageStreamWsFrame(socket, { type: 'error', code: 'STREAM_UNAVAILABLE', sessionId }); socket.close(1011, 'Agent Service unavailable'); }
   });
