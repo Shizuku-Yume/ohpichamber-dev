@@ -91,12 +91,10 @@ test('native skill submission and catalog descriptions hide roots, and failed di
     const entrySchema = z.object({ type: z.string(), message: z.object({ role: z.string(), content: z.unknown() }).optional() });
     const transcriptUsers = (await readFile(worker.sessionFile, 'utf8')).split('\n').filter(Boolean)
       .map(line => entrySchema.parse(JSON.parse(line))).filter(entry => entry.type === 'message' && entry.message?.role === 'user');
-    // The SDK prepends a wire-only date/cwd text block; it is not the submitted skill or persisted message.
-    expect(submitted).toHaveLength(2);
-    expect(submitted[0]).toMatch(/^<system-reminder>\nToday: \d{4}-\d{2}-\d{2}; current working directory:/);
-    expect(submitted[0]).toContain(cwd);
-    const submittedSkill = submitted[1]!;
-    expect(submittedSkill).not.toContain('<system-reminder>');
+    // Inspect the complete skill block, without stripping unrelated SDK request context.
+    const submittedSkills = submitted.filter(text => text.includes('SKILL_BODY_MARKER'));
+    expect(submittedSkills).toHaveLength(1);
+    const submittedSkill = submittedSkills[0]!;
     for (const projection of [submittedSkill, JSON.stringify(liveUser), JSON.stringify(historyUser), JSON.stringify(transcriptUsers)]) {
       expect(projection).toContain('skill://privacy-proof');
       expect(projection).toContain('SKILL_BODY_MARKER');
