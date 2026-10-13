@@ -14,9 +14,9 @@ export function createHostToolExtension({ scope, invoke }: { scope: HostToolScop
       notify: 'Invoke notify.send for an authorized OpenChamber notification.',
     };
     for (const toolName of ['openchamber', 'web', 'memory', 'notify'] as const) {
-      const parameters = api.typebox.Object({
-        action: api.typebox.String(),
-        input: api.typebox.Record(api.typebox.String(), api.typebox.Unknown()),
+      const parameters = api.typebox.Type.Object({
+        action: api.typebox.Type.String(),
+        input: api.typebox.Type.Record(api.typebox.Type.String(), api.typebox.Type.Unknown()),
       });
       api.registerTool<typeof parameters>({
         name: toolName, label: toolName, description: descriptions[toolName], parameters, approval: 'exec',
