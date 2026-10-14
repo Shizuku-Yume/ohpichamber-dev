@@ -721,42 +721,75 @@ Mobile session rows expose the same action inside the manual rename editor
 
 ## Session action rules
 
-- Archive, restore and delete return booleans and id lists through the store contract shared by sidebar rows, the bulk bar and the mobile sheet. The reason behind a failure is recorded separately in `session-action-failures.ts` at the catch site and taken once by the surface that reports it, so the toast can quote the OpenCode status, error class and log `ref` (`OpencodeApiError` from `lib/opencode/client.ts`, which keeps `tag`, `detail` and `ref` from the tagged body) instead of a bare "failed". Rename fails loudly the same way and closes its form.
+`session-actions.ts` owns Canonical Client mutations and their reconciliation in
+the directory stores and global session cache. `session-ui-store.ts` owns
+selection, draft materialization, captured send configuration, and attachment
+preparation. Web/PWA and Electron share these actions. Hosted mobile and
+Capacitor use the same boundary through their selected Host transport; no
+runtime-specific execution client or fallback engine is introduced.
 
-Session actions live in `session-actions.ts` and are the canonical place for SDK-calling session mutations that affect global session lists.
+- Creation resolves the requested Host directory to a canonical workspace,
+  captures provider/model/agent/variant/reasoning options, and registers the
+  workspace-to-directory binding. Native session records contain public
+  identities and numeric timestamps, never Host absolute paths.
+- Run, steering and follow-up submissions use `PromptRequest`. The service owns
+  native message, turn and part identities; the UI does not invent an engine
+  echo ID or automatically retry an ambiguous submission. An explicit retry is
+  a fresh run with the captured prompt configuration.
+- Abort reads the active native run identity and validates the returned run.
+  History refresh uses the shared native loader or a parsed snapshot, including
+  a successful empty snapshot. Authoritative read failure preserves prior data.
+- Metadata/title changes use the Host metadata endpoint through the Canonical
+  Client. Global and directory stores retain revision precedence. Delete commits
+  only the IDs acknowledged by the service; managed chat-directory cleanup is
+  separately Host-owned and must not run after a runtime switch.
+- Archive/restore retain the existing Host batch helper and partial-result
+  contract. They are operational metadata, not agent execution operations.
+- Native forks select a public message on the source branch. Completed-turn
+  forks use native turn status and opaque history cursors, not legacy role or
+  message-ID ordering heuristics. Host-owned metadata inheritance remains
+  independent of the transcript fork.
+- Composer preparation captures its destination and selection before awaiting
+  startup, worktree creation, knowledge, or uploads. Stale runtime completions
+  cannot update the current UI. A materialized older draft cannot select or
+  close a newer draft. Attachment uploads use real bytes and the destination
+  session's workspace; an existing `attachment://` reference keeps its identity
+  and size rather than uploading a placeholder file.
+- Command/skill/catalog reads remain Task 15-owned. Known slash-command
+  templates use the retained expansion helper; command names are not
+  idempotency keys.
+- `optimisticSend` and `setOptimisticRefs` retain their public entrypoints for
+  the Task 16 review-flow cutover. Native callback payloads carry inline
+  `Message` records and `sessionId`/`messageId`. The retained send callback's
+  legacy correlation token is never inserted as native history. A successful
+  delivery refreshes authoritative history; a failed refresh cannot turn an
+  accepted delivery into a retryable send failure.
+- `getSessionLiveActivity` distinguishes active, idle and unknown. Native
+  `unavailable` is unknown, not idle or active; a loaded session list is not
+  authoritative activity coverage.
 
-Rules:
+### Unsupported native controls
 
-1. If an action mutates session list membership or visible session metadata, update `useGlobalSessionsStore` there.
-2. If an action targets a session by ID, resolve the **session's own directory**. Do not assume the current directory is correct.
-3. `session-ui-store.ts` should delegate to `session-actions.ts` for these mutations instead of duplicating SDK calls.
-4. Sending after a revert commits the new branch optimistically: remove the reverted tail and marker before inserting the new message, and restore both if the send is rejected.
-5. Composer and queued sends carry their captured runtime, directory, and session through asynchronous preparation. A runtime change cancels the send instead of re-resolving it against the new runtime. The queue itself is server-owned (`packages/web/server/lib/message-queue/`): the UI hands the server the captured send configuration, resolved text, attachments, and attached context at queue time and the server delivers on idle; the composer only sends a queued message itself after taking it back from the server (`takeForSend`). See the `messageQueueStore.ts` section in `stores/DOCUMENTATION.md`.
-6. After session creation, the directory returned by the server is authoritative over the requested draft directory. The server may canonicalize a worktree path, and the first prompt must use the same directory identity as the created session.
-7. Regular new-chat drafts that inherit the persisted current/last directory must not create a session against a confirmed-missing path. Fall back to the active project only when OpenChamber's directory stat reports the directory missing; keep explicit worktree targets, in-flight worktree creation, and unknown/offline probes unchanged, and do not persist the fallback until session creation succeeds. A concurrent draft rewrite to that same active-project fallback must not abort session creation.
-8. A prompt send that fails **after** the request left the client is ambiguous, never a definite failure: the server may already be answering it. Transports tag those errors (`markAmbiguousTransportFailure` in `@/lib/relay/transport-error`; the relay tunnel tags every stream that dies with a request in flight), and `isAmbiguousSendFailure` reads the tag before falling back to status/text heuristics. An ambiguous failure waits for the connection to return, refetches recent messages, and confirms the optimistic message in place instead of rolling it back — rolling it back lets the message queue re-send a prompt the engine is already running, producing two independent AI responses for one user message.
-9. `SessionLiveActivity` has three answers and `unknown` is never `idle`. `getSessionLiveActivity` reports `active` when any child store or the global session-status index holds a non-idle status. Idle requires an explicit idle event or a successful status snapshot in the session's owning directory. A loaded list, a parent repository containing the worktree session, or an omitted global active-index entry does not grant idle authority. Callers that gate a destructive action, such as worktree moves, must refuse on `unknown`.
-10. Revert and unrevert cascade through known descendant sessions before mutating the parent. Revert uses the first descendant user message at or after the parent's target timestamp, including equal timestamps because message IDs do not define chronology. A descendant failure is logged and does not block its siblings or the parent. The parent runs last so its shared-directory file snapshot remains authoritative. A busy descendant is aborted before it is reverted, like the parent, so nothing keeps writing past the revert boundary. Redo clears the revert marker on every descendant, including markers the user set on a subagent independently of the parent undo.
-11. Starting a session from an assistant answer carries the source session ID, rendered directory, and answer text into the action. It must not rediscover that context from the globally active child store or the OpenCode client's fallback directory: the visible session may belong to an existing worktree while the active provider directory points elsewhere. New isolated worktrees resolve their registered parent project from that captured directory, preferring recorded worktree metadata when available. The dialog offers creation only after the project root is confirmed as a Git repository, and the creation boundary repeats that check so stale or bypassed UI state cannot run Git commands against a non-repository directory; failures leave the dialog open and visible.
-12. Slash commands use `session.command` so OpenCode expands their templates. Slash skills use the optimistic prompt path with native skill attachments, preserving the original text and any inline skill mentions. A cached command takes precedence over a same-name skill in the session's directory. Both routes carry files and admit attached context, including session knowledge, as synthetic messages before sending.
-13. A prompt's optimistic message appears before the session-knowledge read (`/api/session-knowledge`) resolves. `sendMessage` starts that read alongside the goal write and hands it to `routeMessage` as a pending value; `optimisticSend` reserves the knowledge record's id ahead of the other context ids, inserts the prompt at once, and only the prompt request waits for the knowledge. When knowledge arrives it gets its optimistic record under the reserved id, so it still sorts and is admitted first, and a rejected send removes it with the rest. The command route awaits it before `session.command`; shell sends do not fetch it. Delivery is reported only after the send resolves, as before.
+The current contract, Agent Service and Host Gateway do not expose staged
+revert/clear/commit or a session workspace-move operation. The exported helpers
+remain, but reject with `NOT_IMPLEMENTED` before changing history, composer
+drafts, attachments or workspace ownership. They never dispatch an OpenCode
+request for a canonical session. Restoring these capabilities requires the
+owning native contract/service implementation; this slice is not evidence that
+revert or move works end to end. Pure legacy turn-boundary helpers are retained
+for their existing callers, not used to project native records.
 
-Examples of global-store updates performed in `session-actions.ts`:
+### Blocking-request replies
 
-- `createSession()` -> `upsertSession(session)`
-- `updateSessionTitle()` -> `upsertSession(result.data)`
-- `shareSession()` / `unshareSession()` -> `upsertSession(result.data)`
-- `archiveSession()` / `archiveSessions()` -> wait for server confirmation, then upsert each archived session
-- `unarchiveSession()` / `unarchiveSessions()` -> wait for server confirmation, then upsert each restored session. A subsession is never restored on its own: restoring a top-level session brings its archived subsessions back with it, and a subsession id alone fails. The one exception is `undo`, which puts back exactly what an archive just moved.
-- `deleteSession()` / `deleteSessions()` -> wait for server confirmation or `404`, then remove the session and its persisted state
-- `moveSessionToDirectory()` -> move the session between directory stores and update the global directory index
-- `session.moved` (an agent's `session_move`, another client, or the echo of our own move) -> `adoptSessionMove()` does the same store move, routing registration and open-chat directory switch. A move the event already applied is kept when the request's response lands later. Without this the chat kept reading the source store while sends went to the destination, so a new prompt never appeared until the session was reopened. In a flushed batch the move runs after the stores publish, so the batch cannot write the session back into the source.
+Approval and question actions retain their public UI entrypoints, but send the
+native request's version, epoch and worker generation through the Canonical
+Client. Subtree dismissal deduplicates a request shown in multiple directory
+stores, hides its card immediately, and retains its captured CAS identity.
+Terminal/not-found/expired replies clear the card. Other failures reconcile a
+fresh pending snapshot, or restore the captured card if authority is unavailable
+and its runtime/session epoch is still current. No legacy directory-addressed
+permission/form client is used.
 
-### Blocking-request (form/permission) reply routing
-
-`replyToForm`, `cancelForm`, `respondToPermission`, and `dismissPermission` route the reply through `resolveDirectoryForBlockingRequest`. The directory chosen decides which OpenCode instance resolves the pending request, so it must be the **session record's own server-confirmed directory** (ownership), never the containing child-store key (containment): a project store legitimately holds its worktree sessions, and a reply addressed to the parent instance makes the server answer `FormNotFoundError` while the form stays pending in the worktree instance — the session is then stuck on the running form tool with no recovery. When a form reply/cancel comes back not-found, the stale request is removed locally and a `settled-running-tool` tail materialization is enqueued so the trailing tool part converges to the server's actual state instead of leaving the UI on "asking question" forever. A permission reply/reject that comes back not-found only removes the request locally.
-
-Sending a message while forms are open cancels them through `dismissOpenFormsForSession`, which removes them from the store before the cancel request so the card disappears at once. A not-found answer keeps them removed. Any other failure puts each form back into the store and session it came from: the agent is still waiting, and no event will return it. The mounted chat's form-only recovery would refetch the open session's own form, but a subagent's form shown in the parent chat has no other path back. Open permissions follow the same rule through `dismissOpenPermissionsForSession`, which rejects them: a not-found answer keeps them removed, any other failure puts each one back. Permissions have no in-chat recovery at all, so without the restore even the open session's own prompt stays hidden until a reconnect. A restored card can belong to a request the server already settled (its response was lost, or another client answered it); any reply from the card then comes back not-found, and `respondToPermission` removes it. The same cleanup applies to the desktop tray's approve action.
 
 ### Restore (unarchive) contract
 
@@ -764,18 +797,15 @@ Archive and restore use the Host batch routes, not execution `session.update`.
 The SQLite archive owner stores a positive timestamp for archive and `null` as a
 durable restore tombstone. Only confirmed IDs reconcile in the UI; failed IDs
 retain their previous state. Client-side active/archived classification still
-uses the projected `time.archived` truthiness and the existing local active
-sentinel. Host list projection and `hostArchiveError` distinguish successful
-restore from an unreadable archive owner; partial list hydration preserves cached
-classification before splitting active and archived records.
+uses the canonical optional `archivedAt` timestamp. Archive and metadata
+revisions advance independently and older Host records cannot replace newer
+ones. Only successful authoritative records may change classification.
 
-The full-app collection retains active records whose directory is absent from
-the current topology. Display grouping first resolves exact configured
-project/worktree ownership. If that fails, authoritative OpenCode project
-metadata may resolve the record only when its canonical worktree maps to a
-configured project root. The fallback never replaces the session's real
-directory for requests. An unresolved record has no guaranteed project group.
-Mobile uses the same resolver as the full-app sidebar.
+Native session ownership is resolved through its `workspaceId` and the
+runtime-scoped Host directory binding. Public display paths are not absolute
+filesystem ownership hints. Unresolved workspace ownership remains unresolved;
+it must not silently redirect a session mutation to the currently open project.
+
 
 Archive and delete actions capture the active runtime key when they start and
 recheck it before every store reconciliation, so a response

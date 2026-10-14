@@ -60,20 +60,25 @@ export const prepareLocalAttachments = async (
   return attachedFiles
 }
 
-const getDataUrlByteSize = (url: string): number => {
-  if (!url.startsWith("data:")) return 0
-  const commaIndex = url.indexOf(",")
-  if (commaIndex < 0) return 0
+type RestoredAttachment = {
+  url: string
+  mimeType: string
+  filename: string
+  size?: number
+}
+
+const restoredAttachmentFile = ({ url, mimeType, filename }: RestoredAttachment): File => {
+  if (!url.startsWith('data:')) return new File([], filename, { type: mimeType })
+  const commaIndex = url.indexOf(',')
+  if (commaIndex < 0) throw new Error("Invalid restored attachment data URL")
   const metadata = url.slice(0, commaIndex).toLowerCase()
   const payload = url.slice(commaIndex + 1)
-  if (!metadata.endsWith(";base64")) return 0
-  let padding = 0
-  if (payload.endsWith("==")) {
-    padding = 2
-  } else if (payload.endsWith("=")) {
-    padding = 1
+  if (!metadata.endsWith(';base64')) {
+    return new File([decodeURIComponent(payload)], filename, { type: mimeType })
   }
-  return Math.max(0, Math.floor((payload.length * 3) / 4) - padding)
+  const binary = atob(payload)
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+  return new File([bytes], filename, { type: mimeType })
 }
 
 export type SyntheticContextPart = {
@@ -92,7 +97,7 @@ export type InputState = {
   pendingComposerRestore: {
     target: ChatDraftIdentity
     text: string
-    files: Array<{ url: string; mimeType: string; filename: string }>
+    files: RestoredAttachment[]
   } | null
   consumePendingComposerRestore: (target: ChatDraftIdentity | null) => InputState["pendingComposerRestore"]
   pendingInputText: string | null
@@ -139,7 +144,7 @@ export type InputState = {
   setAttachedFiles: (files: AttachedFile[], target?: ChatDraftIdentity | null) => void
   clearAttachedFiles: (target?: ChatDraftIdentity | null) => void
   /** Add attachments restored from a reverted message (file already on server) */
-  addRestoredAttachment: (file: { url: string; mimeType: string; filename: string }) => void
+  addRestoredAttachment: (file: RestoredAttachment) => void
 }
 
 export const useInputStore = create<InputState>()((set, get) => ({
@@ -290,21 +295,19 @@ export const useInputStore = create<InputState>()((set, get) => ({
 
   clearAttachedFiles: (target) => get().setAttachedFiles([], target),
 
-  addRestoredAttachment: ({ url, mimeType, filename }) => {
-    const id = `restored-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    // Use "local" source so the file renders in AttachedFilesList.
-    // Set serverPath to the URL so ImagePreview can use it as the img src
-    // when dataUrl is not a data: URL. sanitizeAttachmentsForSend leaves
-    // dataUrl alone for non-server sources, so the URL stays intact on send.
+  addRestoredAttachment: (restored) => {
+    const { url, mimeType, filename, size } = restored
+    const attachmentId = /^attachment:\/\/([^/?#]+)$/.exec(url)?.[1]
+    const file = restoredAttachmentFile(restored)
     const attached: AttachedFile = {
-      id,
-      file: new File([], filename, { type: mimeType }),
+      id: attachmentId ?? `restored-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file,
       dataUrl: url,
       mimeType,
       filename,
-      size: getDataUrlByteSize(url),
-      source: "local",
-      serverPath: url,
+      size: size ?? file.size,
+      source: url.startsWith('data:') ? "local" : "server",
+      serverPath: url.startsWith('data:') ? undefined : url,
     }
     set((s) => ({ attachedFiles: [...s.attachedFiles, attached] }))
   },
