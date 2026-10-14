@@ -11,6 +11,7 @@ import { createSettingsNormalizationRuntime } from './settings-normalization-run
 import { createProjectDirectoryRuntime } from './project-directory-runtime.js';
 import { getWorktrees } from '../git/service.js';
 import { registerCanonicalHostRoutes } from './canonical-routes.js';
+import { SessionReferences } from '../../../../agent-service/src/sessions/references.ts';
 
 const fixtures = [];
 const normalization = createSettingsNormalizationRuntime({
@@ -168,5 +169,57 @@ describe('configured Host scope authority', () => {
     await expect(runtime.resolveWorkspaceScope(original.items[0].workspaceIds[0])).resolves.toBeNull();
     const replacement = await runtime.listProjects();
     expect(replacement.items[0].projectId).not.toBe(original.items[0].projectId);
+  });
+
+  it('authorizes persisted root and child routes after restart and cleans child records with root deletion', async () => {
+    const { root: fixtureRoot, projectDirectory, agentDirectory, owner, runtime } = await fixture();
+    const projects = await runtime.listProjects();
+    const scope = await runtime.resolveWorkspaceScope(projects.items[0].workspaceIds[0]);
+    const root = admittedSession(scope, 'root-session');
+    const child = { ...root, sessionId: 'child-session', rootSessionId: root.sessionId };
+    await runtime.registerSessionScope(root);
+    await runtime.registerSessionScope(child);
+
+    const serviceState = path.join(fixtureRoot, 'service');
+    const references = new SessionReferences(serviceState);
+    await references.initialize();
+    const childRecord = { subagentId: 'subagent-1', parentSessionId: root.sessionId, childSessionId: child.sessionId, role: 'worker', status: 'completed', rootSessionId: root.sessionId, workspaceId: scope.workspaceId, projectId: scope.projectId, sessionFile: path.join(agentDirectory, 'child.jsonl') };
+    await references.putSubagent(childRecord);
+    await references.close();
+    const reopened = new SessionReferences(serviceState);
+    await reopened.initialize();
+    const persistedChild = reopened.listSubagents(root.sessionId)[0];
+
+    const history = { sessionId: child.sessionId, branch: { branchId: 'branch-1', branchVersion: '1', leafMessageId: 'message-1' }, turns: [], messages: [], nextCursor: null };
+    const service = {
+      getState: () => ({ phase: 'ready' }),
+      request: async (url) => url.includes('/subagents')
+        ? new Response(JSON.stringify(reopened.listSubagents(root.sessionId).map((record) => ({ subagentId: record.subagentId, parentSessionId: record.parentSessionId, childSessionId: record.childSessionId, role: record.role, status: record.status }))), { status: 200, headers: { 'content-type': 'application/json' } })
+        : new Response(JSON.stringify(history), { status: 200, headers: { 'content-type': 'application/json' } }),
+    };
+    const app = express();
+    registerCanonicalHostRoutes(app, {
+      express, service,
+      uiAuthController: { resolveAuthContext: async () => ({ type: 'client' }) },
+      tunnelAuthController: { classifyRequestScope: () => 'local', getTunnelSessionFromRequest: () => null },
+      isRequestOriginAllowed: () => true,
+      resolveWorkspaceScope: runtime.resolveWorkspaceScope, resolveWorkspaceDirectory: runtime.resolveWorkspaceDirectory,
+      resolveSessionScope: runtime.resolveSessionScope, listProjects: runtime.listProjects, listWorkspaces: runtime.listWorkspaces,
+      resolveCredentialHandoff: async () => { throw new Error('Unexpected credential handoff'); },
+      queueRoutes: (router) => router, sessionRoutes: (router) => router, attachmentRoutes: (router) => router,
+    });
+
+    expect(await request(app).get('/api/agent/v1/subagents').query({ sessionId: root.sessionId })).toMatchObject({ status: 200, body: [{ childSessionId: child.sessionId }] });
+    expect(await request(app).get(`/api/agent/v1/sessions/${child.sessionId}/history`)).toMatchObject({ status: 200, body: { sessionId: child.sessionId } });
+    const foreignDirectory = path.join(projectDirectory, 'foreign');
+    fs.mkdirSync(foreignDirectory);
+    const foreign = await owner.agentScopeStore.ensureWorkspace({ hostProjectId: 'foreign-project', projectDirectory, workspaceDirectory: foreignDirectory, agentDirectory, name: 'Foreign' });
+    await owner.agentScopeStore.bindSession({ sessionId: 'foreign-child', rootSessionId: 'foreign-child', workspaceId: foreign.workspaceId });
+    expect((await request(app).get('/api/agent/v1/sessions/foreign-child/history')).status).toBe(403);
+
+    await reopened.removeSubagents(root.sessionId);
+    expect(reopened.listSubagents(root.sessionId)).toEqual([]);
+    expect(await request(app).get('/api/agent/v1/subagents').query({ sessionId: root.sessionId })).toMatchObject({ status: 200, body: [] });
+    await reopened.close();
   });
 });
