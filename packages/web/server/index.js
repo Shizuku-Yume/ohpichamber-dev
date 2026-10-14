@@ -645,7 +645,7 @@ const openChamberSessionService = createOpenChamberSessionService({
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
   listWorkspaceScopes,
-  registerSessionScope: hostAgentRuntime.registerSessionScope,
+  registerSessionScope: agentScopeRuntime.registerSessionScope,
   resolveAttachments,
   capturePrompt: (...args) => hostPromptDeliveryRuntime.capturePrompt(...args),
   beforeDispatch: (scope, capture) => hostPromptDeliveryRuntime.beforeDispatch(scope, capture.request),
