@@ -12,7 +12,15 @@ class TestStorage implements Storage {
   setItem(key: string, value: string) { this.values.set(key, value) }
 }
 
-const worktree = (path: string): WorktreeMetadata => ({ path, branch: path.split("/").pop() ?? "main" }) as WorktreeMetadata
+const worktree = (path: string): WorktreeMetadata => ({
+  path,
+  projectDirectory: "/repo",
+  branch: path.split("/").pop() ?? "main",
+  label: path.split("/").pop() ?? "main",
+  worktreeRoot: path,
+  headState: "branch",
+  worktreeStatus: "ready",
+})
 let storage: TestStorage
 
 beforeEach(() => {
@@ -43,5 +51,24 @@ describe("worktree topology persistence", () => {
 
     const envelope = JSON.parse(storage.getItem("oc.worktreeMap.v2") ?? "{}") as { runtimes?: Record<string, unknown> }
     expect(Object.keys(envelope.runtimes ?? {})).toHaveLength(8)
+  })
+
+  test("successful empty topology replaces only the owning runtime", () => {
+    persistWorktreeTopology("runtime-a", new Map([["/repo", [worktree("/repo/a")]]]), storage)
+    persistWorktreeTopology("runtime-b", new Map([["/repo", [worktree("/repo/b")]]]), storage)
+    persistWorktreeTopology("runtime-a", new Map(), storage)
+    expect(readPersistedWorktreeTopology("runtime-a", storage).size).toBe(0)
+    expect(readPersistedWorktreeTopology("runtime-b", storage).get("/repo")?.[0]?.path).toBe("/repo/b")
+  })
+
+  test("a failed persistence write leaves the previous persisted topology intact", () => {
+    persistWorktreeTopology("runtime-a", new Map([["/repo", [worktree("/repo/a")]]]), storage)
+    class WriteDeniedStorage extends TestStorage {
+      setItem(): void { throw new Error("storage denied") }
+    }
+    const denied = new WriteDeniedStorage()
+    for (const [key, value] of storage.values) denied.values.set(key, value)
+    expect(() => persistWorktreeTopology("runtime-a", new Map(), denied)).not.toThrow()
+    expect(readPersistedWorktreeTopology("runtime-a", denied).get("/repo")?.[0]?.path).toBe("/repo/a")
   })
 })

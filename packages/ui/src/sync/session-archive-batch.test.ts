@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { canonicalClient } from '@/api/canonicalClient';
-import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { requestSessionArchiveBatch, requestSessionMetadataUpdate, requestSessionUnarchiveBatch } from './session-archive-batch';
 
-afterEach(() => { mock.restore(); });
+const originalRuntime = getRuntimeKey();
+const originalBase = getRuntimeApiBaseUrl();
+afterEach(() => {
+  mock.restore();
+  switchRuntimeEndpoint({ apiBaseUrl: originalBase, runtimeKey: originalRuntime });
+});
 
 describe('native session archive and metadata helpers', () => {
   test('forwards the native metadata changes wrapper to CanonicalClient', async () => {

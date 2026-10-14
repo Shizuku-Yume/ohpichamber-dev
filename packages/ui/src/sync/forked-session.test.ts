@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { applyForkedSession, noteForkedSessionPatched, type ForkedSessionDeps } from './forked-session';
+import { deferred } from './session-message-loader-test-fixtures';
 
 const fork: Session = {
   sessionId: 'ses_fork', projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'repo',
@@ -62,7 +63,7 @@ describe('applyForkedSession', () => {
     expect(value.applied).toEqual([marked]);
   });
   test('deduplicates concurrent reads and rejects a mismatched identity', async () => {
-    const gate = Promise.withResolvers<Session>();
+    const gate = deferred<Session>();
     let reads = 0;
     const value = deps({ getSession: () => { reads += 1; return gate.promise; } });
     const first = applyForkedSession(event, value.value);

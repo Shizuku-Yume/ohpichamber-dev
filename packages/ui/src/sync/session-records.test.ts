@@ -4,6 +4,7 @@ import { upsertSessionRecord } from "./session-records"
 
 const session = (sessionId: string, overrides: Partial<Session> = {}): Session => ({
   sessionId,
+  rootSessionId: sessionId,
   projectId: "pro_workspace",
   workspaceId: "wsp_workspace",
   displayPath: "workspace/session",
@@ -57,9 +58,11 @@ describe("upsertSessionRecord", () => {
   const changes: Array<[string, Partial<Session>, Partial<Session>]> = [
     ["workspace", { workspaceId: "wsp_a", projectId: "pro_a" }, { workspaceId: "wsp_b", projectId: "pro_b" }],
     ["parent", { parentSessionId: "p" }, { parentSessionId: "q" }],
+    ["root ownership", { rootSessionId: "root-a" }, { rootSessionId: "root-b" }],
     ["metadata", { metadata: { title: "One" }, metadataRevision: "1" }, { metadata: { title: "Two" }, metadataRevision: "2" }],
     ["runtime status", { runtimeStatus: "idle", activeRunId: null }, { runtimeStatus: "running", activeRunId: "run_b" }],
     ["sequence", { headSequence: "1" }, { headSequence: "2" }],
+    ["execution epoch", { epoch: "epoch-a", headSequence: "10" }, { epoch: "epoch-b", headSequence: "0" }],
     ["timestamps", { updatedAt: 1 }, { updatedAt: 2 }],
   ]
 

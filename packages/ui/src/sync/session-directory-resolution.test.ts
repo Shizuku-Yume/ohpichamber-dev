@@ -115,6 +115,18 @@ describe('resolveSessionDirectoryFromSources', () => {
     expect(resolution.source).toBe('none');
     expect(resolution.conflict).toBeNull();
   });
+
+  test('trims admitted source values without inferring or rewriting filesystem ownership', () => {
+    const resolution = resolveSessionDirectoryFromSources({
+      authoritative: '  C:/repo/.worktrees/feature  ',
+      selected: 'C:/repo/.worktrees/feature',
+      remembered: MAIN,
+    });
+
+    expect(resolution.directory).toBe('C:/repo/.worktrees/feature');
+    expect(resolution.source).toBe('authoritative');
+    expect(resolution.conflict).toEqual({ source: 'remembered', directory: MAIN });
+  });
 });
 
 describe('describeSessionDirectorySources', () => {

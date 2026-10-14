@@ -11,6 +11,7 @@ import {
 import { DIR_IDLE_TTL_MS, EVICTION_GRACE_MS, MAX_DIR_STORES, type State } from "./types"
 import { FilesystemError } from "@/lib/api/files-errors"
 import type { ApprovalRequest, QuestionRequest } from "@openchamber/agent-contract"
+import { nativeSnapshot } from "./session-message-loader-test-fixtures"
 
 type Deferred = { promise: Promise<void>; resolve: () => void }
 const settle = async () => { await Promise.resolve(); await Promise.resolve() }
@@ -233,7 +234,7 @@ describe("ChildStoreManager stream restart recovery", () => {
     const manager = new ChildStoreManager()
     const started: string[] = []
     bootstrapped(manager, "/current")
-    bootstrapped(manager, "/asked", { session: [{ sessionId: "session-asked" } as State["session"][number]], session_status: { "session-asked": "idle" } })
+    bootstrapped(manager, "/asked", { session: [{ ...nativeSnapshot("session-asked", []).session, metadata: null, metadataRevision: "0", archiveRevision: "0" }], session_status: { "session-asked": "idle" } })
     const cleanup = manager.configure({ bootstrapConcurrency: 2, onBootstrap: async ({ directory }) => { started.push(directory) } })
     manager.refreshAfterStreamRestart("/current")
     await settle(); await settle()

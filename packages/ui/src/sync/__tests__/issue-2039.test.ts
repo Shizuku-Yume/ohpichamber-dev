@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test"
+import type { Session } from "@openchamber/agent-contract"
 import { cyclePermissionMode } from "../../components/chat/permissionAutoAccept"
 
 const storage = new Map<string, string>()
@@ -17,10 +18,27 @@ let configVariantOverride: string | null | undefined
 let activationPending: Promise<void> | undefined
 let selectionSource: 'auto' | 'manual' = 'auto'
 const createdWorktreeProjects: Array<{ id: string; path: string }> = []
-// Sync's session→directory index. `createSession` writes it, and directory
-// resolution reads it as the authoritative source, so the mock has to keep one.
+// Host directory ownership is kept in the sync routing index separately from
+// the native Session DTO; this seam models the admitted Host mapping.
 const sessionDirectoryRegistry = new Map<string, string>()
 let createdSessionDirectory: string | undefined
+const nativeSession = (sessionId: string, workspaceId = "workspace-issue-2039"): Session => ({
+  sessionId,
+  projectId: "project-1",
+  workspaceId,
+  displayPath: ".",
+  rootSessionId: sessionId,
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: "epoch-1",
+  headSequence: "0",
+  runtimeStatus: "idle",
+  activeRunId: null,
+  metadata: null,
+  metadataRevision: "0",
+  archiveRevision: "0",
+})
+
 const projectsState = {
   projects: [] as Array<{
     id: string
@@ -107,6 +125,9 @@ mock.module("@/stores/utils/safeStorage", () => ({
   }),
 }))
 
+// Task 16 extraction boundary: these Host directory/filesystem probes still
+// use the retired wrapper until their leaf migration; session execution below
+// is represented by native canonical records.
 mock.module("@/lib/opencode/client", () => ({
   opencodeClient: {
     getDirectory: () => null,
@@ -116,6 +137,7 @@ mock.module("@/lib/opencode/client", () => ({
     setDirectory: mock(() => undefined),
   },
 }))
+
 
 mock.module("@/stores/permissionStore", () => ({
   usePermissionStore: {
@@ -316,25 +338,22 @@ mock.module("../sync-refs", () => ({
 }))
 
 mock.module("../session-actions", () => ({
-  // Mirrors the real action's authoritative steps: the created session becomes
-  // current under the directory the server confirmed, and that directory enters
-  // the routing index. Everything these tests assert about routing depends on
-  // those two, so a mock without them tests nothing.
+  // The action boundary returns a canonical Session. Directory ownership is
+  // tracked separately in the sync routing index, never on a wire wrapper.
   createSession: mock(async (
     title: string | undefined,
     directory: string | null,
     metadata?: unknown,
     selectionTransition?: "submitted-draft",
-  ) => {
+  ): Promise<Session> => {
     createSessionCalls.push({ title, directory, metadata })
-    const session = { id: "ses_issue_2039", directory: createdSessionDirectory ?? directory }
-    const sessionDirectory = session.directory ?? null
-    if (sessionDirectory) {
-      sessionDirectoryRegistry.set(session.id, sessionDirectory)
-    }
+    const sessionId = "ses_issue_2039"
+    const sessionDirectory = createdSessionDirectory ?? directory
+    const session = nativeSession(sessionId)
+    if (sessionDirectory) sessionDirectoryRegistry.set(session.sessionId, sessionDirectory)
     const { useSessionUIStore: store } = await import("../session-ui-store")
-    store.getState().setCurrentSession(session.id, sessionDirectory, selectionTransition)
-    store.getState().markSessionAsOpenChamberCreated(session.id)
+    store.getState().setCurrentSession(session.sessionId, sessionDirectory, selectionTransition)
+    store.getState().markSessionAsOpenChamberCreated(session.sessionId)
     return session
   }),
   forkAfterMessage: mock(async () => undefined),
@@ -737,7 +756,7 @@ describe("issue 2039 draft auto-accept", () => {
     expect(createSessionCalls[1]?.metadata).toBe(undefined)
   })
 
-  test("uses the server-authoritative directory after worktree session creation", async () => {
+  test("uses the admitted Host directory after worktree session creation", async () => {
     createdSessionDirectory = "/canonical/worktree"
     useSessionUIStore.getState().openNewSessionDraft({
       directoryOverride: "/requested/worktree",
@@ -830,15 +849,7 @@ describe("assistant answer worktree routing", () => {
       worktreeMetadata: new Map([["source-session", sourceWorktree]]),
       createSession: async (_title, directory) => {
         createdDirectory = directory
-        return {
-          id: "created-session",
-          projectID: "project",
-          directory: directory ?? "",
-          title: "Created session",
-          cost: 0,
-          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-          time: { created: 1, updated: 1 },
-        }
+        return nativeSession("created-session")
       },
       sendMessage: async () => undefined,
     })

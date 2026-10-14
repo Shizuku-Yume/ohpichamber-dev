@@ -43,7 +43,7 @@ describe("last active session persistence", () => {
     expect(readLastActiveSession("runtime-b", storage)).toEqual({ sessionId: "ses-b", directory: null })
   })
 
-  test("malformed persisted payload reads as empty, not a crash", () => {
+  test("malformed persisted payload is unavailable startup context, not a crash", () => {
     storage.setItem("oc.lastSession.v1", "{not json")
     expect(readLastActiveSession("runtime-a", storage)).toBeNull()
 
@@ -61,5 +61,27 @@ describe("last active session persistence", () => {
     // Newest entries survive.
     expect(readLastActiveSession("runtime-9", storage)).not.toBeNull()
     expect(readLastActiveSession("runtime-0", storage)).toBeNull()
+  })
+
+  test("ignores malformed entries without losing a valid runtime pointer", () => {
+    storage.setItem("oc.lastSession.v1", JSON.stringify({ version: 1, runtimes: {
+      "runtime-a": { sessionId: "", directory: "/repo", updatedAt: 1 },
+      "runtime-b": { sessionId: "ses-b", directory: 123, updatedAt: 2 },
+      "runtime-c": { sessionId: "ses-c", directory: "/repo/c", updatedAt: 3 },
+    } }))
+    expect(readLastActiveSession("runtime-a", storage)).toBeNull()
+    expect(readLastActiveSession("runtime-b", storage)).toEqual({ sessionId: "ses-b", directory: null })
+    expect(readLastActiveSession("runtime-c", storage)).toEqual({ sessionId: "ses-c", directory: "/repo/c" })
+  })
+
+  test("failed writes preserve the previous pointer and do not break session switching", () => {
+    persistLastActiveSession("runtime-a", { sessionId: "ses-a", directory: "/repo/a" }, storage)
+    class WriteDeniedStorage extends TestStorage {
+      setItem(): void { throw new Error("storage denied") }
+    }
+    const denied = new WriteDeniedStorage()
+    for (const [key, value] of storage.values) denied.values.set(key, value)
+    expect(() => persistLastActiveSession("runtime-a", { sessionId: "ses-new", directory: "/repo/new" }, denied)).not.toThrow()
+    expect(readLastActiveSession("runtime-a", denied)).toEqual({ sessionId: "ses-a", directory: "/repo/a" })
   })
 })

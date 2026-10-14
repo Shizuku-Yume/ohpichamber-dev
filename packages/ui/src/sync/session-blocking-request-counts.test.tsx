@@ -1,39 +1,32 @@
-import { describe, expect, spyOn, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { OpenCode } from '@opencode/client'
-import { opencodeClient } from '@/lib/opencode/client'
-import type { FormRequest, PermissionRequest } from '@/lib/opencode/model'
+import type { ApprovalRequest, QuestionRequest } from '@openchamber/agent-contract'
+import type { StoreApi } from 'zustand'
+import { nativeApproval, nativeClient, nativeQuestion } from './session-message-loader-test-fixtures'
 import { SyncProvider, useDirectoryStore, useSessionBlockingRequestCounts } from './sync-context'
+import type { DirectoryStore } from './child-store'
 import { installHookTestDom } from '../components/session/sidebar/test-utils/testDom'
 
 // The provider has no current directory to bootstrap; the two scoped stores
 // receive only the live bucket writes made by these tests.
-const CURRENT_DIR = '/workspace'
 const PARENT_DIR = '/repo'
 const CHILD_DIR = '/worktrees/feature'
 
-const createSdk = () => OpenCode.make({
-  baseUrl: 'https://sync.test',
-  fetch: async (request) => {
-    const path = new URL(request instanceof Request ? request.url : request.toString()).pathname
-    if (path.endsWith('/event')) {
-      return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } })
-    }
-    const body = path.endsWith('/location')
-      ? { directory: CURRENT_DIR, project: { id: 'project', directory: CURRENT_DIR, canonical: CURRENT_DIR } }
-      : path.endsWith('/session/active') ? {}
-      : { data: [] }
-    return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
-  },
-})
+const createClient = () => {
+  const client = nativeClient()
+  client.listProjects = async () => ({ items: [], errors: {} })
+  client.listWorkspaces = async () => ({ items: [], errors: {} })
+  client.subscribeSessionEvents = () => () => {}
+  return client
+}
 
-const permission = (id: string, sessionID: string): PermissionRequest => ({ id, sessionID, action: 'bash', resources: [] })
-const form = (id: string, sessionID: string): FormRequest => ({ id, sessionID, title: 'Answer', fields: [{ key: 'answer', type: 'boolean' }] })
+const permission = (id: string, sessionId: string): ApprovalRequest => ({ ...nativeApproval(sessionId), approvalId: id })
+const form = (id: string, sessionId: string): QuestionRequest => ({ ...nativeQuestion(sessionId), questionId: id })
 
 type ProbeStores = {
-  parent: ReturnType<typeof useDirectoryStore>
-  child: ReturnType<typeof useDirectoryStore>
+  parent: StoreApi<DirectoryStore>
+  child: StoreApi<DirectoryStore>
 }
 
 let stores: ProbeStores | null = null
@@ -51,10 +44,10 @@ const CountsProbe = ({ includeChild }: { includeChild: boolean }) => {
   // Stable identity: the hook keys its store resolution and pinning on this array.
   const scopes = React.useMemo(() => (includeChild
     ? [
-        { directory: PARENT_DIR, sessionIDs: ['parent'] },
-        { directory: CHILD_DIR, sessionIDs: ['child'] },
+        { directory: PARENT_DIR, sessionIds: ['parent'] },
+        { directory: CHILD_DIR, sessionIds: ['child'] },
       ]
-    : [{ directory: PARENT_DIR, sessionIDs: ['parent'] }]), [includeChild])
+    : [{ directory: PARENT_DIR, sessionIds: ['parent'] }]), [includeChild])
   renderedCounts = useSessionBlockingRequestCounts(scopes)
   renderCount += 1
   return null
@@ -71,35 +64,19 @@ const seedPermissions = async () => {
 
 const withProbe = async (includeChild: boolean, assert: () => Promise<void>) => {
   const dom = installHookTestDom()
-  const previousSurface = window.__OPENCHAMBER_SURFACE__
-  window.__OPENCHAMBER_SURFACE__ = 'desktop'
-  const homeInfo = spyOn(opencodeClient, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home' })
-  const home = spyOn(opencodeClient, 'getFilesystemHome').mockResolvedValue('/home')
-  const location = spyOn(opencodeClient, 'getLocation').mockResolvedValue({
-    directory: CURRENT_DIR,
-    project: { id: 'project', directory: CURRENT_DIR, canonical: CURRENT_DIR },
-  })
-  const config = spyOn(opencodeClient, 'getConfig').mockResolvedValue({})
-  const projects = spyOn(opencodeClient, 'listProjects').mockResolvedValue([])
   const root = createRoot(dom.container)
   stores = null
   renderedCounts = null
   renderCount = 0
   try {
     await act(async () => root.render(
-      <SyncProvider sdk={createSdk()} directory="">
+      <SyncProvider client={createClient()} directory="">
         <CountsProbe includeChild={includeChild} />
       </SyncProvider>,
     ))
     await assert()
   } finally {
     await act(async () => root.unmount())
-    homeInfo.mockRestore()
-    home.mockRestore()
-    location.mockRestore()
-    config.mockRestore()
-    projects.mockRestore()
-    window.__OPENCHAMBER_SURFACE__ = previousSurface
     dom.restore()
   }
 }
