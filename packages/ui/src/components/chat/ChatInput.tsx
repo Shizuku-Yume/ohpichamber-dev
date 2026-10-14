@@ -104,10 +104,8 @@ import { useGuestsStore } from '@/lib/guests/store';
 import { isGuestActive } from '@/lib/guests/capabilities';
 import { routeGuestSlashCommand } from './composer/submit/guestCommands';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
-import { opencodeClient, type SkillMentions } from '@/lib/opencode/client';
+import type { CanonicalSkillMentions as SkillMentions } from '@/sync/session-ui-store';
 import { buildSkillMentionInstruction } from '@/lib/skillMentionInstruction';
-import { useGitStore } from '@/stores/useGitStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
 import { selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -124,7 +122,6 @@ import { sessionEvents } from '@/lib/sessionEvents';
 import { fetchResponseStyleInstruction } from '@/lib/responseStyle';
 import { wrapSystemReminder } from '@/lib/systemReminder';
 import { getSyncMessages } from '@/sync/sync-refs';
-import { useOpenCodeStartupStore } from '@/sync/opencode-startup-gate';
 import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from '@/lib/shortcuts';
 import {
     assignImageAttachmentFilenames,
@@ -675,7 +672,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     }, [getLargeTextPasteScope]);
     const { expanded: persistedExpandedInput, setExpanded: setExpandedInput } = useChatColumnExpandedInput();
     const isExpandedInput = !isBtwActive && persistedExpandedInput;
-    const { git: runtimeGit, linear: runtimeLinear } = useRuntimeAPIs();
+    const { files: runtimeFiles, git: runtimeGit, linear: runtimeLinear } = useRuntimeAPIs();
     const cycleAgentShortcutOverride = useUIStore((state) => state.shortcutOverrides.cycle_agent);
     const cycleAgentShortcut = React.useMemo(() => (
         getEffectiveShortcutCombo('cycle_agent', cycleAgentShortcutOverride ? { cycle_agent: cycleAgentShortcutOverride } : undefined)
@@ -929,8 +926,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const normalizedMentionPath = mentionPath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
         if (!normalizedMentionPath) return null;
 
-        const clientDirectory = opencodeClient.getDirectory() || '';
-        const root = (chatSearchDirectory || clientDirectory).replace(/\\/g, '/').replace(/\/+$/, '');
+        const root = (chatSearchDirectory || currentDirectory || '').replace(/\\/g, '/').replace(/\/+$/, '');
         let serverPath: string | null = null;
         if (mentionPath.startsWith('/')) {
             serverPath = mentionPath.replace(/\\/g, '/');
@@ -1381,7 +1377,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // delivery 400s.
         const { sendable: mentionAttachments } = await filterMissingInlineAttachments(
             extractedMentionAttachments,
-            opencodeClient,
+            { listLocalDirectory: async (directory) => (await runtimeFiles.listDirectory(directory)).entries },
         );
         const availableSkillNames = new Set(
             selectSkillsForDirectory(useSkillsStore.getState(), currentDirectory).map((skill) => skill.name),
@@ -1831,9 +1827,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     });
                     if (forkOutcome === 'send-failed') toast.error(t('chat.chatInput.toast.forkSendFailed'));
                 } else if (actionName === 'compact') {
-                    await sessionActions.waitForConnectionOrThrow();
-                    const compactDirectory = useSessionUIStore.getState().getDirectoryForSession(currentSessionId) || currentDirectory || undefined;
-                    await opencodeClient.compactSession(currentSessionId, compactDirectory);
+                    await sendMessage('/compact', currentProviderId, currentModelId, currentAgentName, undefined, undefined, undefined, variantToSend, 'normal', {
+                        sessionId: currentSessionId,
+                        directory: currentDirectory ?? undefined,
+                    });
                 }
             } catch (error) {
                 restoreComposerText();
@@ -1979,8 +1976,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
         if (outgoing.isEmpty) return;
 
-        // Skills named inline are attached to the prompt so OpenCode loads
-        // them with the message, rather than hoping the model follows a hint.
+        // Skills named inline are attached to the canonical prompt request.
         if (skillNames.length > 0) {
             sendMessageOptions = {
                 ...sendMessageOptions,
@@ -1996,7 +1992,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // carries the same list.
         const { sendable: sendableAttachments } = await filterMissingInlineAttachments(
             primaryAttachments,
-            opencodeClient,
+            { listLocalDirectory: async (directory) => (await runtimeFiles.listDirectory(directory)).entries },
         );
 
         // Clear input (the queue was taken above)
@@ -3837,7 +3833,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     // Set by the footer's desktop dictation; the mobile overlay lives outside the box.
     const [desktopDictating, setDesktopDictating] = React.useState(false);
     const goalObjectiveLength = goalArmed ? message.length : 0;
-    const waitingForOpenCode = useOpenCodeStartupStore((state) => state.waitingSends > 0);
+    const waitingForOpenCode = false;
 
     const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : 'px-2.5 py-1.5';
     const buttonSizeClass = isMobile ? 'h-8 w-8' : 'h-6 w-6';

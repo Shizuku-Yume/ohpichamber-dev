@@ -12,18 +12,18 @@
  * SDK-calling actions that need domain data read it from sync-refs.
  */
 
+export type CanonicalSkillMentions = {
+  names: readonly string[]
+  instructionFor: (names: readonly string[]) => string | null
+}
 import type { ContextPartMetadata } from "@/lib/messages/contextParts"
 import { create } from "zustand"
 import type { PromptAttachment, PromptContext, PromptRequest, Session, SessionMetadata } from "@openchamber/agent-contract"
 import type { AttachedFile, SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
-import type { PermissionMode } from "@/stores/utils/permissionAutoAccept"
 import type { WorktreeMetadata } from "@/types/worktree"
 import { canonicalClient } from "@/api/canonicalClient"
-import { runtimeFetch } from "@/lib/runtime-fetch"
-import { opencodeClient, type SkillMentions } from "@/lib/opencode/client"
 import { buildSkillMentionInstruction } from "@/lib/skillMentionInstruction"
 import { useConfigStore } from "@/stores/useConfigStore"
-import { runAfterOpenCodeStartup } from "./opencode-startup-gate"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useSessionDisplayStore } from "@/stores/useSessionDisplayStore"
 import { fetchSessionKnowledge, reportSessionKnowledgeDelivered } from "@/lib/sessionKnowledgeApi"
@@ -173,7 +173,7 @@ export async function routeMessage(params: {
   delivery?: 'run' | 'steer' | 'follow-up'
   /** Host idempotency key; never a slash command name. */
   commandId?: string
-  skills?: SkillMentions
+  skills?: CanonicalSkillMentions
   sessionKnowledge?: Promise<string>
 }): Promise<'command' | 'prompt' | 'shell'> {
   const runtimeKey = params.runtimeKey ?? getRuntimeKey()
@@ -239,20 +239,6 @@ export async function routeMessage(params: {
       .find((command) => command.name === cmdName)
     let matchedSkill = selectSkillsForDirectory(useSkillsStore.getState(), requestDirectory)
       .find((skill) => skill.name === cmdName)
-    if (!matchedCommand && !matchedSkill) {
-      // Task 15 owns command/skill catalog reads; execution is native here.
-      const [liveCommands, skillsLoaded] = await Promise.all([
-        opencodeClient.listCommands(requestDirectory),
-        useSkillsStore.getState().loadSkills(requestDirectory),
-      ])
-      assertSendRuntime(runtimeKey)
-      matchedCommand = liveCommands.find((command) => command.name === cmdName)
-      if (!matchedCommand && !skillsLoaded) throw new Error(`Could not load skills to resolve /${cmdName}`)
-      if (!matchedCommand) {
-        matchedSkill = selectSkillsForDirectory(useSkillsStore.getState(), requestDirectory)
-          .find((skill) => skill.name === cmdName)
-      }
-    }
     if (matchedCommand) {
       request.input.text = expandSlashCommandGoalObjective(params.content, [matchedCommand])
       await dispatchPrompt()
@@ -368,7 +354,7 @@ type SendMessageOptions = {
   commandId?: string
   reasoningEffort?: string
   /** Skills named inline, attached to the prompt once the session exists. */
-  skills?: SkillMentions
+  skills?: CanonicalSkillMentions
 }
 
 type AssistantMessageSessionExecution = {
@@ -853,7 +839,7 @@ const resolveCreatableDraftDirectory = async (
   requestedDirectory: string | null | undefined,
   submittedDraft = false,
 ): Promise<{ status: "ok"; directory: string | null | undefined } | { status: "aborted" }> => {
-  const directory = requestedDirectory ?? opencodeClient.getDirectory() ?? null
+  const directory = requestedDirectory ?? useDirectoryStore.getState().currentDirectory ?? null
   const isRecoverableDraftDirectory =
     draft.open
     && draft.preserveDirectoryOverride !== true
@@ -872,10 +858,9 @@ const resolveCreatableDraftDirectory = async (
 
   const runtimeKey = getRuntimeKey()
   const draftDirectory = draft.directoryOverride
-  const availability = await opencodeClient.getDirectoryAvailability(directory)
   if (submittedDraft) {
     if (getRuntimeKey() !== runtimeKey) return { status: "aborted" }
-    return { status: "ok", directory: availability === "missing" ? activeProjectDirectory : directory }
+    return { status: "ok", directory }
   }
   const currentDraft = useSessionUIStore.getState().newSessionDraft
   const currentDirectory = normalizePath(currentDraft.directoryOverride)
@@ -898,10 +883,7 @@ const resolveCreatableDraftDirectory = async (
     return { status: "ok", directory: activeProjectDirectory }
   }
 
-  return {
-    status: "ok",
-    directory: availability === "missing" ? activeProjectDirectory : directory,
-  }
+  return { status: "ok", directory }
 }
 
 const recoverStaleDraftDirectory = async (openedDraft: NewSessionDraftState): Promise<void> => {
@@ -1204,7 +1186,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       id,
       (sid) => get().worktreeMetadata.get(sid),
     )
-    const fallbackDir = opencodeClient.getDirectory() ?? directoryState.currentDirectory ?? null
+    const fallbackDir = directoryState.currentDirectory ?? null
     const knownDir = (directoryHint ? normalizePath(directoryHint) : null) ?? sessionDir
     const resolvedDir = knownDir ?? fallbackDir
     // `fallbackDir` is the active directory, not this session's directory. It
@@ -1247,7 +1229,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       persistLastActiveSession(key, { sessionId: id, directory: rememberedDir })
     }
 
-    try {
       if (resolvedDir && directoryState.currentDirectory !== resolvedDir) {
         directoryState.setDirectory(resolvedDir, { showOverlay: false })
       }
@@ -1257,10 +1238,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       if (id && !isGuessedDir && sessionProject) {
         useSessionDisplayStore.getState().setSingleProjectId(sessionProject.id)
       }
-      opencodeClient.setDirectory(resolvedDir ?? undefined)
-    } catch (e) {
-      console.warn("Failed to set OpenCode directory for session switch:", e)
-    }
 
     // Defer viewport anchor save for previous session — not needed for the
     // skeleton to render and reads messages which can be expensive.
@@ -1356,7 +1333,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       sessionAbortFlags: new Map(),
         })
     if (restoredSessionId) {
-      setActiveSession(restoredDirectory ?? opencodeClient.getDirectory() ?? "", restoredSessionId)
+      setActiveSession(restoredDirectory ?? useDirectoryStore.getState().currentDirectory ?? "", restoredSessionId)
     } else {
       setActiveSession("", "")
     }
@@ -1805,9 +1782,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       : { armed: false, objectiveOverride: null }
     let goalApplied = false
 
-    // Startup may hold this send. Never resolve its destination or selection
-    // again from the composer that happens to be visible when it is released.
-    return runAfterOpenCodeStartup(async () => {
+    // Resolve the captured destination and selection once; canonical delivery
+    // owns connection readiness and request lifecycle.
+    return (async () => {
       assertSendRuntime(capturedRuntimeKey)
       let sessionId = targetSessionId
       let directory = targetDirectory

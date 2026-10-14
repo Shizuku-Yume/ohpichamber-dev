@@ -1,44 +1,25 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, Part } from '@/lib/opencode/model';
-import { createContextPart } from '@/lib/messages/contextParts';
+import type { Message } from '@openchamber/agent-contract';
 import { formatSessionAsMarkdown } from './exportSession';
 
-const text = (messageID: string, content: string): Part => ({
-  id: `${messageID}-text`, sessionID: 'session', messageID, type: 'text', text: content,
-});
-
-type SessionRecord = { info: Message; parts: Part[] };
-
-const user = (): SessionRecord => ({
-  info: { id: 'u1', sessionID: 'session', role: 'user', time: { created: 1 } },
-  parts: [text('u1', 'Fix the build')],
-});
-
-const answer = (): SessionRecord => ({
-  info: {
-    id: 'a1', sessionID: 'session', role: 'assistant', agent: 'build',
-    providerID: 'anthropic', modelID: 'claude-opus-4-1', time: { created: 2, completed: 3 },
-  },
-  parts: [text('a1', 'Fixed it')],
+const message = (messageId: string, role: Message['role'], content: string, createdAt = 1): Message => ({
+  messageId,
+  sessionId: 'session',
+  turnId: 'turn',
+  role,
+  createdAt,
+  parts: [{ partId: `${messageId}-text`, messageId, type: 'text', content }],
 });
 
 describe('session export', () => {
-  test('exports attached context as context and drops server prompt plumbing', () => {
-    const attached: SessionRecord = {
-      info: {
-        id: 's1', sessionID: 'session', role: 'synthetic', time: { created: 0 },
-        ...createContextPart({ kind: 'chat-quote', quote: 'Earlier answer', text: 'Fix this detail' }),
-      },
-      parts: [],
-    };
-    const plumbing: SessionRecord = {
-      info: { id: 's2', sessionID: 'session', role: 'synthetic', time: { created: 0 }, text: 'The user is returning after a break.' },
-      parts: [],
-    };
+  test('exports canonical context content and drops system prompt plumbing', () => {
+    const markdown = formatSessionAsMarkdown([
+      message('plumbing', 'system', 'The user is returning after a break.'),
+      message('attached', 'user', 'Earlier answer\n\nFix this detail'),
+      message('user', 'user', 'Fix the build'),
+      message('answer', 'assistant', 'Fixed it', 2),
+    ], 'Session');
 
-    const markdown = formatSessionAsMarkdown([plumbing, attached, user(), answer()], 'Session');
-
-    expect(markdown).toContain('**Context**');
     expect(markdown).toContain('Fix this detail');
     expect(markdown).not.toContain('returning after a break');
     expect(markdown).toContain('Fixed it');

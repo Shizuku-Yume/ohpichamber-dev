@@ -140,6 +140,10 @@ Task 13's downstream boundaries are explicit: Task 32 owns real OMP TaskTool chi
 
 The active M3 implementation wave uses four lightweight isolated worktrees because generated dependency trees exceed the harness snapshot budget. No source changes are shared across those worktrees; the coordinator will cherry-pick reviewed commits into the integration branch. Do not repeat unchanged M0–M2 proofs; each slice runs only its owner checks, followed by one integrated M3 acceptance run.
 
+The native subagent gap remains the current Task 32 boundary: `subagents: false` is still the baseline capability until Task 32 exposes the real OMP TaskTool child projection, session registry/listing, `/subagents` route, child history/cursor authority, and `CanonicalClient.listSubagents()`. Tasks 14 and 15 must consume that contract for child timeline and sidebar hierarchy; Task 16 remains independent of Task 32 after Task 13.
+
+Task 14's non-child slice integrates at the canonical child-navigation seam: once `CanonicalClient.listSubagents(sessionId)` and native child `Message[]` history are available, the session timeline's `ChildSessionExport` records are populated from `parentSessionId`/`rootSessionId` and rendered through `formatSessionAsMarkdown`; no child-session transport or fallback is implemented here. Task 32 remains the owner of the endpoint, registry, child projection, and cursor/history authority.
+
 ## Reusable findings
 
 ### Inherited guidance is not the target architecture

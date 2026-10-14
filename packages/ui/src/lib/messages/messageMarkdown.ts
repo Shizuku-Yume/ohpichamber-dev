@@ -1,5 +1,5 @@
-import type { Metadata, Part } from '@/lib/opencode/model';
-import { readContextPart, type ContextPartPayload } from './contextParts';
+import type { Part } from '@openchamber/agent-contract';
+import { readContextPart, type ContextCarrierPart, type ContextPartPayload } from './contextParts';
 import { extractTerminalContexts } from './terminalContext';
 
 /** Preserve both the source and the reply when a model context needs a limit. */
@@ -27,15 +27,9 @@ function quoteContext(source: string, body: string, comment: string, fieldLimit?
 function formatContext(payload: ContextPartPayload, originalText: string, fieldLimit?: number): string {
   switch (payload.kind) {
     case 'code-comment':
-      return quoteContext(
-        `Quoted from \`${payload.fileLabel}\`, lines ${payload.startLine}-${payload.endLine}${payload.side ? `, ${payload.side}` : ''}:`,
-        payload.code, payload.text, fieldLimit, payload.language,
-      );
+      return quoteContext(`Quoted from \`${payload.fileLabel}\`, lines ${payload.startLine}-${payload.endLine}${payload.side ? `, ${payload.side}` : ''}:`, payload.code, payload.text, fieldLimit, payload.language);
     case 'file-quote':
-      return quoteContext(
-        `Quoted from \`${payload.fileLabel}\`${payload.startLine != null ? `, lines ${payload.startLine}-${payload.endLine ?? payload.startLine}` : ''}:`,
-        payload.quote, payload.text, fieldLimit,
-      );
+      return quoteContext(`Quoted from \`${payload.fileLabel}\`${payload.startLine != null ? `, lines ${payload.startLine}-${payload.endLine ?? payload.startLine}` : ''}:`, payload.quote, payload.text, fieldLimit);
     case 'chat-quote':
       return quoteContext('Quoted from an earlier message:', payload.quote, payload.text, fieldLimit);
     case 'browser-annotation':
@@ -55,11 +49,7 @@ function formatContext(payload: ContextPartPayload, originalText: string, fieldL
   }
 }
 
-/**
- * The model-facing text of a message's own parts. Attached context is no
- * longer a part — it arrives as its own synthetic message — so render it with
- * `formatContextMessage`.
- */
+/** Model-facing text from canonical transcript parts. */
 export function formatMessageText(
   parts: readonly Part[],
   options: { user?: boolean; fieldLimit?: number } = {},
@@ -67,27 +57,22 @@ export function formatMessageText(
   const blocks: string[] = [];
   for (const part of parts) {
     if (part.type !== 'text') continue;
-    const context = options.user ? readContextPart(part) : null;
-    if (context) {
-      blocks.push(formatContext(context, part.text, options.fieldLimit));
-      continue;
-    }
     if (!options.user) {
-      blocks.push(options.fieldLimit ? excerptMarkdown(part.text, options.fieldLimit) : part.text);
+      blocks.push(options.fieldLimit ? excerptMarkdown(part.content, options.fieldLimit) : part.content);
       continue;
     }
-    const terminal = extractTerminalContexts(part.text);
+    const terminal = extractTerminalContexts(part.content);
     blocks.push(options.fieldLimit ? excerptMarkdown(terminal.visibleText, options.fieldLimit) : terminal.visibleText);
     for (const item of terminal.contexts) {
       blocks.push(quoteContext(`Terminal ${item.terminalLabel}, lines ${item.startLine}-${item.endLine}:`, item.text, '', options.fieldLimit, ''));
     }
   }
-  return blocks.map((block) => block.trim()).filter(Boolean).join('\n\n');
+  return blocks.map((block) => block?.trim() ?? '').filter(Boolean).join('\n\n');
 }
 
-/** One attached context item (a synthetic message) as model-facing Markdown. */
+/** Local composer context as model-facing Markdown, before canonical capture. */
 export function formatContextMessage(
-  message: { text: string; metadata?: Metadata },
+  message: ContextCarrierPart & { text: string },
   fieldLimit?: number,
 ): string {
   const payload = readContextPart(message);
