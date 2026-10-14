@@ -5,7 +5,7 @@ import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
 import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, PromptAttachmentSchema, TokenUsageSchema } from '@openchamber/agent-contract';
-import type { HistoryPage, HistoryPageRequest, Message, Part, PromptAttachment, Run, TokenUsage, Turn } from '@openchamber/agent-contract';
+import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, Part, PromptAttachment, Run, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 
@@ -27,6 +27,7 @@ const PRIVATE_ROOTS_TYPE = 'ohpichamber.private-roots.v1';
 const PrivateRootSchema = z.strictObject({ root: z.string().min(1).refine(isAbsolute), label: z.enum(['workspace', 'agent-directory', 'session-storage']) });
 const PrivateRootsSchema = z.array(PrivateRootSchema);
 type PrivateRoot = z.infer<typeof PrivateRootSchema>;
+const PrivateTextSchema = z.string();
 const PRIVATE_PATH_DELIMITERS = ' \t\n\r\"\'`=:,;()[]{}<>';
 function startsPrivatePath(text: string, index: number, context = ''): boolean {
   const previous = index > 0 ? text[index - 1] : context.at(-1);
@@ -48,8 +49,11 @@ function storedPrivateRoots(manager: SessionManager): PrivateRoot[] {
 
 function storageRoots(manager: SessionManager): PrivateRoot[] {
   const file = manager.getSessionFile();
-  return file ? [{ root: file, label: 'session-storage' }, { root: dirname(file), label: 'session-storage' },
-    { root: manager.getArtifactsDir(), label: 'session-storage' }] : [];
+  if (!file) return [];
+  const roots: PrivateRoot[] = [{ root: file, label: 'session-storage' }, { root: dirname(file), label: 'session-storage' }];
+  const artifacts = manager.getArtifactsDir();
+  if (artifacts !== null) roots.push({ root: artifacts, label: 'session-storage' });
+  return roots;
 }
 
 /** Private scope context stays in the native tree, never a second transcript store. */
@@ -176,31 +180,70 @@ export class WorkerProjection {
     return text;
   }
 
-  private publicValue<T>(value: T): T {
-    if (typeof value === 'string') return this.publicText(value) as T;
+  private publicJson(value: JsonValue): JsonValue {
     if (Array.isArray(value)) {
-      let next: unknown[] | undefined;
+      let next: JsonValue[] | undefined;
       for (let index = 0; index < value.length; index++) {
-        const item = this.publicValue(value[index]);
+        const item = this.publicJson(value[index]!);
         if (item !== value[index]) { next ??= value.slice(); next[index] = item; }
       }
-      return (next ?? value) as T;
+      return next ?? value;
     }
-    if (value !== null && typeof value === 'object') {
-      const object = value as Record<string, unknown>;
-      let next: Record<string, unknown> | undefined;
-      for (const key of Object.keys(object)) {
-        const publicKey = this.publicText(key);
-        const item = this.publicValue(object[key]);
-        if (publicKey !== key || item !== object[key]) {
-          next ??= { ...object };
-          if (publicKey !== key) delete next[key];
-          next[publicKey] = item;
-        }
+    if (value instanceof Object) return this.publicJsonObject(value);
+    const text = PrivateTextSchema.safeParse(value);
+    return text.success ? this.publicText(text.data) : value;
+  }
+
+  private publicJsonObject(value: JsonObject): JsonObject {
+    let next: JsonObject | undefined;
+    for (const key of Object.keys(value)) {
+      const publicKey = this.publicText(key);
+      const item = this.publicJson(value[key]!);
+      if (publicKey !== key || item !== value[key]) {
+        next ??= { ...value };
+        if (publicKey !== key) delete next[key];
+        next[publicKey] = item;
       }
-      return (next ?? value) as T;
     }
-    return value;
+    return next ?? value;
+  }
+
+  private publicPart(part: Part): void {
+    switch (part.type) {
+      case 'text': case 'reasoning':
+        part.content = this.publicText(part.content);
+        if (part.type === 'reasoning' && part.signature !== undefined) part.signature = this.publicText(part.signature);
+        break;
+      case 'tool_call': part.toolName = this.publicText(part.toolName); part.input = this.publicJsonObject(part.input); break;
+      case 'tool_result':
+        part.toolName = this.publicText(part.toolName);
+        if (part.output !== undefined) part.output = this.publicJson(part.output);
+        if (part.error !== undefined) part.error = this.publicText(part.error);
+        break;
+      case 'attachment': part.name = this.publicText(part.name); part.mediaType = this.publicText(part.mediaType); break;
+      case 'step_summary': part.title = this.publicText(part.title); break;
+    }
+  }
+
+  private publicEvents(inputs: ProjectionInput[]): ProjectionInput[] {
+    for (const { event } of inputs) {
+      switch (event.type) {
+        case 'part.started': case 'part.completed': this.publicPart(event.part); break;
+        case 'tool.started': event.toolName = this.publicText(event.toolName); event.input = this.publicJsonObject(event.input); break;
+        case 'tool.completed':
+          if (event.output !== undefined) event.output = this.publicJson(event.output);
+          if (event.error !== undefined) event.error = this.publicText(event.error);
+          break;
+        case 'run.failed': event.error = this.publicText(event.error); break;
+        case 'message.created': case 'message.updated':
+          if (event.providerId !== undefined) event.providerId = this.publicText(event.providerId);
+          if (event.modelId !== undefined) event.modelId = this.publicText(event.modelId);
+          break;
+        // Text deltas already carry bounded stream context; never reinterpret a chunk as a new path.
+        default: break;
+      }
+    }
+    return inputs;
   }
 
   private publicDelta(id: string, delta: string): string {
@@ -366,16 +409,12 @@ export class WorkerProjection {
         break;
       default: break;
     }
-    for (let index = 0; index < result.length; index++) {
-      // Deltas already carry the bounded stream context; do not reinterpret a chunk as a new path.
-      if (result[index]!.event.type !== 'part.delta') result[index] = this.publicValue(result[index]!);
-    }
-    return result;
+    return this.publicEvents(result);
   }
 
-  failRun(error: string, timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicValue(this.finish('failed', timestamp, error)); }
-  cancelRun(timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicValue(this.finish('cancelled', timestamp)); }
-  completeRun(timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicValue(this.finish('completed', timestamp)); }
+  failRun(error: string, timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicEvents(this.finish('failed', timestamp, error)); }
+  cancelRun(timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicEvents(this.finish('cancelled', timestamp)); }
+  completeRun(timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicEvents(this.finish('completed', timestamp)); }
 
   private recordTurn(status: 'completed' | 'failed' | 'cancelled', finishedAt: number, error?: string): void {
     if (!this.turn?.open || !this.run) return;
@@ -530,9 +569,15 @@ export class WorkerProjection {
     const header = this.manager.getHeader();
     const createdAt = header ? Date.parse(header.timestamp) : Date.now();
     const selection = selectedBranchRevert(entries);
-    return this.publicValue({ createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt),
+    for (const message of messages) {
+      for (const part of message.parts) this.publicPart(part);
+      if (message.providerId !== undefined) message.providerId = this.publicText(message.providerId);
+      if (message.modelId !== undefined) message.modelId = this.publicText(message.modelId);
+    }
+    for (const turn of turns) if (turn.error !== undefined) turn.error = this.publicText(turn.error);
+    return { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt),
       branch: { branchId: `branch:${this.sessionId}`, branchVersion: (version + BigInt(virtualTurns.size)).toString(), leafMessageId,
         ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : undefined) }, turns, messages,
-    });
+    };
   }
 }
