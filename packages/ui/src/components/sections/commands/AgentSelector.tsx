@@ -1,14 +1,7 @@
 import React from 'react';
-import type { Agent } from '@/lib/opencode/model';
+import type { Agent } from '@openchamber/agent-contract';
 import { agentLabel } from '@/lib/agentLabel';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { useAgentsStore, filterVisibleAgents } from '@/stores/useAgentsStore';
-import { selectConfigAgentsForDirectory, useConfigStore } from '@/stores/useConfigStore';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
@@ -16,13 +9,13 @@ import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
-import { useOpenCodeReadiness } from '@/hooks/useOpenCodeReadiness';
-
+import { canonicalClient } from '@/api/canonicalClient';
+import { getConfigDirectory } from '@/stores/useAgentsStore';
 interface AgentSelectorProps {
     agentName: string;
     onChange: (agentName: string) => void;
     className?: string;
-    filter?: (agent: Agent) => boolean;
+    filter?: (agent: Agent & { readonly mode?: string }) => boolean;
     dropdownPortalToBody?: boolean;
     directory?: string;
 }
@@ -36,22 +29,16 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     directory,
 }) => {
     const { t } = useI18n();
-    const { isReady, isUnavailable } = useOpenCodeReadiness('agents', directory);
-    const configAgents = useConfigStore((state) => selectConfigAgentsForDirectory(state, directory));
-    const agentsStoreAgents = useAgentsStore((state) => state.agents);
-    const loadAgentsStore = useAgentsStore((state) => state.loadAgents);
-    const loadConfigAgents = useConfigStore((state) => state.loadAgents);
-    const rawAgents = React.useMemo(() => {
-        if (directory !== undefined) return configAgents;
-        if (Array.isArray(configAgents) && configAgents.length > 0) return configAgents;
-        return Array.isArray(agentsStoreAgents) ? agentsStoreAgents : [];
-    }, [configAgents, agentsStoreAgents, directory]);
-    const selectedAgent = rawAgents.find((agent) => agent.name === agentName);
+    const [agents, setAgents] = React.useState<Agent[]>([]);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isUnavailable, setIsUnavailable] = React.useState(false);
+    const workspaceDirectory = directory ?? getConfigDirectory();
+    const isReady = !isLoading && !isUnavailable;
+    const selectedAgent = agents.find((agent) => agent.name === agentName);
     const selectedAgentLabel = selectedAgent ? agentLabel(selectedAgent) : agentName;
-    const agents = React.useMemo(() => {
-        const visible = filterVisibleAgents(rawAgents);
-        return filter ? visible.filter(filter) : visible;
-    }, [rawAgents, filter]);
+    const filteredAgents = React.useMemo(() => (
+        filter ? agents.filter(filter) : agents
+    ), [agents, filter]);
     const isMobile = useUIStore(state => state.isMobile);
     const { isMobile: deviceIsMobile } = useDeviceInfo();
     const isActuallyMobile = isMobile || deviceIsMobile;
@@ -59,14 +46,29 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     const [isMobilePanelOpen, setIsMobilePanelOpen] = React.useState(false);
 
     React.useEffect(() => {
-        if (directory !== undefined) {
-            void loadConfigAgents({ directory });
+        let cancelled = false;
+        setIsLoading(true);
+        setIsUnavailable(false);
+        if (!workspaceDirectory) {
+            setAgents([]);
+            setIsLoading(false);
             return;
         }
-        if (rawAgents.length > 0) return;
-        void loadConfigAgents();
-        void loadAgentsStore();
-    }, [directory, rawAgents.length, loadConfigAgents, loadAgentsStore]);
+        void canonicalClient.resolveWorkspace(workspaceDirectory)
+            .then((workspace) => canonicalClient.getAgents(workspace.workspaceId))
+            .then((catalog) => {
+                if (cancelled) return;
+                setAgents(catalog.agents);
+                setIsLoading(false);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setAgents([]);
+                setIsUnavailable(true);
+                setIsLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, [workspaceDirectory]);
 
     const closeMobilePanel = () => setIsMobilePanelOpen(false);
 
@@ -100,7 +102,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                         </span>
                         {!agentName && <div className="h-2 w-2 rounded-full bg-current" />}
                     </button>
-                    {agents.map((agent) => {
+                    {filteredAgents.map((agent) => {
                         const isSelected = agent.name === agentName;
 
                         return (
@@ -198,7 +200,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                         >
                             <span className="text-muted-foreground">{t('settings.commands.agentSelector.notSelected')}</span>
                         </DropdownMenuItem>
-                        {agents.map((agent) => (
+                        {filteredAgents.map((agent) => (
                             <DropdownMenuItem
                                 key={agent.name}
                                 className="typography-meta"
