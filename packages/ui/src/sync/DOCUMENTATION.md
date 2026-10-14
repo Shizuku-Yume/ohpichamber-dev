@@ -429,6 +429,13 @@ const sessionTitle = useSessionSelector(sessionId, directory, (session) => sessi
 - `useSession` and `useSessionSelector`:
   - Subscriptions select the exact session: `state.session.find((s) => s.sessionId === sessionId)`.
   - Equality comparison is preserved (`isEqual = Object.is`), preventing re-renders when unrelated sessions mutate or when the derived selector output has not changed.
+- `useSessionDirectory`:
+  - Selects only the canonical session's `workspaceId`, not its full record. Updates to timestamps, runtime fields, or metadata do not re-render directory-only consumers when the workspace is unchanged.
+  - Resolves the admitted workspace-to-directory binding through `subscribeWorkspaceDirectories`, so a binding registered or moved after the session arrives still publishes its directory without requiring another session update.
+- `useSessionMessagesSelector` and `useLiveSessionsExcluding`:
+  - Preserve the selected output when its equality comparison passes, including rebuilt native message lists with an unchanged primitive selection and excluded-session updates with an unchanged live gap.
+  - Keep the remaining live sessions' list reference stable while excluded records change. Changes to included membership, ordering, or canonical session fields still publish; selectors that render inline parts must include those parts in their selected value.
+  - Selection state belongs to the mounted hook and child-store runtime. Session/directory changes read the new owner, and a runtime-key change remounts the provider rather than reusing outgoing leaf state.
 - `useSessionPartsForMessages(sessionId, messageIds, directory)`:
   - Scopes parts subscription and lookup strictly to the addressed session's messages (`store.getState().message[sessionId]`).
   - Eliminates directory-wide scans over all sessions.

@@ -7,7 +7,7 @@ import { normalizePath } from "@/lib/pathNormalization"
 import { isSurfaceAttended } from "@/lib/surfaceAttention"
 import { useAuthSessionStore } from "@/lib/runtime-auth-expiry"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
-import { resolveWorkspaceDirectory } from "@/stores/globalSessions"
+import { resolveWorkspaceDirectory, subscribeWorkspaceDirectories } from "@/stores/globalSessions"
 import { ChildStoreManager, markDirectorySessionPartChanged, subscribeDirectorySessionMessages, subscribeDirectoryPermission, subscribeDirectoryForm, type DirectoryStore, type DirectoryBootstrapPriority, type DirectoryBootstrapReason } from "./child-store"
 import { bootstrapDirectory, bootstrapGlobal } from "./bootstrap"
 import { notifyFirstCanonicalBootstrap } from "./first-server-connect"
@@ -454,7 +454,11 @@ export function useSessionSelector<T>(sessionId: string | null | undefined, dire
   return useSyncExternalStore(useCallback((notify) => childStores.subscribeAllSelected((state) => directory && state.path.directory !== normalizePath(directory) ? undefined : state.session.find((session) => session.sessionId === sessionId), notify), [childStores, directory, sessionId]), get, get)
 }
 export function useParentSession(sessionId: string | null, directory?: string): Session | null { const session = useSession(sessionId, directory); return useSession(session?.parentSessionId, directory) ?? null }
-export function useSessionDirectory(sessionId?: string | null, directory?: string): string | undefined { const session = useSession(sessionId, directory); return session ? resolveWorkspaceDirectory(session.workspaceId) ?? undefined : undefined }
+export function useSessionDirectory(sessionId?: string | null, directory?: string): string | undefined {
+  const workspaceId = useSessionSelector(sessionId, directory, useCallback((session) => session?.workspaceId, []))
+  const get = useCallback(() => workspaceId ? resolveWorkspaceDirectory(workspaceId) ?? undefined : undefined, [workspaceId])
+  return useSyncExternalStore(subscribeWorkspaceDirectories, get, get)
+}
 
 export const collectComposerForms = (sessions: Session[], forms: Record<string, QuestionRequest[] | undefined>, sessionId: string | null): QuestionRequest[] => collectScopedBlockingRequests(sessions, forms, sessionId, EMPTY_QUESTIONS)
 function useScopedRequests<T extends ApprovalRequest | QuestionRequest>(sessionId: string | null, directory: string | undefined, slice: "permission" | "form", empty: T[]): T[] {
