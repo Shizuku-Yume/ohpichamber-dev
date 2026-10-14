@@ -111,7 +111,7 @@ export class SessionReferences {
     const parsed = SessionReferenceSchema.parse(reference);
     return this.enqueue(async () => {
       if (parsed.rootSessionId !== sessionId || this.relocations[sessionId]?.transactionId !== transactionId) {
-        throw new SessionReferenceError(409, 'RESYNC_REQUIRED', 'Session relocation ownership has changed');
+        throw new SessionReferenceError(409, 'SESSION_RELOCATION_CONFLICT', 'Session relocation ownership has changed');
       }
       const relocations = { ...this.relocations };
       delete relocations[sessionId];

@@ -274,7 +274,7 @@ export class SessionRegistry {
     const request = HostSessionRelocationFinalizeSchema.parse(input);
     if (this.controls.has(sessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
     const intent = this.references.relocation(sessionId);
-    if (!intent || intent.transactionId !== request.transactionId) throw new WorkerOperationError(409, 'RESYNC_REQUIRED');
+    if (!intent || intent.transactionId !== request.transactionId) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT');
     this.controls.add(sessionId);
     try {
       if (request.action === 'rollback') return { session: await this.rollbackRelocation(intent) };

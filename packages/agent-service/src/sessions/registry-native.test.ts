@@ -97,6 +97,9 @@ test('native SDK relocation replaces worker scope and preserves public identity,
     await expect(harness.sessions.open(harness.source)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
     await expect(harness.sessions.prompt(rootSessionId, { type: 'prompt', runId: 'blocked', request: { input: { text: 'blocked', context: [], attachments: [] },
       options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } } })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    await expect(harness.sessions.finalizeRelocation(rootSessionId, { transactionId: 'mismatched-transaction', action: 'commit' }, admit))
+      .rejects.toMatchObject({ code: 'SESSION_RELOCATION_CONFLICT' });
+    expect(harness.sessions.relocation(rootSessionId).relocation?.transactionId).toBe('move-commit');
     const finalized = await harness.sessions.finalizeRelocation(rootSessionId, { transactionId: 'move-commit', action: 'commit' }, admit);
     expect(finalized.session).toMatchObject({ sessionId: rootSessionId, workspaceId: harness.destination.workspaceId });
     const after = harness.sessions.journal(rootSessionId).snapshot();
@@ -104,6 +107,8 @@ test('native SDK relocation replaces worker scope and preserves public identity,
     expect(after.branch).toEqual(before.branch);
     expect(after.session.epoch).not.toBe(before.session.epoch);
     expect(harness.sessions.relocation(rootSessionId).relocation).toBeNull();
+    await expect(harness.sessions.finalizeRelocation(rootSessionId, { transactionId: 'move-commit', action: 'commit' }, admit))
+      .rejects.toMatchObject({ code: 'SESSION_RELOCATION_CONFLICT' });
     const moved = await SessionManager.open(harness.destinationFile, dirname(harness.destinationFile), undefined, { initialCwd: harness.destination.cwd, throwIfMissing: true });
     try {
       expect(moved.getHeader()?.cwd).toBe(harness.destination.cwd);
@@ -177,6 +182,9 @@ test('native destination cutover can commit after restart and a failed reference
     await harness.sessions.prepareRelocation(rootSessionId, { transactionId: 'recover-commit', sourceWorkspaceId: harness.source.workspaceId,
       destination: harness.destination }, admit);
     await harness.restart();
+    await expect(harness.sessions.finalizeRelocation(rootSessionId, { transactionId: 'mismatched-transaction', action: 'commit' }, admit))
+      .rejects.toMatchObject({ code: 'SESSION_RELOCATION_CONFLICT' });
+    expect(harness.sessions.relocation(rootSessionId).relocation?.transactionId).toBe('recover-commit');
     await rename(index, `${index}.previous`);
     await mkdir(index);
     try {
@@ -189,6 +197,8 @@ test('native destination cutover can commit after restart and a failed reference
     expect(committed.session).toMatchObject({ sessionId: rootSessionId, workspaceId: harness.destination.workspaceId, runtimeStatus: 'idle' });
     expect(harness.sessions.journal(rootSessionId).snapshot().messages).toEqual(before.messages);
     expect(harness.sessions.relocation(rootSessionId).relocation).toBeNull();
+    await expect(harness.sessions.finalizeRelocation(rootSessionId, { transactionId: 'recover-commit', action: 'commit' }, admit))
+      .rejects.toMatchObject({ code: 'SESSION_RELOCATION_CONFLICT' });
   } finally { await harness.close(); }
 }, 60000);
 

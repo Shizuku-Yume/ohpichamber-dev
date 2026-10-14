@@ -371,13 +371,13 @@ test('native branch CAS rejects stale owner/version and redo expires after a new
     const target = before.messages.find(message => message.role === 'user')!;
     const leaf = manager.getLeafId();
     await expect(harness.worker.operation({ type: 'branch', request: { action: 'revert', messageId: target.messageId,
-      branchId: 'another-branch', branchVersion: before.branch.branchVersion } })).rejects.toMatchObject({ code: 'RESYNC_REQUIRED' });
+      branchId: 'another-branch', branchVersion: before.branch.branchVersion } })).rejects.toMatchObject({ code: 'SESSION_BRANCH_CONFLICT' });
     expect(manager.getLeafId()).toBe(leaf);
     const reverted = await harness.worker.operation({ type: 'branch', request: { action: 'revert', messageId: target.messageId,
       branchId: before.branch.branchId, branchVersion: before.branch.branchVersion } });
     if (reverted.type !== 'branch') throw new Error('Native branch response is required');
     await expect(harness.worker.operation({ type: 'branch', request: { action: 'restore', branchId: before.branch.branchId,
-      branchVersion: before.branch.branchVersion } })).rejects.toMatchObject({ code: 'RESYNC_REQUIRED' });
+      branchVersion: before.branch.branchVersion } })).rejects.toMatchObject({ code: 'SESSION_BRANCH_CONFLICT' });
     const restored = await harness.worker.operation({ type: 'branch', request: { action: 'restore', branchId: reverted.result.branch.branchId,
       branchVersion: reverted.result.branch.branchVersion } });
     if (restored.type !== 'branch') throw new Error('Native restore response is required');
@@ -397,7 +397,7 @@ test('native branch CAS rejects stale owner/version and redo expires after a new
       if (history.type !== 'history') throw new Error('Native history response is required');
       expect(history.history.branch.revert).toBeUndefined();
       await expect(harness.worker.operation({ type: 'branch', request: { action: 'restore', branchId: history.history.branch.branchId,
-        branchVersion: history.history.branch.branchVersion } })).rejects.toMatchObject({ code: 'RESYNC_REQUIRED' });
+        branchVersion: history.history.branch.branchVersion } })).rejects.toMatchObject({ code: 'SESSION_BRANCH_CONFLICT' });
     } finally { unsubscribe(); }
     expect(harness.fatal()).toBe(false);
   } finally { await harness.close(); }
