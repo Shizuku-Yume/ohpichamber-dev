@@ -119,6 +119,14 @@ The inherited backend lifecycle preflight remains only for unmigrated legacy
 consumers; its presence is not an OMP readiness signal. Packaged Bun/Agent Service
 staging and final lifecycle/proxy/config/auth retirement remain Task 17 blockers.
 
+The shared production startup pipeline no longer bootstraps an OpenCode process
+or schedules legacy API detection. It registers retained Host capabilities,
+publishes the listener and Git credential-helper endpoint, attaches shutdown
+handlers, then starts the supervised Bun Agent Service. Its canonical readiness
+is independent of the inherited legacy lifecycle state. OpenCode packaging and
+explicit legacy controls remain retirement blockers; startup is not release
+certification for those consumers or for packaged Bun staging.
+
 ## Main Files
 
 | File | Purpose |

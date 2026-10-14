@@ -12,7 +12,7 @@ This package owns the browser UI build, the Host Gateway HTTP and WebSocket serv
 
 OpenChamber's retained Host Gateway infrastructure is split between the dedicated `server/lib/host/` modules and the OpenCode integration directory; the extracted Host owner is documented in [`server/lib/host/DOCUMENTATION.md`](server/lib/host/DOCUMENTATION.md). OpenCode proxy routes and process lifecycle management remain scheduled for retirement in favor of the OMP Agent Service and Canonical API (`/api/agent/v1`).
 
-M1 adds Host-composed canonical health, readiness, capabilities, and explicit credential preflight. The absent Agent Service stays unavailable regardless of inherited OpenCode readiness. Preflight reads/imports/stages no credentials, and actual SDK handoff remains required in task22; the exact request/result and retained-surface behavior are documented in the Host module guide above. Private Node Host verification covered status, authentication, origin validation and use-time enterprise refusal without legacy credential calls.
+Production startup now starts the supervised Bun OMP Agent Service after the Host listener, Git credential-helper publication and shutdown handlers are ready. No OpenCode binary is required or automatically started. Canonical readiness is `/api/agent/v1/ready`; startup failure leaves canonical operations unavailable, without an alternate engine. Explicit legacy proxy/config/lifecycle controls still await caller retirement, and packaged Bun/service/native dependency staging and real Web/Electron release acceptance remain unverified. Credential handoff is explicit and private; startup never imports credentials.
 
 Full project overview, screenshots, and architecture documents live in the repository root and `.workflow/omp-migration/`.
 
@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/openchamber/openchamber/main/script
 
 Or install manually: `bun add -g @openchamber/web` (or npm, pnpm, yarn).
 
-> **Prerequisites:** [OpenCode CLI](https://opencode.ai) matching the pinned baseline, Node.js 24.14+.
+> **Runtime prerequisites:** Node.js 24.14+ for the Host, Bun 1.3.14+ on PATH for the supervised Agent Service, and built Agent Service entries with their installed pinned SDK/native dependencies. An OpenCode CLI is not a startup prerequisite. The upstream installer command above is inherited distribution guidance, not certification of an OMP-packaged release.
 
 ### Monorepo development scripts
 
@@ -66,20 +66,16 @@ openchamber connect-url --port 3000  # Add this server to OpenChamber Desktop
 openchamber connect-url --server http://host:3000 --qr
 openchamber connect-url --port 3000 --qr
 openchamber logs                     # Follow latest instance logs
-OPENCODE_PORT=4096 OPENCODE_SKIP_START=true openchamber                    # Connect to external OpenCode server
-OPENCODE_HOST=https://myhost:4096 OPENCODE_SKIP_START=true openchamber  # Connect via custom host/HTTPS
 openchamber stop                     # Stop server
 openchamber update                   # Update to latest version
 ```
 
 `startup enable` snapshots your current environment into the native service so startup behaves like you launched `openchamber` from the same shell. This preserves provider tokens, PATH, SSH agent settings, and other CLI auth/config env vars. Use `--no-env-snapshot` for a minimal service env.
 
-When OpenChamber launches the local OpenCode server, it also registers a native
-`openchamber` agent tool for project, session, and scheduled-task orchestration.
-The tool is not injected when connecting to an external OpenCode server.
-Behavior settings can optionally inject a managed system-prompt optimizer on
-the next OpenCode restart. It is disabled by default and is not available for
-external OpenCode servers.
+The canonical Bun workers invoke retained Host capabilities through the private
+Host Action boundary. OpenCode tool injection, managed prompt optimizer and
+explicit restart/config controls are inherited migration blockers, not current
+automatic startup behavior or fallback engines.
 
 ### Tunnel behavior notes
 
@@ -123,19 +119,18 @@ openchamber serve --lan --port 3000 --ui-password your-password
 Generating a client token does not automatically password-protect the hosted browser UI. `--ui-password` protects browser access; the client token lets another OpenChamber app connect to this server.
 
 <details>
-<summary>Connect to external OpenCode server</summary>
+<summary>Host environment and retained legacy controls</summary>
 
-```bash
-OPENCODE_PORT=4096 OPENCODE_SKIP_START=true openchamber
-OPENCODE_HOST=https://myhost:4096 OPENCODE_SKIP_START=true openchamber
-```
+The Host starts the OMP Agent Service automatically. OpenCode environment settings
+below are retained only for explicit unmigrated legacy controls; they neither
+select the canonical engine nor start an OpenCode server at production boot.
 
 | Variable | Description |
 |----------|-------------|
 | `OPENCODE_HOST` | Full base URL of external server (overrides `OPENCODE_PORT`) |
 | `OPENCODE_PORT` | Port of external server |
-| `OPENCODE_SKIP_START` | Skip starting embedded OpenCode server |
-| `OPENCHAMBER_OPENCODE_HOSTNAME` | Bind hostname for managed OpenCode server (default: `127.0.0.1`, use `0.0.0.0` for LAN/remote access. trusted networks only). Invalid values are rejected with an error and fall back to loopback |
+| `OPENCODE_SKIP_START` | Retained legacy lifecycle setting; automatic OpenCode startup is retired |
+| `OPENCHAMBER_OPENCODE_HOSTNAME` | Retained explicit legacy managed-server bind setting; not the Host or Agent Service bind address |
 | `OPENCHAMBER_HOST` | Bind hostname for the OpenChamber web server (default: `127.0.0.1`; use `0.0.0.0` for LAN/remote access. trusted networks only) |
 | `OPENCHAMBER_VERBOSE_REQUEST_LOGS` | Set to `true` to log every HTTP request; disabled by default to keep user logs small |
 | `OPENCHAMBER_GITLAB_CLIENT_ID` | OAuth application ID used for GitLab device flow. Overrides the built-in application, which covers `gitlab.com` only; a self-managed instance needs its own. Personal access token and `glab` authentication remain available without it. |
@@ -148,13 +143,15 @@ OPENCODE_HOST=https://myhost:4096 OPENCODE_SKIP_START=true openchamber
 </details>
 
 <details>
-<summary>Bind managed OpenCode to LAN / Tailscale</summary>
+<summary>Bind the Host Gateway to LAN / Tailscale</summary>
 
 ```bash
-OPENCHAMBER_OPENCODE_HOSTNAME=0.0.0.0 openchamber --port 3000
+openchamber serve --host 0.0.0.0 --port 3000 --ui-password your-password
 ```
 
-**Security note:** binding to `0.0.0.0` exposes the server on all network interfaces. use only on trusted networks and protect with firewall rules or `--ui-password`.
+The Agent Service stays private on loopback behind the authenticated Host. Protect
+network exposure with UI authentication and appropriate firewall rules; enterprise
+network policy still applies.
 
 </details>
 
@@ -206,28 +203,14 @@ openchamber stop        # Stop background server
 <details>
 <summary>systemd service (VPN / LAN access)</summary>
 
-Use `--foreground` to keep the CLI process alive so systemd (or any other process manager) can track and restart it. Combine with `OPENCODE_HOST` to connect to an OpenCode instance running as a separate service.
-
-**`~/.config/systemd/user/opencode.service`**
-```ini
-[Unit]
-Description=OpenCode Server
-
-[Service]
-Type=simple
-ExecStart=opencode serve --port 4095
-Environment="PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/YOU/.local/bin:/home/YOU/.npm-global/bin:/usr/local/bin:/usr/bin:/bin"
-Environment=SSH_AUTH_SOCK=%t/ssh-agent.socket
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=default.target
-```
+Use `--foreground` to keep the Node Host in-process so systemd (or another process
+manager) can track and restart it. The Host supervises the Bun Agent Service;
+there is no separate OpenCode service dependency. Ensure Bun and the built service
+dependencies are installed and reachable in the service environment.
 
 > **Why set `PATH` and `SSH_AUTH_SOCK`?**
 > systemd user services start with a minimal environment. no shell profile is sourced.
-> Without an explicit `PATH`, OpenCode won't find tools installed via Homebrew, npm, or `~/.local/bin`.
+> Without an explicit `PATH`, Bun and tools installed via Homebrew, npm, or `~/.local/bin` may be unavailable to the service and its shells.
 > Without `SSH_AUTH_SOCK`, git operations over SSH (push, pull, clone) will fail.
 > `%t` expands to `$XDG_RUNTIME_DIR` (e.g. `/run/user/1000`), where most SSH agents write their socket.
 
@@ -235,13 +218,12 @@ WantedBy=default.target
 ```ini
 [Unit]
 Description=OpenChamber Web Server
-After=opencode.service
 
 [Service]
 Type=simple
 ExecStart=openchamber serve --port 3000 --host 0.0.0.0 --ui-password your-password --foreground
-Environment="OPENCODE_HOST=http://localhost:4095"
-Environment="OPENCODE_SKIP_START=true"
+Environment="PATH=/home/YOU/.bun/bin:/home/YOU/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment=SSH_AUTH_SOCK=%t/ssh-agent.socket
 Restart=on-failure
 RestartSec=5
 
@@ -251,7 +233,7 @@ WantedBy=default.target
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable --now opencode openchamber
+systemctl --user enable --now openchamber
 ```
 
 `--host 0.0.0.0` is required to listen on all interfaces (the default is `127.0.0.1`). Use `--host <ip>` or `OPENCHAMBER_HOST=<ip>` to bind to a specific interface instead.

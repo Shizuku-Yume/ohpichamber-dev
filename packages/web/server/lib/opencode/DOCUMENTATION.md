@@ -410,7 +410,6 @@ ConPTY or Console Window Host behavior.
   - `setDetectedOpenCodeApiPrefix()`
   - `buildOpenCodeUrl(path, prefixOverride?)`
   - `ensureOpenCodeApiPrefix()`
-  - `scheduleOpenCodeApiDetection()`
 
 ## Public exports (settings-runtime.js)
 - `createSettingsRuntime(dependencies)`: creates settings lifecycle runtime for read/migrate/persist concerns.
@@ -795,13 +794,14 @@ headers }` or v1 `{ npm, options }`. The stored entry is always a
   - `initialize(app, initialPort, hasUiPassword)`
 
 ## Public exports (startup-pipeline-runtime.js)
-- `createStartupPipelineRuntime(dependencies)`: creates runtime for terminal wiring, proxy/bootstrap scheduling, static route registration, and server startup/listen flow.
+- `createStartupPipelineRuntime(dependencies)`: creates runtime for retained terminal/dictation/message-stream wiring, proxy and static route registration, Host listener startup, and canonical Agent Service startup. It no longer schedules legacy detection or bootstraps OpenCode.
 - Returned API:
   - `run(options)`
 
-The pipeline binds the OpenChamber listener and publishes its active port
-before starting managed OpenCode. The managed custom tool therefore receives
-an authoritative loopback callback URL even when OpenChamber binds port `0`.
+The pipeline binds the Host listener and publishes its active port and Git
+credential-helper endpoint before attaching process handlers and starting the
+supervised Bun Agent Service. Port `0` therefore has an authoritative callback
+endpoint before any canonical worker shell starts.
 
 ## Public exports (openchamber-routes.js)
 Browser completion checks use `appType=web&updateStatus=true` to stay on the

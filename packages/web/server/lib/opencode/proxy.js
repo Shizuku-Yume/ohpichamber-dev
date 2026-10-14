@@ -77,13 +77,12 @@ export const createOpenCodeProxyAgent = (target) => (
 /**
  * Lazily resolves the proxy agent, memoized per scheme.
  *
- * The scheme cannot be decided at registration time: `setupProxy()` runs before
- * `bootstrapOpenCodeAtStartup()` (startup-pipeline-runtime.js), so on a cold
- * start `state.openCodePort` is still null, `buildOpenCodeUrl()` throws
- * (network-runtime.js) and `resolveProxyTarget()` falls back to the http
- * loopback default. An external server configured over https via
- * `OPENCODE_HOST` only becomes visible on `state.openCodeBaseUrl` after
- * bootstrap completes.
+ * The scheme cannot be decided at registration time: production startup no
+ * longer bootstraps OpenCode, so on a cold start `state.openCodePort` is null,
+ * `buildOpenCodeUrl()` throws (network-runtime.js), and `resolveProxyTarget()`
+ * falls back to the http loopback default. Retained explicit legacy lifecycle
+ * controls may later set an external https `state.openCodeBaseUrl`; resolve the
+ * scheme at request time rather than freezing the cold registration state.
  *
  * http-proxy-middleware rebuilds its per-request options with
  * `Object.assign({}, this.proxyOptions)` inside `prepareProxyRequest`, which

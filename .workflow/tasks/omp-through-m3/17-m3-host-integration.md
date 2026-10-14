@@ -79,3 +79,54 @@ intentional retained lifecycle version validation. Its unused compatibility and
 installer dependency pass-through observation was removed from
 `feature-routes-runtime.js`. Generated bundles are not tracked in this worktree;
 coordinator rebuild/acceptance remains unperformed rather than silently claimed.
+
+## Production startup cutover (2026-10-14)
+
+Continues `374ab4a23` with canonical-only automatic agent startup. The shared
+production pipeline no longer invokes `bootstrapOpenCodeAtStartup` or schedules
+legacy API detection. The unused entrypoint bootstrap/health-monitor wrappers,
+interval constant and network detection no-op are removed. Terminal, dictation,
+message-stream, proxy/static route registration and listener/tunnel startup stay
+in place. Git credential-helper publication still precedes process handlers and
+Agent Service startup. The existing supervisor validates its private
+`/api/agent/v1/ready` response with the internal secret before admitting requests;
+the canonical gateway returns unavailable until that real owner is ready.
+
+Web CLI `serve` no longer discovers/requires an OpenCode executable, writes
+`OPENCODE_BINARY`, or translates the legacy skip-start variable into daemon
+settings. Foreground remains in-process; daemon runtime selection, port/exposure
+policy, auth, log/PID/instance handling and listener-ready IPC remain unchanged.
+Startup-service generation no longer discovers a binary or overrides the existing
+injected-environment filter to persist it. User-authored environment snapshots
+otherwise retain their existing semantics. The now-unused executable helper is
+deleted. CLI help no longer advertises an OpenCode startup engine.
+
+Surface decisions:
+- Web/PWA: production Node Host listener and retained services start without an
+  OpenCode prerequisite; only the Bun Agent Service starts automatically.
+- Electron: identical pipeline inside main, no added Host sidecar or native IPC;
+  separate supervised Bun Agent Service is the only automatic agent process.
+- Hosted mobile: its selected remote Host uses this same startup behavior.
+- Capacitor: no local startup process; remote Host behavior changes as above,
+  with unchanged Origin/auth policy and connection selection/recovery.
+
+This supersedes the Web CLI prerequisite and production-bootstrap blockers listed
+in the preceding lane. Remaining blockers are explicit legacy lifecycle/reload,
+proxy/config/auth/credential import and upgrade consumers; Guest/sidebar/agent and
+settings UI migrations; isolated-space OpenCode archive import; Electron staging
+of Bun/service/worker/native dependencies; final Web/Electron OpenCode-absent
+acceptance and Task 18. Legacy status fields/health routes still describe their
+unmigrated owner, not canonical readiness. Removing automatic startup does not
+claim those legacy operations work without their engine or complete Task 17.
+
+Startup-order and injected-credential-environment regressions were updated, not
+executed. No implementation checks ran; coordinator owns the focused suites,
+type-check/lint/build/dead-code and real Web/Electron acceptance after landing.
+
+Discovery also records retained Electron SSH remote-management prerequisites:
+`ssh-manager.mjs` still requires remote OpenCode, and the dev launcher still
+advises OpenCode CLI staging. These are separate retirement lanes from local
+production startup. The embedded controller's unused `isReady` and managed
+preflight exposure still describe legacy state; canonical readiness remains
+`/api/agent/v1/ready`. Unused startup/feature readiness dependency pass-throughs
+and comments implying automatic legacy bootstrap were removed in this lane.

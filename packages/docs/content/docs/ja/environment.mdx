@@ -3,6 +3,8 @@ title: 環境変数
 description: 環境変数で OpenChamber と OpenCode 連携を設定します。
 ---
 
+> OhPiChamber の本番起動では Node Host Gateway と監視対象の Bun OMP Agent Service を使用します。OpenCode の自動起動や CLI の前提条件はありません。以下の OpenCode に関する記述は残存する明示的なレガシー制御のための引き継ぎドキュメントであり、標準の起動構成ではありません。Agent の可用性は `/api/agent/v1/ready` です。
+
 # 環境変数
 
 OpenChamber は起動時にこれらの環境変数を読み取ります。スタートアップサービスでは、`openchamber startup enable` がデフォルトで現在の環境をスナップショットするため、サービスに使わせたい変数を変更した後は再実行してください。

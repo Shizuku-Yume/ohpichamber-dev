@@ -3,6 +3,8 @@ title: Variáveis de ambiente
 description: Configure a integração do OpenChamber e do OpenCode com variáveis de ambiente.
 ---
 
+> A inicialização de produção do OhPiChamber usa o Node Host Gateway e o serviço supervisionado Bun OMP Agent Service; não há inicialização automática do OpenCode nem pré-requisito de CLI; as orientações do OpenCode abaixo são documentação herdada para os controles legados explícitos restantes, não a configuração canônica de lançamento. A disponibilidade do agente é `/api/agent/v1/ready`.
+
 # Variáveis de ambiente
 
 O OpenChamber lê estas variáveis na inicialização. Para serviços de inicialização, `openchamber startup enable` salva por padrão um snapshot do ambiente atual, então execute de novo após mudar variáveis que o serviço deve usar.

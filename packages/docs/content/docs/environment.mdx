@@ -3,6 +3,8 @@ title: Environment Variables
 description: Configure OpenChamber and OpenCode integration with environment variables.
 ---
 
+> OhPiChamber production startup uses Node Host Gateway and supervised Bun OMP Agent Service; no automatic OpenCode startup or CLI prerequisite; OpenCode guidance below is inherited documentation for remaining explicit legacy controls, not canonical launch setup. Agent availability is `/api/agent/v1/ready`.
+
 # Environment Variables
 
 OpenChamber reads these environment variables at startup. For startup services, `openchamber startup enable` snapshots the current environment by default, so rerun it after changing variables you want the service to use. Variables OpenChamber itself set in the shell you run it from, such as the desktop app's terminal or an agent's shell, stay out of the service; your own exports carry over from there too, unless you re-export a name OpenChamber already set in that shell, which a regular terminal avoids.

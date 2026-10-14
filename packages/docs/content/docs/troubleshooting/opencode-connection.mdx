@@ -3,6 +3,8 @@ title: OpenCode Connection
 description: Fix OpenChamber not connecting to its OpenCode server.
 ---
 
+> OhPiChamber production startup uses Node Host Gateway and supervised Bun OMP Agent Service; no automatic OpenCode startup or CLI prerequisite; OpenCode guidance below is inherited documentation for remaining explicit legacy controls, not canonical launch setup. Agent availability is `/api/agent/v1/ready`.
+
 # OpenCode Connection
 
 If OpenChamber loads but never gets past "OpenCode is restarting," or chat won't respond, the server it talks to isn't reachable. Work through these.

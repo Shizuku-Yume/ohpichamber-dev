@@ -3,6 +3,8 @@ title: Serveur OpenCode
 description: Connectez OpenChamber à un serveur OpenCode local ou distant.
 ---
 
+> Le démarrage en production d’OhPiChamber utilise Node Host Gateway et le service supervisé Bun OMP Agent Service ; aucun démarrage automatique d’OpenCode ni prérequis CLI n’est requis ; les instructions OpenCode ci-dessous constituent une documentation héritée pour les contrôles historiques explicites restants, et non la configuration canonique de lancement. La disponibilité de l’agent est `/api/agent/v1/ready`.
+
 # Serveur OpenCode
 
 OpenChamber fonctionne par-dessus un serveur OpenCode. Par défaut, il en démarre un pour vous, donc vous n’avez rien à faire. Vous n’avez besoin de cette page que si vous voulez pointer OpenChamber vers un serveur que vous exécutez déjà, ou gérer celui qu’il démarre.

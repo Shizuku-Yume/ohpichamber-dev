@@ -30,8 +30,6 @@ export const createStartupPipelineRuntime = (dependencies) => {
       terminalMaxRebindsPerWindow,
       environmentRuntime = null,
       setupProxy,
-      scheduleOpenCodeApiDetection,
-      bootstrapOpenCodeAtStartup,
       startAgentService,
       onListenerReady = null,
       staticRoutesRuntime,
@@ -134,8 +132,6 @@ export const createStartupPipelineRuntime = (dependencies) => {
     if (onListenerReady) await onListenerReady();
     serverStartupRuntime.attachProcessHandlers({ attachSignals });
     void startAgentService();
-    scheduleOpenCodeApiDetection();
-    void bootstrapOpenCodeAtStartup();
 
     return {
       terminalRuntime,

@@ -102,9 +102,6 @@ export const createOpenCodeNetworkRuntime = (deps) => {
 
   const ensureOpenCodeApiPrefix = () => detectOpenCodeApiPrefix();
 
-  const scheduleOpenCodeApiDetection = () => {
-    return;
-  };
 
   return {
     waitForReady,
@@ -112,6 +109,5 @@ export const createOpenCodeNetworkRuntime = (deps) => {
     setDetectedOpenCodeApiPrefix,
     buildOpenCodeUrl,
     ensureOpenCodeApiPrefix,
-    scheduleOpenCodeApiDetection,
   };
 };

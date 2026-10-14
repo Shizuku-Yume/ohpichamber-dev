@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { createStartupPipelineRuntime } from './startup-pipeline-runtime.js';
 
 describe('startup pipeline runtime', () => {
-  it('starts the Agent Service after listener publication and signal wiring, independently of legacy bootstrap', async () => {
+  it('starts only the Agent Service after Host capabilities, listener publication and signal wiring', async () => {
     const order = [];
     const runtime = createStartupPipelineRuntime({
-      createTerminalRuntime: () => ({}),
-      createDictationRuntime: () => ({}),
-      createMessageStreamWsRuntime: () => ({}),
+      createTerminalRuntime: () => { order.push('terminal'); return {}; },
+      createDictationRuntime: () => { order.push('dictation'); return {}; },
+      createMessageStreamWsRuntime: () => { order.push('events'); return {}; },
       createServerStartupRuntime: () => ({
         resolveBindHost: () => '127.0.0.1',
         startListeningAndMaybeTunnel: async () => {
@@ -27,15 +27,14 @@ describe('startup pipeline runtime', () => {
       tunnelRuntimeContext: {
         setActivePort: (port) => order.push(`port:${port}`),
       },
-      scheduleOpenCodeApiDetection: () => order.push('detect'),
-      bootstrapOpenCodeAtStartup: () => order.push('bootstrap'),
       startAgentService: () => order.push('agent'),
+      onListenerReady: () => order.push('git'),
       process: {},
       crypto: {},
       server: {},
       attachSignals: false,
     });
 
-    expect(order).toEqual(['listen', 'port:3901', 'handlers', 'agent', 'detect', 'bootstrap']);
+    expect(order).toEqual(['terminal', 'dictation', 'events', 'listen', 'port:3901', 'git', 'handlers', 'agent']);
   });
 });

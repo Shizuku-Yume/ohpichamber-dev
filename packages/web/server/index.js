@@ -173,7 +173,6 @@ const DESKTOP_NOTIFY_PREFIX = '[OpenChamberDesktopNotify] ';
 const uiNotificationClients = new Set();
 const uiNotificationWsClients = new Set();
 const uiOpenChamberEventClients = new Set();
-const HEALTH_CHECK_INTERVAL = 15000;
 const SHUTDOWN_TIMEOUT = 10000;
 const MODELS_DEV_API_URL = 'https://models.dev/api.json';
 const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000;
@@ -890,7 +889,6 @@ const normalizeApiPrefix = (...args) => openCodeNetworkRuntime.normalizeApiPrefi
 const setDetectedOpenCodeApiPrefix = (...args) => openCodeNetworkRuntime.setDetectedOpenCodeApiPrefix(...args);
 const buildOpenCodeUrl = (...args) => openCodeNetworkRuntime.buildOpenCodeUrl(...args);
 const ensureOpenCodeApiPrefix = (...args) => openCodeNetworkRuntime.ensureOpenCodeApiPrefix(...args);
-const scheduleOpenCodeApiDetection = (...args) => openCodeNetworkRuntime.scheduleOpenCodeApiDetection(...args);
 
 configureAgentService(hostAgentRuntime.service, {
   resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
@@ -1493,7 +1491,6 @@ const restartOpenCode = (...args) => openCodeLifecycleRuntime.restartOpenCode(..
 const waitForOpenCodeReady = (...args) => openCodeLifecycleRuntime.waitForOpenCodeReady(...args);
 const waitForAgentPresence = (...args) => openCodeLifecycleRuntime.waitForAgentPresence(...args);
 const refreshOpenCodeAfterConfigChange = (...args) => openCodeLifecycleRuntime.refreshOpenCodeAfterConfigChange(...args);
-const startHealthMonitoring = () => openCodeLifecycleRuntime.startHealthMonitoring(HEALTH_CHECK_INTERVAL);
 const triggerHealthCheck = () => openCodeLifecycleRuntime.triggerHealthCheck();
 const scheduledTasksRuntime = createScheduledTasksRuntime({
   projectConfigRuntime,
@@ -1786,13 +1783,6 @@ const startAgentService = async () => {
   await messageQueueRuntime.start();
   await scheduledTasksRuntime.start();
   return hostAgentRuntime.service.getState();
-};
-const bootstrapOpenCodeAtStartup = async (...args) => {
-  await openCodeLifecycleRuntime.bootstrapOpenCodeAtStartup(...args);
-  scheduleOpenCodeApiDetection();
-  if (openCodeLifecycleState.openCodeProcess && !openCodeLifecycleState.isExternalOpenCode) {
-    startHealthMonitoring();
-  }
 };
 const killProcessOnPort = (...args) => openCodeLifecycleRuntime.killProcessOnPort(...args);
 const waitForPortRelease = (...args) => openCodeLifecycleRuntime.waitForPortRelease(...args);
@@ -2473,7 +2463,6 @@ async function main(options = {}) {
     scheduledTaskService,
     openChamberSessionService,
     openChamberControlService,
-    waitForOpenCodeReady,
     emitSessionCreatedEvent,
     getOpenChamberEventClients: () => uiOpenChamberEventClients,
     writeSseEvent,
@@ -2514,19 +2503,15 @@ async function main(options = {}) {
     terminalMaxRebindsPerWindow: TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW,
     environmentRuntime,
     setupProxy,
-    scheduleOpenCodeApiDetection,
-    bootstrapOpenCodeAtStartup,
     startAgentService: () => startAgentService().catch((error) => {
       console.error('Agent Service startup failed:', error instanceof Error ? error.message : String(error));
     }),
-    // Git's credential helper reaches the server through a file that names
-    // the port, so it is written once the port is known and before OpenCode,
-    // whose shells will use it, starts.
+    // Publish Git's credential-helper endpoint after the Host port is known
+    // and before the Agent Service starts shells that may use it.
     onListenerReady: async () => {
       try { await featureRoutesRuntime.publishRepositoryCredentialEndpoint(); }
       catch (error) { console.warn('Git credential helper endpoint was not published:', error instanceof Error ? error.message : String(error)); }
     },
-    triggerHealthCheck,
     staticRoutesRuntime,
     process,
     crypto,

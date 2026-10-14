@@ -19,7 +19,7 @@ Command modules implement user-facing commands and preserve output contracts acr
 
 - `commands-serve.js`
   - Implements `openchamber serve`.
-  - Owns OpenCode CLI checks, port resolution, log rotation, PID/instance registry writes, foreground/background server launch, startup summaries, and foreground shutdown behavior.
+  - Owns port resolution, log rotation, PID/instance registry writes, foreground/background Host launch, startup summaries, and foreground shutdown behavior. It does not discover or require an OpenCode executable; the Host supervises the Bun Agent Service and canonical readiness is reported through `/api/agent/v1`.
 
 - `commands-lifecycle.js`
   - Implements `openchamber stop` and `openchamber restart`.
@@ -122,9 +122,6 @@ These modules hold reusable, non-presentational logic for commands.
 
 - `cli-log-files.js`
   - Log rotation, tail reads, and file-follow streaming.
-
-- `cli-executables.js`
-  - Executable path resolution and PATH lookup helpers.
 
 - `cli-startup.js`
   - Native startup service detection, install/uninstall/status helpers, and platform-specific startup command execution.

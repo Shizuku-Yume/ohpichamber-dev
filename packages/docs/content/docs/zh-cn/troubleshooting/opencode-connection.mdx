@@ -3,6 +3,8 @@ title: OpenCode 连接
 description: 修复 OpenChamber 无法连接到它的 OpenCode 服务器的问题。
 ---
 
+> OhPiChamber 生产环境启动使用 Node Host Gateway 与受监管的 Bun OMP Agent Service；系统不包含 OpenCode 自动启动或 CLI 前置依赖；下文的 OpenCode 指南属于针对保留的显式旧版控制项的继承文档，并非标准启动配置。Agent 可用性端点为 `/api/agent/v1/ready`。
+
 # OpenCode 连接
 
 如果 OpenChamber 加载了但始终无法越过 “OpenCode is restarting”，或者聊天没有响应，那就是它所通信的服务器无法访问。请逐项排查。

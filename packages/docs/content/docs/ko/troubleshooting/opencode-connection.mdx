@@ -3,6 +3,8 @@ title: OpenCode 연결
 description: OpenChamber가 OpenCode 서버에 연결되지 않는 문제를 해결하세요.
 ---
 
+> OhPiChamber 프로덕션 시작은 Node Host Gateway와 감독되는 Bun OMP Agent Service를 사용합니다. OpenCode 자동 시작이나 CLI 필수 구성 요소는 없습니다. 아래의 OpenCode 안내는 남아 있는 명시적 레거시 제어를 위한 인계 문서이며 표준 시작 구성이 아닙니다. Agent 가용성 확인은 `/api/agent/v1/ready`입니다.
+
 # OpenCode 연결
 
 OpenChamber가 로드되지만 "OpenCode is restarting"에서 넘어가지 못하거나 채팅이 응답하지 않는다면, 통신하는 서버에 접근할 수 없는 상태입니다. 다음을 차례로 확인하세요.

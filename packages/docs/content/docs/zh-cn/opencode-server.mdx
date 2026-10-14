@@ -3,6 +3,8 @@ title: OpenCode Server
 description: 将 OpenChamber 连接到本地或远程的 OpenCode 服务器。
 ---
 
+> OhPiChamber 生产环境启动使用 Node Host Gateway 与受监管的 Bun OMP Agent Service；系统不包含 OpenCode 自动启动或 CLI 前置依赖；下文的 OpenCode 指南属于针对保留的显式旧版控制项的继承文档，并非标准启动配置。Agent 可用性端点为 `/api/agent/v1/ready`。
+
 # OpenCode Server
 
 OpenChamber 运行在 OpenCode 服务器之上。默认情况下，它会为你启动一个，所以你无需做任何事。只有当你想让 OpenChamber 指向一个你已经运行的服务器，或者管理它所启动的服务器时，才需要本页内容。

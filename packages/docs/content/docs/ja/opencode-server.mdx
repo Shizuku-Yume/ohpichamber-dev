@@ -3,6 +3,8 @@ title: OpenCode サーバー
 description: OpenChamber をローカルまたはリモートの OpenCode サーバーに接続します。
 ---
 
+> OhPiChamber の本番起動では Node Host Gateway と監視対象の Bun OMP Agent Service を使用します。OpenCode の自動起動や CLI の前提条件はありません。以下の OpenCode に関する記述は残存する明示的なレガシー制御のための引き継ぎドキュメントであり、標準の起動構成ではありません。Agent の可用性は `/api/agent/v1/ready` です。
+
 # OpenCode サーバー
 
 OpenChamber は OpenCode サーバーの上で動作します。デフォルトでは OpenChamber がサーバーを起動するため、何もする必要はありません。このページが必要なのは、すでに実行しているサーバーに OpenChamber を向けたい場合、または OpenChamber が起動するサーバーを管理したい場合だけです。

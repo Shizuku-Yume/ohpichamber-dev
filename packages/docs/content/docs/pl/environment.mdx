@@ -3,6 +3,8 @@ title: Zmienne środowiskowe
 description: Skonfiguruj integrację OpenChamber i OpenCode za pomocą zmiennych środowiskowych.
 ---
 
+> Uruchomienie produkcyjne OhPiChamber korzysta z Node Host Gateway oraz nadzorowanej usługi Bun OMP Agent Service; nie ma automatycznego uruchamiania OpenCode ani wymagań wstępnych dotyczących CLI; poniższe instrukcje dotyczące OpenCode to odziedziczona dokumentacja dla pozostałych jawnych funkcji legacy, a nie kanoniczna konfiguracja startowa. Dostępność agenta jest sprawdzana pod adresem `/api/agent/v1/ready`.
+
 # Zmienne środowiskowe
 
 OpenChamber odczytuje te zmienne przy starcie. Dla usług startowych `openchamber startup enable` domyślnie zapisuje snapshot bieżącego środowiska, więc uruchom tę komendę ponownie po zmianie zmiennych, których ma używać usługa.

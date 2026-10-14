@@ -3,6 +3,8 @@ title: 环境变量
 description: 使用环境变量配置 OpenChamber 和 OpenCode 集成。
 ---
 
+> OhPiChamber 生产环境启动使用 Node Host Gateway 与受监管的 Bun OMP Agent Service；系统不包含 OpenCode 自动启动或 CLI 前置依赖；下文的 OpenCode 指南属于针对保留的显式旧版控制项的继承文档，并非标准启动配置。Agent 可用性端点为 `/api/agent/v1/ready`。
+
 # 环境变量
 
 OpenChamber 会在启动时读取这些变量。对于开机启动服务，`openchamber startup enable` 默认会保存当前环境的 snapshot，所以如果要让服务使用新的变量，请重新运行它。

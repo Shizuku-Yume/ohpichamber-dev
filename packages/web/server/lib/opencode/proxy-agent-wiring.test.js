@@ -100,12 +100,11 @@ describe('OpenCode API proxy agent wiring', () => {
     expect(options.agent).toBe(options.agent);
   });
 
-  // Production ordering: startup-pipeline-runtime.js calls setupProxy() before
-  // bootstrapOpenCodeAtStartup(), so at registration the port is null,
-  // buildOpenCodeUrl throws, and resolveProxyTarget() falls back to the http
-  // loopback default. An external https server configured via OPENCODE_HOST is
-  // only visible after bootstrap, so the agent must be resolved lazily.
-  it('resolves an https agent after bootstrap even though registration ran cold', () => {
+  // Production registers the retained legacy proxy cold without bootstrapping
+  // OpenCode. Explicit legacy lifecycle controls may later publish an external
+  // https target, so the agent must be resolved lazily rather than fixed to
+  // the initial http loopback fallback.
+  it('resolves an https agent after target initialization even though registration ran cold', () => {
     const state = coldState();
     registerOpenCodeProxy(createStubApp(), createStubDeps(state));
 

@@ -80,6 +80,7 @@ describe('macOS startup service', () => {
       OPENCHAMBER_SKIP_API_COMPRESSION: 'true',
       OPENCHAMBER_UI_PASSWORD: 'desktop-password',
       OPENCODE_SERVER_PASSWORD: 'managed-password',
+      OPENCODE_BINARY: '/injected/retired-opencode',
     };
     const theirs = {
       OPENCODE_HOST: 'http://opencode.lan:4096',
@@ -102,7 +103,7 @@ describe('macOS startup service', () => {
 
       expect(() => enableStartupService({ port: 3000, host: '0.0.0.0', uiPassword: 'service-password' })).toThrow(stopBeforeLaunchctl);
       const plist = fs.readFileSync(plistPath, 'utf8');
-      for (const key of ['OPENCHAMBER_RUNTIME', 'OPENCHAMBER_SKIP_API_COMPRESSION', 'OPENCODE_SERVER_PASSWORD', INJECTED_ENV_KEY]) {
+      for (const key of ['OPENCHAMBER_RUNTIME', 'OPENCHAMBER_SKIP_API_COMPRESSION', 'OPENCODE_SERVER_PASSWORD', 'OPENCODE_BINARY', INJECTED_ENV_KEY]) {
         expect(plist).not.toContain(`<key>${key}</key>`);
       }
       for (const key of Object.keys(theirs)) {

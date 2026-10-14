@@ -249,7 +249,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       scheduledTaskService,
       openChamberSessionService,
       openChamberControlService,
-      waitForOpenCodeReady,
       getOpenChamberEventClients,
       writeSseEvent,
       emitSessionCreatedEvent,

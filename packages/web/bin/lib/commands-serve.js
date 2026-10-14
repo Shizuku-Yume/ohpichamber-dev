@@ -27,7 +27,6 @@ const DAEMON_READY_TIMEOUT_MS = 30000;
 function createServeCommand({
   serverPath,
   bunBin,
-  checkOpenCodeCLI,
   getPreferredServerRuntime,
   setForegroundServerActive,
   setForegroundShutdown,
@@ -101,7 +100,6 @@ async function serveCommand(options) {
       }
     }
 
-    const opencodeBinary = await checkOpenCodeCLI(emitNotice);
     const preferredRuntime = getPreferredServerRuntime();
     const runtimeBin = preferredRuntime === 'bun' ? bunBin : process.execPath;
 
@@ -155,12 +153,7 @@ async function serveCommand(options) {
         );
       }
 
-      // Propagate resolved values into env before importing the server module.
-      // The binary path is left unmarked: a startup service enabled from this
-      // server's terminal wants the same OpenCode.
-      if (opencodeBinary) {
-        process.env.OPENCODE_BINARY = opencodeBinary;
-      }
+      // Propagate Host-owned settings before importing the in-process server.
       assignInjectedEnv(process.env, {
         OPENCHAMBER_UI_PASSWORD: effectiveUiPassword || undefined,
         OPENCHAMBER_HOST: effectiveHost,
@@ -283,15 +276,13 @@ async function serveCommand(options) {
       detached: true,
       windowsHide: true,
       stdio: ['ignore', logFd, logFd, 'ipc'],
-      // Same marking as the foreground path above: the server's own settings
-      // are recorded as OpenChamber's, the binary path is not.
-      env: assignInjectedEnv({ ...process.env, OPENCODE_BINARY: opencodeBinary }, {
+      // Record injected Host settings while preserving the user's environment.
+      env: assignInjectedEnv({ ...process.env }, {
         OPENCHAMBER_PORT: String(targetPort),
         OPENCHAMBER_RUNTIME: 'web',
         OPENCHAMBER_HOST: effectiveHost,
         OPENCHAMBER_UI_PASSWORD: effectiveUiPassword || undefined,
         OPENCHAMBER_API_ONLY: options.apiOnly === true ? 'true' : undefined,
-        OPENCHAMBER_SKIP_OPENCODE_START: process.env.OPENCODE_SKIP_START || undefined,
       }),
     });
 

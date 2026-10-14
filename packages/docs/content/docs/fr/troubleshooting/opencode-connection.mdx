@@ -3,6 +3,8 @@ title: Connexion à OpenCode
 description: Corrigez OpenChamber lorsqu’il ne se connecte pas à son serveur OpenCode.
 ---
 
+> Le démarrage en production d’OhPiChamber utilise Node Host Gateway et le service supervisé Bun OMP Agent Service ; aucun démarrage automatique d’OpenCode ni prérequis CLI n’est requis ; les instructions OpenCode ci-dessous constituent une documentation héritée pour les contrôles historiques explicites restants, et non la configuration canonique de lancement. La disponibilité de l’agent est `/api/agent/v1/ready`.
+
 # Connexion à OpenCode
 
 Si OpenChamber se charge mais reste bloqué sur « OpenCode redémarre », ou si le chat ne répond pas, le serveur auquel il parle n’est pas joignable. Suivez ces vérifications.
