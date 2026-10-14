@@ -5,13 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema } from '@openchamber/agent-contract';
+import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema } from '@openchamber/agent-contract';
 import type {
   AgentCatalog, AgentMutationResult, AgentServiceReady, ApprovalRequest, CanonicalEvent,
   CompletionCancelResult, CompletionResult, HistoryPage, JsonObject, MCPCatalogRead,
   MCPApplyResult, MCPOAuthResult, ModelCatalog, ModelMutationResult, ProblemCode,
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
-  QuestionRequest, Run, RuntimeSession, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck,
+  QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck,
   ShellJob, ShellOutput, ShellSnapshot, ShellStopResult, SkillExpandResult,
   SkillInstallResult, SkillsApplyResult, SkillsCatalogState, StreamInvalidated,
 } from '@openchamber/agent-contract';
@@ -26,7 +26,7 @@ import { CatalogCoordinator, CatalogCoordinatorError } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
 import { WorkspaceRoutes } from './workspace-routes.ts';
 import { ShellCoordinator } from './shell.ts';
-import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
+import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema, HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
 import type { PrivateCredentialResolveResult, PrivateCredentialHandoffResult } from '../catalogs/private-credentials.ts';
 const SessionForkRequestSchema = z.strictObject({ sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']) }).refine(input => input.mode === 'full' || input.entryId !== null, { message: 'Selected forks require an entry identity', path: ['entryId'] });
 const SessionReopenRequestSchema = HostSessionBootstrapSchema.omit({ sessionFile: true });
@@ -58,11 +58,12 @@ type ServiceResponse =
   | typeof capabilitiesResponse
   | HostNativePolicySnapshot
   | AgentServiceReady
-  | z.infer<typeof HostAuthorizationScopeSchema | typeof HostWorkspaceRegisteredSchema>
+  | z.infer<typeof HostAuthorizationScopeSchema | typeof HostWorkspaceRegisteredSchema | typeof HostSessionRelocationPreparedSchema | typeof HostSessionRelocationFinalizedSchema | typeof HostSessionRelocationPendingSchema>
   | WorkerInfo | { workers: RegisteredWorkerInfo[] }
   | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck | SessionForkResult | NativeEntryResult
   | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run }
   | SteerAck | FollowUpAck
+  | SessionBranchResult
   | MCPCatalogRead | MCPApplyResult | MCPOAuthResult
   | SkillsCatalogState | SkillsApplyResult | SkillExpandResult | SkillInstallResult
   | ModelCatalog | ProviderCatalog | AgentCatalog
@@ -358,6 +359,28 @@ export class AgentService {
         const owner = this.workspaceCatalogs.get(workspaceId);
         if (input.agentDirectoryId !== undefined && !owner.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
         respondJson(response, 200, await this.catalog.publishSources(workspaceId, input)); return;
+      }
+      const privateBranch = /^\/internal\/sessions\/([^/]+)\/branch$/.exec(url.pathname);
+      if (privateBranch && request.method === 'POST') {
+        respondJson(response, 200, await this.sessions.branch(identity(privateBranch[1]), await readBody(request, SessionBranchRequestSchema))); return;
+      }
+      const pendingRelocation = /^\/internal\/sessions\/([^/]+)\/relocation$/.exec(url.pathname);
+      if (pendingRelocation && request.method === 'GET') {
+        respondJson(response, 200, HostSessionRelocationPendingSchema.parse(this.sessions.relocation(identity(pendingRelocation[1])))); return;
+      }
+      const prepareRelocation = /^\/internal\/sessions\/([^/]+)\/relocation\/prepare$/.exec(url.pathname);
+      if (prepareRelocation && request.method === 'POST') {
+        const sessionId = identity(prepareRelocation[1]);
+        const input = await readBody(request, HostSessionRelocationPrepareSchema);
+        if (input.destination.rootSessionId !== sessionId) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity does not match the route');
+        respondJson(response, 200, HostSessionRelocationPreparedSchema.parse(await this.sessions.prepareRelocation(sessionId, input,
+          (bootstrap, launch) => this.admit(bootstrap, launch)))); return;
+      }
+      const finalizeRelocation = /^\/internal\/sessions\/([^/]+)\/relocation\/finalize$/.exec(url.pathname);
+      if (finalizeRelocation && request.method === 'POST') {
+        const input = await readBody(request, HostSessionRelocationFinalizeSchema);
+        respondJson(response, 200, HostSessionRelocationFinalizedSchema.parse(await this.sessions.finalizeRelocation(identity(finalizeRelocation[1]), input,
+          (bootstrap, launch) => this.admit(bootstrap, launch)))); return;
       }
       const privateReopen = /^\/internal\/sessions\/([^/]+)\/reopen$/.exec(url.pathname);
       if (privateReopen && request.method === 'POST') {

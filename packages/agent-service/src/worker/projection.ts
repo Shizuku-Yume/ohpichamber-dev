@@ -1,7 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
 import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, PromptAttachmentSchema, TokenUsageSchema } from '@openchamber/agent-contract';
 import type { HistoryPage, HistoryPageRequest, Message, Part, PromptAttachment, Run, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
@@ -18,6 +19,44 @@ const ReferenceSchema = z.strictObject({
   attachments: z.array(PromptAttachmentSchema),
 });
 type Reference = z.infer<typeof ReferenceSchema>;
+export const BRANCH_TYPE = 'ohpichamber.branch.v1';
+export const BranchSelectionSchema = z.strictObject({ restoreLeafId: EntityIdSchema.nullable(), revertedMessageId: EntityIdSchema.nullable() });
+export type BranchSelection = z.infer<typeof BranchSelectionSchema>;
+
+function opaqueNativeId(kind: 'message' | 'turn' | 'run', sessionId: string, entryId: string): string {
+  return `${kind}:${createHash('sha256').update(JSON.stringify([sessionId, kind, entryId])).digest('hex')}`;
+}
+
+/** References are tree-wide: selecting an ancestor must not discard its public identity. */
+function nativeReferences(manager: SessionManager): Map<string, Reference> {
+  const references = new Map<string, Reference>();
+  for (const entry of manager.getEntries()) if (entry.type === 'custom' && entry.customType === REF_TYPE) {
+    const reference = ReferenceSchema.parse(entry.data);
+    references.set(reference.nativeEntryId, reference);
+  }
+  return references;
+}
+
+export function resolveCanonicalMessage(manager: SessionManager, sessionId: string, messageId: string, selectedOnly = false): string | null {
+  const references = nativeReferences(manager);
+  for (const entry of selectedOnly ? manager.getBranch() : manager.getEntries()) {
+    if (entry.type !== 'message' || !visible(entry.message)) continue;
+    if ((references.get(entry.id)?.messageId ?? opaqueNativeId('message', sessionId, entry.id)) === messageId) return entry.id;
+  }
+  return null;
+}
+
+export function selectedBranchRevert(branch: readonly SessionEntry[]): BranchSelection | null {
+  for (let index = branch.length - 1; index >= 0; index--) {
+    const entry = branch[index];
+    if (entry.type === 'message' && visible(entry.message)) return null;
+    if (entry.type === 'custom' && entry.customType === BRANCH_TYPE) {
+      const selection = BranchSelectionSchema.parse(entry.data);
+      return selection.revertedMessageId === null ? null : selection;
+    }
+  }
+  return null;
+}
 const TerminalSchema = z.strictObject({
   runId: EntityIdSchema, status: z.enum(['completed', 'failed', 'cancelled']),
   finishedAt: z.number().finite().nonnegative(), error: z.string().optional(),
@@ -80,6 +119,7 @@ export class WorkerProjection {
   }
 
   seed(): ProjectionSeed { return this.readHistory(); }
+  resetSelection(): void { this.entryOffset = this.manager.getBranch().length; }
   activeRun(): Run | null { return this.run; }
   currentTurn(): { turnId: string } | undefined { return this.turn?.open ? { turnId: this.turn.turnId } : undefined; }
   admitQueuedPrompt(message: Extract<NativeMessage, { role: 'user' }>, attachments: PromptAttachment[]): string {
@@ -305,12 +345,22 @@ export class WorkerProjection {
     const terminals = new Map<string, z.infer<typeof TerminalSchema>>();
     const turnTerminals = new Map<string, z.infer<typeof TurnTerminalSchema>>();
     const toolResults = new Map<string, boolean>();
-    for (const entry of entries) {
-      if (entry.type === 'message' && entry.message.role === 'toolResult') toolResults.set(entry.message.toolCallId, entry.message.isError);
+    for (const entry of entries) if (entry.type === 'message' && entry.message.role === 'toolResult') {
+      toolResults.set(entry.message.toolCallId, entry.message.isError);
+    }
+    let version = 0n;
+    let updatedAt = 0;
+    const virtualTurns = new Set<string>();
+    for (const entry of this.manager.getEntries()) {
+      const timestamp = Date.parse(entry.timestamp);
+      if (Number.isFinite(timestamp)) updatedAt = Math.max(updatedAt, timestamp);
+      if (entry.type === 'message' && visible(entry.message)) version++;
       if (entry.type !== 'custom') continue;
+      if (entry.customType === BRANCH_TYPE) version++;
       if (entry.customType === REF_TYPE) {
         const reference = ReferenceSchema.parse(entry.data);
         references.set(reference.nativeEntryId, reference);
+        if (reference.virtualUser) virtualTurns.add(reference.turnId);
       } else if (entry.customType === RUN_TYPE) {
         const terminal = TerminalSchema.parse(entry.data);
         terminals.set(terminal.runId, terminal);
@@ -328,14 +378,14 @@ export class WorkerProjection {
       if (entry.type !== 'message' || !visible(entry.message)) continue;
       const native = entry.message;
       const reference = references.get(entry.id);
-      const messageId = reference?.messageId ?? `native-message:${entry.id}`;
-      const turnId = reference?.turnId ?? (native.role === 'user' ? `native-turn:${entry.id}` : current?.turnId);
+      const messageId = reference?.messageId ?? opaqueNativeId('message', this.sessionId, entry.id);
+      const turnId = reference?.turnId ?? (native.role === 'user' ? opaqueNativeId('turn', this.sessionId, entry.id) : current?.turnId);
       if (!turnId) continue;
       const timestamp = native.timestamp;
       let turn = turnById.get(turnId);
       if (!turn) {
         const userMessageId = reference?.userMessageId ?? messageId;
-        const runId = reference?.runId ?? `native-run:${entry.id}`;
+        const runId = reference?.runId ?? opaqueNativeId('run', this.sessionId, entry.id);
         const terminal = turnTerminals.get(turnId);
         turn = { turnId, sessionId: this.sessionId, runId, userMessageId, assistantMessageIds: [],
           status: terminal?.status ?? 'completed', startedAt: terminal?.startedAt ?? timestamp, finishedAt: terminal?.finishedAt ?? timestamp,
@@ -369,8 +419,10 @@ export class WorkerProjection {
     }
     const header = this.manager.getHeader();
     const createdAt = header ? Date.parse(header.timestamp) : Date.now();
-    return { createdAt, updatedAt: messages.at(-1)?.createdAt ?? createdAt,
-      branch: { branchId: `branch:${this.sessionId}`, branchVersion: String(messages.length), leafMessageId }, turns, messages,
+    const selection = selectedBranchRevert(entries);
+    return { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt),
+      branch: { branchId: `branch:${this.sessionId}`, branchVersion: (version + BigInt(virtualTurns.size)).toString(), leafMessageId,
+        ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : {}) }, turns, messages,
     };
   }
 }

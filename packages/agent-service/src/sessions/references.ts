@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { chmod, mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DisplayPathSchema, JsonValueSchema, TimestampSchema } from '@openchamber/agent-contract';
+import { DisplayPathSchema, EntityIdSchema, JsonValueSchema, TimestampSchema } from '@openchamber/agent-contract';
 import type { JsonValue, ProblemCode } from '@openchamber/agent-contract';
 import { z } from 'zod';
 import { WorkerBootstrapSchema } from '../protocol.ts';
@@ -9,7 +9,16 @@ import { WorkerBootstrapSchema } from '../protocol.ts';
 const SessionReferenceSchema = WorkerBootstrapSchema.omit({ env: true, observationEpoch: true, catalogRevision: true, mcpConfiguration: true, skillSources: true }).required({ sessionFile: true })
   .extend({ displayPath: DisplayPathSchema, createdAt: TimestampSchema, updatedAt: TimestampSchema });
 export type SessionReference = Readonly<z.infer<typeof SessionReferenceSchema>>;
-const PersistedSchema = z.strictObject({ references: z.record(z.string(), JsonValueSchema) });
+export const SessionRelocationIntentSchema = z.strictObject({
+  transactionId: EntityIdSchema, source: SessionReferenceSchema, destination: SessionReferenceSchema,
+  sourceHeader: z.strictObject({ id: z.string().min(1), cwd: z.string().min(1), additionalDirectories: z.array(z.string()).optional(), previousSessionFiles: z.array(z.string()).optional() }),
+  environment: z.record(z.string(), z.string()).optional(),
+}).refine(intent => intent.source.rootSessionId === intent.destination.rootSessionId
+  && intent.source.projectId === intent.destination.projectId && intent.source.agentDirectory === intent.destination.agentDirectory
+  && intent.source.agentDirectoryId === intent.destination.agentDirectoryId, 'Relocation must retain its session and Host owner');
+export type SessionRelocationIntent = z.infer<typeof SessionRelocationIntentSchema>;
+const PersistedSchema = z.strictObject({ references: z.record(z.string(), JsonValueSchema), relocations: z.record(z.string(), SessionRelocationIntentSchema).default({}) })
+  .refine(state => Object.entries(state.relocations).every(([id, intent]) => id === intent.source.rootSessionId), 'Relocation index must retain its root owner');
 type References = z.infer<typeof PersistedSchema>['references'];
 const FileErrorSchema = z.object({ code: z.string() });
 
@@ -33,6 +42,7 @@ function referenceJson(reference: SessionReference): JsonValue {
 export class SessionReferences {
   private readonly file: string;
   private values: References = {};
+  private relocations: Record<string, SessionRelocationIntent> = {};
   private readonly records = new Map<string, SessionReference>();
   private readonly malformed = new Set<string>();
   private initialized = false;
@@ -57,6 +67,7 @@ export class SessionReferences {
     catch { throw new SessionReferenceError(500, 'SESSION_RESTORE_FAILED', 'Session reference index is corrupt'); }
     await chmod(this.file, 0o600);
     this.values = state.references;
+    this.relocations = state.relocations;
     for (const [id, value] of Object.entries(this.values)) {
       const parsed = SessionReferenceSchema.safeParse(value);
       if (parsed.success && parsed.data.rootSessionId === id) this.records.set(id, parsed.data);
@@ -77,6 +88,39 @@ export class SessionReferences {
     const errors: { sessionId: string; code: ProblemCode }[] = [];
     for (const sessionId of this.malformed) errors.push({ sessionId, code: 'SESSION_RESTORE_FAILED' });
     return { items, errors };
+  }
+  relocation(sessionId: string): SessionRelocationIntent | null {
+    this.ensureReady();
+    return this.relocations[sessionId] ?? null;
+  }
+
+  beginRelocation(intent: SessionRelocationIntent): Promise<void> {
+    this.ensureReady();
+    const parsed = SessionRelocationIntentSchema.parse(intent);
+    return this.enqueue(async () => {
+      const id = parsed.source.rootSessionId;
+      if (this.relocations[id]) throw new SessionReferenceError(409, 'COMMAND_IN_FLIGHT', 'A session relocation is pending');
+      const relocations = { ...this.relocations, [id]: parsed };
+      await this.persist(this.values, relocations);
+      this.relocations = relocations;
+    });
+  }
+
+  finishRelocation(sessionId: string, transactionId: string, reference: SessionReference): Promise<void> {
+    this.ensureReady();
+    const parsed = SessionReferenceSchema.parse(reference);
+    return this.enqueue(async () => {
+      if (parsed.rootSessionId !== sessionId || this.relocations[sessionId]?.transactionId !== transactionId) {
+        throw new SessionReferenceError(409, 'RESYNC_REQUIRED', 'Session relocation ownership has changed');
+      }
+      const relocations = { ...this.relocations };
+      delete relocations[sessionId];
+      const references = { ...this.values, [sessionId]: referenceJson(parsed) };
+      await this.persist(references, relocations);
+      this.values = references;
+      this.relocations = relocations;
+      this.records.set(sessionId, parsed);
+    });
   }
 
   put(reference: SessionReference): Promise<void> {
@@ -111,12 +155,12 @@ export class SessionReferences {
     return result;
   }
 
-  private async persist(references: References): Promise<void> {
+  private async persist(references: References, relocations = this.relocations): Promise<void> {
     const temporary = `${this.file}.${randomUUID()}.tmp`;
     try {
       await mkdir(this.stateDirectory, { recursive: true, mode: 0o700 });
       const handle = await open(temporary, 'wx', 0o600);
-      try { await handle.writeFile(JSON.stringify({ references }), 'utf8'); }
+      try { await handle.writeFile(JSON.stringify({ references, relocations }), 'utf8'); }
       finally { await handle.close(); }
       await rename(temporary, this.file);
     } catch {
