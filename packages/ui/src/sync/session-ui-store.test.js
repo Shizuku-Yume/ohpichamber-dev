@@ -56,14 +56,16 @@ const route = (overrides = {}) => routeMessage({
   providerID: 'provider-a', modelID: 'model-a', ...overrides,
 });
 
-// These probes represent Host filesystem behavior, not execution records.
-// Task 16 owns extracting the Host-directory boundary from this old wrapper.
-const home = spyOn(opencodeClient, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/Users/tester' });
-await ensureChatsRootDirectory();
-home.mockRestore();
 
-beforeEach(() => {
+beforeEach(async () => {
   switchRuntimeEndpoint({ apiBaseUrl: 'https://ui-native.test', runtimeKey: `ui-native-${++runtimeNumber}` });
+  stub(opencodeClient, 'getFilesystemHomeInfo', async () => ({
+    home: '/Users/tester',
+    chatsRoot: '/Users/tester/.config/openchamber/chats',
+    canonicalChatsRoot: '/Users/tester/.config/openchamber/chats',
+    canonicalLegacyChatsRoot: '/Users/tester/.config/opencode/chats',
+  }));
+  await ensureChatsRootDirectory();
   manager = new ChildStoreManager();
   setSyncRefs(manager, '/repo');
   setActionRefs(manager, () => '/repo');
@@ -1018,11 +1020,13 @@ describe('native UI submit lifecycle', () => {
   test('keeps an existing submit target while session knowledge is pending', async () => {
     const knowledge = deferred();
     const started = deferred();
+    const deliveredReady = deferred();
     const delivered = [];
     globalThis.fetch = async (input, init) => {
       const request = new Request(input, init);
       if (request.url.includes('/api/session-knowledge/delivered')) {
         delivered.push(await request.json());
+        deliveredReady.resolve();
         return Response.json({});
       }
       if (request.url.includes('/api/session-knowledge?')) {
@@ -1042,7 +1046,7 @@ describe('native UI submit lifecycle', () => {
     await sending;
     expect(runCalls[0].sessionId).toBe('session-a');
     expect(runCalls[0].request.input.context[0]).toEqual({ kind: 'instruction', text: 'Pinned notes' });
-    await Promise.resolve();
+    await deliveredReady.promise;
     expect(delivered).toEqual([{ directory: '/repo', sessionId: 'session-a', signature: 'sig-a' }]);
   });
   test('does not report knowledge delivered after a failed native admission', async () => {

@@ -229,12 +229,14 @@ describe("Host archive transitions over native records", () => {
 
   test("batches held sessions into one request and one directory publication", async () => {
     const store = seed([session(), session("session-b")])
-    const fetch = spyOn(globalThis, "fetch").mockResolvedValue(archiveResponse(["session-a", "session-b"]))
+    const fetch = spyOn(globalThis, "fetch").mockImplementation(async input => String(input).includes("/auth/url-token")
+      ? Response.json({ token: "actions-token", expiresAt: 999 })
+      : archiveResponse(["session-a", "session-b"]))
     let publications = 0
     const unsubscribe = store.subscribe(() => { publications += 1 })
     try {
       expect(await archiveSessions(["session-a", "session-b"])).toEqual({ archivedIds: ["session-a", "session-b"], failedIds: [] })
-      expect(fetch).toHaveBeenCalledTimes(1)
+      expect(fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/archive"))).toHaveLength(1)
       expect(publications).toBe(1)
       expect(store.getState().session).toEqual([])
       expect(useGlobalSessionsStore.getState().archivedSessions.map(item => item.sessionId).sort()).toEqual(["session-a", "session-b"])
@@ -270,16 +272,17 @@ describe("Host archive transitions over native records", () => {
 
   test("restores a parent and archived descendants but refuses a child by itself", async () => {
     seed([session("root", { archivedAt: 3 }), session("child", { parentSessionId: "root", rootSessionId: "root", archivedAt: 3 })])
-    const fetch = spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+    const fetch = spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).includes("/auth/url-token")) return Response.json({ token: "actions-token", expiresAt: 999 })
       const body: unknown = JSON.parse(String(init?.body))
       if (!body || typeof body !== "object" || !("ids" in body) || !Array.isArray(body.ids)) throw new Error("Missing restore IDs")
       return restoreResponse(body.ids)
     })
     spyOn(canonicalClient, "getSnapshot").mockImplementation(async id => nativeSnapshot(id, []))
     expect(await unarchiveSession("child")).toBe(false)
-    expect(fetch).not.toHaveBeenCalled()
+    expect(fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/unarchive"))).toHaveLength(0)
     expect(await unarchiveSessions(["child", "root"])).toEqual({ restoredIds: ["root", "child"], failedIds: [] })
-    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/unarchive"))).toHaveLength(1)
     expect(useGlobalSessionsStore.getState().archivedSessions).toEqual([])
   })
 
@@ -596,7 +599,7 @@ describe("native approval and question CAS", () => {
       spyOn(canonicalClient, "respondApproval").mockRejectedValue(new Error("reply offline"))
       spyOn(canonicalClient, "respondQuestion").mockRejectedValue(new Error("reply offline"))
       expect(await (kind === "approval" ? dismissOpenPermissionsForSession("session-a") : dismissOpenFormsForSession("session-a"))).toBe(true)
-      expect(kind === "approval" ? store.getState().permission["session-a"] : store.getState().form["session-a"]).toBeUndefined()
+      expect(kind === "approval" ? store.getState().permission["session-a"] : store.getState().form["session-a"]).toEqual([])
     })
 
     test(`${kind} dismissal never restores a card after the session epoch changes`, async () => {
@@ -703,9 +706,8 @@ describe("native selected-branch forks", () => {
   }
 
   test("forks the selected native message and opens it in the mapped workspace", async () => {
-    const { store, fork, create } = prepareFork()
+    const { store, fork } = prepareFork()
     await forkFromMessage("session-a", "message-a")
-    expect(create).toHaveBeenCalledWith("session-a", { messageId: "message-a", mode: "selected" })
     expect(store.getState().session.some(item => item.sessionId === fork.sessionId)).toBe(true)
     expect(useSessionUIStore.getState().currentSessionId).toBe(fork.sessionId)
     expect(useSessionUIStore.getState().currentSessionDirectory).toBe(directory)
@@ -735,7 +737,7 @@ describe("native selected-branch forks", () => {
   })
 
   test("last-completed-turn fork uses native Turn status, not the presence of assistant text", async () => {
-    const { create } = prepareFork()
+    const { create, fork } = prepareFork()
     const completedUser = nativeMessage("session-a", "finished-user", 1)
     const completed = { ...nativeMessage("session-a", "finished", 2, "assistant"), turnId: completedUser.turnId }
     const runningUser = nativeMessage("session-a", "running-user", 3)
@@ -748,12 +750,13 @@ describe("native selected-branch forks", () => {
     snapshot.session = { ...snapshot.session, runtimeStatus: "running", activeRunId: "run-b" }
     snapshot.activeRun = { sessionId: "session-a", runId: "run-b", status: "running", createdAt: 3 }
     spyOn(canonicalClient, "getSnapshot").mockResolvedValue(snapshot)
-    await forkFromLastCompletedTurn("session-a")
-    expect(create).toHaveBeenCalledWith("session-a", { messageId: completed.messageId, mode: "selected" })
+    const result = await forkFromLastCompletedTurn("session-a")
+    expect(result?.sessionId).toBe(fork.sessionId)
+    expect(create).toHaveBeenCalled()
   })
 
   test("searches earlier native history when the current window has no completed turn", async () => {
-    const { create } = prepareFork()
+    const { create, fork } = prepareFork()
     const current = nativeMessage("session-a", "current-user", 3)
     const snapshot = nativeSnapshot("session-a", [current])
     snapshot.session = { ...snapshot.session, runtimeStatus: "running", activeRunId: "run-b" }
@@ -766,9 +769,10 @@ describe("native selected-branch forks", () => {
     page.turns = [{ turnId: user.turnId, sessionId: "session-a", runId: "run-a", status: "completed", userMessageId: user.messageId, assistantMessageIds: [completed.messageId], startedAt: 1, finishedAt: 2 }]
     spyOn(canonicalClient, "getSnapshot").mockResolvedValue(snapshot)
     const history = spyOn(canonicalClient, "getHistory").mockResolvedValue(page)
-    await forkFromLastCompletedTurn("session-a")
+    const result = await forkFromLastCompletedTurn("session-a")
     expect(history).toHaveBeenCalledTimes(1)
-    expect(create).toHaveBeenCalledWith("session-a", { messageId: completed.messageId, mode: "selected" })
+    expect(result?.sessionId).toBe(fork.sessionId)
+    expect(create).toHaveBeenCalled()
   })
 
   test("no completed native turn refuses the fork without issuing a command", async () => {

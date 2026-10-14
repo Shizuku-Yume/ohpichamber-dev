@@ -104,7 +104,7 @@ describe("native canonical event reducer", () => {
 
   test("snapshot recovery rejects older heads, clears invalidation and replaces pending scope", () => {
     const base = installSessionSnapshot(state({ sessionStatusInvalidated: { "session-1": true, other: true } }), snapshot({ session: runtime({ headSequence: "9007199254740993" }), cursor: "epoch-1:9007199254740993" }))
-    expect(base.sessionStatusInvalidated).toEqual({ "session-1": false, other: true })
+    expect(base.sessionStatusInvalidated).toEqual({ other: true })
     expect(installSessionSnapshot(base, snapshot({ session: runtime({ headSequence: "9007199254740992" }), cursor: "epoch-1:9007199254740992" }))).toBe(base)
     expect(installSessionSnapshot(base, base.snapshot["session-1"]!)).toBe(base)
     const restarted = installSessionSnapshot(base, snapshot({ session: runtime({ epoch: "epoch-2" }), cursor: "epoch-2:0" }))

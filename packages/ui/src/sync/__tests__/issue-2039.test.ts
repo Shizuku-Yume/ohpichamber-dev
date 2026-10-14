@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test"
 import type { Session } from "@openchamber/agent-contract"
+import { canonicalClient } from "@/api/canonicalClient"
 import { cyclePermissionMode } from "../../components/chat/permissionAutoAccept"
 
 const storage = new Map<string, string>()
 const createSessionCalls: Array<{ title?: string; directory: string | null; metadata?: unknown }> = []
+const resolveWorkspaceCalls: string[] = []
 const permissionAutoAcceptCalls: Array<[string, string]> = []
 const savedVariantCalls: Array<string | undefined> = []
 const savedAgentModelCalls: Array<[string, string, string, string]> = []
@@ -202,9 +204,10 @@ mock.module("@/stores/useGlobalSessionsStore", () => ({
       activeSessions: [],
       archivedSessions: [],
       entityById: new Map(),
+      upsertSession: (_session: Session) => undefined,
     }),
   },
-  resolveGlobalSessionDirectory: () => null,
+  resolveGlobalSessionDirectory: (session: Session) => sessionDirectoryRegistry.get(session.sessionId) ?? null,
 }))
 
 mock.module("@/stores/useSessionFoldersStore", () => ({
@@ -337,45 +340,6 @@ mock.module("../sync-refs", () => ({
   },
 }))
 
-mock.module("../session-actions", () => ({
-  // The action boundary returns a canonical Session. Directory ownership is
-  // tracked separately in the sync routing index, never on a wire wrapper.
-  createSession: mock(async (
-    title: string | undefined,
-    directory: string | null,
-    metadata?: unknown,
-    selectionTransition?: "submitted-draft",
-  ): Promise<Session> => {
-    createSessionCalls.push({ title, directory, metadata })
-    const sessionId = "ses_issue_2039"
-    const sessionDirectory = createdSessionDirectory ?? directory
-    const session = nativeSession(sessionId)
-    if (sessionDirectory) sessionDirectoryRegistry.set(session.sessionId, sessionDirectory)
-    const { useSessionUIStore: store } = await import("../session-ui-store")
-    store.getState().setCurrentSession(session.sessionId, sessionDirectory, selectionTransition)
-    store.getState().markSessionAsOpenChamberCreated(session.sessionId)
-    return session
-  }),
-  forkAfterMessage: mock(async () => undefined),
-  deleteSession: mock(async () => true),
-  deleteSessions: mock(async () => ({ deletedIds: [], failedIds: [] })),
-  archiveSession: mock(async () => true),
-  archiveSessions: mock(async () => ({ archivedIds: [], failedIds: [] })),
-  unarchiveSession: mock(async () => true),
-  unarchiveSessions: mock(async () => ({ restoredIds: [], failedIds: [] })),
-  updateSessionTitle: mock(async () => undefined),
-  shareSession: mock(async () => undefined),
-  unshareSession: mock(async () => undefined),
-  optimisticSend: mock(async () => undefined),
-  refetchSessionMessages: mock(async () => undefined),
-  revertToMessage: mock(async () => undefined),
-  unrevertSession: mock(async () => undefined),
-  forkFromMessage: mock(async () => undefined),
-  fetchMessagesForSession: mock(async () => undefined),
-  getSessionLastAssistantModel: () => null,
-  patchSessionMetadata: mock(async () => undefined),
-  abortCurrentOperation: mock(async () => undefined),
-}))
 
 mock.module("@/lib/git/branchNameGenerator", () => ({
   generateBranchName: () => "generated-branch",
@@ -460,6 +424,17 @@ describe("issue 2039 draft auto-accept", () => {
   beforeEach(() => {
     storage.clear()
     createSessionCalls.length = 0
+    resolveWorkspaceCalls.length = 0
+    spyOn(canonicalClient, "resolveWorkspace").mockImplementation(async directory => {
+      resolveWorkspaceCalls.push(directory)
+      return { workspaceId: "workspace-issue-2039", projectId: "project-1", name: "Workspace", displayPath: "." }
+    })
+    spyOn(canonicalClient, "createSession").mockImplementation(async request => {
+      const session = nativeSession("ses_issue_2039")
+      createSessionCalls.push({ directory: resolveWorkspaceCalls.at(-1) ?? null, metadata: request.metadata })
+      if (createdSessionDirectory) sessionDirectoryRegistry.set(session.sessionId, createdSessionDirectory)
+      return { session }
+    })
     applyDefaultModelAgentSelectionCalls.length = 0
     activateDirectoryCalls.length = 0
     sessionDirectoryRegistry.clear()

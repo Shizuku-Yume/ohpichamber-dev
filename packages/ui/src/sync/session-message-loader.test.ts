@@ -112,10 +112,11 @@ describe("canonical session snapshot loading", () => {
     const { loader, store } = setup({ client: nativeClient({ listSessions: async workspaceId => { expect(workspaceId).toBe("workspace-a"); return { items: [host], errors: {} } } }) })
     await loader.ensure(target)
     expect(store.getState().session[0]).toMatchObject({ metadata: host.metadata, metadataRevision: "5", archiveRevision: "8", archivedAt: 3 })
+    const unprojected = { ...target, sessionId: "session-unprojected" }
     const failing = setup({ client: nativeClient({ listSessions: async () => { throw new Error("discovery failed") } }) })
-    await failing.loader.ensure(target)
+    await failing.loader.ensure(unprojected)
     expect(failing.store.getState().session).toEqual([])
-    expect(failing.store.getState().snapshot[target.sessionId]).toBeDefined()
+    expect(failing.store.getState().snapshot[unprojected.sessionId]).toBeDefined()
   })
 
   test("metadata and archive revisions reconcile independently and never regress", async () => {
@@ -532,6 +533,7 @@ describe("native selection recovery cache boundary", () => {
     loader.invalidateSession(target, [kept])
     expect(loader.getSnapshot(target)).toMatchObject({ resolved: false, cursor: undefined, complete: false })
     current = selected
+    cleanups.push(loader.retainSessionHistory(target))
     await loader.refresh(target)
     expect(store.getState().message[target.sessionId]).toEqual([kept])
     expect(loader.getSnapshot(target)).toMatchObject({ resolved: true, cursor: "selected-branch-cursor", complete: false })
