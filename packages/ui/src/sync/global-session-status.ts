@@ -16,7 +16,7 @@ import { hasRunningShell, useBackgroundShellsStore } from './background-shells';
 
 export type GlobalSessionStatusEntry = { status: SessionRuntimeStatus; directory: string };
 type GlobalSessionStatusState = {
-  observedById: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | null }>;
+  observedById: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | 'cancelled' | null }>;
   statusById: Map<string, GlobalSessionStatusEntry>;
   activeSessionIds: ReadonlySet<string>;
 };
@@ -29,8 +29,8 @@ useGlobalSessionStatusStore.subscribe(() => countSyncPerformance('globalStatusPu
 const isLiveStatus = (status: SessionRuntimeStatus): boolean => status === 'running' || status === 'awaiting_approval' || status === 'awaiting_input';
 const sameSet = (left: ReadonlySet<string>, right: ReadonlySet<string>): boolean => left.size === right.size && [...left].every((id) => right.has(id));
 const sameStatusMap = (left: ReadonlyMap<string, GlobalSessionStatusEntry>, right: ReadonlyMap<string, GlobalSessionStatusEntry>): boolean => left.size === right.size && [...left].every(([id, entry]) => right.get(id)?.directory === entry.directory && right.get(id)?.status === entry.status);
-const sameObservedMap = (left: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | null }>, right: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | null }>): boolean => left.size === right.size && [...left].every(([id, entry]) => right.get(id)?.directory === entry.directory && right.get(id)?.outcome === entry.outcome);
-const setState = (statusById: Map<string, GlobalSessionStatusEntry>, observedById: Map<string, { directory: string; outcome: 'completed' | 'failed' | null }>): void => {
+const sameObservedMap = (left: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | 'cancelled' | null }>, right: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | 'cancelled' | null }>): boolean => left.size === right.size && [...left].every(([id, entry]) => right.get(id)?.directory === entry.directory && right.get(id)?.outcome === entry.outcome);
+const setState = (statusById: Map<string, GlobalSessionStatusEntry>, observedById: Map<string, { directory: string; outcome: 'completed' | 'failed' | 'cancelled' | null }>): void => {
   const active = new Set<string>();
   for (const [id, entry] of statusById) if (isLiveStatus(entry.status)) active.add(id);
   const current = useGlobalSessionStatusStore.getState();
@@ -127,7 +127,7 @@ const activeFromStatuses = (statuses: ReadonlyMap<string, GlobalSessionStatusEnt
   for (const [id, entry] of statuses) if (isLiveStatus(entry.status)) active.add(id);
   return active;
 };
-const recordObserved = (observed: Map<string, { directory: string; outcome: 'completed' | 'failed' | null }>, sessionId: string, directory: string, outcome: 'completed' | 'failed' | null): void => {
+const recordObserved = (observed: Map<string, { directory: string; outcome: 'completed' | 'failed' | 'cancelled' | null }>, sessionId: string, directory: string, outcome: 'completed' | 'failed' | 'cancelled' | null): void => {
   observed.delete(sessionId);
   observed.set(sessionId, { directory, outcome });
   if (observed.size > 2000) observed.delete(observed.keys().next().value!);
@@ -194,7 +194,7 @@ export const applyGlobalSessionStatusEvents = (rawDirectory: string, payloads: r
         break;
       case 'run.cancelled':
         if (activeRunIdBySession.get(event.sessionId) !== event.runId) break;
-        settle(event.sessionId, null, 'idle', event.finishedAt, event.runId);
+        settle(event.sessionId, 'cancelled', 'idle', event.finishedAt, event.runId);
         break;
       case 'turn.started':
         timing.push({ type: 'active', sessionId: event.sessionId, runId: event.runId });

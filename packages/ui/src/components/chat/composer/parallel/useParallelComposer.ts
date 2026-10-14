@@ -1,4 +1,5 @@
 import React from 'react';
+import { canonicalClient } from '@/api/canonicalClient';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { isAutoModel } from '@/lib/routing/autoModel';
@@ -181,7 +182,8 @@ export function useParallelComposer(input: {
     }
     const projects = useProjectsStore.getState();
     const projectId = draftProjectId ?? projects.activeProjectId;
-    if (!projectId || !projects.projects.some((project) => project.id === projectId)) {
+    const project = projectId ? projects.projects.find((entry) => entry.id === projectId) : undefined;
+    if (!project) {
       toast.error(t('multirun.launcher.project.empty'));
       return;
     }
@@ -189,6 +191,9 @@ export function useParallelComposer(input: {
 
     const title = runTitleFrom(variants[0].text) || t('chat.parallel.defaultTitle');
     const attachments = useInputStore.getState().attachedFiles;
+    const attachmentWorkspaceId = attachments.length > 0
+      ? (await canonicalClient.resolveWorkspace(project.path)).workspaceId
+      : undefined;
     const config = useConfigStore.getState();
     const params: CreateMultiRunParams = {
       name: title,
@@ -208,6 +213,7 @@ export function useParallelComposer(input: {
       files: attachments.length > 0
         ? attachments.map((file) => ({ mime: file.mimeType, filename: file.filename, url: file.dataUrl }))
         : undefined,
+      attachmentWorkspaceId,
       setupCommands: current.isolate ? current.setupCommands?.filter((command) => command.trim()) : undefined,
       autoFusion: current.fuse
         ? { providerID: current.fuse.providerID, modelID: current.fuse.modelID, variant: current.fuse.variant, agent: config.currentAgentName || undefined }

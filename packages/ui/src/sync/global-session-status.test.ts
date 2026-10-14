@@ -49,7 +49,7 @@ describe('global canonical session status', () => {
     applyGlobalSessionStatusEvent('/repo', event('run.started', { runId: 'new_run', createdAt: 100 }));
     applyGlobalSessionStatusEvent('/repo', event('run.failed', { runId: 'old_run', finishedAt: 200, error: 'stale' }));
     expect(useGlobalSessionStatusStore.getState().activeSessionIds.has('session_1')).toBe(true);
-    expect(useGlobalSessionStatusStore.getState().observedById.get('session_1')?.outcome).toBeUndefined();
+    expect(useGlobalSessionStatusStore.getState().observedById.get('session_1')?.outcome).toBeNull();
     expect(useSessionActivityTimingStore.getState().startedAt.get('session_1')).toBe(100);
     applyGlobalSessionStatusEvent('/repo', event('run.completed', { runId: 'new_run', finishedAt: 250 }));
     expect(useSessionActivityTimingStore.getState().settledMs.get('session_1')).toBe(150);
@@ -68,6 +68,12 @@ describe('global canonical session status', () => {
     expect(useGlobalSessionStatusStore.getState().observedById.get('session_1')?.outcome).toBe('failed');
     applyGlobalSessionStatusEvent('/repo', event('run.started', { runId: 'run_2', createdAt: 3 }));
     expect(useGlobalSessionStatusStore.getState().observedById.get('session_1')?.outcome).toBeNull();
+  });
+  test('cancelled run publishes a terminal cancelled outcome', () => {
+    applyGlobalSessionStatusEvent('/repo', event('run.started', { runId: 'run_cancelled', createdAt: 1 }));
+    applyGlobalSessionStatusEvent('/repo', event('run.cancelled', { runId: 'run_cancelled', finishedAt: 2 }));
+    expect(useGlobalSessionStatusStore.getState().observedById.get('session_1')?.outcome).toBe('cancelled');
+    expect(useGlobalSessionStatusStore.getState().activeSessionIds.has('session_1')).toBe(false);
   });
   test('streaming-only and repeated live events preserve public references', () => {
     applyGlobalSessionStatusEvent('/repo', status('session_1', 'running'));
