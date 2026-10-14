@@ -158,7 +158,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     if (!isCurrent()) return
     const store = childStores.getChild(target.directory)
     if (!store || store.getState().snapshot[target.sessionId]?.cursor !== snapshot.cursor) return
-    const invalidated: Record<string, true> = { ...(store.getState().sessionStatusInvalidated ?? {}) }
+    const invalidated = { ...(store.getState().sessionStatusInvalidated ?? {}) }
     delete invalidated[target.sessionId]
     store.setState({ sessionStatusInvalidated: invalidated, sessionStatusReady: true })
     applyGlobalSessionStatusSnapshot(target.directory, { [target.sessionId]: snapshot.session.runtimeStatus }, [target.sessionId], { [target.sessionId]: snapshot.session.activeRunId })
@@ -325,23 +325,21 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     const stopAuthRecovery = useAuthSessionStore.subscribe((state, previous) => {
       if (state.state === "ok" && previous.state !== "ok") resume()
     })
-    if (typeof window !== "undefined") {
-      window.addEventListener("online", resume)
-      window.addEventListener("offline", offline)
-      window.addEventListener("pageshow", pageshow)
-      window.addEventListener("openchamber:system-resume", resume)
-      document.addEventListener("visibilitychange", visible)
-    }
+    // Effects only run in a browser document; the provider never registers
+    // listeners during server rendering.
+    window.addEventListener("online", resume)
+    window.addEventListener("offline", offline)
+    window.addEventListener("pageshow", pageshow)
+    window.addEventListener("openchamber:system-resume", resume)
+    document.addEventListener("visibilitychange", visible)
     return () => {
       currentRef.current = false
       stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer)
-      if (typeof window !== "undefined") {
-        window.removeEventListener("online", resume)
-        window.removeEventListener("offline", offline)
-        window.removeEventListener("pageshow", pageshow)
-        window.removeEventListener("openchamber:system-resume", resume)
-        document.removeEventListener("visibilitychange", visible)
-      }
+      window.removeEventListener("online", resume)
+      window.removeEventListener("offline", offline)
+      window.removeEventListener("pageshow", pageshow)
+      window.removeEventListener("openchamber:system-resume", resume)
+      document.removeEventListener("visibilitychange", visible)
       if (pipelineRef.current === pipeline) pipelineRef.current = null
       disposalRef.current = setTimeout(() => { messageLoader.dispose(); childStores.disposeAll() }, 0)
     }
@@ -464,7 +462,16 @@ export const collectComposerForms = (sessions: Session[], forms: Record<string, 
 function useScopedRequests<T extends ApprovalRequest | QuestionRequest>(sessionId: string | null, directory: string | undefined, slice: "permission" | "form", empty: T[]): T[] {
   const store = useDirectoryStore(directory)
   const cache = useRef<T[]>(empty)
-  const get = useCallback(() => { const state = store.getState(); const value = collectScopedBlockingRequests(state.session, state[slice] as Record<string, T[]>, sessionId, empty); if (!areRequestArraysReferentiallyEqual(cache.current, value)) cache.current = value; return cache.current }, [store, sessionId, slice, empty])
+  const get = useCallback(() => {
+    const state = store.getState()
+    // SAFETY: `slice` names the slice whose element type is `T` — the
+    // "permission" caller passes `ApprovalRequest` and the "form" caller
+    // passes `QuestionRequest` — so the store's two request records both hold
+    // `Record<string, T[]>` for the `T` this call was instantiated with.
+    const value = collectScopedBlockingRequests(state.session, state[slice] as Record<string, T[]>, sessionId, empty)
+    if (!areRequestArraysReferentiallyEqual(cache.current, value)) cache.current = value
+    return cache.current
+  }, [store, sessionId, slice, empty])
   return useSyncExternalStore(useCallback((notify) => store.subscribe((state, prior) => { if (state.session !== prior.session || state[slice] !== prior[slice]) notify() }), [store, slice]), get, get)
 }
 export function useScopedBlockingPermissions(sessionId: string | null, directory?: string): ApprovalRequest[] { return useScopedRequests(sessionId, directory, "permission", EMPTY_APPROVALS) }

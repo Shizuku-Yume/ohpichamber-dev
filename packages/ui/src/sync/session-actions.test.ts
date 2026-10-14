@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import type { ApprovalRequest, PromptRequest, Run, Session, SessionDeleteAck, SessionSnapshot } from "@openchamber/agent-contract"
 import { SessionMetadataSchema } from "@openchamber/agent-contract"
+import { z } from "zod"
 import { CanonicalApiError, canonicalClient } from "@/api/canonicalClient"
 import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from "@/lib/runtime-switch"
 import * as chatDirectories from "@/lib/chatDirectories"
@@ -62,6 +63,9 @@ function archiveResponse(ids: string[], failedIds: string[] = []) {
 function restoreResponse(ids: string[], failedIds: string[] = []) {
   return Response.json({ restored: ids.map(id => ({ id, archivedAt: null })), failedIds })
 }
+
+/** The unarchive route reads `{ ids }` off the request body. */
+const unarchiveRequestSchema = z.object({ ids: z.array(z.string()) })
 
 beforeEach(() => {
   switchRuntimeEndpoint({ apiBaseUrl: "https://actions.test", runtimeKey: "actions" })
@@ -274,9 +278,8 @@ describe("Host archive transitions over native records", () => {
     seed([session("root", { archivedAt: 3 }), session("child", { parentSessionId: "root", rootSessionId: "root", archivedAt: 3 })])
     const fetch = spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (String(input).includes("/auth/url-token")) return Response.json({ token: "actions-token", expiresAt: 999 })
-      const body: unknown = JSON.parse(String(init?.body))
-      if (!body || typeof body !== "object" || !("ids" in body) || !Array.isArray(body.ids)) throw new Error("Missing restore IDs")
-      return restoreResponse(body.ids)
+      const request = unarchiveRequestSchema.parse(JSON.parse(String(init?.body)))
+      return restoreResponse(request.ids)
     })
     spyOn(canonicalClient, "getSnapshot").mockImplementation(async id => nativeSnapshot(id, []))
     expect(await unarchiveSession("child")).toBe(false)
@@ -489,7 +492,10 @@ describe("native approval and question CAS", () => {
     for (const [response, decision] of [["once", "approve"], ["always", "always-allow"], ["reject", "reject"]] as const) {
       store.setState({ permission: { "session-a": [approval] } })
       await respondToPermission("session-a", approval.approvalId, response)
-      expect(reply).toHaveBeenLastCalledWith("session-a", approval.approvalId, { ...identity, decision, ...(response === "always" ? { policyScope: "session" } : {}) })
+      const expected = response === "always"
+        ? { ...identity, decision, policyScope: "session" }
+        : { ...identity, decision }
+      expect(reply).toHaveBeenLastCalledWith("session-a", approval.approvalId, expected)
       expect(store.getState().permission["session-a"]).toBeUndefined()
     }
   })

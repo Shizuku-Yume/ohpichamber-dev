@@ -62,11 +62,12 @@ async function readCanonicalSession(sessionId: string, runtimeKey: string): Prom
     host = page.items.find((session) => session.sessionId === sessionId) ?? null
     if (!host) throw new Error("Host session projection is unavailable")
   }
-  return {
+  const session: CanonicalSession = {
     ...snapshot.session, metadata: metadata.metadata, metadataRevision: metadata.revision,
     archiveRevision: host.archiveRevision,
-    ...(host.archivedAt === undefined ? {} : { archivedAt: host.archivedAt }),
   }
+  if (host.archivedAt !== undefined) session.archivedAt = host.archivedAt
+  return session
 }
 
 function publishCanonicalSession(session: CanonicalSession, directory?: string): void {
@@ -617,6 +618,8 @@ export async function createSession(
     if (!effectiveDirectory) throw new Error("No directory for session creation")
     const workspace = await canonicalClient.resolveWorkspace(effectiveDirectory)
     if (isStaleRuntime(runtimeKey)) return null
+    const admittedMetadata = { ...metadata }
+    if (title !== undefined) admittedMetadata.title = title
     const { session } = await canonicalClient.createSession({
       projectId: workspace.projectId,
       workspaceId: workspace.workspaceId,
@@ -627,7 +630,7 @@ export async function createSession(
         variant: selection?.variant ?? null,
         reasoningEffort: selection?.reasoningEffort ?? null,
       },
-      metadata: SessionMetadataSchema.parse({ ...metadata, ...(title === undefined ? {} : { title }) }),
+      metadata: SessionMetadataSchema.parse(admittedMetadata),
     })
     if (isStaleRuntime(runtimeKey)) return null
     registerWorkspaceDirectory(workspace.workspaceId, effectiveDirectory)
@@ -1416,7 +1419,7 @@ async function restoreArchivedSession(sessionId: string, expectedRuntimeKey: str
         store.setState((current) => {
           if (current.sessionStatusInvalidated !== before.sessionStatusInvalidated
             || current.session_status[sessionId] !== before.session_status[sessionId]) return current
-          const invalidated: Record<string, true> = { ...(current.sessionStatusInvalidated ?? {}) }
+          const invalidated = { ...(current.sessionStatusInvalidated ?? {}) }
           delete invalidated[sessionId]
           return { ...installSessionSnapshot(current, snapshot), sessionStatusInvalidated: invalidated }
         })
