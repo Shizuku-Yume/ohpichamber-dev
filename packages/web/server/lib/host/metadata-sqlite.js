@@ -97,6 +97,12 @@ export const ensureHostMetadataSchema = (db) => {
       workspace_id TEXT NOT NULL,
       agent_directory_id TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS host_agent_relocations (
+      root_session_id TEXT PRIMARY KEY,
+      transaction_id TEXT NOT NULL UNIQUE,
+      source_workspace_id TEXT NOT NULL,
+      destination_workspace_id TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS host_attachments (
       attachment_id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,

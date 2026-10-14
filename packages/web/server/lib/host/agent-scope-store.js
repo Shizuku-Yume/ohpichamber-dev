@@ -28,6 +28,7 @@ const SessionInputSchema = z.strictObject({
   workspaceId: EntityIdSchema, agentDirectoryId: EntityIdSchema.optional(),
 });
 const SessionRowSchema = WorkspaceRowSchema.extend({ sessionId: EntityIdSchema, rootSessionId: EntityIdSchema });
+const RelocationSchema = z.strictObject({ rootSessionId: EntityIdSchema, transactionId: EntityIdSchema, sourceWorkspaceId: EntityIdSchema, destinationWorkspaceId: EntityIdSchema });
 const projectColumns = `p.project_id AS projectId, p.host_project_id AS hostProjectId,
   p.directory AS projectDirectory, p.name, p.display_path AS displayPath`;
 const workspaceColumns = `${projectColumns}, w.workspace_id AS workspaceId, w.cwd,
@@ -69,6 +70,27 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
       throw new MetadataCorruptError('Canonical session refers to a missing or conflicting scope owner');
     }
     return null;
+  };
+  const readFamily = (rootSessionId) => {
+    const rows = db.prepare('SELECT session_id AS sessionId FROM host_agent_sessions WHERE root_session_id = ? ORDER BY session_id').all(rootSessionId);
+    return rows.map((row) => readSession(EntityIdSchema.parse(row.sessionId)));
+  };
+  const readRelocation = (rootSessionId) => {
+    const row = db.prepare('SELECT root_session_id AS rootSessionId, transaction_id AS transactionId, source_workspace_id AS sourceWorkspaceId, destination_workspace_id AS destinationWorkspaceId FROM host_agent_relocations WHERE root_session_id = ?').get(rootSessionId);
+    return row ? parseRow(RelocationSchema, row) : null;
+  };
+  const matchingRelocation = (input) => {
+    const value = RelocationSchema.parse(input);
+    const pending = readRelocation(value.rootSessionId);
+    if (!pending || pending.transactionId !== value.transactionId || pending.sourceWorkspaceId !== value.sourceWorkspaceId || pending.destinationWorkspaceId !== value.destinationWorkspaceId)
+      throw new MetadataWriteError('Canonical relocation intent is stale');
+    return value;
+  };
+  const matchingFamily = (rootSessionId, workspaceId) => {
+    const family = readFamily(rootSessionId);
+    if (!family.some((member) => member.sessionId === rootSessionId) || family.some((member) => member.workspaceId !== workspaceId))
+      throw new MetadataWriteError('Canonical relocation family does not match its admitted Host owner');
+    return family;
   };
   const captureDirectory = async (directory) => {
     const realDirectory = await fsPromises.realpath(directory);
@@ -152,6 +174,57 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
       });
     } catch (error) { throw writeFailure(error); }
   });
+  const listSessionFamily = (rootSessionId) => lifecycle.run(() => {
+    try { return readFamily(EntityIdSchema.parse(rootSessionId)); } catch (error) { throw readFailure(error); }
+  });
+  const getRelocation = (rootSessionId) => lifecycle.run(() => {
+    try { return readRelocation(EntityIdSchema.parse(rootSessionId)); } catch (error) { throw readFailure(error); }
+  });
+  const createRelocation = (input) => lifecycle.run(() => {
+    try {
+      const value = RelocationSchema.parse(input);
+      return withTransaction(db, () => {
+        matchingFamily(value.rootSessionId, value.sourceWorkspaceId);
+        const source = readWorkspace(value.sourceWorkspaceId);
+        const destination = readWorkspace(value.destinationWorkspaceId);
+        if (!source || !destination || source.projectId !== destination.projectId || source.agentDirectoryId !== destination.agentDirectoryId)
+          throw new MetadataWriteError('Canonical relocation destination does not match its source owner');
+        const existing = readRelocation(value.rootSessionId);
+        if (existing) { matchingRelocation(value); return existing; }
+        db.prepare('INSERT INTO host_agent_relocations (root_session_id, transaction_id, source_workspace_id, destination_workspace_id) VALUES (?, ?, ?, ?)')
+          .run(value.rootSessionId, value.transactionId, value.sourceWorkspaceId, value.destinationWorkspaceId);
+        return value;
+      });
+    } catch (error) { throw writeFailure(error); }
+  });
+  const moveFamily = (input, rollback) => lifecycle.run(() => {
+    try {
+      return withTransaction(db, () => {
+        const value = matchingRelocation(input);
+        const from = rollback ? value.destinationWorkspaceId : value.sourceWorkspaceId;
+        const to = rollback ? value.sourceWorkspaceId : value.destinationWorkspaceId;
+        const family = matchingFamily(value.rootSessionId, from);
+        const source = readWorkspace(from);
+        const destination = readWorkspace(to);
+        if (!source || !destination || source.projectId !== destination.projectId || source.agentDirectoryId !== destination.agentDirectoryId)
+          throw new MetadataWriteError('Canonical relocation destination does not match its source owner');
+        const changed = db.prepare('UPDATE host_agent_sessions SET workspace_id = ?, agent_directory_id = ? WHERE root_session_id = ? AND workspace_id = ? AND agent_directory_id = ?')
+          .run(to, destination.agentDirectoryId, value.rootSessionId, from, source.agentDirectoryId);
+        if (changed.changes !== family.length) throw new MetadataWriteError('Canonical relocation Host family changed during compare-and-set');
+        return readFamily(value.rootSessionId);
+      });
+    } catch (error) { throw writeFailure(error); }
+  });
+  const rebindSessionFamily = (input) => moveFamily(input, false);
+  const rollbackSessionFamily = (input) => moveFamily(input, true);
+  const clearRelocation = (input) => lifecycle.run(() => {
+    try {
+      return withTransaction(db, () => {
+        const value = matchingRelocation(input);
+        db.prepare('DELETE FROM host_agent_relocations WHERE root_session_id = ? AND transaction_id = ?').run(value.rootSessionId, value.transactionId);
+      });
+    } catch (error) { throw writeFailure(error); }
+  });
   const listWorkspaces = (projectId) => lifecycle.run(() => {
     try {
       const rows = projectId === undefined
@@ -187,5 +260,5 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
       return { items, errors };
     } catch (error) { throw readFailure(error); }
   });
-  return { ensureWorkspace, getWorkspace, bindSession, getSession, listProjects, listWorkspaces, flush: lifecycle.flush, close: lifecycle.close };
+  return { ensureWorkspace, getWorkspace, bindSession, getSession, listSessionFamily, getRelocation, createRelocation, rebindSessionFamily, rollbackSessionFamily, clearRelocation, listProjects, listWorkspaces, flush: lifecycle.flush, close: lifecycle.close };
 };

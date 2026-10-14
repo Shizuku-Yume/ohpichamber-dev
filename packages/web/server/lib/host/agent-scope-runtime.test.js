@@ -89,10 +89,13 @@ describe('configured Host scope authority', () => {
     expect(scope.cwd).toBe(worktreeDirectory);
     await expect(runtime.registerSessionScope({ ...admittedSession(scope), projectId: 'foreign-project' }))
       .rejects.toMatchObject({ code: 'METADATA_WRITE_FAILED' });
+    await runtime.registerSessionScope(admittedSession(scope));
     execFileSync('git', ['-C', projectDirectory, 'worktree', 'remove', worktreeDirectory]);
     await expect(runtime.listWorkspaces()).resolves.toMatchObject({
       items: [expect.objectContaining({ displayPath: '.' })], errors: {},
     });
+    await expect(runtime.resolveRelocationSourceScope('native-session')).resolves.toMatchObject({ workspaceId: scope.workspaceId, cwd: worktreeDirectory });
+    await expect(runtime.resolveSessionScope('native-session')).rejects.toMatchObject({ code: 'METADATA_READ_FAILED' });
   });
 
   it('does not replace a failed settings read with authoritative empty discovery', async () => {

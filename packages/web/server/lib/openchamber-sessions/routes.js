@@ -3,11 +3,22 @@ import express from 'express';
 import { z } from 'zod';
 import { SessionCreateAckSchema, SessionCreateRequestSchema, RuntimeSessionSchema, SessionSchema, RunSchema, RunAbortRequestSchema, SessionDeleteAckSchema, PromptRequestSchema, CapturedSendOptionsSchema, SessionSnapshotSchema, HistoryPageSchema, SessionMetadataStateSchema, SessionMetadataPatchSchema, SteerRequestSchema, SteerAckSchema, FollowUpRequestSchema, FollowUpAckSchema, ProblemDetailsSchema, ProblemCodeSchema } from '@openchamber/agent-contract';
 import { EntityIdSchema } from '@openchamber/agent-contract';
+import { SessionBranchRequestSchema, SessionBranchResultSchema, SessionRelocateRequestSchema, SessionRelocateResultSchema } from '@openchamber/agent-contract';
+import { HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema } from '@openchamber/agent-service/private-protocol';
 
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
 import { asNonEmptyString } from '../shared/guards.js';
 const SessionForkAckSchema = z.strictObject({ sessionId: z.string().min(1), rootSessionId: z.string().min(1), sessionFile: z.string().min(1), sourceSessionId: z.string().min(1), entryId: z.string().min(1).nullable(), mode: z.enum(['selected', 'full']) });
+const SessionForkRequestSchema = z.strictObject({ messageId: EntityIdSchema.optional(), mode: z.enum(['selected', 'full']) }).refine(
+  (input) => input.mode === 'selected' ? input.messageId !== undefined : input.messageId === undefined,
+  { message: 'Selected forks require a public message ID; full forks do not accept one' },
+);
 const SessionReopenScopeSchema = z.strictObject({ rootSessionId: z.string().min(1), projectId: z.string().min(1), workspaceId: z.string().min(1), cwd: z.string().min(1), agentDirectory: z.string().min(1), agentDirectoryId: z.string().min(1), displayPath: z.string().min(1), env: z.record(z.string(), z.string()).optional() });
+const parseCommand = (schema, payload) => {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) throw new OpenChamberControlError('Session command is invalid', 400);
+  return parsed.data;
+};
 
 
 
@@ -53,6 +64,8 @@ const parseArchiveRequest = (payload) => {
 
 const createCanonicalSessionService = (dependencies) => {
   const { service, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope, listWorkspaceScopes, registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted, directCommandAdmissionStore, publishSessionEvent, archiveStore, sessionMetadataStore, persistSessionMetadata, broadcastGlobalUiEvent } = dependencies;
+  const { agentScopeStore, resolveHostRelocationScope } = dependencies;
+  const relocationControls = new Set();
   const requiredFunctions = [service?.request, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope,
     registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted,
     directCommandAdmissionStore?.claim, directCommandAdmissionStore?.accept];
@@ -64,7 +77,17 @@ const createCanonicalSessionService = (dependencies) => {
     if (!response.ok) { const problem = ProblemDetailsSchema.safeParse(body); const error = new OpenChamberControlError(problem.success ? problem.data.detail : body?.detail || body?.error || 'Agent service request failed', response.status); error.code = problem.success ? problem.data.code : body?.code; throw error; }
     return body;
   };
-  const scopeFor = async (sessionId) => { const scope = await resolveSessionScope(sessionId); if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404); return scope; };
+  const scopeFor = async (sessionId) => {
+    const owner = resolveHostRelocationScope ? await resolveHostRelocationScope(sessionId) : null;
+    if (owner && agentScopeStore && await agentScopeStore.getRelocation(owner.rootSessionId)) {
+      if (relocationControls.has(owner.rootSessionId)) throw new OpenChamberControlError('Session relocation is in progress', 409, { code: 'COMMAND_IN_FLIGHT' });
+      relocationControls.add(owner.rootSessionId);
+      try { await recoverRelocation(owner.rootSessionId); } finally { relocationControls.delete(owner.rootSessionId); }
+    }
+    const scope = await resolveSessionScope(sessionId);
+    if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404);
+    return scope;
+  };
   const hostScopeFor = async (sessionId) => { const scope = await resolveHostSessionScope(sessionId); if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404); return scope; };
   const emit = (event) => { try { publishSessionEvent?.(event); } catch {} try { broadcastGlobalUiEvent?.(event); } catch {} };
   const metadata = { getState: (id) => sessionMetadataStore.getState(id), set: async (id, patch, directory = '') => persistSessionMetadata ? persistSessionMetadata(id, patch, { directory }) : sessionMetadataStore.setSessionMetadata(id, patch) };
@@ -146,15 +169,13 @@ const createCanonicalSessionService = (dependencies) => {
   const followUp = (sessionId, payload = {}, commandId) => deliver('followUp', sessionId, payload, commandId);
   const fork = async (sessionId, payload = {}) => {
     const source = await scopeFor(sessionId);
-    const publicMessageId = asNonEmptyString(payload.messageId);
-    const directEntryId = asNonEmptyString(payload.entryId);
-    const entryId = publicMessageId ? asNonEmptyString((await request(`/internal/sessions/${encodeURIComponent(sessionId)}/native-entry/${encodeURIComponent(publicMessageId)}`)).entryId) : directEntryId;
-    const mode = payload.mode === undefined ? (entryId ? 'selected' : 'full') : payload.mode;
-    if (mode !== 'selected' && mode !== 'full') throw new OpenChamberControlError('Fork mode must be selected or full', 400);
-    if (mode === 'selected' && !entryId) throw new OpenChamberControlError('A native entry identity is required for a selected fork', 400);
-    const body = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/fork`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceSessionId: sessionId, entryId: entryId ?? null, mode }) });
+    const input = parseCommand(SessionForkRequestSchema, payload);
+    await reopen(source);
+    const entryId = input.mode === 'selected' ? asNonEmptyString((await request(`/internal/sessions/${encodeURIComponent(sessionId)}/native-entry/${encodeURIComponent(input.messageId)}`)).entryId) : null;
+    if (input.mode === 'selected' && !entryId) throw new OpenChamberControlError('Selected message is unavailable', 409);
+    const body = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/fork`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceSessionId: sessionId, entryId, mode: input.mode }) });
     const ack = SessionForkAckSchema.parse(body);
-    if (ack.sourceSessionId !== sessionId || (mode === 'selected' && ack.entryId !== entryId) || ack.mode !== mode) throw new OpenChamberControlError('Fork acknowledgement does not match the requested source', 502);
+    if (ack.sourceSessionId !== sessionId || ack.entryId !== entryId || ack.mode !== input.mode) throw new OpenChamberControlError('Fork acknowledgement does not match the requested source', 502);
     const child = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(ack.sessionId)}`));
     if (child.sessionId !== ack.sessionId || child.rootSessionId !== ack.rootSessionId || child.projectId !== source.projectId || child.workspaceId !== source.workspaceId) throw new OpenChamberControlError('Fork acknowledgement is outside the source scope', 502);
     if (!await registerSessionScope(child)) throw new OpenChamberControlError('Forked session scope registration failed', 500);
@@ -209,9 +230,122 @@ const createCanonicalSessionService = (dependencies) => {
   const unarchive = async (payload = {}) => { const parsed = parseIdBatch(payload); if (!parsed.ok) throw new OpenChamberControlError(parsed.error, 400); await Promise.all(parsed.ids.map((id) => hostScopeFor(id))); return archiveStore.unarchive(parsed.ids); };
   const getMetadata = async (id) => { await hostScopeFor(id); const state = await sessionMetadataStore.getState(id); return SessionMetadataStateSchema.parse({ sessionId: id, revision: state?.revision ?? '0', metadata: state?.metadata ?? null }); };
   const setMetadata = async (id, payload = {}) => { const scope = await hostScopeFor(id); const patch = SessionMetadataPatchSchema.parse(payload); const result = await metadata.set(id, patch.changes, scope.cwd); return SessionMetadataStateSchema.parse({ sessionId: id, revision: result.revision, metadata: result.metadata }); };
+  const selectBranch = async (sessionId, payload = {}) => {
+    const input = parseCommand(SessionBranchRequestSchema, payload);
+    const scope = await scopeFor(sessionId);
+    await reopen(scope);
+    const result = SessionBranchResultSchema.parse(await request(`/internal/sessions/${encodeURIComponent(sessionId)}/branch`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }));
+    if (result.sessionId !== sessionId || result.branch.branchId !== input.branchId || BigInt(result.branch.branchVersion) <= BigInt(input.branchVersion)
+      || (input.action === 'revert' ? result.branch.revert?.messageId !== input.messageId : result.branch.revert !== undefined))
+      throw new OpenChamberControlError('Branch acknowledgement does not match its requested owner and selection', 502);
+    return result;
+  };
+  const pendingRelocation = async (rootSessionId) => HostSessionRelocationPendingSchema.parse(await request(`/internal/sessions/${encodeURIComponent(rootSessionId)}/relocation`)).relocation;
+  const sameIntent = (intent, pending) => pending && pending.transactionId === intent.transactionId
+    && pending.sourceWorkspaceId === intent.sourceWorkspaceId && pending.destinationWorkspaceId === intent.destinationWorkspaceId;
+  const familyOwner = async (intent) => {
+    const family = await agentScopeStore.listSessionFamily(intent.rootSessionId);
+    if (!family.some((member) => member.sessionId === intent.rootSessionId)) throw new OpenChamberControlError('Relocation family is unavailable', 503);
+    if (family.every((member) => member.workspaceId === intent.sourceWorkspaceId)) return 'source';
+    if (family.every((member) => member.workspaceId === intent.destinationWorkspaceId)) return 'destination';
+    throw new OpenChamberControlError('Relocation Host ownership has changed', 503);
+  };
+  const assertRelocationRuntime = async (intent, runtime, workspaceId) => {
+    const scope = await agentScopeStore.getWorkspace(workspaceId);
+    if (!scope || runtime.sessionId !== intent.rootSessionId || runtime.rootSessionId !== intent.rootSessionId
+      || runtime.workspaceId !== workspaceId || runtime.projectId !== scope.projectId || (workspaceId === intent.destinationWorkspaceId && runtime.activeRunId !== null))
+      throw new OpenChamberControlError('Relocation acknowledgement is outside its captured Host owner', 502);
+  };
+  const finalizeRelocation = async (intent, action) => {
+    const result = HostSessionRelocationFinalizedSchema.parse(await request(`/internal/sessions/${encodeURIComponent(intent.rootSessionId)}/relocation/finalize`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(HostSessionRelocationFinalizeSchema.parse({ transactionId: intent.transactionId, action })),
+    }));
+    await assertRelocationRuntime(intent, result.session, action === 'commit' ? intent.destinationWorkspaceId : intent.sourceWorkspaceId);
+    return result.session;
+  };
+  const recoverRelocation = async (rootSessionId) => {
+    const intent = await agentScopeStore.getRelocation(rootSessionId);
+    if (!intent) return;
+    const owner = await familyOwner(intent);
+    const pending = await pendingRelocation(rootSessionId);
+    if (pending && !sameIntent(intent, pending)) throw new OpenChamberControlError('Native relocation intent does not match its Host owner', 503);
+    if (pending) await finalizeRelocation(intent, owner === 'destination' ? 'commit' : 'rollback');
+    else {
+      const runtime = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(rootSessionId)}`));
+      await assertRelocationRuntime(intent, runtime, owner === 'destination' ? intent.destinationWorkspaceId : intent.sourceWorkspaceId);
+    }
+    await agentScopeStore.clearRelocation(intent);
+  };
+  const relocationResult = async (rootSessionId, workspaceId) => {
+    const family = await agentScopeStore.listSessionFamily(rootSessionId);
+    const sessions = await Promise.all(family.map(async (member) => {
+      const runtime = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(member.sessionId)}`));
+      if (member.workspaceId !== workspaceId || runtime.sessionId !== member.sessionId || runtime.rootSessionId !== rootSessionId || runtime.workspaceId !== workspaceId || runtime.projectId !== member.projectId)
+        throw new OpenChamberControlError('Relocation family projection is outside its destination owner', 502);
+      const [stored, archive] = await Promise.all([sessionMetadataStore.getState(member.sessionId), archiveStore.getState(member.sessionId)]);
+      return SessionSchema.parse({ ...runtime, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', archiveRevision: archive?.revision ?? '0', ...(archive?.archivedAt != null ? { archivedAt: archive.archivedAt } : {}) });
+    }));
+    return SessionRelocateResultSchema.parse({ sessions });
+  };
+  const relocate = async (sessionId, payload = {}) => {
+    const input = parseCommand(SessionRelocateRequestSchema, payload);
+    if (!agentScopeStore || !resolveHostRelocationScope) throw new OpenChamberControlError('Host relocation authority is unavailable', 503);
+    let source = await resolveHostRelocationScope(sessionId);
+    if (!source || source.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404);
+    const rootSessionId = source.rootSessionId;
+    if (relocationControls.has(rootSessionId)) throw new OpenChamberControlError('Session relocation is in progress', 409, { code: 'COMMAND_IN_FLIGHT' });
+    relocationControls.add(rootSessionId);
+    try {
+      await recoverRelocation(rootSessionId);
+      source = await resolveHostRelocationScope(sessionId);
+      if (!source) throw new OpenChamberControlError('Session scope was not found', 404);
+      const destination = await resolveWorkspaceScope(input.workspaceId);
+      if (!destination || destination.projectId !== source.projectId || destination.agentDirectoryId !== source.agentDirectoryId)
+        throw new OpenChamberControlError('Relocation destination is outside the source Host owner', 403);
+      if (destination.workspaceId === source.workspaceId) return relocationResult(rootSessionId, destination.workspaceId);
+      const intent = { rootSessionId, transactionId: randomUUID(), sourceWorkspaceId: source.workspaceId, destinationWorkspaceId: destination.workspaceId };
+      await agentScopeStore.createRelocation(intent);
+      try {
+        const prepared = HostSessionRelocationPreparedSchema.parse(await request(`/internal/sessions/${encodeURIComponent(rootSessionId)}/relocation/prepare`, {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(HostSessionRelocationPrepareSchema.parse({
+            transactionId: intent.transactionId, sourceWorkspaceId: source.workspaceId,
+            destination: { rootSessionId, projectId: destination.projectId, workspaceId: destination.workspaceId, cwd: destination.cwd, agentDirectory: destination.agentDirectory,
+              agentDirectoryId: destination.agentDirectoryId, displayPath: destination.displayPath ?? 'workspace', ...(destination.env ? { env: destination.env } : {}) },
+          })),
+        }));
+        if (prepared.transactionId !== intent.transactionId) throw new OpenChamberControlError('Relocation acknowledgement identified another transaction', 502);
+        await assertRelocationRuntime(intent, prepared.session, destination.workspaceId);
+        await agentScopeStore.rebindSessionFamily(intent);
+        await finalizeRelocation(intent, 'commit');
+        await agentScopeStore.clearRelocation(intent);
+      } catch (error) {
+        // An unreadable response is not proof of failure. Only a matching durable
+        // native intent permits rollback; a completed destination is reconciled.
+        const pending = await pendingRelocation(rootSessionId);
+        if (pending && !sameIntent(intent, pending)) throw new OpenChamberControlError('Native relocation recovery owner has changed', 503);
+        const owner = await familyOwner(intent);
+        if (!pending && owner === 'destination') {
+          const runtime = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(rootSessionId)}`));
+          await assertRelocationRuntime(intent, runtime, destination.workspaceId);
+          await agentScopeStore.clearRelocation(intent);
+          return relocationResult(rootSessionId, destination.workspaceId);
+        }
+        if (pending) {
+          if (owner === 'destination') await agentScopeStore.rollbackSessionFamily(intent);
+          await finalizeRelocation(intent, 'rollback');
+        } else {
+          const runtime = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(rootSessionId)}`));
+          await assertRelocationRuntime(intent, runtime, source.workspaceId);
+        }
+        await agentScopeStore.clearRelocation(intent);
+        throw error;
+      }
+      return relocationResult(rootSessionId, destination.workspaceId);
+    } finally { relocationControls.delete(rootSessionId); }
+  };
   const control = async (sessionId, operation = {}) => { await scopeFor(sessionId); if (operation?.type !== 'abort') throw new OpenChamberControlError('Unsupported session control operation', 400); const parsed = RunAbortRequestSchema.parse({ sessionId, runId: operation.runId }); const body = await request(`/api/agent/v1/sessions/${encodeURIComponent(parsed.sessionId)}/runs/${encodeURIComponent(parsed.runId)}/abort`, { method: 'POST' }); return { run: RunSchema.parse(body?.run) }; };
   const remove = async (id) => { await scopeFor(id); const ack = SessionDeleteAckSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })); if (ack.sessionId !== id) throw new OpenChamberControlError('Session deletion acknowledgement identified another session', 502); return ack; };
-  return { create, send, steer, followUp, fork, delete: remove, open, history, list, control, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, sessionMetadataStore, archiveStore };
+  return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, control, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, sessionMetadataStore, archiveStore };
 };
 
 
@@ -336,4 +470,6 @@ export const registerCanonicalSessionRoutes = (router, service) => {
   router.delete('/:sessionId', (req, res) => call(res, () => service.delete(req.params.sessionId), 'Failed to delete session'));
   router.get('/:sessionId/metadata', (req, res) => call(res, () => service.getMetadata(req.params.sessionId), 'Failed to read session metadata'));
   router.patch('/:sessionId/metadata', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.setMetadata(req.params.sessionId, req.body || {}), 'Failed to write session metadata'));
+  router.post('/:sessionId/branch', express.json({ limit: '256kb' }), (req, res) => call(res, () => service.selectBranch(req.params.sessionId, req.body || {}), 'Failed to select session branch'));
+  router.post('/:sessionId/relocate', express.json({ limit: '256kb' }), (req, res) => call(res, () => service.relocate(req.params.sessionId, req.body || {}), 'Failed to relocate session'));
 };

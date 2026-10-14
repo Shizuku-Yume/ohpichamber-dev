@@ -104,4 +104,49 @@ describe('durable canonical Host scopes', () => {
     try { await expect(reopened.agentScopeStore.getWorkspace(captured.workspaceId)).resolves.toEqual(captured); }
     finally { await reopened.close(); }
   });
+  it('persists relocation intent and moves and rolls back the complete family across restart', async () => {
+    const { root, otherWorkspace, input } = fixture();
+    const owner = createHostSessionState({ dataDir: root });
+    const store = owner.agentScopeStore;
+    const source = await store.ensureWorkspace(input);
+    const destination = await store.ensureWorkspace({ ...input, workspaceDirectory: otherWorkspace });
+    await store.bindSession({ sessionId: 'root-session', rootSessionId: 'root-session', workspaceId: source.workspaceId });
+    await store.bindSession({ sessionId: 'child-session', rootSessionId: 'root-session', workspaceId: source.workspaceId });
+    await store.bindSession({ sessionId: 'unrelated', rootSessionId: 'unrelated', workspaceId: source.workspaceId });
+    const intent = { rootSessionId: 'root-session', transactionId: 'relocation-one', sourceWorkspaceId: source.workspaceId, destinationWorkspaceId: destination.workspaceId };
+    await store.createRelocation(intent);
+    await expect(store.rebindSessionFamily({ ...intent, transactionId: 'stale' })).rejects.toMatchObject({ code: 'METADATA_WRITE_FAILED' });
+    const family = await store.rebindSessionFamily(intent);
+    expect(family.map((member) => member.sessionId)).toEqual(['child-session', 'root-session']);
+    expect(family.every((member) => member.workspaceId === destination.workspaceId)).toBe(true);
+    await expect(store.getSession('unrelated')).resolves.toMatchObject({ workspaceId: source.workspaceId });
+    await owner.close();
+    const reopened = createHostSessionState({ dataDir: root });
+    try {
+      await expect(reopened.agentScopeStore.getRelocation('root-session')).resolves.toEqual(intent);
+      await reopened.agentScopeStore.rollbackSessionFamily(intent);
+      expect((await reopened.agentScopeStore.listSessionFamily('root-session')).every((member) => member.workspaceId === source.workspaceId)).toBe(true);
+      await reopened.agentScopeStore.clearRelocation(intent);
+      await expect(reopened.agentScopeStore.getRelocation('root-session')).resolves.toBeNull();
+    } finally { await reopened.close(); }
+  });
+
+  it('rejects a partial-family compare-and-set rather than moving a subset', async () => {
+    const { root, otherWorkspace, input } = fixture();
+    const owner = createHostSessionState({ dataDir: root });
+    const store = owner.agentScopeStore;
+    const source = await store.ensureWorkspace(input);
+    const destination = await store.ensureWorkspace({ ...input, workspaceDirectory: otherWorkspace });
+    await store.bindSession({ sessionId: 'root-session', rootSessionId: 'root-session', workspaceId: source.workspaceId });
+    await store.bindSession({ sessionId: 'child-session', rootSessionId: 'root-session', workspaceId: source.workspaceId });
+    const intent = { rootSessionId: 'root-session', transactionId: 'relocation-one', sourceWorkspaceId: source.workspaceId, destinationWorkspaceId: destination.workspaceId };
+    await store.createRelocation(intent);
+    const database = new DatabaseSync(owner.databasePath);
+    try {
+      database.prepare('UPDATE host_agent_sessions SET workspace_id = ? WHERE session_id = ?').run(destination.workspaceId, 'child-session');
+      await expect(store.rebindSessionFamily(intent)).rejects.toMatchObject({ code: 'METADATA_WRITE_FAILED' });
+      await expect(store.getSession('root-session')).resolves.toMatchObject({ workspaceId: source.workspaceId });
+      await expect(store.getRelocation('root-session')).resolves.toEqual(intent);
+    } finally { database.close(); await owner.close(); }
+  });
 });

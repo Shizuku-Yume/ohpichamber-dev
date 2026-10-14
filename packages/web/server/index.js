@@ -644,6 +644,8 @@ const openChamberSessionService = createOpenChamberSessionService({
   resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
+  resolveHostRelocationScope: hostAgentRuntime.resolveHostRelocationScope,
+  agentScopeStore,
   listWorkspaceScopes,
   registerSessionScope: agentScopeRuntime.registerSessionScope,
   resolveAttachments,
