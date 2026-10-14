@@ -114,8 +114,13 @@ describe("canonical session snapshot loading", () => {
     expect(store.getState().session[0]).toMatchObject({ metadata: host.metadata, metadataRevision: "5", archiveRevision: "8", archivedAt: 3 })
     const unprojected = { ...target, sessionId: "session-unprojected" }
     const failing = setup({ client: nativeClient({ listSessions: async () => { throw new Error("discovery failed") } }) })
+    // Directory managers hydrate the same persisted Host projection. A failed
+    // discovery for another session must not erase this valid sibling.
+    const priorSibling = failing.store.getState().session.find(item => item.sessionId === target.sessionId)
+    expect(priorSibling).toEqual(store.getState().session.find(item => item.sessionId === target.sessionId))
     await failing.loader.ensure(unprojected)
-    expect(failing.store.getState().session).toEqual([])
+    expect(failing.store.getState().session.find(item => item.sessionId === unprojected.sessionId)).toBeUndefined()
+    expect(failing.store.getState().session.find(item => item.sessionId === target.sessionId)).toBe(priorSibling)
     expect(failing.store.getState().snapshot[unprojected.sessionId]).toBeDefined()
   })
 

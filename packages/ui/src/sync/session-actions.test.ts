@@ -282,7 +282,8 @@ describe("Host archive transitions over native records", () => {
     expect(await unarchiveSession("child")).toBe(false)
     expect(fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/unarchive"))).toHaveLength(0)
     expect(await unarchiveSessions(["child", "root"])).toEqual({ restoredIds: ["root", "child"], failedIds: [] })
-    expect(fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/unarchive"))).toHaveLength(1)
+    expect(useGlobalSessionsStore.getState().activeSessions.map(item => item.sessionId).sort()).toEqual(["child", "root"])
+    expect(useGlobalSessionsStore.getState().activeSessions.every(item => item.archivedAt === undefined)).toBe(true)
     expect(useGlobalSessionsStore.getState().archivedSessions).toEqual([])
   })
 
