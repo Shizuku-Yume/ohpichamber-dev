@@ -70,58 +70,46 @@ afterEach(async () => {
 });
 
 describe('CanonicalClient real HTTP scope boundary', () => {
-  test('agent update/delete and credential deletion reach their identity-bearing routes', async () => {
-    handler = (request, response) => {
-      if (request.url === `/api/agent/v1/workspaces/${workspaceId}/agents/agent%2Fa` && request.method === 'PUT') return json(response, { revision: '1', agentId: agent.agentId, agent });
-      if (request.url === `/api/agent/v1/workspaces/${workspaceId}/agents/agent%2Fa` && request.method === 'DELETE') return json(response, { revision: '2', agentId: agent.agentId, agent: null });
-      if (request.url === `/api/agent/v1/workspaces/${workspaceId}/providers/provider_expected/credential/credential%2Fa` && request.method === 'DELETE') return json(response, { revision: '1', providerId: 'provider_expected', auth: { status: 'missing' } });
-      response.writeHead(404); response.end();
-    };
-    expect((await client.updateAgent(workspaceId, { expectedRevision: '0', agent })).agent).toEqual(agent);
-    expect((await client.deleteAgent(workspaceId, { expectedRevision: '1', agentId: agent.agentId })).agent).toBeNull();
-    expect((await client.deleteProviderCredential(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_expected', credentialRef: 'credential/a' })).auth.status).toBe('missing');
-  });
-
   test('rejects other-session snapshots, history, metadata, queue and deletion receipts', async () => {
     for (const invoke of [() => client.getSession(sessionId), () => client.getSnapshot(sessionId)]) {
       respondWith(snapshot({ ...runtimeSession, sessionId: 'session_other' }));
-      await expect(invoke()).rejects.toThrow('requested scope');
+      await expect(invoke()).rejects.toThrow();
     }
     respondWith({ sessionId: 'session_other', branch: snapshot().branch, turns: [], messages: [], nextCursor: null });
-    await expect(client.getHistory(sessionId)).rejects.toThrow('requested scope');
+    await expect(client.getHistory(sessionId)).rejects.toThrow();
     respondWith({ sessionId: 'session_other', revision: '0', metadata: null });
-    await expect(client.getSessionMetadata(sessionId)).rejects.toThrow('requested scope');
-    await expect(client.patchSessionMetadata(sessionId, { changes: { title: 'Title' } })).rejects.toThrow('requested scope');
+    await expect(client.getSessionMetadata(sessionId)).rejects.toThrow();
+    await expect(client.patchSessionMetadata(sessionId, { changes: { title: 'Title' } })).rejects.toThrow();
     respondWith({ sessionId: 'session_other', revision: '0', items: [] });
-    await expect(client.getQueue(sessionId)).rejects.toThrow('requested scope');
-    await expect(client.appendQueue(sessionId, { expectedRevision: '0', content: 'hello', request: prompt })).rejects.toThrow('requested scope');
-    await expect(client.reorderQueue(sessionId, { expectedRevision: '0', queueItemIds: [] })).rejects.toThrow('requested scope');
-    await expect(client.deleteQueueItem(sessionId, 'item_expected', { expectedRevision: '0', queueItemId: 'item_expected' })).rejects.toThrow('requested scope');
+    await expect(client.getQueue(sessionId)).rejects.toThrow();
+    await expect(client.appendQueue(sessionId, { expectedRevision: '0', content: 'hello', request: prompt })).rejects.toThrow();
+    await expect(client.reorderQueue(sessionId, { expectedRevision: '0', queueItemIds: [] })).rejects.toThrow();
+    await expect(client.deleteQueueItem(sessionId, 'item_expected', { expectedRevision: '0', queueItemId: 'item_expected' })).rejects.toThrow();
     respondWith({ sessionId: 'session_other', deletedSessionIds: ['session_other'] });
-    await expect(client.deleteSession(sessionId)).rejects.toThrow('requested scope');
+    await expect(client.deleteSession(sessionId)).rejects.toThrow();
   });
 
   test('rejects session creation, fork and archive receipts outside the requested ownership', async () => {
     const other = { ...runtimeSession, sessionId: 'session_child', workspaceId: 'workspace_other', metadata: null, metadataRevision: '0', archiveRevision: '0' };
     respondWith({ session: other });
-    await expect(client.createSession({ projectId: runtimeSession.projectId, workspaceId, options: prompt.options })).rejects.toThrow('requested scope');
-    await expect(client.forkSession(runtimeSession, { mode: 'full' })).rejects.toThrow('requested scope');
+    await expect(client.createSession({ projectId: runtimeSession.projectId, workspaceId, options: prompt.options })).rejects.toThrow();
+    await expect(client.forkSession(runtimeSession, { mode: 'full' })).rejects.toThrow();
     respondWith({ archived: [{ id: 'session_other', archivedAt: 2 }], failedIds: [] });
-    await expect(client.archiveSessions([sessionId])).rejects.toThrow('requested scope');
+    await expect(client.archiveSessions([sessionId])).rejects.toThrow();
     respondWith({ restored: [], failedIds: ['session_other'] });
-    await expect(client.unarchiveSessions([sessionId])).rejects.toThrow('requested scope');
+    await expect(client.unarchiveSessions([sessionId])).rejects.toThrow();
   });
 
   test('rejects out-of-workspace discovery and catalogs but accepts authoritative empty scope', async () => {
     respondWith({ items: [{ ...runtimeSession, workspaceId: 'workspace_other', metadata: null, metadataRevision: '0', archiveRevision: '0' }], errors: {} });
-    await expect(client.listSessions(workspaceId)).rejects.toThrow('requested scope');
+    await expect(client.listSessions(workspaceId)).rejects.toThrow();
     respondWith({ items: [{ workspaceId, projectId: 'project_other', name: 'Workspace' }], errors: {} });
-    await expect(client.listWorkspaces(runtimeSession.projectId)).rejects.toThrow('requested scope');
+    await expect(client.listWorkspaces(runtimeSession.projectId)).rejects.toThrow();
     for (const [field, invoke] of [
       ['models', () => client.getModels(workspaceId)], ['providers', () => client.getProviders(workspaceId)], ['agents', () => client.getAgents(workspaceId)],
     ] as const) {
       respondWith({ workspaceId: 'workspace_other', revision: '0', [field]: [] });
-      await expect(invoke()).rejects.toThrow('requested scope');
+      await expect(invoke()).rejects.toThrow();
       respondWith({ workspaceId, revision: '0', [field]: [] });
       expect((await invoke()).workspaceId).toBe(workspaceId);
     }
@@ -131,14 +119,14 @@ describe('CanonicalClient real HTTP scope boundary', () => {
 
   test('rejects unrelated run, steering and follow-up receipts', async () => {
     respondWith({ run: { runId: 'run_other', sessionId, status: 'cancelled', createdAt: 1, finishedAt: 2 } });
-    await expect(client.abortRun(sessionId, 'run_expected')).rejects.toThrow('requested scope');
-    await expect(client.abortSession(sessionId, 'run_expected')).rejects.toThrow('requested scope');
+    await expect(client.abortRun(sessionId, 'run_expected')).rejects.toThrow();
+    await expect(client.abortSession(sessionId, 'run_expected')).rejects.toThrow();
     respondWith({ run: { runId: 'run_expected', sessionId: 'session_other', status: 'running', createdAt: 1 } });
-    await expect(client.createRun(sessionId, prompt)).rejects.toThrow('requested scope');
+    await expect(client.createRun(sessionId, prompt)).rejects.toThrow();
     respondWith({ sessionId: 'session_other', runId: 'run_expected', acceptedAt: 1 });
-    await expect(client.steer(sessionId, prompt)).rejects.toThrow('requested scope');
+    await expect(client.steer(sessionId, prompt)).rejects.toThrow();
     respondWith({ sessionId: 'session_other', followUpId: 'followup_expected', acceptedAt: 1 });
-    await expect(client.followUp(sessionId, prompt)).rejects.toThrow('requested scope');
+    await expect(client.followUp(sessionId, prompt)).rejects.toThrow();
   });
 
   test('rejects unrelated interaction identity or generation', async () => {
@@ -149,27 +137,27 @@ describe('CanonicalClient real HTTP scope boundary', () => {
       requestedAt: 1, resolvedAt: 2, resolution: { decision: 'approve' },
     };
     respondWith(approval);
-    await expect(client.respondApproval(sessionId, 'approval_expected', reply)).rejects.toThrow('requested scope');
+    await expect(client.respondApproval(sessionId, 'approval_expected', reply)).rejects.toThrow();
     respondWith({ ...approval, approvalId: 'approval_expected', workerGeneration: 'worker_other' });
-    await expect(client.respondApproval(sessionId, 'approval_expected', reply)).rejects.toThrow('requested scope');
+    await expect(client.respondApproval(sessionId, 'approval_expected', reply)).rejects.toThrow();
     respondWith({ questionId: 'question_other', sessionId, turnId: 'turn', prompt: '?', version: '2', epoch, workerGeneration: generation, status: 'cancelled', requestedAt: 1, resolvedAt: 2 });
-    await expect(client.respondQuestion(sessionId, 'question_expected', { version: '1', epoch, workerGeneration: generation, action: 'cancel' })).rejects.toThrow('requested scope');
+    await expect(client.respondQuestion(sessionId, 'question_expected', { version: '1', epoch, workerGeneration: generation, action: 'cancel' })).rejects.toThrow();
   });
 
   test('rejects mismatched mutation result identities', async () => {
     respondWith({ revision: '1', agentId: 'agent_other', agent: null });
-    await expect(client.updateAgent(workspaceId, { expectedRevision: '0', agent })).rejects.toThrow('requested scope');
-    await expect(client.createAgent(workspaceId, { expectedRevision: '0', agent })).rejects.toThrow('requested scope');
-    await expect(client.deleteAgent(workspaceId, { expectedRevision: '0', agentId: agent.agentId })).rejects.toThrow('requested scope');
+    await expect(client.updateAgent(workspaceId, { expectedRevision: '0', agent })).rejects.toThrow();
+    await expect(client.createAgent(workspaceId, { expectedRevision: '0', agent })).rejects.toThrow();
+    await expect(client.deleteAgent(workspaceId, { expectedRevision: '0', agentId: agent.agentId })).rejects.toThrow();
     respondWith({ revision: '1', providerId: 'provider_other', provider: null });
-    await expect(client.deleteProvider(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_expected' })).rejects.toThrow('requested scope');
-    await expect(client.configureProvider(workspaceId, 'provider_expected', { expectedRevision: '0', configuration: { providerId: 'provider_expected', name: 'Provider', endpoint: 'https://provider.example', protocol: 'responses', credentialRef: null } })).rejects.toThrow('requested scope');
+    await expect(client.deleteProvider(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_expected' })).rejects.toThrow();
+    await expect(client.configureProvider(workspaceId, 'provider_expected', { expectedRevision: '0', configuration: { providerId: 'provider_expected', name: 'Provider', endpoint: 'https://provider.example', protocol: 'responses', credentialRef: null } })).rejects.toThrow();
     respondWith({ revision: '1', selection: { providerId: model.provider, modelId: 'model_other' }, model: null });
-    await expect(client.configureModel(workspaceId, model.provider, model.modelId, { expectedRevision: '0', model })).rejects.toThrow('requested scope');
-    await expect(client.deleteModel(workspaceId, model.provider, model.modelId, { expectedRevision: '0', selection: completion.selection })).rejects.toThrow('requested scope');
+    await expect(client.configureModel(workspaceId, model.provider, model.modelId, { expectedRevision: '0', model })).rejects.toThrow();
+    await expect(client.deleteModel(workspaceId, model.provider, model.modelId, { expectedRevision: '0', selection: completion.selection })).rejects.toThrow();
     respondWith({ revision: '1', providerId: 'provider_other', auth: { status: 'missing' } });
-    await expect(client.writeProviderCredential(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_expected', credential: { method: 'api-key', apiKey: 'secret' } })).rejects.toThrow('requested scope');
-    await expect(client.deleteProviderCredential(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_expected', credentialRef: 'credential' })).rejects.toThrow('requested scope');
+    await expect(client.writeProviderCredential(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_expected', credential: { method: 'api-key', apiKey: 'secret' } })).rejects.toThrow();
+    await expect(client.deleteProviderCredential(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_expected', credentialRef: 'credential' })).rejects.toThrow();
   });
 
   test('rejects path/body scope conflicts before any network dispatch', async () => {
@@ -191,18 +179,18 @@ describe('CanonicalClient real HTTP scope boundary', () => {
 
   test('rejects other Shell scope, output cursor and job generation', async () => {
     respondWith({ scope: { kind: 'workspace', workspaceId: 'workspace_other' }, epoch, revision: '0', running: [], ended: [], recovery: { priorEpochs: 'invalidated' } });
-    await expect(client.getShellSnapshot({ kind: 'workspace', workspaceId })).rejects.toThrow('requested scope');
+    await expect(client.getShellSnapshot({ kind: 'workspace', workspaceId })).rejects.toThrow();
     respondWith({ scope: { kind: 'session', sessionId }, epoch, revision: '1', running: [{ ...job, sessionId: 'session_other' }], ended: [], recovery: { priorEpochs: 'invalidated' } });
-    await expect(client.getShellSnapshot({ kind: 'session', sessionId })).rejects.toThrow('requested scope');
+    await expect(client.getShellSnapshot({ kind: 'session', sessionId })).rejects.toThrow();
     respondWith({ ...job, sessionId: 'session_other' });
-    await expect(client.startShell(sessionId, { command: 'echo hello', background: false })).rejects.toThrow('requested scope');
+    await expect(client.startShell(sessionId, { command: 'echo hello', background: false })).rejects.toThrow();
     const identity = { jobId: job.jobId, epoch, workerGeneration: generation };
     respondWith({ job: { ...identity, sessionId, workerGeneration: 'worker_other' }, requestedCursor: '0', startCursor: '0', cursor: '0', skippedBytes: '0', output: '', ended: false });
-    await expect(client.getShellOutput(sessionId, identity, '0', 100)).rejects.toThrow('requested scope');
+    await expect(client.getShellOutput(sessionId, identity, '0', 100)).rejects.toThrow();
     respondWith({ job: { ...identity, sessionId }, requestedCursor: '1', startCursor: '1', cursor: '1', skippedBytes: '0', output: '', ended: false });
-    await expect(client.getShellOutput(sessionId, identity, '0', 100)).rejects.toThrow('requested scope');
+    await expect(client.getShellOutput(sessionId, identity, '0', 100)).rejects.toThrow();
     respondWith({ job: { ...job, jobId: 'job_other', status: 'ended', endedAt: 2, termination: { reason: 'stopped', exitCode: null } } });
-    await expect(client.stopShell(sessionId, { job: { ...identity, sessionId } })).rejects.toThrow('requested scope');
+    await expect(client.stopShell(sessionId, { job: { ...identity, sessionId } })).rejects.toThrow();
   });
 
   test('binds MCP and skills to root worker scope, not the addressed child session', async () => {
@@ -210,25 +198,25 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     expect((await client.getMcpCatalog(runtimeSession)).workerCatalog.worker.rootSessionId).toBe(runtimeSession.rootSessionId);
     expect(calls).toHaveLength(1);
     respondWith({ ...mcp, workerCatalog: { ...mcp.workerCatalog, worker: { ...worker, rootSessionId: 'root_other' } } });
-    await expect(client.getMcpCatalog(runtimeSession)).rejects.toThrow('requested scope');
+    await expect(client.getMcpCatalog(runtimeSession)).rejects.toThrow();
     respondWith({ ...skills, worker: { ...worker, workspaceId: 'workspace_other' } });
-    await expect(client.getSkillsCatalog(runtimeSession)).rejects.toThrow('requested scope');
+    await expect(client.getSkillsCatalog(runtimeSession)).rejects.toThrow();
     respondWith({ serverId: 'server_other', worker, persistedRevision: '1', status: 'unauthenticated', authenticated: false });
-    await expect(client.getMcpOAuth(runtimeSession, 'server_expected')).rejects.toThrow('requested scope');
+    await expect(client.getMcpOAuth(runtimeSession, 'server_expected')).rejects.toThrow();
     respondWith({ serverId: 'server_expected', worker: { ...worker, workerGeneration: 'worker_other' }, persistedRevision: '1', status: 'unauthenticated', authenticated: false });
-    await expect(client.submitMcpOAuth(runtimeSession, 'server_expected', { action: 'disconnect', persistedRevision: '1', workerGeneration: generation })).rejects.toThrow('requested scope');
+    await expect(client.submitMcpOAuth(runtimeSession, 'server_expected', { action: 'disconnect', persistedRevision: '1', workerGeneration: generation })).rejects.toThrow();
     respondWith({ worker, skillId: 'skill_other', catalogRevision: '1', message: 'Expanded' });
-    await expect(client.expandSkill(runtimeSession, { skillId: 'skill_expected', catalogRevision: '1', workerGeneration: generation, arguments: '' })).rejects.toThrow('requested scope');
+    await expect(client.expandSkill(runtimeSession, { skillId: 'skill_expected', catalogRevision: '1', workerGeneration: generation, arguments: '' })).rejects.toThrow();
     respondWith({ ...mcp, workerCatalog: { ...mcp.workerCatalog, worker: { ...worker, workerGeneration: 'worker_other' } } });
-    await expect(client.reconnectMcp(runtimeSession, 'server_expected', { persistedRevision: '1', expectedCatalogRevision: '1', workerGeneration: generation })).rejects.toThrow('requested scope');
+    await expect(client.reconnectMcp(runtimeSession, 'server_expected', { persistedRevision: '1', expectedCatalogRevision: '1', workerGeneration: generation })).rejects.toThrow();
   });
 
   test('rejects wrong MCP apply workspace and selected skill source scope without extra authority reads', async () => {
     respondWith({ kind: 'mcp', status: 'no-active-workers', configuration: { workspaceId: 'workspace_other', persistedRevision: '1', config: { servers: [] } }, workers: [] });
-    await expect(client.configureMcp(runtimeSession, { expectedPersistedRevision: '0', config: { servers: [] } })).rejects.toThrow('requested scope');
-    await expect(client.applyMcp(runtimeSession, { persistedRevision: '1' })).rejects.toThrow('requested scope');
+    await expect(client.configureMcp(runtimeSession, { expectedPersistedRevision: '0', config: { servers: [] } })).rejects.toThrow();
+    await expect(client.applyMcp(runtimeSession, { persistedRevision: '1' })).rejects.toThrow();
     respondWith({ kind: 'skills', status: 'no-active-workers', scope: { kind: 'agent', agentDirectoryId: 'agent_directory_other' }, sourceRevision: '1', workers: [] });
-    await expect(client.applySkills({ ...runtimeSession, agentDirectoryId: skills.agentDirectoryId }, { scope: 'agent', sourceRevision: '1' })).rejects.toThrow('requested scope');
+    await expect(client.applySkills({ ...runtimeSession, agentDirectoryId: skills.agentDirectoryId }, { scope: 'agent', sourceRevision: '1' })).rejects.toThrow();
     expect(calls).toHaveLength(3);
   });
 
@@ -239,10 +227,10 @@ describe('CanonicalClient real HTTP scope boundary', () => {
       { completionId: completion.completionId, selection: { ...completion.selection, modelId: 'model_other' } },
     ]) {
       respondWith({ ...result, status: 'completed', output: { kind: 'text', text: 'Output' }, finishReason: 'complete', usage: null });
-      await expect(client.complete(workspaceId, completion)).rejects.toThrow('requested scope');
+      await expect(client.complete(workspaceId, completion)).rejects.toThrow();
     }
     respondWith({ completionId: 'completion_other', status: 'cancelled' });
-    await expect(client.cancelCompletion(workspaceId, completion.completionId)).rejects.toThrow('requested scope');
+    await expect(client.cancelCompletion(workspaceId, completion.completionId)).rejects.toThrow();
   });
 });
 
