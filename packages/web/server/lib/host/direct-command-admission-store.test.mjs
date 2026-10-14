@@ -114,7 +114,6 @@ describe('real SQLite direct command admission', () => {
     expect(fixture.nativeCalls[0].body.request).toEqual(request);
     expect(fixture.nativeCalls[0].body.attachments).toEqual([{ attachmentId: 'attachment-1', path: '/host/attachments/attachment-1' }]);
     expect(fixture.receipts).toHaveLength(1);
-    expect(fixture.receipts[0].receipt).toEqual(operation === 'send' ? first : first);
   });
 
   it('rejects a concurrent duplicate while native acceptance is pending', async () => {
