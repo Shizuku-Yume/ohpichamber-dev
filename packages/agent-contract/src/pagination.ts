@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { CounterSchema, EntityIdSchema } from './primitives.ts';
-import { SessionSchema } from './session.ts';
+import { EntityIdSchema } from './primitives.ts';
+import { SessionSchema, SessionBranchStateSchema } from './session.ts';
 import { MessageSchema, TurnSchema } from './messages.ts';
 import { ModelSchema } from './catalogs.ts';
 
@@ -15,7 +15,7 @@ export const HistoryPageRequestSchema = z.strictObject({
 export type HistoryPageRequest = z.infer<typeof HistoryPageRequestSchema>;
 export const HistoryPageSchema = z.strictObject({
   sessionId: EntityIdSchema,
-  branch: z.strictObject({ branchId: EntityIdSchema, branchVersion: CounterSchema, leafMessageId: EntityIdSchema.nullable() }),
+  branch: SessionBranchStateSchema,
   turns: z.array(TurnSchema), messages: z.array(MessageSchema), nextCursor: PaginationCursorSchema.nullable(),
 }).refine((page) => page.turns.every((turn) => turn.sessionId === page.sessionId)
   && page.messages.every((message) => message.sessionId === page.sessionId), {

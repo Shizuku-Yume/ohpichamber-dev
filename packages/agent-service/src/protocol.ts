@@ -1,4 +1,4 @@
-import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema } from '@openchamber/agent-contract';
+import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { ProjectionInputSchema, ProjectionSeedSchema } from './projection/protocol.ts';
@@ -63,6 +63,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('approval.resolve'), approvalId: EntityIdSchema, decision: z.enum(['approve', 'reject']), policy: WorkerApprovalPolicySchema.optional() }),
   z.strictObject({ type: z.literal('question.resolve'), questionId: EntityIdSchema, action: z.enum(['answer', 'cancel']), response: JsonValueSchema.optional() }),
   z.strictObject({ type: z.literal('history'), request: HistoryPageRequestSchema }),
+  z.strictObject({ type: z.literal('branch'), request: SessionBranchRequestSchema }),
   z.strictObject({ type: z.literal('delete') }),
   z.strictObject({ type: z.literal('catalog'), operation: CatalogOperationSchema, revision: CounterSchema }),
   z.strictObject({ type: z.literal('mcp'), operation: McpOperationSchema }),
@@ -90,6 +91,7 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('approval.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('question.resolve'), resolved: z.literal(true) }),
   z.strictObject({ type: z.literal('history'), history: HistoryPageSchema }),
+  z.strictObject({ type: z.literal('branch'), result: SessionBranchResultSchema, seed: ProjectionSeedSchema }),
   z.strictObject({ type: z.literal('delete'), deletedSessionIds: z.array(EntityIdSchema).min(1) }),
   z.strictObject({ type: z.literal('catalog'), result: CatalogResultSchema }),
   z.strictObject({ type: z.literal('mcp'), result: McpResultSchema }),
