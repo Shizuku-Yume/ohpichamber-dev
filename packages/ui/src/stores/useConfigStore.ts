@@ -12,7 +12,7 @@ import { isSameProjectConfigError, readProjectConfigError, type ProjectConfigErr
 import { scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
 import type { ModelMetadata } from "@/types";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
-import { filterVisibleAgents, isAgentHidden } from "./useAgentsStore";
+import { filterVisibleAgents, isAgentHidden } from '@/lib/opencode/model';
 import { isPrimaryMode } from "@/components/chat/mobileControlsUtils";
 import { useSessionUIStore } from "@/sync/session-ui-store";
 import { useSelectionStore } from "@/sync/selection-store";

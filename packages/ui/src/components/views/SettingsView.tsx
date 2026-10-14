@@ -402,7 +402,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (result.id.startsWith('agents.')) {
       const store = useAgentsStore.getState();
       const name = nextUniqueName('new-agent', store.agents.map((agent) => agent.name));
-      store.setAgentDraft({ name, scope: 'user' });
+      store.setAgentDraft({ agentId: crypto.randomUUID(), name, description: '', model: null, allowedTools: [] });
       store.setSelectedAgent(name);
       return result.id === 'agents.create' ? 'agents.name' : result.id;
     }

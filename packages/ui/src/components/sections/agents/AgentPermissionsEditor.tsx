@@ -1,4 +1,5 @@
 import React from 'react';
+import type { Agent } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Icon } from '@/components/icon/Icon';
@@ -11,7 +12,6 @@ import {
   useAgentsStore,
   type PermissionEffect,
   type PermissionRule,
-  type AgentWithExtras,
 } from '@/stores/useAgentsStore';
 import {
   SettingsSection,
@@ -41,13 +41,9 @@ import {
 } from './agentPermissionModel';
 
 /**
- * Tool permissions for one agent.
- *
- * One row per tool: the tool's name, an arrow with what OpenCode will actually
- * do for it right now, and inherit / allow / ask / deny. "Inherit" means the
- * agent says nothing about the tool, so OpenCode's defaults and the global
- * config decide (that is what the arrow shows). A row expands to resource
- * patterns for that tool (`git push *` → deny).
+ * Host-owned ordered tool rules for one agent name. This is a separate Host
+ * config capability, not native Agent.allowedTools or permissionPresetId.
+ * The editor does not infer native execution policy from these rules.
  *
  * Under the hood v2 keeps an ordered rule list where the last match wins;
  * `agentPermissionModel.ts` translates this view to and from that list and
@@ -83,7 +79,7 @@ const PATTERN_HINT_ACTIONS: ReadonlySet<string> = new Set([
 const EMPTY_KEY: KeyState = { effect: null, patterns: [] };
 
 interface AgentPermissionsEditorProps {
-  agent: AgentWithExtras;
+  agent: Agent;
   /**
    * Hand the page this section's save routine. It is called on mount and
    * whenever the routine changes, and with `null` on unmount.
@@ -99,7 +95,7 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
   requestSave,
 }) => {
   const { t } = useI18n();
-  const updateAgent = useAgentsStore((state) => state.updateAgent);
+  const saveHostAgentPermissions = useAgentsStore((state) => state.saveHostAgentPermissions);
   const fetchAgentPermissions = useAgentsStore((state) => state.fetchAgentPermissions);
 
   const [globalRules, setGlobalRules] = React.useState<PermissionRule[]>([]);
@@ -154,14 +150,14 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
   }, [agentName, fetchAgentPermissions, reloadToken, settingsDirectory]);
 
   const save = React.useCallback(async (): Promise<AutosaveResult> => {
-    if (modelsEqual(model, baseline)) return AUTOSAVE_UNCHANGED;
-    const result = await updateAgent(agentName, { permissions: serializeRules(model) }, settingsDirectory);
+    if (isLoading || loadFailed || modelsEqual(model, baseline)) return AUTOSAVE_UNCHANGED;
+    const result = await saveHostAgentPermissions(agentName, serializeRules(model), settingsDirectory);
     if (!result.ok) {
       return autosaveFailed(t('settings.agents.page.permissionsEditor.toast.saveFailed'));
     }
     setBaseline(cloneModel(model));
     return AUTOSAVE_SAVED;
-  }, [agentName, baseline, model, settingsDirectory, t, updateAgent]);
+  }, [agentName, baseline, isLoading, loadFailed, model, settingsDirectory, t, saveHostAgentPermissions]);
 
   React.useEffect(() => {
     registerSave(save);

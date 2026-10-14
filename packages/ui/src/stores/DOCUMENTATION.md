@@ -547,31 +547,39 @@ server answered but OpenCode is not healthy), `loadAgents`, or `unexpected` —
 plus the error text when there is one. The startup recovery screen reads it, so
 only a real network failure tells the user to check that the server is running.
 
-#### What they hold: OpenCode 2 entity shapes
+#### Native agent profiles and retained Host configuration
 
-The mutation payloads these stores send are the v2 entities documented in
-`packages/web/server/lib/opencode/DOCUMENTATION.md` ("Entity routes (v2
-shapes)"). Agents carry `system`, `steps`, `request.body.temperature` /
-`top_p`, a joined `provider/model#variant` string and an ordered `permissions`
-rule list; commands carry `template` and `subagent`; MCP servers carry
-`disabled`, `codemode` and `timeout: { startup, catalog, execution }`.
+`useAgentsStore` owns native workspace agent profiles. Web/PWA, Electron,
+hosted mobile and Capacitor all resolve the settings directory with
+`CanonicalClient.resolveWorkspace` and read `getAgents(workspaceId)` through
+the active Host transport. An unavailable workspace/catalog is a failed read,
+not an empty catalog; the previous list remains available and the settings UI
+shows the failure. Runtime switches clear catalog revisions and drafts.
 
-Two rules follow from the routes:
+Agent create/update/delete use native `Agent` records and catalog
+`expectedRevision`. Mutation acknowledgements update the scoped list and its
+revision without waiting for a second read. Retired reads cannot resurrect a
+deleted agent, and older revisions cannot replace newer state. The page keeps
+the revision that hydrated its draft until a successful mutation returns the
+next revision, so background refreshes cannot silently authorize a stale edit.
+Agent IDs remain stable across rename; duplicate creates a new ID. Native
+profiles have no legacy scope, mode, hidden, color, sampling or file metadata.
 
-- **The list is not the config.** `opencodeClient.listAgents` answers OpenCode's
-  RESOLVED `AgentInfo` (built-in defaults and global config already merged), and
-  the v2 `CommandInfo` carries only a name and a description. Anything that
-  edits, duplicates or renames an entity reads its own stored entry instead:
-  `useAgentsStore.fetchAgentEntity` / `fetchAgentPermissions`, and the
-  per-command `…/config` read inside `useCommandsStore.loadCommands`.
-- **`request` and `permissions` are replaced wholesale by a PATCH.** A caller
-  must send the full block it wants persisted; sending only the field it changed
-  drops the rest.
+The ordered permissions editor remains an explicit **Host configuration**
+capability: `fetchAgentPermissions` reads the Host permissions subresource and
+`saveHostAgentPermissions` PATCHes only `{ permissions }`. These rules are not
+native `allowedTools` or `permissionPresetId`; their execution-policy linkage
+is not claimed. Native allowed-tool names and optional preset IDs can be edited
+directly; no preset catalog or invented preset choices exist in this slice.
+The Host-rules/native-execution linkage remains an explicit W9 gap.
 
-Config reads also report `legacy: true` when the entity's file still uses v1
-spellings, and mutations answer with the `path` they wrote. The stores surface
-`legacy` and `path` on the entity so a page can show the quiet note; no file is
-ever moved.
+Retained command and MCP configuration still use their Host entity routes.
+Command editors read their own stored `…/config` entries rather than resolved
+runtime defaults; whole-block PATCH values must preserve untouched keys.
+Their legacy/path notes describe existing files, not native agent profiles.
+SDK agent visibility helpers live with the retained OpenCode model and are
+used only by unmigrated config/chat consumers, not settings agent catalogs.
+
 
 Thinking variants keep the effective value in `currentVariant` so existing send
 paths capture a stable configuration. `currentVariantSelection` says where that

@@ -46,6 +46,13 @@ import type {
  * and carries the wire name as `displayName`.
  */
 export type Agent = Omit<AgentInfo, "name"> & { name: string; displayName: string }
+
+/** Visibility for retained OpenCode catalog consumers; native agents have no hidden field. */
+export const isAgentHidden = (agent: Agent): boolean => {
+  const options = agent as Agent & { options?: { hidden?: boolean } };
+  return agent.hidden === true || options.options?.hidden === true;
+};
+export const filterVisibleAgents = (agents: Agent[]): Agent[] => agents.filter((agent) => !isAgentHidden(agent));
 export type Command = CommandInfo
 export type Skill = SkillInfo
 export type Provider = ProviderInfo
