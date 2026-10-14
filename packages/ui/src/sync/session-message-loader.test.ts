@@ -3,6 +3,7 @@ import type { HistoryPage, SessionSnapshot } from "@openchamber/agent-contract"
 import { ChildStoreManager } from "./child-store"
 import { SessionMessageLoader, type LoaderConfiguration } from "./session-message-loader"
 import { deferred, nativeApproval, nativeClient, nativeHistory, nativeHostSession, nativeMessage, nativeQuestion, nativeSnapshot } from "./session-message-loader-test-fixtures"
+import { clearRuntimeSessionPrefetch, getSessionPrefetch, setSessionPrefetch } from "./session-prefetch-cache"
 
 const cleanups: Array<() => void> = []
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup() })
@@ -431,5 +432,131 @@ describe("native optimistic continuity", () => {
     await loader.ensure(target)
     expect(calls).toBe(1)
     expect(loader.getSnapshot(target).complete).toBe(true)
+  })
+})
+
+describe("native selection recovery cache boundary", () => {
+  afterEach(() => clearRuntimeSessionPrefetch("runtime-a"))
+
+  test("invalidates speculative coverage without requiring a materialized loader entry", () => {
+    const { loader } = setup()
+    const other = { ...target, sessionId: "session-other" }
+    setSessionPrefetch({ ...target, runtimeKey: "runtime-a", limit: 100, complete: true })
+    setSessionPrefetch({ ...other, runtimeKey: "runtime-a", limit: 100, complete: true })
+    loader.invalidateSession(target)
+    expect(getSessionPrefetch(target.directory, target.sessionId, "runtime-a")).toBeUndefined()
+    expect(getSessionPrefetch(other.directory, other.sessionId, "runtime-a")?.complete).toBe(true)
+  })
+
+  test("discarded optimistic shadows cannot reappear after an empty authoritative selection", async () => {
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async sessionId => nativeSnapshot(sessionId, []) }) })
+    const other = { ...target, sessionId: "session-other" }
+    const discarded = nativeMessage(target.sessionId, "discarded", 1)
+    const unrelated = nativeMessage(other.sessionId, "unrelated", 1)
+    loader.optimisticAdd({ ...target, message: discarded })
+    loader.optimisticAdd({ ...other, message: unrelated })
+    const unrelatedMessages = store.getState().message[other.sessionId]
+    loader.invalidateSession(target)
+    await loader.refresh(target)
+    expect(store.getState().message[target.sessionId]).toEqual([])
+    expect(store.getState().partOwner[target.sessionId]).toEqual({})
+    expect(store.getState().message[other.sessionId]).toBe(unrelatedMessages)
+    await loader.refresh(other)
+    expect(store.getState().message[other.sessionId]).toEqual([unrelated])
+  })
+
+  test("a no-op visible selection still clears discarded shadows and speculation", async () => {
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async sessionId => nativeSnapshot(sessionId, []) }) })
+    loader.optimisticAdd({ ...target, message: nativeMessage(target.sessionId, "discarded", 1) })
+    store.setState({ message: { [target.sessionId]: [] } })
+    setSessionPrefetch({ ...target, runtimeKey: "runtime-a", limit: 100, complete: true })
+    loader.invalidateSession(target)
+    expect(getSessionPrefetch(target.directory, target.sessionId, "runtime-a")).toBeUndefined()
+    await loader.refresh(target)
+    expect(store.getState().message[target.sessionId]).toEqual([])
+  })
+
+  test("selection invalidation preserves only explicitly retained optimistic records", async () => {
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: async sessionId => nativeSnapshot(sessionId, []) }) })
+    const retained = nativeMessage(target.sessionId, "retained", 1)
+    const discarded = nativeMessage(target.sessionId, "discarded", 2)
+    loader.optimisticAdd({ ...target, message: retained })
+    loader.optimisticAdd({ ...target, message: discarded })
+    loader.invalidateSession(target, [retained])
+    await loader.refresh(target)
+    expect(store.getState().message[target.sessionId]).toEqual([retained])
+    expect(store.getState().partOwner[target.sessionId]).toEqual({ "part-retained": "retained" })
+  })
+
+  test("a fresh branch and epoch win over a snapshot started before selection invalidation", async () => {
+    const old = deferred<SessionSnapshot>()
+    const selected = nativeSnapshot(target.sessionId, [nativeMessage(target.sessionId, "selected", 1)])
+    selected.session.epoch = "epoch-selected"
+    selected.branch = { branchId: "branch-selected", branchVersion: "2", leafMessageId: "selected" }
+    selected.cursor = "opaque-selected-stream-cursor"
+    let calls = 0
+    const { loader, store } = setup({ client: nativeClient({ getSnapshot: () => ++calls === 1 ? old.promise : Promise.resolve(selected) }) })
+    const obsolete = loader.refresh(target)
+    loader.invalidateSession(target)
+    await loader.refresh(target)
+    const committed = store.getState()
+    old.resolve(nativeSnapshot(target.sessionId, [nativeMessage(target.sessionId, "discarded", 2)]))
+    await obsolete
+    expect(store.getState()).toBe(committed)
+    expect(store.getState().message[target.sessionId]?.map(message => message.messageId)).toEqual(["selected"])
+    expect(store.getState().snapshot[target.sessionId]?.branch).toEqual(selected.branch)
+    expect(store.getState().sessionEpoch[target.sessionId]).toBe("epoch-selected")
+    expect(store.getState().sessionCursor[target.sessionId]).toBe(selected.cursor)
+  })
+
+  test("a selected branch retaining earlier history replaces the old cursor with its own authority", async () => {
+    const previous = historyWindow()
+    const kept = nativeMessage(target.sessionId, "kept", 10)
+    const older = nativeMessage(target.sessionId, "older-selected", 1)
+    const selected = nativeSnapshot(target.sessionId, [kept])
+    selected.branch = { branchId: "selected-branch", branchVersion: "2", leafMessageId: kept.messageId }
+    selected.window.hasEarlier = true
+    let current = previous
+    const cursors: Array<string | undefined> = []
+    const { loader, store } = setup({ client: nativeClient({
+      getSnapshot: async () => current,
+      getHistory: async (_id, options) => {
+        cursors.push(options?.cursor)
+        return options?.cursor
+          ? nativeHistory([older], null, selected)
+          : nativeHistory(current.messages, current === previous ? "previous-branch-cursor" : "selected-branch-cursor", current)
+      },
+    }) })
+    await loader.ensure(target)
+    expect(loader.getSnapshot(target).cursor).toBe("previous-branch-cursor")
+    loader.invalidateSession(target, [kept])
+    expect(loader.getSnapshot(target)).toMatchObject({ resolved: false, cursor: undefined, complete: false })
+    current = selected
+    await loader.refresh(target)
+    expect(store.getState().message[target.sessionId]).toEqual([kept])
+    expect(loader.getSnapshot(target)).toMatchObject({ resolved: true, cursor: "selected-branch-cursor", complete: false })
+    await loader.loadOlder(target)
+    expect(cursors).toEqual([undefined, undefined, "selected-branch-cursor"])
+    expect(store.getState().message[target.sessionId]).toEqual([older, kept])
+    expect(loader.getSnapshot(target).complete).toBe(true)
+  })
+
+  test("an empty selected branch resets prior history completeness and never reuses its cursor", async () => {
+    const previous = historyWindow()
+    let current = previous
+    const history = nativeClient({
+      getSnapshot: async () => current,
+      getHistory: async () => nativeHistory(previous.messages, "old-branch-cursor", previous),
+    })
+    const { loader, store } = setup({ client: history })
+    await loader.ensure(target)
+    expect(loader.getSnapshot(target)).toMatchObject({ resolved: true, cursor: "old-branch-cursor", complete: false })
+    loader.invalidateSession(target)
+    expect(loader.getSnapshot(target)).toMatchObject({ resolved: false, cursor: undefined, complete: false })
+    current = nativeSnapshot(target.sessionId, [])
+    current.branch = { branchId: "empty-selected-branch", branchVersion: "2", leafMessageId: null }
+    await loader.refresh(target)
+    expect(store.getState().message[target.sessionId]).toEqual([])
+    expect(loader.getSnapshot(target)).toMatchObject({ resolved: true, cursor: undefined, complete: true })
   })
 })
