@@ -8,6 +8,7 @@ import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, Run
 import { WorkerBootstrapSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
 import { HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, type HostSessionRelocationPrepare } from '../supervisor/host-authorization-protocol.ts';
+import { rememberPrivateRoots } from '../worker/projection.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError, SessionJournal } from '../projection/journal.ts';
 import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad } from '../interaction/manager.ts';
@@ -55,7 +56,7 @@ export class SessionRegistry {
     }
   }
 
-  open(input: SessionBootstrap, replace = false): Promise<RuntimeSession> {
+  async open(input: SessionBootstrap, replace = false): Promise<RuntimeSession> {
     this.ensureOpen();
     const parsed = HostSessionBootstrapSchema.parse(input);
     this.assertControlAvailable(parsed.rootSessionId);
@@ -240,6 +241,7 @@ export class SessionRegistry {
       await this.workers.stop(sessionId);
       manager = await SessionManager.open(source.sessionFile, source.sessionsDirectory, undefined, { initialCwd: source.cwd, throwIfMissing: true });
       await manager.flush();
+      await rememberPrivateRoots(manager, source);
       const header = manager.getHeader();
       if (!header) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
       const sessionsDirectory = SessionManager.getDefaultSessionDir(destination.cwd, destination.agentDirectory);
@@ -248,7 +250,7 @@ export class SessionRegistry {
           displayPath: destination.displayPath, sessionsDirectory, sessionFile: join(sessionsDirectory, basename(source.sessionFile)),
           mcpConfigPath: join(destination.cwd, '.omp', 'mcp.json'), updatedAt: Date.now() },
         sourceHeader: { id: header.id, cwd: header.cwd, additionalDirectories: header.additionalDirectories, previousSessionFiles: header.previousSessionFiles },
-        ...(destination.env ? { environment: destination.env } : {}),
+        ...(destination.env ? { environment: destination.env } : undefined),
       };
       await this.references.beginRelocation(intent);
       await manager.moveTo(destination.cwd, sessionsDirectory);
@@ -290,8 +292,8 @@ export class SessionRegistry {
     await this.workers.stop(intent.source.rootSessionId);
     this.setUnloaded(intent.destination);
     const { displayPath, createdAt: _createdAt, updatedAt: _updatedAt, ...input } = intent.destination;
-    return admit({ ...input, ...(intent.environment ? { env: intent.environment } : {}) },
-      bootstrap => this.openResolved({ ...bootstrap, displayPath }, true, intent.destination, false));
+    const launchInput: WorkerBootstrap = intent.environment === undefined ? input : { ...input, env: intent.environment };
+    return admit(launchInput, next => this.openResolved({ ...next, displayPath }, true, intent.destination, false));
   }
 
   private async rollbackRelocation(intent: SessionRelocationIntent): Promise<RuntimeSession> {
@@ -461,13 +463,13 @@ export class SessionRegistry {
   private async openResolved(input: SessionBootstrap, replace: boolean, reference = this.references.get(input.rootSessionId), persistReference = true): Promise<RuntimeSession> {
     const previous = this.entries.get(input.rootSessionId);
     if (!replace && previous?.state === 'live' && previous.opened.journal.runtime().runtimeStatus !== 'unavailable') return previous.opened.journal.runtime();
-    const resolved = reference ? {
-      ...input,
-      sessionFile: reference.sessionFile,
-      ...(input.sessionsDirectory === undefined && reference.sessionsDirectory !== undefined ? { sessionsDirectory: reference.sessionsDirectory } : {}),
-      ...(input.mcpConfigPath === undefined && reference.mcpConfigPath !== undefined ? { mcpConfigPath: reference.mcpConfigPath } : {}),
-      ...(input.options === undefined && reference.options !== undefined ? { options: reference.options } : {}),
-    } : input;
+    const resolved = { ...input };
+    if (reference) {
+      resolved.sessionFile = reference.sessionFile;
+      if (resolved.sessionsDirectory === undefined && reference.sessionsDirectory !== undefined) resolved.sessionsDirectory = reference.sessionsDirectory;
+      if (resolved.mcpConfigPath === undefined && reference.mcpConfigPath !== undefined) resolved.mcpConfigPath = reference.mcpConfigPath;
+      if (resolved.options === undefined && reference.options !== undefined) resolved.options = reference.options;
+    }
     const entry: Extract<Entry, { state: 'opening' }> = { state: 'opening', input: resolved };
     if (previous?.state === 'live') entry.opened = previous.opened;
     this.entries.set(input.rootSessionId, entry);

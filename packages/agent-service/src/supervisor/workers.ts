@@ -276,8 +276,8 @@ export class WorkerRegistry {
       exited.resolve();
     });
     try {
-      if (!child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-      child.send(command, error => { if (error) ready.reject(error); });
+      if (!child.connected) ready.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
+      else child.send(command, error => { if (error) ready.reject(error); });
       await waitWithin(entry.ready, this.options.startupTimeoutMs ?? 15_000);
       if (this.closing || this.entries.get(input.rootSessionId) !== entry || entry.info.state !== 'ready' || !child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       return { ...entry.info };
@@ -290,9 +290,10 @@ export class WorkerRegistry {
   private async stopEntry(entry: WorkerEntry): Promise<boolean> {
     if (entry.stopping) return entry.stopping;
     entry.stopping = (async () => {
+      const wasStarting = entry.info.state === 'starting';
       entry.info.state = 'stopping';
       for (const [requestId, handle] of this.actions) if (handle.entry === entry) { this.actions.delete(requestId); handle.controller.abort(); }
-      entry.rejectReady(new Error('SDK worker is stopping'));
+      if (wasStarting) entry.rejectReady(new Error('SDK worker is stopping'));
       if (entry.child.connected) entry.child.send({ type: 'stop', workerGeneration: entry.info.workerGeneration });
       try {
         await waitWithin(entry.exited, this.options.stopTimeoutMs ?? 5_000);

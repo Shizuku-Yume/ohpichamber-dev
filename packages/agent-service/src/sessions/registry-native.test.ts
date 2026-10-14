@@ -199,7 +199,7 @@ test('service native branch selection expires stream epochs and survives cold re
     const before = journal.snapshot();
     const generation = harness.workers.authorizationScope(rootSessionId)?.workerGeneration;
     const invalidations: string[] = [];
-    const subscription = journal.subscribe(undefined, event => { if (event.type === 'stream.invalidated') invalidations.push(event.reason); });
+    const subscription = journal.subscribe(before.cursor, event => { if (event.type === 'stream.invalidated') invalidations.push(event.reason); });
     try {
       const reverted = await harness.sessions.branch(rootSessionId, { action: 'revert', messageId: before.messages[0]!.messageId,
         branchId: before.branch.branchId, branchVersion: before.branch.branchVersion });
