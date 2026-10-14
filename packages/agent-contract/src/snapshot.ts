@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { CounterSchema, CursorSchema, EntityIdSchema } from './primitives.ts';
-import { RuntimeSessionSchema, RunSchema } from './session.ts';
+import { CursorSchema, EntityIdSchema } from './primitives.ts';
+import { RuntimeSessionSchema, RunSchema, SessionBranchStateSchema } from './session.ts';
 import { MessageSchema, TurnSchema } from './messages.ts';
 import { ApprovalRequestSchema, QuestionRequestSchema } from './requests.ts';
 
 export const SessionSnapshotSchema = z.strictObject({
   session: RuntimeSessionSchema, cursor: CursorSchema, activeRun: RunSchema.nullable(),
-  branch: z.strictObject({ branchId: EntityIdSchema, branchVersion: CounterSchema, leafMessageId: EntityIdSchema.nullable() }),
+  branch: SessionBranchStateSchema,
   window: z.strictObject({
     firstTurnId: EntityIdSchema.nullable(), lastTurnId: EntityIdSchema.nullable(),
     firstMessageId: EntityIdSchema.nullable(), lastMessageId: EntityIdSchema.nullable(), hasEarlier: z.boolean(),

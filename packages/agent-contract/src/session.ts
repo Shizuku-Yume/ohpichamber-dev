@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, EpochSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
-import { CapturedSendOptionsSchema, PromptRequestSchema } from './prompt.ts';
+import { CapturedSendOptionsSchema, PromptAttachmentSchema, PromptRequestSchema } from './prompt.ts';
 import { SessionMetadataSchema } from './metadata.ts';
 
 export const DisplayPathSchema = z.string().min(1).refine(
@@ -110,3 +110,25 @@ export const FollowUpRequestSchema = z.strictObject({ sessionId: EntityIdSchema,
 export type FollowUpRequest = z.infer<typeof FollowUpRequestSchema>;
 export const FollowUpAckSchema = z.strictObject({ sessionId: EntityIdSchema, followUpId: EntityIdSchema, acceptedAt: TimestampSchema });
 export type FollowUpAck = z.infer<typeof FollowUpAckSchema>;
+
+export const SessionBranchStateSchema = z.strictObject({
+  branchId: EntityIdSchema, branchVersion: CounterSchema, leafMessageId: EntityIdSchema.nullable(),
+  revert: z.strictObject({ messageId: EntityIdSchema }).optional(),
+});
+export type SessionBranchState = z.infer<typeof SessionBranchStateSchema>;
+const BranchOwnerSchema = z.strictObject({ branchId: EntityIdSchema, branchVersion: CounterSchema });
+export const SessionBranchRequestSchema = z.discriminatedUnion('action', [
+  BranchOwnerSchema.extend({ action: z.literal('revert'), messageId: EntityIdSchema }),
+  BranchOwnerSchema.extend({ action: z.literal('restore') }),
+]);
+export type SessionBranchRequest = z.infer<typeof SessionBranchRequestSchema>;
+export const SessionBranchResultSchema = z.strictObject({
+  sessionId: EntityIdSchema,
+  branch: SessionBranchStateSchema,
+  draft: z.strictObject({ text: z.string(), attachments: z.array(PromptAttachmentSchema) }).nullable(),
+});
+export type SessionBranchResult = z.infer<typeof SessionBranchResultSchema>;
+export const SessionRelocateRequestSchema = z.strictObject({ workspaceId: EntityIdSchema });
+export type SessionRelocateRequest = z.infer<typeof SessionRelocateRequestSchema>;
+export const SessionRelocateResultSchema = z.strictObject({ sessions: z.array(SessionSchema).min(1) });
+export type SessionRelocateResult = z.infer<typeof SessionRelocateResultSchema>;
