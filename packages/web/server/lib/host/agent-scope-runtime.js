@@ -1,8 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { z } from 'zod';
 import { ProjectSchema, RuntimeSessionSchema } from '@openchamber/agent-contract';
 import { MetadataReadError, MetadataWriteError, HostMetadataError } from './metadata-sqlite.js';
+
+const WorkspaceDirectorySchema = z.string().refine((directory) => Boolean(directory.trim()) && path.isAbsolute(directory.trim()));
 
 const failureCode = (error) => error instanceof HostMetadataError ? error.code : 'METADATA_READ_FAILED';
 const displayPath = (scope) => path.relative(scope.projectDirectory, scope.cwd) || '.';
@@ -133,8 +136,9 @@ export const createHostAgentScopeRuntime = ({
     return { ...scope, displayPath: displayPath(scope) };
   };
   const resolveWorkspaceDirectory = async (directory) => {
-    if (typeof directory !== 'string' || !directory.trim() || !path.isAbsolute(directory.trim())) return null;
-    const requested = await validateDirectoryPath(directory);
+    const parsed = WorkspaceDirectorySchema.safeParse(directory);
+    if (!parsed.success) return null;
+    const requested = await validateDirectoryPath(parsed.data);
     if (!requested.ok) return null;
     const [projects, selectedAgentDirectory] = await Promise.all([readProjects(), selectedDirectory()]);
     let discoveryFailed = false;

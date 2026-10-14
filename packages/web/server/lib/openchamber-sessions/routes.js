@@ -128,7 +128,10 @@ const createCanonicalSessionService = (dependencies) => {
     const claim = commandId === undefined ? null : await directCommandAdmissionStore.claim(scope, commandId, operation, requestBody);
     if (claim?.state === 'accepted') return claim.acknowledgment;
     const deliveryRunId = randomUUID();
-    const capture = await prepareDelivery(scope, requestBody, { ...(operation === 'send' ? { runId: deliveryRunId } : {}), deliveryRunId, ...(commandId === undefined ? {} : { commandId }) });
+    const deliveryIdentity = { deliveryRunId };
+    if (operation === 'send') deliveryIdentity.runId = deliveryRunId;
+    if (commandId !== undefined) deliveryIdentity.commandId = commandId;
+    const capture = await prepareDelivery(scope, requestBody, deliveryIdentity);
     let acknowledgment;
     let receipt;
     try {
@@ -155,7 +158,9 @@ const createCanonicalSessionService = (dependencies) => {
       throw error;
     }
     try {
-      await onPromptAccepted(scope, { ...capture, ...(receipt.runId ? { runId: receipt.runId } : {}), receipt }, receipt);
+      const acceptedCapture = { ...capture, receipt };
+      if (receipt.runId) acceptedCapture.runId = receipt.runId;
+      await onPromptAccepted(scope, acceptedCapture, receipt);
     } catch (error) {
       if (claim) throw new OpenChamberControlError('Command was accepted but its delivery receipt is incomplete', 409, { code: 'COMMAND_IN_FLIGHT', retryable: false });
       throw error;
@@ -283,7 +288,9 @@ const createCanonicalSessionService = (dependencies) => {
       if (member.workspaceId !== workspaceId || runtime.sessionId !== member.sessionId || runtime.rootSessionId !== rootSessionId || runtime.workspaceId !== workspaceId || runtime.projectId !== member.projectId)
         throw new OpenChamberControlError('Relocation family projection is outside its destination owner', 502);
       const [stored, archive] = await Promise.all([sessionMetadataStore.getState(member.sessionId), archiveStore.getState(member.sessionId)]);
-      return SessionSchema.parse({ ...runtime, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', archiveRevision: archive?.revision ?? '0', ...(archive?.archivedAt != null ? { archivedAt: archive.archivedAt } : {}) });
+      const session = { ...runtime, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', archiveRevision: archive?.revision ?? '0' };
+      if (archive?.archivedAt != null) session.archivedAt = archive.archivedAt;
+      return SessionSchema.parse(session);
     }));
     return SessionRelocateResultSchema.parse({ sessions });
   };
@@ -306,11 +313,13 @@ const createCanonicalSessionService = (dependencies) => {
       const intent = { rootSessionId, transactionId: randomUUID(), sourceWorkspaceId: source.workspaceId, destinationWorkspaceId: destination.workspaceId };
       await agentScopeStore.createRelocation(intent);
       try {
+        const destinationScope = { rootSessionId, projectId: destination.projectId, workspaceId: destination.workspaceId, cwd: destination.cwd, agentDirectory: destination.agentDirectory,
+          agentDirectoryId: destination.agentDirectoryId, displayPath: destination.displayPath ?? 'workspace' };
+        if (destination.env) destinationScope.env = destination.env;
         const prepared = HostSessionRelocationPreparedSchema.parse(await request(`/internal/sessions/${encodeURIComponent(rootSessionId)}/relocation/prepare`, {
           method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(HostSessionRelocationPrepareSchema.parse({
             transactionId: intent.transactionId, sourceWorkspaceId: source.workspaceId,
-            destination: { rootSessionId, projectId: destination.projectId, workspaceId: destination.workspaceId, cwd: destination.cwd, agentDirectory: destination.agentDirectory,
-              agentDirectoryId: destination.agentDirectoryId, displayPath: destination.displayPath ?? 'workspace', ...(destination.env ? { env: destination.env } : {}) },
+            destination: destinationScope,
           })),
         }));
         if (prepared.transactionId !== intent.transactionId) throw new OpenChamberControlError('Relocation acknowledgement identified another transaction', 502);

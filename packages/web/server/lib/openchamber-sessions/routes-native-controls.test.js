@@ -30,9 +30,13 @@ const fixture = async () => {
   const destination = await store.ensureWorkspace({ hostProjectId: 'project', projectDirectory: cwd, workspaceDirectory: destinationCwd, agentDirectory, name: 'Project' });
   for (const sessionId of ['public-root', 'public-child']) await store.bindSession({ sessionId, rootSessionId: 'public-root', workspaceId: source.workspaceId });
   const native = { workspaceId: source.workspaceId, pending: null, commitFailure: false, loseCommitResponse: false, prepareFailure: false, active: false, calls: [] };
-  const runtime = (sessionId = 'public-root') => ({ sessionId, rootSessionId: 'public-root', ...(sessionId === 'public-child' ? { parentSessionId: 'public-root' } : {}),
-    projectId: source.projectId, workspaceId: native.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001,
-    epoch: 'epoch-native', headSequence: '0', runtimeStatus: native.active ? 'running' : 'idle', activeRunId: native.active ? 'active-run' : null });
+  const runtime = (sessionId = 'public-root') => {
+    const session = { sessionId, rootSessionId: 'public-root',
+      projectId: source.projectId, workspaceId: native.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001,
+      epoch: 'epoch-native', headSequence: '0', runtimeStatus: native.active ? 'running' : 'idle', activeRunId: native.active ? 'active-run' : null };
+    if (sessionId === 'public-child') session.parentSessionId = 'public-root';
+    return session;
+  };
   const request = async (pathname, init = {}) => {
     const body = init.body ? JSON.parse(init.body) : null;
     native.calls.push({ pathname, body });
@@ -52,7 +56,11 @@ const fixture = async () => {
       return Response.json({ session: runtime() });
     }
     if (pathname.endsWith('/reopen')) return Response.json(runtime());
-    if (pathname.endsWith('/branch')) return Response.json({ sessionId: 'public-root', branch: { branchId: body.branchId, branchVersion: String(BigInt(body.branchVersion) + 1n), leafMessageId: null, ...(body.action === 'revert' ? { revert: { messageId: body.messageId } } : {}) }, draft: null });
+    if (pathname.endsWith('/branch')) {
+      const branch = { branchId: body.branchId, branchVersion: String(BigInt(body.branchVersion) + 1n), leafMessageId: null };
+      if (body.action === 'revert') branch.revert = { messageId: body.messageId };
+      return Response.json({ sessionId: 'public-root', branch, draft: null });
+    }
     if (pathname.startsWith('/api/agent/v1/sessions/')) return Response.json(runtime(decodeURIComponent(pathname.split('/').at(-1))));
     throw new Error(`Unexpected private request ${pathname}`);
   };
