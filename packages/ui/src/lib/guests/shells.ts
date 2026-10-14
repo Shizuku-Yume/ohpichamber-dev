@@ -35,18 +35,18 @@ const scopeSessionIds = (scope: GuestShellsScope): ReadonlySet<string> | null =>
   }
   const known = new Set<string>();
   const store = useBackgroundShellsStore.getState();
-  for (const shell of store.byId.values()) known.add(shell.sessionID);
-  for (const shell of store.ended.values()) known.add(shell.sessionID);
+  for (const shell of store.byId.values()) known.add(shell.sessionId);
+  for (const shell of store.ended.values()) known.add(shell.sessionId);
   return new Set(sessionsInTree(known, scope.sessionId, (id) => sessions.get(id)?.parentSessionId ?? undefined));
 };
 
 const guestShell = (shell: TrackedShell): GuestRunningShell => ({
-  id: shell.id, sessionID: shell.sessionID, command: shell.command, startedAt: shell.startedAt, background: shell.background,
+  id: shell.jobId, sessionID: shell.sessionId, command: shell.command, startedAt: shell.startedAt, background: shell.background,
 });
 
-const guestEndedShell = (shell: EndedShell): GuestEndedShell => (shell.exit === undefined
-  ? { ...guestShell(shell), status: shell.status, endedAt: shell.endedAt }
-  : { ...guestShell(shell), status: shell.status, exit: shell.exit, endedAt: shell.endedAt });
+const guestEndedShell = (shell: EndedShell): GuestEndedShell => (shell.termination.exitCode === null
+  ? { ...guestShell(shell), status: shell.termination.reason, endedAt: shell.endedAt }
+  : { ...guestShell(shell), status: shell.termination.reason, exit: shell.termination.exitCode, endedAt: shell.endedAt });
 
 /**
  * The running shells a scope covers, oldest first, and the ones that ended,
@@ -57,13 +57,13 @@ export const readGuestShells = (scope: GuestShellsScope): GuestRunningShellsSnap
   const inScope = scopeSessionIds(scope);
   const shells: GuestRunningShell[] = [];
   for (const shell of store.byId.values()) {
-    if (inScope && !inScope.has(shell.sessionID)) continue;
+    if (inScope && !inScope.has(shell.sessionId)) continue;
     shells.push(guestShell(shell));
   }
   shells.sort((left, right) => left.startedAt - right.startedAt || left.id.localeCompare(right.id));
   const ended: GuestEndedShell[] = [];
   for (const shell of store.ended.values()) {
-    if (inScope && !inScope.has(shell.sessionID)) continue;
+    if (inScope && !inScope.has(shell.sessionId)) continue;
     ended.push(guestEndedShell(shell));
   }
   ended.sort((left, right) => left.endedAt - right.endedAt || left.id.localeCompare(right.id));
@@ -77,10 +77,10 @@ export const readGuestShells = (scope: GuestShellsScope): GuestRunningShellsSnap
  */
 export const readGuestShellOutput = async (shellId: string, cursor?: number, tailBytes?: number): Promise<GuestShellOutputResult> => {
   const store = useBackgroundShellsStore.getState();
-  const shell = store.byId.get(shellId) ?? store.ended.get(shellId);
-  if (!shell) throw new HostRequestError('NOT_FOUND', 'OpenChamber has not seen that shell.');
+  const shell = [...store.byId.values(), ...store.ended.values()].find((entry) => entry.jobId === shellId);
+  if (!shell || ('termination' in shell && shell.termination.reason === 'stopped')) throw new HostRequestError('NOT_FOUND', 'OpenChamber has not seen that shell.');
   try {
-    const result = await canonicalClient.getShellOutput(shell.sessionID, { jobId: shell.jobId, epoch: shell.epoch, workerGeneration: shell.workerGeneration }, String(cursor ?? 0), tailBytes ?? 65536);
+    const result = await canonicalClient.getShellOutput(shell.sessionId, { jobId: shell.jobId, epoch: shell.epoch, workerGeneration: shell.workerGeneration }, String(cursor ?? 0), tailBytes ?? 65536);
     return { shellId, cursor: Number(result.cursor), output: result.output, ended: result.ended };
   } catch (error) {
     if (error instanceof CanonicalApiError && error.problem.status === 404) throw new HostRequestError('NOT_FOUND', 'The host no longer keeps that shell output.');

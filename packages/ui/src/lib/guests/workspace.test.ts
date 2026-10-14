@@ -59,6 +59,7 @@ describe('extension workspace projection', () => {
     } finally { fetch.mockRestore(); }
   });
   test('live outcomes work with canonical status events and distinguish turn outcomes', () => {
+    useConfigStore.setState({ isConnected: true });
     const status = (runtimeStatus: 'running' | 'idle', activeRunId: string | null, sequence: string) => ({
       type: 'session.status' as const, sessionId: 'b-session', epoch: 'epoch-1', sequence, timestamp: Number(sequence), runtimeStatus, activeRunId,
     });
@@ -76,6 +77,7 @@ describe('extension workspace projection', () => {
     expect(readB().sessions[0]).toMatchObject({ activity: 'unknown', outcome: null });
   });
   test('archive invalidation prevents old idle coverage and notifies guest subscribers', async () => {
+    useConfigStore.setState({ isConnected: true });
     const child = manager.ensureChild('/b-tree', { bootstrap: false });
     child.setState({ sessionStatusReady: true });
     const activity: string[] = [];
@@ -112,6 +114,7 @@ describe('extension workspace projection', () => {
     expect(snapshots.length).toBe(baseline + 1);
   });
   test('blocking requests expose state without conversation data', () => {
+    useConfigStore.setState({ isConnected: true });
     const child = manager.ensureChild('/b-tree', { bootstrap: false });
     applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', sessionId: 'b-session', epoch: 'epoch-1', sequence: '6', timestamp: 6, runtimeStatus: 'awaiting_approval', activeRunId: 'run-4' });
     expect(readB().sessions[0].activity).toBe('waiting-permission');

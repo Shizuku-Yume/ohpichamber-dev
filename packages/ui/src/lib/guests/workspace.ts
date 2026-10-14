@@ -5,7 +5,7 @@ import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { getAllSyncSessionMap, getSyncChildStores } from '@/sync/sync-refs';
+import { getAllSyncSessionMap, getDirectoryState, getSyncChildStores } from '@/sync/sync-refs';
 import { normalizePath } from '@/lib/pathNormalization';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useUIStore } from '@/stores/useUIStore';
@@ -29,11 +29,22 @@ const combinedState = (states: GuestLoadState[]): GuestLoadState => states.inclu
 
 const projectSession = (session: CanonicalSession, worktrees: ReadonlyMap<string, GuestWorktree>): GuestSessionRecord => {
   const id = session.sessionId;
-  const observed = useGlobalSessionStatusStore.getState().observedById.get(id);
+  const child = getDirectoryState(session.displayPath);
+  const live = useGlobalSessionStatusStore.getState();
+  const observed = live.observedById.get(id);
+  const liveStatus = live.statusById.get(id)?.status;
   const attached = useSessionUIStore.getState().worktreeMetadata.get(id);
-  const worktree = worktrees.get(session.displayPath) ?? (attached && normalizePath(attached.path) === normalizePath(session.displayPath) ? toWorktree(attached) : null);
+  const worktree = worktrees.get(normalizePath(session.displayPath) ?? session.displayPath) ?? (attached && normalizePath(attached.path) === normalizePath(session.displayPath) ? toWorktree(attached) : null);
   let activity: GuestSessionRecord['activity'] = 'unknown';
-  if (useConfigStore.getState().isConnected) activity = session.runtimeStatus === 'running' ? 'running' : session.runtimeStatus === 'awaiting_approval' ? 'waiting-permission' : session.runtimeStatus === 'awaiting_input' ? 'waiting-question' : session.runtimeStatus === 'idle' ? 'idle' : 'unknown';
+  if (useConfigStore.getState().isConnected) {
+    const childReady = child?.sessionStatusReady === true && child.sessionStatusInvalidated?.[id] !== true;
+    activity = liveStatus === 'running' || session.runtimeStatus === 'running' && liveStatus === undefined ? 'running'
+      : liveStatus === 'awaiting_approval' || session.runtimeStatus === 'awaiting_approval' && liveStatus === undefined ? 'waiting-permission'
+      : liveStatus === 'awaiting_input' || session.runtimeStatus === 'awaiting_input' && liveStatus === undefined ? 'waiting-question'
+      : childReady || observed ? 'idle' : 'unknown';
+    if (child?.permission[id]?.length) activity = 'waiting-permission';
+    else if (child?.form[id]?.length) activity = 'waiting-question';
+  }
   return { id, title: session.metadata?.title ?? id, projectId: session.projectId, directory: session.displayPath, parentId: session.parentSessionId ?? null, createdAt: session.createdAt, updatedAt: session.updatedAt, archivedAt: session.archivedAt ?? null, worktree, activity, outcome: activity === 'idle' ? observed?.outcome ?? null : null, items: [] };
 };
 
