@@ -1,26 +1,31 @@
 import { describe, expect, test } from 'bun:test';
-import { getRecentSessionErrors, recordSessionError, responseBodyOf, summarizeOpenCodeError } from './session-error-log';
+import { getRecentSessionErrors, recordSessionError, responseBodyOf, summarizeSessionError } from './session-error-log';
 
-describe('summarizeOpenCodeError', () => {
+describe('summarizeSessionError', () => {
+  test('keeps the native run.failed string', () => {
+    expect(summarizeSessionError('  Invalid API key  ')).toEqual({ name: null, message: 'Invalid API key' });
+    expect(summarizeSessionError('x'.repeat(1000)).message?.length).toBe(400);
+    expect(summarizeSessionError('   ')).toEqual({ name: null, message: null });
+  });
   test('reads the structured error: type plus message', () => {
-    expect(summarizeOpenCodeError({ type: 'ProviderAuthError', message: 'Invalid API key' }))
+    expect(summarizeSessionError({ type: 'ProviderAuthError', message: 'Invalid API key' }))
       .toEqual({ name: 'ProviderAuthError', message: 'Invalid API key' });
   });
 
   test('reports missing details as null', () => {
-    expect(summarizeOpenCodeError({ type: '', message: 'socket hang up' })).toEqual({ name: null, message: 'socket hang up' });
-    expect(summarizeOpenCodeError({ type: 'UnknownError', message: '   ' })).toEqual({ name: 'UnknownError', message: null });
-    expect(summarizeOpenCodeError(undefined)).toEqual({ name: null, message: null });
+    expect(summarizeSessionError({ type: '', message: 'socket hang up' })).toEqual({ name: null, message: 'socket hang up' });
+    expect(summarizeSessionError({ type: 'UnknownError', message: '   ' })).toEqual({ name: 'UnknownError', message: null });
+    expect(summarizeSessionError(undefined)).toEqual({ name: null, message: null });
   });
 
   test('bounds the message length', () => {
-    const summary = summarizeOpenCodeError({ type: 'UnknownError', message: 'x'.repeat(1000) });
+    const summary = summarizeSessionError({ type: 'UnknownError', message: 'x'.repeat(1000) });
     expect(summary.message?.length).toBe(400);
   });
 });
 
 describe('responseBodyOf', () => {
-  test('returns the provider body OpenCode attached, trimmed and bounded', () => {
+  test('returns the provider body attached to native error detail, trimmed and bounded', () => {
     expect(responseBodyOf({ type: 'provider.api', message: 'Bad request', response: { body: ' {"error":"x"} ' } })).toBe('{"error":"x"}');
     expect(responseBodyOf({ type: 'provider.api', message: 'Bad request', response: { body: 'y'.repeat(20_000) } })?.length).toBe(16_000);
   });

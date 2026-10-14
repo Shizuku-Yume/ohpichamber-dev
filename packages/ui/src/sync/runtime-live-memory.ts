@@ -1,4 +1,4 @@
-import type { SessionStatus } from "@/lib/opencode/model"
+import type { SessionRuntimeStatus } from "@openchamber/agent-contract"
 
 export const LIVE_STATUS_TTL_MS = 15_000
 
@@ -6,7 +6,7 @@ type RuntimeLiveStatus = {
   runtimeKey: string
   directory: string
   sessionId: string
-  status: SessionStatus
+  status: SessionRuntimeStatus
   expiresAt: number
 }
 
@@ -18,10 +18,14 @@ export function rememberRuntimeLiveStatus(params: {
   runtimeKey: string
   directory: string | null | undefined
   sessionId: string | null | undefined
-  status: SessionStatus | null | undefined
+  status: SessionRuntimeStatus | null | undefined
 }) {
   if (!params.runtimeKey || !params.directory || !params.sessionId || !params.status) return
-  if (params.status.type === "idle") return
+  if (params.status === "idle" || params.status === "unavailable") {
+    const key = keyFor(params.runtimeKey, params.directory)
+    if (liveStatusByRuntime.get(key)?.sessionId === params.sessionId) liveStatusByRuntime.delete(key)
+    return
+  }
 
   // Evict expired entries on write so keys that are never read again don't
   // accumulate (reads are lazy and only prune their own key).

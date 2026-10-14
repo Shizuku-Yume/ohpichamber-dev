@@ -1,3 +1,5 @@
+import { CanonicalApiError } from "@/api/canonicalClient"
+
 export interface RetryOptions {
   attempts?: number
   delay?: number
@@ -6,10 +8,7 @@ export interface RetryOptions {
   retryIf?: (error: unknown) => boolean
 }
 
-// undici tears down half-open upstream connection with `TypeError: terminated`
-// (exact failure from the #2470 logs); the SDK client also rejects reads with
-// normalized "request timed out" error after OPENCODE_REQUEST_TIMEOUT_MS.
-// Both are transient — managed process may be restarting.
+// Half-open streams and bounded read timeouts are transient during Host warmup.
 const TRANSIENT_MESSAGES = [
   "load failed",
   "network connection was lost",
@@ -19,7 +18,7 @@ const TRANSIENT_MESSAGES = [
   "econnrefused",
   "etimedout",
   "socket hang up",
-  "opencode api unavailable",
+  "agent service unavailable",
   "503",
   "502",
   "terminated",
@@ -28,10 +27,10 @@ const TRANSIENT_MESSAGES = [
 
 function isTransientError(error: unknown): boolean {
   if (!error) return false
+  if (error instanceof CanonicalApiError) return error.problem.retryable
   const message = String(error instanceof Error ? error.message : error).toLowerCase()
   if (TRANSIENT_MESSAGES.some((m) => message.includes(m))) return true
-  // Any HTTP 5xx is considered transient — server-side issues during warmup
-  // (OpenCode reading sessions from disk, bridge not ready, etc.) are retryable.
+  // HTTP 5xx errors during Host/service startup are retryable.
   const status = (error as { status?: number })?.status
   if (typeof status === "number" && status >= 500 && status < 600) return true
   return false

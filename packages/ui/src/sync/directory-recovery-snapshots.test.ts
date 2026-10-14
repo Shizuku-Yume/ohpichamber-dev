@@ -1,160 +1,94 @@
 import { describe, expect, test } from "bun:test"
-import { createStore } from "zustand/vanilla"
-import type { PermissionRequest, FormRequest, Session } from "@/lib/opencode/model"
+import type { ApprovalRequest, CanonicalEvent, QuestionRequest, SessionSnapshot } from "@openchamber/agent-contract"
+import { applyDirectoryEvent, installSessionSnapshot } from "./event-reducer"
 import { INITIAL_STATE, type State } from "./types"
-import {
-  readDirectoryPermissionSnapshot,
-  readDirectoryFormSnapshot,
-  readDirectoryStatusSnapshot,
-  recordDirectoryRecoveryEvent,
-} from "./directory-recovery-snapshots"
-import { ChildStoreManager } from "./child-store"
-import { createEventRoutingIndex, handleEvent } from "./sync-context"
-import { getRuntimeKey } from "../lib/runtime-switch"
-import { replaceGlobalSessionStatusById } from "./global-session-status"
 
-const deferred = <T>() => {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((complete) => { resolve = complete })
-  return { resolve, promise }
-}
-const source = (initial: Partial<State> = {}) => createStore<State>(() => ({ ...INITIAL_STATE, ...initial }))
-const permission: PermissionRequest = { id: "permission", sessionID: "session", action: "read", resources: ["*"], metadata: {} }
-const form: FormRequest = { id: "form", sessionID: "session", title: "Pick", fields: [{ key: "answer", type: "boolean" }] }
-const session: Session = {
-  id: "session", projectID: "project", directory: "/repo",
-  title: "Session", time: { created: 1, updated: 1 }, cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-}
+const question = (overrides: Partial<QuestionRequest> = {}): QuestionRequest => ({
+  questionId: "question-1", sessionId: "session-1", turnId: "turn-1", prompt: "Continue?", status: "pending", requestedAt: 1,
+  epoch: "epoch-1", version: "1", workerGeneration: "worker-1", ...overrides,
+})
+const approval = (): ApprovalRequest => ({
+  approvalId: "approval-1", sessionId: "session-1", turnId: "turn-1", toolCallId: "tool-1", toolName: "bash",
+  actionType: "bash_command", commandSummary: "pwd", details: {}, status: "pending", requestedAt: 1,
+  epoch: "epoch-1", version: "1", workerGeneration: "worker-1",
+})
+const snapshot = (overrides: Partial<SessionSnapshot> = {}): SessionSnapshot => ({
+  session: {
+    sessionId: "session-1", projectId: "project-1", workspaceId: "workspace-1", displayPath: ".", rootSessionId: "session-1",
+    createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "0", runtimeStatus: "idle", activeRunId: null,
+  },
+  cursor: "epoch-1:0", activeRun: null,
+  branch: { branchId: "branch-1", branchVersion: "0", leafMessageId: null },
+  window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false },
+  turns: [], messages: [], approvals: [], questions: [],
+  requestRecovery: { pendingSet: "replace", priorEpochs: "expired" }, ...overrides,
+})
+const state = (overrides: Partial<State> = {}): State => ({
+  ...INITIAL_STATE,
+  session: [{ ...snapshot().session, metadata: null, metadataRevision: "0", archiveRevision: "0" }], sessionTotal: 1,
+  ...overrides,
+})
+const event = (sequence: string, type: CanonicalEvent["type"], fields: Record<string, unknown> = {}): CanonicalEvent => ({
+  sessionId: "session-1", epoch: "epoch-1", sequence, timestamp: Number(sequence), type, ...fields,
+}) as CanonicalEvent
 
-describe("directory recovery snapshots", () => {
-  test("the event pipeline preserves repeated busy events without publishing a redundant store update", async () => {
-    const manager = new ChildStoreManager()
-    const store = manager.ensureChild("/repo", { bootstrap: false })
-    store.setState({ session: [session], session_status: { session: { type: "busy" } } })
-    const response = deferred<State["session_status"]>()
-    const snapshot = readDirectoryStatusSnapshot(store, () => response.promise)
-    let publications = 0
-    const unsubscribe = store.subscribe(() => { publications += 1 })
-    try {
-      handleEvent("/repo", { type: "session.status", properties: { sessionID: "session", status: { type: "busy" } } },
-        manager, createEventRoutingIndex(), getRuntimeKey(), true)
-      response.resolve({})
-      expect(await snapshot).toEqual({ session: { type: "busy" } })
-      expect(publications).toBe(0)
-    } finally {
-      response.resolve({})
-      unsubscribe()
-      manager.disposeAll()
-      replaceGlobalSessionStatusById(new Map())
-    }
+describe("canonical snapshot recovery", () => {
+  test("accepts a contiguous status event once and rejects repeated delivery", () => {
+    const base = installSessionSnapshot(state(), snapshot())
+    const applied = applyDirectoryEvent(base, event("1", "session.status", { runtimeStatus: "running", activeRunId: "run-1" }))
+    expect(applied.kind).toBe("applied")
+    const duplicate = applyDirectoryEvent(applied.state, event("1", "session.status", { runtimeStatus: "running", activeRunId: "run-1" }))
+    expect(duplicate.kind).toBe("duplicate")
   })
 
-  test("a newer idle event cannot be overwritten by an old busy snapshot", async () => {
-    const store = source()
-    const response = deferred<State["session_status"]>()
-    const snapshot = readDirectoryStatusSnapshot(store, () => response.promise)
-    recordDirectoryRecoveryEvent(store, { type: "session.idle", properties: { sessionID: "session" } })
-    response.resolve({ session: { type: "busy" } })
-    expect(await snapshot).toEqual({ session: { type: "idle" } })
+  test("an older snapshot cannot overwrite a newer head", () => {
+    const current = installSessionSnapshot(state(), snapshot({ session: { ...snapshot().session, headSequence: "2" }, cursor: "epoch-1:2" }))
+    const older = installSessionSnapshot(current, snapshot())
+    expect(older).toBe(current)
   })
 
-  test("an archive event rejected by the reducer cannot erase pending requests from a snapshot", async () => {
-    const manager = new ChildStoreManager()
-    const store = manager.ensureChild("/repo", { bootstrap: false })
-    store.setState({ session: [{ ...session, time: { created: 1, updated: 20 } }] })
-    const response = deferred<PermissionRequest[]>()
-    const snapshot = readDirectoryPermissionSnapshot(store, () => response.promise)
-    try {
-      handleEvent("/repo", {
-        type: "session.patched",
-        properties: { sessionID: session.id, patch: { time: { updated: 10, archived: 10 } } },
-      }, manager, createEventRoutingIndex(), getRuntimeKey(), true, undefined, undefined, true)
-      response.resolve([permission])
-      expect(await snapshot).toEqual({ session: [permission] })
-      expect(store.getState().session[0].time.archived).toBeUndefined()
-    } finally {
-      response.resolve([])
-      manager.disposeAll()
-    }
+  test("a stale runtime event does not erase independently recovered requests", () => {
+    const pending = snapshot({ approvals: [approval()], questions: [question()] })
+    const base = installSessionSnapshot(state(), pending)
+    const result = applyDirectoryEvent(base, event("1", "session.updated", {
+      session: { ...snapshot().session, headSequence: "1" }, metadata: null, metadataRevision: "0", archivedAt: null, archiveRevision: "0",
+    }))
+    expect(result.kind).toBe("applied")
+    expect(result.state.permission["session-1"]).toEqual([approval()])
+    expect(result.state.form["session-1"]).toEqual([question()])
   })
 
-  test("equal session IDs in different stores do not share in-flight events", async () => {
-    const a = source()
-    const b = source()
-    const response = deferred<State["session_status"]>()
-    const first = readDirectoryStatusSnapshot(a, () => response.promise)
-    const second = readDirectoryStatusSnapshot(b, () => response.promise)
-    recordDirectoryRecoveryEvent(a, { type: "session.status", properties: { sessionID: "session", status: { type: "busy" } } })
-    response.resolve({})
-    expect(await first).toEqual({ session: { type: "busy" } })
-    expect(await second).toEqual({})
+  test("CAS-resolved questions are removed from the pending replacement set", () => {
+    const base = installSessionSnapshot(state(), snapshot({ questions: [question()] }))
+    const resolved = question({ status: "cancelled", version: "2", resolvedAt: 2, resolvedBy: "user-1" })
+    const result = applyDirectoryEvent(base, event("1", "question.resolved", { question: resolved }))
+    expect(result.kind).toBe("applied")
+    expect(result.state.form["session-1"]).toEqual([])
   })
 
-  test("a permission reply received before its ask is materialized prevents resurrection", async () => {
-    const store = source()
-    const response = deferred<PermissionRequest[]>()
-    const snapshot = readDirectoryPermissionSnapshot(store, () => response.promise)
-    recordDirectoryRecoveryEvent(store, { type: "permission.replied", properties: { sessionID: "session", requestID: permission.id } })
-    response.resolve([permission])
-    expect(await snapshot).toEqual({})
+  test("a newly requested question survives an older empty snapshot", () => {
+    const base = installSessionSnapshot(state(), snapshot())
+    const requested = applyDirectoryEvent(base, event("1", "question.requested", { question: question() }))
+    expect(requested.kind).toBe("applied")
+    const older = installSessionSnapshot(requested.state, snapshot())
+    expect(older).toBe(requested.state)
+    expect(older.form["session-1"]).toEqual([question()])
   })
 
-  test("a settled form cannot be reopened by an old HTTP response", async () => {
-    const store = source()
-    const response = deferred<FormRequest[]>()
-    const snapshot = readDirectoryFormSnapshot(store, () => response.promise)
-    recordDirectoryRecoveryEvent(store, { type: "form.settled", properties: { sessionID: "session", formID: form.id } })
-    response.resolve([form])
-    expect(await snapshot).toEqual({})
+  test("session deletion clears runtime, status, and blocking request caches", () => {
+    const base = installSessionSnapshot(state(), snapshot({ approvals: [approval()], questions: [question()] }))
+    const result = applyDirectoryEvent(base, event("1", "session.deleted", { deletedSessionIds: ["session-1"] }))
+    expect(result.state.snapshot["session-1"]).toBeUndefined()
+    expect(result.state.session_status["session-1"]).toBeUndefined()
+    expect(result.state.permission["session-1"]).toBeUndefined()
+    expect(result.state.form["session-1"]).toBeUndefined()
   })
 
-  test("new asks survive empty snapshots and supersede older copies of the same request", async () => {
-    const store = source()
-    const response = deferred<FormRequest[]>()
-    const snapshot = readDirectoryFormSnapshot(store, () => response.promise)
-    const newer: FormRequest = { ...form, title: "Proceed?" }
-    recordDirectoryRecoveryEvent(store, { type: "form.created", properties: { form: newer } })
-    response.resolve([form])
-    expect(await snapshot).toEqual({ session: [newer] })
-    const permissionSnapshot = readDirectoryPermissionSnapshot(store, async () => [])
-    recordDirectoryRecoveryEvent(store, { type: "permission.asked", properties: permission })
-    expect(await permissionSnapshot).toEqual({ session: [permission] })
-  })
-
-  test("direct local mutations survive while unchanged stale requests are removed", async () => {
-    const store = source({ form: { session: [form] } })
-    const response = deferred<FormRequest[]>()
-    const snapshot = readDirectoryFormSnapshot(store, () => response.promise)
-    const added = { ...form, id: "new-form" }
-    store.setState({ form: { session: [form, added] } })
-    response.resolve([])
-    expect(await snapshot).toEqual({ session: [added] })
-  })
-
-  test("deleting a session invalidates its status and blocking requests in every in-flight snapshot", async () => {
-    const store = source()
-    const statusResponse = deferred<State["session_status"]>()
-    const permissionResponse = deferred<PermissionRequest[]>()
-    const formResponse = deferred<FormRequest[]>()
-    const statuses = readDirectoryStatusSnapshot(store, () => statusResponse.promise)
-    const permissions = readDirectoryPermissionSnapshot(store, () => permissionResponse.promise)
-    const forms = readDirectoryFormSnapshot(store, () => formResponse.promise)
-    recordDirectoryRecoveryEvent(store, { type: "session.deleted", properties: { sessionID: session.id } })
-    statusResponse.resolve({ session: { type: "busy" } })
-    permissionResponse.resolve([permission])
-    formResponse.resolve([form])
-    expect(await statuses).toEqual({})
-    expect(await permissions).toEqual({})
-    expect(await forms).toEqual({})
-  })
-
-  test("failed reads leave no event history for a later successful snapshot", async () => {
-    const store = source()
-    for (let index = 0; index < 100; index += 1) {
-      await expect(readDirectoryStatusSnapshot(store, async () => { throw new Error("offline") })).rejects.toThrow("offline")
-      recordDirectoryRecoveryEvent(store, { type: "session.status", properties: { sessionID: "session", status: { type: "busy" } } })
-    }
-    expect(await readDirectoryStatusSnapshot(store, async () => ({}))).toEqual({})
+  test("state recovery for one session does not share request mutations with another", () => {
+    const other = { ...snapshot(), session: { ...snapshot().session, sessionId: "session-2", rootSessionId: "session-2" }, cursor: "epoch-1:0" }
+    const base = installSessionSnapshot(installSessionSnapshot(state({ session: [state().session[0]!, { ...state().session[0]!, sessionId: "session-2", rootSessionId: "session-2" }], sessionTotal: 2 }), snapshot()), other)
+    const result = applyDirectoryEvent(base, event("1", "question.requested", { question: question() }))
+    expect(result.state.form["session-1"]).toHaveLength(1)
+    expect(result.state.form["session-2"]).toEqual([])
   })
 })

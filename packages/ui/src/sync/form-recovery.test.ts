@@ -1,42 +1,33 @@
 import { describe, expect, test } from "bun:test"
-import type { Message, Part } from "@/lib/opencode/model"
+import type { Message, Part } from "@openchamber/agent-contract"
 import { hasActiveFormToolInCurrentTurn, recoverPendingFormWithRetry } from "./form-recovery"
 
-const message = (role: "user" | "assistant", parts: Part[] = []) => ({
-  info: { id: `${role}-${parts.length}`, sessionID: "ses_1", role } as Message,
-  parts,
+const message = (role: Message["role"], parts: Part[] = []): Message => ({
+  messageId: `${role}-${parts.length}`, sessionId: "ses_1", turnId: "turn_1", role, createdAt: 1, parts,
 })
 
-const formTool = (status: "pending" | "running" | "completed"): Part => {
-  const state = status === "pending"
-    ? { status: "pending" as const, input: {}, raw: "" }
-    : status === "running"
-      ? { status: "running" as const, input: {}, time: { start: 1 } }
-      : { status: "completed" as const, input: {}, output: "", time: { start: 1, end: 2 } }
-  return {
-    id: `tool-${status}`,
-    sessionID: "ses_1",
-    messageID: "assistant-1",
-    type: "tool",
-    callID: `call-${status}`,
-    tool: "question",
-    state,
-  }
-}
+const questionTool = (status: "pending_approval" | "running" | "completed"): Part => ({
+  type: "tool_call", partId: `tool-${status}`, toolCallId: `call-${status}`, toolName: "question", input: {}, status,
+})
 
 describe("hasActiveFormToolInCurrentTurn", () => {
-  test("detects a pending or running form in the current turn", () => {
-    expect(hasActiveFormToolInCurrentTurn([message("user"), message("assistant", [formTool("pending")])])).toBe(true)
-    expect(hasActiveFormToolInCurrentTurn([message("user"), message("assistant", [formTool("running")])])).toBe(true)
+  test("detects a pending or running question tool in the current turn", () => {
+    expect(hasActiveFormToolInCurrentTurn([message("user"), message("assistant", [questionTool("pending_approval")])])).toBe(true)
+    expect(hasActiveFormToolInCurrentTurn([message("user"), message("assistant", [questionTool("running")])])).toBe(true)
   })
 
-  test("ignores completed forms and active forms from an older turn", () => {
-    expect(hasActiveFormToolInCurrentTurn([message("assistant", [formTool("completed")])])).toBe(false)
+  test("ignores completed tools and active tools from an older turn", () => {
+    expect(hasActiveFormToolInCurrentTurn([message("assistant", [questionTool("completed")])])).toBe(false)
     expect(hasActiveFormToolInCurrentTurn([
-      message("assistant", [formTool("running")]),
+      message("assistant", [questionTool("running")]),
       message("user"),
       message("assistant"),
     ])).toBe(false)
+  })
+
+  test("ignores non-question tools", () => {
+    const tool: Part = { ...questionTool("running"), toolName: "bash", toolCallId: "call-bash", partId: "tool-bash" }
+    expect(hasActiveFormToolInCurrentTurn([message("user"), message("assistant", [tool])])).toBe(false)
   })
 })
 
@@ -44,15 +35,10 @@ describe("recoverPendingFormWithRetry", () => {
   test("retries the cold-start inconsistency with bounded delays and stops on recovery", async () => {
     const delays: number[] = []
     let attempts = 0
-
     const recovered = await recoverPendingFormWithRetry(
-      async () => {
-        attempts += 1
-        return attempts === 3
-      },
+      async () => { attempts += 1; return attempts === 3 },
       { sleep: async (delayMs) => { delays.push(delayMs) } },
     )
-
     expect(recovered).toBe(true)
     expect(attempts).toBe(3)
     expect(delays).toEqual([500, 1500])
@@ -61,13 +47,9 @@ describe("recoverPendingFormWithRetry", () => {
   test("does no more work after cancellation", async () => {
     let attempts = 0
     const recovered = await recoverPendingFormWithRetry(
-      async () => {
-        attempts += 1
-        return false
-      },
+      async () => { attempts += 1; return false },
       { isCancelled: () => true, sleep: async () => undefined },
     )
-
     expect(recovered).toBe(false)
     expect(attempts).toBe(0)
   })

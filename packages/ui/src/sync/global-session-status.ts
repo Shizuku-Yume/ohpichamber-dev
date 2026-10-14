@@ -1,13 +1,12 @@
 import { create } from 'zustand';
-import type { SyncEvent } from '@/lib/opencode/events';
-import type { Session, SessionStatus } from '@/lib/opencode/model';
-import { normalizeProjectPath } from '@/lib/projectResolution';
+import type { CanonicalEvent, RuntimeSession, Session, SessionRuntimeStatus } from '@openchamber/agent-contract';
 import {
   applySessionOrderingMutations,
   reconcileSessionActivitySnapshot,
   type SessionOrderingMutation,
 } from './session-ordering';
 import {
+  applySessionActivityEvents,
   applySessionActivityTimingMutations,
   reconcileSessionActivityTiming,
   type SessionActivityTimingMutation,
@@ -15,371 +14,248 @@ import {
 import { countSyncPerformance } from './performance-diagnostics';
 import { hasRunningShell, useBackgroundShellsStore } from './background-shells';
 
-// Shared live busy/retry index for every directory. Global events update it
-// incrementally and authoritative directory snapshots reconcile it, so each
-// sidebar row can subscribe to one leaf instead of every child store.
-//
-// Only non-idle entries are kept; absence alone does not prove idle. Entries carry their
-// directory so a polled per-directory snapshot can authoritatively replace
-// that directory's slice (the server omits idle sessions from snapshots).
-
-type ActiveStatusType = 'busy' | 'retry';
-
-type GlobalSessionStatusEntry = { status: SessionStatus; directory: string };
-
+export type GlobalSessionStatusEntry = { status: SessionRuntimeStatus; directory: string };
 type GlobalSessionStatusState = {
-  /** Last explicitly observed activity/outcome. Bounded memory, never persisted. */
   observedById: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | null }>;
   statusById: Map<string, GlobalSessionStatusEntry>;
   activeSessionIds: ReadonlySet<string>;
 };
-
 const EMPTY_ACTIVE_SESSION_IDS: ReadonlySet<string> = new Set();
-
-const initialState: GlobalSessionStatusState = {
-  observedById: new Map(),
-  statusById: new Map(),
-  activeSessionIds: EMPTY_ACTIVE_SESSION_IDS,
-};
-
+const initialState: GlobalSessionStatusState = { observedById: new Map(), statusById: new Map(), activeSessionIds: EMPTY_ACTIVE_SESSION_IDS };
+const activeRunIdBySession = new Map<string, string>();
 export const useGlobalSessionStatusStore = create<GlobalSessionStatusState>(() => initialState);
 useGlobalSessionStatusStore.subscribe(() => countSyncPerformance('globalStatusPublications'));
 
-/**
- * Replaces the status map wholesale and derives active membership from it.
- * This is the ONE sanctioned way to swap statusById from outside the event
- * reducers (runtime switch, tests) — previously a setState monkeypatch
- * derived membership for arbitrary callers, which silently trusted any
- * caller passing both fields to keep them consistent.
- */
-export const replaceGlobalSessionStatusById = (statusById: Map<string, GlobalSessionStatusEntry>): void => {
+const isLiveStatus = (status: SessionRuntimeStatus): boolean => status === 'running' || status === 'awaiting_approval' || status === 'awaiting_input';
+const sameSet = (left: ReadonlySet<string>, right: ReadonlySet<string>): boolean => left.size === right.size && [...left].every((id) => right.has(id));
+const sameStatusMap = (left: ReadonlyMap<string, GlobalSessionStatusEntry>, right: ReadonlyMap<string, GlobalSessionStatusEntry>): boolean => left.size === right.size && [...left].every(([id, entry]) => right.get(id)?.directory === entry.directory && right.get(id)?.status === entry.status);
+const sameObservedMap = (left: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | null }>, right: ReadonlyMap<string, { directory: string; outcome: 'completed' | 'failed' | null }>): boolean => left.size === right.size && [...left].every(([id, entry]) => right.get(id)?.directory === entry.directory && right.get(id)?.outcome === entry.outcome);
+const setState = (statusById: Map<string, GlobalSessionStatusEntry>, observedById: Map<string, { directory: string; outcome: 'completed' | 'failed' | null }>): void => {
+  const active = new Set<string>();
+  for (const [id, entry] of statusById) if (isLiveStatus(entry.status)) active.add(id);
   const current = useGlobalSessionStatusStore.getState();
-  const nextActiveSessionIds = new Set<string>();
-  for (const [sessionId, entry] of statusById) {
-    if (entry.status.type === 'busy' || entry.status.type === 'retry') {
-      nextActiveSessionIds.add(sessionId);
-    }
-  }
-  const sameMembership = nextActiveSessionIds.size === current.activeSessionIds.size
-    && [...nextActiveSessionIds].every((sessionId) => current.activeSessionIds.has(sessionId));
+  if (sameStatusMap(current.statusById, statusById) && sameObservedMap(current.observedById, observedById)) return;
   useGlobalSessionStatusStore.setState({
-    observedById: new Map(),
     statusById,
-    activeSessionIds: sameMembership ? current.activeSessionIds : nextActiveSessionIds,
+    observedById,
+    activeSessionIds: sameSet(current.activeSessionIds, active) ? current.activeSessionIds : active,
   });
 };
 
-// A parent session goes idle while a background subagent keeps working in a
-// child session; OpenCode then hands the result back and the parent runs
-// again. For everything the user reads as "this session is working" (the row's
-// status dot and turn timer), that pause is still the same turn. The parent
-// lookup is injected by the sync provider: the sessions store sits above this
-// module in the import graph.
+export const removeGlobalSessionStatuses = (sessionIds: Iterable<string>): void => {
+  const ids = new Set(sessionIds);
+  if (ids.size === 0) return;
+  const state = useGlobalSessionStatusStore.getState();
+  const statuses = new Map(state.statusById);
+  const observed = new Map(state.observedById);
+  const ordering: SessionOrderingMutation[] = [];
+  const timing: SessionActivityTimingMutation[] = [];
+  for (const id of ids) {
+    activeRunIdBySession.delete(id);
+    statuses.delete(id);
+    observed.delete(id);
+    ordering.push({ type: 'remove', sessionId: id });
+    timing.push({ type: 'remove', sessionId: id });
+  }
+  setState(statuses, observed);
+  applySessionOrderingMutations(ordering);
+  applySessionActivityTimingMutations(timing);
+};
+export const replaceGlobalSessionStatusById = (statusById: Map<string, GlobalSessionStatusEntry>): void => {
+  activeRunIdBySession.clear();
+  setState(statusById, new Map());
+};
+
 type SessionParentResolver = (sessionId: string) => string | undefined;
 let resolveSessionParentId: SessionParentResolver = () => undefined;
-
-export const setSessionParentResolver = (resolver: SessionParentResolver): void => {
-  resolveSessionParentId = resolver;
-};
-
-/** Subagents nest; a deeper chain than this is treated as unrelated. */
+export const setSessionParentResolver = (resolver: SessionParentResolver): void => { resolveSessionParentId = resolver; };
 const MAX_SUBAGENT_DEPTH = 8;
-
 const forEachAncestorId = (sessionId: string, visit: (ancestorId: string) => void): void => {
   let current = resolveSessionParentId(sessionId);
-  for (let depth = 0; current && depth < MAX_SUBAGENT_DEPTH; depth += 1) {
-    visit(current);
-    current = resolveSessionParentId(current);
-  }
+  for (let depth = 0; current && depth < MAX_SUBAGENT_DEPTH; depth += 1) { visit(current); current = resolveSessionParentId(current); }
 };
-
-/** True when a subagent anywhere below the session is running. */
 export const hasActiveSubagent = (sessionId: string, activeSessionIds: ReadonlySet<string>): boolean => {
   for (const activeId of activeSessionIds) {
     if (activeId === sessionId) continue;
     let found = false;
-    forEachAncestorId(activeId, (ancestorId) => {
-      if (ancestorId === sessionId) found = true;
-    });
+    forEachAncestorId(activeId, (ancestorId) => { if (ancestorId === sessionId) found = true; });
     if (found) return true;
   }
   return false;
 };
-
-/**
- * Active sessions plus every session whose turn they keep open: ancestors of
- * running subagents, and sessions waiting on a background command.
- */
 const withBackgroundWork = (activeSessionIds: ReadonlySet<string>): ReadonlySet<string> => {
   let extended: Set<string> | null = null;
-  const add = (sessionId: string): void => {
-    if (activeSessionIds.has(sessionId)) return;
-    extended ??= new Set(activeSessionIds);
-    extended.add(sessionId);
-  };
-  for (const activeId of activeSessionIds) forEachAncestorId(activeId, add);
-  for (const sessionId of useBackgroundShellsStore.getState().sessionIds) add(sessionId);
+  const add = (id: string): void => { if (activeSessionIds.has(id)) return; extended ??= new Set(activeSessionIds); extended.add(id); };
+  for (const id of activeSessionIds) forEachAncestorId(id, add);
+  for (const id of useBackgroundShellsStore.getState().sessionIds) add(id);
   return extended ?? activeSessionIds;
 };
-
-/** True when the session idles only while its background work runs. */
-const hasBackgroundWork = (sessionId: string, activeSessionIds: ReadonlySet<string>): boolean => (
-  hasActiveSubagent(sessionId, activeSessionIds) || hasRunningShell(sessionId)
-);
-
-/**
- * What keeps the session's turn open, or null when nothing does: the session
- * runs itself, or it idles while a subagent below it runs, or while a command
- * it started in the background runs. The session's own run wins; a pause with
- * both kinds of background work reports the subagent.
- */
-type SessionTurnActivity = 'running' | 'subagent' | 'shell';
-
+const hasBackgroundWork = (sessionId: string, activeSessionIds: ReadonlySet<string>): boolean => hasActiveSubagent(sessionId, activeSessionIds) || hasRunningShell(sessionId);
+export type SessionTurnActivity = 'running' | 'subagent' | 'shell';
 export const useSessionTurnActivity = (sessionId: string): SessionTurnActivity | null => {
   const status = useGlobalSessionStatusStore((state): SessionTurnActivity | null => {
     if (state.activeSessionIds.has(sessionId)) return 'running';
     return hasActiveSubagent(sessionId, state.activeSessionIds) ? 'subagent' : null;
   });
-  const waitingOnShell = useBackgroundShellsStore((state) => state.sessionIds.has(sessionId));
-  return status ?? (waitingOnShell ? 'shell' : null);
+  const shell = useBackgroundShellsStore((state) => state.sessionIds.has(sessionId));
+  return status ?? (shell ? 'shell' : null);
 };
-
-// The last background command of an idle session ending closes its turn,
-// the way the last subagent finishing does below.
 useBackgroundShellsStore.subscribe((state, previous) => {
   if (state.sessionIds === previous.sessionIds) return;
-  const { activeSessionIds } = useGlobalSessionStatusStore.getState();
-  const timingMutations: SessionActivityTimingMutation[] = [];
-  for (const sessionId of previous.sessionIds) {
-    if (state.sessionIds.has(sessionId)) continue;
-    if (activeSessionIds.has(sessionId) || hasActiveSubagent(sessionId, activeSessionIds)) continue;
-    timingMutations.push({ type: 'observe', sessionId, phase: 'settled' });
-  }
-  applySessionActivityTimingMutations(timingMutations);
+  const active = useGlobalSessionStatusStore.getState().activeSessionIds;
+  const mutations: SessionActivityTimingMutation[] = [];
+  for (const id of previous.sessionIds) if (!state.sessionIds.has(id) && !active.has(id) && !hasActiveSubagent(id, active)) mutations.push({ type: 'settled', sessionId: id });
+  applySessionActivityTimingMutations(mutations);
 });
 
-const normalizeStatusType = (type: string | undefined): ActiveStatusType | 'idle' => {
-  if (type === 'busy') return 'busy';
-  if (type === 'retry') return 'retry';
-  return 'idle';
+const normalizeDirectory = (directory: string): string => directory;
+const recordSession = (session: RuntimeSession | Session | undefined, directory: string, statuses: Map<string, GlobalSessionStatusEntry>): void => {
+  if (!session) return;
+  if (session.runtimeStatus === 'idle') statuses.delete(session.sessionId);
+  else statuses.set(session.sessionId, { status: session.runtimeStatus, directory });
+  if (session.activeRunId === null) activeRunIdBySession.delete(session.sessionId);
+  else activeRunIdBySession.set(session.sessionId, session.activeRunId);
+};
+const applyStatus = (directory: string, sessionId: string, status: SessionRuntimeStatus, activeRunId: string | null, statuses: Map<string, GlobalSessionStatusEntry>): void => {
+  if (status === 'idle') statuses.delete(sessionId);
+  else statuses.set(sessionId, { status, directory });
+  if (activeRunId === null) activeRunIdBySession.delete(sessionId);
+  else activeRunIdBySession.set(sessionId, activeRunId);
+};
+const activeFromStatuses = (statuses: ReadonlyMap<string, GlobalSessionStatusEntry>): Set<string> => {
+  const active = new Set<string>();
+  for (const [id, entry] of statuses) if (isLiveStatus(entry.status)) active.add(id);
+  return active;
+};
+const recordObserved = (observed: Map<string, { directory: string; outcome: 'completed' | 'failed' | null }>, sessionId: string, directory: string, outcome: 'completed' | 'failed' | null): void => {
+  observed.delete(sessionId);
+  observed.set(sessionId, { directory, outcome });
+  if (observed.size > 2000) observed.delete(observed.keys().next().value!);
 };
 
-const statusesEqual = (left: SessionStatus, right: SessionStatus): boolean => (
-  left.type === right.type && JSON.stringify(left) === JSON.stringify(right)
-);
-
-// Both write paths normalize the directory key, so a polled snapshot can
-// authoritatively replace entries written by events (and vice versa) even when
-// the two sources format the same path differently (trailing slash, …).
-const normalizeDirectory = (directory: string): string =>
-  normalizeProjectPath(directory) ?? directory;
-
-export const getDirectoryOwnedSessionIds = (directory: string, sessions: readonly Session[]): string[] => {
-  const scope = normalizeProjectPath(directory);
-  if (!scope) return [];
-  const ids: string[] = [];
-  for (const session of sessions) {
-    if (normalizeProjectPath(session.directory) === scope) ids.push(session.id);
-  }
-  return ids;
-};
-
-// Event-driven path: called by the sync dispatcher for status-bearing events
-// whose directory has no child store. Mirrors the child reducer's semantics
-// (`session.idle` / `session.error` both resolve to idle).
-export const applyGlobalSessionStatusEvents = (directory: string, payloads: readonly SyncEvent[]): void => {
+export const applyGlobalSessionStatusEvents = (rawDirectory: string, payloads: readonly CanonicalEvent[]): void => {
   if (payloads.length === 0) return;
-  const normalizedDirectory = normalizeDirectory(directory);
+  const hasStatusEvent = payloads.some((event) => event.type === 'session.status' || event.type === 'session.updated' || event.type === 'session.deleted' || event.type === 'run.started' || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled');
+  const hasActivityEvent = payloads.some((event) => event.type === 'turn.started' || event.type === 'turn.completed');
+  if (!hasStatusEvent) {
+    if (hasActivityEvent) applySessionActivityEvents(rawDirectory, payloads);
+    return;
+  }
+  const directory = normalizeDirectory(rawDirectory);
   const state = useGlobalSessionStatusStore.getState();
-  let statusById: Map<string, GlobalSessionStatusEntry> | null = null;
-  let activeSessionIds: Set<string> | null = null;
-  let observedById: Map<string, { directory: string; outcome: 'completed' | 'failed' | null }> | null = null;
-  const observe = (id: string, outcome: 'completed' | 'failed' | null) => {
-    const previous = (observedById ?? state.observedById).get(id);
-    // OpenCode may publish idle after an error for the same failed turn.
-    const nextOutcome = outcome === 'completed' && previous?.outcome === 'failed' ? 'failed' : outcome;
-    if (previous?.directory === normalizedDirectory && previous.outcome === nextOutcome) return;
-    observedById ??= new Map(state.observedById);
-    observedById.delete(id);
-    observedById.set(id, { directory: normalizedDirectory, outcome: nextOutcome });
-    if (observedById.size > 2000) {
-      const oldest = observedById.keys().next().value;
-      if (oldest) observedById.delete(oldest);
-    }
+  const statuses = new Map(state.statusById);
+  const observed = new Map(state.observedById);
+  const ordering: SessionOrderingMutation[] = [];
+  const timing: SessionActivityTimingMutation[] = [];
+  const activeBefore = activeFromStatuses(statuses);
+  const settle = (sessionId: string, outcome: 'completed' | 'failed' | null = null, status: SessionRuntimeStatus = 'idle', at?: number, runId?: string): void => {
+    recordObserved(observed, sessionId, directory, outcome);
+    if (status === 'idle') statuses.delete(sessionId);
+    else statuses.set(sessionId, { status, directory });
+    activeRunIdBySession.delete(sessionId);
+    ordering.push({ type: 'settled', sessionId });
+    if (!hasBackgroundWork(sessionId, activeFromStatuses(statuses))) timing.push({ type: 'settled', sessionId, at, runId });
   };
-  const orderingMutations: SessionOrderingMutation[] = [];
-  const timingMutations: SessionActivityTimingMutation[] = [];
-  const currentStatuses = (): ReadonlyMap<string, GlobalSessionStatusEntry> => statusById ?? state.statusById;
-  const draftStatuses = (): Map<string, GlobalSessionStatusEntry> => (statusById ??= new Map(state.statusById));
-  const draftActiveIds = (): Set<string> => (activeSessionIds ??= new Set(state.activeSessionIds));
-  const currentActiveIds = (): ReadonlySet<string> => activeSessionIds ?? state.activeSessionIds;
-  const settledIds: string[] = [];
-  const settle = (sessionId: string): void => {
-    if (currentStatuses().has(sessionId)) {
-      draftStatuses().delete(sessionId);
-      draftActiveIds().delete(sessionId);
-    }
-    orderingMutations.push({ type: 'observe', sessionId, phase: 'settled' });
-    settledIds.push(sessionId);
-    // The turn timer keeps running through a background-subagent or background-command pause.
-    if (!hasBackgroundWork(sessionId, currentActiveIds())) {
-      timingMutations.push({ type: 'observe', sessionId, phase: 'settled' });
-    }
-  };
-
-  for (const payload of payloads) {
-    if (payload.type === 'session.status') {
-      const { sessionID, status } = payload.properties;
-      if (!sessionID) continue;
-      const type = normalizeStatusType(status.type);
-      // A status event only records that the session is running again; the
-      // outcome of the turn stays whatever the terminal event reported.
-      observe(sessionID, type === 'idle' ? (observedById ?? state.observedById).get(sessionID)?.outcome ?? null : null);
-      if (type === 'idle') {
-        settle(sessionID);
-        continue;
+  for (const event of payloads) {
+    switch (event.type) {
+      case 'session.status': {
+        const priorOutcome = observed.get(event.sessionId)?.outcome ?? null;
+        recordObserved(observed, event.sessionId, directory, isLiveStatus(event.runtimeStatus) ? null : priorOutcome);
+        applyStatus(directory, event.sessionId, event.runtimeStatus, event.activeRunId, statuses);
+        if (isLiveStatus(event.runtimeStatus)) ordering.push({ type: 'active', sessionId: event.sessionId });
+        if (isLiveStatus(event.runtimeStatus)) timing.push({ type: 'active', sessionId: event.sessionId, ...(event.activeRunId === null ? {} : { runId: event.activeRunId }) });
+        else settle(event.sessionId, priorOutcome, event.runtimeStatus);
+        break;
       }
-      const current = currentStatuses().get(sessionID);
-      if (!current || current.directory !== normalizedDirectory || !statusesEqual(current.status, status)) {
-        draftStatuses().set(sessionID, { status, directory: normalizedDirectory });
-        if (!current) draftActiveIds().add(sessionID);
+      case 'session.updated': {
+        if (event.session && (event.session.sessionId !== event.sessionId || event.session.epoch !== event.epoch)) break;
+        const priorOutcome = observed.get(event.sessionId)?.outcome ?? null;
+        recordSession(event.session, directory, statuses);
+        if (event.session && isLiveStatus(event.session.runtimeStatus)) {
+          recordObserved(observed, event.sessionId, directory, null);
+          ordering.push({ type: 'active', sessionId: event.sessionId });
+          timing.push({ type: 'active', sessionId: event.sessionId, ...(event.session.activeRunId === null ? {} : { runId: event.session.activeRunId }) });
+        } else if (event.session) settle(event.sessionId, priorOutcome, event.session.runtimeStatus);
+        break;
       }
-      orderingMutations.push({ type: 'observe', sessionId: sessionID, phase: 'active' });
-      timingMutations.push({ type: 'observe', sessionId: sessionID, phase: 'active' });
-      continue;
-    }
-
-    if (payload.type === 'session.idle' || payload.type === 'session.error') {
-      const { sessionID } = payload.properties;
-      if (sessionID) {
-        observe(sessionID, payload.type === 'session.error' ? 'failed' : 'completed');
-        settle(sessionID);
-      }
-      continue;
-    }
-
-    if (payload.type === 'session.deleted') {
-      const { sessionID } = payload.properties;
-      if (!sessionID) continue;
-      if ((observedById ?? state.observedById).has(sessionID)) {
-        observedById ??= new Map(state.observedById);
-        observedById.delete(sessionID);
-      }
-      if (currentStatuses().has(sessionID)) {
-        draftStatuses().delete(sessionID);
-        draftActiveIds().delete(sessionID);
-      }
-      orderingMutations.push({ type: 'remove', sessionId: sessionID });
-      timingMutations.push({ type: 'remove', sessionId: sessionID });
+      case 'run.started':
+        applyStatus(directory, event.sessionId, 'running', event.runId, statuses);
+        recordObserved(observed, event.sessionId, directory, null);
+        ordering.push({ type: 'active', sessionId: event.sessionId });
+        timing.push({ type: 'active', sessionId: event.sessionId, at: event.createdAt, runId: event.runId });
+        break;
+      case 'run.completed':
+        if (activeRunIdBySession.get(event.sessionId) !== event.runId) break;
+        settle(event.sessionId, 'completed', 'idle', event.finishedAt, event.runId);
+        break;
+      case 'run.failed':
+        if (activeRunIdBySession.get(event.sessionId) !== event.runId) break;
+        settle(event.sessionId, 'failed', 'idle', event.finishedAt, event.runId);
+        break;
+      case 'run.cancelled':
+        if (activeRunIdBySession.get(event.sessionId) !== event.runId) break;
+        settle(event.sessionId, null, 'idle', event.finishedAt, event.runId);
+        break;
+      case 'turn.started':
+        timing.push({ type: 'active', sessionId: event.sessionId, runId: event.runId });
+        break;
+      case 'session.deleted':
+        for (const id of event.deletedSessionIds) {
+          activeRunIdBySession.delete(id);
+          statuses.delete(id); observed.delete(id); ordering.push({ type: 'remove', sessionId: id }); timing.push({ type: 'remove', sessionId: id });
+        }
+        break;
+      default:
+        break;
     }
   }
-
-  // A subagent that finished may have been the last thing holding its
-  // parent's turn open.
-  const finalActiveIds = currentActiveIds();
-  for (const settledId of settledIds) {
-    forEachAncestorId(settledId, (ancestorId) => {
-      if (finalActiveIds.has(ancestorId) || hasBackgroundWork(ancestorId, finalActiveIds)) return;
-      timingMutations.push({ type: 'observe', sessionId: ancestorId, phase: 'settled' });
-    });
-  }
-
-  if (statusById || observedById) {
-    useGlobalSessionStatusStore.setState({
-      statusById: statusById ?? state.statusById,
-      observedById: observedById ?? state.observedById,
-      activeSessionIds: activeSessionIds ?? state.activeSessionIds,
-    });
-  }
-  applySessionOrderingMutations(orderingMutations);
-  applySessionActivityTimingMutations(timingMutations);
+  const finalActive = activeFromStatuses(statuses);
+  for (const id of activeBefore) if (!finalActive.has(id) && !hasBackgroundWork(id, finalActive)) timing.push({ type: 'settled', sessionId: id });
+  for (const id of activeBefore) if (!finalActive.has(id)) forEachAncestorId(id, (ancestorId) => {
+    if (!finalActive.has(ancestorId) && !hasBackgroundWork(ancestorId, finalActive)) timing.push({ type: 'settled', sessionId: ancestorId });
+  });
+  setState(statuses, observed);
+  applySessionOrderingMutations(ordering);
+  applySessionActivityTimingMutations(timing);
 };
+export const applyGlobalSessionStatusEvent = (directory: string, payload: CanonicalEvent): void => applyGlobalSessionStatusEvents(directory, [payload]);
 
-export const applyGlobalSessionStatusEvent = (directory: string, payload: SyncEvent): void => {
-  applyGlobalSessionStatusEvents(directory, [payload]);
-};
-
-// Polled path: an authoritative `/api/session/active` snapshot. Entries
-// missing from the snapshot are idle now — cleared both by directory key and by
-// the caller's session-id list (the server may report a canonicalized directory
-// that differs from the key an event wrote, e.g. via symlinks). Seeds the
-// initial state (events only deliver changes) and reconciles missed events.
 export const applyGlobalSessionStatusSnapshot = (
   rawDirectory: string,
-  raw: Record<string, SessionStatus>,
+  raw: Record<string, SessionRuntimeStatus>,
   knownSessionIds?: Iterable<string>,
+  activeRunIds?: Readonly<Record<string, string | null>>,
 ): void => {
   const directory = normalizeDirectory(rawDirectory);
+  const hasKnownScope = knownSessionIds !== undefined;
   const known = new Set(knownSessionIds ?? []);
-  // Built once as a set and shared by both consumers below; only non-idle
-  // sessions land here, so it stays small however long the directory's list is.
-  const activeSessionIds = new Set<string>();
-  for (const [sessionId, status] of Object.entries(raw)) {
-    if (normalizeStatusType(status.type) !== 'idle') activeSessionIds.add(sessionId);
+  const state = useGlobalSessionStatusStore.getState();
+  const covered = new Set(known);
+  if (!hasKnownScope) for (const [id, entry] of state.statusById) if (entry.directory === directory) covered.add(id);
+  for (const id of Object.keys(raw)) covered.add(id);
+  const statuses = new Map(state.statusById);
+  const observed = new Map(state.observedById);
+  for (const id of covered) {
+    if (!Object.hasOwn(raw, id)) statuses.delete(id);
+    if (activeRunIds && Object.prototype.hasOwnProperty.call(activeRunIds, id)) {
+      const runId = activeRunIds[id];
+      if (typeof runId === 'string') activeRunIdBySession.set(id, runId); else activeRunIdBySession.delete(id);
+    } else if (!Object.hasOwn(raw, id) || !isLiveStatus(raw[id]!)) activeRunIdBySession.delete(id);
   }
-  reconcileSessionActivitySnapshot(activeSessionIds, known);
-  // Timing asks the coverage question instead of being handed a list: a snapshot
-  // authoritatively covers the caller's session list plus every id it reports
-  // itself, and only the handful of sessions actually being timed need an
-  // answer. Reuses the sets already built above, so this allocates nothing.
-  reconcileSessionActivityTiming(
-    withBackgroundWork(activeSessionIds),
-    (sessionId) => known.has(sessionId) || sessionId in raw,
-  );
-  useGlobalSessionStatusStore.setState((state) => {
-    let changed = false;
-    let observedById: Map<string, { directory: string; outcome: 'completed' | 'failed' | null }> | null = null;
-    const next = new Map(state.statusById);
-    let nextActiveSessionIds: Set<string> | null = null;
-    const hasActiveSession = (sessionId: string): boolean => (
-      (nextActiveSessionIds ?? state.activeSessionIds).has(sessionId)
-    );
-    const removeActiveSession = (sessionId: string): void => {
-      if (!hasActiveSession(sessionId)) return;
-      nextActiveSessionIds ??= new Set(state.activeSessionIds);
-      nextActiveSessionIds.delete(sessionId);
-    };
-    const addActiveSession = (sessionId: string): void => {
-      if (hasActiveSession(sessionId)) return;
-      nextActiveSessionIds ??= new Set(state.activeSessionIds);
-      nextActiveSessionIds.add(sessionId);
-    };
-
-    for (const [sessionId, entry] of state.statusById) {
-      if ((entry.directory === directory || known.has(sessionId)) && !(sessionId in raw)) {
-        next.delete(sessionId);
-        removeActiveSession(sessionId);
-        changed = true;
-      }
-    }
-
-    for (const [sessionId, status] of Object.entries(raw)) {
-      const type = normalizeStatusType(status.type);
-      const observed = state.observedById.get(sessionId);
-      if (type !== 'idle' && observed?.outcome) {
-        observedById ??= new Map(state.observedById);
-        observedById.set(sessionId, { directory, outcome: null });
-      }
-      const current = next.get(sessionId);
-      if (type === 'idle') {
-        if (current && (current.directory === directory || known.has(sessionId))) {
-          next.delete(sessionId);
-          removeActiveSession(sessionId);
-          changed = true;
-        }
-        continue;
-      }
-      if (!current || current.directory !== directory || !statusesEqual(current.status, status)) {
-        next.set(sessionId, { status, directory });
-        if (!current) addActiveSession(sessionId);
-        changed = true;
-      }
-    }
-
-    return changed || observedById ? {
-      observedById: observedById ?? state.observedById,
-      statusById: next,
-      activeSessionIds: nextActiveSessionIds ?? state.activeSessionIds,
-    } : state;
-  });
+  for (const [id, status] of Object.entries(raw)) {
+    const previous = observed.get(id)?.outcome ?? null;
+    if (status === 'idle') recordObserved(observed, id, directory, previous);
+    else if (isLiveStatus(status)) recordObserved(observed, id, directory, null);
+    if (status === 'idle') statuses.delete(id);
+    else statuses.set(id, { status, directory });
+  }
+  const active = activeFromStatuses(statuses);
+  reconcileSessionActivitySnapshot(active, covered);
+  const timingScope = new Set(covered);
+  for (const id of covered) forEachAncestorId(id, (ancestorId) => timingScope.add(ancestorId));
+  reconcileSessionActivityTiming(withBackgroundWork(active), (id) => timingScope.has(id));
+  setState(statuses, observed);
 };
+
+export const getDirectoryOwnedSessionIds = (_directory: string, sessions: readonly Session[]): string[] => sessions.map((session) => session.sessionId);
+export { hasBackgroundWork };

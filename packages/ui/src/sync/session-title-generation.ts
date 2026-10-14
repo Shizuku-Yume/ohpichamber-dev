@@ -1,35 +1,43 @@
 import { create } from 'zustand';
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { normalizePath } from '@/lib/pathNormalization';
-import type { Session } from "@/lib/opencode/model"
-import type { collectSessionTitleTurns } from '@/lib/sessionTitle';
+import type { Session, SessionMetadataState } from '@openchamber/agent-contract';
+import type { NativeTitleTurn } from './session-title-context';
 
-type TitleTarget = { runtimeKey: string; directory: string; sessionID: string };
+type TitleTarget = { runtimeKey: string; directory: string; sessionId: string };
 type PendingTitle = { target: TitleTarget; controller: AbortController };
 
-const keyFor = (target: TitleTarget) => JSON.stringify([target.runtimeKey, normalizePath(target.directory), target.sessionID]);
+export type NativeTitleContext = { session: Session; metadata: SessionMetadataState; turns: NativeTitleTurn[] };
+
+const keyFor = (target: TitleTarget) => JSON.stringify([target.runtimeKey, normalizePath(target.directory), target.sessionId]);
 const useTitleGenerations = create<{ pending: ReadonlyMap<string, PendingTitle> }>(() => ({ pending: new Map() }));
 
 /** The metadata check belongs to the operation, independently of its menu. */
 export async function generateAndSaveSessionTitle(input: {
   signal: AbortSignal;
-  prepare: (signal: AbortSignal) => Promise<{ session: Session; turns: ReturnType<typeof collectSessionTitleTurns> }>;
-  generate: (turns: ReturnType<typeof collectSessionTitleTurns>, signal: AbortSignal) => Promise<string>;
-  readSession: () => Promise<Session>;
+  prepare: (signal: AbortSignal) => Promise<NativeTitleContext>;
+  generate: (turns: readonly NativeTitleTurn[], signal: AbortSignal) => Promise<string>;
+  readSession: () => Promise<{ session: Session; metadata: SessionMetadataState }>;
   saveTitle: (title: string, signal: AbortSignal) => Promise<void>;
 }): Promise<void> {
   const { signal } = input;
   signal.throwIfAborted();
-  const { session, turns } = await input.prepare(signal);
+  const prepared = await input.prepare(signal);
   signal.throwIfAborted();
-  if (!turns.length) throw new Error('No completed turns');
-  const title = await input.generate(turns, signal);
+  if (prepared.metadata.sessionId !== prepared.session.sessionId) throw new Error('Session metadata belongs to another session');
+  if (!prepared.turns.length) throw new Error('No completed turns');
+  const title = await input.generate(prepared.turns, signal);
   signal.throwIfAborted();
   const current = await input.readSession();
   signal.throwIfAborted();
-  if (current.title !== session.title || current.directory !== session.directory
-    || current.time.archived !== session.time.archived
-    || current.revert?.messageID !== session.revert?.messageID) return;
+  if (current.session.sessionId !== prepared.session.sessionId
+    || current.metadata.sessionId !== prepared.metadata.sessionId
+    || current.session.updatedAt !== prepared.session.updatedAt
+    || current.session.epoch !== prepared.session.epoch
+    || current.session.headSequence !== prepared.session.headSequence
+    || current.session.archivedAt !== prepared.session.archivedAt
+    || current.metadata.revision !== prepared.metadata.revision
+    || current.metadata.metadata?.title !== prepared.metadata.metadata?.title) return;
   await input.saveTitle(title, signal);
 }
 
@@ -39,7 +47,7 @@ export const useSessionTitleGenerationPending = (target: TitleTarget): boolean =
 /** Manual saves invalidate generation immediately, before their HTTP write settles. */
 export function cancelSessionTitleGeneration(sessionID: string, runtimeKey = getRuntimeKey()): void {
   for (const operation of useTitleGenerations.getState().pending.values()) {
-    if (operation.target.sessionID === sessionID && operation.target.runtimeKey === runtimeKey) {
+    if (operation.target.sessionId === sessionID && operation.target.runtimeKey === runtimeKey) {
       operation.controller.abort();
     }
   }

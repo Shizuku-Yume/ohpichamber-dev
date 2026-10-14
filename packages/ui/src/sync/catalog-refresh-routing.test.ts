@@ -1,95 +1,70 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { Project } from '@/lib/opencode/model';
-import { opencodeClient } from '@/lib/opencode/client';
-import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
-import { useAgentsStore } from '@/stores/useAgentsStore';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { useProjectsStore } from '@/stores/useProjectsStore';
-import { ChildStoreManager } from './child-store';
-import { useGlobalSyncStore } from './global-sync-store';
-import { createEventRoutingIndex, handleEvent } from './sync-context';
+import { describe, expect, test } from "bun:test"
+import type { CanonicalEvent, CatalogUpdate, SessionSnapshot } from "@openchamber/agent-contract"
+import { applyDirectoryEvent, installSessionSnapshot } from "./event-reducer"
+import { INITIAL_STATE, type State } from "./types"
 
-const originalListAgents = opencodeClient.listAgents;
-const originalListProjects = opencodeClient.listProjects;
-const originalAgentLoad = useAgentsStore.getState().loadAgents;
-const originalConfigLoad = useConfigStore.getState().loadAgents;
-const originalRuntime = getRuntimeKey();
-const originalBase = getRuntimeApiBaseUrl();
-let childStores: ChildStoreManager;
-let agentLoads: Array<string | null | undefined> = [];
-let sdkReads: Array<string | null | undefined> = [];
+const snapshot = (overrides: Partial<SessionSnapshot> = {}): SessionSnapshot => ({
+  session: {
+    sessionId: "session-1", projectId: "project-1", workspaceId: "workspace-1", displayPath: ".",
+    rootSessionId: "session-1", createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "0",
+    runtimeStatus: "idle", activeRunId: null,
+  },
+  cursor: "epoch-1:0", activeRun: null,
+  branch: { branchId: "branch-1", branchVersion: "0", leafMessageId: null },
+  window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false },
+  turns: [], messages: [], approvals: [], questions: [],
+  requestRecovery: { pendingSet: "replace", priorEpochs: "expired" }, ...overrides,
+})
 
-const project = (id: string): Project => ({ id, worktree: `/workspace/${id}`, time: { created: 1, updated: 1 }, sandboxes: [] });
-const deferred = <T>() => {
-  let resolvePromise: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((resolve) => { resolvePromise = resolve; });
-  return { promise, resolve: resolvePromise };
-};
+const state = (overrides: Partial<State> = {}): State => ({
+  ...INITIAL_STATE, session: [{ ...snapshot().session, metadata: null, metadataRevision: "0", archiveRevision: "0" }],
+  sessionTotal: 1, ...overrides,
+})
 
-beforeEach(() => {
-  agentLoads = [];
-  sdkReads = [];
-  childStores = new ChildStoreManager();
-  childStores.ensureChild('/workspace/project', { bootstrap: false });
-  childStores.ensureChild('/workspace/unrelated', { bootstrap: false });
-  useProjectsStore.setState({ projects: [{ id: 'ambient', path: '/workspace/ambient' }], activeProjectId: 'ambient' });
-  useAgentsStore.setState({ loadAgents: async (directory) => { agentLoads.push(directory); return true; } });
-  useConfigStore.setState({ loadAgents: async () => true });
-  opencodeClient.listAgents = async (directory) => { sdkReads.push(directory); return []; };
-  useGlobalSyncStore.getState().actions.reset();
-});
+type CatalogFixture = CatalogUpdate
+const catalog = (kind: "mcp" | "skills", revision: string, workspaceId = "workspace-1"): CatalogFixture => kind === "mcp"
+  ? {
+      kind, state: {
+        runtimeStatus: "ready", appliedRevision: "1", catalogRevision: revision,
+        worker: { workspaceId, rootSessionId: "session-1", workerGeneration: "worker-1" }, activeServers: [], tools: [],
+      },
+    }
+  : {
+      kind, state: {
+        runtimeStatus: "ready", persistedSources: { workspace: "1", agent: "1" }, appliedSources: { workspace: "1", agent: "1" },
+        catalogRevision: revision, worker: { workspaceId, rootSessionId: "session-1", workerGeneration: "worker-1" },
+        agentDirectoryId: "agent-dir-1", skills: [],
+      },
+    }
 
-afterEach(() => {
-  opencodeClient.listAgents = originalListAgents;
-  opencodeClient.listProjects = originalListProjects;
-  useAgentsStore.setState({ loadAgents: originalAgentLoad });
-  useConfigStore.setState({ loadAgents: originalConfigLoad });
-  switchRuntimeEndpoint({ apiBaseUrl: originalBase, runtimeKey: originalRuntime });
-  childStores.disposeAll();
-});
+const event = (sequence: string, catalogUpdate: CatalogFixture): CanonicalEvent => ({
+  sessionId: "session-1", epoch: "epoch-1", sequence, timestamp: Number(sequence), type: "catalog.updated", catalog: catalogUpdate,
+})
 
-describe('catalog refresh routing', () => {
-  test('an open-directory event refreshes its Settings list without reading unrelated locations', async () => {
-    handleEvent('/workspace/project', { type: 'catalog.updated', properties: { kind: 'agent' } }, childStores, createEventRoutingIndex(), getRuntimeKey());
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    expect(agentLoads).toContain('/workspace/project');
-    expect(agentLoads).not.toContain('/workspace/unrelated');
-    expect(sdkReads).toEqual([]);
-  });
+describe("canonical catalog updates", () => {
+  test("publishes only native MCP and skills catalog kinds", () => {
+    let current = installSessionSnapshot(state(), snapshot())
+    const mcp = applyDirectoryEvent(current, event("1", catalog("mcp", "1")))
+    expect(mcp.kind).toBe("applied")
+    current = mcp.state
+    const skills = applyDirectoryEvent(current, event("2", catalog("skills", "2")))
+    expect(skills.kind).toBe("applied")
+    expect(skills.state.catalog["session-1\\nmcp"]?.kind).toBe("mcp")
+    expect(skills.state.catalog["session-1\\nskills"]?.kind).toBe("skills")
+  })
 
-  test('a queued catalog batch is discarded after a runtime switch', async () => {
-    handleEvent('/workspace/project', { type: 'catalog.updated', properties: { kind: 'agent' } }, childStores, createEventRoutingIndex(), getRuntimeKey());
-    switchRuntimeEndpoint({ apiBaseUrl: 'https://runtime-b.test', runtimeKey: 'runtime-b' });
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    expect(agentLoads).toEqual([]);
-    expect(sdkReads).toEqual([]);
-  });
+  test("rejects a catalog update from another workspace for snapshot recovery", () => {
+    const base = installSessionSnapshot(state(), snapshot())
+    const result = applyDirectoryEvent(base, event("1", catalog("mcp", "1", "other-workspace")))
+    expect(result.kind).toBe("resnapshot")
+    expect(result.state).toBe(base)
+  })
 
-  test('a project catalog response cannot publish after its runtime changes', async () => {
-    const response = deferred<Project[]>();
-    const started = deferred<void>();
-    const retained = [project('runtime-b')];
-    opencodeClient.listProjects = () => { started.resolve(); return response.promise; };
-    useGlobalSyncStore.getState().actions.set({ projects: retained });
-    handleEvent('global', { type: 'catalog.updated', properties: { kind: 'project' } }, childStores, createEventRoutingIndex(), getRuntimeKey());
-    await started.promise;
-    switchRuntimeEndpoint({ apiBaseUrl: 'https://runtime-b.test', runtimeKey: 'runtime-b' });
-    response.resolve([project('runtime-a')]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(useGlobalSyncStore.getState().projects).toBe(retained);
-  });
-
-  test('a reconnected SDK rejects an older project response even when the runtime key stays the same', async () => {
-    const response = deferred<Project[]>();
-    const started = deferred<void>();
-    const retained = [project('current-runtime')];
-    opencodeClient.listProjects = () => { started.resolve(); return response.promise; };
-    useGlobalSyncStore.getState().actions.set({ projects: retained });
-    handleEvent('global', { type: 'catalog.updated', properties: { kind: 'project' } }, childStores, createEventRoutingIndex(), getRuntimeKey());
-    await started.promise;
-    opencodeClient.reconnectToRuntimeBaseUrl();
-    response.resolve([project('obsolete-sdk')]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(useGlobalSyncStore.getState().projects).toBe(retained);
-  });
-});
+  test("retains the latest catalog revision and ignores stale duplicate delivery", () => {
+    let current = installSessionSnapshot(state(), snapshot())
+    current = applyDirectoryEvent(current, event("1", catalog("mcp", "2"))).state
+    const duplicate = applyDirectoryEvent(current, event("1", catalog("mcp", "1")))
+    expect(duplicate.kind).toBe("duplicate")
+    expect(duplicate.state.catalog["session-1\\nmcp"]?.state.catalogRevision).toBe("2")
+  })
+})

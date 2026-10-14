@@ -1,10 +1,9 @@
 import { create } from 'zustand';
-import type { Session } from "@/lib/opencode/model"
+import type { Session } from '@openchamber/agent-contract';
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
-import { getBtwSessionID } from '@/lib/sessionBtwMetadata';
-import { isSessionInWork } from '@/lib/sessionWorkMetadata';
 import { isSessionPinned, useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
-import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 import { useUIStore, type SessionRetentionAction } from '@/stores/useUIStore';
 import { useSessionUIStore } from './session-ui-store';
 import { useGlobalSessionStatusStore } from './global-session-status';
@@ -14,11 +13,10 @@ const DAY_MS = 86_400_000;
 export const RETENTION_KEEP_RECENT = 5;
 export const RETENTION_INTERVAL_MS = DAY_MS;
 
-// A record without timestamps has no age to compare, so it never qualifies.
 const retentionTimestamp = (session: Session, onlyArchived: boolean): number => (
-  onlyArchived ? session.time?.archived ?? 0 : session.time?.updated ?? session.time?.created ?? 0
+  onlyArchived ? session.archivedAt ?? 0 : session.updatedAt
 );
-const isArchived = (session: Session): boolean => Boolean(session.time?.archived);
+const isArchived = (session: Session): boolean => session.archivedAt !== undefined;
 
 const isOlderThanCutoff = (session: Session, cutoff: number, onlyArchived: boolean): boolean => {
   const timestamp = retentionTimestamp(session, onlyArchived);
@@ -26,8 +24,14 @@ const isOlderThanCutoff = (session: Session, cutoff: number, onlyArchived: boole
 };
 
 /** Sessions the user asked to keep: pinned on this client, or in the In work block. */
-export const isSessionKeptByUser = (session: Session, pinnedIds: Set<string> = useSessionPinnedStore.getState().ids): boolean => (
-  isSessionInWork(session) || isSessionPinned(pinnedIds, session.directory, session.id)
+export const isSessionKeptByUser = (
+  session: Session,
+  pinnedIds: Set<string> = useSessionPinnedStore.getState().ids,
+  directory: string | null = resolveWorkspaceDirectory(session.workspaceId),
+): boolean => (
+  session.metadata?.openchamber?.work?.state === 'open'
+  || session.metadata?.isPinned === true
+  || isSessionPinned(pinnedIds, directory, session.sessionId)
 );
 
 type CandidateOptions = {
@@ -47,44 +51,41 @@ export function buildSessionRetentionCandidates({
 }: CandidateOptions): string[] {
   if (!Number.isFinite(cutoffDays) || cutoffDays < 1) return [];
   const cutoff = now - cutoffDays * DAY_MS;
-  const byId = new Map(sessions.map((session) => [session.id, session]));
+  const byId = new Map(sessions.map((session) => [session.sessionId, session]));
   const sorted = sessions.filter((session) => isArchived(session) === onlyArchived)
     .sort((a, b) => retentionTimestamp(b, onlyArchived) - retentionTimestamp(a, onlyArchived));
-  const protectedIds = new Set(sorted.slice(0, RETENTION_KEEP_RECENT).map((session) => session.id));
+  const protectedIds = new Set(sorted.slice(0, RETENTION_KEEP_RECENT).map((session) => session.sessionId));
   for (const session of sessions) {
-    if (isArchived(session) !== onlyArchived || getBtwSessionID(session) || session.id === currentSessionId
-      || activeSessionIds.has(session.id) || isKept?.(session) || !isOlderThanCutoff(session, cutoff, onlyArchived)) {
-      protectedIds.add(session.id);
+    if (isArchived(session) !== onlyArchived || session.metadata?.openchamber?.btwSessionID || session.sessionId === currentSessionId
+      || activeSessionIds.has(session.sessionId) || session.runtimeStatus === 'running' || session.runtimeStatus === 'awaiting_approval' || session.runtimeStatus === 'awaiting_input'
+      || isKept?.(session) || !isOlderThanCutoff(session, cutoff, onlyArchived)) {
+      protectedIds.add(session.sessionId);
     }
   }
   if (action === 'delete' || onlyArchived) {
-    // OpenCode deletes the whole subtree. Protect every ancestor of a retained session.
     for (const id of protectedIds) {
-      const parentId = byId.get(id)?.parentID;
+      const parentId = byId.get(id)?.parentSessionId;
       if (parentId) protectedIds.add(parentId);
     }
   }
-  const candidates = sorted.filter((session) => !protectedIds.has(session.id));
-  if (action === 'archive' && !onlyArchived) return candidates.map((session) => session.id);
+  const candidates = sorted.filter((session) => !protectedIds.has(session.sessionId));
+  if (action === 'archive' && !onlyArchived) return candidates.map((session) => session.sessionId);
 
-  // Children first: each request deletes one eligible session, and a failed child
-  // can prevent its parent from bypassing that failure with a cascading delete.
-  const ids = new Set(candidates.map((session) => session.id));
+  const ids = new Set(candidates.map((session) => session.sessionId));
   const childrenLeft = new Map<string, number>();
   for (const session of candidates) {
-    if (session.parentID && ids.has(session.parentID)) {
-      childrenLeft.set(session.parentID, (childrenLeft.get(session.parentID) ?? 0) + 1);
+    if (session.parentSessionId && ids.has(session.parentSessionId)) {
+      childrenLeft.set(session.parentSessionId, (childrenLeft.get(session.parentSessionId) ?? 0) + 1);
     }
   }
-  const ordered = candidates.filter((session) => !childrenLeft.has(session.id)).map((session) => session.id);
+  const ordered = candidates.filter((session) => !childrenLeft.has(session.sessionId)).map((session) => session.sessionId);
   for (let index = 0; index < ordered.length; index += 1) {
-    const parentId = byId.get(ordered[index])?.parentID;
+    const parentId = byId.get(ordered[index])?.parentSessionId;
     if (!parentId || !ids.has(parentId)) continue;
     const remaining = (childrenLeft.get(parentId) ?? 0) - 1;
     childrenLeft.set(parentId, remaining);
     if (remaining === 0) ordered.push(parentId);
   }
-  // Cyclic/malformed hierarchies never become leaves and cannot be deleted.
   return ordered;
 }
 
@@ -95,7 +96,6 @@ type SessionRetentionResult = {
   skippedReason?: 'disabled' | 'loading' | 'cooldown' | 'no-candidates' | 'running' | 'runtime-changed';
 };
 
-// Shared by the app's automatic runner and every Settings mount. Acquire before any await.
 export const useSessionRetentionRunStore = create(() => ({ isRunning: false }));
 
 export async function runSessionRetentionCleanup({ force = false } = {}): Promise<SessionRetentionResult> {
@@ -120,17 +120,16 @@ export async function runSessionRetentionCleanup({ force = false } = {}): Promis
   try {
     await useGlobalSessionsStore.getState().loadSessions();
     if (!isCurrentRuntime()) return { ...result, skippedReason: 'runtime-changed' };
-    if (useGlobalSessionsStore.getState().status !== 'ready') {
-      throw new Error('Session retention requires a complete session list');
-    }
+    if (useGlobalSessionsStore.getState().status !== 'ready') throw new Error('Session retention requires a complete session list');
+    const globalState = useGlobalSessionsStore.getState();
     const candidateIds = buildSessionRetentionCandidates({
-      sessions: [...useGlobalSessionsStore.getState().entityById.values()],
+      sessions: [...globalState.entityById.values()],
       currentSessionId: useSessionUIStore.getState().currentSessionId,
       cutoffDays: settings.autoDeleteAfterDays,
       action,
       onlyArchived,
       activeSessionIds: useGlobalSessionStatusStore.getState().activeSessionIds,
-      isKept: isSessionKeptByUser,
+      isKept: (session) => isSessionKeptByUser(session),
       now,
     });
     if (candidateIds.length === 0) return { ...result, skippedReason: 'no-candidates' };
@@ -146,22 +145,22 @@ export async function runSessionRetentionCleanup({ force = false } = {}): Promis
       const state = useGlobalSessionsStore.getState();
       const session = state.entityById.get(id);
       if (!session) continue;
-      if (isArchived(session) !== onlyArchived || getBtwSessionID(session) || session.id === useSessionUIStore.getState().currentSessionId
-        || useGlobalSessionStatusStore.getState().activeSessionIds.has(id) || isSessionKeptByUser(session)
+      if (isArchived(session) !== onlyArchived || session.metadata?.openchamber?.btwSessionID || session.sessionId === useSessionUIStore.getState().currentSessionId
+        || useGlobalSessionStatusStore.getState().activeSessionIds.has(id)
+        || session.runtimeStatus === 'running' || session.runtimeStatus === 'awaiting_approval' || session.runtimeStatus === 'awaiting_input'
+        || isSessionKeptByUser(session)
         || !isOlderThanCutoff(session, now - settings.autoDeleteAfterDays * DAY_MS, onlyArchived)) continue;
       if (action === 'delete') {
         if (archivedSnapshot !== state.archivedSessions) {
           archivedSnapshot = state.archivedSessions;
           archivedChildrenByParentId = new Map();
           for (const archived of archivedSnapshot) {
-            if (!archived.parentID) continue;
-            const children = archivedChildrenByParentId.get(archived.parentID);
-            if (children) children.push(archived.id);
-            else archivedChildrenByParentId.set(archived.parentID, [archived.id]);
+            if (!archived.parentSessionId) continue;
+            const children = archivedChildrenByParentId.get(archived.parentSessionId);
+            if (children) children.push(archived.sessionId);
+            else archivedChildrenByParentId.set(archived.parentSessionId, [archived.sessionId]);
           }
         }
-        // Planned children ran first. Any child still present either failed,
-        // became protected, or arrived mid-run. Never delete it via its parent.
         const children = [
           ...(state.structure.activeChildrenByParentId.get(id) ?? []),
           ...(archivedChildrenByParentId.get(id) ?? []),
@@ -173,11 +172,6 @@ export async function runSessionRetentionCleanup({ force = false } = {}): Promis
           }
           continue;
         }
-      }
-      if (!resolveGlobalSessionDirectory(session)) {
-        failedIds.add(id);
-        result.failedIds.push(id);
-        continue;
       }
       const completed = action === 'archive'
         ? await archiveSession(id, runtimeKey)

@@ -1,76 +1,51 @@
-import type { FormRequest, Message, Part, PermissionRequest, SessionStatus } from "@/lib/opencode/model"
-import { getLastConversationMessage, isIncompleteAssistantTurn } from "@/lib/opencode/model"
+import type { ApprovalRequest, Message, QuestionRequest, SessionRuntimeStatus } from "@openchamber/agent-contract"
 
 type SessionCache = {
-  session_status: Record<string, SessionStatus | undefined>
+  session_status: Record<string, SessionRuntimeStatus | undefined>
   message: Record<string, Message[] | undefined>
-  part: Record<string, Part[] | undefined>
-  permission: Record<string, PermissionRequest[] | undefined>
-  form: Record<string, FormRequest[] | undefined>
+  snapshot?: Record<string, unknown>
+  partOwner?: Record<string, unknown>
+  sessionEpoch?: Record<string, string>
+  sessionCursor?: Record<string, string>
+  sessionStatusInvalidated?: Record<string, true>
+  permission: Record<string, ApprovalRequest[] | undefined>
+  form: Record<string, QuestionRequest[] | undefined>
 }
+const isLiveStatus = (status: SessionRuntimeStatus | undefined): boolean => (
+  status === "running" || status === "awaiting_approval" || status === "awaiting_input"
+)
 
 export function getProtectedSessionCacheIds(store: SessionCache): Set<string> {
   const protectedIds = new Set<string>()
 
-  for (const [sessionID, status] of Object.entries(store.session_status ?? {})) {
-    if (status && status.type !== "idle") {
-      protectedIds.add(sessionID)
-    }
+  for (const [sessionId, status] of Object.entries(store.session_status ?? {})) {
+    if (isLiveStatus(status)) protectedIds.add(sessionId)
   }
 
-  for (const [sessionID, permissions] of Object.entries(store.permission ?? {})) {
-    if ((permissions?.length ?? 0) > 0) {
-      protectedIds.add(sessionID)
-    }
+  for (const [sessionId, approvals] of Object.entries(store.permission ?? {})) {
+    if ((approvals?.length ?? 0) > 0) protectedIds.add(sessionId)
   }
 
-  for (const [sessionID, forms] of Object.entries(store.form ?? {})) {
-    if ((forms?.length ?? 0) > 0) {
-      protectedIds.add(sessionID)
-    }
-  }
-
-  for (const [sessionID, messages] of Object.entries(store.message ?? {})) {
-    // Plumbing roles can land after the assistant message that is still
-    // streaming, so protection follows the last conversation message. An idle
-    // session is settled even when its last assistant step never completed.
-    if (
-      store.session_status[sessionID]?.type !== "idle"
-      && isIncompleteAssistantTurn(getLastConversationMessage(messages))
-    ) {
-      protectedIds.add(sessionID)
-    }
+  for (const [sessionId, questions] of Object.entries(store.form ?? {})) {
+    if ((questions?.length ?? 0) > 0) protectedIds.add(sessionId)
   }
 
   return protectedIds
 }
 
-export function dropSessionCaches(store: SessionCache, sessionIDs: Iterable<string>) {
-  const stale = new Set(Array.from(sessionIDs).filter(Boolean))
+export function dropSessionCaches(store: SessionCache, sessionIds: Iterable<string>): void {
+  const stale = new Set(Array.from(sessionIds).filter(Boolean))
   if (stale.size === 0) return
-
-  const staleMessageIDs = new Set<string>()
-  for (const sessionID of stale) {
-    for (const message of store.message?.[sessionID] ?? []) {
-      if (message?.id) staleMessageIDs.add(message.id)
-    }
-  }
-
-  for (const messageID of staleMessageIDs) {
-    if (store.part) delete store.part[messageID]
-  }
-
-  for (const key of Object.keys(store.part ?? {})) {
-    const parts = store.part[key]
-    if (!parts?.some((part) => stale.has(part.sessionID))) continue
-    delete store.part[key]
-  }
-
-  for (const sessionID of stale) {
-    delete store.message[sessionID]
-    delete store.session_status[sessionID]
-    delete store.permission[sessionID]
-    delete store.form[sessionID]
+  for (const sessionId of stale) {
+    delete store.message[sessionId]
+    if (store.snapshot) delete store.snapshot[sessionId]
+    if (store.partOwner) delete store.partOwner[sessionId]
+    if (store.sessionEpoch) delete store.sessionEpoch[sessionId]
+    if (store.sessionCursor) delete store.sessionCursor[sessionId]
+    if (store.sessionStatusInvalidated) delete store.sessionStatusInvalidated[sessionId]
+    delete store.session_status[sessionId]
+    delete store.permission[sessionId]
+    delete store.form[sessionId]
   }
 }
 
@@ -79,7 +54,7 @@ export function pickSessionCacheEvictions(input: {
   keep?: string
   limit: number
   preserve?: Iterable<string>
-}) {
+}): string[] {
   const stale: string[] = []
   const keep = new Set(input.preserve)
   if (input.keep) {
@@ -92,8 +67,6 @@ export function pickSessionCacheEvictions(input: {
     if (keep.has(id)) continue
     stale.push(id)
   }
-  for (const id of stale) {
-    input.seen.delete(id)
-  }
+  for (const id of stale) input.seen.delete(id)
   return stale
 }

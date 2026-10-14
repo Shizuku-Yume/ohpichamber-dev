@@ -7,6 +7,7 @@ import { normalizePath } from "@/lib/pathNormalization"
 import { startSessionLoadPerformanceEvent } from "./session-load-performance"
 import { countSyncPerformance } from "./performance-diagnostics"
 import { isFilesystemError } from "@/lib/api/files-errors"
+import { updateChangedStreamingSessions } from "./streaming"
 
 export type DirectoryStore = State & {
   /** Apply a partial state update */
@@ -23,7 +24,7 @@ const formSubscribersByStore: BlockingRequestSubscribers = new WeakMap()
 type SessionMessageChange = {
   messagesChanged: boolean
   reset: boolean
-  partMessageIDs: readonly string[]
+  partMessageIds: readonly string[]
 }
 
 type SessionMessageSubscriber = (change: SessionMessageChange) => void
@@ -153,8 +154,8 @@ const notifyChangedBlockingRequests = <T,>(
   const subscribers = subscribersByStore.get(store)
   if (!subscribers || subscribers.size === 0) return
   const changedListeners = new Set<BlockingRequestSubscriber>()
-  for (const [sessionID, listeners] of subscribers) {
-    if (current[sessionID] === previous[sessionID]) continue
+  for (const [sessionId, listeners] of subscribers) {
+    if (current[sessionId] === previous[sessionId]) continue
     for (const listener of listeners) changedListeners.add(listener)
   }
   for (const listener of changedListeners) {
@@ -175,37 +176,50 @@ const notifyChangedSessionMessages = (
 
   const notifications = new Map<string, SessionMessageChange>()
   if (current.message !== previous.message) {
-    for (const sessionID of subscribers.keys()) {
-      if (current.message[sessionID] === previous.message[sessionID]) continue
-      notifications.set(sessionID, { messagesChanged: true, reset: false, partMessageIDs: [] })
+    for (const [sessionId, listeners] of subscribers) {
+      const messages = current.message[sessionId]
+      const previousMessages = previous.message[sessionId]
+      if (messages === previousMessages) continue
+      const pendingMessageIds = pendingParts?.get(sessionId)
+      const isPartOnlyChange = Boolean(
+        pendingMessageIds
+        && messages
+        && previousMessages
+        && messages.length === previousMessages.length
+        && messages.every((message, index) => (
+          message.messageId === previousMessages[index]?.messageId
+          && (pendingMessageIds.has(message.messageId) || message === previousMessages[index])
+        )),
+      )
+      notifications.set(sessionId, {
+        messagesChanged: !isPartOnlyChange,
+        reset: false,
+        partMessageIds: isPartOnlyChange ? [...pendingMessageIds!] : [],
+      })
+      if (listeners.size === 0) notifications.delete(sessionId)
     }
   }
 
-  if (current.part !== previous.part) {
-    if (pendingParts && pendingParts.size > 0) {
-      for (const [sessionID, messageIDs] of pendingParts) {
-        if (!subscribers.has(sessionID)) continue
-        const existing = notifications.get(sessionID)
-        notifications.set(sessionID, {
-          messagesChanged: existing?.messagesChanged ?? false,
-          reset: existing?.reset ?? false,
-          partMessageIDs: [...messageIDs],
-        })
-      }
-    } else {
-      for (const sessionID of subscribers.keys()) {
-        const existing = notifications.get(sessionID)
-        notifications.set(sessionID, {
-          messagesChanged: existing?.messagesChanged ?? false,
-          reset: true,
-          partMessageIDs: existing?.partMessageIDs ?? [],
-        })
-      }
+  if (pendingParts && pendingParts.size > 0) {
+    for (const [sessionId, messageIds] of pendingParts) {
+      if (!subscribers.has(sessionId)) continue
+      const existing = notifications.get(sessionId)
+      if (existing?.partMessageIds.length) continue
+      notifications.set(sessionId, {
+        messagesChanged: existing?.messagesChanged ?? false,
+        reset: existing?.reset ?? false,
+        partMessageIds: [...messageIds],
+      })
+    }
+  } else if (current.message !== previous.message && notifications.size === 0) {
+    for (const sessionId of subscribers.keys()) {
+      if (current.message[sessionId] === previous.message[sessionId]) continue
+      notifications.set(sessionId, { messagesChanged: true, reset: false, partMessageIds: [] })
     }
   }
 
-  for (const [sessionID, change] of notifications) {
-    const listeners = subscribers.get(sessionID)
+  for (const [sessionId, change] of notifications) {
+    const listeners = subscribers.get(sessionId)
     if (!listeners) continue
     for (const listener of listeners) {
       countSyncPerformance("sessionMessageChangeCallbacks")
@@ -277,15 +291,15 @@ function holdsLiveState(state: State | undefined): boolean {
   if (!state) return false
   if (hasPendingBlockingRequests(state)) return true
   for (const status of Object.values(state.session_status ?? {})) {
-    if (status && status.type !== "idle") return true
+    if (status !== "idle" && status !== "unavailable") return true
   }
   return false
 }
 
 /** Whether the store lists one of these sessions or holds a status for it. */
-function ownsAnySession(state: State, sessionIDs: ReadonlySet<string>): boolean {
-  if (state.session.some((session) => sessionIDs.has(session.id))) return true
-  return Object.keys(state.session_status ?? {}).some((sessionID) => sessionIDs.has(sessionID))
+function ownsAnySession(state: State, sessionIds: ReadonlySet<string>): boolean {
+  if (state.session.some((session) => sessionIds.has(session.sessionId))) return true
+  return Object.keys(state.session_status ?? {}).some((sessionId) => sessionIds.has(sessionId))
 }
 
 function createDirectoryStore(directory: string): StoreApi<DirectoryStore> {
@@ -299,6 +313,7 @@ function createDirectoryStore(directory: string): StoreApi<DirectoryStore> {
 
   const store = create<DirectoryStore>()((set) => ({
     ...INITIAL_STATE,
+    path: { ...INITIAL_STATE.path, directory },
     vcs: cached.vcs ?? INITIAL_STATE.vcs,
     projectMeta: cached.projectMeta ?? INITIAL_STATE.projectMeta,
     icon: cached.icon ?? INITIAL_STATE.icon,
@@ -319,6 +334,7 @@ function createDirectoryStore(directory: string): StoreApi<DirectoryStore> {
     notifyChangedBlockingRequests(permissionSubscribersByStore, "permissionChangeCallbacks", store, state.permission, prev.permission)
     notifyChangedBlockingRequests(formSubscribersByStore, "formChangeCallbacks", store, state.form, prev.form)
     notifyChangedSessionMessages(store, state, prev)
+    updateChangedStreamingSessions(state, prev)
   })
 
   return store
@@ -515,13 +531,10 @@ export class ChildStoreManager {
   }
 
   /**
-   * OpenCode's event stream restarted, so every bootstrapped store may have
-   * missed events. Only the stores in use re-read now: the current directory,
-   * those with foreground demand, and those showing live state the gap may
-   * have made wrong (a running turn, a pending permission or form). Every
-   * other store stays stale and re-reads when foreground demand returns. On v2 a
-   * directory read starts that directory's location and MCP servers, so
-   * re-reading every open store would start a fleet per directory.
+   * A session stream restarted, so initialized stores may have missed events.
+   * Re-read only directories in use or showing live/request state immediately;
+   * the rest stay stale and re-read when foreground demand returns. Workspace
+   * resolution and catalogs remain owned by the directory bootstrap lanes.
    *
    * Returns the directories queued now.
    */
@@ -559,10 +572,8 @@ export class ChildStoreManager {
   /**
    * `refreshAfterStreamRestart` judges stores by what they showed before the
    * gap, so a store that looked idle misses a turn that started, or a
-   * permission or form asked, during it. The caller reads OpenCode's global
-   * active-session list (one request that starts no location) and passes it
-   * here. A session waiting on a permission or form is still running its
-   * turn, so it is in that list. Stale stores that own one of those sessions
+   * approval or question asked during it. The caller supplies canonical active
+   * session identities. Stale stores that own one of those sessions
    * re-read now at background priority; the rest stay deferred.
    *
    * Returns the directories queued now.

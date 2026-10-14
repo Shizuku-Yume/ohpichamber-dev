@@ -1,11 +1,10 @@
 import type { StoreApi } from "zustand/vanilla"
 import type { ChildStoreManager, DirectoryStore } from "./child-store"
 import { getProtectedSessionCacheIds, pickSessionCacheEvictions } from "./session-cache"
-import type { SessionMessageTarget } from "./session-message-loader"
 
-/** How long a settled, unviewed session keeps its history before eviction. */
 const SESSION_CACHE_IDLE_TTL_MS = 5 * 60 * 1000
 
+export type SessionMessageTarget = { directory: string; sessionId: string }
 type RetentionOptions = {
   limit: number
   idleTtlMs?: number
@@ -14,23 +13,27 @@ type RetentionOptions = {
   isProtected: (target: SessionMessageTarget) => boolean
   evict: (target: SessionMessageTarget) => void
 }
-
 type DirectoryEntry = {
   store: StoreApi<DirectoryStore>
-  /** Navigation recency, oldest first. */
   seen: Set<string>
-  /** When each cached session last became eligible for eviction. */
   idleSince: Map<string, number>
   timer: ReturnType<typeof setTimeout> | null
   unsubscribe: () => void
 }
 
-/**
- * Whole-session eviction, never partial trimming. A cached history is either
- * fully present or gone. Settled sessions nobody is looking at are dropped
- * after an idle grace period, so a quick return needs no request; the count
- * limit is a safety net that evicts the least recently visited session first.
- */
+const sameMessageMembership = (left: Record<string, unknown>, right: Record<string, unknown>): boolean => {
+  let leftCount = 0;
+  let rightCount = 0;
+  for (const sessionId in left) {
+    if (!Object.prototype.hasOwnProperty.call(left, sessionId)) continue;
+    if (!Object.prototype.hasOwnProperty.call(right, sessionId)) return false;
+    leftCount += 1;
+  }
+  for (const sessionId in right) if (Object.prototype.hasOwnProperty.call(right, sessionId)) rightCount += 1;
+  return leftCount === rightCount;
+};
+
+/** Whole-session retention keeps active and viewed native histories intact. */
 export class SessionCacheRetention {
   private readonly directories = new Map<string, DirectoryEntry>()
   private readonly pending = new Set<string>()
@@ -47,8 +50,8 @@ export class SessionCacheRetention {
   touch(target: SessionMessageTarget): void {
     const entry = this.directories.get(target.directory)
     if (!entry) return
-    entry.seen.delete(target.sessionID)
-    entry.seen.add(target.sessionID)
+    entry.seen.delete(target.sessionId)
+    entry.seen.add(target.sessionId)
     this.schedule(target.directory)
   }
 
@@ -56,12 +59,10 @@ export class SessionCacheRetention {
     const entry = this.directories.get(target.directory)
     if (!entry) return false
     const messages = entry.store.getState().message
-    if (entry.seen.has(target.sessionID) || messages[target.sessionID] !== undefined) return true
+    if (entry.seen.has(target.sessionId) || messages[target.sessionId] !== undefined) return true
     const occupied = new Set([...entry.seen, ...Object.keys(messages)])
     if (occupied.size >= this.options.limit) return false
-    // Reserve capacity before HTTP starts. Speculative history is older than
-    // every visited session and never promotes a cache hit's navigation recency.
-    entry.seen = new Set([target.sessionID, ...entry.seen])
+    entry.seen = new Set([target.sessionId, ...entry.seen])
     return true
   }
 
@@ -98,11 +99,14 @@ export class SessionCacheRetention {
       if (this.directories.has(directory)) continue
       const seen = new Set(Object.keys(store.getState().message))
       const unsubscribe = store.subscribe((state, previous) => {
-        // Token/part deltas do not affect retention eligibility.
         if (state.message === previous.message
           && state.session_status === previous.session_status
           && state.permission === previous.permission
           && state.form === previous.form) return
+        if (state.session_status === previous.session_status
+          && state.permission === previous.permission
+          && state.form === previous.form
+          && sameMessageMembership(state.message, previous.message)) return
         this.schedule(directory)
       })
       this.directories.set(directory, { store, seen, idleSince: new Map(), timer: null, unsubscribe })
@@ -115,30 +119,32 @@ export class SessionCacheRetention {
     if (!entry) return
     const state = entry.store.getState()
     const protectedIds = getProtectedSessionCacheIds(state)
-    for (const id of entry.seen) {
-      if (state.message[id] === undefined && !this.options.isProtected({ directory, sessionID: id })) entry.seen.delete(id)
+    for (const sessionId of entry.seen) {
+      if (state.message[sessionId] !== undefined || this.options.isProtected({ directory, sessionId })) continue
+      entry.seen.delete(sessionId)
+      entry.idleSince.delete(sessionId)
     }
-    for (const id of Object.keys(state.message)) entry.seen.add(id)
-    for (const sessionID of entry.seen) {
-      const target = { directory, sessionID }
-      if (this.options.isViewed(target) || this.options.isProtected(target)) protectedIds.add(sessionID)
+    for (const sessionId of Object.keys(state.message)) entry.seen.add(sessionId)
+    for (const sessionId of entry.seen) {
+      const target = { directory, sessionId }
+      if (this.options.isViewed(target) || this.options.isProtected(target)) protectedIds.add(sessionId)
     }
     const now = Date.now()
     const expired: string[] = []
-    for (const sessionID of entry.seen) {
-      if (protectedIds.has(sessionID)) {
-        entry.idleSince.delete(sessionID)
+    for (const sessionId of entry.seen) {
+      if (protectedIds.has(sessionId)) {
+        entry.idleSince.delete(sessionId)
         continue
       }
-      const since = entry.idleSince.get(sessionID)
-      if (since === undefined) entry.idleSince.set(sessionID, now)
-      else if (now - since >= this.idleTtlMs) expired.push(sessionID)
+      const since = entry.idleSince.get(sessionId)
+      if (since === undefined) entry.idleSince.set(sessionId, now)
+      else if (now - since >= this.idleTtlMs) expired.push(sessionId)
     }
     const overflow = pickSessionCacheEvictions({ seen: entry.seen, limit: this.options.limit, preserve: protectedIds })
-    for (const sessionID of new Set([...expired, ...overflow])) {
-      entry.seen.delete(sessionID)
-      entry.idleSince.delete(sessionID)
-      this.options.evict({ directory, sessionID })
+    for (const sessionId of new Set([...expired, ...overflow])) {
+      entry.seen.delete(sessionId)
+      entry.idleSince.delete(sessionId)
+      this.options.evict({ directory, sessionId })
     }
     this.armTimer(entry, directory, now)
   }
@@ -147,9 +153,7 @@ export class SessionCacheRetention {
     if (entry.timer !== null) clearTimeout(entry.timer)
     entry.timer = null
     let earliest: number | null = null
-    for (const since of entry.idleSince.values()) {
-      if (earliest === null || since < earliest) earliest = since
-    }
+    for (const since of entry.idleSince.values()) if (earliest === null || since < earliest) earliest = since
     if (earliest === null) return
     entry.timer = setTimeout(() => {
       entry.timer = null

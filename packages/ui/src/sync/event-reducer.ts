@@ -1,784 +1,319 @@
-import type { MessagePatch, SessionPatch, SyncEvent, ToolTransition } from "@/lib/opencode/events"
-import {
-  compact,
-  isFinalToolStatus,
-  type Message,
-  type Part,
-  type Session,
-  type SessionStatus,
-  type ToolPart,
-} from "@/lib/opencode/model"
-import { mergeSessionDirectoryMetadata } from "@/stores/globalSessionStructure"
-import { Binary } from "./binary"
+import type { CanonicalEvent, Message, Part, QueueState, Session, SessionMetadataState, SessionSnapshot } from "@openchamber/agent-contract"
 import type { State } from "./types"
-import { dropSessionCaches } from "./session-cache"
-import { syncDebug } from "./debug"
-import { shouldSkipStaleSessionEvent } from "./session-event-freshness"
-import {
-  compareMessagesChronologically,
-  findMessageIndex,
-  insertMessageChronologically,
-} from "./message-ordering"
 
-type DedupeMetadata = {
-  __dedupeNextDeltaFields?: string[]
+export function compareCounters(left: string, right: string): number {
+  return left.length === right.length ? (left < right ? -1 : left > right ? 1 : 0) : left.length < right.length ? -1 : 1
 }
 
-function appendNonOverlappingDelta(existingValue: string | undefined, delta: string) {
-  if (!existingValue || delta.length === 0) return (existingValue ?? "") + delta
-  if (existingValue.endsWith(delta)) return existingValue
-
-  const maxOverlap = Math.min(existingValue.length, delta.length)
-  for (let overlap = maxOverlap; overlap > 0; overlap--) {
-    if (existingValue.endsWith(delta.slice(0, overlap))) {
-      return existingValue + delta.slice(overlap)
-    }
-  }
-
-  return existingValue + delta
+const same = <T>(left: T, right: T): boolean => left === right || JSON.stringify(left) === JSON.stringify(right)
+const retain = <T>(current: readonly T[], incoming: readonly T[], key: (item: T) => string): T[] => {
+  const prior = new Map(current.map((item) => [key(item), item]))
+  const next = incoming.map((item) => { const old = prior.get(key(item)); return old && same(old, item) ? old : item })
+  return next.length === current.length && next.every((item, index) => item === current[index]) ? current as T[] : next
 }
 
-/**
- * A full text snapshot that extends or repeats the streamed text means the
- * next delta may overlap it; mark the field so the delta appends only what is
- * new.
- */
-function getUpdatedDeltaFields(previous: Part, next: Part): string[] {
-  if (previous.type !== next.type) return []
-  if (next.type !== "text" && next.type !== "reasoning") return []
-  if (previous.type !== "text" && previous.type !== "reasoning") return []
-  const previousValue = previous.text
-  const nextValue = next.text
-  if (previousValue.length === 0 || nextValue.length === 0) return []
-  if (nextValue === previousValue || nextValue.startsWith(previousValue) || previousValue.startsWith(nextValue)) {
-    return ["text"]
+export function mergeHostSession(incoming: Session, previous?: Session): Session {
+  if (!previous) return incoming
+  let next = incoming
+  if (incoming.epoch === previous.epoch && compareCounters(incoming.headSequence, previous.headSequence) < 0) {
+    const { metadata: _metadata, metadataRevision: _metadataRevision, archiveRevision: _archiveRevision, archivedAt: _archivedAt, ...runtime } = previous
+    next = { ...incoming, ...runtime }
   }
-  return []
+  if (compareCounters(incoming.metadataRevision, previous.metadataRevision) < 0) {
+    next = { ...next, metadata: previous.metadata, metadataRevision: previous.metadataRevision }
+  }
+  if (compareCounters(incoming.archiveRevision, previous.archiveRevision) < 0) {
+    next = { ...next, archiveRevision: previous.archiveRevision }
+    if (previous.archivedAt === undefined) delete next.archivedAt
+    else next.archivedAt = previous.archivedAt
+  }
+  return same(previous, next) ? previous : next
 }
 
-/**
- * A text or reasoning `ended` snapshot carries only its own timestamp as
- * `start`; the start streamed earlier is the real one and stays.
- */
-function withStreamedStart(previous: Part, next: Part): Part {
-  if (next.type !== "text" && next.type !== "reasoning") return next
-  if (previous.type !== next.type || !previous.time || !next.time) return next
-  if (next.time.end === undefined || previous.time.start >= next.time.start) return next
-  return { ...next, time: { ...next.time, start: previous.time.start } }
+export function installHostSession(state: State, incoming: Session): State {
+  const index = state.session.findIndex((item) => item.sessionId === incoming.sessionId)
+  const previous = state.session[index]
+  const next = mergeHostSession(incoming, previous)
+  if (next === previous) return state
+  const session = [...state.session]
+  if (index < 0) session.push(next)
+  else session[index] = next
+  const revision = (state.sessionRevision ?? 0) + 1
+  return { ...state, session, sessionTotal: session.length, sessionRevision: revision, sessionEventRevision: { ...state.sessionEventRevision, [incoming.sessionId]: revision } }
 }
 
-function getPartEndTime(part: Part): number | undefined {
-  if (part.type === "tool") {
-    return part.state.status === "completed" || part.state.status === "error" ? part.state.time.end : undefined
-  }
-  if (part.type === "text" || part.type === "reasoning") return part.time?.end
-  return undefined
+export function installSessionMetadata(state: State, metadata: SessionMetadataState): State {
+  const current = state.session.find((item) => item.sessionId === metadata.sessionId)
+  if (!current || compareCounters(metadata.revision, current.metadataRevision) < 0) return state
+  return installHostSession(state, { ...current, metadata: metadata.metadata, metadataRevision: metadata.revision })
 }
 
-function shouldPreserveExistingPart(previous: Part, next: Part): boolean {
-  if (previous.type !== "tool" || next.type !== "tool") {
-    return false
-  }
-
-  if (isFinalToolStatus(previous.state.status) && !isFinalToolStatus(next.state.status)) {
-    return true
-  }
-
-  const previousEnd = getPartEndTime(previous)
-  const nextEnd = getPartEndTime(next)
-  if (previousEnd !== undefined && nextEnd === undefined) {
-    return true
-  }
-
-  return false
+export function installQueue(state: State, queue: QueueState): State {
+  const previous = state.queue[queue.sessionId]
+  if (previous && (compareCounters(queue.revision, previous.revision) < 0 || same(previous, queue))) return state
+  return { ...state, queue: { ...state.queue, [queue.sessionId]: queue } }
 }
 
-function areSessionStatusesEqual(left: SessionStatus | undefined, right: SessionStatus): boolean {
-  if (left === right) return true
-  if (!left || left.type !== right.type) return false
-  if (left.type === "retry") {
-    return right.type === "retry"
-      && left.attempt === right.attempt
-      && left.message === right.message
-      && left.next === right.next
-  }
-  return true
+function partOwners(messages: readonly Message[]): Record<string, string> {
+  const owners: Record<string, string> = {}
+  for (const message of messages) for (const part of message.parts) owners[part.partId] = message.messageId
+  return owners
 }
 
-function areJsonEquivalent<T extends object>(left: T | undefined, right: T | undefined): boolean {
-  if (left === right) return true
-  if (left === undefined || right === undefined) return false
-  try {
-    return JSON.stringify(left) === JSON.stringify(right)
-  } catch {
-    return false
+/** Runtime history and cursor commit together; Host metadata and queue are independent. */
+export function installSessionSnapshot(state: State, snapshot: SessionSnapshot): State {
+  const id = snapshot.session.sessionId
+  const old = state.snapshot[id]
+  if (old?.session.epoch === snapshot.session.epoch && compareCounters(snapshot.session.headSequence, old.session.headSequence) < 0) return state
+  const messages = retain(state.message[id] ?? [], snapshot.messages, (message) => message.messageId)
+  const approvals = retain(state.permission[id] ?? [], snapshot.approvals, (request) => request.approvalId)
+  const questions = retain(state.form[id] ?? [], snapshot.questions, (request) => request.questionId)
+  const nextSnapshot = old && same(old, snapshot) ? old : { ...snapshot, messages, approvals, questions }
+  let next: State = {
+    ...state,
+    snapshot: nextSnapshot === old ? state.snapshot : { ...state.snapshot, [id]: nextSnapshot },
+    message: messages === state.message[id] ? state.message : { ...state.message, [id]: messages },
+    permission: approvals === state.permission[id] ? state.permission : { ...state.permission, [id]: approvals },
+    form: questions === state.form[id] ? state.form : { ...state.form, [id]: questions },
+    sessionCursor: state.sessionCursor[id] === snapshot.cursor ? state.sessionCursor : { ...state.sessionCursor, [id]: snapshot.cursor },
+    sessionEpoch: state.sessionEpoch[id] === snapshot.session.epoch ? state.sessionEpoch : { ...state.sessionEpoch, [id]: snapshot.session.epoch },
+    session_status: state.session_status[id] === snapshot.session.runtimeStatus ? state.session_status : { ...state.session_status, [id]: snapshot.session.runtimeStatus },
+    sessionStatusInvalidated: state.sessionStatusInvalidated[id] ? { ...state.sessionStatusInvalidated, [id]: false } : state.sessionStatusInvalidated,
+    partOwner: messages === state.message[id] ? state.partOwner : { ...state.partOwner, [id]: partOwners(messages) },
   }
+  const projected = state.session.find((session) => session.sessionId === id)
+  if (projected) next = installHostSession(next, { ...projected, ...snapshot.session })
+  return Object.keys(next).every((key) => next[key as keyof State] === state[key as keyof State]) ? state : next
 }
 
-// ---------------------------------------------------------------------------
-// Global events
-// ---------------------------------------------------------------------------
+export type DirectoryEventResult = { kind: "applied" | "duplicate" | "resnapshot"; state: State }
 
-export type GlobalEventResult = {
-  type: "refresh"
-} | {
-  type: "catalog"
-  kind: Extract<SyncEvent, { type: "catalog.updated" }>["properties"]["kind"]
-} | null
-
-export type SessionMaterializationReason =
-  | "missing-owning-message"
-  | "orphan-delta"
-  | "missing-delta-part"
-  | "empty-assistant-message"
-  | "child-session-idle"
-  | "child-session-discovered"
-  | "ensure-session-messages"
-  | "stream-reconnect"
-  | "transport-switch"
-  | "stale-status-resync"
-  | "settled-running-tool"
-
-export type DirectoryEventResult = boolean | {
-  changed: boolean
-  materialization: {
-    type: "incomplete-session-snapshot"
-    reason: SessionMaterializationReason
-    sessionID?: string
-    messageID: string
-    partID?: string
+/** Every canonical variant shares the same sequence gate. Never apply across a gap. */
+export function applyDirectoryEvent(state: State, event: CanonicalEvent): DirectoryEventResult {
+  const id = event.sessionId
+  const snapshot = state.snapshot[id]
+  if (!snapshot || event.epoch !== snapshot.session.epoch) return { kind: "resnapshot", state }
+  const comparison = compareCounters(event.sequence, snapshot.session.headSequence)
+  if (comparison <= 0) return { kind: "duplicate", state }
+  if (BigInt(event.sequence) !== BigInt(snapshot.session.headSequence) + 1n) return { kind: "resnapshot", state }
+  let next = state
+  let updated = snapshot
+  let messages = state.message[id] ?? snapshot.messages
+  let turns = snapshot.turns
+  let owners = state.partOwner[id] ?? {}
+  let recover = false
+  const updateMessage = (messageId: string, change: (message: Message) => Message) => {
+    const index = messages.findIndex((message) => message.messageId === messageId)
+    if (index < 0) { recover = true; return }
+    const current = messages[index]!
+    const message = change(current)
+    if (message === current) return
+    messages = [...messages]
+    messages[index] = message
   }
-}
-
-function hasMessage(draft: State, sessionID: string | undefined, messageID: string): boolean {
-  if (!sessionID) return false
-  const messages = draft.message[sessionID]
-  if (!messages) return false
-  return messages.some((message) => message.id === messageID)
-}
-
-/** Index of the compaction still running in a session (the newest one), or -1. */
-const findRunningCompactionIndex = (messages: readonly Message[]): number => {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index]
-    if (message?.role === "compaction") return message.status === "running" ? index : -1
+  const updatePart = (partId: string, change: (part: Part) => Part) => {
+    const messageId = owners[partId]
+    if (!messageId) { recover = true; return }
+    updateMessage(messageId, (message) => {
+      const index = message.parts.findIndex((part) => part.partId === partId)
+      if (index < 0) { recover = true; return message }
+      const part = change(message.parts[index]!)
+      if (part === message.parts[index]) return message
+      const parts = [...message.parts]
+      parts[index] = part
+      return { ...message, parts }
+    })
   }
-  return -1
-}
-
-export function reduceGlobalEvent(event: SyncEvent): GlobalEventResult {
-  if (event.type === "server.connected") {
-    return { type: "refresh" }
+  const upsertPart = (messageId: string, part: Part) => {
+    if (owners[part.partId] !== undefined && owners[part.partId] !== messageId) { recover = true; return }
+    updateMessage(messageId, (message) => {
+      const index = message.parts.findIndex((item) => item.partId === part.partId)
+      if (index >= 0 && same(message.parts[index], part)) return message
+      const parts = [...message.parts]
+      if (index < 0) parts.push(part)
+      else parts[index] = part
+      owners = { ...owners, [part.partId]: messageId }
+      return { ...message, parts }
+    })
   }
-  if (event.type === "catalog.updated") {
-    return { type: "catalog", kind: event.properties.kind }
-  }
-  return null
-}
-
-// ---------------------------------------------------------------------------
-// Patch application
-// ---------------------------------------------------------------------------
-
-function applySessionPatch(session: Session, patch: SessionPatch): Session {
-  const next: Session = { ...session }
-  if (patch.title !== undefined) next.title = patch.title
-  if (patch.directory !== undefined) next.directory = patch.directory
-  if (patch.projectID !== undefined) next.projectID = patch.projectID
-  if (patch.subpath === null) delete next.subpath
-  else if (patch.subpath !== undefined) next.subpath = patch.subpath
-  if (patch.agent !== undefined) next.agent = patch.agent
-  if (patch.model !== undefined) next.model = patch.model
-  if (patch.cost !== undefined) next.cost = patch.cost
-  if (patch.tokens !== undefined) next.tokens = patch.tokens
-  if (patch.permissions !== undefined) next.permissions = patch.permissions
-  if (patch.revert === null) delete next.revert
-  else if (patch.revert !== undefined) next.revert = patch.revert
-  if (patch.outcome !== undefined) next.outcome = patch.outcome
-  if (patch.metadata !== undefined) {
-    next.metadata = patch.metadata
-    delete next.hostMetadataError
-  }
-  if (patch.metadataRevision !== undefined) next.metadataRevision = patch.metadataRevision
-  if (patch.time) {
-    const { archived, ...rest } = patch.time
-    if (archived !== undefined) delete next.hostArchiveError
-    next.time = compact({ ...session.time, ...rest, archived: archived === null ? undefined : (archived ?? session.time.archived) })
-  }
-  return mergeSessionDirectoryMetadata(next, session)
-}
-
-function applyMessagePatch(message: Message, patch: MessagePatch): Message {
-  if (message.role === "assistant") {
-    const next = { ...message }
-    if (patch.time) next.time = compact({ ...message.time, ...patch.time })
-    if (patch.finish !== undefined) next.finish = patch.finish
-    if (patch.error !== undefined) next.error = patch.error
-    // A completion the server reports supersedes the local interruption mark
-    // (`interruptedTurnToolParts`); a turn that really failed arrives with its
-    // own error in the same patch.
-    else if (patch.time?.completed !== undefined && message.error?.type === "aborted") delete next.error
-    if (patch.cost !== undefined) next.cost = patch.cost
-    if (patch.tokens !== undefined) next.tokens = patch.tokens
-    if (patch.snapshot) next.snapshot = compact({ ...message.snapshot, ...patch.snapshot })
-    if (patch.retry === null) delete next.retry
-    else if (patch.retry !== undefined) next.retry = patch.retry
-    return next
-  }
-  if (message.role === "shell") {
-    const next = { ...message }
-    if (patch.time?.completed !== undefined) next.time = { ...message.time, completed: patch.time.completed }
-    if (patch.shell) {
-      next.status = patch.shell.status
-      if (patch.shell.exit !== undefined) next.exit = patch.shell.exit
-      if (patch.shell.signal !== undefined) next.signal = patch.shell.signal
-      if (patch.shell.output !== undefined) next.output = patch.shell.output
-    }
-    return next
-  }
-  if (patch.time?.created !== undefined) {
-    return { ...message, time: { ...message.time, created: patch.time.created } }
-  }
-  return message
-}
-
-function applyToolTransition(part: ToolPart, transition: ToolTransition): ToolPart {
-  const state = part.state
-  switch (transition.kind) {
-    case "input":
-      if (state.status !== "pending") return part
-      return { ...part, state: { ...state, raw: transition.raw } }
-    case "called":
-      if (isFinalToolStatus(state.status)) return part
-      return {
-        ...part,
-        executed: transition.executed,
-        state: { status: "running", input: transition.input, time: { start: transition.start } },
-      }
-    case "progress":
-      if (state.status !== "running") return part
-      return { ...part, state: { ...state, metadata: transition.metadata } }
-    case "success": {
-      if (isFinalToolStatus(state.status)) return part
-      const start = state.status === "running" ? state.time.start : transition.end
-      const attachments = transition.attachments
-      return {
-        ...part,
-        executed: transition.executed,
-        state: compact({
-          status: "completed",
-          input: state.input,
-          output: transition.output,
-          metadata: transition.metadata ?? (state.status === "running" ? state.metadata : undefined),
-          time: { start, end: transition.end },
-          attachments,
-        }),
-      }
-    }
-    case "failed": {
-      if (isFinalToolStatus(state.status)) return part
-      const start = state.status === "running" ? state.time.start : transition.end
-      return {
-        ...part,
-        executed: transition.executed,
-        state: compact({
-          status: "error",
-          input: state.input,
-          error: transition.error,
-          output: transition.output,
-          metadata: transition.metadata ?? (state.status === "running" ? state.metadata : undefined),
-          time: { start, end: transition.end },
-        }),
-      }
-    }
-  }
-}
-
-function findShellMessageIndex(messages: readonly Message[], shellID: string): number {
-  return messages.findIndex((message) => message.role === "shell" && message.shellID === shellID)
-}
-
-// ---------------------------------------------------------------------------
-// Directory events — mutates draft in place for batching efficiency.
-// Caller MUST pass a mutable copy of State (e.g. structuredClone or spread).
-// ---------------------------------------------------------------------------
-
-export function applyDirectoryEvent(
-  draft: State,
-  event: SyncEvent,
-  callbacks?: {
-    onRefresh?: (directory: string) => void
-    onLoadMcp?: () => void
-    onCatalogUpdated?: (kind: Extract<SyncEvent, { type: "catalog.updated" }>["properties"]["kind"]) => void
-  },
-): DirectoryEventResult {
-  const markSessionEvent = (sessionID: string, deleted: boolean) => {
-    const revision = (draft.sessionRevision ?? 0) + 1
-    draft.sessionRevision = revision
-    draft.sessionListSource = "live"
-    draft.sessionEventRevision = draft.sessionEventRevision ?? {}
-    draft.sessionDeletedRevision = draft.sessionDeletedRevision ?? {}
-    if (deleted) {
-      draft.sessionDeletedRevision[sessionID] = revision
-      delete draft.sessionEventRevision[sessionID]
-    } else {
-      draft.sessionEventRevision[sessionID] = revision
-      delete draft.sessionDeletedRevision[sessionID]
-    }
-  }
-
   switch (event.type) {
-    case "server.connected": {
-      callbacks?.onRefresh?.("")
-      return false
-    }
-
-    case "session.created": {
-      const info = event.properties.info
-      const sessions = draft.session
-      const result = Binary.search(sessions, info.id, (s) => s.id)
-      if (result.found && shouldSkipStaleSessionEvent(sessions[result.index], info)) {
-        return false
+    case "session.updated": {
+      if (event.session) {
+        if (event.session.sessionId !== id || event.session.epoch !== event.epoch || event.session.workspaceId !== snapshot.session.workspaceId || compareCounters(event.session.headSequence, event.sequence) > 0) { recover = true; break }
+        updated = { ...updated, session: event.session }
       }
-      if (result.found) {
-        // A create echo for a session we already hold (optimistic create, or
-        // a replayed event) must not erase title/usage learned since.
-        sessions[result.index] = { ...info, ...sessions[result.index] }
-      } else {
-        sessions.splice(result.index, 0, info)
-        trimSessions(draft)
-        if (!info.parentID) draft.sessionTotal += 1
-      }
-      markSessionEvent(info.id, false)
-      return true
-    }
-
-    case "session.patched": {
-      const { sessionID, patch } = event.properties
-      const sessions = draft.session
-      const result = Binary.search(sessions, sessionID, (s) => s.id)
-      if (!result.found) return false
-      const next = applySessionPatch(sessions[result.index], patch)
-      if (shouldSkipStaleSessionEvent(sessions[result.index], next)) return false
-
-      // Archiving removes the session from the live list; its caches go too.
-      if (next.time.archived && !sessions[result.index].time.archived) {
-        sessions.splice(result.index, 1)
-        cleanupSessionCaches(draft, sessionID)
-        draft.sessionStatusInvalidated = { ...draft.sessionStatusInvalidated, [sessionID]: true }
-        if (!next.parentID) draft.sessionTotal = Math.max(0, draft.sessionTotal - 1)
-        markSessionEvent(sessionID, true)
-        return true
-      }
-
-      if (areJsonEquivalent(sessions[result.index], next)) return false
-      sessions[result.index] = next
-      markSessionEvent(sessionID, false)
-      return true
-    }
-
-    case "session.revert.committed": {
-      // OpenCode deleted the boundary message and everything after it without
-      // per-message removals, so the same range goes here. The loaded window
-      // is always the transcript's tail: a boundary the window does not hold
-      // is older than everything loaded, so a matching marker trims it all.
-      const { sessionID, to } = event.properties
-      const sessions = draft.session
-      const result = Binary.search(sessions, sessionID, (s) => s.id)
-      const session = result.found ? sessions[result.index] : undefined
-      const messages = draft.message[sessionID]
-      let changed = false
-      if (messages && messages.length > 0) {
-        const index = findMessageIndex(messages, to)
-        const from = index >= 0 ? index : session?.revert?.messageID === to ? 0 : -1
-        if (from >= 0) {
-          for (const removed of messages.slice(from)) delete draft.part[removed.id]
-          draft.message[sessionID] = messages.slice(0, from)
-          changed = true
+      const current = next.session.find((session) => session.sessionId === id)
+      if (current) {
+        let session: Session = { ...current, ...(event.session ?? {}) }
+        if (event.metadataRevision !== undefined && compareCounters(event.metadataRevision, current.metadataRevision) >= 0) {
+          session = { ...session, metadata: event.metadata ?? null, metadataRevision: event.metadataRevision }
         }
+        if (event.archiveRevision !== undefined && compareCounters(event.archiveRevision, current.archiveRevision) >= 0) {
+          session = { ...session, archiveRevision: event.archiveRevision }
+          if (event.archivedAt === null) delete session.archivedAt
+          else if (event.archivedAt !== undefined) session.archivedAt = event.archivedAt
+        }
+        next = installHostSession(next, session)
       }
-      if (session?.revert) {
-        const rest = { ...session }
-        delete rest.revert
-        sessions[result.index] = rest
-        markSessionEvent(sessionID, false)
-        changed = true
-      }
-      return changed
+      break
     }
-
     case "session.deleted": {
-      const sessions = draft.session
-      const { sessionID } = event.properties
-      const result = Binary.search(sessions, sessionID, (s) => s.id)
-      const info = result.found ? sessions[result.index] : undefined
-      if (result.found) sessions.splice(result.index, 1)
-      cleanupSessionCaches(draft, sessionID)
-      if (draft.sessionStatusInvalidated?.[sessionID]) {
-        draft.sessionStatusInvalidated = { ...draft.sessionStatusInvalidated }
-        delete draft.sessionStatusInvalidated[sessionID]
+      const deleted = new Set(event.deletedSessionIds)
+      const session = next.session.filter((item) => !deleted.has(item.sessionId))
+      const without = <T>(record: Record<string, T>): Record<string, T> => {
+        if (!event.deletedSessionIds.some((key) => Object.hasOwn(record, key))) return record
+        const result = { ...record }
+        for (const key of deleted) delete result[key]
+        return result
       }
-      if (!info?.parentID) draft.sessionTotal = Math.max(0, draft.sessionTotal - 1)
-      markSessionEvent(sessionID, true)
-      return true
+      const revision = (next.sessionRevision ?? 0) + 1
+      const sessionDeletedRevision = { ...next.sessionDeletedRevision }
+      for (const sessionId of deleted) sessionDeletedRevision[sessionId] = revision
+      return { kind: "applied", state: {
+        ...next, session, sessionTotal: session.length,
+        sessionRevision: revision, sessionDeletedRevision,
+        snapshot: without(next.snapshot), message: without(next.message), permission: without(next.permission), form: without(next.form),
+        queue: without(next.queue), partOwner: without(next.partOwner), session_status: without(next.session_status),
+        sessionCursor: without(next.sessionCursor), sessionEpoch: without(next.sessionEpoch), sessionStatusInvalidated: without(next.sessionStatusInvalidated),
+      } }
     }
-
-    case "session.status": {
-      const { sessionID, status } = event.properties
-      const wasInvalidated = draft.sessionStatusInvalidated?.[sessionID] === true
-      if (wasInvalidated) {
-        draft.sessionStatusInvalidated = { ...draft.sessionStatusInvalidated }
-        delete draft.sessionStatusInvalidated[sessionID]
-      }
-      if (areSessionStatusesEqual(draft.session_status[sessionID], status)) {
-        return wasInvalidated
-      }
-      draft.session_status[sessionID] = status
-      return true
+    case "session.status":
+      updated = { ...updated, session: { ...updated.session, runtimeStatus: event.runtimeStatus, activeRunId: event.activeRunId } }
+      if (event.activeRunId === null) updated = { ...updated, activeRun: null }
+      break
+    case "run.started":
+      updated = { ...updated, activeRun: { runId: event.runId, sessionId: id, status: "running", createdAt: event.createdAt }, session: { ...updated.session, runtimeStatus: "running", activeRunId: event.runId } }
+      break
+    case "run.completed":
+    case "run.failed":
+    case "run.cancelled":
+      if (updated.session.activeRunId === event.runId) updated = { ...updated, activeRun: null, session: { ...updated.session, runtimeStatus: "idle", activeRunId: null } }
+      break
+    case "turn.started":
+      if (!turns.some((turn) => turn.turnId === event.turnId)) turns = [...turns, { turnId: event.turnId, sessionId: id, runId: event.runId, status: "running", userMessageId: event.userMessageId, assistantMessageIds: [], startedAt: event.timestamp }]
+      break
+    case "turn.completed": {
+      const index = turns.findIndex((turn) => turn.turnId === event.turnId)
+      if (index < 0) { recover = true; break }
+      turns = [...turns]
+      if (turns[index]!.runId !== event.runId) { recover = true; break }
+      turns[index] = { ...turns[index]!, status: "completed", finishedAt: event.timestamp }
+      break
     }
-
-    case "session.idle":
-    case "session.error": {
-      // An error ends the turn; it is not a lasting status.
-      const { sessionID } = event.properties
-      const status = { type: "idle" } as const
-      const wasInvalidated = draft.sessionStatusInvalidated?.[sessionID] === true
-      if (wasInvalidated) {
-        draft.sessionStatusInvalidated = { ...draft.sessionStatusInvalidated }
-        delete draft.sessionStatusInvalidated[sessionID]
-      }
-      if (areSessionStatusesEqual(draft.session_status[sessionID], status)) {
-        return wasInvalidated
-      }
-      draft.session_status[sessionID] = status
-      return true
-    }
-
-    case "message.updated": {
-      let info = event.properties.info
-      const messages = draft.message[info.sessionID]
-      if (!messages) {
-        draft.message[info.sessionID] = [info]
-        return true
-      }
-      // A compaction settles the record that has been running, the way
-      // OpenCode's own message store does: `session.compaction.ended` carries
-      // no input id, so the settled record keeps the running one's identity.
-      const runningCompaction = info.role === "compaction" && info.status !== "running"
-        ? findRunningCompactionIndex(messages)
-        : -1
-      if (runningCompaction >= 0) {
-        const running = messages[runningCompaction]
-        info = { ...info, id: running.id, time: { ...running.time } }
-      }
-      const messageIndex = findMessageIndex(messages, info.id)
-      if (messageIndex >= 0) {
-        // Skip message replacement if unchanged — preserves reference, avoids re-render
-        const existing = messages[messageIndex]
-        if (areJsonEquivalent(existing, info)) {
-          syncDebug.reducer.messageUpdatedUnchanged(info.sessionID, info.id, info.role, undefined, undefined)
-          return false
-        }
-        const next = [...messages]
-        if (compareMessagesChronologically(existing, info) === 0) {
-          next[messageIndex] = info
-        } else {
-          next.splice(messageIndex, 1)
-          insertMessageChronologically(next, info)
-        }
-        draft.message[info.sessionID] = next
-      } else {
-        const next = [...messages]
-        insertMessageChronologically(next, info)
-        draft.message[info.sessionID] = next
-      }
-      return true
-    }
-
-    case "message.patched": {
-      const { sessionID, messageID, patch } = event.properties
-      const messages = draft.message[sessionID]
-      if (!messages) {
-        return {
-          changed: false,
-          materialization: { type: "incomplete-session-snapshot", reason: "missing-owning-message", sessionID, messageID },
+    case "message.created": {
+      if (!messages.some((message) => message.messageId === event.messageId)) messages = [...messages, { messageId: event.messageId, sessionId: id, turnId: event.turnId, role: event.role, createdAt: event.timestamp, parts: [], ...(event.providerId === undefined ? {} : { providerId: event.providerId }), ...(event.modelId === undefined ? {} : { modelId: event.modelId }), ...(event.usage === undefined ? {} : { usage: event.usage }) }]
+      if (event.role === "assistant") {
+        const index = turns.findIndex((turn) => turn.turnId === event.turnId)
+        if (index < 0) { recover = true; break }
+        if (!turns[index]!.assistantMessageIds.includes(event.messageId)) {
+          turns = [...turns]
+          turns[index] = { ...turns[index]!, assistantMessageIds: [...turns[index]!.assistantMessageIds, event.messageId] }
         }
       }
-      const shellID = messageID.startsWith("shell:") ? messageID.slice("shell:".length) : undefined
-      const messageIndex = shellID ? findShellMessageIndex(messages, shellID) : findMessageIndex(messages, messageID)
-      if (messageIndex < 0) {
-        if (shellID) return false
-        return {
-          changed: false,
-          materialization: { type: "incomplete-session-snapshot", reason: "missing-owning-message", sessionID, messageID },
-        }
-      }
-      const existing = messages[messageIndex]
-      const updated = applyMessagePatch(existing, patch)
-      if (updated === existing || areJsonEquivalent(existing, updated)) return false
-      const next = [...messages]
-      if (compareMessagesChronologically(existing, updated) === 0) {
-        next[messageIndex] = updated
-      } else {
-        next.splice(messageIndex, 1)
-        insertMessageChronologically(next, updated)
-      }
-      draft.message[sessionID] = next
-      return true
+      break
     }
-
-    case "message.compaction.delta": {
-      const { sessionID, delta } = event.properties
-      const messages = draft.message[sessionID]
-      if (!messages || !delta) return false
-      const index = findRunningCompactionIndex(messages)
-      if (index < 0) return false
-      const running = messages[index]
-      if (running.role !== "compaction") return false
-      const next = [...messages]
-      next[index] = { ...running, summary: running.summary + delta }
-      draft.message[sessionID] = next
-      return true
+    case "message.updated":
+      updateMessage(event.messageId, (message) => {
+        const providerId = event.providerId ?? message.providerId
+        const modelId = event.modelId ?? message.modelId
+        const usage = event.usage ?? message.usage
+        return providerId === message.providerId && modelId === message.modelId && same(usage, message.usage) ? message : { ...message, ...(providerId === undefined ? {} : { providerId }), ...(modelId === undefined ? {} : { modelId }), ...(usage === undefined ? {} : { usage }) }
+      })
+      break
+    case "part.started": upsertPart(event.messageId, event.part); break
+    case "part.completed": {
+      const messageId = owners[event.part.partId]
+      if (!messageId) recover = true
+      else upsertPart(messageId, event.part)
+      break
     }
-
-    case "message.removed": {
-      const { sessionID, messageID } = event.properties
-      const messages = draft.message[sessionID]
-      if (messages) {
-        const next = [...messages]
-        const messageIndex = findMessageIndex(next, messageID)
-        if (messageIndex >= 0) {
-          next.splice(messageIndex, 1)
-          draft.message[sessionID] = next
-        }
+    case "part.delta":
+      updatePart(event.partId, (part) => {
+        if (part.type !== "text" && part.type !== "reasoning") { recover = true; return part }
+        return event.delta.length === 0 ? part : { ...part, content: part.content + event.delta }
+      })
+      break
+    case "tool.started":
+    case "tool.completed": {
+      // The envelope has a toolCallId, not a part/message identity. Limit lookup to
+      // this addressed session; tool_result remains its independently authored part.
+      let found = false
+      for (const message of messages) {
+        const call = message.parts.find((part) => part.type === "tool_call" && part.toolCallId === event.toolCallId)
+        if (!call || call.type !== "tool_call") continue
+        found = true
+        updatePart(call.partId, (part) => {
+          const status = event.type === "tool.started" ? "running" : event.status
+          return part.type === "tool_call" && part.status !== status ? { ...part, status } : part
+        })
+        break
       }
-      delete draft.part[messageID]
-      return true
+      if (!found) recover = true
+      break
     }
-
-    case "message.part.updated": {
-      const { sessionID, part } = event.properties
-      const messageID = part.messageID
-      const missingOwningMessage = !hasMessage(draft, sessionID, messageID)
-      const parts = draft.part[messageID]
-      if (!parts) {
-        syncDebug.reducer.partUpdatedNoExistingParts(messageID, part.id, part.type)
-        draft.part[messageID] = [part]
-        return missingOwningMessage
-          ? {
-            changed: true,
-            materialization: { type: "incomplete-session-snapshot", reason: "missing-owning-message", sessionID, messageID, partID: part.id },
-          }
-          : true
+    case "approval.requested":
+    case "approval.resolved": {
+      const request = event.approval
+      if (request.sessionId !== id || request.epoch !== event.epoch) { recover = true; break }
+      const prior = updated.approvals.find((item) => item.approvalId === request.approvalId)
+      if (prior && prior.workerGeneration !== request.workerGeneration) { recover = true; break }
+      if (!prior || compareCounters(request.version, prior.version) > 0) {
+        const approvals = updated.approvals.filter((item) => item.approvalId !== request.approvalId)
+        if (request.status === "pending") approvals.push(request)
+        updated = { ...updated, approvals }
       }
-      const next = [...parts]
-      const partIndex = next.findIndex((candidate) => candidate.id === part.id)
-      if (partIndex >= 0) {
-        const previous = next[partIndex]
-        if (shouldPreserveExistingPart(previous, part)) {
-          return false
-        }
-        const dedupeFields = getUpdatedDeltaFields(previous, part)
-        const settled = withStreamedStart(previous, part)
-        // SAFETY: the dedupe marker is a private annotation the delta reducer
-        // strips again; the part itself is unchanged.
-        next[partIndex] = dedupeFields.length > 0
-          ? ({ ...settled, __dedupeNextDeltaFields: dedupeFields } as Part & DedupeMetadata)
-          : settled
-      } else {
-        next.push(part)
-      }
-      draft.part[messageID] = next
-      return missingOwningMessage
-        ? {
-          changed: true,
-          materialization: { type: "incomplete-session-snapshot", reason: "missing-owning-message", sessionID, messageID, partID: part.id },
-        }
-        : true
+      break
     }
-
-    case "message.parts.replaced": {
-      const { sessionID, messageID, parts } = event.properties
-      const missingOwningMessage = !hasMessage(draft, sessionID, messageID)
-      const existing = draft.part[messageID]
-      if (existing && areJsonEquivalent(existing, parts)) return false
-      draft.part[messageID] = parts
-      return missingOwningMessage
-        ? {
-          changed: true,
-          materialization: { type: "incomplete-session-snapshot", reason: "missing-owning-message", sessionID, messageID },
-        }
-        : true
-    }
-
-    case "message.part.delta": {
-      const { sessionID, messageID, partID, field, delta } = event.properties
-      const parts = draft.part[messageID]
-      if (!parts) {
-        syncDebug.reducer.partDeltaNoParts(messageID, partID)
-        return {
-          changed: false,
-          materialization: { type: "incomplete-session-snapshot", reason: "orphan-delta", sessionID, messageID, partID },
-        }
+    case "question.requested":
+    case "question.resolved": {
+      const request = event.question
+      if (request.sessionId !== id || request.epoch !== event.epoch) { recover = true; break }
+      const prior = updated.questions.find((item) => item.questionId === request.questionId)
+      if (prior && prior.workerGeneration !== request.workerGeneration) { recover = true; break }
+      if (!prior || compareCounters(request.version, prior.version) > 0) {
+        const questions = updated.questions.filter((item) => item.questionId !== request.questionId)
+        if (request.status === "pending") questions.push(request)
+        updated = { ...updated, questions }
       }
-      const partIndex = parts.findIndex((part) => part.id === partID)
-      if (partIndex < 0) {
-        syncDebug.reducer.partDeltaNotFound(messageID, partID)
-        return {
-          changed: false,
-          materialization: { type: "incomplete-session-snapshot", reason: "missing-delta-part", sessionID, messageID, partID },
-        }
-      }
-      const existing = parts[partIndex]
-      const next = [...parts]
-      if (field === "raw") {
-        if (existing.type !== "tool" || existing.state.status !== "pending") return false
-        next[partIndex] = { ...existing, state: { ...existing.state, raw: existing.state.raw + delta } }
-        draft.part[messageID] = next
-        return true
-      }
-      if (existing.type !== "text" && existing.type !== "reasoning") return false
-      // SAFETY: the marker is only ever set by the snapshot branch above.
-      const dedupeFields = (existing as DedupeMetadata).__dedupeNextDeltaFields ?? []
-      const shouldDedupe = dedupeFields.includes(field)
-      // Create new Part object + new array so React detects the change
-      // SAFETY: same private marker as above on an otherwise unchanged part.
-      next[partIndex] = {
-        ...existing,
-        text: shouldDedupe ? appendNonOverlappingDelta(existing.text, delta) : existing.text + delta,
-        __dedupeNextDeltaFields: dedupeFields.filter((candidate) => candidate !== field),
-      } as Part & DedupeMetadata
-      draft.part[messageID] = next
-      return true
+      break
     }
-
-    case "message.tool.transition": {
-      const { sessionID, messageID, partID, transition } = event.properties
-      const parts = draft.part[messageID]
-      if (!parts) {
-        return {
-          changed: false,
-          materialization: { type: "incomplete-session-snapshot", reason: "orphan-delta", sessionID, messageID, partID },
-        }
-      }
-      const partIndex = parts.findIndex((part) => part.id === partID)
-      const existing = partIndex >= 0 ? parts[partIndex] : undefined
-      if (!existing || existing.type !== "tool") {
-        return {
-          changed: false,
-          materialization: { type: "incomplete-session-snapshot", reason: "missing-delta-part", sessionID, messageID, partID },
-        }
-      }
-      const updated = applyToolTransition(existing, transition)
-      if (updated === existing) return false
-      const next = [...parts]
-      next[partIndex] = updated
-      draft.part[messageID] = next
-      return true
-    }
-
-    case "vcs.branch.updated": {
-      const { branch } = event.properties
-      if (draft.vcs?.branch === branch) return false
-      draft.vcs = compact({ ...draft.vcs, branch })
-      return true
-    }
-
-    case "permission.asked": {
-      const permission = event.properties
-      const permissions = draft.permission[permission.sessionID] ?? []
-      const next = [...permissions]
-      const result = Binary.search(next, permission.id, (p) => p.id)
-      if (result.found) {
-        next[result.index] = permission
-      } else {
-        next.splice(result.index, 0, permission)
-      }
-      draft.permission[permission.sessionID] = next
-      return true
-    }
-
-    case "permission.replied": {
-      const { sessionID, requestID } = event.properties
-      const permissions = draft.permission[sessionID]
-      if (!permissions) return false
-      const result = Binary.search(permissions, requestID, (p) => p.id)
-      if (result.found) {
-        const next = [...permissions]
-        next.splice(result.index, 1)
-        draft.permission[sessionID] = next
-        return true
-      }
-      return false
-    }
-
-    case "form.created": {
-      const form = event.properties.form
-      const forms = draft.form[form.sessionID] ?? []
-      const next = [...forms]
-      const result = Binary.search(next, form.id, (f) => f.id)
-      if (result.found) {
-        next[result.index] = form
-      } else {
-        next.splice(result.index, 0, form)
-      }
-      draft.form[form.sessionID] = next
-      return true
-    }
-
-    case "form.settled": {
-      const { sessionID, formID } = event.properties
-      const forms = draft.form[sessionID]
-      if (!forms) return false
-      const result = Binary.search(forms, formID, (f) => f.id)
-      if (result.found) {
-        const next = [...forms]
-        next.splice(result.index, 1)
-        draft.form[sessionID] = next
-        return true
-      }
-      return false
-    }
-
-    case "mcp.status.changed": {
-      callbacks?.onLoadMcp?.()
-      return false
-    }
-
+    case "queue.updated":
+      if (event.queue.sessionId !== id) recover = true
+      else next = installQueue(next, event.queue)
+      break
     case "catalog.updated": {
-      callbacks?.onCatalogUpdated?.(event.properties.kind)
-      return false
+      const worker = event.catalog.state.worker
+      if (worker.workspaceId !== snapshot.session.workspaceId || worker.rootSessionId !== snapshot.session.rootSessionId) { recover = true; break }
+      const key = `${worker.rootSessionId}\n${event.catalog.kind}`
+      const previous = next.catalog[key]
+      if (!previous || previous.state.worker.workerGeneration !== worker.workerGeneration || compareCounters(event.catalog.state.catalogRevision, previous.state.catalogRevision) > 0) next = { ...next, catalog: { ...next.catalog, [key]: event.catalog } }
+      break
     }
-
-    default:
-      return false
+    case "shell.updated": {
+      if (event.job.sessionId !== id || event.job.epoch !== event.epoch || event.job.workspaceId !== snapshot.session.workspaceId) { recover = true; break }
+      const previous = next.shell[event.job.jobId]
+      if (!previous || previous.workerGeneration !== event.job.workerGeneration || previous.epoch !== event.job.epoch || (previous.status !== "ended" && compareCounters(event.job.outputCursor, previous.outputCursor) >= 0)) next = { ...next, shell: { ...next.shell, [event.job.jobId]: event.job } }
+      break
+    }
+    case "session.compacted": recover = true; break
+    default: { const exhaustive: never = event; return exhaustive }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function trimSessions(draft: State) {
-  if (draft.session.length <= draft.limit) return
-  // Sessions with a pending permission or form stay and do not count toward
-  // the limit: the composer finds a subagent's requests through its parent
-  // link in this list.
-  const isBlocking = (sessionID: string) =>
-    (draft.permission[sessionID]?.length ?? 0) > 0 || (draft.form[sessionID]?.length ?? 0) > 0
-  // Drop the oldest by creation time. The array is sorted by id, and session
-  // ids descend with time, so its head holds the newest session: trimming by
-  // position evicted a just-created subagent before its requests arrived.
-  const trimmable = draft.session
-    .filter((session) => !isBlocking(session.id))
-    .sort((a, b) => a.time.created - b.time.created)
-  const excess = trimmable.length - draft.limit
-  if (excess <= 0) return
-  const dropped = new Set(trimmable.slice(0, excess).map((session) => session.id))
-  draft.session = draft.session.filter((session) => !dropped.has(session.id))
-}
-
-function cleanupSessionCaches(draft: State, sessionID: string) {
-  if (!sessionID) return
-  dropSessionCaches(draft, [sessionID])
+  if (recover) return { kind: "resnapshot", state }
+  updated = {
+    ...updated, messages, turns,
+    session: { ...updated.session, epoch: event.epoch, headSequence: event.sequence, updatedAt: Math.max(updated.session.updatedAt, event.timestamp) },
+    window: turns === snapshot.turns && messages === (state.message[id] ?? snapshot.messages) ? updated.window : { ...updated.window, firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null, firstMessageId: messages[0]?.messageId ?? null, lastMessageId: messages.at(-1)?.messageId ?? null },
+    branch: event.type === "message.created" ? { ...updated.branch, leafMessageId: messages.at(-1)?.messageId ?? null } : updated.branch,
+  }
+  const committed: State = {
+    ...next,
+    snapshot: { ...next.snapshot, [id]: updated },
+    message: messages === state.message[id] ? next.message : { ...next.message, [id]: messages },
+    partOwner: owners === state.partOwner[id] ? next.partOwner : { ...next.partOwner, [id]: owners },
+    permission: updated.approvals === snapshot.approvals ? next.permission : { ...next.permission, [id]: updated.approvals },
+    form: updated.questions === snapshot.questions ? next.form : { ...next.form, [id]: updated.questions },
+    session_status: updated.session.runtimeStatus === state.session_status[id] ? next.session_status : { ...next.session_status, [id]: updated.session.runtimeStatus },
+    sessionStatusInvalidated: next.sessionStatusInvalidated[id] ? { ...next.sessionStatusInvalidated, [id]: false } : next.sessionStatusInvalidated,
+  }
+  return { kind: "applied", state: committed }
 }

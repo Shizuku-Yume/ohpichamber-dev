@@ -1,52 +1,39 @@
-import type { Session } from "@/lib/opencode/model"
+import type { Session } from '@openchamber/agent-contract';
 
 /**
- * OpenCode 2.x announces a fork with `session.forked` only: no
- * `session.created` follows, and the event carries ids, not the record. Every
- * client that did not start the fork would otherwise miss it until its session
- * list reloads. This reads the fork's record and hands it back as a
- * `session.created`, so it lands through the same path as any new session.
- *
- * The forking client already inserted the record from the fork response, so a
- * session this client knows is left alone. A fork this client is creating
- * itself (`/btw`, which marks the fork only after it exists) is left to that
- * flow. A failed read applies nothing; the next list read picks the fork up.
- *
- * A patch for the fork can land while its record is being read (the `/btw`
- * marker does), and the global router drops patches for sessions it hasn't
- * seen, so the read record would be stale. Such a fork is read once more.
+ * Hydrate an identity discovered after a fork command through the authoritative
+ * Session insertion path. Forking has no synthetic canonical event variant;
+ * callers supply identity and a native Host-projected Session read.
  */
 export type ForkedSessionDeps = {
-  isKnown: (sessionID: string) => boolean
-  isCreatingLocally: (parentID: string) => boolean
-  getSession: (sessionID: string, directory: string | undefined) => Promise<Session>
-  isCurrent: () => boolean
-  apply: (info: Session) => void
-}
+  isKnown: (sessionId: string) => boolean;
+  isCreatingLocally: (parentSessionId: string) => boolean;
+  getSession: (sessionId: string) => Promise<Session>;
+  isCurrent: () => boolean;
+  apply: (session: Session) => void;
+};
 
-const patchedDuringRead = new Map<string, boolean>()
+const patchedDuringRead = new Map<string, boolean>();
 
-export function noteForkedSessionPatched(sessionID: string): void {
-  if (patchedDuringRead.has(sessionID)) patchedDuringRead.set(sessionID, true)
+export function noteForkedSessionPatched(sessionId: string): void {
+  if (patchedDuringRead.has(sessionId)) patchedDuringRead.set(sessionId, true);
 }
 
 export async function applyForkedSession(
-  event: { sessionID: string; parentID: string; directory: string | undefined },
+  event: { sessionId: string; parentSessionId: string },
   deps: ForkedSessionDeps,
 ): Promise<void> {
-  if (deps.isKnown(event.sessionID) || deps.isCreatingLocally(event.parentID)) return
-  let info: Session
+  if (!deps.isCurrent() || deps.isKnown(event.sessionId) || deps.isCreatingLocally(event.parentSessionId) || patchedDuringRead.has(event.sessionId)) return;
+  let session: Session;
   try {
-    patchedDuringRead.set(event.sessionID, false)
-    info = await deps.getSession(event.sessionID, event.directory)
-    if (patchedDuringRead.get(event.sessionID)) {
-      info = await deps.getSession(event.sessionID, event.directory)
-    }
+    patchedDuringRead.set(event.sessionId, false);
+    session = await deps.getSession(event.sessionId);
+    if (patchedDuringRead.get(event.sessionId)) session = await deps.getSession(event.sessionId);
   } catch {
-    return
+    return;
   } finally {
-    patchedDuringRead.delete(event.sessionID)
+    patchedDuringRead.delete(event.sessionId);
   }
-  if (!deps.isCurrent() || deps.isKnown(event.sessionID)) return
-  deps.apply(info)
+  if (!deps.isCurrent() || deps.isKnown(event.sessionId) || session.sessionId !== event.sessionId) return;
+  deps.apply(session);
 }

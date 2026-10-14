@@ -5,12 +5,9 @@ import { directoriesWithRunningShells } from "./background-shells"
 import { useGlobalSessionStatusStore } from "./global-session-status"
 import type { State } from "./types"
 
-// OpenCode 2 keeps a location for every directory it serves, and each location
-// runs its own copy of the user's local MCP servers until OpenCode's hour-long
-// inactivity sweep. Once the user has left a managed chat or a worktree and
-// nothing runs there, ask OpenCode to drop that location sooner. Project roots
-// are never released: the user returns to them most, and the server keeps
-// reading the last-used one.
+// Retained host location release scheduling waits until native session work,
+// pending user requests, and background shell jobs no longer hold a directory.
+// Project roots remain resident; the Host owns the release operation.
 
 /** Long enough that flicking between chats does not restart their MCP servers. */
 export const CHAT_LOCATION_RELEASE_DELAY_MS = 30_000
@@ -33,8 +30,8 @@ const realTimers: Timers<ReturnType<typeof setTimeout>> = {
 
 /**
  * `busy`: work or a question for the user still holds the location.
- * `unknown`: this window cannot see the directory's sessions, so it leaves
- * the location to OpenCode's own sweep.
+ * `unknown`: this window cannot see authoritative directory activity and leaves
+ * release decisions to the Host.
  */
 export type DirectoryUse = "free" | "busy" | "unknown"
 
@@ -82,7 +79,7 @@ export function createLocationRelease<T>(deps: LocationReleaseDeps<T>): Location
       return
     }
     void deps.release(directory).catch(() => {
-      // Nothing to undo: OpenCode's own inactivity sweep still drops it.
+      // A failed release leaves the Host location resident.
     })
   }
 
@@ -103,8 +100,8 @@ export function createLocationRelease<T>(deps: LocationReleaseDeps<T>): Location
 }
 
 /**
- * Whether anything in `directory` still needs its location: a running or
- * retrying session, a pending permission or form, or a background command.
+ * Whether anything in `directory` still needs its location: active native
+ * execution, a pending approval/question, or a background command.
  * `state` is the directory's store; without one the answer is unknown.
  */
 export function directoryUse(
@@ -113,15 +110,17 @@ export function directoryUse(
 ): DirectoryUse {
   if (!state) return "unknown"
   for (const status of Object.values(state.session_status)) {
-    if (status.type === "busy" || status.type === "retry") return "busy"
+    if (status === "running" || status === "awaiting_approval" || status === "awaiting_input") return "busy"
+    if (status === "unavailable") return "unknown"
   }
-  if (Object.values(state.permission).some((requests) => requests.length > 0)) return "busy"
-  if (Object.values(state.form).some((requests) => requests.length > 0)) return "busy"
+  if (Object.values(state.permission).some((requests) => requests.some((request) => request.status === "pending"))) return "busy"
+  if (Object.values(state.form).some((requests) => requests.some((request) => request.status === "pending"))) return "busy"
 
   const scope = normalizeProjectPath(directory) ?? directory
   for (const entry of useGlobalSessionStatusStore.getState().statusById.values()) {
     if ((normalizeProjectPath(entry.directory) ?? entry.directory) !== scope) continue
-    if (entry.status.type === "busy" || entry.status.type === "retry") return "busy"
+    if (entry.status === "running" || entry.status === "awaiting_approval" || entry.status === "awaiting_input") return "busy"
+    if (entry.status === "unavailable") return "unknown"
   }
   const shellRuns = directoriesWithRunningShells().some((shellDirectory) => (
     (normalizeProjectPath(shellDirectory) ?? shellDirectory) === scope

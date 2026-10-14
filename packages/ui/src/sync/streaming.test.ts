@@ -1,244 +1,57 @@
-import { beforeEach, describe, expect, test } from "bun:test"
-import type { Message, SessionStatus } from "@/lib/opencode/model"
-import { INITIAL_STATE, type State } from "./types"
-import {
-  touchStreamingSession,
-  updateChangedStreamingSessions,
-  updateStreamingState,
-  useStreamingStore,
-} from "./streaming"
-import {
-  getSyncPerformanceDiagnostics,
-  resetSyncPerformanceDiagnostics,
-  setSyncPerformanceDiagnosticsEnabled,
-} from "./performance-diagnostics"
-
-const message = (id: string, role: "user" | "assistant"): Message =>
-  role === "user"
-    ? { id, sessionID: "ses_1", role, time: { created: 1 } }
-    : { id, sessionID: "ses_1", role, time: { created: 1 }, agent: "build", providerID: "provider", modelID: "model" }
-
-const completedAssistantMessage = (id: string): Message => ({
-  id,
-  sessionID: "ses_1",
-  role: "assistant",
-  time: { created: 1, completed: 100 },
-  agent: "build",
-  providerID: "provider",
-  modelID: "model",
-})
-
-const stateWithMessages = (messages: Message[], status: SessionStatus = { type: "busy" }): State => ({
-  ...INITIAL_STATE,
-  session_status: {
-    ses_1: status,
-  },
-  message: {
-    ses_1: messages,
-  },
-})
-
-describe("updateStreamingState", () => {
-  beforeEach(() => {
-    setSyncPerformanceDiagnosticsEnabled(false)
-    useStreamingStore.setState({
-      streamingMessageIds: new Map(),
-      messageStreamStates: new Map(),
-    })
-  })
-
-  test("does not mark a previous assistant message as streaming during a new user turn", () => {
-    updateStreamingState(stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-    ]))
-    expect(useStreamingStore.getState().streamingMessageIds.get("ses_1")).toBe("msg_assistant_1")
-
-    updateStreamingState(stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-      message("msg_user_2", "user"),
-    ]))
-
-    expect(useStreamingStore.getState().streamingMessageIds.get("ses_1")).toBeNull()
-    expect(useStreamingStore.getState().messageStreamStates.get("msg_assistant_1")?.phase).toBe("completed")
-  })
-
-  test("tracks the trailing assistant message once it appears", () => {
-    updateStreamingState(stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-    ]))
-    updateStreamingState(stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-      message("msg_user_2", "user"),
-    ]))
-    expect(useStreamingStore.getState().streamingMessageIds.get("ses_1")).toBeNull()
-
-    updateStreamingState(stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-      message("msg_user_2", "user"),
-      message("msg_assistant_2", "assistant"),
-    ]))
-
-    expect(useStreamingStore.getState().streamingMessageIds.get("ses_1")).toBe("msg_assistant_2")
-  })
-
-  test("completes the streaming message when the session becomes idle", () => {
-    updateStreamingState(stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-    ]))
-    expect(useStreamingStore.getState().streamingMessageIds.get("ses_1")).toBe("msg_assistant_1")
-
-    updateStreamingState(stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-    ], { type: "idle" } as SessionStatus))
-
-    expect(useStreamingStore.getState().streamingMessageIds.get("ses_1")).toBeNull()
-    expect(useStreamingStore.getState().messageStreamStates.get("msg_assistant_1")?.phase).toBe("completed")
-  })
-
-  test("does no full or incremental scans for part-only updates across 50 busy sessions", () => {
-    const session_status: NonNullable<State["session_status"]> = {}
-    const messages: State["message"] = {}
-    for (let index = 0; index < 50; index += 1) {
-      const sessionID = `ses_${index}`
-      session_status[sessionID] = { type: "busy" }
-      messages[sessionID] = [
-        message(`msg_user_${index}`, "user"),
-        message(`msg_assistant_${index}`, "assistant"),
-      ]
-    }
-    const state: State = { ...INITIAL_STATE, session_status, message: messages }
-
-    setSyncPerformanceDiagnosticsEnabled(true)
-    updateStreamingState(state, 0)
-    resetSyncPerformanceDiagnostics()
-
-    for (let index = 0; index < 10_000; index += 1) {
-      const next = { ...state, part: { ...state.part, changed: [] } }
-      updateChangedStreamingSessions(next, state, 100)
-      touchStreamingSession(`ses_${index % 50}`, 100)
-    }
-
-    const diagnostics = getSyncPerformanceDiagnostics()
-    expect(diagnostics?.streamingFullReconciliations).toBe(0)
-    expect(diagnostics?.streamingIncrementalReconciliations).toBe(0)
-    expect(diagnostics?.streamingStatusEntriesVisited).toBe(0)
-    expect(diagnostics?.streamingSessionCandidatesVisited).toBe(0)
-    expect(diagnostics?.streamingMessagesVisited).toBe(0)
-    expect(diagnostics?.streamingHeartbeatAttempts).toBe(10_000)
-    expect(diagnostics?.streamingHeartbeatCommits).toBe(0)
-  })
-
-  test("updates heartbeat timestamps per session without rescanning directory state", () => {
-    const state = stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-    ])
-    setSyncPerformanceDiagnosticsEnabled(true)
-    updateStreamingState(state, 0)
-    resetSyncPerformanceDiagnostics()
-
-    touchStreamingSession("ses_1", 999)
-    touchStreamingSession("ses_1", 1_000)
-
-    expect(useStreamingStore.getState().messageStreamStates.get("msg_assistant_1")?.lastUpdateAt).toBe(1_000)
-    expect(getSyncPerformanceDiagnostics()?.streamingHeartbeatAttempts).toBe(2)
-    expect(getSyncPerformanceDiagnostics()?.streamingHeartbeatCommits).toBe(1)
-    expect(getSyncPerformanceDiagnostics()?.streamingFullReconciliations).toBe(0)
-    expect(getSyncPerformanceDiagnostics()?.streamingSessionCandidatesVisited).toBe(0)
-  })
-
-  test("incrementally completes a replaced assistant message", () => {
-    const previous = stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-    ])
-    updateStreamingState(previous, 10)
-    const next = stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-      message("msg_assistant_2", "assistant"),
-    ])
-
-    updateChangedStreamingSessions(next, previous, 20)
-
-    const streaming = useStreamingStore.getState()
-    expect(streaming.streamingMessageIds.get("ses_1")).toBe("msg_assistant_2")
-    expect(streaming.messageStreamStates.get("msg_assistant_1")?.phase).toBe("completed")
-    expect(streaming.messageStreamStates.get("msg_assistant_2")?.phase).toBe("streaming")
-  })
-
-  test("completes a streaming message when the trailing assistant message finishes while the session stays busy", () => {
-    updateStreamingState(stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-    ]))
-    expect(useStreamingStore.getState().streamingMessageIds.get("ses_1")).toBe("msg_assistant_1")
-
-    // The message completed (time.completed) but the turn keeps running
-    // (next step / tool phase) — the finished message must not stay marked
-    // as streaming with the typing indicator and part-update suspension on it.
-    updateStreamingState(stateWithMessages([
-      message("msg_user_1", "user"),
-      completedAssistantMessage("msg_assistant_1"),
-    ]))
-
-    const streaming = useStreamingStore.getState()
-    expect(streaming.streamingMessageIds.get("ses_1")).toBeNull()
-    expect(streaming.messageStreamStates.get("msg_assistant_1")?.phase).toBe("completed")
-  })
-
-  test("does not mark an already-completed trailing assistant message as streaming", () => {
-    updateStreamingState(stateWithMessages([
-      message("msg_user_1", "user"),
-      completedAssistantMessage("msg_assistant_1"),
-    ]))
-
-    const streaming = useStreamingStore.getState()
-    expect(streaming.streamingMessageIds.get("ses_1") ?? null).toBeNull()
-    expect(streaming.messageStreamStates.has("msg_assistant_1")).toBe(false)
-  })
-
-  test("incrementally clears the streaming marker when the trailing message completes while busy", () => {
-    const previous = stateWithMessages([
-      message("msg_user_1", "user"),
-      message("msg_assistant_1", "assistant"),
-    ])
-    updateStreamingState(previous, 10)
-    expect(useStreamingStore.getState().streamingMessageIds.get("ses_1")).toBe("msg_assistant_1")
-
-    const next = stateWithMessages([
-      message("msg_user_1", "user"),
-      completedAssistantMessage("msg_assistant_1"),
-    ])
-    updateChangedStreamingSessions(next, previous, 20)
-
-    const streaming = useStreamingStore.getState()
-    expect(streaming.streamingMessageIds.get("ses_1")).toBeNull()
-    expect(streaming.messageStreamStates.get("msg_assistant_1")?.phase).toBe("completed")
-  })
-
-  test("keeps the next assistant message streaming after an intermediate message completed while busy", () => {
-    const previous = stateWithMessages([
-      message("msg_user_1", "user"),
-      completedAssistantMessage("msg_assistant_1"),
-    ])
-    updateStreamingState(previous, 10)
-    expect(useStreamingStore.getState().streamingMessageIds.get("ses_1") ?? null).toBeNull()
-
-    const next = stateWithMessages([
-      message("msg_user_1", "user"),
-      completedAssistantMessage("msg_assistant_1"),
-      message("msg_assistant_2", "assistant"),
-    ])
-    updateChangedStreamingSessions(next, previous, 20)
-
-    expect(useStreamingStore.getState().streamingMessageIds.get("ses_1")).toBe("msg_assistant_2")
-  })
-})
+import { beforeEach, describe, expect, test } from 'bun:test';
+import type { Message, SessionSnapshot } from '@openchamber/agent-contract';
+import { INITIAL_STATE, type State } from './types';
+import { updateChangedStreamingSessions, updateStreamingState, useStreamingStore } from './streaming';
+const message = (messageId: string, role: 'user' | 'assistant'): Message => ({ messageId, sessionId: 'session_1', turnId: 'turn_1', role, createdAt: 1, parts: [] });
+const stateWithMessages = (messages: Message[], status: State['session_status'][string] = 'running'): State => ({ ...INITIAL_STATE, session_status: { session_1: status }, message: { session_1: messages } });
+beforeEach(() => useStreamingStore.setState({ streamingMessageIds: new Map(), messageStreamStates: new Map() }));
+describe('native streaming state', () => {
+  test('tracks trailing assistant while runtime is live', () => {
+    updateStreamingState(stateWithMessages([message('user_1', 'user'), message('assistant_1', 'assistant')]), 10);
+    expect(useStreamingStore.getState().streamingMessageIds.get('session_1')).toBe('assistant_1');
+  });
+  test('does not carry a prior assistant into a new user turn', () => {
+    updateStreamingState(stateWithMessages([message('user_1', 'user'), message('assistant_1', 'assistant')]), 10);
+    updateStreamingState(stateWithMessages([message('user_1', 'user'), message('assistant_1', 'assistant'), message('user_2', 'user')]), 20);
+    expect(useStreamingStore.getState().streamingMessageIds.get('session_1')).toBeNull();
+  });
+  test('run status settling completes the stream', () => {
+    updateStreamingState(stateWithMessages([message('user_1', 'user'), message('assistant_1', 'assistant')]), 10);
+    updateStreamingState(stateWithMessages([message('user_1', 'user'), message('assistant_1', 'assistant')], 'idle'), 20);
+    expect(useStreamingStore.getState().streamingMessageIds.get('session_1')).toBeNull();
+    expect(useStreamingStore.getState().messageStreamStates.get('assistant_1')?.phase).toBe('completed');
+  });
+  test('incremental message replacement moves the live marker', () => {
+    const previous = stateWithMessages([message('user_1', 'user'), message('assistant_1', 'assistant')]);
+    updateStreamingState(previous, 10);
+    const next = stateWithMessages([message('user_1', 'user'), message('assistant_1', 'assistant'), message('assistant_2', 'assistant')]);
+    updateChangedStreamingSessions(next, previous, 20);
+    expect(useStreamingStore.getState().streamingMessageIds.get('session_1')).toBe('assistant_2');
+    expect(useStreamingStore.getState().messageStreamStates.get('assistant_1')?.phase).toBe('completed');
+  });
+  test('full reconciliation retains the live ID during the heartbeat window', () => {
+    const state = stateWithMessages([message('assistant_1', 'assistant')]);
+    updateStreamingState(state, 10);
+    updateStreamingState(state, 20);
+    expect(useStreamingStore.getState().streamingMessageIds.get('session_1')).toBe('assistant_1');
+    updateStreamingState(stateWithMessages([message('assistant_1', 'assistant')], 'idle'), 30);
+    expect(useStreamingStore.getState().messageStreamStates.get('assistant_1')?.phase).toBe('completed');
+  });
+  test('an inner turn can complete while its outer run remains live', () => {
+    const user = message('user_1', 'user'); const assistant = message('assistant_1', 'assistant');
+    const snapshot: SessionSnapshot = {
+      session: { sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'repo', rootSessionId: 'session_1', createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '1', runtimeStatus: 'running', activeRunId: 'run_1' },
+      cursor: 'epoch_1:1', activeRun: { runId: 'run_1', sessionId: 'session_1', status: 'running', createdAt: 1 },
+      branch: { branchId: 'branch_1', branchVersion: '0', leafMessageId: 'assistant_1' },
+      window: { firstTurnId: 'turn_1', lastTurnId: 'turn_1', firstMessageId: 'user_1', lastMessageId: 'assistant_1', hasEarlier: false },
+      turns: [{ turnId: 'turn_1', sessionId: 'session_1', runId: 'run_1', status: 'running', userMessageId: 'user_1', assistantMessageIds: ['assistant_1'], startedAt: 1 }],
+      messages: [user, assistant], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' },
+    };
+    const previous = { ...stateWithMessages([user, assistant]), snapshot: { session_1: snapshot } };
+    updateStreamingState(previous, 10);
+    const completed = { ...snapshot, turns: [{ ...snapshot.turns[0], status: 'completed' as const, finishedAt: 2 }] };
+    updateChangedStreamingSessions({ ...previous, snapshot: { session_1: completed } }, previous, 20);
+    expect(useStreamingStore.getState().streamingMessageIds.get('session_1')).toBeNull();
+    expect(useStreamingStore.getState().messageStreamStates.get('assistant_1')?.phase).toBe('completed');
+  });
+});
