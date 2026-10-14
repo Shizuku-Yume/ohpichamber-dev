@@ -42,38 +42,47 @@ The parent integration worktree (`/home/shizuku/Project/ohpichamber-worktrees/m1
 - Parent composition: `b776e51a2` (integrates `directCommandAdmissionStore` into `packages/web/server/index.js` and updates `canonicalClient.forkSession(snapshot.session, ...)` to use authoritative scoped session objects in `packages/ui/src/sync/session-actions.ts`).
 - Sync spy lifecycle follow-up: `5601698fb` (from `6a74f9376`, restoring issue regression spy cleanup).
 - Subagent plan amendment: `f84cc6fac` / `da6eec253` (adding Task 32 for native subagent projection and refining M2 receipt phrasing).
+- Native controls contract: `1dd58aa29` (from `f824e9674`, defining canonical native branch and relocation controls).
+- Native controls SDK service: `71cfc9e24` (from `1ebe84468`, implementing durable native branch controls and session relocation in SDK worker and session registry).
+- Native controls Host, client, and UI actions: `0204db004` (from `181392684`, wiring native controls through Host routes, canonical client, and session actions).
+- Authored sync lint cleanup: `1d4ac3ac8` (from `2c1d673e7`, clearing authored anti-slop findings in session actions).
+- Native fixture admission: `3ae891c70` (wiring durable admission in native control fixture).
+- Host authored native lint repairs: `473d75e95` (from `2bd49c047`, repairing authored native control lint findings in Host).
 
 ### Observed integration checks and verified receipts
 
-Verification observations and receipts recorded from integration runs (not rerun):
-- Connected CanonicalClient transport proof verified on receipt `/home/shizuku/Project/ohpichamber-omp-artifacts/m313-canonical-client-proof-receipt.json` (`bun /tmp/m313-client-proof.mjs`, exit 0 once): exercises CanonicalClient → runtimeFetch → Host HTTP (`registerCanonicalHostRoutes`, `registerCanonicalSessionRoutes`) → supervisor.request → private Bun service → dedicated SDK worker → loopback OpenAI-compatible provider (1 request, sequence 1..12, 2 messages/2 parts matching history IDs, snapshot head 12, 8 recovered events duplicate-free, abort cancelled). Limitations are explicit: caller publication token guard verified around delayed response, not actual UI sync publication; fixture bearer auth is not production auth certification; clean shutdown and throwaway script removal confirmed; M2 receipts reused unchanged.
-- Client boundary after-receipt verified on receipt `/home/shizuku/Project/ohpichamber-omp-artifacts/m313-client-boundary-after-receipt.json` (`bun /tmp/m313-client-boundary-proof.mjs ... after`, exit 0 once): validates real CanonicalClient/runtimeFetch against loopback adversarial HTTP/SSE fixtures (`wrongMetadataScopeRejected`, `wrongStreamScopeRejected`, `legalCrLfInvalidationDelivered`). Limits: boundary scope and legal framing only, not native service, production auth, or visible UI certification.
-- Focused core suite baseline on `/home/shizuku/Project/ohpichamber-omp-artifacts/m313-focused-core-check-results.json` recorded 33 native core files (24 pass, 9 fail against earlier baseline `c7a07e6b1` + `ea5e8b019`).
-- Standalone check observations: All repaired focused suites now pass standalone; durable admission separately 14/0:
-  - `packages/ui/src/sync/session-ui-store.test.js`: 72 pass / 0 fail (artifact://2404).
-  - `packages/ui/src/sync/event-reducer.test.ts`: 14 pass / 0 fail.
-  - `packages/ui/src/sync/session-blocking-request-counts.test.tsx`: 3 pass / 0 fail.
-  - `packages/ui/src/sync/session-archive-batch.test.ts`: 5 pass / 0 fail.
-  - `packages/web/server/lib/openchamber-sessions/routes.test.js`: 7 pass / 0 fail (artifact://2392).
-  - `packages/web/server/lib/host/direct-command-admission-store.test.mjs`: 14 pass / 0 fail (Vitest package test runner under `packages/web`, duration 491 ms).
-  - `packages/ui/src/sync/sync-context-selection-boundary.test.tsx`: 4 pass / 0 fail (11 assertions) on actual React navigation path following param rename `sessionID` -> `sessionId` at `session-actions.ts:1922` (committed in `2bf6d7331`).
-  - `packages/ui/src/sync/native-leaf-subscriptions.test.tsx`: 3 pass / 0 fail (18 assertions, `bun test packages/ui/src/sync/native-leaf-subscriptions.test.tsx`, parent commit `b00249a31`; narrowed `useSessionDirectory` subscription to `workspaceId` primitive and workspace binding snapshot eliminates render churn; time-only/excluded-root 10/6 updates cause no extra renders).
-  - `packages/ui/src/sync/session-actions.test.ts`: 62 pass / 0 fail (182 assertions, artifact://2431; fixture code `50a7e0f8c` integrated in `bcc3a35d4`).
-  - `packages/ui/src/sync/session-message-loader.test.ts`: 35 pass / 0 fail (125 assertions).
-  - `packages/ui/src/sync/__tests__/issue-2039.test.ts`: 18 pass / 0 fail (59 assertions, artifact://2430; real store fixtures without obsolete module mocks; Task 15 config and assistant send boundary spied limitations unchanged).
-  - Recheck receipt `/home/shizuku/Project/ohpichamber-omp-artifacts/m313-fixture-recheck-20261014.json` records 10 files and navigation commit `2bf6d7331`.
+- Standalone check observations & historical baselines:
+  - Earlier unchanged transport, client boundary, and 33-file suite baselines are preserved as historical evidence (`m313-canonical-client-proof-receipt.json`, `m313-client-boundary-after-receipt.json`, `m313-focused-core-check-results.json`).
   - Production module composition receipt verified on `/home/shizuku/Project/ohpichamber-omp-artifacts/m313-production-composition-receipt.json`: real Node import of production `packages/web/server/index.js` (isolated `HOME` and data root) exited 0 (`{"probe":"production-module","status":"imported"}`) after fix commit `fbae4eafb`, resolving the prior exit 1 failure observed at HEAD `6d3f9239e` caused by the nonexistent `registerSessionScope` member on `hostAgentRuntime` at line 648 (generic probe message reports missing owners, actual verified cause was `hostAgentRuntime.registerSessionScope` corrected to `agentScopeRuntime.registerSessionScope`). Limits: module construction only, not running listener, visible UI, or SDK worker certification.
   - Review quality and security passes: transport boundary review (`eab..2bf6`) passed quality review (old blocking URLs closed; client backend idempotency outside quality scope). Security pass passed with no findings on transport and durable admission auth binding; corrected real correctness defect at `packages/web/server/index.js:648` (nonexistent `hostAgentRuntime.registerSessionScope` changed to existing `agentScopeRuntime.registerSessionScope` in commit `fbae4eafb`).
-  - Authored oxlint status: failed across 7 paths on authored `sessionActions`, test fixtures, and `syncContext` (delegated to separate agent `RepairAuthoredM313Lint`; existing legacy `index.js` findings remain untouched, and the actual registration injection line is lint-clean).
   - Workflow validation: `.workflow/bin/workflow validate --no-color` passed across 42 task files.
-- Active Task 13 blockers pending: authored lint fixes (`RepairAuthoredM313Lint`), native session controls source and proof (`ImplementNativeSessionControls`, worktree `m313-native-controls`), and full core A/B review remain pending. No fixture failures remain; no archive move or checkmark ticks.
-- No green Task 13 claim is made.
+- Native integration check receipt `/home/shizuku/Project/ohpichamber-omp-artifacts/m313-native-integration-checks-20261014.json`:
+  - Package builds & service typecheck passed: `packages/agent-contract` build, `packages/agent-service` build, and `packages/agent-service` typecheck all pass (`bg_38`).
+  - Host native controls routes: `packages/web/server/lib/openchamber-sessions/routes-native-controls.test.js` passes 5/0 (`bg_40`).
+  - Host native and scope core: `bg_54` passes 9/0 across 2 files.
+  - Host authored lint: `bg_55` exits 0 (clean across 3 changed files).
+  - Canonical client native controls: `packages/ui/src/api/canonicalClient-native-controls.test.ts` passes 11/0 (16 assertions, `bg_41`).
+  - Dedicated worker session native: `packages/agent-service/src/worker/session-native.test.ts` passes 10/0 (85 assertions, `bg_43`).
+  - Sync selection boundary: `packages/ui/src/sync/sync-context-selection-boundary.test.tsx` passes 4/0 (11 assertions, `bg_46`).
+  - Native leaf subscriptions: `packages/ui/src/sync/native-leaf-subscriptions.test.tsx` passes 3/0 (18 assertions, `bg_47`).
+  - Native integration check regressions and pending items:
+    - `packages/ui/src/sync/session-actions.test.ts`: 60 pass / 2 fail (output `artifact://2542`, repair owner `RepairNativeActionCache`), invalidating earlier 62/0 observation after native integration.
+    - `packages/agent-service/src/sessions/registry-native.test.ts`: 2 pass / 3 fail (output `artifact://2535`, repair owner `ImplementNativeSessionControls` / `RepairNativeRegistryRecovery`), pending source fix.
+    - Authored oxlint: failed with 36 findings across 20 paths (`bg_48`, repair owners `ImplementNativeSessionControls`, `RepairNativeActionCache`, `RepairNativeHostLint`; inherited findings attributed to exact Base and retained).
+    - Dead-code inventory: nonblocking audit (`bg_50`), 3 unused files, 63 unused exports, 28 unused exported types.
+  - Connected native controls proof: `/home/shizuku/Project/ohpichamber-omp-artifacts/m313-native-controls-proof-receipt.json` (`bg_44`): failed setup with 'The Host workspace projection is unavailable' (0 provider requests, 0 assertions); cleanup all true; it is NOT a privacy failure before observation since provider never ran.
+  - Public/private-root leak invariant: known source-confirmed private-bootstrap-root disclosure in public worker projection remains blocking, under repair by native owner, with no user transcript path waiver.
+- Active Task 13 blockers pending: authored lint fixes, native controls source and proof repairs, and full core A/B review remain pending. No green Task 13 claim is made.
 
 ### Active repair worktrees and native controls
 
 - Explicit git worktrees avoid snapshot budget issues without modifying configuration.
-- Core production compile repairs (`m313-sync-compile`), native test repairs (`m313-sync-tests`, `m313-test-repair`), and fixture updates (`50a7e0f8c` / `bcc3a35d4`) are integrated in parent.
-- Native session controls (branch leaf selection and workspace relocation) remain in progress in agent `ImplementNativeSessionControls` (worktree `m313-native-controls`), not yet committed; source integration pending.
+- Core production compile repairs (`m313-sync-compile`), native test repairs (`m313-sync-tests`, `m313-test-repair`), fixture updates (`50a7e0f8c` / `bcc3a35d4`), and native session controls source (`1dd58aa29`, `71cfc9e24`, `0204db004`, `1d4ac3ac8`, `3ae891c70`, `473d75e95`) are integrated in parent.
+- Active focused repairs underway across delegated workstreams:
+  - `ImplementNativeSessionControls`: projection and session privacy repairs, and child `RepairNativeRegistryRecovery` for registry/worker test failures.
+  - `RepairNativeActionCache`: archive 2-fail repair, authored client lint, and reviewer native redo / snapshot bypass bugs.
+  - `PrepareNativeControlsProof`: Host workspace projection composition for connected native controls proof.
+  - Ongoing reviews: core B review (`ReviewM313CoreQuality`) and Host native security review (`ReviewM313NativeSecurity`); full A + worker B/security still required after proof.
 - Task 32 plan (`f84cc6fac` / `da6eec253`) is integrated into the workflow; native backend subagent capability remains absent and unverified (`subagents: false`), with no premature true claim.
 
 ### Dependency and surface boundaries
@@ -96,4 +105,4 @@ Verification observations and receipts recorded from integration runs (not rerun
 
 ### Next action
 
-Parent integrates authored lint fixes from `RepairAuthoredM313Lint` and native session controls from `ImplementNativeSessionControls` (`m313-native-controls`). Re-verify focused core tests in separate `bun test` processes, authored oxlint, and core-only typecheck. Task 13 closes after its focused core checks, connected proof, and reviews pass, handing off to Task 32 and downstream consumer tasks (Tasks 14, 15, 16); full visible Web/Electron UI checks W7–W10 remain Task 18. Task 13 remains active while authored lint fixes, native controls, and full core A/B review remain pending; checkboxes remain unticked and no archive move occurs.
+Parent integrates active repairs from `ImplementNativeSessionControls` / `RepairNativeRegistryRecovery`, `RepairNativeActionCache`, and `PrepareNativeControlsProof`. Re-verify focused core suites in separate `bun test` processes, authored oxlint, and core-only typecheck. Task 13 closes after its focused core checks, connected native proof, and full core A/B reviews pass, handing off to Task 32 and downstream consumer tasks (Tasks 14, 15, 16); full visible Web/Electron UI checks W7–W10 remain Task 18. Task 13 remains active while authored lint fixes, native controls, and full core A/B review remain pending; checkboxes remain unticked and no archive move occurs.
