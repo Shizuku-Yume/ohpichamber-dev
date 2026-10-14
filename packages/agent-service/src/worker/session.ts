@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
+import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
+import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, type SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
 import type { AgentMessage } from '@oh-my-pi/pi-agent-core';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import type { PromptOptions } from '@oh-my-pi/pi-coding-agent/session/agent-session-types';
@@ -63,11 +65,16 @@ export class WorkerSession {
     private readonly completion: WorkerCompletion,
     private readonly admission: NativeAdmission,
     private readonly authorize: WorkerAuthorize,
+    private readonly onSubagent: (payload: SubagentLifecyclePayload) => void,
+    private readonly subagentEventBus: EventBus,
   ) {
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
     this.defaultToolNames = session.getActiveToolNames();
     this.defaultMountedNames = session.getMountedXdevToolNames();
     this.nativeQueuedPreparation = session.agent.prepareQueuedMessages;
+    this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
+      this.onSubagent(data as SubagentLifecyclePayload);
+    });
     session.agent.prepareQueuedMessages = async (messages, signal) => {
       const nativePreparation = await this.nativeQueuedPreparation?.(messages, signal);
       return {
@@ -96,7 +103,7 @@ export class WorkerSession {
     });
   }
 
-  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void): Promise<WorkerSession> {
+  static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void, onSubagent: (payload: SubagentLifecyclePayload) => void): Promise<WorkerSession> {
     if (input.mcpConfiguration && !input.mcpConfigPath) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'MCP storage ownership is missing');
     if (input.skillSources && !input.agentDirectoryId) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Skill source ownership is missing');
     const runtime = await openNativeRuntime(input);
@@ -172,11 +179,12 @@ export class WorkerSession {
         // This factory does not override SDK spawns; retain its actual default policy context.
         getSessionSpawns: () => '*',
       });
+      const subagentEventBus = new EventBus();
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
         enableMCP: mcp !== undefined, mcpManager: mcp, enableLsp: false, disableExtensionDiscovery: true,
-        hasUI: true, interactivePrompts: true, extensions: [observer, createNativeBashPolicyExtension({ interaction, approval: bashPolicy.approval,
+        hasUI: true, interactivePrompts: true, subagentEventBus, extensions: [observer, createNativeBashPolicyExtension({ interaction, approval: bashPolicy.approval,
           authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
         }), createHostToolExtension({
           scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
@@ -225,7 +233,7 @@ export class WorkerSession {
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
       await rememberPrivateRoots(manager, input);
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, onSubagent, subagentEventBus);
       capturePolicy = async () => {
         const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId) : null;
         publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));

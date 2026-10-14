@@ -11,7 +11,7 @@ import type {
   ShellOutput, ShellSnapshot, ShellStartRequest, ShellStopRequest, SkillsApplyRequest, SkillsApplyResult,
   SkillsCatalogState, SkillExpandRequest, SkillExpandResult, CompletionRequest, CompletionResult, CompletionCancelRequest, CompletionCancelResult,
   MCPCatalogRead, MCPConfigureRequest, MCPApplyRequest, MCPApplyResult, MCPReconnectRequest, MCPOAuthRequest, MCPOAuthResult, SteerAck, SteerRequest, Workspace,
-  WorkspaceList, ProjectList, QueueAppendRequest, QueueDeleteRequest, QueueReorderRequest, QueueState,
+  WorkspaceList, ProjectList, QueueAppendRequest, QueueDeleteRequest, QueueReorderRequest, QueueState, Subagent,
 } from '@openchamber/agent-contract';
 
 export class CanonicalApiError extends Error {
@@ -97,6 +97,10 @@ export class CanonicalClient {
   listSessions(workspaceId?: string): Promise<SessionList> {
     const schema = z.strictObject({ items: z.array(C.SessionSchema), errors: C.DiscoveryErrorsSchema });
     return request(`/api/agent/v1/sessions${query({ workspaceId })}`, scoped(schema, result => workspaceId === undefined || result.items.every(session => session.workspaceId === workspaceId)));
+  }
+  listSubagents(sessionId: string): Promise<Subagent[]> {
+    return request(`/api/agent/v1/subagents${query({ sessionId })}`, z.array(C.SubagentSchema), {
+    }).then(result => result.filter(subagent => subagent.parentSessionId === sessionId));
   }
   getSession(sessionId: string): Promise<SessionSnapshot> { return request(`/api/agent/v1/sessions/${id(sessionId)}`, scoped(C.SessionSnapshotSchema, result => result.session.sessionId === sessionId)); }
   getSnapshot(sessionId: string): Promise<SessionSnapshot> { return request(`/api/agent/v1/sessions/${id(sessionId)}/snapshot`, scoped(C.SessionSnapshotSchema, result => result.session.sessionId === sessionId)); }

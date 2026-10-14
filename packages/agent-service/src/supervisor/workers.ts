@@ -16,6 +16,7 @@ interface WorkerLifecycleCallbacks {
   onOpened?: (rootSessionId: string, generation: string, sessionFile: string, seed: ProjectionSeed) => void;
   onEvents?: (rootSessionId: string, generation: string, inputs: ProjectionInput[]) => void;
   onInteraction?: (rootSessionId: string, generation: string, interaction: WorkerInteraction) => void;
+  onSubagent?: (rootSessionId: string, generation: string, subagent: { subagentId: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; solutionSpace?: string; sessionFile?: string }) => void;
   onExit?: (rootSessionId: string, generation: string) => void;
 }
 
@@ -220,6 +221,8 @@ export class WorkerRegistry {
           entry.input.sessionFile = reply.data.sessionFile;
           this.options.callbacks?.onOpened?.(input.rootSessionId, workerGeneration, reply.data.sessionFile, reply.data.seed);
         }
+      } else if (reply.data.type === 'subagent') {
+        if (entry.kind === 'session') this.options.callbacks?.onSubagent?.(input.rootSessionId, workerGeneration, reply.data);
       } else if (reply.data.type === 'events') {
         if (entry.kind === 'session') this.options.callbacks?.onEvents?.(input.rootSessionId, workerGeneration, reply.data.inputs);
       } else if (reply.data.type === 'interaction') {

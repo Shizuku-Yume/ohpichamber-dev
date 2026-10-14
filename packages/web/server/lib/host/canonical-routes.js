@@ -20,6 +20,7 @@ const EmptyRequestBodySchema = z.strictObject({});
 const WorkspaceResolveRequestSchema = z.strictObject({ directory: z.string().min(1) });
 // Only SDK-owned operations appear here. Host session admission, metadata and delivery have their own routers.
 const AGENT_ROUTES = [
+  { method: 'GET', pattern: /^\/subagents$/, response: z.array(C.SubagentSchema), query: ['sessionId'], subagent: true },
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/models$/, response: C.ModelCatalogSchema },
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers$/, response: C.ProviderCatalogSchema },
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/agents$/, response: C.AgentCatalogSchema },
@@ -219,6 +220,12 @@ export function registerCanonicalHostRoutes(app, {
         const projectId = C.EntityIdSchema.parse(decodeURIComponent(groups.projectId));
         const projects = C.ProjectListSchema.parse(await listProjects());
         if (!projects.items.some(project => project.projectId === projectId)) return problem(res, 403, 'UNAUTHORIZED', 'The selected project is not authorized.');
+      }
+      if (route.subagent) {
+        const sessionId = C.EntityIdSchema.safeParse(req.query.sessionId);
+        if (!sessionId.success) return problem(res, 400, 'INVALID_REQUEST', 'The subagent session identity is invalid.');
+        scope = capturedScope(await resolveSessionScope(sessionId.data));
+        if (!scope) return problem(res, 403, 'UNAUTHORIZED', 'The selected session is not authorized.');
       }
       const url = new URL(req.originalUrl, 'http://canonical.invalid');
       for (const key of url.searchParams.keys()) {

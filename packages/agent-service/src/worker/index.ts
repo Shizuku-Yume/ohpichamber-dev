@@ -114,6 +114,8 @@ process.on('message', raw => {
       send({ type: 'interaction', workerGeneration: command.workerGeneration, request: interaction });
     }, () => { void stop(1); }, authorization.authorize, hostActions.invoke, snapshot => {
       send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot });
+    }, payload => {
+      send({ type: 'subagent', workerGeneration: command.workerGeneration, subagentId: payload.id, status: payload.status, role: payload.agent, ...(payload.description ? { solutionSpace: payload.description } : {}), ...(payload.sessionFile ? { sessionFile: payload.sessionFile } : {}) });
     }).then(owned => {
       resources = owned;
       if (stopping) return;

@@ -3,12 +3,12 @@ import { access } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { z } from 'zod';
-import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema, SessionBranchRequestSchema } from '@openchamber/agent-contract';
-import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest } from '@openchamber/agent-contract';
+import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema, SessionBranchRequestSchema, SubagentSchema } from '@openchamber/agent-contract';
+import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, Subagent } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
 import { HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, type HostSessionRelocationPrepare } from '../supervisor/host-authorization-protocol.ts';
-import { nativePrivateRootContext, rememberPrivateRoots } from '../worker/projection.ts';
+import { nativePrivateRootContext, rememberPrivateRoots, resolveCanonicalMessage, WorkerProjection } from '../worker/projection.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError, SessionJournal } from '../projection/journal.ts';
 import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad } from '../interaction/manager.ts';
@@ -16,7 +16,7 @@ import { WorkerOperationError, WorkerRegistry } from '../supervisor/workers.ts';
 import { SessionReferenceError, SessionReferences } from './references.ts';
 import type { SessionReference, SessionRelocationIntent } from './references.ts';
 import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
-import { resolveCanonicalMessage } from '../worker/projection.ts';
+type SubagentRecord = Subagent & { rootSessionId: string; workspaceId: string; projectId: string; sessionFile: string };
 type RelocationAdmission = (input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<RuntimeSession>) => Promise<RuntimeSession>;
 type SessionBootstrap = z.infer<typeof HostSessionBootstrapSchema>;
 export interface SessionList { items: RuntimeSession[]; errors: { sessionId: string; code: ProblemCode }[]; }
@@ -33,6 +33,7 @@ export class SessionRegistry {
   private readonly references: SessionReferences;
   private readonly interactions: InteractionManager;
   private readonly entries = new Map<string, Entry>();
+  private readonly subagents = new Map<string, SubagentRecord>();
   private readonly openings = new Map<string, Promise<RuntimeSession>>();
   private readonly pendingRuns = new Set<string>();
   private readonly deleting = new Set<string>();
@@ -44,6 +45,7 @@ export class SessionRegistry {
     this.interactions = new InteractionManager(undefined, policyCommit);
   }
 
+
   async initialize(): Promise<void> {
     await this.references.initialize();
     for (const reference of this.references.list().items) {
@@ -53,6 +55,7 @@ export class SessionRegistry {
         createdAt: reference.createdAt, updatedAt: reference.updatedAt,
         epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null,
       }) });
+      for (const child of this.references.listSubagents(reference.rootSessionId)) this.subagents.set(child.subagentId, child);
     }
   }
 
@@ -95,6 +98,11 @@ export class SessionRegistry {
 
 
   runtime(sessionId: string): RuntimeSession {
+    const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
+    if (child) {
+      const root = this.runtime(child.rootSessionId);
+      return RuntimeSessionSchema.parse({ ...root, sessionId: child.childSessionId, rootSessionId: child.rootSessionId, runtimeStatus: child.status === 'running' ? 'running' : 'idle', activeRunId: null });
+    }
     const entry = this.get(sessionId);
     if (entry.state === 'unloaded') return structuredClone(entry.runtime);
     if (!entry.opened) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
@@ -111,6 +119,28 @@ export class SessionRegistry {
       items.push(this.runtime(id));
     }
     return { items, errors: references.errors };
+  }
+
+  async onSubagent(rootSessionId: string, _generation: string, input: { subagentId: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; solutionSpace?: string; sessionFile?: string }): Promise<void> {
+    const entry = this.entries.get(rootSessionId);
+    if (!entry || entry.state === 'unloaded' || !input.sessionFile) return;
+    let childSessionId: string;
+    try {
+      const manager = await SessionManager.open(input.sessionFile, entry.input.sessionsDirectory, undefined, { initialCwd: entry.input.cwd, throwIfMissing: true });
+      childSessionId = manager.getSessionId();
+      await manager.close();
+    } catch { return; }
+    const status: Subagent['status'] = input.status === 'started' ? 'running' : input.status === 'aborted' ? 'failed' : input.status;
+    const record = { subagentId: input.subagentId, parentSessionId: rootSessionId, childSessionId, role: input.role, ...(input.solutionSpace ? { solutionSpace: input.solutionSpace } : {}), status, rootSessionId, workspaceId: entry.input.workspaceId, projectId: entry.input.projectId, sessionFile: input.sessionFile };
+    this.subagents.set(input.subagentId, record);
+    await this.references.putSubagent(record);
+  }
+
+  listSubagents(sessionId: string): Subagent[] {
+    const root = this.entries.has(sessionId) ? sessionId : [...this.subagents.values()].find(record => record.childSessionId === sessionId)?.rootSessionId;
+    if (!root) throw new WorkerOperationError(404, 'SESSION_NOT_FOUND');
+    this.get(root);
+    return [...this.subagents.values()].filter(record => record.rootSessionId === root).map(({ rootSessionId: _root, workspaceId: _workspace, sessionFile: _file, ...publicRecord }) => SubagentSchema.parse(publicRecord));
   }
 
   journal(sessionId: string): SessionJournal {
@@ -357,6 +387,12 @@ export class SessionRegistry {
 
   async history(request: HistoryPageRequest) {
     this.ensureOpen();
+    const child = [...this.subagents.values()].find(record => record.childSessionId === request.sessionId);
+    if (child) {
+      const manager = await SessionManager.open(child.sessionFile, undefined, undefined, { initialCwd: dirname(child.sessionFile), throwIfMissing: true });
+      try { return new WorkerProjection(manager, child.childSessionId).history(request); }
+      finally { await manager.close(); }
+    }
     this.get(request.sessionId);
     const result = await this.workers.request(request.sessionId, { type: 'history', request });
     if (result.type !== 'history') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
@@ -388,6 +424,8 @@ export class SessionRegistry {
       if (result.type !== 'delete') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
       // The SDK deletion is authoritative even if reference cleanup later fails.
       for (const id of result.deletedSessionIds) this.entries.delete(id);
+      for (const [subagentId, record] of this.subagents) if (record.rootSessionId === sessionId || result.deletedSessionIds.includes(record.childSessionId)) this.subagents.delete(subagentId);
+      await this.references.removeSubagents(sessionId);
       this.interactions.closeSession(sessionId);
       journal.close();
       await this.workers.stop(sessionId);

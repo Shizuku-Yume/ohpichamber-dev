@@ -11,9 +11,8 @@ import type {
   CompletionCancelResult, CompletionResult, HistoryPage, JsonObject, MCPCatalogRead,
   MCPApplyResult, MCPOAuthResult, ModelCatalog, ModelMutationResult, ProblemCode,
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
-  QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck,
-  ShellJob, ShellOutput, ShellSnapshot, ShellStopResult, SkillExpandResult,
-  SkillInstallResult, SkillsApplyResult, SkillsCatalogState, StreamInvalidated,
+  QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
+  ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult, StreamInvalidated,
 } from '@openchamber/agent-contract';
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
@@ -51,7 +50,7 @@ const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port:
 class RequestError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
 }
-const capabilitiesResponse = { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: true, followUpQueue: true, subagents: false, attachments: true, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true } };
+const capabilitiesResponse = { version: '1.0.0', engine: 'omp', capabilities: { streaming: true, casApprovals: true, midTurnSteering: true, followUpQueue: true, subagents: true, attachments: true, models: true, providers: true, agents: true, mcp: true, skills: true, statelessCompletion: true, shells: true } };
 type ServiceHealthObservation = Pick<AgentServiceReady, 'engine' | 'version'> & { status: 'ready' | 'starting' };
 type ServiceResponse =
   | ServiceHealthObservation
@@ -60,7 +59,7 @@ type ServiceResponse =
   | AgentServiceReady
   | z.infer<typeof HostAuthorizationScopeSchema | typeof HostWorkspaceRegisteredSchema | typeof HostSessionRelocationPreparedSchema | typeof HostSessionRelocationFinalizedSchema | typeof HostSessionRelocationPendingSchema>
   | WorkerInfo | { workers: RegisteredWorkerInfo[] }
-  | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck | SessionForkResult | NativeEntryResult
+  | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck | SessionForkResult | NativeEntryResult | Subagent[]
   | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run }
   | SteerAck | FollowUpAck
   | SessionBranchResult
@@ -133,6 +132,7 @@ export class AgentService {
         onEvents: (...args) => this.sessions.onEvents(...args),
         onInteraction: (...args) => this.sessions.onInteraction(...args),
         onExit: (...args) => { this.sessions.onExit(...args); this.catalog.retire(args[0], args[1]); },
+        onSubagent: (...args) => { void this.sessions.onSubagent(...args); },
       },
     });
     this.workspaceCatalogs = new WorkspaceCatalogs(options.stateDirectory, this.workers);
@@ -398,6 +398,12 @@ export class AgentService {
         const workspaceId = EntityIdSchema.safeParse(url.searchParams.get('workspaceId'));
         if (!workspaceId.success) throw new RequestError(400, 'INVALID_REQUEST', 'Workspace identity is required');
         respondJson(response, 200, this.sessions.list(workspaceId.data)); return;
+      }
+      const subagents = /^\/api\/agent\/v1\/subagents$/.exec(url.pathname);
+      if (subagents && request.method === 'GET') {
+        const sessionId = EntityIdSchema.safeParse(url.searchParams.get('sessionId'));
+        if (!sessionId.success) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity is required');
+        respondJson(response, 200, this.sessions.listSubagents(sessionId.data)); return;
       }
       const privateEntry = /^\/internal\/sessions\/([^/]+)\/native-entry\/([^/]+)$/.exec(url.pathname);
       if (privateEntry && request.method === 'GET') { respondJson(response, 200, await this.sessions.resolveNativeEntry(identity(privateEntry[1]), identity(privateEntry[2]))); return; }
