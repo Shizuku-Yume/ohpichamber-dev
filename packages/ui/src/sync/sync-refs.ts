@@ -5,7 +5,6 @@
  * session-actions) use them to read child-store domain data without hooks.
  */
 
-import type { OpenCodeClient } from "@opencode/client"
 import type { Config } from "@/lib/opencode/model"
 import type { ChildStoreManager } from "./child-store"
 import { getSessionMaterializationStatus } from "./materialization"
@@ -21,7 +20,6 @@ let cachedSessionsById = new Map<string, State["session"][number]>()
 let cachedSessionDirectoryById = new Map<string, string>()
 
 export function setSyncRefs(
-  _sdk: OpenCodeClient,
   childStores: ChildStoreManager,
   directory: string,
   registerSessionDirectory?: (sessionID: string, directory: string) => void,
@@ -60,7 +58,7 @@ export function getDirectoryState(directory?: string): State | undefined {
   return stores.getState(dir)
 }
 
-/** Read resolved OpenCode config from a directory child store, if bootstrapped. */
+/** Read resolved Host config from a directory child store, if bootstrapped. */
 export function getSyncConfig(directory?: string): Config | undefined {
   const config = getDirectoryState(directory)?.config
   return config && Object.keys(config).length > 0 ? config : undefined
@@ -111,9 +109,9 @@ export function getAllSyncSessionMap(): ReadonlyMap<string, State["session"][num
     const sessions = store.getState().session
     nextSlices.set(directory, sessions)
     for (const session of sessions) {
-      if (!session?.id) continue
-      nextSessionsById.set(session.id, session)
-      nextDirectoriesById.set(session.id, directory)
+      if (!session.sessionId) continue
+      nextSessionsById.set(session.sessionId, session)
+      nextDirectoriesById.set(session.sessionId, directory)
     }
   }
   cachedSessionManager = stores
@@ -123,17 +121,8 @@ export function getAllSyncSessionMap(): ReadonlyMap<string, State["session"][num
   return cachedSessionsById
 }
 
-/**
- * Directory of a child store that holds this session.
- *
- * This reports containment, not ownership, and a session can be held by more
- * than one store: a project's session list includes the sessions of its
- * worktrees so the sidebar can group them, so the parent repository holds
- * worktree sessions too. Ownership comes from the session record's own
- * directory; this is the fallback for a record that carries none. Returns
- * `null` when no initialized child store contains the session, which means
- * "unknown", never "no directory".
- */
+/** Native workspace ownership is registered by the directory loader and actions.
+ * A child store is a directory-scoped owner; public records contain no Host path. */
 export function getSyncSessionDirectory(sessionId: string): string | null {
   if (!sessionId) return null
   getAllSyncSessionMap()
@@ -152,10 +141,6 @@ export function getSyncSessionMaterializationStatus(sessionId: string, directory
   return getSessionMaterializationStatus(state, sessionId)
 }
 
-/** Read parts for a message from current directory's child store */
-export function getSyncParts(messageId: string, directory?: string) {
-  return getDirectoryState(directory)?.part[messageId] ?? []
-}
 
 /** Read session status from current directory's child store */
 export function getSyncSessionStatus(sessionId: string, directory?: string) {

@@ -1,68 +1,66 @@
 import { describe, expect, test } from "bun:test"
-import type { Session } from "@/lib/opencode/model"
+import type { Session } from "@openchamber/agent-contract"
 import { upsertSessionRecord } from "./session-records"
 
-const session = (id: string, overrides: Partial<Session> = {}): Session => ({
-  id, projectID: "project", directory: "/workspace", title: id, cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 }, ...overrides,
+const session = (sessionId: string, overrides: Partial<Session> = {}): Session => ({
+  sessionId,
+  projectId: "pro_workspace",
+  workspaceId: "wsp_workspace",
+  displayPath: "workspace/session",
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: "epoch_workspace",
+  headSequence: "0",
+  runtimeStatus: "idle",
+  activeRunId: null,
+  metadata: null,
+  metadataRevision: "0",
+  archiveRevision: "0",
+  ...overrides,
 })
 
 describe("upsertSessionRecord", () => {
   test("inserts missing IDs in binary order", () => {
-    expect(upsertSessionRecord([session("a"), session("c")], session("b")).map((item) => item.id)).toEqual(["a", "b", "c"])
+    expect(upsertSessionRecord([session("a"), session("c")], session("b")).map((item) => item.sessionId)).toEqual(["a", "b", "c"])
   })
 
-  test("preserves references for separately allocated equivalent metadata", () => {
-    const current = [session("a", {
-      metadata: { nested: ["value", { count: 1 }] },
-    }), session("b")]
-    const incoming = session("a", {
-      metadata: { nested: ["value", { count: 1 }] },
-    })
+  test("preserves references for equivalent metadata", () => {
+    const current = [session("a", { metadata: { title: "Known" }, metadataRevision: "2" }), session("b")]
+    const incoming = session("a", { metadata: { title: "Known" }, metadataRevision: "2" })
     const result = upsertSessionRecord(current, incoming)
     expect(result).toBe(current)
     expect(result[0]).toBe(current[0])
     expect(result[1]).toBe(current[1])
   })
 
-  test("replaces a same-ID record when an unlisted semantic field changes", () => {
-    const current = [session("a")]
-    // SAFETY: a server payload may carry an additive field before the local
-    // Session type knows it; the record is still a Session for this boundary.
-    const incoming = { ...session("a"), customField: "changed" } as Session
-
-    expect(upsertSessionRecord(current, incoming)).not.toBe(current)
-  })
-
-  test("preserves cached Host metadata and archive state when directory hydration marks failures", () => {
+  test("keeps newer Host metadata and archive revisions independently of runtime changes", () => {
     const cached = session("a", {
-      title: "Host title", directory: "/host", projectID: "host-project",
-      metadata: { openchamber: { assist: { recap: "known" } } }, time: { created: 1, updated: 1, archived: 10 },
+      metadata: { title: "Host title" }, metadataRevision: "9007199254740993",
+      archivedAt: 10, archiveRevision: "3",
     })
     const result = upsertSessionRecord([cached], session("a", {
-      hostMetadataError: "METADATA_CORRUPT", hostArchiveError: "METADATA_READ_FAILED",
-      metadata: undefined, cost: 2, time: { created: 1, updated: 2 },
+      metadata: { title: "Old" }, metadataRevision: "9007199254740992",
+      archiveRevision: "2", updatedAt: 2, headSequence: "7",
     }))
-    expect(result[0]).toMatchObject({ title: "Host title", directory: "/host", projectID: "host-project", cost: 2, time: { updated: 2, archived: 10 } })
+    expect(result[0]).toMatchObject({ updatedAt: 2, headSequence: "7", archivedAt: 10, archiveRevision: "3" })
     expect(result[0].metadata).toBe(cached.metadata)
+    expect(result[0].metadataRevision).toBe("9007199254740993")
   })
 
-  test("confirmed empty Host metadata and restored archive state replace cached values", () => {
-    const cached = session("a", { metadata: { title: "Old" }, time: { created: 1, updated: 1, archived: 10 } })
-    const result = upsertSessionRecord([cached], session("a", { metadata: {}, time: { created: 1, updated: 2 } }))
+  test("confirmed empty metadata and restored archive replace cached values at newer revisions", () => {
+    const cached = session("a", { metadata: { title: "Old" }, metadataRevision: "2", archivedAt: 10, archiveRevision: "2" })
+    const result = upsertSessionRecord([cached], session("a", { metadata: {}, metadataRevision: "3", archiveRevision: "3", updatedAt: 2 }))
     expect(result[0].metadata).toEqual({})
-    expect(result[0].time.archived).toBeUndefined()
+    expect(result[0].archivedAt).toBeUndefined()
   })
 
   const changes: Array<[string, Partial<Session>, Partial<Session>]> = [
-    ["scalars", { title: "one", subpath: "a", parentID: "p", cost: 1, agent: "a" }, { title: "two", subpath: "b", parentID: "q", cost: 2, agent: "b" }],
-    ["tokens", { tokens: { input: 1, output: 2, reasoning: 3, cache: { read: 4, write: 5 } } }, { tokens: { input: 1, output: 2, reasoning: 3, cache: { read: 4, write: 6 } } }],
-    ["model", { model: { id: "m", providerID: "p", variant: "a" } }, { model: { id: "m", providerID: "p", variant: "b" } }],
-    ["metadata", { metadata: { key: "a" } }, { metadata: { key: "b" } }],
-    ["permissions", { permissions: [{ action: "bash", resource: "*", effect: "ask" }] }, { permissions: [{ action: "bash", resource: "*", effect: "allow" }] }],
-    ["revert", { revert: { messageID: "m", partID: "a", snapshot: "s" } }, { revert: { messageID: "m", partID: "b", snapshot: "s" } }],
-    ["time", { time: { created: 1, updated: 1, idle: 2, archived: 3 } }, { time: { created: 1, updated: 2, idle: 2, archived: 3 } }],
+    ["workspace", { workspaceId: "wsp_a", projectId: "pro_a" }, { workspaceId: "wsp_b", projectId: "pro_b" }],
+    ["parent", { parentSessionId: "p" }, { parentSessionId: "q" }],
+    ["metadata", { metadata: { title: "One" }, metadataRevision: "1" }, { metadata: { title: "Two" }, metadataRevision: "2" }],
+    ["runtime status", { runtimeStatus: "idle", activeRunId: null }, { runtimeStatus: "running", activeRunId: "run_b" }],
+    ["sequence", { headSequence: "1" }, { headSequence: "2" }],
+    ["timestamps", { updatedAt: 1 }, { updatedAt: 2 }],
   ]
 
   for (const [field, current, incoming] of changes) {

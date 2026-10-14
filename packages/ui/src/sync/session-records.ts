@@ -1,5 +1,5 @@
 import { mergeSessionDirectoryMetadata } from "@/stores/globalSessionStructure"
-import type { Session } from "@/lib/opencode/model"
+import type { Session } from "@openchamber/agent-contract"
 import { Binary } from "./binary"
 
 function areSessionsEqual(left: Session, right: Session): boolean {
@@ -7,7 +7,7 @@ function areSessionsEqual(left: Session, right: Session): boolean {
 }
 
 export function upsertSessionRecord(current: Session[], incoming: Session): Session[] {
-  const result = Binary.search(current, incoming.id, (session) => session.id)
+  const result = Binary.search(current, incoming.sessionId, (session) => session.sessionId)
   if (!result.found) return [...current.slice(0, result.index), incoming, ...current.slice(result.index)]
   const merged = mergeSessionDirectoryMetadata(incoming, current[result.index])
   // Equivalent authoritative detail must retain sidebar session-list references.

@@ -13,14 +13,12 @@ export type LastSessionRestoreResult =
     | 'failed';
 
 /**
- * The session load resolves even when the server could not be read (OpenCode
- * still starting, a network error): it then returns the cached or fallback
- * list and marks the store `error`. Only a completed load may say a session is
- * gone.
+ * A failed or partial native discovery retains the pointer. Only a completed
+ * current-runtime global snapshot may prove that a session is gone.
  */
 const isSessionListAuthoritative = (): boolean => {
     const { hasLoaded, status } = useGlobalSessionsStore.getState();
-    return hasLoaded && status !== 'error';
+    return hasLoaded && status === 'ready';
 };
 
 const loadSessionList = (refresh: boolean) =>
@@ -49,7 +47,7 @@ export const restoreLastActiveSession = async (options: {
     if (getRuntimeKey() !== runtimeKey) return 'none';
     if (!snapshot || !isSessionListAuthoritative()) return 'failed';
 
-    const session = snapshot.activeSessions.find((entry) => entry.id === persisted.sessionId);
+    const session = snapshot.activeSessions.find((entry) => entry.sessionId === persisted.sessionId);
     if (!session) {
         // The authoritative list says it is gone (deleted or archived): drop
         // the stale pointer instead of retrying it on every launch.
@@ -62,7 +60,7 @@ export const restoreLastActiveSession = async (options: {
         return 'none';
     }
     void latest.setCurrentSession(
-        session.id,
+        session.sessionId,
         resolveGlobalSessionDirectory(session) ?? persisted.directory ?? undefined,
     );
     return 'restored';
@@ -73,7 +71,7 @@ type ReopenedSession = { readonly runtimeKey: string; readonly sessionId: string
 /**
  * Selects the last session at once, before the session list confirms it, so
  * the launch never shows the automatic draft first. Needs the session's
- * directory without asking OpenCode: the pointer's own, or the persisted
+ * directory without asking the runtime: the pointer's own, or the persisted
  * session list's. Returns null when it selected nothing.
  */
 const reopenLastActiveSession = (): ReopenedSession | null => {
@@ -102,11 +100,11 @@ const confirmReopenedSession = async (reopened: ReopenedSession): Promise<LastSe
 
     const latest = useSessionUIStore.getState();
     const stillOpen = latest.currentSessionId === reopened.sessionId;
-    const session = snapshot.activeSessions.find((entry) => entry.id === reopened.sessionId);
+    const session = snapshot.activeSessions.find((entry) => entry.sessionId === reopened.sessionId);
     if (session) {
         const directory = normalizePath(resolveGlobalSessionDirectory(session));
         if (stillOpen && directory && directory !== latest.currentSessionDirectory) {
-            void latest.setCurrentSession(session.id, directory);
+            void latest.setCurrentSession(session.sessionId, directory);
         }
         return 'restored';
     }

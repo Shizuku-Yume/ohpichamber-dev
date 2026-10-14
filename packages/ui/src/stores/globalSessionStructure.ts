@@ -1,5 +1,7 @@
-import type { Session } from '@/lib/opencode/model';
-import { normalizePath } from '@/lib/pathNormalization';
+import type { Session } from '@openchamber/agent-contract';
+import { resolveWorkspaceDirectory } from './globalSessions';
+
+export { mergeSessionDirectoryMetadata } from './globalSessions';
 
 export type GlobalSessionStructure = {
   activeSessionIds: readonly string[];
@@ -14,114 +16,16 @@ export type GlobalSessionStructureMutation = {
   next: Session | null;
 };
 
-type SessionLocation = {
-  directory: string | null;
-  parentId: string | null;
-};
+type SessionLocation = { directory: string | null; parentId: string | null };
+type BucketChange = { additions: Set<string>; removals: Set<string> };
 
-type BucketChange = {
-  additions: Set<string>;
-  removals: Set<string>;
-};
+export const resolveGlobalSessionDirectory = (session: Session): string | null => resolveWorkspaceDirectory(session.workspaceId);
 
-type SessionIndexFields = {
-  directory?: string | null;
-  parentID?: string | null;
-  projectID?: string | null;
-  project?: { id?: string | null; worktree?: string | null } | null;
-};
-
-const indexFields = (session: Session): Session & SessionIndexFields => {
-  // SAFETY: OpenCode session payloads expose these stable fields even though the SDK base Session omits them.
-  return session as Session & SessionIndexFields;
-};
-
-const parentIdOf = (session: Session): string | null => (
-  indexFields(session).parentID ?? null
-);
-
-export const resolveGlobalSessionDirectory = (session: Session): string | null => {
-  const record = indexFields(session);
-
-  return normalizePath(record.directory ?? null)
-    ?? normalizePath(record.project?.worktree ?? null);
-};
-
-export const mergeSessionDirectoryMetadata = (incoming: Session, existing?: Session | null): Session => {
-  if (!existing) return incoming;
-
-  const incomingRecord = indexFields(incoming);
-  const existingRecord = indexFields(existing);
-  const incomingDirectory = normalizePath(incomingRecord.directory ?? null);
-  const incomingWorktree = normalizePath(incomingRecord.project?.worktree ?? null);
-  const existingDirectory = normalizePath(existingRecord.directory ?? null);
-  const existingWorktree = normalizePath(existingRecord.project?.worktree ?? null);
-  const incomingProjectIdentity = incomingRecord.projectID ?? incomingRecord.project?.id ?? null;
-  const existingProjectIdentity = existingRecord.projectID ?? existingRecord.project?.id ?? null;
-  const projectIdentitiesConflict = Boolean(
-    incomingProjectIdentity
-    && existingProjectIdentity
-    && incomingProjectIdentity !== existingProjectIdentity,
-  );
-  let changed = false;
-  const next: typeof incomingRecord = { ...incomingRecord };
-  const preserveHostMetadata = existing.metadataRevision !== undefined && (
-    incoming.metadataRevision === undefined
-    || incoming.metadataRevision.length < existing.metadataRevision.length
-    || (incoming.metadataRevision.length === existing.metadataRevision.length && incoming.metadataRevision < existing.metadataRevision)
-  );
-
-  if (incoming.hostMetadataError || preserveHostMetadata) {
-    next.title = existing.title;
-    next.metadata = existing.metadata;
-    next.metadataRevision = existing.metadataRevision;
-    next.directory = existingRecord.directory;
-    next.projectID = existingRecord.projectID;
-    next.project = existingRecord.project;
-    changed = true;
+const locationOf = (session: Session | null): SessionLocation | null => (
+  session === null || session.archivedAt !== undefined ? null : {
+    directory: resolveGlobalSessionDirectory(session),
+    parentId: session.parentSessionId ?? null,
   }
-  if (incoming.hostArchiveError) {
-    next.time = { ...incoming.time, archived: existing.time?.archived };
-    changed = true;
-  }
-  if (!incomingDirectory && existingDirectory) {
-    next.directory = existingRecord.directory;
-    changed = true;
-  }
-  if (!projectIdentitiesConflict && !incomingWorktree && existingWorktree) {
-    next.project = {
-      ...(existingRecord.project ?? {}),
-      ...(incomingRecord.project ?? {}),
-      worktree: existingRecord.project?.worktree,
-    };
-    changed = true;
-  } else if (!projectIdentitiesConflict && !incomingRecord.project && existingRecord.project) {
-    next.project = existingRecord.project;
-    changed = true;
-  }
-  if (!projectIdentitiesConflict && !incomingRecord.projectID && existingRecord.projectID) {
-    next.projectID = existingRecord.projectID;
-    changed = true;
-  }
-  if (!projectIdentitiesConflict && incomingRecord.project && !incomingRecord.project.id && existingRecord.project?.id) {
-    next.project = {
-      ...(next.project ?? incomingRecord.project),
-      id: existingRecord.project.id,
-    };
-    changed = true;
-  }
-
-  return changed ? next : incoming;
-};
-
-const locationOf = (session: Session): SessionLocation | null => session.time?.archived ? null : ({
-  directory: resolveGlobalSessionDirectory(session),
-  parentId: parentIdOf(session),
-});
-
-const sameLocation = (left: SessionLocation, right: SessionLocation): boolean => (
-  left.directory === right.directory
-  && left.parentId === right.parentId
 );
 
 const appendToBucket = (buckets: Map<string, string[]>, key: string, sessionId: string): void => {
@@ -130,43 +34,23 @@ const appendToBucket = (buckets: Map<string, string[]>, key: string, sessionId: 
   else buckets.set(key, [sessionId]);
 };
 
-export const buildGlobalSessionStructure = (
-  activeSessions: readonly Session[],
-): GlobalSessionStructure => {
+export const buildGlobalSessionStructure = (activeSessions: readonly Session[]): GlobalSessionStructure => {
+  const activeSessionIds: string[] = [];
   const activeRootIds: string[] = [];
   const activeChildrenByParentId = new Map<string, string[]>();
   const activeIdsByDirectory = new Map<string, string[]>();
-
-  const index = (
-    session: Session,
-    roots: string[],
-    children: Map<string, string[]>,
-    directories: Map<string, string[]>,
-  ): void => {
+  for (const session of activeSessions) {
     const location = locationOf(session);
-    if (!location) return;
-    if (location.parentId) appendToBucket(children, location.parentId, session.id);
-    else roots.push(session.id);
-    if (location.directory) appendToBucket(directories, location.directory, session.id);
-  };
-
-  for (const session of activeSessions) index(session, activeRootIds, activeChildrenByParentId, activeIdsByDirectory);
-
-  return {
-    activeSessionIds: activeSessions.map((session) => session.id),
-    activeRootIds,
-    activeChildrenByParentId,
-    activeIdsByDirectory,
-  };
+    if (!location) continue;
+    activeSessionIds.push(session.sessionId);
+    if (location.parentId) appendToBucket(activeChildrenByParentId, location.parentId, session.sessionId);
+    else activeRootIds.push(session.sessionId);
+    if (location.directory) appendToBucket(activeIdsByDirectory, location.directory, session.sessionId);
+  }
+  return { activeSessionIds, activeRootIds, activeChildrenByParentId, activeIdsByDirectory };
 };
 
-const recordBucketChange = (
-  changes: Map<string, BucketChange>,
-  key: string,
-  sessionId: string,
-  operation: 'add' | 'remove',
-): void => {
-  const change = changes.get(key) ?? { additions: new Set<string>(), removals: new Set<string>() };
+const recordChange = (change: BucketChange, sessionId: string, operation: 'add' | 'remove'): void => {
   if (operation === 'add') {
     change.removals.delete(sessionId);
     change.additions.delete(sessionId);
@@ -175,27 +59,26 @@ const recordBucketChange = (
     change.additions.delete(sessionId);
     change.removals.add(sessionId);
   }
+};
+
+const recordBucketChange = (
+  changes: Map<string, BucketChange>, key: string, sessionId: string, operation: 'add' | 'remove',
+): void => {
+  const change = changes.get(key) ?? { additions: new Set<string>(), removals: new Set<string>() };
+  recordChange(change, sessionId, operation);
   changes.set(key, change);
 };
 
-const applyListChange = (
-  source: readonly string[],
-  change: BucketChange,
-): readonly string[] => {
+const applyListChange = (source: readonly string[], change: BucketChange): readonly string[] => {
   if (change.additions.size === 0 && change.removals.size === 0) return source;
   const additions = [...change.additions].reverse();
-  const added = new Set(additions);
-  const retained = source.filter((id) => !change.removals.has(id) && !added.has(id));
-  const next = [...additions, ...retained];
-  if (next.length === source.length && next.every((id, index) => id === source[index])) return source;
-  return next;
+  const next = [...additions, ...source.filter((id) => !change.removals.has(id) && !change.additions.has(id))];
+  return next.length === source.length && next.every((id, index) => id === source[index]) ? source : next;
 };
 
 const applyBucketChanges = (
-  source: ReadonlyMap<string, readonly string[]>,
-  changes: Map<string, BucketChange>,
+  source: ReadonlyMap<string, readonly string[]>, changes: Map<string, BucketChange>,
 ): ReadonlyMap<string, readonly string[]> => {
-  if (changes.size === 0) return source;
   let next: Map<string, readonly string[]> | null = null;
   for (const [key, change] of changes) {
     const previous = source.get(key) ?? [];
@@ -209,53 +92,38 @@ const applyBucketChanges = (
 };
 
 export const applyGlobalSessionStructureMutations = (
-  structure: GlobalSessionStructure,
-  mutations: readonly GlobalSessionStructureMutation[],
+  structure: GlobalSessionStructure, mutations: readonly GlobalSessionStructureMutation[],
 ): GlobalSessionStructure => {
-  const activeRoots: BucketChange = { additions: new Set(), removals: new Set() };
-  const activeSessions: BucketChange = { additions: new Set(), removals: new Set() };
-  const activeChildren = new Map<string, BucketChange>();
-  const activeDirectories = new Map<string, BucketChange>();
-
-  const record = (location: SessionLocation, sessionId: string, operation: 'add' | 'remove'): void => {
-    if (operation === 'add') {
-      activeSessions.removals.delete(sessionId);
-      activeSessions.additions.delete(sessionId);
-      activeSessions.additions.add(sessionId);
-    } else {
-      activeSessions.additions.delete(sessionId);
-      activeSessions.removals.add(sessionId);
-    }
-    if (location.parentId) recordBucketChange(activeChildren, location.parentId, sessionId, operation);
-    else if (operation === 'add') {
-      activeRoots.removals.delete(sessionId);
-      activeRoots.additions.delete(sessionId);
-      activeRoots.additions.add(sessionId);
-    } else {
-      activeRoots.additions.delete(sessionId);
-      activeRoots.removals.add(sessionId);
-    }
-    if (location.directory) recordBucketChange(activeDirectories, location.directory, sessionId, operation);
-  };
-
+  const members: BucketChange = { additions: new Set(), removals: new Set() };
+  const roots: BucketChange = { additions: new Set(), removals: new Set() };
+  const children = new Map<string, BucketChange>();
+  const directories = new Map<string, BucketChange>();
   for (const mutation of mutations) {
-    const previousLocation = mutation.previous ? locationOf(mutation.previous) : null;
-    const nextLocation = mutation.next ? locationOf(mutation.next) : null;
-    if (previousLocation && nextLocation && sameLocation(previousLocation, nextLocation)) continue;
-    if (previousLocation) record(previousLocation, mutation.sessionId, 'remove');
-    if (nextLocation) record(nextLocation, mutation.sessionId, 'add');
+    const previous = locationOf(mutation.previous);
+    const next = locationOf(mutation.next);
+    if (previous === null && next === null) continue;
+    if (previous === null) recordChange(members, mutation.sessionId, 'add');
+    else if (next === null) recordChange(members, mutation.sessionId, 'remove');
+    if (previous?.parentId !== next?.parentId || (previous === null) !== (next === null)) {
+      if (previous) {
+        if (previous.parentId) recordBucketChange(children, previous.parentId, mutation.sessionId, 'remove');
+        else recordChange(roots, mutation.sessionId, 'remove');
+      }
+      if (next) {
+        if (next.parentId) recordBucketChange(children, next.parentId, mutation.sessionId, 'add');
+        else recordChange(roots, mutation.sessionId, 'add');
+      }
+    }
+    if (previous?.directory !== next?.directory) {
+      if (previous?.directory) recordBucketChange(directories, previous.directory, mutation.sessionId, 'remove');
+      if (next?.directory) recordBucketChange(directories, next.directory, mutation.sessionId, 'add');
+    }
   }
-
-  const next: GlobalSessionStructure = {
-    activeSessionIds: applyListChange(structure.activeSessionIds, activeSessions),
-    activeRootIds: applyListChange(structure.activeRootIds, activeRoots),
-    activeChildrenByParentId: applyBucketChanges(structure.activeChildrenByParentId, activeChildren),
-    activeIdsByDirectory: applyBucketChanges(structure.activeIdsByDirectory, activeDirectories),
-  };
-  return next.activeSessionIds === structure.activeSessionIds
-    && next.activeRootIds === structure.activeRootIds
-    && next.activeChildrenByParentId === structure.activeChildrenByParentId
-    && next.activeIdsByDirectory === structure.activeIdsByDirectory
-    ? structure
-    : next;
+  const activeSessionIds = applyListChange(structure.activeSessionIds, members);
+  const activeRootIds = applyListChange(structure.activeRootIds, roots);
+  const activeChildrenByParentId = applyBucketChanges(structure.activeChildrenByParentId, children);
+  const activeIdsByDirectory = applyBucketChanges(structure.activeIdsByDirectory, directories);
+  if (activeSessionIds === structure.activeSessionIds && activeRootIds === structure.activeRootIds
+    && activeChildrenByParentId === structure.activeChildrenByParentId && activeIdsByDirectory === structure.activeIdsByDirectory) return structure;
+  return { activeSessionIds, activeRootIds, activeChildrenByParentId, activeIdsByDirectory };
 };

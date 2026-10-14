@@ -1,254 +1,147 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from './globalSessions';
+import { isGlobalSessionRecencyOnlyUpdate, resolveGlobalSessionDirectory, useGlobalSessionsStore } from './useGlobalSessionsStore';
 
-import {
-  isGlobalSessionRecencyOnlyUpdate,
-  resolveGlobalSessionDirectory,
-  useGlobalSessionsStore,
-} from './useGlobalSessionsStore';
+const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
+  sessionId, projectId: 'pro_project', workspaceId: 'wsp_repo', displayPath: 'repo',
+  rootSessionId: sessionId, createdAt: 1, updatedAt: 2, epoch: 'epoch', headSequence: '0',
+  runtimeStatus: 'idle', activeRunId: null, metadata: { title: sessionId },
+  metadataRevision: '1', archiveRevision: '0', ...extra,
+});
 
-type SessionExtra = Partial<Session> & {
-  directory?: string | null;
-  project?: { worktree?: string | null } | null;
-};
+beforeEach(() => {
+  useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+  useGlobalSessionsStore.getState().applySnapshot([], [], 'idle');
+  registerWorkspaceDirectory('wsp_repo', '/repo');
+  registerWorkspaceDirectory('wsp_other', '/other');
+});
 
-const buildSession = (title: string, extra: SessionExtra = {}): Session => ({
-  id: 'ses_1',
-  projectID: 'project',
-  directory: '',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  title,
-  time: { created: 1, updated: 2 },
-  ...extra,
-} as Session);
-
-describe('useGlobalSessionsStore', () => {
-  beforeEach(() => {
-    useGlobalSessionsStore.setState({
-      activeSessions: [],
-      archivedSessions: [],
-      sessionsByDirectory: new Map(),
-      entityById: new Map(),
-      structure: {
-        activeSessionIds: [],
-        activeRootIds: [],
-        activeChildrenByParentId: new Map(),
-        activeIdsByDirectory: new Map(),
-      },
-      hasLoaded: false,
-      status: 'idle',
-    });
+describe('native global session mutations', () => {
+  test('keeps Host titles in metadata and updates the native entity', () => {
+    useGlobalSessionsStore.getState().upsertSession(session('ses_one'));
+    useGlobalSessionsStore.getState().upsertSession(session('ses_one', { metadata: { title: 'Renamed' }, metadataRevision: '2' }));
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_one')?.metadata?.title).toBe('Renamed');
   });
 
-  test('updates an existing session when its title changes', () => {
-    useGlobalSessionsStore.getState().upsertSession(buildSession('First'));
-    useGlobalSessionsStore.getState().upsertSession(buildSession('Second'));
-
-    expect(useGlobalSessionsStore.getState().activeSessions[0]?.title).toBe('Second');
+  test('resolves directories only from authorized workspace bindings', () => {
+    const record = session('ses_one', { displayPath: 'not-an-absolute-directory' });
+    useGlobalSessionsStore.getState().upsertSession(record);
+    expect(resolveGlobalSessionDirectory(record)).toBe('/repo');
+    expect(resolveGlobalSessionDirectory({ ...record, workspaceId: 'wsp_unknown' })).toBeNull();
   });
 
-  test('preserves directory metadata when a live update omits it', () => {
-    useGlobalSessionsStore.getState().upsertSession(buildSession('Session A', { directory: '/repo/app' }));
-    useGlobalSessionsStore.getState().upsertSession(buildSession('Session B', {
-      time: { created: 1, updated: 3 },
-    }));
-
-    const session = useGlobalSessionsStore.getState().activeSessions[0];
-    expect(resolveGlobalSessionDirectory(session)).toBe('/repo/app');
-    expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/app')?.[0]?.id).toBe('ses_1');
+  test('indexes a directory binding which arrives after the session', () => {
+    useGlobalSessionsStore.getState().upsertSession(session('ses_late', { workspaceId: 'wsp_late' }));
+    registerWorkspaceDirectory('wsp_late', '/late');
+    const state = useGlobalSessionsStore.getState();
+    expect(state.sessionsByDirectory.get('/late')?.map((item) => item.sessionId)).toEqual(['ses_late']);
+    expect(state.structure.activeIdsByDirectory.get('/late')).toEqual(['ses_late']);
   });
 
-  test('preserves raw directory metadata when a live update only has project worktree', () => {
-    useGlobalSessionsStore.getState().upsertSession(buildSession('Session A', { directory: '/repo/app' }));
-    useGlobalSessionsStore.getState().upsertSession(buildSession('Session B', {
-      project: { worktree: '/repo/app' },
-      time: { created: 1, updated: 3 },
-    }));
-
-    const session = useGlobalSessionsStore.getState().activeSessions[0] as Session & { directory?: string | null };
-    expect(session.directory).toBe('/repo/app');
-    expect(resolveGlobalSessionDirectory(session)).toBe('/repo/app');
+  test('moves a native workspace without retaining an obsolete directory', () => {
+    const record = session('ses_one');
+    useGlobalSessionsStore.getState().upsertSession(record);
+    useGlobalSessionsStore.getState().upsertSession({ ...record, workspaceId: 'wsp_other' });
+    const state = useGlobalSessionsStore.getState();
+    expect(state.sessionsByDirectory.has('/repo')).toBe(false);
+    expect(state.sessionsByDirectory.get('/other')?.[0]?.sessionId).toBe('ses_one');
   });
 
-  test('trusts explicit incoming raw directory metadata', () => {
-    useGlobalSessionsStore.getState().upsertSession(buildSession('Session A', { directory: '/repo/app' }));
-    useGlobalSessionsStore.getState().upsertSession(buildSession('Session B', {
-      directory: '/repo/app-worktree',
-      time: { created: 1, updated: 3 },
-    }));
-
-    expect(resolveGlobalSessionDirectory(useGlobalSessionsStore.getState().activeSessions[0])).toBe('/repo/app-worktree');
-    expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/app')).toBe(undefined);
-    expect(useGlobalSessionsStore.getState().sessionsByDirectory.get('/repo/app-worktree')?.[0]?.id).toBe('ses_1');
-  });
-
-  test('preserves directory metadata when moving a session to archived', () => {
-    useGlobalSessionsStore.getState().upsertSession(buildSession('Session A', { directory: '/repo/app' }));
-    useGlobalSessionsStore.getState().upsertSession(buildSession('Session B', {
-      time: { created: 1, updated: 3, archived: 4 },
-    }));
-
+  test('archives and restores without legacy zero timestamps', () => {
+    const record = session('ses_one');
+    useGlobalSessionsStore.getState().upsertSession(record);
+    useGlobalSessionsStore.getState().archiveSessions(['ses_one'], 0);
     expect(useGlobalSessionsStore.getState().activeSessions).toEqual([]);
-    expect(resolveGlobalSessionDirectory(useGlobalSessionsStore.getState().archivedSessions[0])).toBe('/repo/app');
+    expect(useGlobalSessionsStore.getState().archivedSessions[0]?.archivedAt).toBe(0);
+    useGlobalSessionsStore.getState().upsertSession({ ...record, archiveRevision: '2' });
+    expect(useGlobalSessionsStore.getState().archivedSessions).toEqual([]);
+    expect(useGlobalSessionsStore.getState().activeSessions[0]?.sessionId).toBe('ses_one');
   });
 
-  test('preserves the opposite session-list reference during an upsert', () => {
-    const active = buildSession('https://share.example/active');
-    const archived = buildSession('https://share.example/archived', {
-      id: 'ses_archived',
-      time: { created: 1, updated: 2, archived: 3 },
-    });
+  test('preserves opposite list and hierarchy references during entity-only changes', () => {
+    const active = session('ses_active');
+    const archived = session('ses_archived', { archivedAt: 3, archiveRevision: '1' });
     useGlobalSessionsStore.getState().applySnapshot([active], [archived]);
-
-    const archivedSessions = useGlobalSessionsStore.getState().archivedSessions;
-    useGlobalSessionsStore.getState().upsertSession(buildSession('https://share.example/active-updated', {
-      time: { created: 1, updated: 3 },
-    }));
-    expect(useGlobalSessionsStore.getState().archivedSessions).toBe(archivedSessions);
-
-    const activeSessions = useGlobalSessionsStore.getState().activeSessions;
-    const structure = useGlobalSessionsStore.getState().structure;
-    useGlobalSessionsStore.getState().upsertSession({
-      ...archived,
-      time: { created: 1, updated: 4, archived: 3 },
-    });
-    expect(useGlobalSessionsStore.getState().activeSessions).toBe(activeSessions);
-    expect(useGlobalSessionsStore.getState().structure).toBe(structure);
+    const before = useGlobalSessionsStore.getState();
+    useGlobalSessionsStore.getState().upsertSession({ ...active, metadata: { title: 'New' }, metadataRevision: '2' });
+    const after = useGlobalSessionsStore.getState();
+    expect(after.archivedSessions).toBe(before.archivedSessions);
+    expect(after.structure).toBe(before.structure);
+    useGlobalSessionsStore.getState().upsertSession({ ...archived, updatedAt: 4 });
+    expect(useGlobalSessionsStore.getState().activeSessions).toBe(after.activeSessions);
+    expect(useGlobalSessionsStore.getState().structure).toBe(after.structure);
   });
 
-  test('applies a batch of session upserts in one store publication', () => {
+  test('publishes a thousand native children once', () => {
     let publications = 0;
-    const unsubscribe = useGlobalSessionsStore.subscribe(() => {
-      publications += 1;
-    });
-
-    useGlobalSessionsStore.getState().upsertSessions([
-      buildSession('Session A'),
-      buildSession('Session B', { id: 'ses_2' }),
-    ]);
-
-    unsubscribe();
-    expect(useGlobalSessionsStore.getState().activeSessions.map((session) => session.id)).toEqual(['ses_2', 'ses_1']);
-    expect(publications).toBe(1);
-  });
-
-  test('indexes a large batch of subagents in one store publication', () => {
-    const parent = buildSession('https://share.example/parent', { id: 'ses_parent' });
-    const children = Array.from({ length: 1_000 }, (_, index) => buildSession(
-      `https://share.example/child-${index}`,
-      { id: `ses_child_${index}`, parentID: parent.id },
-    ));
-    let publications = 0;
-    const unsubscribe = useGlobalSessionsStore.subscribe(() => {
-      publications += 1;
-    });
-
+    const stop = useGlobalSessionsStore.subscribe(() => { publications += 1; });
+    const parent = session('ses_parent');
+    const children = Array.from({ length: 1_000 }, (_, index) => session(`ses_child_${index}`, { parentSessionId: parent.sessionId, rootSessionId: parent.sessionId }));
     useGlobalSessionsStore.getState().upsertSessions([parent, ...children]);
-
-    unsubscribe();
+    stop();
     const state = useGlobalSessionsStore.getState();
     expect(publications).toBe(1);
-    expect(state.structure.activeRootIds).toEqual([parent.id]);
-    expect(state.structure.activeChildrenByParentId.get(parent.id)?.length).toBe(1_000);
+    expect(state.structure.activeRootIds).toEqual(['ses_parent']);
+    expect(state.structure.activeChildrenByParentId.get('ses_parent')).toHaveLength(1_000);
   });
 
-  test('preserves hierarchy references for entity-only updates', () => {
-    const parent = buildSession('https://share.example/parent', { id: 'ses_parent', directory: '/repo' });
-    const child = buildSession('https://share.example/child', {
-      id: 'ses_child',
-      directory: '/repo',
-      parentID: parent.id,
-    });
-    useGlobalSessionsStore.getState().upsertSessions([parent, child]);
-    const previous = useGlobalSessionsStore.getState();
-    const previousChildren = previous.structure.activeChildrenByParentId.get(parent.id);
-
-    useGlobalSessionsStore.getState().upsertSession({
-      ...child,
-      title: 'Renamed child',
-      time: { ...child.time, updated: 3 },
-    });
-
-    const next = useGlobalSessionsStore.getState();
-    expect(next.structure).toBe(previous.structure);
-    expect(next.structure.activeChildrenByParentId.get(parent.id)).toBe(previousChildren);
-    expect(next.entityById.get(child.id)?.title).toBe('Renamed child');
-  });
-
-  test('updates only affected hierarchy buckets when a session is reparented', () => {
-    const parentA = buildSession('Session A', { id: 'ses_parent_a' });
-    const parentB = buildSession('Session B', { id: 'ses_parent_b' });
-    const parentC = buildSession('https://share.example/c', { id: 'ses_parent_c' });
-    const child = buildSession('https://share.example/child', { id: 'ses_child', parentID: parentA.id });
-    const unrelatedChild = buildSession('https://share.example/other', { id: 'ses_other', parentID: parentC.id });
-    useGlobalSessionsStore.getState().upsertSessions([parentA, parentB, parentC, child, unrelatedChild]);
-    const previous = useGlobalSessionsStore.getState().structure;
-    const unrelatedBucket = previous.activeChildrenByParentId.get(parentC.id);
-
-    useGlobalSessionsStore.getState().upsertSession({ ...child, parentID: parentB.id });
-
-    const next = useGlobalSessionsStore.getState().structure;
-    expect(next).not.toBe(previous);
-    expect(next.activeChildrenByParentId.get(parentA.id)).toBe(undefined);
-    expect([...next.activeChildrenByParentId.get(parentB.id) ?? []]).toEqual([child.id]);
-    expect(next.activeChildrenByParentId.get(parentC.id)).toBe(unrelatedBucket);
+  test('reparents only affected hierarchy buckets', () => {
+    const child = session('ses_child', { parentSessionId: 'ses_a', rootSessionId: 'ses_a' });
+    const unrelated = session('ses_other', { parentSessionId: 'ses_c', rootSessionId: 'ses_c' });
+    useGlobalSessionsStore.getState().upsertSessions([session('ses_a'), session('ses_b'), session('ses_c'), child, unrelated]);
+    const before = useGlobalSessionsStore.getState().structure;
+    useGlobalSessionsStore.getState().upsertSession({ ...child, parentSessionId: 'ses_b', rootSessionId: 'ses_b' });
+    const after = useGlobalSessionsStore.getState().structure;
+    expect(after.activeChildrenByParentId.has('ses_a')).toBe(false);
+    expect(after.activeChildrenByParentId.get('ses_b')).toEqual(['ses_child']);
+    expect(after.activeChildrenByParentId.get('ses_c')).toBe(before.activeChildrenByParentId.get('ses_c'));
   });
 
   test('applies ordered mixed mutations in one publication', () => {
-    const original = buildSession('https://share.example/original', { id: 'ses_original' });
-    useGlobalSessionsStore.getState().upsertSession(original);
+    useGlobalSessionsStore.getState().upsertSession(session('ses_original'));
     let publications = 0;
-    const unsubscribe = useGlobalSessionsStore.subscribe(() => {
-      publications += 1;
-    });
-
+    const stop = useGlobalSessionsStore.subscribe(() => { publications += 1; });
     useGlobalSessionsStore.getState().applySessionMutations([
-      { type: 'upsert', session: buildSession('https://share.example/temporary', { id: 'ses_temporary' }) },
-      { type: 'remove', sessionId: original.id },
+      { type: 'upsert', session: session('ses_temporary') },
+      { type: 'remove', sessionId: 'ses_original' },
       { type: 'remove', sessionId: 'ses_temporary' },
-      { type: 'upsert', session: buildSession('https://share.example/final', { id: 'ses_final' }) },
+      { type: 'upsert', session: session('ses_final') },
     ]);
-
-    unsubscribe();
-    const state = useGlobalSessionsStore.getState();
+    stop();
     expect(publications).toBe(1);
-    expect(state.activeSessions.map((session) => session.id)).toEqual(['ses_final']);
-    expect(state.structure.activeRootIds).toEqual(['ses_final']);
+    expect(useGlobalSessionsStore.getState().structure.activeRootIds).toEqual(['ses_final']);
+  });
+
+  test('records no-op deletions as tombstones', () => {
+    useGlobalSessionsStore.getState().removeSessions(['ses_absent']);
+    const state = useGlobalSessionsStore.getState();
+    expect(state.mutationRevisionBySessionId.get('ses_absent')).toBe(state.mutationRevision);
+    expect(state.mutationRevision).toBeGreaterThan(0);
+  });
+
+  test('does not discard native runtime changes under unchanged Host revisions', () => {
+    const record = session('ses_one');
+    useGlobalSessionsStore.getState().upsertSession(record);
+    useGlobalSessionsStore.getState().upsertSession({ ...record, runtimeStatus: 'running', activeRunId: 'run_one', headSequence: '1' });
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_one')?.runtimeStatus).toBe('running');
+  });
+
+  test('preserves unchanged entities when a sibling changes in a snapshot', () => {
+    const first = session('ses_first');
+    const second = session('ses_second');
+    useGlobalSessionsStore.getState().applySnapshot([first, second], []);
+    useGlobalSessionsStore.getState().applySnapshot([{ ...first }, { ...second, updatedAt: 3 }], []);
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_first')).toBe(first);
   });
 });
 
-describe('isGlobalSessionRecencyOnlyUpdate', () => {
-  test('accepts an updated timestamp while preserving omitted directory metadata', () => {
-    const existing = buildSession('Session', {
-      directory: '/repo/app',
-      time: { created: 1, updated: 2 },
-    });
-    const incoming = buildSession('Session', {
-      time: { created: 1, updated: 3 },
-    });
-
-    expect(isGlobalSessionRecencyOnlyUpdate(existing, incoming)).toBe(true);
-  });
-
-  test('rejects title and archive changes as structural updates', () => {
-    const existing = buildSession('Session', { time: { created: 1, updated: 2 } });
-    const renamed = buildSession('Session', {
-      title: 'Renamed',
-      time: { created: 1, updated: 3 },
-    });
-    const archived = buildSession('Session', {
-      time: { created: 1, updated: 3, archived: 4 },
-    });
-
-    expect(isGlobalSessionRecencyOnlyUpdate(existing, renamed)).toBe(false);
-    expect(isGlobalSessionRecencyOnlyUpdate(existing, archived)).toBe(false);
-  });
-
-  test('rejects a parent change as a structural update', () => {
-    const existing = buildSession('Session', { parentID: 'parent-a', time: { created: 1, updated: 2 } });
-    const reparented = buildSession('Session', { parentID: 'parent-b', time: { created: 1, updated: 3 } });
-
-    expect(isGlobalSessionRecencyOnlyUpdate(existing, reparented)).toBe(false);
+describe('native recency-only detection', () => {
+  test('accepts only an updated timestamp change', () => {
+    const record = session('ses_one');
+    expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3 })).toBe(true);
+    expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, metadata: { title: 'New' } })).toBe(false);
+    expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, archivedAt: 4 })).toBe(false);
+    expect(isGlobalSessionRecencyOnlyUpdate(record, { ...record, updatedAt: 3, parentSessionId: 'ses_parent' })).toBe(false);
   });
 });

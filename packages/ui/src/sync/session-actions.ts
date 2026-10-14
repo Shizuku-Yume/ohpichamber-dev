@@ -19,7 +19,7 @@ import { mergeSessionDirectoryMetadata, resolveGlobalSessionDirectory, useGlobal
 import { useConfigStore } from "@/stores/useConfigStore"
 import { waitForOpenCodeStartup } from "./opencode-startup-gate"
 import { registerSessionDirectory } from "./sync-refs"
-import { useGlobalSessionStatusStore } from "./global-session-status"
+import { useGlobalSessionStatusStore, removeGlobalSessionStatuses } from "./global-session-status"
 import { recordSendFailure } from "./send-failure-log"
 import { draftFromContextPayload, readContextPart, type ContextCarrierPart } from "@/lib/messages/contextParts"
 import { useInlineCommentDraftStore, type InlineCommentDraftTarget } from "@/stores/useInlineCommentDraftStore"
@@ -27,19 +27,16 @@ import { materializeSessionSnapshots } from "./materialization"
 import { sessionEvents } from "@/lib/sessionEvents"
 import { fileTreeChanges } from "@/lib/fileTreeChanges"
 import {
-  getOriginalSessionID,
-  getSessionMetadata,
-  isReviewSession,
   withoutReviewSessionLink,
   type SessionMetadataRecord,
 } from "@/lib/sessionReviewMetadata"
 import { withContextObligatoryMessage, type ContextObligatoryMessage } from "@/lib/contextObligatoryMessages"
-import { getBtwOriginalSessionID, getBtwSessionID, isBtwSession, withoutBtwSessionLink } from "@/lib/sessionBtwMetadata"
+import { withoutBtwSessionLink } from "@/lib/sessionBtwMetadata"
 import { withLinkedIssue, type LinkedIssue } from "@/lib/linkedIssues"
 import { withSessionWorkState, type SessionWork } from "@/lib/sessionWorkMetadata"
 import { getImperativeSessionMessageLoader } from "./session-message-loader"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
-import { requestSessionArchiveBatch, requestSessionMetadataUpdate, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
+import { requestSessionArchiveBatch, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
 import { registerBulkArchiveEchoes, releaseBulkArchiveEchoes } from "./bulk-archive-echo"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { isRelayModeActive } from "@/lib/relay/runtime-tunnel"
@@ -50,12 +47,83 @@ import { normalizePath } from "@/lib/pathNormalization"
 import { mergeMessages } from "./optimistic"
 import { messagesBefore, messagesFrom } from "./message-ordering"
 import { deleteChatDirectory } from "@/lib/chatDirectories"
-import { createChatDraftIdentity } from "@/lib/chatDraftPersistence"
 import { cancelSessionTitleGeneration } from "./session-title-generation"
 import { recordSessionActionFailure } from "./session-action-failures"
-import { applyForkInheritance } from "@/lib/sessionForkInheritance"
-import { getSessionGoal } from "@/lib/sessionGoalMetadata"
+import { withoutSourceOwnedLinks } from "@/lib/sessionForkInheritance"
 import { fetchGoalObjectiveContent, writeGoalObjectiveFile } from "@/lib/goalObjectiveFiles"
+import { canonicalClient, CanonicalApiError } from "@/api/canonicalClient"
+import { SessionMetadataSchema, SessionMetadataPatchSchema, PromptRequestSchema } from "@openchamber/agent-contract"
+import type { Session as CanonicalSession, SessionMetadataState, PromptRequest } from "@openchamber/agent-contract"
+import { installHostSession, installSessionMetadata, installSessionSnapshot } from "./event-reducer"
+import { registerWorkspaceDirectory } from "@/stores/globalSessions"
+
+async function readCanonicalSession(sessionId: string, runtimeKey: string): Promise<CanonicalSession> {
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const snapshot = await canonicalClient.getSession(sessionId)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const metadata = await canonicalClient.getSessionMetadata(sessionId)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (snapshot.session.sessionId !== sessionId || metadata.sessionId !== sessionId) throw new Error("Session response identified another session")
+  let host = getGlobalSessionSnapshot(sessionId) ?? findLiveSession(sessionId)
+  if (!host) {
+    const page = await canonicalClient.listSessions(snapshot.session.workspaceId)
+    if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+    host = page.items.find((session) => session.sessionId === sessionId) ?? null
+    if (!host) throw new Error("Host session projection is unavailable")
+  }
+  return {
+    ...snapshot.session, metadata: metadata.metadata, metadataRevision: metadata.revision,
+    archiveRevision: host.archiveRevision,
+    ...(host.archivedAt === undefined ? {} : { archivedAt: host.archivedAt }),
+  }
+}
+
+function publishCanonicalSession(session: CanonicalSession, directory?: string): void {
+  const ownedDirectory = resolveGlobalSessionDirectory(session) ?? directory
+  if (ownedDirectory) registerSessionDirectory(session.sessionId, ownedDirectory)
+  useGlobalSessionsStore.getState().upsertSession(session)
+  for (const [candidateDirectory, store] of _childStores?.children ?? []) {
+    if (candidateDirectory !== ownedDirectory && !store.getState().session.some((candidate) => candidate.sessionId === session.sessionId)) continue
+    store.setState((state) => {
+      const next = installHostSession(state, session)
+      return next === state ? state : { ...next, ...sessionMutationPatch(state, session.sessionId, false) }
+    })
+  }
+}
+
+function publishCanonicalMetadata(base: CanonicalSession, metadata: SessionMetadataState): CanonicalSession {
+  const current = getGlobalSessionSnapshot(base.sessionId) ?? base
+  const updated = mergeSessionDirectoryMetadata({ ...current, metadata: metadata.metadata, metadataRevision: metadata.revision }, current)
+  useGlobalSessionsStore.getState().upsertSession(updated)
+  for (const store of _childStores?.children.values() ?? []) {
+    store.setState((state) => {
+      const next = installSessionMetadata(state, metadata)
+      return next === state ? state : { ...next, ...sessionMutationPatch(state, base.sessionId, false) }
+    })
+  }
+  return updated
+}
+
+export type SessionSendInput = {
+  sessionId: string
+  request: PromptRequest
+  mode?: "run" | "steer" | "follow-up"
+  runtimeKey?: string
+  commandId?: string
+}
+
+/** Native delivery never generates a message ID or retries an ambiguous send. */
+export async function sendMessage(input: SessionSendInput): Promise<void> {
+  const runtimeKey = input.runtimeKey ?? getRuntimeKey()
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const request = PromptRequestSchema.parse(input.request)
+  await waitForConnectionOrThrow()
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (input.mode === "steer") await canonicalClient.steer(input.sessionId, request, input.commandId)
+  else if (input.mode === "follow-up") await canonicalClient.followUp(input.sessionId, request, input.commandId)
+  else await canonicalClient.createRun(input.sessionId, request, input.commandId)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+}
 
 const MESSAGE_REFETCH_LIMIT = 100
 const SEND_CONFIRMATION_REFETCH_LIMIT = 30
@@ -565,15 +633,14 @@ export async function clearStagedRevert(sessionId: string): Promise<void> {
   }
 }
 
-function getGlobalSessionSnapshot(sessionId: string): Session | null {
-  const global = useGlobalSessionsStore.getState()
-  return [...global.activeSessions, ...global.archivedSessions].find((session) => session.id === sessionId) ?? null
+function getGlobalSessionSnapshot(sessionId: string): CanonicalSession | null {
+  return useGlobalSessionsStore.getState().entityById.get(sessionId) ?? null
 }
 
-function findLiveSession(sessionId: string): Session | null {
+function findLiveSession(sessionId: string): CanonicalSession | null {
   if (!_childStores) return null
   for (const store of _childStores.children.values()) {
-    const session = store.getState().session.find((item) => item.id === sessionId)
+    const session = store.getState().session.find((item) => item.sessionId === sessionId)
     if (session) return session
   }
   return null
@@ -584,13 +651,13 @@ function findLiveSession(sessionId: string): Session | null {
  * applied to the session the global store already holds. A session it does not
  * hold is left alone rather than inserted as a record without its fields.
  */
-function withArchivedAt(sessionId: string, archivedAt: number | null): Session | null {
+function withArchivedAt(sessionId: string, archivedAt: number | null): CanonicalSession | null {
   const known = getGlobalSessionSnapshot(sessionId) ?? findLiveSession(sessionId)
   if (!known) return null
-  const time = { ...known.time }
-  if (archivedAt === null) delete time.archived
-  else time.archived = archivedAt
-  return { ...known, time }
+  const updated = { ...known }
+  if (archivedAt === null) delete updated.archivedAt
+  else updated.archivedAt = archivedAt
+  return updated
 }
 
 const toError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)))
@@ -616,7 +683,7 @@ function findSessionDirectoryInChildStores(sessionId: string): string | null {
   for (const [directory, store] of stores.children) {
     const state = store.getState()
     if (
-      state.session.some((session) => session.id === sessionId)
+      state.session.some((session) => session.sessionId === sessionId)
       || Object.prototype.hasOwnProperty.call(state.message, sessionId)
       || Object.prototype.hasOwnProperty.call(state.session_status ?? {}, sessionId)
       || Object.prototype.hasOwnProperty.call(state.permission ?? {}, sessionId)
@@ -964,14 +1031,7 @@ function getRequestReplyDirectory(
 // Session CRUD
 // ---------------------------------------------------------------------------
 
-/**
- * The model and agent a session starts on.
- *
- * v2 keeps the selection on the session, and a switch after creation is
- * recorded in the transcript as its own message. Callers that already know
- * what the first turn will run on pass it here, so the session is created on
- * that selection and the first prompt needs no switch at all.
- */
+/** Capture the existing composer selection in native session admission options. */
 export type SessionCreateSelection = { model?: ModelRef; agent?: string }
 
 export async function createSession(
@@ -981,44 +1041,35 @@ export async function createSession(
   selectionTransition?: "submitted-draft",
   selection?: SessionCreateSelection,
   navigation: "open" | "preserve" = "open",
-): Promise<Session | null> {
+): Promise<CanonicalSession | null> {
   const runtimeKey = getRuntimeKey()
-  const runtimeClient = opencodeClient.getSdkClient()
   try {
-    // Capture the effective directory used for session creation so we can fall
-    // back to it when the server response omits the `directory` field.
-    // Without this, setCurrentSession would fall through to a stale
-    // opencodeClient.getDirectory() value and group the session under the
-    // wrong project (closes #1637, #2270).
     const effectiveDirectory = directoryOverride ?? dir()
-    const session = await opencodeClient.createSession(
-      { title, metadata, model: selection?.model, agent: selection?.agent },
-      effectiveDirectory,
-    )
-
-    if (getRuntimeKey() !== runtimeKey || opencodeClient.getSdkClient() !== runtimeClient) return null
-    const sessionDirectory = session.directory || effectiveDirectory || null
-    // Pre-populate routing index so SSE events arriving before session.created
-    // can be routed to the correct child store
-    if (sessionDirectory) {
-      registerSessionDirectory(session.id, sessionDirectory)
-      const store = _childStores?.ensureChild(sessionDirectory, { bootstrap: false })
-      if (store) {
-        const current = store.getState().session
-        const existing = Binary.search(current, session.id, (candidate) => candidate.id)
-        // An event may have published newer metadata before the create response.
-        if (!existing.found) {
-          store.setState({ session: [...current.slice(0, existing.index), session, ...current.slice(existing.index)] })
-        }
-      }
-      getImperativeSessionMessageLoader()?.initializeCreatedSession({ directory: sessionDirectory, sessionID: session.id })
-    }
-    if (navigation === "open") useSessionUIStore.getState().setCurrentSession(session.id, sessionDirectory, selectionTransition)
-    useSessionUIStore.getState().markSessionAsOpenChamberCreated(session.id)
-    useGlobalSessionsStore.getState().upsertSession(session)
+    if (!effectiveDirectory) throw new Error("No directory for session creation")
+    const workspace = await canonicalClient.resolveWorkspace(effectiveDirectory)
+    if (isStaleRuntime(runtimeKey)) return null
+    const { session } = await canonicalClient.createSession({
+      projectId: workspace.projectId,
+      workspaceId: workspace.workspaceId,
+      options: {
+        providerId: selection?.model?.providerID ?? null,
+        modelId: selection?.model?.modelID ?? null,
+        agentId: selection?.agent ?? null,
+        variant: null,
+        reasoningEffort: null,
+      },
+      metadata: SessionMetadataSchema.parse({ ...metadata, ...(title === undefined ? {} : { title }) }),
+    })
+    if (isStaleRuntime(runtimeKey)) return null
+    registerWorkspaceDirectory(workspace.workspaceId, effectiveDirectory)
+    _childStores?.ensureChild(effectiveDirectory, { bootstrap: false })
+    publishCanonicalSession(session, effectiveDirectory)
+    getImperativeSessionMessageLoader()?.initializeCreatedSession({ directory: effectiveDirectory, sessionID: session.sessionId })
+    if (navigation === "open") useSessionUIStore.getState().setCurrentSession(session.sessionId, effectiveDirectory, selectionTransition)
+    useSessionUIStore.getState().markSessionAsOpenChamberCreated(session.sessionId)
     return session
   } catch (error) {
-    console.error("[session-actions] createSession failed", error)
+    if (!isStaleRuntime(runtimeKey)) console.error("[session-actions] createSession failed", error)
     return null
   }
 }
@@ -1073,31 +1124,22 @@ export async function patchSessionMetadata(
   directory: string | null | undefined,
   updater: (metadata: SessionMetadataRecord) => SessionMetadataRecord,
   expectedRuntimeKey?: string,
-): Promise<Session> {
-  if (isStaleRuntime(expectedRuntimeKey)) throw new Error("runtime changed")
-  const targetDirectory = directory ?? getSessionDirectory(sessionId)
-  const current = await opencodeClient.getSession(sessionId, targetDirectory)
-  if (isStaleRuntime(expectedRuntimeKey)) throw new Error("runtime changed")
-  const currentMetadata = getSessionMetadata(current)
-  const nextMetadata = updater(currentMetadata)
-  // OpenCode 2.x only accepts metadata at session creation, so OpenChamber
-  // keeps it (see session-archive-batch). The store applies a merge patch, so
-  // only the difference travels and a key the updater dropped is deleted
-  // explicitly. A runtime without that route cannot persist the change, and
-  // reporting success would strand a review or btw link that the next load
-  // silently drops.
-  const result = await requestSessionMetadataUpdate(sessionId, buildMetadataMergePatch(currentMetadata, nextMetadata), targetDirectory)
-  if (result.outcome !== "updated") throw new Error(`session metadata update failed: ${result.reason}`)
-  const candidate: Session = { ...current, metadata: result.metadata, metadataRevision: result.revision }
-  delete candidate.hostMetadataError
-  if (isStaleRuntime(expectedRuntimeKey)) throw new Error("runtime changed")
-  const globalStore = useGlobalSessionsStore.getState()
-  const updated = mergeSessionDirectoryMetadata(candidate, globalStore.entityById.get(sessionId))
-  globalStore.upsertSession(updated)
-  const sessionDirectory = updated.directory || targetDirectory
-  if (sessionDirectory) registerSessionDirectory(updated.id, sessionDirectory)
-  mirrorSessionIntoLiveStores(updated, sessionDirectory ?? undefined)
-  return updated
+): Promise<CanonicalSession> {
+  const runtimeKey = expectedRuntimeKey ?? getRuntimeKey()
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const current = getGlobalSessionSnapshot(sessionId) ?? await readCanonicalSession(sessionId, runtimeKey)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const metadata = await canonicalClient.getSessionMetadata(sessionId)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (metadata.sessionId !== sessionId) throw new Error("Metadata response identified another session")
+  const currentMetadata = metadata.metadata ?? {}
+  const nextMetadata = SessionMetadataSchema.parse(updater(currentMetadata))
+  const patch = SessionMetadataPatchSchema.parse({ changes: buildMetadataMergePatch(currentMetadata, nextMetadata) })
+  const result = await canonicalClient.patchSessionMetadata(sessionId, patch)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (result.sessionId !== sessionId) throw new Error("Metadata response identified another session")
+  if (directory) registerSessionDirectory(sessionId, resolveGlobalSessionDirectory(current) ?? directory)
+  return publishCanonicalMetadata(current, result)
 }
 
 export async function setLinkedIssue(
@@ -1105,7 +1147,7 @@ export async function setLinkedIssue(
   directory: string | null | undefined,
   issue: LinkedIssue,
   linked: boolean,
-): Promise<Session> {
+): Promise<CanonicalSession> {
   return patchSessionMetadata(sessionId, directory, (metadata) =>
     withLinkedIssue(metadata, issue, linked))
 }
@@ -1119,7 +1161,7 @@ export async function addLinkedIssues(
   sessionId: string,
   directory: string | null | undefined,
   issues: readonly LinkedIssue[],
-): Promise<Session> {
+): Promise<CanonicalSession> {
   return patchSessionMetadata(sessionId, directory, (metadata) =>
     issues.reduce((current, issue) => withLinkedIssue(current, issue, true), metadata))
 }
@@ -1134,7 +1176,7 @@ export async function setSessionWorkState(
   sessionId: string,
   directory: string | null | undefined,
   state: SessionWork["state"],
-): Promise<Session | null> {
+): Promise<CanonicalSession | null> {
   const runtimeKeyAtClick = getRuntimeKey()
   try {
     return await patchSessionMetadata(sessionId, directory, (metadata) =>
@@ -1150,7 +1192,7 @@ export async function setContextObligatoryMessage(
   directory: string | null | undefined,
   message: ContextObligatoryMessage,
   pinned: boolean,
-): Promise<Session> {
+): Promise<CanonicalSession> {
   return patchSessionMetadata(sessionId, directory, (metadata) =>
     withContextObligatoryMessage(metadata, message, pinned))
 }
@@ -1161,9 +1203,9 @@ async function cleanupReviewMetadataBeforeDelete(
   expectedRuntimeKey?: string,
 ): Promise<void> {
   if (isStaleRuntime(expectedRuntimeKey)) return
-  let session: Session
+  let metadata: CanonicalSession["metadata"]
   try {
-    session = await opencodeClient.getSession(sessionId, directory ?? getSessionDirectory(sessionId))
+    metadata = (await canonicalClient.getSessionMetadata(sessionId)).metadata
   } catch {
     return
   }
@@ -1179,15 +1221,15 @@ async function cleanupReviewMetadataBeforeDelete(
     }
   }
 
-  if (isReviewSession(session)) {
-    const originalSessionID = getOriginalSessionID(session)
-    if (originalSessionID) await unlinkParent(originalSessionID, (metadata) => withoutReviewSessionLink(metadata, sessionId))
+  if (metadata?.openchamber?.kind === "review") {
+    const originalSessionID = metadata.openchamber.originalSessionID
+    if (originalSessionID) await unlinkParent(originalSessionID, (current) => withoutReviewSessionLink(current, sessionId))
     return
   }
 
-  if (isBtwSession(session)) {
-    const originalSessionID = getBtwOriginalSessionID(session)
-    if (originalSessionID) await unlinkParent(originalSessionID, (metadata) => withoutBtwSessionLink(metadata, sessionId))
+  if (metadata?.openchamber?.kind === "btw") {
+    const originalSessionID = metadata.openchamber.originalSessionID
+    if (originalSessionID) await unlinkParent(originalSessionID, (current) => withoutBtwSessionLink(current, sessionId))
     return
   }
 
@@ -1195,7 +1237,7 @@ async function cleanupReviewMetadataBeforeDelete(
   // the fork: it is a temporary session that only exists for its parent's
   // panel. Best-effort — a failed fork delete must not block the parent's
   // operation; the orphaned fork stays visible in the sidebar.
-  const btwSessionID = getBtwSessionID(session)
+  const btwSessionID = metadata?.openchamber?.btwSessionID
   if (btwSessionID) {
     try {
       if (isStaleRuntime(expectedRuntimeKey)) return
@@ -1229,12 +1271,12 @@ function removeSessionFromLiveStores(sessionId: string, preferredDirectory?: str
 
   for (const [directory, store] of candidates) {
     const current = store.getState()
-    if (!current.session.some((session) => session.id === sessionId)) {
+    if (!current.session.some((session) => session.sessionId === sessionId)) {
       continue
     }
     snapshots.push({ directory })
     const patch: Partial<ReturnType<DirectoryStoreApi["getState"]>> = {
-      session: current.session.filter((session) => session.id !== sessionId),
+      session: current.session.filter((session) => session.sessionId !== sessionId),
       ...sessionMutationPatch(current, sessionId, true),
     }
     if (archive) {
@@ -1279,12 +1321,12 @@ function removeSessionsFromLiveStores(sessionIds: Iterable<string>, preferredDir
 
   for (const [directory, store] of candidates) {
     const current = store.getState()
-    const removed = current.session.filter((session) => ids.has(session.id)).map((session) => session.id)
+    const removed = current.session.filter((session) => ids.has(session.sessionId)).map((session) => session.sessionId)
     if (removed.length === 0) continue
 
     snapshots.push({ directory })
     const patch: Partial<ReturnType<DirectoryStoreApi["getState"]>> = {
-      session: current.session.filter((session) => !ids.has(session.id)),
+      session: current.session.filter((session) => !ids.has(session.sessionId)),
       ...sessionsMutationPatch(current, removed, true),
     }
     if (archive) {
@@ -1321,6 +1363,7 @@ function finalizeConfirmedSessionDeletion(
   expectedRuntimeKey = getRuntimeKey(),
 ): void {
   const snapshots = removeSessionFromLiveStores(sessionId, sessionDirectory)
+  removeGlobalSessionStatuses([sessionId])
   for (const store of _childStores?.children.values() ?? []) {
     const invalidated = store.getState().sessionStatusInvalidated
     if (!invalidated?.[sessionId]) continue
@@ -1374,11 +1417,11 @@ type ChatDirectoryCleanupPlan = {
   cascadeIds: ReadonlySet<string>
 }
 
-function planChatDirectoryCleanup(sessionId: string, snapshot: Session | null, directory: string | undefined): ChatDirectoryCleanupPlan {
+function planChatDirectoryCleanup(sessionId: string, snapshot: CanonicalSession | null, directory: string | undefined): ChatDirectoryCleanupPlan {
   const global = useGlobalSessionsStore.getState()
   return {
     directory,
-    rootDeleted: Boolean(snapshot && snapshot.parentID == null),
+    rootDeleted: Boolean(snapshot && snapshot.parentSessionId == null),
     cascadeIds: computeSubtreeIds([...global.activeSessions, ...global.archivedSessions], sessionId),
   }
 }
@@ -1396,7 +1439,7 @@ function isChatDirectoryStillReferenced(directory: string, excludedIds: Readonly
   if (!global.hasLoaded) return true
   const normalized = normalizePath(directory)
   return [...global.activeSessions, ...global.archivedSessions].some((session) => (
-    !excludedIds.has(session.id) && resolveGlobalSessionDirectory(session) === normalized
+    !excludedIds.has(session.sessionId) && resolveGlobalSessionDirectory(session) === normalized
   ))
 }
 
@@ -1442,12 +1485,12 @@ export async function deleteSession(sessionId: string, options?: DeleteSessionOp
   try {
     await cleanupReviewMetadataBeforeDelete(sessionId, sessionDirectory, expectedRuntimeKey)
     if (isStaleRuntime(expectedRuntimeKey)) return false
-    const deleted = await opencodeClient.deleteSession(sessionId, sessionDirectory)
+    const deleted = await canonicalClient.deleteSession(sessionId)
     if (isStaleRuntime(expectedRuntimeKey)) return false
-    if (deleted !== true) {
+    if (deleted.sessionId !== sessionId || !deleted.deletedSessionIds.includes(sessionId)) {
       throw new Error("session.delete failed: server did not confirm deletion")
     }
-    finalizeConfirmedSessionDeletion(sessionId, sessionDirectory, expectedRuntimeKey)
+    for (const deletedId of deleted.deletedSessionIds) finalizeConfirmedSessionDeletion(deletedId, getSessionDirectory(deletedId), expectedRuntimeKey)
     await cleanupDeletedChatDirectory(chatDirectoryCleanup)
     return true
   } catch (error) {
@@ -1456,7 +1499,7 @@ export async function deleteSession(sessionId: string, options?: DeleteSessionOp
     // The server cascade-deletes child sessions when the parent is removed.
     // Subsequent delete attempts for those children return 404; treat as
     // success since the session was already deleted by the cascade.
-    if ((error as { status?: number })?.status === 404) {
+    if ((error instanceof CanonicalApiError ? error.problem.status : getErrorStatus(error)) === 404) {
       if (isStaleRuntime(expectedRuntimeKey)) return false
       finalizeConfirmedSessionDeletion(sessionId, sessionDirectory, expectedRuntimeKey)
       await cleanupDeletedChatDirectory(chatDirectoryCleanup)
@@ -1534,6 +1577,7 @@ export async function archiveSession(sessionId: string, expectedRuntimeKey = get
     }
     const archived = withArchivedAt(sessionId, stamp.archivedAt)
     const snapshots = removeSessionFromLiveStores(sessionId, sessionDirectory, true)
+    removeGlobalSessionStatuses([sessionId])
     invalidateSessionLoads(sessionId, [...snapshots.map((snapshot) => snapshot.directory), sessionDirectory])
     if (archived) useGlobalSessionsStore.getState().upsertSession(archived)
     const ui = useSessionUIStore.getState()
@@ -1641,8 +1685,9 @@ export async function archiveSessions(
  * read-modify-write pairs on a second session, so they stay on the per-session
  * path instead of the server batch.
  */
-function hasLinkedSessionCleanup(session: Session): boolean {
-  return isReviewSession(session) || isBtwSession(session) || Boolean(getBtwSessionID(session))
+function hasLinkedSessionCleanup(session: CanonicalSession): boolean {
+  const links = session.metadata?.openchamber
+  return links?.kind === "review" || links?.kind === "btw" || Boolean(links?.btwSessionID)
 }
 
 /**
@@ -1659,12 +1704,12 @@ function hasLinkedSessionCleanup(session: Session): boolean {
  */
 function planArchiveBatches(ids: string[]) {
   const global = useGlobalSessionsStore.getState()
-  const knownSessions = new Map<string, Session>()
+  const knownSessions = new Map<string, CanonicalSession>()
   for (const session of [...global.activeSessions, ...global.archivedSessions]) {
-    knownSessions.set(session.id, session)
+    knownSessions.set(session.sessionId, session)
   }
   for (const store of _childStores?.children.values() ?? []) {
-    for (const session of store.getState().session) knownSessions.set(session.id, session)
+    for (const session of store.getState().session) knownSessions.set(session.sessionId, session)
   }
 
   const batchesByDirectory = new Map<string, string[]>()
@@ -1701,6 +1746,7 @@ function commitArchivedSessions(stamps: SessionArchiveStamp[], directory: string
   const ids = stamps.map((stamp) => stamp.id)
   const archived = stamps.flatMap((stamp) => withArchivedAt(stamp.id, stamp.archivedAt) ?? [])
   const snapshots = removeSessionsFromLiveStores(ids, directory, true)
+  removeGlobalSessionStatuses(ids)
   const directories = [...snapshots.map((snapshot) => snapshot.directory), directory]
   for (const id of ids) invalidateSessionLoads(id, directories)
 
@@ -1732,10 +1778,10 @@ export async function unarchiveSession(sessionId: string, expectedRuntimeKey = g
 function archivedSubsessionIds(rootId: string): string[] {
   const childrenByParentId = new Map<string, string[]>()
   for (const session of useGlobalSessionsStore.getState().archivedSessions) {
-    if (!session.parentID) continue
-    const siblings = childrenByParentId.get(session.parentID) ?? []
-    siblings.push(session.id)
-    childrenByParentId.set(session.parentID, siblings)
+    if (!session.parentSessionId) continue
+    const siblings = childrenByParentId.get(session.parentSessionId) ?? []
+    siblings.push(session.sessionId)
+    childrenByParentId.set(session.parentSessionId, siblings)
   }
   const ids: string[] = []
   const seen = new Set([rootId])
@@ -1755,7 +1801,7 @@ async function restoreSessionTree(
   rootId: string,
   expectedRuntimeKey: string,
 ): Promise<{ restoredIds: string[]; failedIds: string[] }> {
-  if (useGlobalSessionsStore.getState().entityById.get(rootId)?.parentID) {
+  if (useGlobalSessionsStore.getState().entityById.get(rootId)?.parentSessionId) {
     recordSessionActionFailure(rootId, new Error("a subsession is restored with its parent"))
     return { restoredIds: [], failedIds: [rootId] }
   }
@@ -1794,17 +1840,14 @@ async function restoreArchivedSession(sessionId: string, expectedRuntimeKey: str
       const before = store.getState()
       // The restore already committed. A rejected status read is unknown, not
       // an action failure or a reason to mark this session idle.
-      const statuses = await opencodeClient.getActiveSessionStatuses(sessionDirectory).catch(() => null)
-      if (!isStaleRuntime(expectedRuntimeKey) && statuses !== null) {
+      const snapshot = await canonicalClient.getSnapshot(sessionId).catch(() => null)
+      if (!isStaleRuntime(expectedRuntimeKey) && snapshot !== null) {
         store.setState((current) => {
           if (current.sessionStatusInvalidated !== before.sessionStatusInvalidated
             || current.session_status[sessionId] !== before.session_status[sessionId]) return current
           const invalidated = { ...current.sessionStatusInvalidated }
           delete invalidated[sessionId]
-          return {
-            session_status: { ...current.session_status, [sessionId]: statuses[sessionId] ?? { type: "idle" } },
-            sessionStatusInvalidated: invalidated,
-          }
+          return { ...installSessionSnapshot(current, snapshot), sessionStatusInvalidated: invalidated }
         })
       }
     }
@@ -1861,7 +1904,7 @@ export async function unarchiveSessions(
   const entityById = useGlobalSessionsStore.getState().entityById
   const ordered = options?.undo
     ? ids
-    : [...ids.filter((id) => !entityById.get(id)?.parentID), ...ids.filter((id) => entityById.get(id)?.parentID)]
+    : [...ids.filter((id) => !entityById.get(id)?.parentSessionId), ...ids.filter((id) => entityById.get(id)?.parentSessionId)]
 
   for (const [index, id] of ordered.entries()) {
     if (isStaleRuntime(expectedRuntimeKey)) {
@@ -1891,18 +1934,18 @@ export async function updateSessionTitle(
   title: string,
   options?: { directory?: string | null; expectedRuntimeKey?: string; signal?: AbortSignal },
 ): Promise<void> {
-  if (isStaleRuntime(options?.expectedRuntimeKey)) throw new Error("runtime changed")
-  if (options?.signal) options.signal.throwIfAborted()
-  else cancelSessionTitleGeneration(sessionId)
-  const sessionDirectory = options?.directory ?? getSessionDirectory(sessionId)
-  await opencodeClient.renameSession(sessionId, title, sessionDirectory)
-  // `session.update` answers with nothing, so the record published to the
-  // stores is re-read rather than assembled from the local copy plus a hope.
-  const session = await opencodeClient.getSession(sessionId, sessionDirectory)
-  if (isStaleRuntime(options?.expectedRuntimeKey)) throw new Error("runtime changed")
+  const runtimeKey = options?.expectedRuntimeKey ?? getRuntimeKey()
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   options?.signal?.throwIfAborted()
-  useGlobalSessionsStore.getState().upsertSession(session)
-  mirrorSessionIntoLiveStores(session, sessionDirectory)
+  if (!options?.signal) cancelSessionTitleGeneration(sessionId)
+  const current = getGlobalSessionSnapshot(sessionId) ?? await readCanonicalSession(sessionId, runtimeKey)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  options?.signal?.throwIfAborted()
+  const result = await canonicalClient.patchSessionMetadata(sessionId, { changes: { title } })
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  options?.signal?.throwIfAborted()
+  if (result.sessionId !== sessionId) throw new Error("Title response identified another session")
+  publishCanonicalMetadata(current, result)
 }
 
 // ---------------------------------------------------------------------------
@@ -2224,17 +2267,13 @@ function materializeConfirmedSendRecords(
 // ---------------------------------------------------------------------------
 
 export async function abortCurrentOperation(sessionId: string): Promise<void> {
-  // The abort must carry the SESSION'S directory, not the active UI directory:
-  // OpenCode routes the request to the per-directory instance, and an abort
-  // sent to the wrong instance cancels nothing while still returning 200 true
-  // (the "stop button does nothing" report — sessions in another project/
-  // worktree than the UI's current directory could never be aborted).
-  const { directory } = dirStoreForSession(sessionId)
-  try {
-    await opencodeClient.abortSession(sessionId, directory)
-  } catch (error) {
-    console.error("[session-actions] abort failed", error)
-  }
+  const runtimeKey = getRuntimeKey()
+  const snapshot = await canonicalClient.getSnapshot(sessionId)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (!snapshot.activeRun) return
+  const result = await canonicalClient.abortSession(sessionId, snapshot.activeRun.runId)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (result.run.sessionId !== sessionId || result.run.runId !== snapshot.activeRun.runId) throw new Error("Abort response identified another run")
 }
 
 // ---------------------------------------------------------------------------
@@ -2635,31 +2674,36 @@ export async function refetchSessionMessages(sessionId: string): Promise<void> {
 }
 
 /** Insert the fork into the child store so the sidebar updates immediately, then switch to it. */
-function openForkedSession(store: DirectoryStoreApi, forkedSession: Session, directory: string | null | undefined) {
-  const sessions = [...store.getState().session]
-  const searchResult = Binary.search(sessions, forkedSession.id, (s) => s.id)
-  if (!searchResult.found) {
-    sessions.splice(searchResult.index, 0, forkedSession)
-    store.setState({ session: sessions })
-  }
-  useSessionUIStore.getState().setCurrentSession(forkedSession.id, directory)
+function openForkedSession(_store: DirectoryStoreApi, forkedSession: CanonicalSession, directory: string | null | undefined) {
+  if (directory) _childStores?.ensureChild(directory, { bootstrap: false })
+  publishCanonicalSession(forkedSession, directory ?? undefined)
+  useSessionUIStore.getState().setCurrentSession(forkedSession.sessionId, directory)
 }
 
-/**
- * The fork keeps the source's goal (OpenCode copies metadata) but not the
- * source's btw/review links; a file-backed objective is copied to the fork.
- * The objective copy re-reads the fork's goal id first and is skipped when the
- * user armed a new goal on the fork in the meantime.
- */
-function inheritForkMetadata(sourceSessionId: string, forkedSession: Session, directory: string | null | undefined, expectedRuntimeKey: string) {
-  return applyForkInheritance(sourceSessionId, forkedSession, {
-    readGoalId: async (sessionId) => getSessionGoal(await opencodeClient.getSession(sessionId, directory))?.id ?? null,
-    readObjective: fetchGoalObjectiveContent,
-    writeObjective: writeGoalObjectiveFile,
-    patchMetadata: async (sessionId, updater) => {
-      await patchSessionMetadata(sessionId, directory, updater, expectedRuntimeKey)
-    },
-  })
+/** The Host metadata is inherited separately from the selected native transcript branch. */
+async function inheritForkMetadata(sourceSessionId: string, forkedSession: CanonicalSession, directory: string | null | undefined, expectedRuntimeKey: string): Promise<void> {
+  try {
+    if (isStaleRuntime(expectedRuntimeKey)) return
+    const source = await canonicalClient.getSessionMetadata(sourceSessionId)
+    if (isStaleRuntime(expectedRuntimeKey)) return
+    const inherited = SessionMetadataSchema.parse(withoutSourceOwnedLinks(source.metadata ?? {}))
+    await patchSessionMetadata(forkedSession.sessionId, directory, (current) => Object.keys(current).length ? current : inherited, expectedRuntimeKey)
+    const goal = inherited.openchamber?.goal
+    if (!goal?.id || !goal.objectiveFile) return
+    const objective = await fetchGoalObjectiveContent(sourceSessionId)
+    if (isStaleRuntime(expectedRuntimeKey) || objective === null) return
+    const current = await canonicalClient.getSessionMetadata(forkedSession.sessionId)
+    if (isStaleRuntime(expectedRuntimeKey) || current.metadata?.openchamber?.goal?.id !== goal.id) return
+    const written = await writeGoalObjectiveFile(forkedSession.sessionId, objective)
+    if (isStaleRuntime(expectedRuntimeKey)) return
+    if (!written) await patchSessionMetadata(forkedSession.sessionId, directory, (metadata) => {
+      const native = SessionMetadataSchema.parse(metadata)
+      if (native.openchamber?.goal?.id !== goal.id) return metadata
+      return { ...native, openchamber: { ...native.openchamber, goal: { ...native.openchamber.goal, objective, objectiveFile: false } } }
+    }, expectedRuntimeKey)
+  } catch (error) {
+    if (!isStaleRuntime(expectedRuntimeKey)) console.warn("[session-actions] fork metadata inheritance failed", error)
+  }
 }
 
 /**
@@ -2674,32 +2718,27 @@ const isTurnBoundary = (message: Message): boolean =>
   || readSubagentRun(message) !== undefined
   || readDispatchedSessionResult(message) !== undefined
 
-/**
- * Fork keeping an assistant turn: the new session holds everything through
- * `messageId`, so the agent there still sees the answer it just gave. The cut
- * is the first record after it that starts something new (a prompt, a
- * compaction, a shell run, a background subagent run, a dispatched session's
- * result); with none, the whole
- * transcript is copied. The composer stays empty since there is no prompt to
- * rewrite.
- */
-export async function forkAfterMessage(sessionId: string, messageId: string): Promise<Session | null> {
+/** Native selected forks include the named public message, without legacy composer replay. */
+export async function forkAfterMessage(sessionId: string, messageId: string): Promise<CanonicalSession | null> {
   const expectedRuntimeKey = getRuntimeKey()
-  const { store, directory } = dirStoreForSession(sessionId)
-  const messages = store.getState().message[sessionId] ?? []
-  const index = messages.findIndex((message) => message.id === messageId)
-  if (index < 0) throw new Error("Fork source message is not loaded")
-  const boundary = messages.slice(index + 1).find(isTurnBoundary)
-
-  const forkedSession = await opencodeClient.forkSession(sessionId, {
-    before: boundary ? transcriptCutForMessage(messages, boundary.id) : undefined,
-    directory,
-  })
+  const snapshot = await canonicalClient.getSnapshot(sessionId)
   if (isStaleRuntime(expectedRuntimeKey)) return null
-  const forkDirectory = resolveSessionOwnedDirectory(forkedSession) ?? directory
+  const { store, directory } = dirStoreForSession(sessionId)
+  if (directory) {
+    const owned = getGlobalSessionSnapshot(sessionId)
+    if (!owned || resolveGlobalSessionDirectory(owned) !== normalizePath(directory)) {
+      const workspace = await canonicalClient.resolveWorkspace(directory)
+      if (isStaleRuntime(expectedRuntimeKey)) return null
+      if (workspace.workspaceId !== snapshot.session.workspaceId) throw new Error("Session workspace directory is not resolved")
+      registerWorkspaceDirectory(workspace.workspaceId, directory)
+    }
+  }
+  const { session: forkedSession } = await canonicalClient.forkSession(sessionId, { messageId, mode: "selected" })
+  if (isStaleRuntime(expectedRuntimeKey)) return null
+  const forkDirectory = resolveGlobalSessionDirectory(forkedSession) ?? directory
   openForkedSession(store, forkedSession, forkDirectory)
   await inheritForkMetadata(sessionId, forkedSession, forkDirectory, expectedRuntimeKey)
-  return forkedSession
+  return isStaleRuntime(expectedRuntimeKey) ? null : getGlobalSessionSnapshot(forkedSession.sessionId) ?? forkedSession
 }
 
 /**
@@ -2755,68 +2794,32 @@ export class NothingToForkError extends Error {
  * `/fork`: fork after the last finished turn and open the fork. A running turn
  * in the source session is left alone and not copied.
  */
-export async function forkFromLastCompletedTurn(sessionId: string): Promise<Session | null> {
-  const { store } = dirStoreForSession(sessionId)
-  const state = store.getState()
-  const status = state.session_status?.[sessionId]
-  const turnRunning = status !== undefined && status.type !== "idle"
-  const messageId = findLastCompletedTurnMessageId(state.message[sessionId] ?? [], turnRunning)
-  if (!messageId) throw new NothingToForkError()
-  return forkAfterMessage(sessionId, messageId)
+export async function forkFromLastCompletedTurn(sessionId: string): Promise<CanonicalSession | null> {
+  const expectedRuntimeKey = getRuntimeKey()
+  const snapshot = await canonicalClient.getSnapshot(sessionId)
+  if (isStaleRuntime(expectedRuntimeKey)) return null
+  let turns = snapshot.turns
+  let messages = snapshot.messages
+  let hasEarlier = snapshot.window.hasEarlier
+  let cursor: string | undefined
+  for (;;) {
+    const completed = new Set(turns.filter((turn) => turn.status === "completed").map((turn) => turn.turnId))
+    const message = [...messages].reverse().find((candidate) => candidate.role === "assistant" && completed.has(candidate.turnId))
+    if (message) return forkAfterMessage(sessionId, message.messageId)
+    if (!hasEarlier) throw new NothingToForkError()
+    const page = await canonicalClient.getHistory(sessionId, { limit: 100, cursor })
+    if (isStaleRuntime(expectedRuntimeKey)) return null
+    if (page.sessionId !== sessionId) throw new Error("History response identified another session")
+    turns = page.turns
+    messages = page.messages
+    cursor = page.nextCursor ?? undefined
+    hasEarlier = page.nextCursor !== null
+  }
 }
 
-/**
- * Fork from a user message.
- *
- * 1. Extract text from the message for input restoration
- * 2. Call the runtime fork endpoint
- * 3. Insert the new session into the child store (so sidebar updates immediately)
- * 4. Switch to the new session and stage its composer replay
- */
+/** Fork the native selected branch including the user message; leave both composers unchanged. */
 export async function forkFromMessage(sessionId: string, messageId: string): Promise<void> {
-  const expectedRuntimeKey = getRuntimeKey()
-  const { store, directory } = dirStoreForSession(sessionId)
-  const state = store.getState()
-
-  // Extract message text and file attachments for input restoration.
-  const parts = state.part[messageId] ?? []
-  const messageText = parts
-    .filter((part): part is TextPart => part.type === "text")
-    .map((part) => part.text)
-    .join("\n")
-    .trim()
-  const fileParts = parts.filter((part): part is FilePart => part.type === "file")
-
-  const forkedSession = await opencodeClient.forkSession(sessionId, {
-    before: transcriptCutForMessage(state.message[sessionId] ?? [], messageId),
-    directory,
-  })
-  if (isStaleRuntime(expectedRuntimeKey)) return
-  const target = createChatDraftIdentity(expectedRuntimeKey, resolveSessionOwnedDirectory(forkedSession) ?? directory, forkedSession.id)
-  if (!target) throw new Error("Forked session has no composer directory")
-
-  openForkedSession(store, forkedSession, target.directory)
-
-  // Navigation is deferred in the chat column. Leave the source composer alone
-  // until the rendered draft identity matches the fork, including for file-only prompts.
-  useInputStore.setState({
-    pendingComposerRestore: {
-      target,
-      text: messageText,
-      files: fileParts.filter((part) => part.url).map((part) => ({
-        url: part.url,
-        mimeType: part.mime,
-        filename: part.filename ?? "attachment",
-      })),
-    },
-  })
-  // The forked session is a fresh draft target, so the attached context of the
-  // forked message follows the text into its composer.
-  restoreContextPartsToInput(
-    contextCarriersForMessage(state.message[sessionId] ?? [], messageId),
-    { directory: target.directory, sessionKey: forkedSession.id },
-  )
-  await inheritForkMetadata(sessionId, forkedSession, target.directory, expectedRuntimeKey)
+  await forkAfterMessage(sessionId, messageId)
 }
 
 export async function fetchMessagesForSession(sessionID: string, directory?: string | null): Promise<void> {
