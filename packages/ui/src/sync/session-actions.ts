@@ -29,6 +29,9 @@ import { withoutBtwSessionLink } from "@/lib/sessionBtwMetadata"
 import { withLinkedIssue, type LinkedIssue } from "@/lib/linkedIssues"
 import { withSessionWorkState, type SessionWork } from "@/lib/sessionWorkMetadata"
 import { getImperativeSessionMessageLoader } from "./session-message-loader"
+import { clearSessionPrefetch } from "./session-prefetch-cache"
+import { dropSessionCaches } from "./session-cache"
+import { useInputStore } from "./input-store"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
 import { requestSessionArchiveBatch, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
 import { registerBulkArchiveEchoes, releaseBulkArchiveEchoes } from "./bulk-archive-echo"
@@ -44,9 +47,9 @@ import { withoutSourceOwnedLinks } from "@/lib/sessionForkInheritance"
 import { fetchGoalObjectiveContent, writeGoalObjectiveFile } from "@/lib/goalObjectiveFiles"
 import { canonicalClient, CanonicalApiError } from "@/api/canonicalClient"
 import { SessionMetadataSchema, SessionMetadataPatchSchema, PromptRequestSchema } from "@openchamber/agent-contract"
-import type { Session as CanonicalSession, Message as CanonicalMessage, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata } from "@openchamber/agent-contract"
+import type { Session as CanonicalSession, Message as CanonicalMessage, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata } from "@openchamber/agent-contract"
 import { installHostSession, installSessionMetadata, installSessionSnapshot } from "./event-reducer"
-import { registerWorkspaceDirectory } from "@/stores/globalSessions"
+import { registerWorkspaceDirectory, resolveWorkspaceDirectory } from "@/stores/globalSessions"
 
 async function readCanonicalSession(sessionId: string, runtimeKey: string): Promise<CanonicalSession> {
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
@@ -181,9 +184,22 @@ function sessionMutationPatch(
 
 function invalidateSessionLoads(sessionId: string, directories: Iterable<string | null | undefined>): void {
   const loader = getImperativeSessionMessageLoader()
-  if (!loader) return
-  for (const directory of new Set(directories)) {
-    if (directory) loader.invalidateSession({ directory, sessionID: sessionId })
+  const owned = new Set(directories)
+  for (const [directory, store] of _childStores?.children ?? []) {
+    if (store.getState().session.some((session) => session.sessionId === sessionId) || store.getState().snapshot[sessionId] || store.getState().message[sessionId]) owned.add(directory)
+  }
+  for (const directory of owned) {
+    if (!directory) continue
+    clearSessionPrefetch(directory, [sessionId], getRuntimeKey())
+    loader?.invalidateSession({ directory, sessionId })
+    const store = _childStores?.getChild(directory)
+    store?.setState((state) => {
+      const next = { ...state, message: { ...state.message }, snapshot: { ...state.snapshot }, partOwner: { ...state.partOwner },
+        sessionEpoch: { ...state.sessionEpoch }, sessionCursor: { ...state.sessionCursor }, session_status: { ...state.session_status },
+        sessionStatusInvalidated: { ...state.sessionStatusInvalidated }, permission: { ...state.permission }, form: { ...state.form } }
+      dropSessionCaches(next, [sessionId])
+      return next
+    })
   }
 }
 
@@ -251,28 +267,72 @@ export function getSessionLastAssistantModel(sessionId: string): { providerID: s
   }
 }
 
-function unsupportedSessionControl(operation: string): CanonicalApiError {
-  return new CanonicalApiError({
-    type: "urn:ohpichamber:problem:NOT_IMPLEMENTED", title: "Session operation unavailable",
-    status: 404, code: "NOT_IMPLEMENTED", retryable: false,
-    detail: `The Canonical Agent Service does not support ${operation}.`,
-  })
+async function installAuthoritativeBranch(sessionId: string, result: SessionBranchResult, runtimeKey: string): Promise<void> {
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const { directory } = dirStoreForSession(sessionId)
+  invalidateSessionLoads(sessionId, [directory])
+  const snapshot = await canonicalClient.getSnapshot(sessionId)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (snapshot.session.sessionId !== sessionId || snapshot.branch.branchId !== result.branch.branchId || snapshot.branch.branchVersion !== result.branch.branchVersion)
+    throw new Error("Branch snapshot does not match its acknowledged selection")
+  dirStoreForSession(sessionId).store.setState((state) => installSessionSnapshot(state, snapshot))
+  if (result.draft && directory) {
+    useInputStore.setState({ pendingComposerRestore: {
+      target: { runtimeKey, directory, sessionId }, text: result.draft.text,
+      files: result.draft.attachments.map((attachment) => ({ url: attachment.uri, mimeType: attachment.mediaType, filename: attachment.name, size: attachment.size })),
+    } })
+  } else {
+    const pending = useInputStore.getState().pendingComposerRestore
+    if (pending?.target.runtimeKey === runtimeKey && pending.target.sessionId === sessionId) useInputStore.setState({ pendingComposerRestore: null })
+  }
 }
 
-/** The public helper remains; a native workspace cannot be moved by an old engine. */
-export async function moveSessionToDirectory(
-  _session: CanonicalSession,
-  _sourceDirectory: string,
-  _destinationDirectory: string,
-  expectedRuntimeKey = getRuntimeKey(),
-): Promise<void> {
+export async function moveSessionToDirectory(session: CanonicalSession, sourceDirectory: string, destinationDirectory: string, expectedRuntimeKey = getRuntimeKey()): Promise<void> {
   if (isStaleRuntime(expectedRuntimeKey)) throw new Error("runtime changed")
-  throw unsupportedSessionControl("moving a session to another workspace")
+  const source = normalizePath(sourceDirectory)
+  const destination = normalizePath(destinationDirectory)
+  if (!source || !destination) throw new Error("Session relocation directories are invalid")
+  if (resolveWorkspaceDirectory(session.workspaceId) !== source) throw new Error("Session source directory is not authoritative")
+  const workspace = await canonicalClient.resolveWorkspace(destination)
+  if (isStaleRuntime(expectedRuntimeKey)) throw new Error("runtime changed")
+  if (workspace.projectId !== session.projectId) throw new Error("Relocation destination is outside the source project")
+  const result = await canonicalClient.relocateSession(session.sessionId, workspace.workspaceId)
+  if (isStaleRuntime(expectedRuntimeKey)) throw new Error("runtime changed")
+  if (result.sessions.some((member) => member.rootSessionId !== session.rootSessionId || member.projectId !== session.projectId)) throw new Error("Relocation response identified another session family")
+  registerWorkspaceDirectory(workspace.workspaceId, destination)
+  for (const moved of result.sessions) invalidateSessionLoads(moved.sessionId, [source, destination])
+  removeSessionsFromLiveStores(result.sessions.map((member) => member.sessionId), source)
+  for (const moved of result.sessions) {
+    publishCanonicalSession(moved, destination)
+    useSessionUIStore.getState().setSessionDirectory(moved.sessionId, destination)
+  }
+  const selectedId = useSessionUIStore.getState().currentSessionId
+  const selected = result.sessions.find((member) => member.sessionId === selectedId) ?? result.sessions.find((member) => member.sessionId === session.sessionId)
+  if (!selected) throw new Error("Relocation response omitted the requested session")
+  const snapshot = await canonicalClient.getSnapshot(selected.sessionId)
+  if (isStaleRuntime(expectedRuntimeKey)) throw new Error("runtime changed")
+  if (snapshot.session.sessionId !== selected.sessionId || snapshot.session.workspaceId !== workspace.workspaceId || snapshot.session.rootSessionId !== session.rootSessionId) throw new Error("Relocation snapshot identified another destination owner")
+  dirStoreForDirectory(destination).setState((state) => installSessionSnapshot(state, snapshot))
 }
 
-/** Native streams do not publish an authoritative workspace-move operation. */
-export function adoptSessionMove(_sessionId: string, _sourceDirectory: string, _destinationDirectory: string): void {
-  throw unsupportedSessionControl("adopting a session workspace move")
+export async function adoptSessionMove(sessionId: string, sourceDirectory: string, destinationDirectory: string): Promise<void> {
+  const runtimeKey = getRuntimeKey()
+  const destination = normalizePath(destinationDirectory)
+  if (!destination) throw new Error("Session relocation destination is invalid")
+  const workspace = await canonicalClient.resolveWorkspace(destination)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const snapshot = await canonicalClient.getSnapshot(sessionId)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (snapshot.session.sessionId !== sessionId || snapshot.session.workspaceId !== workspace.workspaceId || snapshot.session.projectId !== workspace.projectId) throw new Error("Relocation adoption is not authoritative")
+  const authoritative = await readCanonicalSession(sessionId, runtimeKey)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (authoritative.workspaceId !== workspace.workspaceId) throw new Error("Relocation adoption ownership changed")
+  registerWorkspaceDirectory(workspace.workspaceId, destination)
+  invalidateSessionLoads(sessionId, [sourceDirectory, destination])
+  removeSessionsFromLiveStores([sessionId], normalizePath(sourceDirectory) ?? undefined)
+  publishCanonicalSession(authoritative, destination)
+  dirStoreForDirectory(destination).setState((state) => installSessionSnapshot(state, snapshot))
+  useSessionUIStore.getState().setSessionDirectory(sessionId, destination)
 }
 
 function dir() {
@@ -383,9 +443,14 @@ export function isSessionBusyNow(sessionId: string): boolean {
   return getSessionLiveActivity(sessionId) === "active"
 }
 
-/** No native staged-revert contract exists; keep drafts/history unchanged. */
-export async function clearStagedRevert(_sessionId: string): Promise<void> {
-  throw unsupportedSessionControl("clearing a staged revert")
+export async function clearStagedRevert(sessionId: string): Promise<void> {
+  const runtimeKey = getRuntimeKey()
+  const snapshot = await canonicalClient.getSnapshot(sessionId)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (snapshot.session.sessionId !== sessionId) throw new Error("Snapshot response identified another session")
+  if (!snapshot.branch.revert) return
+  const result = await canonicalClient.selectSessionBranch(sessionId, { action: "restore", branchId: snapshot.branch.branchId, branchVersion: snapshot.branch.branchVersion })
+  await installAuthoritativeBranch(sessionId, result, runtimeKey)
 }
 
 function getGlobalSessionSnapshot(sessionId: string): CanonicalSession | null {
@@ -1735,12 +1800,13 @@ export async function dismissOpenFormsForSession(sessionId: string): Promise<boo
 // Message history
 // ---------------------------------------------------------------------------
 
-/**
- * The native service has no revert/stage/commit operation. Reject before
- * mutating history, attachments or composer state; never fall back to OpenCode.
- */
-export async function revertToMessage(_sessionId: string, _messageId: string): Promise<void> {
-  throw unsupportedSessionControl("reverting session history")
+export async function revertToMessage(sessionId: string, messageId: string): Promise<void> {
+  const runtimeKey = getRuntimeKey()
+  const snapshot = await canonicalClient.getSnapshot(sessionId)
+  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  if (snapshot.session.sessionId !== sessionId) throw new Error("Snapshot response identified another session")
+  const result = await canonicalClient.selectSessionBranch(sessionId, { action: "revert", messageId, branchId: snapshot.branch.branchId, branchVersion: snapshot.branch.branchVersion })
+  await installAuthoritativeBranch(sessionId, result, runtimeKey)
 }
 
 export async function refetchSessionMessages(sessionId: string): Promise<void> {
@@ -1822,7 +1888,7 @@ export async function forkAfterMessage(sessionId: string, messageId: string): Pr
       registerWorkspaceDirectory(workspace.workspaceId, directory)
     }
   }
-  const { session: forkedSession } = await canonicalClient.forkSession(sessionId, { messageId, mode: "selected" })
+  const { session: forkedSession } = await canonicalClient.forkSession(snapshot.session, { messageId, mode: "selected" })
   if (isStaleRuntime(expectedRuntimeKey)) return null
   if (forkedSession.sessionId === sessionId || forkedSession.workspaceId !== snapshot.session.workspaceId) {
     throw new Error("Fork response did not identify a new session in the source workspace")

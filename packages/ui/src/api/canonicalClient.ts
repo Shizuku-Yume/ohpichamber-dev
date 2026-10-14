@@ -7,7 +7,7 @@ import type {
   ModelCatalog, ModelConfigureRequest, ModelDeleteRequest, ProviderCatalog, ProviderConfigureRequest,
   ProviderCredentialDeleteRequest, ProviderCredentialMutationResult, ProviderCredentialWriteRequest, ProviderDeleteRequest,
   ProviderMutationResult, QuestionReply, QuestionRequest, RunAbortAck, RunCreateRequest, Session, SessionCreateAck,
-  SessionCreateRequest, SessionDeleteAck, SessionMetadataPatch, SessionMetadataState, SessionSnapshot, ShellJob,
+  SessionCreateRequest, SessionDeleteAck, SessionMetadataPatch, SessionMetadataState, SessionSnapshot, SessionBranchRequest, SessionBranchResult, SessionRelocateResult, ShellJob,
   ShellOutput, ShellSnapshot, ShellStartRequest, ShellStopRequest, SkillsApplyRequest, SkillsApplyResult,
   SkillsCatalogState, SkillExpandRequest, SkillExpandResult, CompletionRequest, CompletionResult, CompletionCancelRequest, CompletionCancelResult,
   MCPCatalogRead, MCPConfigureRequest, MCPApplyRequest, MCPApplyResult, MCPReconnectRequest, MCPOAuthRequest, MCPOAuthResult, SteerAck, SteerRequest, Workspace,
@@ -92,6 +92,30 @@ export class CanonicalClient {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
     });
   }
+  selectSessionBranch(sessionId: string, input: SessionBranchRequest): Promise<SessionBranchResult> {
+    const parsed = C.SessionBranchRequestSchema.parse(input);
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/branch`, C.SessionBranchResultSchema, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsed),
+    }).then((result) => {
+      if (result.sessionId !== sessionId || result.branch.branchId !== parsed.branchId || BigInt(result.branch.branchVersion) <= BigInt(parsed.branchVersion)
+          || (parsed.action === 'revert' ? result.branch.revert?.messageId !== parsed.messageId : result.branch.revert !== undefined))
+        throw new Error('Branch response does not match the requested branch owner and selection');
+      return result;
+    });
+  }
+  relocateSession(sessionId: string, workspaceId: string): Promise<SessionRelocateResult> {
+    const input = C.SessionRelocateRequestSchema.parse({ workspaceId });
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/relocate`, C.SessionRelocateResultSchema, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+    }).then((result) => {
+      const requested = result.sessions.find((session) => session.sessionId === sessionId);
+      const root = requested && result.sessions.find((session) => session.sessionId === requested.rootSessionId && session.rootSessionId === requested.rootSessionId);
+      const ids = new Set(result.sessions.map((session) => session.sessionId));
+      if (!requested || !root || ids.size !== result.sessions.length || result.sessions.some((session) => session.workspaceId !== workspaceId || session.projectId !== root.projectId || session.rootSessionId !== root.rootSessionId))
+        throw new Error('Relocation response does not match the requested destination session family');
+      return result;
+    });
+  }
   createSession(input: SessionCreateRequest, commandId?: string): Promise<SessionCreateAck> {
     return request('/api/agent/v1/sessions', C.SessionCreateAckSchema, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: JSON.stringify(input) });
   }
@@ -105,8 +129,8 @@ export class CanonicalClient {
   unarchiveSessions(sessionIds: string[]): Promise<ArchiveAck> {
     return request('/api/openchamber/sessions/unarchive', z.strictObject({ restored: z.array(z.strictObject({ id: C.EntityIdSchema, archivedAt: z.nullable(z.number()) })), failedIds: z.array(C.EntityIdSchema) }), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: sessionIds }) });
   }
-  forkSession(sessionId: string, input: { messageId?: string; entryId?: string; mode: 'selected' | 'full' }, commandId?: string): Promise<SessionCreateAck> {
-    return request(`/api/agent/v1/sessions/${id(sessionId)}/fork`, C.SessionCreateAckSchema, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: JSON.stringify(input) });
+  forkSession(scope: Pick<Session, 'sessionId' | 'rootSessionId' | 'workspaceId' | 'projectId'>, input: { messageId?: string; mode: 'selected' | 'full' }, commandId?: string): Promise<SessionCreateAck> {
+    return request(`/api/agent/v1/sessions/${id(scope.sessionId)}/fork`, C.SessionCreateAckSchema, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: JSON.stringify(input) });
   }
   abortSession(sessionId: string, runId: string): Promise<RunAbortAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/control`, C.RunAbortAckSchema, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'abort', runId }) });

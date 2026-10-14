@@ -103,5 +103,6 @@ export function createHostAgentRuntime({
   };
   return {
     service, resolveWorkspaceScope, resolveWorkspaceDirectory: scopeRuntime.resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope,
+    resolveHostRelocationScope: scopeRuntime.resolveRelocationSourceScope,
   };
 }

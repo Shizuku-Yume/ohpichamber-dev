@@ -192,6 +192,22 @@ export const createHostAgentScopeRuntime = ({
       workspaceId: workspace.workspaceId, agentDirectoryId: workspace.agentDirectoryId,
     });
   };
+  const resolveRelocationSourceScope = async (sessionId) => {
+    const scope = await store.getSession(sessionId);
+    if (!scope) return null;
+    const [projects, selectedAgentDirectory] = await Promise.all([readProjects(), selectedDirectory()]);
+    if (scope.agentDirectory !== selectedAgentDirectory) return null;
+    if (managedChatsScope && scope.hostProjectId === managedChatsScope.id) {
+      const projectDirectory = await managedRoot();
+      return scope.projectDirectory === projectDirectory && contains(projectDirectory, scope.cwd)
+        ? { ...scope, displayPath: displayPath(scope) } : null;
+    }
+    const project = projects.find((item) => item.id === scope.hostProjectId);
+    if (!project || await validateDirectory(project.path) !== scope.projectDirectory) return null;
+    // A previously admitted workspace remains owned when its worktree is gone.
+    // Only relocation may use this owner; execution still requires authorize().
+    return { ...scope, displayPath: displayPath(scope) };
+  };
   const listProjects = async () => {
     const { scopes, errors } = await discover();
     const projects = new Map();
@@ -209,5 +225,5 @@ export const createHostAgentScopeRuntime = ({
     const { scopes, errors } = await discover();
     return { items: scopes.filter((scope) => projectId === undefined || scope.projectId === projectId).map(publicWorkspace), errors };
   };
-  return { initialize, createChatWorkspace, resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, registerSessionScope, listProjects, listWorkspaces };
+  return { initialize, createChatWorkspace, resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, resolveRelocationSourceScope, registerSessionScope, listProjects, listWorkspaces };
 };
