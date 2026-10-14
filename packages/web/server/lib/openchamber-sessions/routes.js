@@ -52,11 +52,12 @@ const parseArchiveRequest = (payload) => {
 
 
 const createCanonicalSessionService = (dependencies) => {
-  const { service, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope, listWorkspaceScopes, registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted, publishSessionEvent, archiveStore, sessionMetadataStore, persistSessionMetadata, broadcastGlobalUiEvent } = dependencies;
+  const { service, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope, listWorkspaceScopes, registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted, directCommandAdmissionStore, publishSessionEvent, archiveStore, sessionMetadataStore, persistSessionMetadata, broadcastGlobalUiEvent } = dependencies;
   const requiredFunctions = [service?.request, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope,
-    registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted];
+    registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted,
+    directCommandAdmissionStore?.claim, directCommandAdmissionStore?.accept];
   if (!service || requiredFunctions.some((candidate) => !z.function().safeParse(candidate).success))
-    throw new Error('session routes require the Agent service, Host scope resolvers, registration, attachment and delivery owners');
+    throw new Error('session routes require the Agent service, Host scope resolvers, registration, attachment, delivery and direct command admission owners');
   const request = async (pathname, init = {}) => {
     const response = await service.request(pathname, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
     const body = await response.json().catch(() => null);
@@ -90,9 +91,59 @@ const createCanonicalSessionService = (dependencies) => {
     return result;
   };
   const prepareDelivery = async (scope, requestBody, identity = {}) => { const capturedRequest = PromptRequestSchema.parse(await capturePrompt(scope, requestBody)); const capture = { ...identity, request: capturedRequest }; await beforeDispatch(scope, capture); const attachments = await resolveAttachments(scope, capturedRequest.input.attachments); return { ...capture, attachments }; };
-  const send = async (sessionId, payload = {}) => { const scope = await scopeFor(sessionId); const requestBody = PromptRequestSchema.parse(payload); const runId = randomUUID(); const capture = await prepareDelivery(scope, requestBody, { runId, deliveryRunId: runId }); const response = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/runs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'prompt', runId, request: capture.request, attachments: capture.attachments }) }); const run = RunSchema.parse(response?.run); const receipt = { runId, deliveryRunId: runId, run }; await onPromptAccepted(scope, { ...capture, receipt }, receipt); return { run }; };
-  const steer = async (sessionId, payload = {}) => { const scope = await scopeFor(sessionId); const requestBody = PromptRequestSchema.parse(payload.request ?? payload); const envelope = SteerRequestSchema.parse({ sessionId, request: requestBody }); const deliveryRunId = randomUUID(); const capture = await prepareDelivery(scope, envelope.request, { deliveryRunId }); const ack = SteerAckSchema.parse(await request(`/internal/sessions/${encodeURIComponent(sessionId)}/steer`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request: capture.request, attachments: capture.attachments }) })); const receipt = { runId: ack.runId, deliveryRunId, ack }; await onPromptAccepted(scope, { ...capture, runId: ack.runId, receipt }, receipt); return ack; };
-  const followUp = async (sessionId, payload = {}) => { const scope = await scopeFor(sessionId); const requestBody = PromptRequestSchema.parse(payload.request ?? payload); const envelope = FollowUpRequestSchema.parse({ sessionId, request: requestBody }); const deliveryRunId = randomUUID(); const capture = await prepareDelivery(scope, envelope.request, { deliveryRunId }); const ack = FollowUpAckSchema.parse(await request(`/internal/sessions/${encodeURIComponent(sessionId)}/follow-up`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request: capture.request, attachments: capture.attachments }) })); const receipt = { deliveryRunId, followUpId: ack.followUpId, ack }; await onPromptAccepted(scope, { ...capture, receipt }, receipt); return ack; };
+  const deliver = async (operation, sessionId, payload, commandId) => {
+    const scope = await scopeFor(sessionId);
+    const parsed = PromptRequestSchema.safeParse(operation === 'send' ? payload : payload?.request ?? payload);
+    if (!parsed.success || (operation !== 'send' && payload?.sessionId !== undefined && payload.sessionId !== sessionId)) {
+      throw new OpenChamberControlError('Prompt request is invalid', 400, { code: 'INVALID_REQUEST' });
+    }
+    const requestBody = operation === 'steer' ? SteerRequestSchema.parse({ sessionId, request: parsed.data }).request
+      : operation === 'followUp' ? FollowUpRequestSchema.parse({ sessionId, request: parsed.data }).request : parsed.data;
+    if (commandId !== undefined && !EntityIdSchema.safeParse(commandId).success) {
+      throw new OpenChamberControlError('Command key is invalid', 400, { code: 'INVALID_REQUEST' });
+    }
+    const claim = commandId === undefined ? null : await directCommandAdmissionStore.claim(scope, commandId, operation, requestBody);
+    if (claim?.state === 'accepted') return claim.acknowledgment;
+    const deliveryRunId = randomUUID();
+    const capture = await prepareDelivery(scope, requestBody, { ...(operation === 'send' ? { runId: deliveryRunId } : {}), deliveryRunId, ...(commandId === undefined ? {} : { commandId }) });
+    let acknowledgment;
+    let receipt;
+    try {
+      const pathname = operation === 'send' ? 'runs' : operation === 'steer' ? 'steer' : 'follow-up';
+      const body = operation === 'send' ? { type: 'prompt', runId: deliveryRunId, request: capture.request, attachments: capture.attachments }
+        : { request: capture.request, attachments: capture.attachments };
+      const response = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/${pathname}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      if (operation === 'send') {
+        const run = RunSchema.parse(response?.run);
+        if (run.sessionId !== sessionId || run.runId !== deliveryRunId) throw new Error('Native run acknowledgement does not match the admitted command');
+        acknowledgment = { run };
+        receipt = { runId: run.runId, deliveryRunId, run };
+      } else {
+        acknowledgment = (operation === 'steer' ? SteerAckSchema : FollowUpAckSchema).parse(response);
+        if (acknowledgment.sessionId !== sessionId) throw new Error('Native acknowledgement does not match the admitted session');
+        receipt = operation === 'steer' ? { runId: acknowledgment.runId, deliveryRunId, ack: acknowledgment }
+          : { deliveryRunId, followUpId: acknowledgment.followUpId, ack: acknowledgment };
+      }
+    } catch (error) {
+      // A failed transport or malformed acknowledgement cannot prove that native execution did not accept the command.
+      if (claim && !(error instanceof OpenChamberControlError && error.statusCode < 500)) {
+        throw new OpenChamberControlError('Command acceptance is uncertain; it will not be dispatched again', 409, { code: 'COMMAND_IN_FLIGHT', retryable: false });
+      }
+      throw error;
+    }
+    try {
+      await onPromptAccepted(scope, { ...capture, ...(receipt.runId ? { runId: receipt.runId } : {}), receipt }, receipt);
+    } catch (error) {
+      if (claim) throw new OpenChamberControlError('Command was accepted but its delivery receipt is incomplete', 409, { code: 'COMMAND_IN_FLIGHT', retryable: false });
+      throw error;
+    }
+    // Keep the claim pending if this durable write fails, rather than authorizing an unsafe resend.
+    if (claim) await directCommandAdmissionStore.accept(scope, commandId, claim.claimId, acknowledgment);
+    return acknowledgment;
+  };
+  const send = (sessionId, payload = {}, commandId) => deliver('send', sessionId, payload, commandId);
+  const steer = (sessionId, payload = {}, commandId) => deliver('steer', sessionId, payload, commandId);
+  const followUp = (sessionId, payload = {}, commandId) => deliver('followUp', sessionId, payload, commandId);
   const fork = async (sessionId, payload = {}) => {
     const source = await scopeFor(sessionId);
     const publicMessageId = asNonEmptyString(payload.messageId);
@@ -171,8 +222,8 @@ const sendServiceError = (res, error, fallback) => {
   const status = controlError.statusCode >= 400 && controlError.statusCode <= 599 ? controlError.statusCode : 500;
   const codeResult = ProblemCodeSchema.safeParse(error?.code);
   const code = codeResult.success ? codeResult.data : status === 404 ? 'SESSION_NOT_FOUND' : status === 400 ? 'INVALID_REQUEST' : status === 401 || status === 403 ? 'UNAUTHORIZED' : status === 503 ? 'SERVICE_UNAVAILABLE' : 'INTERNAL_ERROR';
-  const problem = ProblemDetailsSchema.parse({ type: `urn:ohpichamber:problem:${code}`, title: 'Session operation failed', status, detail: controlError.message || fallback || 'Session operation failed', code, retryable: status >= 500 });
-  return res.status(status).json(problem);
+  const problem = ProblemDetailsSchema.parse({ type: `urn:ohpichamber:problem:${code}`, title: 'Session operation failed', status, detail: controlError.message || fallback || 'Session operation failed', code, retryable: error?.retryable ?? status >= 500 });
+  return res.status(status).type('application/problem+json').json(problem);
 };
 
 export const registerOpenChamberSessionRoutes = (app, dependencies) => {
@@ -233,15 +284,15 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
     express.json({ limit: '1mb' }),
     async (req, res) => {
       try {
-        return res.json(await service.send(req.params.sessionId, req.body));
+        return res.json(await service.send(req.params.sessionId, req.body, req.get('Idempotency-Key')));
       } catch (error) {
         console.error('[OpenChamberSessions] failed to send session:', error);
         return sendServiceError(res, error, 'Failed to send session');
       }
     },
   );
-  app.post('/api/openchamber/sessions/:sessionId/steer', express.json({ limit: '1mb' }), async (req, res) => { try { return res.json(await service.steer(req.params.sessionId, req.body || {})); } catch (error) { return sendServiceError(res, error, 'Failed to steer session'); } });
-  app.post('/api/openchamber/sessions/:sessionId/follow-up', express.json({ limit: '1mb' }), async (req, res) => { try { return res.json(await service.followUp(req.params.sessionId, req.body || {})); } catch (error) { return sendServiceError(res, error, 'Failed to submit session follow-up'); } });
+  app.post('/api/openchamber/sessions/:sessionId/steer', express.json({ limit: '1mb' }), async (req, res) => { try { return res.json(await service.steer(req.params.sessionId, req.body || {}, req.get('Idempotency-Key'))); } catch (error) { return sendServiceError(res, error, 'Failed to steer session'); } });
+  app.post('/api/openchamber/sessions/:sessionId/follow-up', express.json({ limit: '1mb' }), async (req, res) => { try { return res.json(await service.followUp(req.params.sessionId, req.body || {}, req.get('Idempotency-Key'))); } catch (error) { return sendServiceError(res, error, 'Failed to submit session follow-up'); } });
   app.post(
     '/api/openchamber/sessions/:sessionId/fork',
     express.json({ limit: '1mb' }),
@@ -277,9 +328,9 @@ export const registerCanonicalSessionRoutes = (router, service) => {
   router.get('/:sessionId/snapshot', (req, res) => call(res, () => service.open(req.params.sessionId), 'Failed to open session snapshot'));
   router.get('/:sessionId', (req, res) => call(res, () => service.open(req.params.sessionId), 'Failed to open session'));
   router.get('/:sessionId/history', (req, res) => call(res, () => service.history(req.params.sessionId, new URLSearchParams(req.query).toString()), 'Failed to read session history'));
-  router.post('/:sessionId/runs', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.send(req.params.sessionId, req.body || {}), 'Failed to submit session run'));
-  router.post('/:sessionId/steer', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.steer(req.params.sessionId, req.body || {}), 'Failed to steer session'));
-  router.post('/:sessionId/follow-up', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.followUp(req.params.sessionId, req.body || {}), 'Failed to submit session follow-up'));
+  router.post('/:sessionId/runs', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.send(req.params.sessionId, req.body || {}, req.get('Idempotency-Key')), 'Failed to submit session run'));
+  router.post('/:sessionId/steer', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.steer(req.params.sessionId, req.body || {}, req.get('Idempotency-Key')), 'Failed to steer session'));
+  router.post('/:sessionId/follow-up', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.followUp(req.params.sessionId, req.body || {}, req.get('Idempotency-Key')), 'Failed to submit session follow-up'));
   router.post('/:sessionId/fork', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.fork(req.params.sessionId, req.body || {}), 'Failed to fork session'));
   router.post('/:sessionId/control', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.control(req.params.sessionId, req.body || {}), 'Failed to control session'));
   router.delete('/:sessionId', (req, res) => call(res, () => service.delete(req.params.sessionId), 'Failed to delete session'));

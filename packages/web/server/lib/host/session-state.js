@@ -5,6 +5,7 @@ import { createArchiveStore } from '../openchamber-sessions/archive-store.js';
 import { createSessionFoldersStore } from '../session-folders/routes.js';
 import { createAgentScopeStore } from './agent-scope-store.js';
 import { createAttachmentStore } from './attachment-store.js';
+import { createDirectCommandAdmissionStore } from './direct-command-admission-store.js';
 
 /** One explicit Host connection and lifecycle for metadata, canonical scopes, archive, and folders. */
 export const createHostSessionState = ({ dataDir, fsPromises, path, now } = {}) => {
@@ -14,6 +15,7 @@ export const createHostSessionState = ({ dataDir, fsPromises, path, now } = {}) 
   const sessionFoldersStore = createSessionFoldersStore({ openchamberDataDir: dataDir, fsPromises, path, now, database: db });
   const agentScopeStore = createAgentScopeStore({ database: db, fsPromises });
   const attachmentStore = createAttachmentStore({ database: db, storageDirectory: (path ?? nodePath).join(dataDir, 'attachments'), fsPromises, now });
+  const directCommandAdmissionStore = createDirectCommandAdmissionStore({ database: db });
   let closePromise;
   const initialize = async () => {
     const [metadata, archive, folders] = await Promise.all([
@@ -26,16 +28,16 @@ export const createHostSessionState = ({ dataDir, fsPromises, path, now } = {}) 
     };
     return { metadata: outcome(metadata), archive: outcome(archive), folders: outcome(folders) };
   };
-  const flush = async () => { await Promise.all([sessionMetadataStore.flush(), archiveStore.flush(), sessionFoldersStore.flush(), agentScopeStore.flush(), attachmentStore.flush()]); };
+  const flush = async () => { await Promise.all([sessionMetadataStore.flush(), archiveStore.flush(), sessionFoldersStore.flush(), agentScopeStore.flush(), attachmentStore.flush(), directCommandAdmissionStore.flush()]); };
   const close = () => {
     if (closePromise) return closePromise;
     // Store close fences new admissions immediately, then drains already
     // admitted work before the sole connection owner closes SQLite.
     closePromise = (async () => {
-      await Promise.all([sessionMetadataStore.close(), archiveStore.close(), sessionFoldersStore.close(), agentScopeStore.close(), attachmentStore.close()]);
+      await Promise.all([sessionMetadataStore.close(), archiveStore.close(), sessionFoldersStore.close(), agentScopeStore.close(), attachmentStore.close(), directCommandAdmissionStore.close()]);
       db.close();
     })();
     return closePromise;
   };
-  return { sessionMetadataStore, archiveStore, sessionFoldersStore, agentScopeStore, attachmentStore, initialize, flush, close, databasePath: filePath };
+  return { sessionMetadataStore, archiveStore, sessionFoldersStore, agentScopeStore, attachmentStore, directCommandAdmissionStore, initialize, flush, close, databasePath: filePath };
 };
