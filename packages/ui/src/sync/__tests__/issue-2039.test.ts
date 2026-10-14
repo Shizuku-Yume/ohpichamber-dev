@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import type { Session } from "@openchamber/agent-contract"
 import { canonicalClient } from "@/api/canonicalClient"
 import { cyclePermissionMode } from "../../components/chat/permissionAutoAccept"
+afterEach(() => mock.restore())
 
 const storage = new Map<string, string>()
 const createSessionCalls: Array<{ title?: string; directory: string | null; metadata?: unknown }> = []
