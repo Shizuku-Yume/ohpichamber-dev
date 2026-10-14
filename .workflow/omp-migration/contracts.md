@@ -451,13 +451,30 @@ The M0 capability fixture observed direct approval/question request, resolve and
 
 ## Session topology, branching, and deletion
 
-### Branching versus filesystem rewind
+### Branching, leaf selection, and filesystem independence
 
 The protocol treats conversation history branching and filesystem modifications as completely separate concerns:
 
-1. **Branching.** Branching forks the message transcript at an earlier turn. The Agent Service creates a new linear history path from that turn.
-2. **No Filesystem Rollback.** Branching does not rewind files, delete created files, or revert Git commits made by tools in abandoned turns.
-3. **Explicit Host Operations.** If a user wishes to restore previous file states, they must execute explicit Host Git operations (e.g. `git restore` or worktree branch switching) through Host APIs.
+1. **Branching and leaf selection.** Branching forks the message transcript at an earlier turn. Same-session durable reversible tree leaf selection switches the active conversation branch within the native transcript tree. Abandoned branches remain intact on disk. Selecting an alternate leaf is non-destructive and persists across cold reopen. The OMP SDK is the sole transcript writer; OpenChamber never maintains a second transcript.
+2. **No Filesystem Rollback.** Branching and leaf selection do not rewind files, delete created files, or revert Git commits made by tools in abandoned turns.
+3. **Explicit Host Operations.** If a user wishes to restore previous file states, they must execute explicit Host Git operations (such as `git restore` or worktree branch switching) through Host APIs.
+4. **Transition rejection and state preservation.** Leaf selection requested during an active run, or with a stale selection owner or mismatched version, is rejected with an error. Failed selection attempts preserve the valid original selection state.
+5. **Privacy.** Public responses never include absolute host working-directory paths or private SDK entry identifiers.
+6. **Implementation status.** Native session control endpoints, leaf selection, and verification remain in progress and unverified.
+
+### Execution workspace relocation
+
+UI folder organization and session renaming update Host metadata only ([contracts.md#metadata-sidecar-and-transcript-ownership](contracts.md#metadata-sidecar-and-transcript-ownership)). Execution workspace relocation moves an execution session to a different workspace (SCOPE-8.3):
+
+1. **Authorized Host Resolution.** The Host Gateway validates and authorizes the target destination workspace path before dispatching to the Agent Service.
+2. **Service SDK Persistence and Worker Replacement.** Relocation executes service-owned SDK storage and working-directory persistence followed by orderly destination-cwd worker replacement to enforce destination scope.
+3. **Identity Persistence.** Canonical root session and descendant subagent identities persist unchanged across relocation.
+4. **Handle Expiry.** Previous worker epoch handles and pending approval or question handles expire upon worker replacement; stale handles cannot be resolved against the new worker.
+5. **Client Recovery.** The client recovers relocated session state via authoritative snapshot catch-up.
+6. **No Filesystem or Git Rollback.** Workspace relocation does not move repository files, rewind Git history, or revert changes in either the source or destination workspace.
+7. **Rejection and Preservation.** Relocation requests submitted during an active run, or targeting an invalid path, are rejected. Failure preserves the valid original workspace and worker state.
+8. **Privacy.** Public responses do not expose absolute host paths or private SDK entry identifiers.
+9. **Implementation status.** Native workspace relocation endpoints and Data Transfer Objects are under active implementation; they remain unverified and pending live proof. Exact endpoint and DTO names are established during implementation.
 
 ### History Pagination Across Branch Versions
 

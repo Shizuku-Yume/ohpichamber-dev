@@ -14,7 +14,7 @@
 **Read first:** `.workflow/specs/omp-through-m3.md` M3/W7/W8; UI API and sync-state skills; `packages/ui/src/sync/DOCUMENTATION.md`; `packages/ui/src/stores/DOCUMENTATION.md`; `packages/ui/src/sync/sync-context.tsx`; `packages/ui/src/lib/opencode/client.ts`; contracts and Host Gateway architecture
 **Covers:** W8
 
-**Check:** `node scripts/run-isolated-tests.mjs packages/ui/src/sync` plus focused Canonical Client tests and a temporary connected client/service scenario → bootstrap/reconnect/runtime switching handles snapshot/cursor and stale responses correctly; fetch failure preserves prior authoritative state. Run changed-source oxlint and owner type-check once at integration. Do not use a full UI run that cannot compile until the dependent record consumers land.
+**Check:** Focused core sync/session-loader/bootstrap/event-reducer/selection tests run in separate `bun test <resolved files>` processes (the runner script accepts a directory only), connected CanonicalClient transport proof, authored oxlint, and core-only typecheck findings → bootstrap/reconnect/runtime switching handles snapshot/cursor and stale responses correctly; fetch failure preserves prior authoritative state. The broad sync runner currently includes leaf consumer/model/token/permission tests owned by Task 14 (`lib/messages/userModelChoice`, `stores/utils/tokenUtils/issue2404/session-leaf-subscriptions`) and Host directory-recovery helper extraction owned by Task 16, which cannot pass before downstream tasks land. Full `node scripts/run-isolated-tests.mjs packages/ui/src/sync` and cross-workspace checks remain mandatory after Tasks 14–17 at Gate 18 (W7–W10 integrated), neither waived nor silently reduced.
 
 - [ ] Implement one transport-facing Canonical Client for Web and Electron consumers.
 - [ ] Migrate sync context, client helpers, session stores/actions and global state without an OpenCode-shaped adapter.
@@ -47,7 +47,8 @@ Existing check observations (recorded from integration runs, not rerun):
 - Automatic isolated agent spawn failed prior to edits because the 1.3 GB snapshot exceeded the 1.0 GB budget. Explicit git worktrees avoid snapshot budget issues without modifying configuration.
 - Core production compile repairs run in separate worktree `m313-sync-compile`.
 - Legacy sync test conversion runs in separate worktree `m313-sync-tests`.
-- A real CanonicalClient-only connected proof is actively running (results pending).
+- Native session controls (branch leaf selection and workspace relocation) run in separate worktree `m313-native-controls` (in progress, unverified).
+- Connected CanonicalClient transport proof verified on receipt `/home/shizuku/Project/ohpichamber-omp-artifacts/m313-canonical-client-proof-receipt.json` (`bun /tmp/m313-client-proof.mjs`, exit 0 once): exercises CanonicalClient → runtimeFetch → Host HTTP (`registerCanonicalHostRoutes`, `registerCanonicalSessionRoutes`) → supervisor.request → private Bun service → dedicated SDK worker → loopback OpenAI-compatible provider (1 request, sequence 1..12, 2 messages/2 parts matching history IDs, snapshot head 12, 8 recovered events duplicate-free, abort cancelled). Limitations are explicit: caller publication token guard verified around delayed response, not actual UI sync publication; fixture bearer auth is not production auth certification; clean shutdown and throwaway script removal confirmed; M2 receipts reused unchanged. Existing broad suite failures preserved; no green M3 claim.
 
 ### Dependency and surface boundaries
 
@@ -62,4 +63,4 @@ Existing check observations (recorded from integration runs, not rerun):
 
 ### Next action
 
-Complete the focused CanonicalClient-only connected proof, land production compile repairs from `m313-sync-compile`, and land converted sync tests from `m313-sync-tests`. Checkboxes remain unchecked and the task remains active until focused proof is verified.
+Land production compile repairs from `m313-sync-compile`, land converted sync tests from `m313-sync-tests`, and complete native session controls in `m313-native-controls` following clarified contracts. Run focused core tests in separate `bun test` processes, authored oxlint, and core-only typecheck. Hand off to downstream consumer migration (Task 14). Checkboxes remain unticked and the task remains active until downstream integration and Gate 18.
