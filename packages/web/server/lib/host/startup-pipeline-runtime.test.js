@@ -21,7 +21,6 @@ describe('startup pipeline runtime', () => {
 
     await runtime.run({
       app: {},
-      setupProxy: vi.fn(),
       staticRoutesRuntime: { registerStaticRoutes: vi.fn() },
       apiOnly: false,
       tunnelRuntimeContext: {

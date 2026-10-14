@@ -29,7 +29,6 @@ export const createStartupPipelineRuntime = (dependencies) => {
       terminalRebindWindowMs,
       terminalMaxRebindsPerWindow,
       environmentRuntime = null,
-      setupProxy,
       startAgentService,
       onListenerReady = null,
       staticRoutesRuntime,
@@ -93,7 +92,6 @@ export const createStartupPipelineRuntime = (dependencies) => {
       wsClients: messageStreamWsClients,
     });
 
-    setupProxy(app);
 
     if (apiOnly) {
       staticRoutesRuntime.registerApiOnlyFallbackRoutes(app);
