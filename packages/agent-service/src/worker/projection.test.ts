@@ -121,12 +121,16 @@ test('configured private roots are withheld across split native deltas without c
     }
     expect(unchanged).toBe(` ${unrelated}`);
     const toolInput = { path: `${agentDirectory}/settings.json`, other: '/usr/share/public.txt' };
-    const toolStarted = projection.consume({ type: 'tool_execution_start', toolCallId: 'call', toolName: 'read', args: toolInput });
-    expect(toolStarted[0]?.event).toMatchObject({ type: 'tool.started', input: { path: '[agent-directory]/settings.json', other: '/usr/share/public.txt' } });
+    const nativeToolStarted = { type: 'tool_execution_start' as const, toolCallId: `${cwd}/call`, toolName: 'read', args: toolInput };
+    const toolStarted = projection.consume(nativeToolStarted);
+    expect(toolStarted[0]?.event).toMatchObject({ type: 'tool.started', toolCallId: '[workspace]/call', input: { path: '[agent-directory]/settings.json', other: '/usr/share/public.txt' } });
+    expect(nativeToolStarted.toolCallId).toBe(`${cwd}/call`);
     expect(toolInput.path).toBe(`${agentDirectory}/settings.json`);
     const toolResult = { content: [{ type: 'text' as const, text: `${storage}/private.json` }], details: { path: `${cwd}/file` } };
-    const toolCompleted = projection.consume({ type: 'tool_execution_end', toolCallId: 'call', toolName: 'read', result: toolResult, isError: false });
-    expect(toolCompleted[0]?.event).toMatchObject({ type: 'tool.completed', output: {
+    const nativeToolCompleted = { type: 'tool_execution_end' as const, toolCallId: `${cwd}/call`, toolName: 'read', result: toolResult, isError: false };
+    const toolCompleted = projection.consume(nativeToolCompleted);
+    expect(nativeToolCompleted.toolCallId).toBe(`${cwd}/call`);
+    expect(toolCompleted[0]?.event).toMatchObject({ type: 'tool.completed', toolCallId: '[workspace]/call', output: {
       content: [{ type: 'text', text: '[session-storage]/private.json' }], details: { path: '[workspace]/file' },
     } });
     expect(toolResult.details.path).toBe(`${cwd}/file`);
