@@ -367,13 +367,13 @@ export class WorkerSession {
       if (this.preparation || this.projection.activeRun() || this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
       const before = this.projection.seed();
       if (before.branch.branchId !== request.branchId || before.branch.branchVersion !== request.branchVersion) {
-        throw new ProjectionError(409, 'RESYNC_REQUIRED', 'The selected branch has changed');
+        throw new ProjectionError(409, 'SESSION_BRANCH_CONFLICT', 'The selected branch has changed');
       }
       previousLeaf = manager.getLeafId();
       previousRevert = selectedBranchRevert(manager.getBranch());
       const targetId = request.action === 'revert'
         ? resolveCanonicalMessage(manager, this.sessionId, request.messageId, true) : previousRevert?.restoreLeafId;
-      if (!targetId) throw new ProjectionError(409, 'RESYNC_REQUIRED', 'The requested branch selection is unavailable');
+      if (!targetId) throw new ProjectionError(409, 'SESSION_BRANCH_CONFLICT', 'The requested branch selection is unavailable');
       const targetMessage = request.action === 'revert' ? before.messages.find(message => message.messageId === request.messageId) : undefined;
       navigationStarted = true;
       const navigation = await this.session.navigateTree(targetId, { summarize: false, allowAskReopen: false });
