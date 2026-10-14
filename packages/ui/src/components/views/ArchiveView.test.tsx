@@ -2,7 +2,8 @@ import { afterAll, afterEach, beforeEach, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 const browser = new Window({ url: 'http://localhost' });
 let root: Root;
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
@@ -18,9 +19,11 @@ const { useGlobalSessionsStore } = await import('@/stores/useGlobalSessionsStore
 const { ArchiveSessionsView, ArchiveView } = await import('./ArchiveView');
 const initialUI = useUIStore.getState();
 const initialSessions = useGlobalSessionsStore.getState();
-const session = (id: string, title: string, archived = 2): Session => ({
-  id, title, projectID: 'project', cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, directory: '/workspace',
-  time: { created: 1, updated: 1, archived },
+const session = (sessionId: string, title: string, archivedAt?: number): Session => ({
+  sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: 'workspace', rootSessionId: sessionId,
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  ...(archivedAt === undefined ? {} : { archivedAt }),
+  metadata: { title }, metadataRevision: '1', archiveRevision: archivedAt === undefined ? '0' : '1',
 });
 
 beforeEach(() => {
@@ -28,6 +31,7 @@ beforeEach(() => {
   document.body.append(host);
   root = createRoot(host);
   useUIStore.setState({ isArchivePageOpen: true });
+  registerWorkspaceDirectory('workspace', '/workspace');
 });
 
 afterEach(async () => {
@@ -49,7 +53,7 @@ test('archive search uses exact IDs and preserves title search and archive membe
   const id = 'ses_f88b1a2b3c4d';
   useGlobalSessionsStore.setState({
     archivedSessions: [session(id, 'Release notes'), session('ses_f88b1a2b3c4e', id)],
-    activeSessions: [session('ses_active', 'Active session', 0)],
+    activeSessions: [session('ses_active', 'Active session')],
   });
   await act(async () => root.render(<I18nProvider><ArchiveView /></I18nProvider>));
   const input = browser.document.querySelector('input');
@@ -83,9 +87,10 @@ test('the chats of a deleted space are grouped under its name and cannot be rest
     archives: [{ spaceId: 'a1b2c3d4e5f6', name: 'Fix login', directory: '/data/spaces/archive/a1b2c3d4e5f6' }],
   }), { status: 200 }), originalFetch);
   try {
+    registerWorkspaceDirectory('space-workspace', '/data/spaces/archive/a1b2c3d4e5f6');
     useGlobalSessionsStore.setState({
       archivedSessions: [
-        { ...session('ses_space1', 'Agent chat'), directory: '/data/spaces/archive/a1b2c3d4e5f6' },
+        { ...session('ses_space1', 'Agent chat'), workspaceId: 'space-workspace' },
         session('ses_mine1', 'My chat'),
       ],
       activeSessions: [],

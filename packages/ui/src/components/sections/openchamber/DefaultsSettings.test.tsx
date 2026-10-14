@@ -8,6 +8,8 @@ type ProviderState = {
   id: string;
   models: Array<{ id: string; variants?: Record<string, boolean> }>;
 };
+const canonicalProviderCalls: string[] = [];
+const canonicalProviders = [{ providerId: 'sidecar', name: 'Sidecar', endpoint: null, protocol: null, authMethods: ['api-key'], auth: { status: 'configured', credentialRef: 'cred', method: 'api-key', source: 'stored-credential' } }];
 
 type ConfigState = {
   providers: ProviderState[];
@@ -69,11 +71,16 @@ mock.module('@/sync/selection-store', () => ({
 mock.module('@/sync/session-ui-store', () => ({
   useSessionUIStore: <T,>(selector: (state: typeof sessionState) => T): T => selector(sessionState),
 }));
-mock.module('@/lib/runtime-fetch', () => ({
-  runtimeFetch: async () => new Response(JSON.stringify({ authenticatedProviders: [] }), {
-    headers: { 'Content-Type': 'application/json' },
-  }),
+mock.module('@/api/canonicalClient', () => ({
+  canonicalClient: {
+    resolveWorkspace: async (directory: string) => ({ workspaceId: `workspace:${directory}`, projectId: 'project', name: 'Project' }),
+    getProviders: async (workspaceId: string) => {
+      canonicalProviderCalls.push(workspaceId);
+      return { workspaceId, revision: '1', providers: canonicalProviders };
+    },
+  },
 }));
+mock.module('@/hooks/useSettingsDirectory', () => ({ useSettingsDirectory: () => '/settings/project' }));
 const persistenceModule = await import('@/lib/persistence');
 mock.module('@/lib/persistence', () => ({
   ...persistenceModule,
@@ -142,6 +149,7 @@ describe('DefaultsSettings', () => {
       defaultModel: 'sidecar/model',
       defaultVariant: 'high',
     };
+    canonicalProviderCalls.length = 0;
     updateCalls.length = 0;
     configState.providers = [{ id: 'sidecar', models: [{ id: 'model', variants: { high: true } }] }];
     windowInstance = new Window({ url: 'http://localhost/' });
@@ -177,8 +185,7 @@ describe('DefaultsSettings', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-
-    expect(host.textContent).toContain('High');
+    expect(canonicalProviderCalls).toEqual(['workspace:/settings/project']);
 
     configState.providers = [];
     await act(async () => {

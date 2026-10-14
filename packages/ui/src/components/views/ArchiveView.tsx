@@ -1,6 +1,6 @@
 import { rankByQuery } from '@/lib/search/fuzzySearch';
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -69,8 +69,8 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   const sortedSessions = React.useMemo(() => {
     // Subsessions are restored with their parent and never listed on their own.
     return archivedSessions
-      .filter((session) => !session.parentID)
-      .sort((a, b) => (b.time?.archived ?? 0) - (a.time?.archived ?? 0));
+      .filter((session) => !session.parentSessionId)
+      .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
   }, [archivedSessions]);
 
   const buckets = React.useMemo<DirectoryBucket[]>(() => {
@@ -97,9 +97,9 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   const filteredSessions = React.useMemo(() => {
     if (normalizedQuery) {
       if (normalizedQuery.startsWith('ses_')) {
-        return sortedSessions.filter((session) => session.id.toLowerCase() === normalizedQuery);
+        return sortedSessions.filter((session) => session.sessionId.toLowerCase() === normalizedQuery);
       }
-      return rankByQuery(sortedSessions, normalizedQuery, (session) => [session.title]);
+      return rankByQuery(sortedSessions, normalizedQuery, (session) => [session.metadata?.title ?? '']);
     }
     if (selectedDirectory === null) return sortedSessions;
     return buckets.find((bucket) => bucket.directory === selectedDirectory)?.sessions ?? [];
@@ -116,12 +116,12 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
 
   const openSession = React.useCallback((session: Session) => {
     const directory = normalizePath(resolveGlobalSessionDirectory(session));
-    setCurrentSession(session.id, directory ?? undefined);
+    setCurrentSession(session.sessionId, directory ?? undefined);
     onLeave();
   }, [onLeave, setCurrentSession]);
 
   const restoreSession = React.useCallback((session: Session) => {
-    void unarchiveSession(session.id).then((success) => {
+    void unarchiveSession(session.sessionId).then((success) => {
       if (success) {
         toast.success(t('sessions.sidebar.session.restore.success'));
       } else {
@@ -192,11 +192,11 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
         >
           {visibleSessions.length === 0 ? emptyState : visibleSessions.map((session) => {
             const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
-            const title = session.title || t('sessions.sidebar.session.untitled');
+            const title = session.metadata?.title || t('sessions.sidebar.session.untitled');
             // A deleted space's chat has nowhere to be restored to.
             const restorable = !(spaceArchives?.has(sessionDirectory) ?? false);
             return (
-              <div key={session.id} className="flex items-center pr-1.5">
+              <div key={session.sessionId} className="flex items-center pr-1.5">
                 <button
                   type="button"
                   className="flex min-h-10 min-w-0 flex-1 items-center py-1 pl-4 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
@@ -210,7 +210,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
                     <span className="flex items-center gap-2.5 typography-micro text-muted-foreground">
                       <span className="block min-w-0 flex-1 truncate">{labelOf(sessionDirectory)}</span>
                       <span className="shrink-0 tabular-nums">
-                        {formatSessionDateLabel(session.time?.archived ?? session.time?.updated ?? session.time?.created ?? Date.now())}
+                        {formatSessionDateLabel(session.archivedAt ?? session.updatedAt ?? session.createdAt)}
                       </span>
                     </span>
                   </span>
@@ -325,11 +325,12 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
               {visibleSessions.length === 0 ? emptyState : visibleSessions.map((session) => {
                 const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
                 const directoryLabel = sessionDirectory ? labelOf(sessionDirectory) : null;
+                const title = session.metadata?.title || t('sessions.sidebar.session.untitled');
                 // A deleted space's chat has nowhere to be restored to.
                 const restorable = !(spaceArchives?.has(sessionDirectory) ?? false);
                 return (
                   <div
-                    key={session.id}
+                    key={session.sessionId}
                     className="group relative flex cursor-pointer items-center gap-3 rounded-md py-1 pl-2 pr-2 transition-[padding] hover:bg-interactive-hover/40 hover:pr-14 focus-within:pr-14"
                     onClick={() => openSession(session)}
                     role="button"
@@ -342,7 +343,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
                     }}
                   >
                     <span dir="auto" className="min-w-0 flex-1 truncate text-left typography-ui-label text-foreground">
-                      {session.title || t('sessions.sidebar.session.untitled')}
+                      {title}
                     </span>
                     {normalizedQuery && directoryLabel ? (
                       <span className="max-w-40 flex-shrink-0 truncate text-[0.72rem] text-muted-foreground/70" title={sessionDirectory}>
@@ -350,7 +351,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
                       </span>
                     ) : null}
                     <span className="flex-shrink-0 text-[0.72rem] text-muted-foreground/75">
-                      {formatSessionDateLabel(session.time?.archived ?? session.time?.updated ?? session.time?.created ?? Date.now())}
+                      {formatSessionDateLabel(session.archivedAt ?? session.updatedAt ?? session.createdAt)}
                     </span>
                     {restorable ? <button
                       type="button"
@@ -359,7 +360,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
                         restoreSession(session);
                       }}
                       className="absolute right-7 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity pointer-events-none hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={t('sessions.archivePage.restoreSessionAria', { title: session.title || t('sessions.sidebar.session.untitled') })}
+                      aria-label={t('sessions.archivePage.restoreSessionAria', { title })}
                     >
                       <Icon name="inbox-unarchive" className="h-3.5 w-3.5" />
                     </button> : null}
@@ -370,7 +371,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
                         sessionEvents.requestDelete({ sessions: [session], mode: 'session' });
                       }}
                       className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity pointer-events-none hover:text-destructive group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={t('sessions.archivePage.deleteSessionAria', { title: session.title || t('sessions.sidebar.session.untitled') })}
+                      aria-label={t('sessions.archivePage.deleteSessionAria', { title })}
                     >
                       <Icon name="delete-bin" className="h-3.5 w-3.5" />
                     </button>

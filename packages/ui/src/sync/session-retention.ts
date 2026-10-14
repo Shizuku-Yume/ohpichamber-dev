@@ -2,8 +2,7 @@ import { create } from 'zustand';
 import type { Session } from '@openchamber/agent-contract';
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { isSessionPinned, useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useUIStore, type SessionRetentionAction } from '@/stores/useUIStore';
 import { useSessionUIStore } from './session-ui-store';
 import { useGlobalSessionStatusStore } from './global-session-status';
@@ -27,7 +26,7 @@ const isOlderThanCutoff = (session: Session, cutoff: number, onlyArchived: boole
 export const isSessionKeptByUser = (
   session: Session,
   pinnedIds: Set<string> = useSessionPinnedStore.getState().ids,
-  directory: string | null = resolveWorkspaceDirectory(session.workspaceId),
+  directory: string | null = resolveGlobalSessionDirectory(session),
 ): boolean => (
   session.metadata?.openchamber?.work?.state === 'open'
   || session.metadata?.isPinned === true

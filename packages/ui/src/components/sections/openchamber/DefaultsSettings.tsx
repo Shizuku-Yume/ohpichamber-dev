@@ -1,4 +1,5 @@
 import React from 'react';
+import { canonicalClient } from '@/api/canonicalClient';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,7 +27,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useI18n } from '@/lib/i18n';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
 import { isAutoModel } from '@/lib/routing/autoModel';
-import { runtimeFetch } from '@/lib/runtime-fetch';
+import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 
@@ -41,8 +42,9 @@ const getDisplayModel = (
   return { providerId: '', modelId: '' };
 };
 
-export const DefaultsSettings: React.FC = () => {
-  const { t } = useI18n();
+ export const DefaultsSettings: React.FC = () => {
+   const { t } = useI18n();
+  const settingsDirectory = useSettingsDirectory();
   const setProvider = useConfigStore((state) => state.setProvider);
   const setModel = useConfigStore((state) => state.setModel);
   const setAgent = useConfigStore((state) => state.setAgent);
@@ -255,28 +257,29 @@ export const DefaultsSettings: React.FC = () => {
     [walkthroughModelOverride]
   );
   React.useEffect(() => {
-    // Both pickers offer the same providers — the walkthrough runs through the
-    // small model — and the walkthrough picker is always visible, so this is
-    // always worth fetching. The server answers with the providers it has a
-    // credential and an endpoint for, including plugin-registered ones that
-    // exist only inside the running OpenCode.
     let cancelled = false;
+    if (!settingsDirectory) {
+      setSmallModelProviders([]);
+      return () => { cancelled = true; };
+    }
     (async () => {
       try {
-        const response = await runtimeFetch('/api/small-model', { method: 'GET', headers: { Accept: 'application/json' } });
-        if (!response.ok) return;
-        const payload = await response.json().catch(() => null) as { authenticatedProviders?: unknown } | null;
-        if (!cancelled && Array.isArray(payload?.authenticatedProviders)) {
-          setSmallModelProviders(payload.authenticatedProviders.filter((id): id is string => typeof id === 'string'));
+        const workspace = await canonicalClient.resolveWorkspace(settingsDirectory);
+        const catalog = await canonicalClient.getProviders(workspace.workspaceId);
+        if (!cancelled) {
+          setSmallModelProviders(catalog.providers
+            .filter((provider) => provider.auth.status === 'configured')
+            .map((provider) => provider.providerId));
         }
       } catch {
-        // Fail closed: never offer providers whose credentials were not verified.
+        // Fail closed: unavailable canonical catalogs must not offer providers.
+        if (!cancelled) setSmallModelProviders([]);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [settingsDirectory]);
 
   const availableVariants = React.useMemo(() => {
     if (!parsedModel.providerId || !parsedModel.modelId) return [];

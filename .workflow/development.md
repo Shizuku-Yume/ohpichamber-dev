@@ -144,6 +144,12 @@ The native subagent gap remains the current Task 32 boundary: `subagents: false`
 
 Task 14's non-child slice integrates at the canonical child-navigation seam: once `CanonicalClient.listSubagents(sessionId)` and native child `Message[]` history are available, the session timeline's `ChildSessionExport` records are populated from `parentSessionId`/`rootSessionId` and rendered through `formatSessionAsMarkdown`; no child-session transport or fallback is implemented here. Task 32 remains the owner of the endpoint, registry, child projection, and cursor/history authority.
 
+### Task 15 bounded provider defaults and archive/retention slice
+
+On 2026-10-14, Task 15 independently migrated provider discovery in Defaults settings to the canonical workspace-scoped catalog, archive rendering to native session/archive metadata with authorized directory resolution, and pinned-session retention directory matching to the global canonical session owner. Opening an archived session still calls `onLeave`. The authorized bounded commit excludes incomplete config/profile migration; `useConfigStore.ts`, `useAgentsStore.ts` and `AgentsPage.tsx` were restored to the clean Task 15 base rather than landing mixed-key state.
+
+Focused Defaults settings verification passed 1 test in its worker. Separate parent runs passed ArchiveView's 5 tests / 30 assertions and retention's 18 tests / 42 assertions after two missing archive delimiters were repaired. Archive tests logged unavailable localhost Host probes; this is not a connected UI proof. Guest Shell verification returned 5 passed / 5 failed because session-tree/project scopes omitted expected jobs; Guest/sidebar/catalog continuation and Task 32 child navigation remain open. The task Progress record owns the exact commands and retained Host-only filesystem extraction callers for Task 17. No full package, Web/Electron/mobile or Composer skill/slash-command acceptance was exercised.
+
 ## Reusable findings
 
 ### Inherited guidance is not the target architecture
