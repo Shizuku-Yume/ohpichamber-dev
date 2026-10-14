@@ -206,9 +206,10 @@ export class SessionMessageLoader {
     return this.ensure(normalized, { reason: "prefetch" })
   }
 
-  refresh(target: SessionMessageTarget): Promise<void> {
+  refresh(target: SessionMessageTarget, snapshot?: SessionSnapshot): Promise<void> {
     const normalized = this.normalizeTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
+    if (snapshot) this.invalidateSession(normalized)
     const entry = this.getEntry(normalized)
     if (entry.inflight) {
       if (entry.snapshot.loadingKind !== "older") return entry.inflight
@@ -226,7 +227,7 @@ export class SessionMessageLoader {
       return queued
     }
     const store = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
-    return this.startSnapshotLoad(normalized, entry, store, "refresh")
+    return this.startSnapshotLoad(normalized, entry, store, "refresh", snapshot)
   }
 
   loadOlder(target: SessionMessageTarget): Promise<void> {
@@ -468,14 +469,14 @@ export class SessionMessageLoader {
     return promise
   }
 
-  private startSnapshotLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: "initial" | "refresh" | "prefetch"): Promise<void> {
+  private startSnapshotLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: "initial" | "refresh" | "prefetch", suppliedSnapshot?: SessionSnapshot): Promise<void> {
     const client = this.configuration.client
     const onSnapshot = this.configuration.onSnapshot
     return this.startLoad(target, entry, store, kind, async isCurrent => {
       const requestedRevision = store.getState().sessionRevision ?? 0
       const knownWorkspace = store.getState().workspace
       const [snapshot, workspace] = await Promise.all([
-        client.getSnapshot(target.sessionId),
+        suppliedSnapshot ? Promise.resolve(suppliedSnapshot) : client.getSnapshot(target.sessionId),
         knownWorkspace ? Promise.resolve(knownWorkspace) : client.resolveWorkspace(target.directory),
       ])
       if (!isCurrent()) return

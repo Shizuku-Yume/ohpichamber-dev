@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
-import type { Session, SessionBranchRequest } from '@openchamber/agent-contract';
+import type { Session, SessionBranchRequest, SessionBranchResult, SessionRelocateResult } from '@openchamber/agent-contract';
 import * as transport from '../lib/runtime-fetch';
 import { CanonicalClient } from './canonicalClient';
 
 const client = new CanonicalClient();
 let fetchSpy: ReturnType<typeof spyOn> | undefined;
 afterEach(() => { fetchSpy?.mockRestore(); fetchSpy = undefined; });
-const respond = (payload: unknown) => {
+const respond = (payload: SessionBranchResult | SessionRelocateResult) => {
   const calls: Array<{ path: string; init: RequestInit }> = [];
   fetchSpy = spyOn(transport, 'runtimeFetch').mockImplementation(async (path, init = {}) => {
     calls.push({ path: String(path), init });
@@ -17,7 +17,7 @@ const respond = (payload: unknown) => {
 const branchRequest: SessionBranchRequest = { action: 'revert', messageId: 'public-message', branchId: 'public-branch', branchVersion: '9007199254740993' };
 const branchResult = () => ({ sessionId: 'public-session', branch: { branchId: 'public-branch', branchVersion: '9007199254740994', leafMessageId: null, revert: { messageId: 'public-message' } }, draft: null });
 const session = (sessionId: string, parentSessionId?: string): Session => ({
-  sessionId, rootSessionId: 'public-session', ...(parentSessionId ? { parentSessionId } : {}), projectId: 'public-project', workspaceId: 'destination-workspace',
+  sessionId, rootSessionId: 'public-session', parentSessionId, projectId: 'public-project', workspaceId: 'destination-workspace',
   displayPath: '.', createdAt: 1, updatedAt: 2, epoch: 'new-epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 });

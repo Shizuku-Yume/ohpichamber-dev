@@ -39,22 +39,23 @@ const query = (entries: Record<string, string | number | undefined>): string => 
   return result ? `?${result}` : '';
 };
 
-async function readJson(response: Response): Promise<unknown> {
-  return response.json().catch(() => null);
+async function readJson<T>(response: Response, schema: z.ZodType<T>) {
+  return schema.safeParse(await response.json().catch(() => null));
 }
 
-async function request<T>(path: string, schema: { parse(value: unknown): T }, init: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, schema: z.ZodType<T>, init: RequestInit = {}): Promise<T> {
   const response = await runtimeFetch(path, init);
-  const payload = await readJson(response);
   if (!response.ok) {
-    const problem = C.ProblemDetailsSchema.safeParse(payload);
+    const problem = await readJson(response, C.ProblemDetailsSchema);
     if (problem.success) throw new CanonicalApiError(problem.data);
     throw new CanonicalApiError(C.ProblemDetailsSchema.parse({
       type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Agent Service unavailable',
       status: response.status, detail: 'The canonical operation failed.', code: 'SERVICE_UNAVAILABLE', retryable: response.status >= 500,
     }));
   }
-  return schema.parse(payload);
+  const result = await readJson(response, schema);
+  if (!result.success) throw result.error;
+  return result.data;
 }
 
 const scoped = <T>(schema: z.ZodType<T>, matches: (value: T) => boolean): z.ZodType<T> =>
@@ -277,7 +278,7 @@ export class CanonicalClient {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/completions/${id(completionId)}/cancel`, scoped(C.CompletionCancelResultSchema, result => result.completionId === completionId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.CompletionCancelRequestSchema, input, body => body.completionId === completionId) });
   }
 
-  subscribeSessionEvents(sessionId: string, cursor: string, onEvent: (event: CanonicalEvent) => void, onInvalidated: (event: C.StreamInvalidated) => void, onError: (error: unknown) => void): () => void {
+  subscribeSessionEvents(sessionId: string, cursor: string, onEvent: (event: CanonicalEvent) => void, onInvalidated: (event: C.StreamInvalidated) => void, onError: (error: Error) => void): () => void {
     const controller = new AbortController();
     void (async () => {
       let response: Response | undefined;
@@ -288,8 +289,7 @@ export class CanonicalClient {
         response = await runtimeFetch(`/api/agent/v1/sessions/${id(sessionId)}/events`, { signal: controller.signal, headers: { Accept: 'text/event-stream', 'Last-Event-ID': cursor } });
         if (controller.signal.aborted) return;
         if (!response.ok || !response.body) {
-          const payload = await readJson(response);
-          const problem = C.ProblemDetailsSchema.safeParse(payload);
+          const problem = await readJson(response, C.ProblemDetailsSchema);
           if (problem.success) throw new CanonicalApiError(problem.data);
           throw new CanonicalApiError(C.ProblemDetailsSchema.parse({
             type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Agent event stream unavailable',
@@ -356,7 +356,7 @@ export class CanonicalClient {
         }
         if (!controller.signal.aborted) throw new Error('Canonical event stream ended unexpectedly');
       } catch (error) {
-        if (!controller.signal.aborted) onError(error);
+        if (!controller.signal.aborted) onError(error instanceof Error ? error : new Error(String(error)));
       } finally {
         controller.signal.removeEventListener('abort', cancel);
         if (reader) {
@@ -372,4 +372,4 @@ export class CanonicalClient {
 }
 
 export const canonicalClient = new CanonicalClient();
-export type { SessionList, RunCreateAck, ArchiveAck, CanonicalSessionScope, CanonicalSkillsScope };
+export type { SessionList };

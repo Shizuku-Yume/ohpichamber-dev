@@ -5,10 +5,6 @@
 
 // The review-flow callback signature is retained for its Task 16 cutover;
 // session records and action responses use the Canonical contract directly.
-// Retained pure turn-boundary helper; native fork actions below use Turn records.
-import type { Message } from "@/lib/opencode/model"
-import { readSubagentRun } from "@/lib/opencode/subagent-run"
-import { readDispatchedSessionResult } from "@/lib/opencode/dispatched-session"
 import { useSessionUIStore } from "./session-ui-store"
 import type { ChildStoreManager } from "./child-store"
 import { computeSubtreeIds } from "./scoped-blocking-requests"
@@ -47,9 +43,10 @@ import { withoutSourceOwnedLinks } from "@/lib/sessionForkInheritance"
 import { fetchGoalObjectiveContent, writeGoalObjectiveFile } from "@/lib/goalObjectiveFiles"
 import { canonicalClient, CanonicalApiError } from "@/api/canonicalClient"
 import { SessionMetadataSchema, SessionMetadataPatchSchema, PromptRequestSchema } from "@openchamber/agent-contract"
-import type { Session as CanonicalSession, Message as CanonicalMessage, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata } from "@openchamber/agent-contract"
+import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata } from "@openchamber/agent-contract"
 import { installHostSession, installSessionMetadata, installSessionSnapshot } from "./event-reducer"
 import { registerWorkspaceDirectory, resolveWorkspaceDirectory } from "@/stores/globalSessions"
+import type { State } from "./types"
 
 async function readCanonicalSession(sessionId: string, runtimeKey: string): Promise<CanonicalSession> {
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
@@ -182,25 +179,32 @@ function sessionMutationPatch(
   return sessionsMutationPatch(state, [sessionId], deleted)
 }
 
-function invalidateSessionLoads(sessionId: string, directories: Iterable<string | null | undefined>): void {
+function purgeSessionCaches(state: State, ids: string[]) {
+  const next = { ...state, message: { ...state.message }, snapshot: { ...state.snapshot }, partOwner: { ...state.partOwner },
+    sessionEpoch: { ...state.sessionEpoch }, sessionCursor: { ...state.sessionCursor }, session_status: { ...state.session_status },
+    sessionStatusInvalidated: { ...state.sessionStatusInvalidated }, permission: { ...state.permission }, form: { ...state.form } }
+  dropSessionCaches(next, ids)
+  return next
+}
+
+function invalidateSessionLoadBatch(ids: string[], directories: Iterable<string | null | undefined>, purgeStores = true): void {
   const loader = getImperativeSessionMessageLoader()
   const owned = new Set(directories)
+  const sessionIds = new Set(ids)
   for (const [directory, store] of _childStores?.children ?? []) {
-    if (store.getState().session.some((session) => session.sessionId === sessionId) || store.getState().snapshot[sessionId] || store.getState().message[sessionId]) owned.add(directory)
+    const state = store.getState()
+    if (state.session.some((session) => sessionIds.has(session.sessionId)) || ids.some((id) => state.snapshot[id] || state.message[id])) owned.add(directory)
   }
   for (const directory of owned) {
     if (!directory) continue
-    clearSessionPrefetch(directory, [sessionId], getRuntimeKey())
-    loader?.invalidateSession({ directory, sessionId })
-    const store = _childStores?.getChild(directory)
-    store?.setState((state) => {
-      const next = { ...state, message: { ...state.message }, snapshot: { ...state.snapshot }, partOwner: { ...state.partOwner },
-        sessionEpoch: { ...state.sessionEpoch }, sessionCursor: { ...state.sessionCursor }, session_status: { ...state.session_status },
-        sessionStatusInvalidated: { ...state.sessionStatusInvalidated }, permission: { ...state.permission }, form: { ...state.form } }
-      dropSessionCaches(next, [sessionId])
-      return next
-    })
+    clearSessionPrefetch(directory, ids, getRuntimeKey())
+    for (const sessionId of ids) loader?.invalidateSession({ directory, sessionId })
+    if (purgeStores) _childStores?.getChild(directory)?.setState((state) => purgeSessionCaches(state, ids))
   }
+}
+
+function invalidateSessionLoads(sessionId: string, directories: Iterable<string | null | undefined>): void {
+  invalidateSessionLoadBatch([sessionId], directories)
 }
 
 
@@ -267,15 +271,36 @@ export function getSessionLastAssistantModel(sessionId: string): { providerID: s
   }
 }
 
+async function acceptActionSnapshot(directory: string, snapshot: SessionSnapshot, runtimeKey: string): Promise<void> {
+  const sessionId = snapshot.session.sessionId
+  const loader = getImperativeSessionMessageLoader()
+  if (loader) {
+    await loader.refresh({ directory, sessionId }, snapshot)
+    if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+    const loaded = loader.getSnapshot({ directory, sessionId })
+    if (loaded.status === "error") throw loaded.error ?? new Error("Session snapshot recovery failed")
+  } else {
+    dirStoreForDirectory(directory).setState((state) => installSessionSnapshot(purgeSessionCaches(state, [sessionId]), snapshot))
+  }
+}
+
 async function installAuthoritativeBranch(sessionId: string, result: SessionBranchResult, runtimeKey: string): Promise<void> {
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   const { directory } = dirStoreForSession(sessionId)
-  invalidateSessionLoads(sessionId, [directory])
+  // Fence pre-selection responses without erasing the last valid transcript
+  // while authoritative recovery can still fail.
+  invalidateSessionLoadBatch([sessionId], [directory], false)
   const snapshot = await canonicalClient.getSnapshot(sessionId)
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   if (snapshot.session.sessionId !== sessionId || snapshot.branch.branchId !== result.branch.branchId || snapshot.branch.branchVersion !== result.branch.branchVersion)
     throw new Error("Branch snapshot does not match its acknowledged selection")
-  dirStoreForSession(sessionId).store.setState((state) => installSessionSnapshot(state, snapshot))
+  if (!directory) throw new Error("Branch directory is unknown")
+  await acceptActionSnapshot(directory, snapshot, runtimeKey)
+  for (const [ownedDirectory, store] of _childStores?.children ?? []) {
+    if (ownedDirectory === directory) continue
+    const state = store.getState()
+    if (state.snapshot[sessionId] || state.message[sessionId]) store.setState(purgeSessionCaches(state, [sessionId]))
+  }
   if (result.draft && directory) {
     useInputStore.setState({ pendingComposerRestore: {
       target: { runtimeKey, directory, sessionId }, text: result.draft.text,
@@ -312,28 +337,9 @@ export async function moveSessionToDirectory(session: CanonicalSession, sourceDi
   const snapshot = await canonicalClient.getSnapshot(selected.sessionId)
   if (isStaleRuntime(expectedRuntimeKey)) throw new Error("runtime changed")
   if (snapshot.session.sessionId !== selected.sessionId || snapshot.session.workspaceId !== workspace.workspaceId || snapshot.session.rootSessionId !== session.rootSessionId) throw new Error("Relocation snapshot identified another destination owner")
-  dirStoreForDirectory(destination).setState((state) => installSessionSnapshot(state, snapshot))
+  await acceptActionSnapshot(destination, snapshot, expectedRuntimeKey)
 }
 
-export async function adoptSessionMove(sessionId: string, sourceDirectory: string, destinationDirectory: string): Promise<void> {
-  const runtimeKey = getRuntimeKey()
-  const destination = normalizePath(destinationDirectory)
-  if (!destination) throw new Error("Session relocation destination is invalid")
-  const workspace = await canonicalClient.resolveWorkspace(destination)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
-  const snapshot = await canonicalClient.getSnapshot(sessionId)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
-  if (snapshot.session.sessionId !== sessionId || snapshot.session.workspaceId !== workspace.workspaceId || snapshot.session.projectId !== workspace.projectId) throw new Error("Relocation adoption is not authoritative")
-  const authoritative = await readCanonicalSession(sessionId, runtimeKey)
-  if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
-  if (authoritative.workspaceId !== workspace.workspaceId) throw new Error("Relocation adoption ownership changed")
-  registerWorkspaceDirectory(workspace.workspaceId, destination)
-  invalidateSessionLoads(sessionId, [sourceDirectory, destination])
-  removeSessionsFromLiveStores([sessionId], normalizePath(sourceDirectory) ?? undefined)
-  publishCanonicalSession(authoritative, destination)
-  dirStoreForDirectory(destination).setState((state) => installSessionSnapshot(state, snapshot))
-  useSessionUIStore.getState().setSessionDirectory(sessionId, destination)
-}
 
 function dir() {
   return _getDirectory() || undefined
@@ -886,7 +892,7 @@ async function cleanupReviewMetadataBeforeDelete(
 }
 
 /** Remove a server-confirmed session from every live child store that has it. */
-function removeSessionFromLiveStores(sessionId: string, preferredDirectory?: string, archive = false): SessionListSnapshot[] {
+function removeSessionFromLiveStores(sessionId: string, preferredDirectory?: string): SessionListSnapshot[] {
   if (!_childStores) return []
 
   const snapshots: SessionListSnapshot[] = []
@@ -916,11 +922,6 @@ function removeSessionFromLiveStores(sessionId: string, preferredDirectory?: str
       session: current.session.filter((session) => session.sessionId !== sessionId),
       ...sessionMutationPatch(current, sessionId, true),
     }
-    if (archive) {
-      patch.session_status = { ...current.session_status }
-      delete patch.session_status[sessionId]
-      patch.sessionStatusInvalidated = { ...(current.sessionStatusInvalidated ?? {}), [sessionId]: true }
-    }
     store.setState(patch)
   }
 
@@ -938,6 +939,7 @@ function removeSessionFromLiveStores(sessionId: string, preferredDirectory?: str
 function removeSessionsFromLiveStores(sessionIds: Iterable<string>, preferredDirectory?: string, archive = false): SessionListSnapshot[] {
   const ids = new Set(sessionIds)
   if (!_childStores || ids.size === 0) return []
+  const cacheIds = [...ids]
 
   const snapshots: SessionListSnapshot[] = []
   const visited = new Set<string>()
@@ -959,20 +961,19 @@ function removeSessionsFromLiveStores(sessionIds: Iterable<string>, preferredDir
   for (const [directory, store] of candidates) {
     const current = store.getState()
     const removed = current.session.filter((session) => ids.has(session.sessionId)).map((session) => session.sessionId)
-    if (removed.length === 0) continue
+    const cached = archive && (directory === preferredDirectory || cacheIds.some((id) => current.snapshot[id] || current.message[id] || current.partOwner[id] || current.sessionEpoch[id] || current.sessionCursor[id] || current.session_status[id] || current.permission[id] || current.form[id]))
+    if (removed.length === 0 && !cached) continue
 
     snapshots.push({ directory })
-    const patch: Partial<ReturnType<DirectoryStoreApi["getState"]>> = {
-      session: current.session.filter((session) => !ids.has(session.sessionId)),
-      ...sessionsMutationPatch(current, removed, true),
-    }
+    const patch = archive ? purgeSessionCaches(current, cacheIds) : { ...current }
+    patch.session = current.session.filter((session) => !ids.has(session.sessionId))
+    Object.assign(patch, sessionsMutationPatch(current, removed, true))
     if (archive) {
-      patch.session_status = { ...current.session_status }
-      patch.sessionStatusInvalidated = { ...(current.sessionStatusInvalidated ?? {}) }
-      for (const id of removed) {
-        delete patch.session_status[id]
-        patch.sessionStatusInvalidated[id] = true
-      }
+      // Keep the unknown-status fence after purging the old snapshot. Directory
+      // readiness alone must not certify an archived/restored session idle.
+      const invalidated = patch.sessionStatusInvalidated ?? {}
+      for (const id of ids) invalidated[id] = true
+      patch.sessionStatusInvalidated = invalidated
     }
     store.setState(patch)
   }
@@ -1214,9 +1215,9 @@ export async function archiveSession(sessionId: string, expectedRuntimeKey = get
       throw new Error("archive failed: server did not return the archived session")
     }
     const archived = withArchivedAt(sessionId, stamp.archivedAt)
-    const snapshots = removeSessionFromLiveStores(sessionId, sessionDirectory, true)
+    const snapshots = removeSessionsFromLiveStores([sessionId], sessionDirectory, true)
     removeGlobalSessionStatuses([sessionId])
-    invalidateSessionLoads(sessionId, [...snapshots.map((snapshot) => snapshot.directory), sessionDirectory])
+    invalidateSessionLoadBatch([sessionId], [...snapshots.map((snapshot) => snapshot.directory), sessionDirectory], false)
     if (archived) useGlobalSessionsStore.getState().upsertSession(archived)
     const ui = useSessionUIStore.getState()
     if (ui.currentSessionId === sessionId) ui.setCurrentSession(null)
@@ -1387,7 +1388,7 @@ function commitArchivedSessions(stamps: SessionArchiveStamp[], directory: string
   const snapshots = removeSessionsFromLiveStores(ids, directory, true)
   removeGlobalSessionStatuses(ids)
   const directories = [...snapshots.map((snapshot) => snapshot.directory), directory]
-  for (const id of ids) invalidateSessionLoads(id, directories)
+  invalidateSessionLoadBatch(ids, directories, false)
 
   useGlobalSessionsStore.getState().upsertSessions(archived)
 
@@ -1862,17 +1863,6 @@ async function inheritForkMetadata(sourceSessionId: string, forkedSession: Canon
   }
 }
 
-/**
- * Records that start something new after a turn. OpenCode 1 carried a
- * compaction and a shell run as user messages; OpenCode 2 gives them their own
- * roles, so they have to be named here or a fork after an answer copies them.
- */
-const TURN_BOUNDARY_ROLES = new Set<Message["role"]>(["user", "compaction", "shell"])
-
-const isTurnBoundary = (message: Message): boolean =>
-  TURN_BOUNDARY_ROLES.has(message.role)
-  || readSubagentRun(message) !== undefined
-  || readDispatchedSessionResult(message) !== undefined
 
 /** Native selected forks include the named public message, without legacy composer replay. */
 export async function forkAfterMessage(sessionId: string, messageId: string): Promise<CanonicalSession | null> {
@@ -1901,46 +1891,6 @@ export async function forkAfterMessage(sessionId: string, messageId: string): Pr
   return isStaleRuntime(expectedRuntimeKey) ? null : getGlobalSessionSnapshot(forkedSession.sessionId) ?? forkedSession
 }
 
-/**
- * Whether the boundary at `index` opened a turn rather than arriving inside one.
- * OpenCode steers subagent reports, compactions and prompts typed during a run
- * into the turn that is still going, right after a step that ended on tool
- * calls. A boundary opens a turn only when the assistant step before it finished
- * the previous turn (or there is none).
- */
-const opensTurn = (messages: readonly Message[], index: number): boolean => {
-  for (let before = index - 1; before >= 0; before -= 1) {
-    const message = messages[before]
-    if (message.role !== "assistant") continue
-    return message.time.completed !== undefined && message.finish !== "tool-calls"
-  }
-  return true
-}
-
-/**
- * The last assistant message of the last finished turn, or null when there is
- * none. While a turn runs, everything from the record that opened it on is
- * excluded: that record is a turn boundary (a prompt, a compaction, a shell
- * run, or a background subagent run), and a step inside the running turn can
- * already carry `time.completed` while the turn keeps going, so only turns
- * before it count as stable.
- */
-export function findLastCompletedTurnMessageId(messages: readonly Message[], turnRunning: boolean): string | null {
-  let end = messages.length
-  if (turnRunning) {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      if (isTurnBoundary(messages[index]) && opensTurn(messages, index)) {
-        end = index
-        break
-      }
-    }
-  }
-  for (let index = end - 1; index >= 0; index -= 1) {
-    const message = messages[index]
-    if (message.role === "assistant" && message.time.completed !== undefined) return message.id
-  }
-  return null
-}
 
 /** The session has no finished turn yet, so a fork would copy nothing stable. */
 export class NothingToForkError extends Error {

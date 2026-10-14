@@ -15,12 +15,13 @@ import { resetSessionActionFailures, takeSessionActionFailure } from "./session-
 import { SessionMessageLoader, setImperativeSessionMessageLoader } from "./session-message-loader"
 import { deferred, nativeApproval, nativeClient, nativeHistory, nativeMessage, nativeQuestion, nativeSnapshot } from "./session-message-loader-test-fixtures"
 import { useSessionUIStore } from "./session-ui-store"
+import { setSyncRefs } from "./sync-refs"
 import {
   NothingToForkError, abortCurrentOperation, archiveSession, archiveSessions, cancelForm,
   deleteSession, deleteSessions, dismissOpenFormsForSession, dismissOpenPermissionsForSession,
   dismissPermission, forkAfterMessage, forkFromLastCompletedTurn, forkFromMessage,
   getSessionLastAssistantModel, getSessionLiveActivity, patchSessionMetadata,
-  reconcileExternallyDeletedSession, refetchSessionMessages, replyToForm,
+  moveSessionToDirectory, reconcileExternallyDeletedSession, refetchSessionMessages, replyToForm, revertToMessage,
   respondToPermission, sendMessage, setActionRefs, setSessionWorkState,
   unarchiveSession, unarchiveSessions, updateSessionTitle,
 } from "./session-actions"
@@ -87,6 +88,7 @@ beforeEach(() => {
   currentDirectory = directory
   loader = null
   setActionRefs(manager, () => currentDirectory)
+  setSyncRefs(manager, directory)
   setImperativeSessionMessageLoader(null)
 })
 
@@ -103,6 +105,86 @@ afterEach(() => {
   useConfigStore.setState(originalConfig)
   useGlobalSessionsStore.setState(originalGlobal)
   useSessionPinnedStore.setState(originalPins)
+})
+
+describe("native branch consumer lifecycle", () => {
+  test("tail undo and repeated undo work when selected snapshots omit reverted messages, and redo restores the leaf", async () => {
+    const first = nativeMessage("session-a", "first", 1)
+    const last = nativeMessage("session-a", "last", 2)
+    let snapshot = nativeSnapshot("session-a", [first, last])
+    const store = seed()
+    store.setState({ snapshot: { "session-a": snapshot }, message: { "session-a": snapshot.messages } })
+    spyOn(canonicalClient, "getSnapshot").mockImplementation(async () => snapshot)
+    const select = spyOn(canonicalClient, "selectSessionBranch").mockImplementation(async (_id, request) => {
+      const messages = request.action === "restore" ? [first, last] : request.messageId === "last" ? [first] : []
+      snapshot = nativeSnapshot("session-a", messages)
+      snapshot.branch = { ...snapshot.branch, branchVersion: String(BigInt(request.branchVersion) + 1n) }
+      if (request.action === "revert") snapshot.branch.revert = { messageId: request.messageId }
+      return { sessionId: "session-a", branch: snapshot.branch, draft: null }
+    })
+    await useSessionUIStore.getState().handleSlashUndo("session-a")
+    expect(store.getState().message["session-a"]).toEqual([first])
+    await useSessionUIStore.getState().handleSlashUndo("session-a")
+    expect(store.getState().message["session-a"]).toEqual([])
+    await useSessionUIStore.getState().handleSlashRedo("session-a")
+    expect(select.mock.calls.map(([, request]) => request.action)).toEqual(["revert", "revert", "restore"])
+    expect(select.mock.calls[2]?.[1]).toMatchObject({ branchId: "branch-a", branchVersion: "3" })
+    expect(store.getState().message["session-a"]).toEqual([first, last])
+  })
+
+  test("a confirmed selection followed by failed snapshot recovery preserves prior authoritative data", async () => {
+    const store = seed()
+    const prior = nativeSnapshot()
+    store.setState({ snapshot: { "session-a": prior }, message: { "session-a": prior.messages }, permission: { "session-a": [nativeApproval()] } })
+    spyOn(canonicalClient, "getSnapshot").mockResolvedValueOnce(prior).mockRejectedValueOnce(new Error("snapshot offline"))
+    spyOn(canonicalClient, "selectSessionBranch").mockResolvedValue({ sessionId: "session-a", branch: { ...prior.branch, branchVersion: "2", revert: { messageId: "message-a" } }, draft: null })
+    await expect(revertToMessage("session-a", "message-a")).rejects.toThrow("snapshot offline")
+    expect(store.getState().snapshot["session-a"]).toBe(prior)
+    expect(store.getState().message["session-a"]).toBe(prior.messages)
+    expect(store.getState().permission["session-a"]).toEqual([nativeApproval()])
+  })
+
+  test("branch acceptance publishes the selected snapshot through loader recovery and establishes history coverage", async () => {
+    const store = seed()
+    const prior = nativeSnapshot()
+    const selected = nativeSnapshot("session-a", [])
+    selected.branch = { ...selected.branch, branchVersion: "2", revert: { messageId: "message-a" } }
+    const snapshots: SessionSnapshot[] = []
+    loader = new SessionMessageLoader(manager, { runtimeKey: getRuntimeKey(), client: nativeClient(), onSnapshot: (_target, snapshot) => { snapshots.push(snapshot) } })
+    setImperativeSessionMessageLoader(loader)
+    spyOn(canonicalClient, "getSnapshot").mockResolvedValueOnce(prior).mockResolvedValueOnce(selected)
+    spyOn(canonicalClient, "selectSessionBranch").mockResolvedValue({ sessionId: "session-a", branch: selected.branch, draft: null })
+    await revertToMessage("session-a", "message-a")
+    expect(snapshots).toEqual([selected])
+    expect(loader.getSnapshot({ directory, sessionId: "session-a" })).toMatchObject({ status: "ready", resolved: true, complete: true })
+    expect(store.getState().snapshot["session-a"]?.branch).toEqual(selected.branch)
+  })
+  test("relocation accepts destination snapshot through loader publication and native history coverage", async () => {
+    const source = seed()
+    source.setState({ snapshot: { "session-a": nativeSnapshot() }, message: { "session-a": [nativeMessage()] } })
+    const destination = "/native/destination"
+    const workspace = { workspaceId: "workspace-destination", projectId: "project-a", name: "Destination" }
+    const moved = session("session-a", { workspaceId: workspace.workspaceId, epoch: "epoch-destination" })
+    const snapshot = nativeSnapshot()
+    snapshot.session = moved
+    snapshot.cursor = "epoch-destination:4"
+    snapshot.window.hasEarlier = true
+    const history = spyOn(canonicalClient, "getHistory").mockResolvedValue(nativeHistory(snapshot.messages, "older-page", snapshot))
+    const published: Array<{ directory: string; snapshot: SessionSnapshot }> = []
+    loader = new SessionMessageLoader(manager, { runtimeKey: getRuntimeKey(), client: canonicalClient,
+      onSnapshot: (target, accepted) => { published.push({ directory: target.directory, snapshot: accepted }) } })
+    setImperativeSessionMessageLoader(loader)
+    spyOn(canonicalClient, "resolveWorkspace").mockResolvedValue(workspace)
+    spyOn(canonicalClient, "relocateSession").mockResolvedValue({ sessions: [moved] })
+    spyOn(canonicalClient, "getSnapshot").mockResolvedValue(snapshot)
+    spyOn(canonicalClient, "getQueue").mockResolvedValue({ sessionId: "session-a", revision: "0", items: [] })
+    await moveSessionToDirectory(session(), directory, destination)
+    expect(source.getState().message["session-a"]).toBeUndefined()
+    expect(manager.getChild(destination)?.getState().snapshot["session-a"]?.session.workspaceId).toBe(workspace.workspaceId)
+    expect(published).toEqual([{ directory: destination, snapshot }])
+    expect(history).toHaveBeenCalledTimes(1)
+    expect(loader.getSnapshot({ directory: destination, sessionId: "session-a" })).toMatchObject({ status: "ready", resolved: true, cursor: "older-page", complete: false })
+  })
 })
 
 describe("native session deletion", () => {
@@ -222,17 +304,26 @@ describe("Host archive transitions over native records", () => {
 
   test("confirmed archive invalidates status and moves the full canonical record", async () => {
     const store = seed()
-    store.setState({ session_status: { "session-a": "running" } })
+    store.setState({ sessionStatusReady: true, session_status: { "session-a": "running" },
+      snapshot: { "session-a": nativeSnapshot() }, message: { "session-a": [nativeMessage()] },
+      permission: { "session-a": [nativeApproval()] }, form: { "session-a": [nativeQuestion()] } })
     spyOn(globalThis, "fetch").mockResolvedValue(archiveResponse(["session-a"]))
     expect(await archiveSession("session-a")).toBe(true)
     expect(store.getState().session).toEqual([])
     expect(store.getState().session_status["session-a"]).toBeUndefined()
     expect(store.getState().sessionStatusInvalidated["session-a"]).toBe(true)
+    expect(getSessionLiveActivity("session-a")).toBe("unknown")
+    expect(store.getState().snapshot["session-a"]).toBeUndefined()
+    expect(store.getState().message["session-a"]).toBeUndefined()
+    expect(store.getState().permission["session-a"]).toBeUndefined()
+    expect(store.getState().form["session-a"]).toBeUndefined()
     expect(useGlobalSessionsStore.getState().archivedSessions.find(item => item.sessionId === "session-a")).toEqual({ ...session(), archivedAt: 123 })
   })
 
   test("batches held sessions into one request and one directory publication", async () => {
     const store = seed([session(), session("session-b")])
+    store.setState({ sessionStatusReady: true, snapshot: { "session-a": nativeSnapshot(), "session-b": nativeSnapshot("session-b") },
+      message: { "session-a": [nativeMessage()], "session-b": [nativeMessage("session-b")] } })
     const fetch = spyOn(globalThis, "fetch").mockImplementation(async input => String(input).includes("/auth/url-token")
       ? Response.json({ token: "actions-token", expiresAt: 999 })
       : archiveResponse(["session-a", "session-b"]))
@@ -243,6 +334,10 @@ describe("Host archive transitions over native records", () => {
       expect(fetch.mock.calls.filter(([input]) => String(input).includes("/sessions/archive"))).toHaveLength(1)
       expect(publications).toBe(1)
       expect(store.getState().session).toEqual([])
+      expect(store.getState().snapshot).toEqual({})
+      expect(store.getState().message).toEqual({})
+      expect(getSessionLiveActivity("session-a")).toBe("unknown")
+      expect(getSessionLiveActivity("session-b")).toBe("unknown")
       expect(useGlobalSessionsStore.getState().archivedSessions.map(item => item.sessionId).sort()).toEqual(["session-a", "session-b"])
     } finally { unsubscribe() }
   })

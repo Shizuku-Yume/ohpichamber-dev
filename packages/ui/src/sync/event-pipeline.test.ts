@@ -58,6 +58,24 @@ describe("native canonical event pipeline", () => {
     expect(fake.counts().cleanupCount).toBe(1)
   })
 
+  test("destination attachment retires the source stream and rejects its late callbacks", () => {
+    const fake = fakeClient()
+    const received: SessionMessageTarget[] = []
+    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: (owner) => { received.push(owner); return true }, recover: async () => {} })
+    const destination = { ...target, directory: "/destination" }
+    try {
+      pipeline.attach(target, snapshot)
+      const oldCallback = fake.callbacks[0]
+      pipeline.attach(destination, snapshot)
+      expect(fake.counts().cleanupCount).toBe(1)
+      oldCallback?.(nativeEvent)
+      expect(received).toEqual([])
+      fake.emit(nativeEvent)
+      expect(received).toEqual([destination])
+    } finally { pipeline.cleanup() }
+    expect(fake.counts().cleanupCount).toBe(2)
+  })
+
   test("invalidates and disposes the session stream without a second subscription", () => {
     const fake = fakeClient()
     const recovered: SessionMessageTarget[] = []

@@ -71,6 +71,7 @@ import {
   fetchMessagesForSession,
   refetchSessionMessages,
   revertToMessage as revertToMessageAction,
+  clearStagedRevert,
   type ArchiveSessionsOptions,
   type DeleteSessionOptions,
   type DeleteSessionsOptions,
@@ -585,9 +586,6 @@ const getAuthoritativeSessionDirectory = (sessionId: string): string | null => {
   const owningDirectory = getSyncSessionDirectory(sessionId)
   return owningDirectory ? normalizePath(owningDirectory) : null
 }
-// Native revert is not exposed by the current contract. These retained undo
-// helpers belong to the legacy revert action, not native branch selection.
-const legacyUndoTargetBySession = new Map<string, string>()
 
 /**
  * Directory remembered for a session in this runtime, plus the one persisted
@@ -1969,15 +1967,10 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
   handleSlashUndo: async (sessionId) => {
     const runtimeKey = getRuntimeKey()
-    const undoKey = `${runtimeKey}:${sessionId}`
     const messages = getSyncMessages(sessionId)
     const userMessages = messages.filter((message) => message.role === "user")
     if (userMessages.length === 0) return
-    const currentTarget = legacyUndoTargetBySession.get(undoKey)
-    const currentIndex = currentTarget
-      ? userMessages.findIndex((message) => message.messageId === currentTarget)
-      : userMessages.length
-    const targetMessage = userMessages[currentIndex - 1]
+    const targetMessage = userMessages.at(-1)
     if (!targetMessage) return
     const textPart = targetMessage.parts.find((part) => part.type === "text")
     const preview = textPart?.type === "text"
@@ -1985,7 +1978,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       : "[No text]"
     await get().revertToMessage(sessionId, targetMessage.messageId)
     assertSendRuntime(runtimeKey)
-    legacyUndoTargetBySession.set(undoKey, targetMessage.messageId)
     const { toast } = await import("sonner")
     assertSendRuntime(runtimeKey)
     const { useI18nStore, formatMessage } = await import("@/lib/i18n/store")
@@ -1996,19 +1988,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
   handleSlashRedo: async (sessionId) => {
     const runtimeKey = getRuntimeKey()
-    const undoKey = `${runtimeKey}:${sessionId}`
-    const messages = getSyncMessages(sessionId)
-    const userMessages = messages.filter((message) => message.role === "user")
-    const currentTarget = legacyUndoTargetBySession.get(undoKey)
-    if (!currentTarget) return
-    const currentIndex = userMessages.findIndex((message) => message.messageId === currentTarget)
-    const targetMessage = currentIndex >= 0 ? userMessages[currentIndex + 1] : undefined
-    if (!targetMessage) return
-    await refetchSessionMessages(sessionId)
+    await clearStagedRevert(sessionId)
     assertSendRuntime(runtimeKey)
-    await revertToMessageAction(sessionId, targetMessage.messageId)
-    assertSendRuntime(runtimeKey)
-    legacyUndoTargetBySession.set(undoKey, targetMessage.messageId)
     const { toast } = await import("sonner")
     assertSendRuntime(runtimeKey)
     const { useI18nStore, formatMessage } = await import("@/lib/i18n/store")
