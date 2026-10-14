@@ -43,6 +43,17 @@ const metadataDatabasePath = (dataDir, nodePath = path) => nodePath.join(dataDir
 export const ensureHostMetadataSchema = (db) => {
   db.exec(`
     PRAGMA journal_mode = WAL;
+    PRAGMA synchronous = FULL;
+    CREATE TABLE IF NOT EXISTS host_direct_command (
+      session_id TEXT NOT NULL, command_id TEXT NOT NULL,
+      project_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
+      operation TEXT NOT NULL CHECK (operation IN ('send', 'steer', 'followUp')),
+      payload_hash TEXT NOT NULL, claim_id TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('pending', 'accepted')),
+      acknowledgment TEXT,
+      PRIMARY KEY (session_id, command_id),
+      CHECK ((state = 'pending' AND acknowledgment IS NULL) OR (state = 'accepted' AND acknowledgment IS NOT NULL))
+    );
     CREATE TABLE IF NOT EXISTS session_metadata (
       session_id TEXT PRIMARY KEY,
       revision INTEGER NOT NULL,
