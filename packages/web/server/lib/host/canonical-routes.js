@@ -17,6 +17,7 @@ const NativeServiceCapabilitiesSchema = C.RuntimeCapabilitiesSchema.extend({
 });
 const RunResponseSchema = z.strictObject({ run: C.RunSchema });
 const EmptyRequestBodySchema = z.strictObject({});
+const WorkspaceResolveRequestSchema = z.strictObject({ directory: z.string().min(1) });
 // Only SDK-owned operations appear here. Host session admission, metadata and delivery have their own routers.
 const AGENT_ROUTES = [
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/models$/, response: C.ModelCatalogSchema },
@@ -82,9 +83,9 @@ function capturedScope(value, expectedWorkspaceId) {
 /** The external Host owns authentication, trusted selection and local delivery before private agent forwarding. */
 export function registerCanonicalHostRoutes(app, {
   express, service, uiAuthController, tunnelAuthController, isRequestOriginAllowed, enterprisePolicyOptions,
-  resolveWorkspaceScope, resolveSessionScope, listProjects, listWorkspaces,
+  resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, listProjects, listWorkspaces,
   resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes,
-}) {
+ }) {
   const validService = service && z.function().safeParse(service.request).success && z.function().safeParse(service.getState).success;
   if (!validService) throw new TypeError('Canonical gateway requires the real Agent Service request/getState');
   const validHttp = express && z.function().safeParse(express.Router).success && z.function().safeParse(express.json).success
@@ -92,9 +93,8 @@ export function registerCanonicalHostRoutes(app, {
     && z.function().safeParse(tunnelAuthController?.classifyRequestScope).success
     && z.function().safeParse(tunnelAuthController?.getTunnelSessionFromRequest).success;
   if (!validHttp) throw new TypeError('Canonical gateway requires the production HTTP and auth owners');
-  const owners = [isRequestOriginAllowed, resolveWorkspaceScope, resolveSessionScope, listProjects, listWorkspaces,
-    resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes];
-  if (owners.some(owner => !z.function().safeParse(owner).success)) throw new TypeError('Canonical gateway requires every scoped local owner');
+  const owners = [isRequestOriginAllowed, resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, listProjects, listWorkspaces,
+     resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes];
   const router = express.Router();
   router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   router.get('/health', (_req, res) => {
@@ -146,6 +146,22 @@ export function registerCanonicalHostRoutes(app, {
     try {
       return res.json(C.WorkspaceListSchema.parse(await listWorkspaces(query.data.projectId)));
     } catch { return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Host workspace catalog could not be read.'); }
+  });
+  router.post('/workspaces/resolve', express.json({ limit: '64kb', strict: true }), async (req, res) => {
+    const parsed = WorkspaceResolveRequestSchema.safeParse(req.body);
+    if (!parsed.success || !parsed.data.directory.trim()) return problem(res, 400, 'INVALID_REQUEST', 'Provide a directory to resolve.');
+    try {
+      const scope = await resolveWorkspaceDirectory(parsed.data.directory);
+      if (!scope) return problem(res, 404, 'UNAUTHORIZED', 'The requested workspace is not authorized.');
+      const result = C.WorkspaceSchema.safeParse({
+        workspaceId: scope.workspaceId, projectId: scope.projectId, name: scope.name, displayPath: scope.displayPath,
+      });
+      if (!result.success) return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Host workspace projection is unavailable.');
+      return res.json(result.data);
+    } catch (error) {
+      if (error instanceof z.ZodError || error instanceof URIError) return problem(res, 400, 'INVALID_REQUEST', 'The workspace directory is invalid.');
+      return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Host workspace discovery is unavailable.');
+    }
   });
   // Queue routes address /sessions/:sessionId/queue and run delivery before any SDK proxy.
   router.use(/^\/sessions\/[^/]+\/queue(?:\/|$)/, express.json({ limit: '1mb', strict: true }));

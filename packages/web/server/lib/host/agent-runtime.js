@@ -102,9 +102,6 @@ export function createHostAgentRuntime({
     return closePromise;
   };
   return {
-    service, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope,
-    registerSessionScope: scopeRuntime.registerSessionScope,
-    listProjects: scopeRuntime.listProjects, listWorkspaces: scopeRuntime.listWorkspaces,
-    start: service.start, stop: service.stop, restart: service.restart, close,
+    service, resolveWorkspaceScope, resolveWorkspaceDirectory: scopeRuntime.resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope,
   };
 }

@@ -132,6 +132,46 @@ export const createHostAgentScopeRuntime = ({
     }
     return { ...scope, displayPath: displayPath(scope) };
   };
+  const resolveWorkspaceDirectory = async (directory) => {
+    if (typeof directory !== 'string' || !directory.trim() || !path.isAbsolute(directory.trim())) return null;
+    const requested = await validateDirectoryPath(directory);
+    if (!requested.ok) return null;
+    const [projects, selectedAgentDirectory] = await Promise.all([readProjects(), selectedDirectory()]);
+    let discoveryFailed = false;
+    for (const project of projects) {
+      let projectDirectory;
+      try { projectDirectory = await validateDirectory(project.path); }
+      catch { discoveryFailed = true; continue; }
+      if (projectDirectory === requested.directory) {
+        return store.ensureWorkspace({
+          hostProjectId: project.id, projectDirectory, workspaceDirectory: requested.directory,
+          agentDirectory: selectedAgentDirectory, name: project.label || path.basename(projectDirectory),
+        });
+      }
+      let worktrees;
+      try { worktrees = await getWorktrees(projectDirectory); }
+      catch { discoveryFailed = true; continue; }
+      for (const worktree of worktrees) {
+        if (worktree.prunable) continue;
+        try {
+          const worktreeDirectory = await validateDirectory(worktree.path);
+          if (worktreeDirectory !== requested.directory) continue;
+          return store.ensureWorkspace({
+            hostProjectId: project.id, projectDirectory, workspaceDirectory: requested.directory,
+            agentDirectory: selectedAgentDirectory, name: project.label || path.basename(projectDirectory),
+          });
+        } catch { discoveryFailed = true; }
+      }
+    }
+    if (managedChatsScope) {
+      try {
+        const root = await managedRoot();
+        if (contains(root, requested.directory)) return admitChatDirectory(requested.directory);
+      } catch { discoveryFailed = true; }
+    }
+    if (discoveryFailed) throw new MetadataReadError('Configured Host workspace discovery is unavailable');
+    return null;
+  };
   const resolveWorkspaceScope = async (workspaceId) => {
     const scope = await store.getWorkspace(workspaceId);
     return scope === null ? null : authorize(scope);
@@ -169,5 +209,5 @@ export const createHostAgentScopeRuntime = ({
     const { scopes, errors } = await discover();
     return { items: scopes.filter((scope) => projectId === undefined || scope.projectId === projectId).map(publicWorkspace), errors };
   };
-  return { initialize, createChatWorkspace, resolveWorkspaceScope, resolveSessionScope, registerSessionScope, listProjects, listWorkspaces };
+  return { initialize, createChatWorkspace, resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, registerSessionScope, listProjects, listWorkspaces };
 };

@@ -2256,6 +2256,7 @@ async function main(options = {}) {
     canonicalAgentRoutes: {
       service: hostAgentRuntime.service,
       resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
+      resolveWorkspaceDirectory: hostAgentRuntime.resolveWorkspaceDirectory,
       resolveSessionScope: hostAgentRuntime.resolveSessionScope,
       listProjects: agentScopeRuntime.listProjects,
       listWorkspaces: agentScopeRuntime.listWorkspaces,

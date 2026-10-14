@@ -71,6 +71,7 @@ function createApp() {
     isRequestOriginAllowed: originSecurity.isRequestOriginAllowed,
     enterprisePolicyOptions: { env: {}, readFile: () => JSON.stringify({ enterpriseMode: policyEnabled }) },
     resolveWorkspaceScope: async id => resolveScope(id),
+    resolveWorkspaceDirectory: async directory => directory === '/workspace' ? { workspaceId: 'workspace_1', projectId: 'project_1', name: 'Workspace', displayPath: '/workspace' } : null,
     resolveSessionScope: async id => id === 'session_1' ? resolveScope('workspace_1') : null,
     listProjects: async () => projectCatalog,
     listWorkspaces: async () => workspaceCatalog,
