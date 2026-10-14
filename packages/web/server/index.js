@@ -655,6 +655,7 @@ const openChamberSessionService = createOpenChamberSessionService({
       .catch((error) => console.warn('[agent-events] session observation failed:', error.code ?? 'SERVICE_UNAVAILABLE'));
   },
   sessionMetadataStore,
+  directCommandAdmissionStore: hostSessionState.directCommandAdmissionStore,
   archiveStore,
   persistSessionMetadata: persistSessionMetadataPatch,
   broadcastGlobalUiEvent: broadcastOpenChamberUiEvent,

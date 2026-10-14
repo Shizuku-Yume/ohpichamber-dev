@@ -1821,7 +1821,7 @@ export async function forkAfterMessage(sessionId: string, messageId: string): Pr
       registerWorkspaceDirectory(workspace.workspaceId, directory)
     }
   }
-  const { session: forkedSession } = await canonicalClient.forkSession(sessionId, { messageId, mode: "selected" })
+  const { session: forkedSession } = await canonicalClient.forkSession(snapshot.session, { messageId, mode: "selected" })
   if (isStaleRuntime(expectedRuntimeKey)) return null
   if (forkedSession.sessionId === sessionId || forkedSession.workspaceId !== snapshot.session.workspaceId) {
     throw new Error("Fork response did not identify a new session in the source workspace")
