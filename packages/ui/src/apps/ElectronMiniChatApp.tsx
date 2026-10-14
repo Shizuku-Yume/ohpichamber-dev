@@ -344,7 +344,7 @@ export function ElectronMiniChatApp({ apis }: ElectronMiniChatAppProps) {
 
   return (
     <ErrorBoundary>
-      <SyncProvider sdk={opencodeClient.getSdkClient()} directory={currentDirectory || config.directory || ''}>
+      <SyncProvider directory={currentDirectory || config.directory || ''}>
         <RuntimeAPIProvider apis={apis}>
           <TooltipProvider delayDuration={300} skipDelayDuration={150}>
             <div className="h-full text-foreground bg-background">

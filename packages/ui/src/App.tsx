@@ -875,7 +875,7 @@ function App({ apis }: AppProps) {
 
   return (
     <ErrorBoundary>
-      <SyncProvider key={runtimeEndpointEpoch} sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
+      <SyncProvider key={runtimeEndpointEpoch} directory={currentDirectory || ''}>
         <RuntimeAPIProvider apis={apis}>
           <FireworksProvider>
               <TooltipProvider delayDuration={300} skipDelayDuration={150}>

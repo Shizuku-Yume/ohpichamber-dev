@@ -165,7 +165,7 @@ export class SessionMessageLoader {
       message: { ...current.message }, snapshot: { ...current.snapshot }, partOwner: { ...current.partOwner },
       session_status: { ...current.session_status }, permission: { ...current.permission }, form: { ...current.form },
       sessionEpoch: { ...current.sessionEpoch }, sessionCursor: { ...current.sessionCursor },
-      sessionStatusInvalidated: { ...current.sessionStatusInvalidated },
+      sessionStatusInvalidated: current.sessionStatusInvalidated ? { ...current.sessionStatusInvalidated } : undefined,
     }
     this.invalidateSession(target)
     this.getEntry(target).evicted = true

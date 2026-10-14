@@ -6,6 +6,12 @@ export function compareCounters(left: string, right: string): number {
 }
 
 const same = <T>(left: T, right: T): boolean => left === right || JSON.stringify(left) === JSON.stringify(right)
+const clearInvalidation = (invalidated: Record<string, true> | undefined, sessionId: string): Record<string, true> | undefined => {
+  if (!invalidated?.[sessionId]) return invalidated
+  const next = { ...invalidated }
+  delete next[sessionId]
+  return next
+}
 const retain = <T>(current: readonly T[], incoming: readonly T[], key: (item: T) => string): T[] => {
   const prior = new Map(current.map((item) => [key(item), item]))
   const next = incoming.map((item) => { const old = prior.get(key(item)); return old && same(old, item) ? old : item })
@@ -78,7 +84,7 @@ export function installSessionSnapshot(state: State, snapshot: SessionSnapshot):
     sessionCursor: state.sessionCursor[id] === snapshot.cursor ? state.sessionCursor : { ...state.sessionCursor, [id]: snapshot.cursor },
     sessionEpoch: state.sessionEpoch[id] === snapshot.session.epoch ? state.sessionEpoch : { ...state.sessionEpoch, [id]: snapshot.session.epoch },
     session_status: state.session_status[id] === snapshot.session.runtimeStatus ? state.session_status : { ...state.session_status, [id]: snapshot.session.runtimeStatus },
-    sessionStatusInvalidated: state.sessionStatusInvalidated[id] ? { ...state.sessionStatusInvalidated, [id]: false } : state.sessionStatusInvalidated,
+    sessionStatusInvalidated: clearInvalidation(state.sessionStatusInvalidated, id),
     partOwner: messages === state.message[id] ? state.partOwner : { ...state.partOwner, [id]: partOwners(messages) },
   }
   const projected = state.session.find((session) => session.sessionId === id)
@@ -174,7 +180,7 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
         sessionRevision: revision, sessionDeletedRevision,
         snapshot: without(next.snapshot), message: without(next.message), permission: without(next.permission), form: without(next.form),
         queue: without(next.queue), partOwner: without(next.partOwner), session_status: without(next.session_status),
-        sessionCursor: without(next.sessionCursor), sessionEpoch: without(next.sessionEpoch), sessionStatusInvalidated: without(next.sessionStatusInvalidated),
+        sessionCursor: without(next.sessionCursor), sessionEpoch: without(next.sessionEpoch), sessionStatusInvalidated: next.sessionStatusInvalidated ? without(next.sessionStatusInvalidated) : next.sessionStatusInvalidated,
       } }
     }
     case "session.status":
@@ -313,7 +319,7 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
     permission: updated.approvals === snapshot.approvals ? next.permission : { ...next.permission, [id]: updated.approvals },
     form: updated.questions === snapshot.questions ? next.form : { ...next.form, [id]: updated.questions },
     session_status: updated.session.runtimeStatus === state.session_status[id] ? next.session_status : { ...next.session_status, [id]: updated.session.runtimeStatus },
-    sessionStatusInvalidated: next.sessionStatusInvalidated[id] ? { ...next.sessionStatusInvalidated, [id]: false } : next.sessionStatusInvalidated,
+    sessionStatusInvalidated: clearInvalidation(next.sessionStatusInvalidated, id),
   }
   return { kind: "applied", state: committed }
 }
