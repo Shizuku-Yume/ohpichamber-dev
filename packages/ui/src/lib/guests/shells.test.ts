@@ -1,27 +1,27 @@
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { GUEST_SHELLS_MAX, HostRequestError } from '@openchamber/sdk';
-import { OpencodeApiError, opencodeClient } from '@/lib/opencode/client';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
+import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useBackgroundShellsStore, type EndedShell, type TrackedShell } from '@/sync/background-shells';
 import { observeGuestShells, readGuestShellOutput, readGuestShells } from './shells';
 
-const session = (id: string, directory: string, projectID: string, parentID?: string): Session => ({
-  id, directory, title: id, projectID, cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
-  ...(parentID ? { parentID } : {}),
+const session = (sessionId: string, displayPath: string, projectId: string, parentSessionId?: string): Session => ({
+  sessionId, projectId, workspaceId: `workspace-${projectId}`, displayPath, rootSessionId: parentSessionId ? 'root' : sessionId,
+  ...(parentSessionId ? { parentSessionId } : {}),
+  createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
 });
-const shell = (id: string, sessionID: string, startedAt: number, background: boolean): TrackedShell => ({
-  id, sessionID, command: `run ${id}`, startedAt, directory: '/repo', background, file: 'shell.log',
+const shell = (jobId: string, sessionId: string, startedAt: number, background: boolean): TrackedShell => ({
+  jobId, sessionId, epoch: 'epoch-1', workerGeneration: 'worker-1', workspaceId: 'workspace-opencode-app', projectId: 'opencode-app',
+  command: `run ${jobId}`, startedAt, outputCursor: '0', status: 'running', directory: '/repo', background,
 });
-const ended = (id: string, sessionID: string, end: Pick<EndedShell, 'status' | 'exit' | 'endedAt'>): EndedShell => (
-  end.exit === undefined
-    ? { ...shell(id, sessionID, 1, true), status: end.status, endedAt: end.endedAt }
-    : { ...shell(id, sessionID, 1, true), status: end.status, exit: end.exit, endedAt: end.endedAt }
-);
+const ended = (jobId: string, sessionId: string, reason: 'exit' | 'stopped' | 'timeout', endedAt: number, exitCode: number | null = null): EndedShell => ({
+  ...shell(jobId, sessionId, 1, true), status: 'ended', endedAt,
+  termination: reason === 'exit' ? { reason, exitCode: exitCode ?? 0 } : { reason, exitCode },
+});
 
 beforeEach(() => {
   useProjectsStore.setState({ hasServerSnapshot: true, serverSnapshotFailed: false, projects: [{ id: 'path_/repo', path: '/repo', label: 'Repo', addedAt: 1 }] });
@@ -44,26 +44,25 @@ beforeEach(() => {
     ]),
     sessionIds: new Set(['root', 'child', 'tree', 'other', 'ghost']),
     ended: new Map([
-      ['sh_done', ended('sh_done', 'grandchild', { status: 'exited', exit: 1, endedAt: 20 })],
-      ['sh_stopped', ended('sh_stopped', 'root', { status: 'stopped', endedAt: 10 })],
-      ['sh_elsewhere', ended('sh_elsewhere', 'other', { status: 'timeout', endedAt: 30 })],
+      ['sh_done', ended('sh_done', 'grandchild', 'exit', 20, 1)],
+      ['sh_stopped', ended('sh_stopped', 'root', 'stopped', 10)],
+      ['sh_elsewhere', ended('sh_elsewhere', 'other', 'timeout', 30)],
     ]),
   });
 });
 
 describe('ended shells in the projection', () => {
-  test('a session scope lists its tree\'s ended shells oldest end first, with exit codes', () => {
+  test('a session scope lists its tree\'s ended shells oldest end first', () => {
     const snapshot = readGuestShells({ kind: 'session', sessionId: 'root' });
-    expect(snapshot.ended).toEqual([
-      { id: 'sh_stopped', sessionID: 'root', command: 'run sh_stopped', startedAt: 1, background: true, status: 'stopped', endedAt: 10 },
-      { id: 'sh_done', sessionID: 'grandchild', command: 'run sh_done', startedAt: 1, background: true, status: 'exited', exit: 1, endedAt: 20 },
+    expect(snapshot.ended.map((entry) => [entry.id, entry.sessionID, entry.endedAt])).toEqual([
+      ['sh_stopped', 'root', 10], ['sh_done', 'grandchild', 20],
     ]);
   });
 
   test('keeps the newest ends at the documented bound', () => {
     const many = new Map<string, EndedShell>();
     for (let index = 0; index < GUEST_SHELLS_MAX + 10; index += 1) {
-      many.set(`sh_${index}`, ended(`sh_${index}`, 'root', { status: 'exited', endedAt: index }));
+      many.set(`sh_${index}`, ended(`sh_${index}`, 'root', 'exit', Math.max(1, index), index));
     }
     useBackgroundShellsStore.setState({ ended: many });
     const snapshot = readGuestShells({ kind: 'global' });
@@ -84,35 +83,34 @@ const failureOf = async (read: Promise<unknown>): Promise<string> => {
 };
 
 describe('extension shell output', () => {
-  test('reads a running or ended shell in the directory it ran in', async () => {
-    const read = spyOn(opencodeClient, 'readShellOutput').mockResolvedValue({ output: 'ok', cursor: 2, skipped: false });
+  test('reads a running or ended shell with its canonical identity and cursor', async () => {
+    const identity = { jobId: 'sh_done', sessionId: 'grandchild', epoch: 'epoch-1', workerGeneration: 'worker-1' };
+    const read = spyOn(canonicalClient, 'getShellOutput').mockResolvedValue({ job: identity, requestedCursor: '0', startCursor: '0', cursor: '2', skippedBytes: '0', output: 'ok', ended: true });
     try {
-      expect(await readGuestShellOutput('sh_done', undefined, 100)).toEqual({ output: 'ok', cursor: 2, skipped: false });
-      expect(read.mock.calls[0]).toEqual(['sh_done', '/repo', undefined, 100]);
-    } finally {
-      read.mockRestore();
-    }
+      expect(await readGuestShellOutput('sh_done', undefined, 100)).toEqual({ shellId: 'sh_done', output: 'ok', cursor: 2, ended: true });
+      expect(read.mock.calls[0]).toEqual(['grandchild', { jobId: 'sh_done', epoch: 'epoch-1', workerGeneration: 'worker-1' }, '0', 100]);
+    } finally { read.mockRestore(); }
   });
 
-  test('an unseen shell, a stopped one, and output OpenCode dropped are NOT_FOUND', async () => {
-    const read = spyOn(opencodeClient, 'readShellOutput').mockRejectedValue(new OpencodeApiError('shell.output', 'gone', { status: 404 }));
+  test('an unseen shell, a stopped one, and dropped output are NOT_FOUND', async () => {
+    const read = spyOn(canonicalClient, 'getShellOutput').mockRejectedValue(new CanonicalApiError({
+      type: 'urn:ohpichamber:problem:SESSION_NOT_FOUND', title: 'Not found', status: 404, detail: 'gone', code: 'SESSION_NOT_FOUND', retryable: false,
+    }));
     try {
       expect(await failureOf(readGuestShellOutput('sh_nope'))).toBe('NOT_FOUND');
       expect(await failureOf(readGuestShellOutput('sh_stopped'))).toBe('NOT_FOUND');
       expect(await failureOf(readGuestShellOutput('sh_done'))).toBe('NOT_FOUND');
       expect(read.mock.calls).toHaveLength(1);
-    } finally {
-      read.mockRestore();
-    }
+    } finally { read.mockRestore(); }
   });
 
-  test('any other failure is passed on, not reported as missing', async () => {
-    const read = spyOn(opencodeClient, 'readShellOutput').mockRejectedValue(new OpencodeApiError('shell.output', 'boom', { status: 500 }));
+  test('any other canonical failure is passed on, not reported as missing', async () => {
+    const read = spyOn(canonicalClient, 'getShellOutput').mockRejectedValue(new CanonicalApiError({
+      type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Unavailable', status: 500, detail: 'boom', code: 'SERVICE_UNAVAILABLE', retryable: true,
+    }));
     try {
-      expect(await failureOf(readGuestShellOutput('sh_1'))).toBe('OpencodeApiError');
-    } finally {
-      read.mockRestore();
-    }
+      expect(await failureOf(readGuestShellOutput('sh_1'))).toBe('CanonicalApiError');
+    } finally { read.mockRestore(); }
   });
 });
 

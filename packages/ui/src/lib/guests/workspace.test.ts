@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -7,26 +7,28 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { ChildStoreManager } from '@/sync/child-store';
 import { setSyncRefs } from '@/sync/sync-refs';
-import { createRuntimeOpencodeClient } from '@/lib/opencode/client';
 import { applyGlobalSessionStatusEvent, replaceGlobalSessionStatusById } from '@/sync/global-session-status';
 import { readGuestWorkspace, observeGuestWorkspace } from './workspace';
 import { guestMay } from './capabilities';
 
-const session = (id: string, directory: string): Session => ({
-  id, directory, title: id, projectID: 'upstream', cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
+const session = (sessionId: string, displayPath: string, projectId: string): Session => ({
+  sessionId, projectId, workspaceId: `workspace-${projectId}`, displayPath, rootSessionId: sessionId,
+  createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
 });
 let manager: ChildStoreManager;
 beforeEach(() => {
   manager = new ChildStoreManager();
-  setSyncRefs(createRuntimeOpencodeClient({ baseUrl: 'http://localhost' }), manager, '/a');
+  setSyncRefs(manager, '/a');
   useProjectsStore.setState({ hasServerSnapshot: true, serverSnapshotFailed: false, projects: [
     { id: 'a', path: '/a', label: 'A', addedAt: 1 }, { id: 'b', path: '/b', label: 'B', addedAt: 1 },
   ] });
   useSessionUIStore.setState({ availableWorktreesByProject: new Map([['/b', [{ path: '/b-tree', projectDirectory: '/b', branch: 'fix', name: 'fix', label: 'fix', worktreeStatus: 'ready' }]]]), worktreeDiscoveryByProject: new Map([['/a', 'ready'], ['/b', 'ready']]) });
-  useGlobalSessionsStore.getState().applySnapshot([session('a-session', '/a'), session('b-session', '/b-tree')], [], 'ready');
-  useConfigStore.setState({ isConnected: true });
+  const aSession = session('a-session', '/a', 'a');
+  const bSession = session('b-session', '/b-tree', 'b');
+  useGlobalSessionsStore.getState().applySnapshot([aSession, bSession], [], 'ready');
+  manager.ensureChild('/a', { bootstrap: false }).setState({ session: [aSession], sessionTotal: 1, sessionStatusReady: true });
+  manager.ensureChild('/b-tree', { bootstrap: false }).setState({ session: [bSession], sessionTotal: 1, sessionStatusReady: true });
   // The legacy diagnostic field is not maintained by the current sync pipeline.
   useUIStore.setState({ eventStreamStatus: 'idle' });
   replaceGlobalSessionStatusById(new Map());
@@ -56,17 +58,19 @@ describe('extension workspace projection', () => {
       expect(fetch.mock.calls.length).toBe(0);
     } finally { fetch.mockRestore(); }
   });
-  test('live outcomes work with the untouched diagnostic stream field and distinguish turn outcomes', () => {
+  test('live outcomes work with canonical status events and distinguish turn outcomes', () => {
+    const status = (runtimeStatus: 'running' | 'idle', activeRunId: string | null, sequence: string) => ({
+      type: 'session.status' as const, sessionId: 'b-session', epoch: 'epoch-1', sequence, timestamp: Number(sequence), runtimeStatus, activeRunId,
+    });
     const store = manager.ensureChild('/b-tree', { bootstrap: false });
     store.setState({ sessionStatusReady: true });
     expect(readB().sessions[0]).toMatchObject({ activity: 'idle', outcome: null });
-    applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', properties: { sessionID: 'b-session', status: { type: 'busy' } } });
+    applyGlobalSessionStatusEvent('/b-tree', status('running', 'run-1', '1'));
     expect(readB().sessions[0]).toMatchObject({ activity: 'running', outcome: null });
-    applyGlobalSessionStatusEvent('/b-tree', { type: 'session.error', properties: { sessionID: 'b-session', error: { type: 'UnknownError', message: 'Failed' } } });
-    applyGlobalSessionStatusEvent('/b-tree', { type: 'session.idle', properties: { sessionID: 'b-session' } });
+    applyGlobalSessionStatusEvent('/b-tree', { type: 'run.failed', sessionId: 'b-session', epoch: 'epoch-1', sequence: '2', timestamp: 2, runId: 'run-1', finishedAt: 2, error: 'Failed' });
     expect(readB().sessions[0]).toMatchObject({ activity: 'idle', outcome: 'failed' });
-    applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', properties: { sessionID: 'b-session', status: { type: 'busy' } } });
-    applyGlobalSessionStatusEvent('/b-tree', { type: 'session.idle', properties: { sessionID: 'b-session' } });
+    applyGlobalSessionStatusEvent('/b-tree', status('running', 'run-2', '3'));
+    applyGlobalSessionStatusEvent('/b-tree', { type: 'run.completed', sessionId: 'b-session', epoch: 'epoch-1', sequence: '4', timestamp: 4, runId: 'run-2', finishedAt: 4 });
     expect(readB().sessions[0]).toMatchObject({ activity: 'idle', outcome: 'completed' });
     useConfigStore.setState({ isConnected: false });
     expect(readB().sessions[0]).toMatchObject({ activity: 'unknown', outcome: null });
@@ -103,18 +107,17 @@ describe('extension workspace projection', () => {
     await Promise.resolve();
     expect(snapshots.length).toBe(baseline + 1);
     stop();
-    applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', properties: { sessionID: 'b-session', status: { type: 'busy' } } });
+    applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', sessionId: 'b-session', epoch: 'epoch-1', sequence: '5', timestamp: 5, runtimeStatus: 'running', activeRunId: 'run-3' });
     await Promise.resolve();
     expect(snapshots.length).toBe(baseline + 1);
   });
-  test('blocking requests and retries expose state without conversation data', () => {
+  test('blocking requests expose state without conversation data', () => {
     const child = manager.ensureChild('/b-tree', { bootstrap: false });
-    applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', properties: { sessionID: 'b-session', status: { type: 'retry', attempt: 1, message: 'Wait', next: 1 } } });
-    expect(readB().sessions[0].activity).toBe('retrying');
-    child.setState({ permission: { 'b-session': [{ id: 'permission', sessionID: 'b-session', action: 'bash', resources: [] }] } });
+    applyGlobalSessionStatusEvent('/b-tree', { type: 'session.status', sessionId: 'b-session', epoch: 'epoch-1', sequence: '6', timestamp: 6, runtimeStatus: 'awaiting_approval', activeRunId: 'run-4' });
     expect(readB().sessions[0].activity).toBe('waiting-permission');
-    // v2's typed forms replaced the v1 question tool; the public activity value is unchanged.
-    child.setState({ permission: {}, form: { 'b-session': [{ id: 'form', sessionID: 'b-session', title: 'Pick one', fields: [{ key: 'answer', type: 'boolean' }] }] } });
+    child.setState({ permission: { 'b-session': [{ approvalId: 'permission', sessionId: 'b-session', turnId: 'turn-1', toolCallId: 'tool-1', toolName: 'bash', actionType: 'bash_command', commandSummary: 'echo', details: {}, status: 'pending', requestedAt: 1, version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' }] } });
+    expect(readB().sessions[0].activity).toBe('waiting-permission');
+    child.setState({ permission: {}, form: { 'b-session': [{ questionId: 'form', sessionId: 'b-session', turnId: 'turn-1', prompt: 'Pick one', schema: { type: 'boolean' }, status: 'pending', requestedAt: 1, version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' }] } });
     expect(readB().sessions[0].activity).toBe('waiting-question');
     expect('messages' in readB().sessions[0]).toBe(false);
   });
