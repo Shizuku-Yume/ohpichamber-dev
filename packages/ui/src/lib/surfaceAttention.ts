@@ -2,6 +2,6 @@
 // (unread markers, toasts) depends on it.
 //
 export function isSurfaceAttended(): boolean {
-  return document.hasFocus()
+  return document.hasFocus?.() ?? false
 }
 

@@ -2,7 +2,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import { isDeepStrictEqual } from 'node:util';
-import { CapturedHostBootstrapScopeSchema, HostSessionBootstrapSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema, WorkerBootstrapSchema } from '@openchamber/agent-service/private-protocol';
+import { CapturedHostBootstrapScopeSchema, HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema, WorkerBootstrapSchema } from '@openchamber/agent-service/private-protocol';
 import { createHostWorkerAuthorizationChannel } from './worker-authorization-channel.js';
 
 import { openApprovalPolicyStore } from './approval-policy-store.js';
@@ -60,6 +60,7 @@ export const createAgentServiceSupervisor = ({
   let phase = 'stopped'; let child = null; let port = null; let secret = null;
   let startupPromise = null; let stopPromise = null; let lifecycle = 0; let startupController = null; let accepting = false;
   const scopes = new Map();
+  const relocationScopes = new Map();
   const workspaceScopes = new Map();
   const authorization = createHostWorkerAuthorizationChannel({
     isCurrentChild: launched => child === launched && accepting && phase === 'ready',
@@ -76,11 +77,11 @@ export const createAgentServiceSupervisor = ({
   let ownsPolicyStore = false;
   const state = () => ({ phase, pid: child?.pid ?? null, port });
   const assertAdmitted = () => { if (!accepting || phase !== 'ready' || !child) throw new Error('Agent service is not accepting requests'); };
-  const captureScope = body => {
+  const captureScope = (body, allowRebind = false) => {
     const captured = Object.freeze(CapturedHostBootstrapScopeSchema.parse({ rootSessionId: body.rootSessionId, projectId: body.projectId, workspaceId: body.workspaceId, cwd: body.cwd, agentDirectory: body.agentDirectory, ...(body.agentDirectoryId === undefined ? {} : { agentDirectoryId: body.agentDirectoryId }) }));
     const prior = scopes.get(captured.rootSessionId);
-    if (prior && !isDeepStrictEqual(prior, captured)) throw new Error('Host bootstrap scope cannot change');
-    if (prior) return { captured: prior, prior };
+    if (prior && !allowRebind && !isDeepStrictEqual(prior, captured)) throw new Error('Host bootstrap scope cannot change');
+    if (prior && !allowRebind) return { captured: prior, prior };
     scopes.set(captured.rootSessionId, captured);
     return { captured, prior };
   };
@@ -165,7 +166,7 @@ export const createAgentServiceSupervisor = ({
           finish(reject, new Error(`Agent service exited before listening (${code ?? signal ?? 'unknown'})`));
           if (child === launched && phase !== 'stopping') {
             phase = 'failed';
-            scopes.clear(); workspaceScopes.clear(); authorization.closeChild(launched);
+            relocationScopes.clear(); scopes.clear(); workspaceScopes.clear(); authorization.closeChild(launched);
             accepting = false;
           }
         };
@@ -208,7 +209,7 @@ export const createAgentServiceSupervisor = ({
       await killChild();
       secret = null;
       port = null;
-      scopes.clear();
+      relocationScopes.clear(); scopes.clear();
       workspaceScopes.clear();
       if (ownsPolicyStore) { policyStore.close(); policyStore = null; ownsPolicyStore = false; }
       phase = 'stopped';
@@ -222,32 +223,53 @@ export const createAgentServiceSupervisor = ({
     const requestedChild = child; const requestedLifecycle = lifecycle;
     const method = String(init.method ?? 'GET').toUpperCase();
     let capture; let workspaceCapture;
+    let relocationAction;
     const workspace = /^\/internal\/workspaces\/([^/]+)$/.exec(requestPath);
     const restartWorker = /^\/internal\/workers\/([^/]+)\/restart$/.exec(requestPath);
     const reopenSession = /^\/internal\/sessions\/([^/]+)\/reopen$/.exec(requestPath);
+    const relocationPrepare = method === 'POST' && /^\/internal\/sessions\/([^/]+)\/relocation\/prepare$/.exec(requestPath);
+    const relocationFinalize = method === 'POST' && /^\/internal\/sessions\/([^/]+)\/relocation\/finalize$/.exec(requestPath);
     const rootBootstrap = method === 'POST' && (requestPath === '/internal/sessions' || requestPath === '/internal/workers' || restartWorker || reopenSession);
-    if (rootBootstrap || (workspace && method === 'POST')) {
-      const schema = workspace ? HostWorkspaceBootstrapSchema : reopenSession ? HostSessionBootstrapSchema.omit({ sessionFile: true }) : requestPath === '/internal/sessions' ? HostSessionBootstrapSchema : WorkerBootstrapSchema;
+    if (rootBootstrap || (workspace && method === 'POST') || relocationPrepare) {
+      const schema = workspace ? HostWorkspaceBootstrapSchema : relocationPrepare ? HostSessionRelocationPrepareSchema : reopenSession ? HostSessionBootstrapSchema.omit({ sessionFile: true }) : requestPath === '/internal/sessions' ? HostSessionBootstrapSchema : WorkerBootstrapSchema;
       const parsed = schema.safeParse(JSON.parse(init.body));
       if (!parsed.success) throw new Error('Invalid Host bootstrap');
-      const body = { ...parsed.data, cwd: await fs.realpath(parsed.data.cwd), agentDirectory: await fs.realpath(parsed.data.agentDirectory) };
-      if (restartWorker && decodeURIComponent(restartWorker[1]) !== body.rootSessionId) throw new Error('Invalid Host restart scope');
-      if (reopenSession && decodeURIComponent(reopenSession[1]) !== body.rootSessionId) throw new Error('Invalid Host reopen scope');
-      if (workspace) {
-        const workspaceId = decodeURIComponent(workspace[1]);
-        const captured = Object.freeze({ projectId: body.projectId, workspaceId, cwd: body.cwd, agentDirectory: body.agentDirectory, agentDirectoryId: body.agentDirectoryId });
-        const prior = workspaceScopes.get(workspaceId);
-        if (prior && !isDeepStrictEqual(prior.scope, captured)) throw new Error('Host workspace scope cannot change');
-        workspaceCapture = { scope: captured, prior };
+      if (relocationPrepare) {
+        const sessionId = decodeURIComponent(relocationPrepare[1]);
+        if (parsed.data.destination.rootSessionId !== sessionId) throw new Error('Invalid Host relocation scope');
+        const destination = { ...parsed.data.destination, cwd: await fs.realpath(parsed.data.destination.cwd), agentDirectory: await fs.realpath(parsed.data.destination.agentDirectory) };
+        capture = captureScope(destination, true);
+        relocationScopes.set(sessionId, { prior: capture.prior });
+        init = { ...init, body: JSON.stringify({ ...parsed.data, destination }) };
       } else {
-        if (body.agentDirectoryId === undefined) {
-          const registered = workspaceScopes.get(body.workspaceId)?.scope;
-          if (registered && registered.projectId === body.projectId && registered.cwd === body.cwd
-            && registered.agentDirectory === body.agentDirectory) body.agentDirectoryId = registered.agentDirectoryId;
+        const body = { ...parsed.data, cwd: await fs.realpath(parsed.data.cwd), agentDirectory: await fs.realpath(parsed.data.agentDirectory) };
+        if (restartWorker && decodeURIComponent(restartWorker[1]) !== body.rootSessionId) throw new Error('Invalid Host restart scope');
+        if (reopenSession && decodeURIComponent(reopenSession[1]) !== body.rootSessionId) throw new Error('Invalid Host reopen scope');
+        if (workspace) {
+          const workspaceId = decodeURIComponent(workspace[1]);
+          const captured = Object.freeze({ projectId: body.projectId, workspaceId, cwd: body.cwd, agentDirectory: body.agentDirectory, agentDirectoryId: body.agentDirectoryId });
+          const prior = workspaceScopes.get(workspaceId);
+          if (prior && !isDeepStrictEqual(prior.scope, captured)) throw new Error('Host workspace scope cannot change');
+          workspaceCapture = { scope: captured, prior };
+        } else {
+          if (body.agentDirectoryId === undefined) {
+            const registered = workspaceScopes.get(body.workspaceId)?.scope;
+            if (registered && registered.projectId === body.projectId && registered.cwd === body.cwd
+              && registered.agentDirectory === body.agentDirectory) body.agentDirectoryId = registered.agentDirectoryId;
+          }
+          capture = captureScope(body);
         }
-        capture = captureScope(body);
+        init = { ...init, body: JSON.stringify(body) };
       }
-      init = { ...init, body: JSON.stringify(body) };
+    } else if (relocationFinalize) {
+      const parsed = HostSessionRelocationFinalizeSchema.safeParse(JSON.parse(init.body));
+      if (!parsed.success) throw new Error('Invalid Host relocation finalization');
+      relocationAction = parsed.data.action;
+      if (relocationAction === 'rollback') {
+        const sessionId = decodeURIComponent(relocationFinalize[1]);
+        const transition = relocationScopes.get(sessionId);
+        if (transition?.prior) scopes.set(sessionId, transition.prior);
+      }
     }
     const rollback = () => {
       if (!capture || scopes.get(capture.captured.rootSessionId) !== capture.captured) return;
@@ -259,7 +281,10 @@ export const createAgentServiceSupervisor = ({
       assertAdmitted();
       if (child !== requestedChild || lifecycle !== requestedLifecycle) throw new Error('Agent service request scope expired');
       const response = await fetchImpl(`http://127.0.0.1:${port}${requestPath}`, { ...init, headers });
-      if (!response.ok) rollback();
+      if (!response.ok) {
+        rollback();
+        if (relocationPrepare) relocationScopes.delete(decodeURIComponent(relocationPrepare[1]));
+      }
       if (response.ok && workspaceCapture) {
         const registered = HostWorkspaceRegisteredSchema.safeParse(await response.clone().json());
         if (!registered.success || registered.data.workspaceId !== workspaceCapture.scope.workspaceId
@@ -269,12 +294,17 @@ export const createAgentServiceSupervisor = ({
         const captured = captureScope({ ...workspaceCapture.scope, rootSessionId: registered.data.authorizationRootId });
         workspaceScopes.set(workspaceCapture.scope.workspaceId, { scope: workspaceCapture.scope, rootSessionId: captured.captured.rootSessionId });
       }
+      if (response.ok && relocationFinalize) relocationScopes.delete(decodeURIComponent(relocationFinalize[1]));
       if (response.ok && method === 'DELETE') {
         const deleted = /^\/(?:api\/agent\/v1\/sessions|internal\/workers)\/([^/]+)$/.exec(requestPath);
         if (deleted && child === requestedChild && lifecycle === requestedLifecycle) scopes.delete(decodeURIComponent(deleted[1]));
       }
       return response;
-    } catch (error) { rollback(); throw error; }
+    } catch (error) {
+      rollback();
+      if (relocationPrepare) relocationScopes.delete(decodeURIComponent(relocationPrepare[1]));
+      throw error;
+    }
   };
   return { start, stop, restart, request, getState: state };
 };

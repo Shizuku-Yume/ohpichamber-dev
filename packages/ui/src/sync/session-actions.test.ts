@@ -169,7 +169,9 @@ describe("native branch consumer lifecycle", () => {
     snapshot.session = moved
     snapshot.cursor = "epoch-destination:4"
     snapshot.window.hasEarlier = true
-    const history = spyOn(canonicalClient, "getHistory").mockResolvedValue(nativeHistory(snapshot.messages, "older-page", snapshot))
+    const history = spyOn(canonicalClient, "getHistory").mockImplementation(async (_sessionId, options) => options?.cursor === "older-page"
+      ? nativeHistory([], null, snapshot)
+      : nativeHistory(snapshot.messages, "older-page", snapshot))
     const published: Array<{ directory: string; snapshot: SessionSnapshot }> = []
     loader = new SessionMessageLoader(manager, { runtimeKey: getRuntimeKey(), client: canonicalClient,
       onSnapshot: (target, accepted) => { published.push({ directory: target.directory, snapshot: accepted }) } })
@@ -182,8 +184,8 @@ describe("native branch consumer lifecycle", () => {
     expect(source.getState().message["session-a"]).toBeUndefined()
     expect(manager.getChild(destination)?.getState().snapshot["session-a"]?.session.workspaceId).toBe(workspace.workspaceId)
     expect(published).toEqual([{ directory: destination, snapshot }])
-    expect(history).toHaveBeenCalledTimes(1)
-    expect(loader.getSnapshot({ directory: destination, sessionId: "session-a" })).toMatchObject({ status: "ready", resolved: true, cursor: "older-page", complete: false })
+    expect(history).toHaveBeenCalledTimes(2)
+    expect(loader.getSnapshot({ directory: destination, sessionId: "session-a" })).toMatchObject({ status: "ready", resolved: true, cursor: undefined, complete: true })
   })
 })
 
