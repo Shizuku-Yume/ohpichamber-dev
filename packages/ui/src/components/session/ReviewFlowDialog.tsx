@@ -20,10 +20,10 @@ import { useAgentsStore } from '@/stores/useAgentsStore';
 import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 
 export type ReviewFlowExecution = {
-  providerID: string;
-  modelID: string;
+  providerId: string;
+  modelId: string;
   variant: string;
-  agent: string;
+  agentId: string;
   generateHandoff: boolean;
   autoReview: boolean;
 };
@@ -37,15 +37,15 @@ type ReviewFlowDialogProps = {
 };
 
 const getInitialExecution = (params: {
-  providerID: string;
-  modelID: string;
+  providerId: string;
+  modelId: string;
   variant: string;
-  agent: string;
+  agentId: string;
 }): ReviewFlowExecution => ({
-  providerID: params.providerID,
-  modelID: params.modelID,
+  providerId: params.providerId,
+  modelId: params.modelId,
   variant: params.variant,
-  agent: params.agent,
+  agentId: params.agentId,
   generateHandoff: true,
   autoReview: false,
 });
@@ -68,10 +68,10 @@ function ReviewFlowDialogView({
   const currentAgentName = useConfigStore((state) => state.currentAgentName || '');
 
   const [execution, setExecution] = React.useState<ReviewFlowExecution>(() => getInitialExecution({
-    providerID: currentProviderID,
-    modelID: currentModelID,
+    providerId: currentProviderID,
+    modelId: currentModelID,
     variant: currentVariant,
-    agent: currentAgentName,
+    agentId: currentAgentName,
   }));
 
   React.useEffect(() => {
@@ -84,38 +84,38 @@ function ReviewFlowDialogView({
   React.useEffect(() => {
     if (!open) return;
     setExecution(getInitialExecution({
-      providerID: currentProviderID,
-      modelID: currentModelID,
+      providerId: currentProviderID,
+      modelId: currentModelID,
       variant: currentVariant,
-      agent: currentAgentName,
+      agentId: currentAgentName,
     }));
   }, [open, currentProviderID, currentModelID, currentVariant, currentAgentName]);
 
   React.useEffect(() => {
     if (!open || providers.length === 0) return;
 
-    const provider = providers.find((item) => item.id === execution.providerID) ?? providers[0];
+    const provider = providers.find((item) => item.id === execution.providerId) ?? providers[0];
     const models = Array.isArray(provider?.models) ? provider.models : [];
-    const hasModel = models.some((item) => item.id === execution.modelID);
-    const fallbackModelID = models[0]?.id ?? '';
+    const hasModel = models.some((item) => item.id === execution.modelId);
+    const fallbackModelId = models[0]?.id ?? '';
 
-    if (provider?.id === execution.providerID && hasModel) return;
+    if (provider?.id === execution.providerId && hasModel) return;
 
     setExecution((prev) => ({
       ...prev,
-      providerID: provider?.id ?? '',
-      modelID: hasModel ? prev.modelID : fallbackModelID,
+      providerId: provider?.id ?? '',
+      modelId: hasModel ? prev.modelId : fallbackModelId,
       variant: '',
     }));
-  }, [open, providers, execution.providerID, execution.modelID]);
+  }, [open, providers, execution.providerId, execution.modelId]);
 
   const agentFilter = React.useCallback((agent: { mode?: string }) => isPrimaryMode(agent.mode), []);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === execution.providerID);
-    const model = provider?.models?.find((item) => item.id === execution.modelID) as { variants?: ModelVariantSource } | undefined;
+    const provider = providers.find((item) => item.id === execution.providerId);
+    const model = provider?.models?.find((item) => item.id === execution.modelId) as { variants?: ModelVariantSource } | undefined;
     return listModelVariantIds(model?.variants);
-  }, [providers, execution.providerID, execution.modelID]);
+  }, [providers, execution.providerId, execution.modelId]);
 
   const hasVariantOptions = variantOptions.length > 0;
 
@@ -124,7 +124,7 @@ function ReviewFlowDialogView({
     setExecution((prev) => ({ ...prev, variant: '' }));
   }, [hasVariantOptions, execution.variant]);
 
-  const canConfirm = execution.providerID.trim().length > 0 && execution.modelID.trim().length > 0;
+  const canConfirm = execution.providerId.trim().length > 0 && execution.modelId.trim().length > 0;
 
   const handleSubmit = React.useCallback(() => {
     if (!canConfirm || submitting) return;
@@ -181,12 +181,12 @@ function ReviewFlowDialogView({
           <div className="flex min-w-0 flex-col gap-1.5">
             <span className="typography-meta font-medium text-muted-foreground">{t('chat.modelControls.model')}</span>
             <ModelSelector
-              providerId={execution.providerID}
-              modelId={execution.modelID}
+              providerId={execution.providerId}
+              modelId={execution.modelId}
               className="max-w-[320px] justify-between"
               dropdownPortalToBody
-              onChange={(providerID, modelID) => {
-                setExecution((prev) => ({ ...prev, providerID, modelID, variant: '' }));
+              onChange={(providerId, modelId) => {
+                setExecution((prev) => ({ ...prev, providerId, modelId, variant: '' }));
               }}
             />
           </div>
@@ -204,10 +204,10 @@ function ReviewFlowDialogView({
           <div className="flex flex-col gap-1.5">
             <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
             <AgentSelector
-              agentName={execution.agent}
+              agentName={execution.agentId}
               filter={agentFilter}
               dropdownPortalToBody
-              onChange={(agent) => setExecution((prev) => ({ ...prev, agent }))}
+              onChange={(agent) => setExecution((prev) => ({ ...prev, agentId: agent }))}
             />
           </div>
         </div>

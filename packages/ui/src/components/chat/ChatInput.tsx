@@ -790,9 +790,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             await startReviewFlow({
                 originalSessionID: currentSessionId,
                 directory,
-                providerID: execution.providerID,
-                modelID: execution.modelID,
-                agent: execution.agent || undefined,
+                providerId: execution.providerId,
+                modelId: execution.modelId,
+                agentId: execution.agentId || undefined,
                 variant: execution.variant || undefined,
                 generateHandoff: execution.generateHandoff,
                 returnAfterHandoffRequest: execution.generateHandoff,
