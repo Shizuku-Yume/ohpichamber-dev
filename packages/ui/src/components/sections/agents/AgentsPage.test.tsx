@@ -27,6 +27,7 @@ const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { useAgentsStore } = await import('@/stores/useAgentsStore');
+const { useProjectsStore } = await import('@/stores/useProjectsStore');
 plugin({
   name: 'agent-settings-provider-logos',
   setup(build) {
@@ -49,6 +50,7 @@ const container = document.createElement('div');
 document.body.appendChild(container);
 let root: Root;
 beforeEach(() => {
+  useProjectsStore.setState({ projects: [], activeProjectId: null });
   root = createRoot(container);
   useAgentsStore.setState({
     selectedAgentName: 'test', agentDraft: null,
