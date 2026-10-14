@@ -6,7 +6,7 @@
 
 **Delivers:** One current acceptance packet proves M0-to-M3 behavior on Web and Electron, records platform/provider limitations, and closes only the gates supported by observed evidence.
 
-**Blocked by:** 10, 11, 15, 16, 17
+**Blocked by:** 10, 11, 14, 15, 16, 17
 **Files:** `.workflow/development.md`, `.workflow/omp-migration/implementation-plan.md`, `.workflow/specs/omp-through-m3.md`, acceptance artifacts under `.workflow/omp-migration/m3/`
 
 **Read first:** `.workflow/specs/omp-through-m3.md` W1-W10; all task artifacts; architecture/contracts/scope; package validation commands; existing M0 evidence
