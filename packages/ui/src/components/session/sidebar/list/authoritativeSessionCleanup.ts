@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 type AuthoritativeSessionIdentity = {
@@ -13,7 +13,7 @@ export const buildAuthoritativeSessionIdentityMap = (
   for (const session of sessions) {
     const directory = resolveGlobalSessionDirectory(session);
     if (!directory) continue;
-    identities.set(session.id, { directory, sessionId: session.id });
+    identities.set(session.sessionId, { directory, sessionId: session.sessionId });
   }
   return identities;
 };

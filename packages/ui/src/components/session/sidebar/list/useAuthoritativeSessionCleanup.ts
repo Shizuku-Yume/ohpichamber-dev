@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { reconcileExternallyDeletedSession } from '@/sync/session-actions';
 import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
