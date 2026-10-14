@@ -1,227 +1,110 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test"
-import type { Session } from "@/lib/opencode/model"
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
+import type { Session } from "@openchamber/agent-contract"
+import { canonicalClient } from "@/api/canonicalClient"
 import type { ProjectEntry } from "@/lib/api/types"
-import type { WorktreeMetadata } from "@/types/worktree"
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution"
+import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from "@/lib/runtime-switch"
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from "@/stores/globalSessions"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { useSessionUIStore } from "../session-ui-store"
+import { ChildStoreManager } from "../child-store"
+import { createSession, setActionRefs } from "../session-actions"
+import type { WorktreeMetadata } from "@/types/worktree"
 
-// Recorded call info
-const setCurrentSessionCalls: Array<{ id: string | null; directoryHint: string | null | undefined }> = []
-const registerSessionDirectoryCalls: Array<{ sessionID: string; directory: string }> = []
-const upsertSessionCalls: Session[] = []
-const markSessionAsOpenChamberCreatedCalls: string[] = []
+const PROJECT = "/projects/alpha"
+const workspace = (directory: string) => ({
+  workspaceId: `workspace-${directory.replace(/[^a-z0-9]+/gi, "-")}`,
+  projectId: "project-1",
+  name: "Workspace",
+})
 
-// Configurable opencodeClient.createSession — set per test
-let nextCreateSessionResponse: Session = { id: "ses_default", time: { created: 1 } } as Session
-let nextCreateSessionCalls: Array<{ params: unknown; directory: string | null | undefined }> = []
+const session = (sessionId: string, workspaceId: string): Session => ({
+  sessionId,
+  projectId: "project-1",
+  workspaceId,
+  displayPath: ".",
+  rootSessionId: sessionId,
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: "epoch-1",
+  headSequence: "0",
+  runtimeStatus: "idle",
+  activeRunId: null,
+  metadata: null,
+  metadataRevision: "0",
+  archiveRevision: "0",
+})
 
-// Configurable current directory (used as fallback when no directoryOverride is set)
-let currentDirectory: string | null = null
-// Stands in for the runtime's raw client; createSession only compares identity.
-const runtimeSdkClient = {}
-
-let idCounter = 0
-mock.module("@/lib/opencode/client", () => ({
-  ascendingId: (prefix: string) => `${prefix}_${(idCounter += 1).toString(16).padStart(12, "0")}`,
-  opencodeClient: {
-    getSdkClient: () => runtimeSdkClient,
-    getDirectory: () => currentDirectory,
-    setDirectory: mock(() => undefined),
-    createSession: mock(async (params: unknown, directory?: string | null) => {
-      nextCreateSessionCalls.push({ params, directory })
-      return nextCreateSessionResponse
-    }),
-  },
-}))
-
-mock.module("../session-ui-store", () => ({
-  useSessionUIStore: {
-    getState: () => ({
-      setCurrentSession: (id: string | null, directoryHint?: string | null) => {
-        setCurrentSessionCalls.push({ id, directoryHint })
-      },
-      markSessionAsOpenChamberCreated: (sessionId: string) => {
-        markSessionAsOpenChamberCreatedCalls.push(sessionId)
-      },
-    }),
-  },
-}))
-
-mock.module("../sync-refs", () => ({
-  getSyncSessionDirectory: () => null,
-  registerSessionDirectory: (sessionID: string, directory: string) => {
-    registerSessionDirectoryCalls.push({ sessionID, directory })
-  },
-}))
-
-mock.module("@/stores/useGlobalSessionsStore", () => ({
-  useGlobalSessionsStore: {
-    getState: () => ({
-      upsertSession: (session: Session) => {
-        upsertSessionCalls.push(session)
-      },
-    }),
-  },
-  mergeSessionDirectoryMetadata: (incoming: Session) => incoming,
-  resolveGlobalSessionDirectory: () => null,
-}))
-
-mock.module("@/stores/useConfigStore", () => ({
-  useConfigStore: {
-    getState: () => ({
-      isConnected: true,
-      hasEverConnected: true,
-    }),
-  },
-}))
-
-mock.module("../input-store", () => ({
-  useInputStore: {
-    getState: () => ({
-      clearAttachedFiles: () => undefined,
-      addRestoredAttachment: () => undefined,
-    }),
-  },
-}))
-
-const { createSession, setActionRefs } = await import("../session-actions")
+const originalRuntime = getRuntimeKey()
+const originalBase = getRuntimeApiBaseUrl()
+let manager: ChildStoreManager
+let currentDirectory: string | null
+const selected: Array<{ id: string | null; directory: string | null | undefined }> = []
+const resolvedDirectories: string[] = []
 
 beforeEach(() => {
-  setCurrentSessionCalls.length = 0
-  registerSessionDirectoryCalls.length = 0
-  upsertSessionCalls.length = 0
-  markSessionAsOpenChamberCreatedCalls.length = 0
-  nextCreateSessionCalls = []
-  nextCreateSessionResponse = { id: "ses_default", time: { created: 1 } } as Session
+  switchRuntimeEndpoint({ apiBaseUrl: "https://issue-1637.test", runtimeKey: "issue-1637" })
+  resetWorkspaceDirectories()
+  useGlobalSessionsStore.setState({ activeSessions: [], archivedSessions: [], activeById: new Map(), archivedById: new Map(), entityById: new Map(), hasLoaded: true })
+  manager = new ChildStoreManager()
   currentDirectory = null
+  selected.length = 0
+  resolvedDirectories.length = 0
+  setActionRefs(manager, () => currentDirectory ?? "")
 
-  // Initialize action refs. `createSession` seeds the created session into its
-  // directory's child store, so the mock hands back an empty store.
-  setActionRefs(
-    {
-      children: new Map(),
-      ensureChild: () => ({ getState: () => ({ session: [] }), setState: () => undefined }),
-      getChild: () => undefined,
-    } as never,
-    () => currentDirectory ?? "",
-  )
-})
-
-describe("issue #1637 — server omits directory, falls back to directoryOverride", () => {
-  test("when server response omits directory and directoryOverride is set, setCurrentSession receives the directoryOverride (not null)", async () => {
-    nextCreateSessionResponse = { id: "ses_1637_a", time: { created: 1 } } as Session
-
-    const result = await createSession("test title", "/projects/alpha")
-
-    expect(result?.id).toBe("ses_1637_a")
-    expect(nextCreateSessionCalls).toHaveLength(1)
-    expect(nextCreateSessionCalls[0].directory).toBe("/projects/alpha")
-    expect(setCurrentSessionCalls).toHaveLength(1)
-    expect(setCurrentSessionCalls[0]).toEqual({
-      id: "ses_1637_a",
-      directoryHint: "/projects/alpha",
-    })
-    // registerSessionDirectory is also called with the effective directory
-    expect(registerSessionDirectoryCalls).toEqual([{ sessionID: "ses_1637_a", directory: "/projects/alpha" }])
+  spyOn(canonicalClient, "resolveWorkspace").mockImplementation(async (directory) => {
+    resolvedDirectories.push(directory)
+    return workspace(directory)
+  })
+  spyOn(canonicalClient, "createSession").mockImplementation(async (request) => ({
+    session: session(`session-${resolvedDirectories.length}`, request.workspaceId),
+  }))
+  spyOn(useSessionUIStore.getState(), "setCurrentSession").mockImplementation((id, directory) => {
+    selected.push({ id, directory })
   })
 })
 
-describe("issue #1637 — server returns directory, server value wins", () => {
-  test("when server response includes directory and directoryOverride is set, setCurrentSession receives the server directory", async () => {
-    nextCreateSessionResponse = {
-      id: "ses_1637_b",
-      time: { created: 1 },
-      directory: "/projects/gamma",
-    } as Session
+afterEach(() => {
+  manager.disposeAll()
+  mock.restore()
+  resetWorkspaceDirectories()
+  switchRuntimeEndpoint({ apiBaseUrl: originalBase, runtimeKey: originalRuntime })
+})
 
-    const result = await createSession("test title", "/projects/alpha")
+describe("issue #1637 — native session admission keeps the effective directory", () => {
+  test("directoryOverride is resolved and used for selection when the caller provides it", async () => {
+    const result = await createSession("test title", PROJECT)
 
-    expect(result?.id).toBe("ses_1637_b")
-    expect(setCurrentSessionCalls).toHaveLength(1)
-    // Server's directory should take precedence over the override
-    expect(setCurrentSessionCalls[0]).toEqual({
-      id: "ses_1637_b",
-      directoryHint: "/projects/gamma",
-    })
-    expect(registerSessionDirectoryCalls).toEqual([{ sessionID: "ses_1637_b", directory: "/projects/gamma" }])
+    expect(result?.sessionId).toBe("session-1")
+    expect(resolvedDirectories).toEqual([PROJECT])
+    expect(canonicalClient.createSession).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: "project-1",
+      workspaceId: "workspace--projects-alpha",
+      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
+      metadata: { title: "test title" },
+    }))
+    expect(selected).toEqual([{ id: "session-1", directory: PROJECT }])
+    expect(useGlobalSessionsStore.getState().entityById.get("session-1")?.workspaceId).toBe("workspace--projects-alpha")
+  })
+
+  test("the active directory is used when no override is provided", async () => {
+    currentDirectory = "/projects/current"
+    const result = await createSession("test title")
+
+    expect(result?.sessionId).toBe("session-1")
+    expect(resolvedDirectories).toEqual([currentDirectory])
+    expect(selected).toEqual([{ id: "session-1", directory: currentDirectory }])
+  })
+
+  test("creation without an admitted directory is rejected without issuing a native request", async () => {
+    expect(await createSession("test title", null)).toBeNull()
+    expect(canonicalClient.resolveWorkspace).not.toHaveBeenCalled()
+    expect(canonicalClient.createSession).not.toHaveBeenCalled()
+    expect(selected).toEqual([])
   })
 })
 
-describe("issue #1637 — no directoryOverride, no server directory", () => {
-  test("when no directoryOverride and server omits directory, setCurrentSession receives null", async () => {
-    currentDirectory = null
-    nextCreateSessionResponse = { id: "ses_1637_c", time: { created: 1 } } as Session
-
-    const result = await createSession("test title", null)
-
-    expect(result?.id).toBe("ses_1637_c")
-    // Without any directory source, the call to opencodeClient.createSession
-    // is made with undefined (dir() returned undefined).
-    // dir() returns undefined when no current directory is set and no override is provided
-    expect(nextCreateSessionCalls[0].directory == null).toBe(true)
-    expect(setCurrentSessionCalls).toHaveLength(1)
-    // Existing behavior preserved when no directory info is available anywhere
-    expect(setCurrentSessionCalls[0]).toEqual({
-      id: "ses_1637_c",
-      directoryHint: null,
-    })
-    // registerSessionDirectory is not called when sessionDirectory is null
-    expect(registerSessionDirectoryCalls).toHaveLength(0)
-  })
-})
-
-describe("issue #1637 — no directoryOverride, server returns directory", () => {
-  test("when no directoryOverride but server returns directory, setCurrentSession receives the server directory", async () => {
-    currentDirectory = null
-    nextCreateSessionResponse = {
-      id: "ses_1637_d",
-      time: { created: 1 },
-      directory: "/projects/server-side",
-    } as Session
-
-    const result = await createSession("test title", null)
-
-    expect(result?.id).toBe("ses_1637_d")
-    expect(setCurrentSessionCalls).toHaveLength(1)
-    expect(setCurrentSessionCalls[0]).toEqual({
-      id: "ses_1637_d",
-      directoryHint: "/projects/server-side",
-    })
-    expect(registerSessionDirectoryCalls).toEqual([
-      { sessionID: "ses_1637_d", directory: "/projects/server-side" },
-    ])
-  })
-})
-
-describe("issue #2270 — nested Git projects: child directory wins when override is provided", () => {
-  test("when creating a session with a directoryOverride pointing to a child project, the child project directory is used even when the server omits directory", async () => {
-    // Simulate the situation where multiple child projects are registered
-    // under a parent Git repo. The user is on a child project and clicks "+".
-    // The server response omits the `directory` field.
-    const childProjectDir = "/work/parent-git-repo/child-project-a"
-    nextCreateSessionResponse = { id: "ses_2270_child", time: { created: 1 } } as Session
-
-    const result = await createSession(undefined, childProjectDir)
-
-    expect(result?.id).toBe("ses_2270_child")
-    // The SDK should be called with the child project directory
-    expect(nextCreateSessionCalls).toHaveLength(1)
-    expect(nextCreateSessionCalls[0].directory).toBe(childProjectDir)
-    // setCurrentSession receives the child project directory, not null
-    expect(setCurrentSessionCalls).toHaveLength(1)
-    expect(setCurrentSessionCalls[0]).toEqual({
-      id: "ses_2270_child",
-      directoryHint: childProjectDir,
-    })
-    // And it is NOT a different child project
-    expect(setCurrentSessionCalls[0].directoryHint).not.toBe("/work/parent-git-repo/child-project-b")
-    // The session is registered in the routing index under the correct directory
-    expect(registerSessionDirectoryCalls).toEqual([
-      { sessionID: "ses_2270_child", directory: childProjectDir },
-    ])
-  })
-})
-
-describe("issue #2270 — registered child project wins over a leaked ancestor worktree", () => {
+describe("issue #2270 — nested Git projects", () => {
   test("resolves a nested child repository directly instead of through a sibling project's ancestor worktree", () => {
     const projects = [
       { id: "project-a", path: "/workspace/project-a" },
@@ -265,46 +148,5 @@ describe("issue #2270 — registered child project wins over a leaked ancestor w
     )
 
     expect(resolved?.id).toBe("project-b")
-  })
-})
-
-describe("issue #2270 — registerSessionDirectory called with effective directory", () => {
-  test("registerSessionDirectory is called with the effective directory (not null or a stale value) when directoryOverride is set", async () => {
-    // Server response omits directory; effectiveDirectory is the directoryOverride
-    const effectiveDir = "/projects/alpha/subdir"
-    nextCreateSessionResponse = { id: "ses_2270_reg", time: { created: 1 } } as Session
-
-    await createSession("title", effectiveDir)
-
-    expect(registerSessionDirectoryCalls).toHaveLength(1)
-    expect(registerSessionDirectoryCalls[0]).toEqual({
-      sessionID: "ses_2270_reg",
-      directory: effectiveDir,
-    })
-    // Sanity: not null and not a stale value
-    expect(registerSessionDirectoryCalls[0].directory).not.toBeNull()
-    expect(registerSessionDirectoryCalls[0].directory).not.toBe("")
-    // setCurrentSession and registerSessionDirectory must agree
-    expect(setCurrentSessionCalls[0].directoryHint).toBe(effectiveDir)
-  })
-
-  test("registerSessionDirectory is called with the server's directory when the server returns one (server takes precedence over override)", async () => {
-    const overrideDir = "/projects/alpha"
-    const serverDir = "/projects/echoed-by-server"
-    nextCreateSessionResponse = {
-      id: "ses_2270_server",
-      time: { created: 1 },
-      directory: serverDir,
-    } as Session
-
-    await createSession("title", overrideDir)
-
-    expect(registerSessionDirectoryCalls).toHaveLength(1)
-    expect(registerSessionDirectoryCalls[0]).toEqual({
-      sessionID: "ses_2270_server",
-      directory: serverDir,
-    })
-    // Not the override (the server has authoritative info)
-    expect(registerSessionDirectoryCalls[0].directory).not.toBe(overrideDir)
   })
 })

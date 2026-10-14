@@ -1,25 +1,39 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import type { Session } from '@openchamber/agent-contract';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import * as runtimeSwitch from '@/lib/runtime-switch';
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { clearLastActiveSession, persistLastActiveSession, readLastActiveSession } from './last-session-cache';
 import { beginLastSessionRestore, restoreLastActiveSession } from './last-session-restore';
 import { useSessionUIStore } from './session-ui-store';
+import { deferred } from './session-message-loader-test-fixtures';
 
-const session = (id: string): Session => ({
-    id,
-    projectID: 'project',
-    directory: '/repo',
-    title: id,
-    time: { created: 1, updated: 1 },
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+const session = (sessionId: string, workspaceId = 'workspace-restore'): Session => ({
+    sessionId,
+    rootSessionId: sessionId,
+    projectId: 'project-restore',
+    workspaceId,
+    displayPath: 'repo/session',
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: 'epoch-restore',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    metadata: { title: sessionId },
+    metadataRevision: '1',
+    archiveRevision: '0',
 });
 
 const originalSetCurrentSession = useSessionUIStore.getState().setCurrentSession;
+let previousGlobalState = useGlobalSessionsStore.getState();
 let selected: Array<{ id: string | null; directory: string | null | undefined }> = [];
 
 beforeEach(() => {
+    previousGlobalState = useGlobalSessionsStore.getState();
+    resetWorkspaceDirectories();
+    registerWorkspaceDirectory('workspace-restore', '/repo');
     selected = [];
     useSessionUIStore.setState({
         currentSessionId: null,
@@ -36,6 +50,8 @@ beforeEach(() => {
 
 afterEach(() => {
     useSessionUIStore.setState({ setCurrentSession: originalSetCurrentSession, currentSessionId: null, currentSessionDirectory: null });
+    useGlobalSessionsStore.setState(previousGlobalState);
+    resetWorkspaceDirectories();
     clearLastActiveSession(getRuntimeKey());
 });
 
@@ -70,8 +86,7 @@ describe('restoreLastActiveSession', () => {
 
     test('keeps the pointer and reports failure when the session list could not be read', async () => {
         persistLastActiveSession(getRuntimeKey(), { sessionId: 'ses_open', directory: '/repo' });
-        // Cold start: OpenCode is not ready, so the load falls back to what the
-        // store holds and marks it as an error instead of rejecting.
+        // Failed native discovery cannot turn a persisted pointer into a deletion.
         const originalLoadSessions = useGlobalSessionsStore.getState().loadSessions;
         useGlobalSessionsStore.setState({
             hasLoaded: false,
@@ -87,7 +102,7 @@ describe('restoreLastActiveSession', () => {
             expect(selected).toEqual([]);
             expect(readLastActiveSession(getRuntimeKey())?.sessionId).toBe('ses_open');
 
-            // Once OpenCode is ready the retry finds the session.
+            // A later authoritative discovery confirms the native session.
             useGlobalSessionsStore.setState({
                 loadSessions: async () => {
                     useGlobalSessionsStore.setState({ hasLoaded: true, status: 'ready', activeSessions: [session('ses_open')] });
@@ -117,6 +132,77 @@ describe('restoreLastActiveSession', () => {
             useGlobalSessionsStore.setState({ loadSessions: originalLoadSessions });
         }
     });
+
+    test('does not select a session after the user opens another while discovery is pending', async () => {
+        persistLastActiveSession(getRuntimeKey(), { sessionId: 'ses_open', directory: '/repo' });
+        const original = useGlobalSessionsStore.getState().loadSessions;
+        const { promise, resolve: resolveList } = deferred<{ activeSessions: Session[]; archivedSessions: Session[] }>();
+        useGlobalSessionsStore.setState({
+            hasLoaded: false,
+            status: 'idle',
+            loadSessions: () => promise,
+        });
+        try {
+            const attempt = restoreLastActiveSession({ refresh: false });
+            useSessionUIStore.setState({ currentSessionId: 'ses_other' });
+            useGlobalSessionsStore.setState({ hasLoaded: true, status: 'ready' });
+            resolveList({ activeSessions: [session('ses_open')], archivedSessions: [] });
+            expect(await attempt).toBe('none');
+            expect(selected).toEqual([]);
+        } finally {
+            useGlobalSessionsStore.setState({ loadSessions: original });
+        }
+    });
+
+    test('rejects discovery completion from a previous runtime without deleting its pointer', async () => {
+        let runtimeKey = 'restore-runtime-a';
+        const runtime = spyOn(runtimeSwitch, 'getRuntimeKey').mockImplementation(() => runtimeKey);
+        const original = useGlobalSessionsStore.getState().loadSessions;
+        const { promise, resolve: resolveList } = deferred<{ activeSessions: Session[]; archivedSessions: Session[] }>();
+        persistLastActiveSession(runtimeKey, { sessionId: 'ses_open', directory: '/repo' });
+        useGlobalSessionsStore.setState({
+            hasLoaded: false,
+            status: 'idle',
+            loadSessions: () => promise,
+        });
+        try {
+            const attempt = restoreLastActiveSession({ refresh: false });
+            runtimeKey = 'restore-runtime-b';
+            useGlobalSessionsStore.setState({ hasLoaded: true, status: 'ready' });
+            resolveList({ activeSessions: [], archivedSessions: [] });
+            expect(await attempt).toBe('none');
+            expect(selected).toEqual([]);
+            expect(readLastActiveSession('restore-runtime-a')?.sessionId).toBe('ses_open');
+        } finally {
+            clearLastActiveSession('restore-runtime-a');
+            clearLastActiveSession('restore-runtime-b');
+            runtime.mockRestore();
+            useGlobalSessionsStore.setState({ loadSessions: original });
+        }
+    });
+
+    test('retains the pointer when native discovery rejects', async () => {
+        persistLastActiveSession(getRuntimeKey(), { sessionId: 'ses_open', directory: '/repo' });
+        useGlobalSessionsStore.setState({
+            loadSessions: async () => { throw new Error('discovery unavailable'); },
+        });
+        expect(await restoreLastActiveSession({ refresh: true })).toBe('failed');
+        expect(selected).toEqual([]);
+        expect(readLastActiveSession(getRuntimeKey())?.sessionId).toBe('ses_open');
+    });
+
+    test('successful empty active discovery clears an archived session pointer', async () => {
+        persistLastActiveSession(getRuntimeKey(), { sessionId: 'ses_open', directory: '/repo' });
+        useGlobalSessionsStore.setState({
+            activeSessions: [],
+            archivedSessions: [{ ...session('ses_open'), archivedAt: 10, archiveRevision: '1' }],
+            hasLoaded: true,
+            status: 'ready',
+        });
+        expect(await restoreLastActiveSession({ refresh: false })).toBe('none');
+        expect(selected).toEqual([]);
+        expect(readLastActiveSession(getRuntimeKey())).toBeNull();
+    });
 });
 
 describe('beginLastSessionRestore', () => {
@@ -134,23 +220,23 @@ describe('beginLastSessionRestore', () => {
     const holdSessionList = () => {
         const original = useGlobalSessionsStore.getState().loadSessions;
         let loads = 0;
-        let answer: (sessions: Session[] | null) => void = () => undefined;
+        let answer!: (sessions: Session[] | null) => void;
         useGlobalSessionsStore.setState({
             hasLoaded: false,
             status: 'idle',
             loadSessions: () => {
                 loads += 1;
-                return new Promise((resolve) => {
-                    answer = (sessions) => {
-                        if (sessions === null) {
-                            useGlobalSessionsStore.setState({ status: 'error' });
-                            resolve({ activeSessions: [], archivedSessions: [] });
-                            return;
-                        }
-                        useGlobalSessionsStore.setState({ hasLoaded: true, status: 'ready', activeSessions: sessions });
-                        resolve({ activeSessions: sessions, archivedSessions: [] });
-                    };
-                });
+                const { promise, resolve } = deferred<{ activeSessions: Session[]; archivedSessions: Session[] }>();
+                answer = (sessions) => {
+                    if (sessions === null) {
+                        useGlobalSessionsStore.setState({ status: 'error' });
+                        resolve({ activeSessions: [], archivedSessions: [] });
+                        return;
+                    }
+                    useGlobalSessionsStore.setState({ hasLoaded: true, status: 'ready', activeSessions: sessions });
+                    resolve({ activeSessions: sessions, archivedSessions: [] });
+                };
+                return promise;
             },
         });
         return {
@@ -179,7 +265,7 @@ describe('beginLastSessionRestore', () => {
         }
     });
 
-    test('takes the directory from the persisted session list when the pointer has none', () => {
+    test('takes the directory from the cached session workspace mapping when the pointer has none', () => {
         persistLastActiveSession(getRuntimeKey(), { sessionId: 'ses_open', directory: null });
         const original = useGlobalSessionsStore.getState().entityById;
         useGlobalSessionsStore.setState({ entityById: new Map([['ses_open', session('ses_open')]]) });
@@ -222,7 +308,7 @@ describe('beginLastSessionRestore', () => {
             const attempt = beginLastSessionRestore({ selectNow: true });
             expect(useSessionUIStore.getState().currentSessionId).toBe('ses_deleted');
 
-            // OpenCode still starting: the list proves nothing, nothing changes.
+            // Failed discovery proves nothing and leaves the reopened session intact.
             const early = attempt();
             list.answer(null);
             expect(await early).toBe('failed');
@@ -234,6 +320,24 @@ describe('beginLastSessionRestore', () => {
             expect(await result).toBe('none');
             expect(useSessionUIStore.getState().currentSessionId).toBeNull();
             expect(readLastActiveSession(getRuntimeKey())).toBeNull();
+        } finally {
+            list.restore();
+        }
+    });
+
+    test('reselects a reopened session at its authoritative mapped workspace directory', async () => {
+        persistLastActiveSession(getRuntimeKey(), { sessionId: 'ses_open', directory: '/repo' });
+        registerWorkspaceDirectory('workspace-moved', '/repo/.worktrees/moved');
+        const list = holdSessionList();
+        try {
+            const attempt = beginLastSessionRestore({ selectNow: true });
+            const result = attempt();
+            list.answer([session('ses_open', 'workspace-moved')]);
+            expect(await result).toBe('restored');
+            expect(selected).toEqual([
+                { id: 'ses_open', directory: '/repo' },
+                { id: 'ses_open', directory: '/repo/.worktrees/moved' },
+            ]);
         } finally {
             list.restore();
         }

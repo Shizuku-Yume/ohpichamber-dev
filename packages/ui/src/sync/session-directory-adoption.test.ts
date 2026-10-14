@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import type { Session } from "@openchamber/agent-contract"
 
 import { ChildStoreManager } from "./child-store"
 import { setSyncRefs } from "./sync-refs"
 import { useSessionUIStore } from "./session-ui-store"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from "@/stores/globalSessions"
 
 /**
  * Selecting a session whose directory this client has not indexed yet routes it
@@ -20,14 +22,33 @@ const PARENT = "/repo"
 const WORKTREE = "/repo/.worktrees/feature"
 const SESSION_ID = "ses_directory_adoption"
 
+const session = (sessionId: string, workspaceId: string): Session => ({
+  sessionId,
+  rootSessionId: sessionId,
+  projectId: "project-adoption",
+  workspaceId,
+  displayPath: "repo/worktrees/feature",
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: "epoch-adoption",
+  headSequence: "0",
+  runtimeStatus: "idle",
+  activeRunId: null,
+  metadata: { title: "Worktree session" },
+  metadataRevision: "1",
+  archiveRevision: "0",
+})
+
 const indexSessionIn = (
   manager: ChildStoreManager,
   directory: string,
   recordDirectory: string = directory,
 ): void => {
   const store = manager.ensureChild(directory, { bootstrap: false })
+  const workspaceId = `workspace-adoption:${recordDirectory}`
+  registerWorkspaceDirectory(workspaceId, recordDirectory)
   store.setState({
-    session: [{ id: SESSION_ID, directory: recordDirectory, title: "test" } as never],
+    session: [session(SESSION_ID, workspaceId)],
   })
 }
 
@@ -35,22 +56,23 @@ let manager: ChildStoreManager
 
 beforeEach(() => {
   manager = new ChildStoreManager()
-  setSyncRefs({} as never, manager, PARENT)
+  resetWorkspaceDirectories()
+  setSyncRefs(manager, PARENT)
   useSessionUIStore.getState().setCurrentSession(null)
+})
+
+afterEach(() => {
+  useSessionUIStore.getState().setCurrentSession(null)
+  manager.disposeAll()
+  resetWorkspaceDirectories()
 })
 
 describe("adoptAuthoritativeSessionDirectory", () => {
   test("opens a globally indexed Windows worktree session before its child store bootstraps", () => {
     const sessionId = "ses_windows_global_directory"
-    useGlobalSessionsStore.getState().upsertSession({
-      id: sessionId,
-      projectID: "windows-project",
-      directory: "c:\\repo\\.worktrees\\feature",
-      title: "Worktree session",
-      cost: 0,
-      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-      time: { created: 1, updated: 1 },
-    })
+    const workspaceId = "workspace-windows-adoption"
+    registerWorkspaceDirectory(workspaceId, "c:\\repo\\.worktrees\\feature")
+    useGlobalSessionsStore.getState().upsertSession(session(sessionId, workspaceId))
     try {
       useSessionUIStore.getState().setCurrentSession(sessionId)
 
@@ -71,10 +93,9 @@ describe("adoptAuthoritativeSessionDirectory", () => {
     expect(useSessionUIStore.getState().currentSessionDirectory).toBe(WORKTREE)
   })
 
-  test("believes the session record over the store that merely holds it", () => {
-    // A project's session list includes the sessions of its worktrees so the
-    // sidebar can group them, so the parent store holds this session while the
-    // session itself reports the worktree. Ownership comes from the record.
+  test("believes admitted workspace ownership over the store that merely holds the session", () => {
+    // Public sessions carry workspace identity, not a Host filesystem path.
+    // A parent list may hold a worktree session without becoming its owner.
     useSessionUIStore.getState().setCurrentSession(SESSION_ID)
     indexSessionIn(manager, PARENT, WORKTREE)
 

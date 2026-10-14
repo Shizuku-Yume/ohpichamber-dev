@@ -2,36 +2,33 @@ import { describe, expect, test } from "bun:test"
 import React, { act } from "react"
 import { createRoot } from "react-dom/client"
 import type { CanonicalClient } from "@/api/canonicalClient"
-import type { Message, Session, SessionSnapshot, ShellSnapshot, Workspace } from "@openchamber/agent-contract"
+import type { Message, Session, ShellSnapshot, Workspace } from '@openchamber/agent-contract'
 import { SyncProvider, useChildStoreManager, useSyncDirectory } from "./sync-context"
 import { usePrefetchSessionMessages } from "./use-sync"
 import { ChildStoreManager } from "./child-store"
 import { installHookTestDom } from "../components/session/sidebar/test-utils/testDom"
 import { useSessionUIStore } from "./session-ui-store"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
-import { deferred } from "./session-message-loader-test-fixtures"
+import { deferred, nativeClient as createCanonicalClient } from './session-message-loader-test-fixtures'
 
-const workspace = (directory: string): Workspace => ({ workspaceId: `workspace-${directory.slice(1).replaceAll("/", "-")}`, projectId: "project-1", name: "Workspace", displayPath: "." })
-const shellSnapshot = (workspaceId: string): ShellSnapshot => ({ scope: { kind: "workspace", workspaceId }, epoch: "shell-epoch", revision: "0", running: [], ended: [], recovery: { priorEpochs: "invalidated" } })
-const nativeClient = (): CanonicalClient => ({
-  listProjects: async () => ({ items: [{ projectId: "project-1", name: "Project", workspaceIds: [], displayPath: "." }], errors: {} }),
-  listWorkspaces: async () => ({ items: [], errors: {} }),
-  resolveWorkspace: async (directory: string) => workspace(directory),
-  listSessions: async () => ({ items: [], errors: {} }),
-  getModels: async (workspaceId: string) => ({ workspaceId, revision: "0", models: [] }),
-  getProviders: async (workspaceId: string) => ({ workspaceId, revision: "0", providers: [] }),
-  getAgents: async (workspaceId: string) => ({ workspaceId, revision: "0", agents: [] }),
-  getShellSnapshot: async ({ workspaceId }: { workspaceId: string }) => shellSnapshot(workspaceId),
-  getSnapshot: async (sessionId: string): Promise<SessionSnapshot> => ({
-    session: { sessionId, projectId: "project-1", workspaceId: "workspace-1", displayPath: ".", rootSessionId: sessionId, createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "0", runtimeStatus: "idle", activeRunId: null },
-    cursor: "epoch-1:0", activeRun: null, branch: { branchId: "branch-1", branchVersion: "0", leafMessageId: null },
-    window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: "replace", priorEpochs: "expired" },
-  }),
-  subscribeSessionEvents: () => () => {},
-} as unknown as CanonicalClient)
+const workspace = (directory: string): Workspace => ({ workspaceId: `workspace-${directory.slice(1).replaceAll('/', '-')}`, projectId: 'project-1', name: 'Workspace', displayPath: '.' })
+const shellSnapshot = (workspaceId: string): ShellSnapshot => ({ scope: { kind: 'workspace', workspaceId }, epoch: 'shell-epoch', revision: '0', running: [], ended: [], recovery: { priorEpochs: 'invalidated' } })
+const createNativeClient = (): CanonicalClient => {
+  const client = createCanonicalClient()
+  client.listProjects = async () => ({ items: [{ projectId: 'project-1', name: 'Project', workspaceIds: [], displayPath: '.' }], errors: {} })
+  client.listWorkspaces = async () => ({ items: [], errors: {} })
+  client.resolveWorkspace = async (directory: string) => workspace(directory)
+  client.listSessions = async () => ({ items: [], errors: {} })
+  client.getModels = async (workspaceId: string) => ({ workspaceId, revision: '0', models: [] })
+  client.getProviders = async (workspaceId: string) => ({ workspaceId, revision: '0', providers: [] })
+  client.getAgents = async (workspaceId: string) => ({ workspaceId, revision: '0', agents: [] })
+  client.getShellSnapshot = async (scope) => { if (scope.kind !== 'workspace') throw new Error('Selection fixture only uses workspace shell scope'); return shellSnapshot(scope.workspaceId) }
+  client.subscribeSessionEvents = () => () => {}
+  return client
+}
 const session = (sessionId: string, workspaceId: string): Session => ({
-  sessionId, projectId: "project-1", workspaceId, displayPath: ".", rootSessionId: sessionId, createdAt: 1, updatedAt: 1, epoch: "epoch-1", headSequence: "0", runtimeStatus: "idle", activeRunId: null,
-  metadata: null, metadataRevision: "0", archiveRevision: "0",
+  sessionId, projectId: 'project-1', workspaceId, displayPath: '.', rootSessionId: sessionId, createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: null, metadataRevision: '0', archiveRevision: '0',
 })
 
 describe("SyncProvider native scope and selection boundaries", () => {
@@ -43,7 +40,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
     const directory = "/workspace/actual"
     const sessionId = "selected-native"
     try {
-      await act(async () => root.render(<SyncProvider client={nativeClient()} directory="/workspace/guess"><Probe /></SyncProvider>))
+      await act(async () => root.render(<SyncProvider client={createNativeClient()} directory="/workspace/guess"><Probe /></SyncProvider>))
       if (!manager) throw new Error("Directory manager was not mounted")
       const store = manager.ensureChild(directory, { bootstrap: false })
       const messages: Message[] = Array.from({ length: 10 }, (_, index) => ({ messageId: `${sessionId}-${index}`, sessionId, turnId: "turn-1", role: "user", createdAt: index, parts: [] }))
@@ -64,7 +61,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
     const dom = installHookTestDom()
     const root = createRoot(dom.container)
     let runtimeRenders = 0
-    const client = nativeClient()
+    const client = createNativeClient()
     let directoryRenders = 0
     let callback: unknown
     const RuntimeConsumer = React.memo(() => { callback = usePrefetchSessionMessages(); runtimeRenders += 1; return null })
@@ -88,7 +85,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
     const directory = "/workspace/revision-race"
     const resolved = workspace(directory)
     const pending = deferred<{ items: Session[]; errors: Record<string, string> }>()
-    const client = nativeClient()
+    const client = createNativeClient()
     client.listSessions = () => pending.promise
     let manager: ChildStoreManager | undefined
     const Probe = () => { manager = useChildStoreManager(); return null }
@@ -115,7 +112,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
     const directory = "/workspace/archive-scope"
     const active = session("active-session", workspace(directory).workspaceId)
     const archived = { ...session("archived-session", active.workspaceId), archivedAt: 20, archiveRevision: "1" }
-    const client = nativeClient()
+    const client = createNativeClient()
     client.listSessions = async () => ({ items: [active, archived], errors: {} })
     let manager: ChildStoreManager | undefined
     const Probe = () => { manager = useChildStoreManager(); return null }

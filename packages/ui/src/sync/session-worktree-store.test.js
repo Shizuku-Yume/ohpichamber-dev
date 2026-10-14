@@ -1,5 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { useSessionWorktreeStore } from './session-worktree-store';
+
+beforeEach(() => useSessionWorktreeStore.setState({ attachments: new Map() }));
+afterEach(() => useSessionWorktreeStore.setState({ attachments: new Map() }));
 
 describe('session-worktree-store', () => {
   test('stores and retrieves attachment by session id', () => {
@@ -67,5 +70,23 @@ describe('session-worktree-store', () => {
     expect(attB?.branch).toBe('feat-b');
     expect(attA?.worktreeSource).toBe('existing');
     expect(attB?.worktreeSource).toBe('created-for-session');
+  });
+
+  test('replaces an attachment without changing another session or the previous snapshot', () => {
+    const first = { worktreeRoot: '/repo/a', cwd: '/repo/a', branch: 'a', headState: 'branch', worktreeStatus: 'ready', worktreeSource: 'existing', legacy: false, degraded: false };
+    const sibling = { ...first, worktreeRoot: '/repo/b', cwd: '/repo/b', branch: 'b' };
+    const store = useSessionWorktreeStore.getState();
+    store.setAttachment('session-a', first);
+    store.setAttachment('session-b', sibling);
+    const previous = useSessionWorktreeStore.getState().attachments;
+    const replacement = { ...first, worktreeStatus: 'missing', degraded: true };
+    store.setAttachment('session-a', replacement);
+
+    expect(useSessionWorktreeStore.getState().getAttachment('session-a')).toBe(replacement);
+    expect(useSessionWorktreeStore.getState().getAttachment('session-b')).toBe(sibling);
+    expect(previous.get('session-a')).toBe(first);
+    store.clearAttachment('session-a');
+    expect(useSessionWorktreeStore.getState().getAttachment('session-a')).toBeUndefined();
+    expect(useSessionWorktreeStore.getState().getAttachment('session-b')).toBe(sibling);
   });
 });

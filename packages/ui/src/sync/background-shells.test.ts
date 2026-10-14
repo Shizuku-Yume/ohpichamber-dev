@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { CanonicalEvent, RunningShell, ShellJob, ShellSnapshot } from '@openchamber/agent-contract';
 import { ENDED_SHELLS_MAX, applyBackgroundShellEvents, backgroundShellRevision, backgroundShellsOfSessions, refreshBackgroundShells, replaceDirectoryShells, resetBackgroundShells, sessionsInTree, useBackgroundShellsStore } from './background-shells';
+import { deferred } from './session-message-loader-test-fixtures';
 const running = (jobId: string, sessionId = 'session_1', background = true): RunningShell => ({ jobId, sessionId, epoch: 'epoch_1', workerGeneration: 'worker_1', workspaceId: 'workspace_1', projectId: 'project_1', command: `run ${jobId}`, background, startedAt: 1000, outputCursor: '0', status: 'running' });
 const ended = (jobId: string, sessionId = 'session_1'): ShellJob => ({ ...running(jobId, sessionId), status: 'ended', endedAt: 2000, termination: { reason: 'exit', exitCode: 0 } });
 const event = (job: ShellJob): CanonicalEvent => ({ sessionId: job.sessionId, epoch: job.epoch, sequence: '1', timestamp: 1, type: 'shell.updated', job });
@@ -24,7 +25,7 @@ describe('native background shell index', () => {
     applyBackgroundShellEvents('/repo', [event(running('job_1'))]);
     await expect(refreshBackgroundShells('/repo', async () => { throw new Error('offline'); })).rejects.toThrow('offline');
     expect(ids()).toEqual(['job_1']);
-    const { promise, resolve } = Promise.withResolvers<ShellSnapshot>();
+    const { promise, resolve } = deferred<ShellSnapshot>();
     const pending = refreshBackgroundShells('/repo', () => promise);
     resetBackgroundShells();
     resolve({ scope: { kind: 'global' }, epoch: 'epoch_1', revision: '0', running: [running('stale')], ended: [], recovery: { priorEpochs: 'invalidated' } });
@@ -63,8 +64,8 @@ describe('native background shell index', () => {
     expect(ids()).toEqual(['fresh']);
   });
   test('a newer refresh wins when reads complete out of order', async () => {
-    const older = Promise.withResolvers<ShellSnapshot>();
-    const newer = Promise.withResolvers<ShellSnapshot>();
+    const older = deferred<ShellSnapshot>();
+    const newer = deferred<ShellSnapshot>();
     const first = refreshBackgroundShells('/repo', () => older.promise);
     const second = refreshBackgroundShells('/repo', () => newer.promise);
     newer.resolve(snapshot([running('newer')]));
@@ -74,7 +75,7 @@ describe('native background shell index', () => {
     expect(ids()).toEqual(['newer']);
   });
   test('retains all mutation tombstones for an in-flight recovery', async () => {
-    const pending = Promise.withResolvers<ShellSnapshot>();
+    const pending = deferred<ShellSnapshot>();
     const recovery = refreshBackgroundShells('/repo', () => pending.promise);
     applyBackgroundShellEvents('/repo', Array.from({ length: 650 }, (_, index) => event(ended(`job_${index}`))));
     pending.resolve(snapshot([running('job_0')]));

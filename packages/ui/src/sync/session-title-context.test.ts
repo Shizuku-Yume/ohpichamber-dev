@@ -62,7 +62,8 @@ describe('native title context loader', () => {
   });
   test('failed authority never returns cached title context', async () => {
     const error = new Error('offline');
-    await expect(loadSessionTitleTurns({ target, signal: new AbortController().signal, getMessages: () => [], getTurns: () => [], loader: {
+    const cached = [message('user', 'turn', 'user', 'Question'), message('assistant', 'turn', 'assistant', 'Answer')];
+    await expect(loadSessionTitleTurns({ target, signal: new AbortController().signal, getMessages: () => cached, getTurns: () => [turn('turn', 'user', ['assistant'])], loader: {
       getSnapshot: () => ({ ...ready(), status: 'error', error }),
       ensure: async () => { throw error; },
       loadOlder: async () => {},
@@ -74,5 +75,22 @@ describe('native title context loader', () => {
       ensure: async () => {},
       loadOlder: async () => {},
     } })).rejects.toThrow('pagination made no progress');
+  });
+  test('successful complete empty history returns empty context without requesting older pages', async () => {
+    let olderReads = 0;
+    expect(await loadSessionTitleTurns({ target, signal: new AbortController().signal, getMessages: () => [], getTurns: () => [], loader: {
+      getSnapshot: () => ({ ...ready(), complete: true, cursor: undefined }),
+      ensure: async () => {},
+      loadOlder: async () => { olderReads += 1; },
+    } })).toEqual([]);
+    expect(olderReads).toBe(0);
+  });
+  test('rejects a loader generation replaced during pagination rather than mixing title context', async () => {
+    let state = ready();
+    await expect(loadSessionTitleTurns({ target, signal: new AbortController().signal, getMessages: () => [], getTurns: () => [], loader: {
+      getSnapshot: () => state,
+      ensure: async () => {},
+      loadOlder: async () => { state = { ...state, generation: state.generation + 1, complete: true }; },
+    } })).rejects.toThrow('Session history is unavailable');
   });
 });

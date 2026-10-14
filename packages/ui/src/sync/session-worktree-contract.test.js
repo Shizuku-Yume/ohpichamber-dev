@@ -3,7 +3,6 @@ import {
   buildAttachmentFromCanonicalization,
   getAttachedSessionDirectory,
   resolveSessionWorktreeState,
-  formatSessionWorktreeBadge,
   getSessionWorktreeRepairActions,
   getMutationBlockingReasons,
   buildSessionTargetOptions,
@@ -150,7 +149,7 @@ describe('resolveSessionWorktreeState', () => {
 
   test('falls back to worktreeRoot when cwd escapes root', () => {
     const result = resolveSessionWorktreeState({
-      sessionDirectory: '/repo/worktrees/feat-a/src',
+      sessionDirectory: '/repo/worktrees/feat-a-other/src',
       metadata: {
         path: '/repo/worktrees/feat-a',
         projectDirectory: '/repo',
@@ -163,9 +162,8 @@ describe('resolveSessionWorktreeState', () => {
       cwdExists: true,
     });
 
-    // cwd is inside worktreeRoot so should be kept
-    expect(result.cwd).toBe('/repo/worktrees/feat-a/src');
-    expect(result.degraded).toBe(false);
+    expect(result.cwd).toBe('/repo/worktrees/feat-a');
+    expect(result.degraded).toBe(true);
   });
 
   test('marks missing metadata as legacy with invalid status', () => {
@@ -291,106 +289,6 @@ describe('resolveSessionWorktreeState', () => {
   });
 });
 
-describe('formatSessionWorktreeBadge', () => {
-  test('formats needs-attention badge for invalid worktree', () => {
-    const badge = formatSessionWorktreeBadge({
-      worktreeStatus: 'invalid',
-      degraded: true,
-      legacy: false,
-      branch: null,
-      headState: 'detached',
-      worktreeRoot: null,
-      cwd: null,
-      worktreeSource: null,
-    });
-    expect(badge).toBe('Needs attention');
-  });
-
-  test('formats legacy session badge', () => {
-    const badge = formatSessionWorktreeBadge({
-      legacy: true,
-      worktreeStatus: 'invalid',
-      degraded: true,
-      branch: null,
-      headState: 'branch',
-      worktreeRoot: null,
-      cwd: null,
-      worktreeSource: null,
-    });
-    expect(badge).toBe('Legacy session');
-  });
-
-  test('formats detached HEAD', () => {
-    const badge = formatSessionWorktreeBadge({
-      headState: 'detached',
-      degraded: false,
-      legacy: false,
-      branch: null,
-      worktreeStatus: 'ready',
-      worktreeRoot: '/repo',
-      cwd: '/repo',
-      worktreeSource: 'existing',
-    });
-    expect(badge).toBe('Detached HEAD');
-  });
-
-  test('formats unborn branch', () => {
-    const badge = formatSessionWorktreeBadge({
-      headState: 'unborn',
-      degraded: false,
-      legacy: false,
-      branch: null,
-      worktreeStatus: 'ready',
-      worktreeRoot: '/repo',
-      cwd: '/repo',
-      worktreeSource: 'existing',
-    });
-    expect(badge).toBe('Unborn branch');
-  });
-
-  test('formats current branch name', () => {
-    const badge = formatSessionWorktreeBadge({
-      branch: 'feature/my-branch',
-      headState: 'branch',
-      degraded: false,
-      legacy: false,
-      worktreeStatus: 'ready',
-      worktreeRoot: '/repo',
-      cwd: '/repo',
-      worktreeSource: 'existing',
-    });
-    expect(badge).toBe('Current branch: feature/my-branch');
-  });
-
-  test('formats missing worktree', () => {
-    const badge = formatSessionWorktreeBadge({
-      worktreeStatus: 'missing',
-      degraded: true,
-      legacy: false,
-      branch: null,
-      headState: 'branch',
-      worktreeRoot: null,
-      cwd: null,
-      worktreeSource: null,
-    });
-    expect(badge).toBe('Worktree missing');
-  });
-
-  test('formats needs-attention for in-progress git operation', () => {
-    const badge = formatSessionWorktreeBadge({
-      worktreeStatus: 'ready',
-      attentionReason: 'merge',
-      degraded: false,
-      legacy: false,
-      branch: 'main',
-      headState: 'branch',
-      worktreeRoot: '/repo',
-      cwd: '/repo',
-      worktreeSource: 'existing',
-    });
-    expect(badge).toBe('Needs attention');
-  });
-});
 
 describe('getSessionWorktreeRepairActions', () => {
   test('returns open-without-worktree-features for missing worktree', () => {
@@ -437,7 +335,7 @@ describe('getSessionWorktreeRepairActions', () => {
 });
 
 describe('buildSessionTargetOptions', () => {
-  test('labels root directory and isolated worktrees distinctly', () => {
+  test('offers root and isolated worktree destinations distinctly', () => {
     const options = buildSessionTargetOptions({
       projectRoot: '/repo',
       rootBranch: 'main',
@@ -446,8 +344,7 @@ describe('buildSessionTargetOptions', () => {
       ],
     });
 
-    expect(options[0]?.label).toContain('main');
-    expect(options[1]?.label).toContain('feat-a');
+    expect(options.map((option) => option.value)).toEqual(['/repo', '/repo/.worktrees/feat-a']);
     expect(options[0]?.kind).toBe('root');
     expect(options[1]?.kind).toBe('worktree');
   });
