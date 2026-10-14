@@ -111,6 +111,8 @@ A disposable service test can create a session in a temporary cwd, submit a prom
 
 Web and Electron can create, stream, abort, reload, and reopen a session through the Canonical Client. A reconnect performs snapshot plus cursor recovery without duplicate message parts. The full affected UI package checks pass, and the old OpenCode client is no longer reachable from retained UI code.
 
+**Current status (2026-10-15):** Canonical session/action/UI slices and the production Agent Service startup cutover are integrated. Focused native UI/Guest and Electron checks pass, but this gate is not closed: full UI type-check, changed-slice oxlint, dead-code and Web package tests still fail; connected Web/Electron W7-W10 observation, credential/importer retirement, isolated-space archive retirement and packaged Agent Service staging remain open. See `.workflow/tasks/omp-through-m3/18-m3-acceptance.md` and `.workflow/development.md` for exact artifacts and next owners.
+
 ## M4: OpenChamber orchestration features
 
 ### Work

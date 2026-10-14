@@ -2,7 +2,7 @@
 
 **Effort:** omp-through-m3
 **Task type:** feature
-**Base commit:** <commit-sha>
+**Base commit:** 3f4afa751888da3e0b6b795ad31534fa6c8a9c6b
 
 **Delivers:** Web and Electron launch paths proxy the same authenticated `/api/agent/v1` boundary, host lifecycle owns Agent Service supervision, and obsolete OpenCode agent integration files/routes/config readers are removed after caller cutover.
 
@@ -130,3 +130,7 @@ production startup. The embedded controller's unused `isReady` and managed
 preflight exposure still describe legacy state; canonical readiness remains
 `/api/agent/v1/ready`. Unused startup/feature readiness dependency pass-throughs
 and comments implying automatic legacy bootstrap were removed in this lane.
+
+## Current integrated verification (2026-10-15)
+
+The production cutover is integrated through `a76afadc6`, `3ea7b1e1d`, `9b4477362`, `de59dda11`, and `3f4afa751`. Host startup tests pass `4`; Electron package tests pass `43/43` files and Electron syntax type-check passes. The UI OpenCode startup gate and its sole session-action wait are now removed. Workflow/docs validation passes. Full Web acceptance remains open: retained OpenCode proxy/worktree readiness tests fail `11` targeted cases (`20` pass) on expected `503` behavior, and credential handoff/importer, isolated-space archive, packaged Bun/worker/native SDK staging, upgrade controls and remaining legacy lifecycle/config callers are not cut over. Task 17 remains active until those owners and the W7/W10 OpenCode-absent Web/Electron proof are complete.

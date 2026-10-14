@@ -2,7 +2,7 @@
 
 **Effort:** omp-through-m3
 **Task type:** feature
-**Base commit:** <commit-sha>
+**Base commit:** 3f4afa751888da3e0b6b795ad31534fa6c8a9c6b
 
 **Delivers:** One current acceptance packet proves M0-to-M3 behavior on Web and Electron, records platform/provider limitations, and closes only the gates supported by observed evidence.
 
@@ -19,4 +19,11 @@
 - [ ] Review dead-code output and remove obsolete agent exports/imports rather than suppressing findings.
 - [ ] Record exact command output/artifact paths, environment and known provider/platform limitations.
 - [ ] Mark M3 complete only if every required acceptance item has evidence; otherwise keep the gate open with the next task.
+
+## Progress
+
+- **Status:** active
+- **Integrated evidence:** combined native UI settings/Guest packet `74` tests / `578` assertions passed; session-actions `66` tests / `208` assertions passed; Electron `43/43` test files and syntax type-check passed; docs validation passed (`696` pages / `58` links); workflow validation passed (`42` task files).
+- **Open gate evidence:** full Web tests exit 1; targeted legacy OpenCode proxy/worktree tests are `20` passed / `11` failed with expected `503` readiness behavior. UI type-check, changed-slice oxlint and dead-code remain failing; artifacts are `artifact://2952`, `artifact://2951`, and `artifact://2957`.
+- **Decision:** M3 is not complete. Keep Task 18 active until W7-W10 connected Web/Electron native child, timeline, sidebar, Guest, packaging and remaining legacy-consumer evidence is current.
 - [ ] Verify native subagent execution, timeline navigation, sidebar hierarchy and child history recovery end-to-end on Web and Electron without OpenCode fallbacks.
