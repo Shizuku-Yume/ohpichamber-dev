@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import { SessionJournal } from '../projection/journal.ts';
-import { rememberPrivateRoots, WorkerProjection } from './projection.ts';
+import { nativePrivateRootContext, rememberPrivateRoots, WorkerProjection } from './projection.ts';
 
 type NativeMessage = Extract<AgentSessionEvent, { type: 'message_start' }>['message'];
 type Assistant = Extract<NativeMessage, { role: 'assistant' }>;
@@ -169,6 +169,48 @@ test('native custom root context survives relocation, branch selection and cold 
     expect(projection.publicText(`${source}/old ${destination}/new ${sourceStorage}/old ${destinationStorage}/new ${agentDirectory}/settings /usr/share/public.txt`))
       .toBe('[workspace]/old [workspace]/new [session-storage]/old [session-storage]/new [agent-directory]/settings /usr/share/public.txt');
     expect(reopened.getEntries().find((entry) => entry.type === 'message' && entry.id === userId)).toMatchObject({ message: input });
+  } finally {
+    await reopened?.close();
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('selected fork of legacy history inherits later tree-wide private roots before its first public seed and cold reopen', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-private-fork-'));
+  const source = join(root, 'source');
+  const destination = join(root, 'destination');
+  const sourceStorage = join(root, 'source-storage');
+  const destinationStorage = join(root, 'destination-storage');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(source, { recursive: true });
+  await mkdir(destination, { recursive: true });
+  const manager = SessionManager.create(source, sourceStorage);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    manager.appendMessage({ role: 'user', content: 'Legacy request', timestamp: 1 });
+    const native = assistant([{ type: 'text', text: `${source}/old ${destination}/new /usr/share/public.txt` }], 'stop', 2);
+    const selected = manager.appendMessage(native);
+    await manager.flush();
+    // The legacy messages precede both root markers, so SDK branchPath alone cannot carry them.
+    await rememberPrivateRoots(manager, { cwd: source, agentDirectory });
+    await manager.moveTo(destination, destinationStorage);
+    await rememberPrivateRoots(manager, { cwd: destination, agentDirectory });
+    const context = nativePrivateRootContext(manager);
+    const childFile = manager.createBranchedSession(selected, { copyArtifacts: true });
+    if (!childFile) throw new Error('Native fork file is required');
+    await rememberPrivateRoots(manager, { cwd: destination, agentDirectory }, context);
+    const childSessionId = manager.getSessionId();
+    const seed = new WorkerProjection(manager, childSessionId).seed();
+    expect(seed.messages[1]?.parts).toMatchObject([{ type: 'text', content: '[workspace]/old [workspace]/new /usr/share/public.txt' }]);
+    expect(manager.getBranch().find((entry) => entry.type === 'message' && entry.id === selected)).toMatchObject({ message: native });
+    await manager.close();
+    reopened = await SessionManager.open(childFile, destinationStorage, undefined, { initialCwd: destination, throwIfMissing: true });
+    const projection = new WorkerProjection(reopened, childSessionId);
+    expect(projection.seed().messages).toEqual(seed.messages);
+    expect(projection.publicText(`${source}/file ${destination}/file ${source}-other/file`))
+      .toBe(`[workspace]/file [workspace]/file ${source}-other/file`);
   } finally {
     await reopened?.close();
     await manager.close();

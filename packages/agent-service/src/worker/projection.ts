@@ -38,7 +38,7 @@ function endsPrivatePath(text: string, index: number): boolean {
   return index === text.length || text[index] === '/' || PRIVATE_PATH_DELIMITERS.includes(text[index]!);
 }
 
-function storedPrivateRoots(manager: SessionManager): PrivateRoot[] {
+export function nativePrivateRootContext(manager: SessionManager): PrivateRoot[] {
   const roots = new Map<string, PrivateRoot>();
   for (const entry of manager.getEntries()) {
     if (entry.type !== 'custom' || entry.customType !== PRIVATE_ROOTS_TYPE) continue;
@@ -57,9 +57,9 @@ function storageRoots(manager: SessionManager): PrivateRoot[] {
 }
 
 /** Private scope context stays in the native tree, never a second transcript store. */
-export async function rememberPrivateRoots(manager: SessionManager, scope: { cwd: string; agentDirectory: string }): Promise<void> {
-  const known = new Set(storedPrivateRoots(manager).map((value) => value.root));
-  const added = PrivateRootsSchema.parse([{ root: scope.cwd, label: 'workspace' }, { root: scope.agentDirectory, label: 'agent-directory' }, ...storageRoots(manager)])
+export async function rememberPrivateRoots(manager: SessionManager, scope: { cwd: string; agentDirectory: string }, inherited: readonly PrivateRoot[] = []): Promise<void> {
+  const known = new Set(nativePrivateRootContext(manager).map((value) => value.root));
+  const added = PrivateRootsSchema.parse([...inherited, { root: scope.cwd, label: 'workspace' }, { root: scope.agentDirectory, label: 'agent-directory' }, ...storageRoots(manager)])
     .filter((value) => { if (known.has(value.root)) return false; known.add(value.root); return true; });
   if (added.length) await manager.appendEntriesAtomically(() => manager.appendCustomEntry(PRIVATE_ROOTS_TYPE, added));
 }
@@ -159,7 +159,7 @@ export class WorkerProjection {
 
   constructor(private readonly manager: SessionManager, private readonly sessionId: string) {
     this.entryOffset = manager.getBranch().length;
-    const roots = new Map(storedPrivateRoots(manager).map((value) => [value.root, value]));
+    const roots = new Map(nativePrivateRootContext(manager).map((value) => [value.root, value]));
     for (const value of storageRoots(manager)) roots.set(value.root, value);
     const cwd = manager.getHeader()?.cwd;
     if (cwd) roots.set(cwd, { root: cwd, label: 'workspace' });
@@ -214,8 +214,9 @@ export class WorkerProjection {
         part.content = this.publicText(part.content);
         if (part.type === 'reasoning' && part.signature !== undefined) part.signature = this.publicText(part.signature);
         break;
-      case 'tool_call': part.toolName = this.publicText(part.toolName); part.input = this.publicJsonObject(part.input); break;
+      case 'tool_call': part.toolCallId = this.publicText(part.toolCallId); part.toolName = this.publicText(part.toolName); part.input = this.publicJsonObject(part.input); break;
       case 'tool_result':
+        part.toolCallId = this.publicText(part.toolCallId);
         part.toolName = this.publicText(part.toolName);
         if (part.output !== undefined) part.output = this.publicJson(part.output);
         if (part.error !== undefined) part.error = this.publicText(part.error);
@@ -229,8 +230,9 @@ export class WorkerProjection {
     for (const { event } of inputs) {
       switch (event.type) {
         case 'part.started': case 'part.completed': this.publicPart(event.part); break;
-        case 'tool.started': event.toolName = this.publicText(event.toolName); event.input = this.publicJsonObject(event.input); break;
+        case 'tool.started': event.toolCallId = this.publicText(event.toolCallId); event.toolName = this.publicText(event.toolName); event.input = this.publicJsonObject(event.input); break;
         case 'tool.completed':
+          event.toolCallId = this.publicText(event.toolCallId);
           if (event.output !== undefined) event.output = this.publicJson(event.output);
           if (event.error !== undefined) event.error = this.publicText(event.error);
           break;

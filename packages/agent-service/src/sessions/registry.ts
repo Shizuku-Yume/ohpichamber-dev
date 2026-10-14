@@ -8,7 +8,7 @@ import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, Run
 import { WorkerBootstrapSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
 import { HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, type HostSessionRelocationPrepare } from '../supervisor/host-authorization-protocol.ts';
-import { rememberPrivateRoots } from '../worker/projection.ts';
+import { nativePrivateRootContext, rememberPrivateRoots } from '../worker/projection.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError, SessionJournal } from '../projection/journal.ts';
 import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad } from '../interaction/manager.ts';
@@ -143,8 +143,10 @@ export class SessionRegistry {
     try {
       if (mode === 'selected') {
         manager = await SessionManager.open(sourceFile, source.sessionsDirectory, undefined, { initialCwd: source.cwd, throwIfMissing: true });
+        const privateRoots = nativePrivateRootContext(manager);
         const childFile = manager.createBranchedSession(entryId!, { copyArtifacts: true });
         if (!childFile) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+        await rememberPrivateRoots(manager, source, privateRoots);
       } else {
         manager = await SessionManager.forkFrom(sourceFile, source.cwd, source.sessionsDirectory, undefined, { copyArtifacts: true });
       }
