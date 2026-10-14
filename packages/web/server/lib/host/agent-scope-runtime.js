@@ -147,10 +147,10 @@ export const createHostAgentScopeRuntime = ({
       try { projectDirectory = await validateDirectory(project.path); }
       catch { discoveryFailed = true; continue; }
       if (projectDirectory === requested.directory) {
-        return store.ensureWorkspace({
+        return publicWorkspace(await store.ensureWorkspace({
           hostProjectId: project.id, projectDirectory, workspaceDirectory: requested.directory,
           agentDirectory: selectedAgentDirectory, name: project.label || path.basename(projectDirectory),
-        });
+        }));
       }
       let worktrees;
       try { worktrees = await getWorktrees(projectDirectory); }
@@ -160,17 +160,17 @@ export const createHostAgentScopeRuntime = ({
         try {
           const worktreeDirectory = await validateDirectory(worktree.path);
           if (worktreeDirectory !== requested.directory) continue;
-          return store.ensureWorkspace({
+          return publicWorkspace(await store.ensureWorkspace({
             hostProjectId: project.id, projectDirectory, workspaceDirectory: requested.directory,
             agentDirectory: selectedAgentDirectory, name: project.label || path.basename(projectDirectory),
-          });
+          }));
         } catch { discoveryFailed = true; }
       }
     }
     if (managedChatsScope) {
       try {
         const root = await managedRoot();
-        if (contains(root, requested.directory)) return admitChatDirectory(requested.directory);
+        if (contains(root, requested.directory)) return publicWorkspace(await admitChatDirectory(requested.directory));
       } catch { discoveryFailed = true; }
     }
     if (discoveryFailed) throw new MetadataReadError('Configured Host workspace discovery is unavailable');

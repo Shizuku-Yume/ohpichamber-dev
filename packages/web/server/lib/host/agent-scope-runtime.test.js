@@ -2,22 +2,26 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import express from 'express';
+import request from 'supertest';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHostSessionState } from './session-state.js';
 import { createHostAgentScopeRuntime } from './agent-scope-runtime.js';
 import { createSettingsNormalizationRuntime } from './settings-normalization-runtime.js';
 import { createProjectDirectoryRuntime } from './project-directory-runtime.js';
 import { getWorktrees } from '../git/service.js';
+import { registerCanonicalHostRoutes } from './canonical-routes.js';
 
 const fixtures = [];
 const normalization = createSettingsNormalizationRuntime({
   os, path, processLike: process, realpathSync: fs.realpathSync, readdirSync: fs.readdirSync,
 });
-const fixture = async () => {
+const fixture = async ({ managedChats = false } = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-scope-authority-'));
   const projectDirectory = path.join(root, 'project');
   const agentDirectory = path.join(root, 'agent');
   const settingsFile = path.join(root, 'settings.json');
+  const managedChatsScope = managedChats ? { id: 'managed-chats', root: path.join(root, 'chats') } : undefined;
   fs.mkdirSync(projectDirectory);
   const saveProjects = (projects) => fs.writeFileSync(settingsFile, JSON.stringify({ projects }));
   saveProjects([{ id: 'host-project', path: projectDirectory, label: 'Project' }]);
@@ -32,10 +36,10 @@ const fixture = async () => {
     readSettings: async () => JSON.parse(await fs.promises.readFile(settingsFile, 'utf8')),
     sanitizeProjects: normalization.sanitizeProjects,
     validateDirectoryPath: directoryRuntime.validateDirectoryPath,
-    getWorktrees, agentDirectory,
+    getWorktrees, agentDirectory, managedChatsScope,
   });
   await runtime.initialize();
-  return { root, projectDirectory, agentDirectory, settingsFile, owner, runtime, saveProjects };
+  return { root, projectDirectory, agentDirectory, settingsFile, owner, runtime, saveProjects, managedChatsScope };
 };
 afterEach(async () => {
   while (fixtures.length) {
@@ -51,6 +55,51 @@ const admittedSession = (scope, sessionId = 'native-session') => ({
 });
 
 describe('configured Host scope authority', () => {
+  it('resolves SQLite-backed project, worktree and managed-chat directories through the canonical public projection', async () => {
+    const { root, projectDirectory, agentDirectory, owner, runtime, managedChatsScope } = await fixture({ managedChats: true });
+    execFileSync('git', ['init', '-q', projectDirectory]);
+    execFileSync('git', ['-C', projectDirectory, '-c', 'user.name=Scope fixture', '-c', 'user.email=scope@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'scope fixture']);
+    const worktreeDirectory = path.join(root, 'linked-worktree');
+    execFileSync('git', ['-C', projectDirectory, 'worktree', 'add', '-q', '-b', 'scope-fixture', worktreeDirectory]);
+    const chatDirectory = path.join(managedChatsScope.root, 'chat-one');
+    fs.mkdirSync(chatDirectory);
+    const app = express();
+    registerCanonicalHostRoutes(app, {
+      express,
+      service: { getState: () => ({ phase: 'stopped' }), request: async () => { throw new Error('Directory resolution must remain Host-owned'); } },
+      uiAuthController: { resolveAuthContext: async () => ({ type: 'client' }) },
+      tunnelAuthController: { classifyRequestScope: () => 'local', getTunnelSessionFromRequest: () => null },
+      isRequestOriginAllowed: () => true,
+      resolveWorkspaceDirectory: runtime.resolveWorkspaceDirectory,
+      resolveWorkspaceScope: runtime.resolveWorkspaceScope,
+      resolveSessionScope: runtime.resolveSessionScope,
+      listProjects: runtime.listProjects,
+      listWorkspaces: runtime.listWorkspaces,
+      resolveCredentialHandoff: async () => { throw new Error('Unexpected credential handoff'); },
+      queueRoutes: (router) => router,
+      sessionRoutes: (router) => router,
+      attachmentRoutes: (router) => router,
+    });
+    for (const [directory, expectedDisplayPath, expectedName] of [
+      [projectDirectory, '.', 'Project'],
+      [worktreeDirectory, '../linked-worktree', 'linked-worktree'],
+      [chatDirectory, 'chat-one', 'chat-one'],
+    ]) {
+      const response = await request(app).post('/api/agent/v1/workspaces/resolve')
+        .set('Authorization', 'Bearer fixture-client').send({ directory });
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        workspaceId: expect.any(String), projectId: expect.any(String), name: expectedName, displayPath: expectedDisplayPath,
+      });
+      expect(response.text).not.toContain(root);
+      const stored = await owner.agentScopeStore.getWorkspace(response.body.workspaceId);
+      expect(stored).toMatchObject({ cwd: directory, agentDirectory, displayPath: null });
+      await expect(runtime.resolveWorkspaceScope(response.body.workspaceId)).resolves.toMatchObject({
+        cwd: directory, agentDirectory, displayPath: expectedDisplayPath,
+      });
+    }
+  });
+
   it('revokes persisted workspace and session access when the configured project is removed', async () => {
     const { root, projectDirectory, agentDirectory, owner, runtime, saveProjects } = await fixture();
     const projects = await runtime.listProjects();
