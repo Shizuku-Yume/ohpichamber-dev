@@ -1,6 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
-
-import { getSessionMetadata, type SessionMetadataRecord } from './sessionReviewMetadata';
+import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 
 export type ContextObligatoryMessage = {
   id: string;
@@ -8,45 +6,22 @@ export type ContextObligatoryMessage = {
   role: 'user' | 'assistant';
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value && typeof value === 'object' && !Array.isArray(value));
-
-// Pins are stored in the order they were pinned; they read in conversation
-// order, the way the compaction re-injection already sends them.
+// Pins are stored in pin order and read in conversation order.
 export const getContextObligatoryMessages = (
   session: Session | null | undefined,
 ): ContextObligatoryMessage[] => {
-  const openchamber = getSessionMetadata(session).openchamber;
-  if (!isRecord(openchamber) || !Array.isArray(openchamber.context_obligatory_messages)) return [];
-
-  return openchamber.context_obligatory_messages
-    .filter((value): value is ContextObligatoryMessage =>
-      isRecord(value)
-      && typeof value.id === 'string'
-      && typeof value.createdAt === 'number'
-      && Number.isFinite(value.createdAt)
-      && (value.role === 'user' || value.role === 'assistant'))
-    .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const messages = session?.metadata?.openchamber?.context_obligatory_messages ?? [];
+  return [...messages].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
 };
 
 export const withContextObligatoryMessage = (
-  metadata: SessionMetadataRecord,
+  metadata: SessionMetadata,
   message: ContextObligatoryMessage,
   pinned: boolean,
-): SessionMetadataRecord => {
-  const openchamber = isRecord(metadata.openchamber) ? metadata.openchamber : {};
-  const current = Array.isArray(openchamber.context_obligatory_messages)
-    ? openchamber.context_obligatory_messages.filter((value): value is ContextObligatoryMessage =>
-      isRecord(value) && typeof value.id === 'string')
-    : [];
+): SessionMetadata => {
+  const openchamber = metadata.openchamber ?? {};
+  const current = openchamber.context_obligatory_messages ?? [];
   const withoutMessage = current.filter((value) => value.id !== message.id);
   const nextMessages = pinned ? [...withoutMessage, message] : withoutMessage;
-
-  return {
-    ...metadata,
-    openchamber: {
-      ...openchamber,
-      context_obligatory_messages: nextMessages,
-    },
-  };
+  return { ...metadata, openchamber: { ...openchamber, context_obligatory_messages: nextMessages } };
 };

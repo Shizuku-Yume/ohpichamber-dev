@@ -1,18 +1,11 @@
-import type { AssistantMessage, Message, Part, SyntheticMessage } from '@/lib/opencode/model';
+import type { Message } from '@openchamber/agent-contract';
+import type { NativeTitleTurn } from '@/sync/session-title-context';
 import { z } from 'zod';
-import { readContextPart } from './messages/contextParts';
-import { excerptMarkdown, formatContextMessage, formatMessageText } from './messages/messageMarkdown';
-import { runtimeFetch } from './runtime-fetch';
+import { excerptMarkdown } from './messages/messageMarkdown';
+import { completionText, requestSmallModel } from './smallModelRequest';
 
-type MessageRecord = { info: Message; parts: Part[] };
-type TitleTurn = {
-  user: MessageRecord;
-  /** Context items OpenChamber attached ahead of this prompt. */
-  context: SyntheticMessage[];
-  assistant: { info: AssistantMessage; parts: Part[] };
-};
 
-// Adapted from OpenCode's agent/prompt/title.txt for recent completed turns.
+// Titles use only the recent completed conversation, never tool execution.
 const TITLE_SYSTEM_PROMPT = [
   'You are a title generator. Output ONLY a thread title. Nothing else.',
   'Generate a brief title that helps the user find this conversation later.',
@@ -27,76 +20,17 @@ const TITLE_SYSTEM_PROMPT = [
   'Examples: debug 500 errors in production → Debugging production 500 errors; add dark mode to App.tsx → Dark mode in App.',
 ].join('\n');
 
-/**
- * Input is chronological. v2 messages carry no parent id, so a turn is a user
- * message plus the last assistant message before the next user message; the
- * synthetic messages that precede a prompt are its attached context.
- */
-export function collectSessionTitleTurns(records: readonly MessageRecord[], revertMessageID?: string): TitleTurn[] {
-  const boundary = revertMessageID ? records.findIndex((record) => record.info.id === revertMessageID) : -1;
-  if (revertMessageID && boundary < 0) return [];
-  const end = boundary < 0 ? records.length : boundary;
 
-  const turns: TitleTurn[] = [];
-  let pendingContext: SyntheticMessage[] = [];
-  let user: MessageRecord | undefined;
-  let userContext: SyntheticMessage[] = [];
-  let answer: TitleTurn['assistant'] | undefined;
-
-  const hasText = (parts: readonly Part[]): boolean =>
-    parts.some((part) => part.type === 'text' && part.text.trim().length > 0);
-
-  const closeTurn = () => {
-    if (!user || !answer) return;
-    if (answer.info.finish !== 'stop' || !answer.info.time.completed || answer.info.error) return;
-    if (!hasText(user.parts) && userContext.length === 0) return;
-    if (!hasText(answer.parts)) return;
-    turns.push({ user, context: userContext, assistant: answer });
-  };
-
-  for (let index = 0; index < end; index += 1) {
-    const record = records[index];
-    const { info } = record;
-    if (info.role === 'synthetic') {
-      // Only context the user attached counts as part of the prompt. Server
-      // plugins inject their own synthetic prompts ("returning user", memory
-      // recall); titling from those describes the plugin, not the request.
-      if (readContextPart(info)) pendingContext.push(info);
-      continue;
-    }
-    if (info.role === 'user') {
-      closeTurn();
-      user = record;
-      userContext = pendingContext;
-      pendingContext = [];
-      answer = undefined;
-      continue;
-    }
-    if (info.role === 'assistant' && user) {
-      // A later assistant record replaces an earlier one: only the final
-      // response of the turn is a title candidate.
-      answer = { info, parts: record.parts };
-    }
-  }
-  closeTurn();
-
-  return turns.slice(-3);
-}
-
-export function formatSessionTitleContext(turns: readonly TitleTurn[]): string {
-  return turns.map((turn) => [
-    '**User**',
-    excerptMarkdown([
-      ...turn.context.map((item) => formatContextMessage(item, 2000)),
-      formatMessageText(turn.user.parts, { user: true, fieldLimit: 2000 }),
-    ].map((block) => block.trim()).filter(Boolean).join('\n\n'), 4000),
-    '**Assistant final response**',
-    excerptMarkdown(formatMessageText(turn.assistant.parts, { fieldLimit: 4000 }), 4000),
+export function formatSessionTitleContext(turns: readonly NativeTitleTurn[]): string {
+  const text = (message: Message) => message.parts.flatMap(part => part.type === 'text' ? [part.content] : part.type === 'attachment' ? [`[Attachment: ${part.name}]`] : []).join('\n\n');
+  return turns.slice(-3).map(turn => [
+    '**User**', excerptMarkdown(text(turn.user), 4000),
+    '**Assistant final response**', excerptMarkdown(text(turn.assistant), 4000),
   ].join('\n\n')).join('\n\n---\n\n');
 }
 
 export const generatedSessionTitleSchema = z.object({ text: z.string().trim().min(1) }).transform(({ text }, context) => {
-  // Match OpenCode's initial title generation cleanup and length limit.
+  // Keep the established first-line cleanup and length limit.
   const title = text
     .replace(/<think>[\s\S]*?<\/think>\s*/g, '')
     .split('\n')
@@ -110,26 +44,21 @@ export const generatedSessionTitleSchema = z.object({ text: z.string().trim().mi
 });
 
 export async function generateSessionTitle(input: {
-  turns: readonly TitleTurn[];
+  turns: readonly NativeTitleTurn[];
   directory: string;
+  workspaceId?: string;
   signal: AbortSignal;
 }): Promise<string> {
   const last = input.turns.at(-1);
   if (!last) throw new Error('No completed turns');
-  const response = await runtimeFetch('/api/small-model/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  if (!last.assistant.providerId || !last.assistant.modelId) throw new Error('Completed turn model selection is unavailable');
+  const result = await requestSmallModel({
+    prompt: formatSessionTitleContext(input.turns),
+    system: TITLE_SYSTEM_PROMPT,
+    directory: input.directory,
+    workspaceId: input.workspaceId,
     signal: input.signal,
-    body: JSON.stringify({
-      prompt: formatSessionTitleContext(input.turns),
-      system: TITLE_SYSTEM_PROMPT,
-      directory: input.directory,
-      preferredProviderID: last.assistant.info.providerID,
-      preferredModelID: last.assistant.info.modelID,
-      // Read by servers before 2026-10; newer ones stay on the named provider anyway.
-      restrictToPreferredProvider: true,
-    }),
-  });
-  if (!response.ok) throw new Error('Session title generation failed');
-  return generatedSessionTitleSchema.parse(await response.json());
+    preferred: { providerId: last.assistant.providerId, modelId: last.assistant.modelId },
+  }, { notifyOnError: false });
+  return generatedSessionTitleSchema.parse({ text: completionText(result) });
 }

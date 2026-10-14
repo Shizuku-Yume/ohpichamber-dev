@@ -12,7 +12,8 @@ import { useSayTTS } from './useSayTTS';
 import { useLocalTTS } from './useLocalTTS';
 import { browserVoiceService } from '@/lib/voice/browserVoiceService';
 import { ensureLineTerminalPunctuation, sanitizeForTTS } from '@/lib/voice/summarize';
-import { requestSmallModel } from '@/lib/smallModelRequest';
+import { completionText, requestSmallModel, type SmallModelRequest } from '@/lib/smallModelRequest';
+import type { ModelSelection } from '@openchamber/agent-contract';
 import {
     finishReading,
     isCurrentReading,
@@ -30,23 +31,18 @@ const SUMMARIZE_SYSTEM_PROMPT = 'Summarize the assistant reply for text-to-speec
 
 async function summarizeForSpeech(
     text: string,
-    preferred: { providerID?: string; modelID?: string },
+    preferred: ModelSelection | undefined,
+    signal: AbortSignal,
 ): Promise<string | null> {
     try {
-        const response = await requestSmallModel({
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                prompt: text,
-                system: SUMMARIZE_SYSTEM_PROMPT,
-                ...(preferred.providerID ? { preferredProviderID: preferred.providerID } : {}),
-                ...(preferred.modelID ? { preferredModelID: preferred.modelID } : {}),
-            }),
-        // No small model is not an error here: the original reply is spoken.
-        }, { silentStatuses: [404] });
-        if (!response.ok) return null;
-        const payload = await response.json().catch(() => null) as { text?: unknown } | null;
-        return typeof payload?.text === 'string' && payload.text.trim() ? payload.text.trim() : null;
+        const request: SmallModelRequest = {
+            prompt: text,
+            system: SUMMARIZE_SYSTEM_PROMPT,
+            signal,
+        };
+        if (preferred) request.preferred = preferred;
+        const result = await requestSmallModel(request, { silentUnavailable: true });
+        return completionText(result).trim() || null;
     } catch {
         return null;
     }
@@ -126,7 +122,8 @@ export function useMessageTTS(readingKey?: string): UseMessageTTSReturn {
     const play = useCallback(async (text: string, options?: PlayMessageTTSOptions) => {
         if (!text.trim()) return;
         
-        const token = startReading(key, stopPlayback);
+        const controller = new AbortController();
+        const token = startReading(key, () => { controller.abort(); stopPlayback(); });
         ownTokenRef.current = token;
         const finish = () => finishReading(token);
         
@@ -140,10 +137,8 @@ export function useMessageTTS(readingKey?: string): UseMessageTTSReturn {
                 && text.length >= TTS_SUMMARIZE_MIN_CHARS;
             if (shouldSummarize) {
                 const { currentProviderId, currentModelId } = useConfigStore.getState();
-                const summary = await summarizeForSpeech(text, {
-                    providerID: currentProviderId || undefined,
-                    modelID: currentModelId || undefined,
-                });
+                const preferred = currentProviderId && currentModelId ? { providerId: currentProviderId, modelId: currentModelId } : undefined;
+                const summary = await summarizeForSpeech(text, preferred, controller.signal);
                 // Stopped or replaced while the summary was being written.
                 if (!isCurrentReading(token)) return;
                 if (summary) {

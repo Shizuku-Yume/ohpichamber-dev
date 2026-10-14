@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import os from 'os';
 import path from 'path';
+import { z } from 'zod';
 import { readMergedSettingsSync } from '../host/settings-files.js';
 import {
   completeSmallModel,
@@ -18,18 +20,22 @@ const OPENCHAMBER_SETTINGS_FILE = path.join(
   'settings.json',
 );
 
-// OpenChamber's own settings: when the user unchecks "use default small model"
-// their explicit override outranks the model OpenCode would pick.
+const modelRefSchema = z.string();
+const nonEmptyTextSchema = z.string().refine(value => value.trim().length > 0);
+
+// The scoped OpenChamber profile override outranks provider-local discovery.
 const readSmallModelSettingsOverride = () => {
   const settings = readMergedSettingsSync({ fs, path, settingsFilePath: OPENCHAMBER_SETTINGS_FILE });
   if (settings.smallModelUseDefault !== false) return null;
-  const override = typeof settings.smallModelOverride === 'string' ? settings.smallModelOverride.trim() : '';
+  const parsed = modelRefSchema.safeParse(settings.smallModelOverride);
+  const override = parsed.success ? parsed.data.trim() : '';
   return override || null;
 };
 
-export function parseModelRef(value) {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
+function parseModelRef(value) {
+  const parsed = modelRefSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const trimmed = parsed.data.trim();
   const slash = trimmed.indexOf('/');
   if (slash <= 0 || slash === trimmed.length - 1) return null;
   return {
@@ -38,9 +44,7 @@ export function parseModelRef(value) {
   };
 }
 
-// Rough safety clamp so a huge input never blows the model's context window.
-// Token estimate is ~4 chars/token; when OpenCode reports no limit for the
-// model a conservative default applies.
+// Conservative estimate for Host input budgeting against canonical limits.
 const DEFAULT_CONTEXT_TOKENS = 64_000;
 const OUTPUT_RESERVE_TOKENS = 4_000;
 
@@ -49,7 +53,7 @@ const OUTPUT_RESERVE_TOKENS = 4_000;
  * to leave for the answer. The reserve must match the output budget the caller
  * will actually request, or the two disagree and the model overruns its context.
  */
-export const getModelInputCharBudget = ({ modelInfo, outputReserveTokens }) => {
+const getModelInputCharBudget = ({ modelInfo, outputReserveTokens }) => {
   const context = Number(modelInfo?.contextWindow);
   const known = context > 0;
   const contextTokens = known ? context : DEFAULT_CONTEXT_TOKENS;
@@ -62,9 +66,7 @@ export const getModelInputCharBudget = ({ modelInfo, outputReserveTokens }) => {
  * The output budget to actually request: what the caller asked for, capped by
  * what the model admits it can emit.
  *
- * `/api/experimental/generate` takes no output budget of its own, so this number only
- * shapes the input reserve — but it has to stay the same number on both sides
- * or a caller that asks for a large answer overruns the context.
+ * The canonical completion receives this same budget as maxOutputTokens.
  */
 const resolveOutputTokens = ({ modelInfo, maxOutputTokens }) => {
   const requested = Number(maxOutputTokens) > 0 ? Number(maxOutputTokens) : 0;
@@ -91,21 +93,11 @@ const clampPromptToModelLimit = ({ prompt, modelInfo, providerID, modelID, onOve
 };
 
 
-/**
- * The model families that count as "small", most preferred first. The same
- * list OpenCode uses for its own session titles (`Catalog.model.small` in
- * `packages/core/src/catalog.ts`); OpenCode does not expose that lookup over
- * HTTP, so the scan is repeated here on `GET /api/model`.
- */
-export const SMALL_MODEL_FAMILY_PRIORITY = ['gpt-luna', 'gemini-flash-lite', 'gemini-flash', 'claude-haiku'];
+/** Product family preference used only within the caller's chosen provider. */
+const SMALL_MODEL_FAMILY_PRIORITY = ['gpt-luna', 'gemini-flash-lite', 'gemini-flash', 'claude-haiku'];
 
-/**
- * A model's family: the catalog's `family` (models.dev) when it has one,
- * else read from the id. A custom provider or a subscription outside the
- * catalog has no `family`, yet its `gemini-3.6-flash` is still a flash.
- */
-export const familyOf = (model) => {
-  if (model?.family) return String(model.family);
+/** Canonical model IDs supply the family used for utility preference. */
+const familyOf = (model) => {
   const id = String(model?.modelId ?? '').toLowerCase();
   if (id.includes('luna')) return 'gpt-luna';
   if (id.includes('flash-lite') || id.includes('flash_lite')) return 'gemini-flash-lite';
@@ -114,12 +106,6 @@ export const familyOf = (model) => {
   return null;
 };
 
-/**
- * The small model within one provider: the newest enabled, active, text-in
- * text-out model of the first family in `SMALL_MODEL_FAMILY_PRIORITY` that the
- * provider has. Null when the provider has none of those families.
- */
-export const pickSmallModelInProvider = (models, providerID) => pickSmallModel(models, (model) => model.provider === providerID);
 
 const pickSmallModel = (models, accept) => {
   const candidates = models
@@ -134,22 +120,26 @@ const pickSmallModel = (models, accept) => {
   return null;
 };
 
+const usableModel = (model) => Boolean(model && model.enabled !== false && model.status !== 'deprecated' && model.modalities.includes('text'));
 /** Resolve only from explicit intent and the authorized workspace catalog. */
 const resolveSmallModel = async ({ client, workspaceId, model, preferredProviderID, preferredModelID }) => {
-  const explicit = parseModelRef(model);
-  if (explicit) return { ...explicit, source: 'request' };
-
   const models = await listModelInfos(client, workspaceId);
-  const fromSettings = parseModelRef(readSmallModelSettingsOverride());
+  const explicit = parseModelRef(model);
+  if (nonEmptyTextSchema.safeParse(model).success && !explicit) throw Object.assign(new Error('Invalid background model selection'), { statusCode: 400, code: 'INVALID_REQUEST' });
+  if (explicit) return usableModel(findModelInfo(models, explicit.providerID, explicit.modelID)) ? { ...explicit, source: 'request' } : null;
+
+  const override = readSmallModelSettingsOverride();
+  const fromSettings = parseModelRef(override);
+  if (override && !fromSettings) return null;
   if (fromSettings) {
     const info = findModelInfo(models, fromSettings.providerID, fromSettings.modelID);
-    if (info?.enabled !== false) return { ...fromSettings, source: 'settings' };
+    return usableModel(info) ? { ...fromSettings, source: 'settings' } : null;
   }
 
   if (preferredProviderID) {
-    const small = pickSmallModelInProvider(models, preferredProviderID);
+    const small = pickSmallModel(models, (candidate) => candidate.provider === preferredProviderID);
     if (small) return { ...small, source: 'session-provider-small' };
-    if (preferredModelID && findModelInfo(models, preferredProviderID, preferredModelID)) {
+    if (preferredModelID && usableModel(findModelInfo(models, preferredProviderID, preferredModelID))) {
       return { providerID: preferredProviderID, modelID: preferredModelID, source: 'session-model' };
     }
     return null;
@@ -160,11 +150,6 @@ const resolveSmallModel = async ({ client, workspaceId, model, preferredProvider
 };
 
 
-const requestOptions = ({ timeoutMs, signal }) => {
-  const timeout = Number(timeoutMs) > 0 ? Number(timeoutMs) : DEFAULT_TIMEOUT_MS;
-  const timeoutSignal = AbortSignal.timeout(timeout);
-  return { signal: signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal };
-};
 
 const completionError = (result, resolved) => {
   const detail = result.error?.detail || 'Small-model completion failed';
@@ -181,8 +166,8 @@ const completionError = (result, resolved) => {
 
 /** Generate through the canonical stateless completion route. */
 export async function generateSmallModelText({ prompt, system, maxOutputTokens, model, workspaceId, preferredProviderID, preferredModelID, responseSchema, timeoutMs, signal, onOverflow = 'truncate' }) {
-  if (typeof prompt !== 'string' || !prompt.trim()) throw Object.assign(new Error('prompt is required'), { statusCode: 400 });
-  if (typeof workspaceId !== 'string' || !workspaceId.trim()) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400 });
+  if (!nonEmptyTextSchema.safeParse(prompt).success) throw Object.assign(new Error('prompt is required'), { statusCode: 400 });
+  if (!nonEmptyTextSchema.safeParse(workspaceId).success) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400 });
   const client = getAgentService();
   if (!client) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
 
@@ -193,29 +178,28 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
   const modelInfo = findModelInfo(models, resolved.providerID, resolved.modelID);
   const outputTokens = resolveOutputTokens({ modelInfo, maxOutputTokens });
   const clamped = clampPromptToModelLimit({ prompt: prompt.trim(), modelInfo, providerID: resolved.providerID, modelID: resolved.modelID, onOverflow, outputReserveTokens: outputTokens });
-  const result = await completeSmallModel({
+  const request = {
     completionId: randomUUID(), workspaceId,
     selection: { providerId: resolved.providerID, modelId: resolved.modelID },
     prompt: clamped.prompt, format: responseSchema ? { kind: 'json', schema: responseSchema } : { kind: 'text' },
-    overflow: onOverflow, variant: null, reasoningEffort: null,
-    ...(outputTokens ? { maxOutputTokens: outputTokens } : {}),
-    ...(timeoutMs ? { timeoutMs } : {}),
-    ...(typeof system === 'string' && system.trim() ? { system: system.trim() } : {}),
-  }, { signal: requestOptions({ timeoutMs, signal }).signal });
+    overflow: onOverflow === 'error' ? 'reject' : 'truncate', variant: null, reasoningEffort: null,
+    timeoutMs: Number(timeoutMs) > 0 ? Number(timeoutMs) : 60_000,
+  };
+  if (outputTokens) request.maxOutputTokens = outputTokens;
+  const parsedSystem = nonEmptyTextSchema.safeParse(system);
+  if (parsedSystem.success) request.system = parsedSystem.data.trim();
+  const result = await completeSmallModel(request, { signal });
   if (result.status === 'cancelled') throw Object.assign(new Error(`Small-model completion ${result.reason}`), { statusCode: 499, code: `completion-${result.reason}` });
   if (result.status === 'failed') throw completionError(result, resolved);
   const text = result.output.kind === 'json' ? JSON.stringify(result.output.value) : result.output.text;
-  return { text: text.trim(), providerID: resolved.providerID, modelID: resolved.modelID, source: resolved.source, ...(clamped.truncated ? { inputTruncated: true } : {}) };
+  const output = { text: text.trim(), providerID: resolved.providerID, modelID: resolved.modelID, source: resolved.source };
+  if (clamped.truncated) output.inputTruncated = true;
+  return output;
 }
 
 /**
- * Provider ids the small model can actually call. A provider counts when
- * OpenCode has at least one enabled model for it — that is the same test
- * OpenCode applies before letting a chat turn use it.
- *
- * The provider list alone is not enough: it comes back empty on setups where
- * models are perfectly usable, so the model list is the authority and the
- * provider list only contributes names.
+ * Providers with enabled workspace models. Canonical provider records supply
+ * identity and auth state; this helper never reads legacy engine config.
  */
 export async function listAuthenticatedProviders(workspaceId) {
   const client = getAgentService();
@@ -234,7 +218,7 @@ export async function listAuthenticatedProviders(workspaceId) {
  * the eventual request the same number by construction.
  */
 const resolveReserveTokens = (outputReserveTokens, limits) => (
-  typeof outputReserveTokens === 'function' ? outputReserveTokens(limits) : outputReserveTokens
+  outputReserveTokens instanceof Function ? outputReserveTokens(limits) : outputReserveTokens
 );
 
 /**

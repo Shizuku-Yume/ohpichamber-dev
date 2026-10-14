@@ -1,34 +1,30 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 import {
-  getBtwBoundaryMessageID,
-  getBtwOriginalSessionID,
-  getBtwSessionID,
-  isBtwSession,
-  withBtwSessionLink,
-  withBtwSessionMarker,
-  withoutBtwSessionLink,
-  wasPromotedBtwSession,
-  withoutBtwSessionMarker,
+  getBtwBoundaryMessageID, getBtwOriginalSessionID, getBtwSessionID, isBtwSession, withBtwSessionLink,
+  withBtwSessionMarker, withoutBtwSessionLink, wasPromotedBtwSession, withoutBtwSessionMarker,
 } from './sessionBtwMetadata';
 
-const sessionWith = (metadata: unknown): Session => ({ id: 's', metadata }) as unknown as Session;
+const sessionWith = (metadata: SessionMetadata): Session => ({
+  sessionId: 's', projectId: 'p', workspaceId: 'w', displayPath: 'repo', rootSessionId: 's', createdAt: 1, updatedAt: 1,
+  epoch: 'e', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata, metadataRevision: '1', archiveRevision: '0',
+});
 
 describe('parent link', () => {
   test('withBtwSessionLink preserves unrelated openchamber metadata', () => {
-    const next = withBtwSessionLink({ openchamber: { reviewSessionID: 'r-1' }, other: 1 }, 'fork-1');
-    expect(next).toEqual({ openchamber: { reviewSessionID: 'r-1', btwSessionID: 'fork-1' }, other: 1 });
+    const next = withBtwSessionLink({ openchamber: { reviewSessionID: 'r-1' } }, 'fork-1');
+    expect(next).toEqual({ openchamber: { reviewSessionID: 'r-1', btwSessionID: 'fork-1' } });
   });
 
   test('getBtwSessionID reads the link and rejects blank values', () => {
     expect(getBtwSessionID(sessionWith({ openchamber: { btwSessionID: 'fork-1' } }))).toBe('fork-1');
     expect(getBtwSessionID(sessionWith({ openchamber: { btwSessionID: '  ' } }))).toBeNull();
-    expect(getBtwSessionID(sessionWith(undefined))).toBeNull();
+    expect(getBtwSessionID(sessionWith({}))).toBeNull();
     expect(getBtwSessionID(null)).toBeNull();
   });
 
   test('withoutBtwSessionLink removes only a matching link', () => {
-    const linked = { openchamber: { btwSessionID: 'fork-1', reviewSessionID: 'r-1' } };
+    const linked: SessionMetadata = { openchamber: { btwSessionID: 'fork-1', reviewSessionID: 'r-1' } };
     expect(withoutBtwSessionLink(linked, 'fork-2')).toBe(linked);
     expect(withoutBtwSessionLink(linked, 'fork-1')).toEqual({ openchamber: { reviewSessionID: 'r-1' } });
   });
@@ -40,10 +36,9 @@ describe('parent link', () => {
 
 describe('fork marker', () => {
   test('withBtwSessionMarker replaces inherited openchamber metadata', () => {
-    const inherited = { openchamber: { btwSessionID: 'stale', reviewSessionID: 'r-1' }, other: 1 };
+    const inherited: SessionMetadata = { openchamber: { btwSessionID: 'stale', reviewSessionID: 'r-1' } };
     expect(withBtwSessionMarker(inherited, 'parent-1', 'msg-9')).toEqual({
       openchamber: { kind: 'btw', originalSessionID: 'parent-1', btwBoundaryMessageID: 'msg-9' },
-      other: 1,
     });
   });
 
@@ -66,10 +61,10 @@ describe('fork marker', () => {
   });
 
   test('withoutBtwSessionMarker strips the marker, keeps other keys, and records the promotion', () => {
-    const marked = { openchamber: { kind: 'btw', originalSessionID: 'parent-1', btwBoundaryMessageID: 'msg-9', btwSessionID: 'nested' } };
+    const marked: SessionMetadata = { openchamber: { kind: 'btw', originalSessionID: 'parent-1', btwBoundaryMessageID: 'msg-9', btwSessionID: 'nested' } };
     expect(withoutBtwSessionMarker(marked)).toEqual({ openchamber: { btwSessionID: 'nested', btwPromoted: true } });
     expect(withoutBtwSessionMarker({ openchamber: { kind: 'btw', originalSessionID: 'parent-1' } })).toEqual({ openchamber: { btwPromoted: true } });
-    const plain = { openchamber: { kind: 'review' } };
+    const plain: SessionMetadata = { openchamber: { kind: 'review' } };
     expect(withoutBtwSessionMarker(plain)).toBe(plain);
   });
 
@@ -78,7 +73,7 @@ describe('fork marker', () => {
     // Still a live btw fork: the boundary applies, the notice must not.
     expect(wasPromotedBtwSession(sessionWith({ openchamber: { kind: 'btw', originalSessionID: 'p-1' } }))).toBe(false);
     expect(wasPromotedBtwSession(sessionWith({ openchamber: {} }))).toBe(false);
-    expect(wasPromotedBtwSession(sessionWith(undefined))).toBe(false);
+    expect(wasPromotedBtwSession(sessionWith({}))).toBe(false);
     expect(wasPromotedBtwSession(null)).toBe(false);
   });
 });

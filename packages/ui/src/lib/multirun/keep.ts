@@ -1,10 +1,10 @@
-import { opencodeClient } from '@/lib/opencode/client';
-import type { Session } from '@/lib/opencode/model';
+import { canonicalClient } from '@/api/canonicalClient';
+import type { Session } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
 import { snapshotGitWorktree } from '@/lib/gitApi';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { listProjectWorktrees, removeProjectWorktree, type ProjectRef } from '@/lib/worktrees/worktreeManager';
-import { listGlobalSessionPages, type SessionPageLister } from '@/stores/globalSessions';
+import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -12,7 +12,6 @@ import type { WorktreeMetadata } from '@/types/worktree';
 import { getMultiRunIdentity } from './identity';
 import type { MultiRunSummary } from './runs';
 
-const listSessionPage: SessionPageLister = (options) => opencodeClient.listSessionsPage(options);
 
 type KeepFailureReason = 'membership-changed' | 'snapshot-failed' | 'archive-failed' | 'worktree-in-use' | 'worktree-removal-failed';
 
@@ -43,15 +42,18 @@ export type RunMemberLocation = { project: ProjectRef; worktree: WorktreeMetadat
  * member in the project root has no worktree and is never removed.
  */
 export async function resolveRunMemberLocation(session: Session, run: MultiRunSummary): Promise<RunMemberLocation | null> {
-  const directory = normalizePath(session.directory);
+  const runtimeKey = getRuntimeKey();
+  const assertCurrent = () => { if (getRuntimeKey() !== runtimeKey) throw new Error('Runtime changed'); };
+  const directory = normalizePath(resolveWorkspaceDirectory(session.workspaceId));
   if (!directory) return null;
-  const known = useSessionUIStore.getState().getWorktreeMetadata(session.id);
+  const known = useSessionUIStore.getState().getWorktreeMetadata(session.sessionId);
   const knownProject = normalizePath(known?.projectDirectory);
   if (known && knownProject && normalizePath(known.path) === directory) {
     return { project: projectRefFor(knownProject), worktree: knownProject === directory ? null : known };
   }
-  const member = [...run.lanes, ...run.fusions].find((entry) => entry.sessionId === session.id);
-  const legacyScope = member?.identity.group.kind === 'legacy' ? normalizePath(member.identity.group.scope) : null;
+  const member = [...run.lanes, ...run.fusions].find((entry) => entry.sessionId === session.sessionId);
+  const legacyScope = member?.identity.group.kind === 'legacy'
+    ? normalizePath(useProjectsStore.getState().projects.find((project) => project.id === member.identity.group.scope)?.path) : null;
   const projects = useProjectsStore.getState().projects
     .map((project) => normalizePath(project.path))
     .filter((path): path is string => Boolean(path));
@@ -59,7 +61,10 @@ export async function resolveRunMemberLocation(session: Session, run: MultiRunSu
   const candidates = legacyScope ? [legacyScope, ...projects.filter((path) => path !== legacyScope)] : projects;
   for (const projectPath of candidates) {
     const project = projectRefFor(projectPath);
-    const worktree = (await listProjectWorktrees(project)).find((entry) => normalizePath(entry.path) === directory);
+    assertCurrent();
+    const worktrees = await listProjectWorktrees(project);
+    assertCurrent();
+    const worktree = worktrees.find((entry) => normalizePath(entry.path) === directory);
     if (worktree) return { project, worktree };
   }
   return null;
@@ -93,7 +98,10 @@ export async function keepRunMember(
     }
     let current: Session;
     try {
-      current = await opencodeClient.getSession(sessionId, cached.directory);
+      const listed = await canonicalClient.listSessions(cached.workspaceId);
+      const found = listed.items.find((session) => session.sessionId === sessionId);
+      if (!found || listed.errors[sessionId] || listed.errors[cached.workspaceId]) throw new Error('Member could not be read');
+      current = found;
     } catch {
       assertCurrent();
       result.failures.push({ sessionId, reason: 'membership-changed' });
@@ -102,7 +110,7 @@ export async function keepRunMember(
     assertCurrent();
     const location = await resolveRunMemberLocation(current, run).catch(() => null);
     assertCurrent();
-    const identity = getMultiRunIdentity(current, location?.project.path ?? current.directory);
+    const identity = getMultiRunIdentity(current, current.projectId);
     if (identity?.key !== run.key) {
       result.failures.push({ sessionId, reason: 'membership-changed' });
       continue;
@@ -131,9 +139,18 @@ export async function keepRunMember(
 
     try {
       // Another chat the user started in this worktree keeps it alive.
-      const remaining = await listGlobalSessionPages(listSessionPage, { directory: worktree.path, pageSize: 500 });
+      const workspace = await canonicalClient.resolveWorkspace(worktree.path);
       assertCurrent();
-      if (remaining.some((session) => session.id !== sessionId && !session.time?.archived)) {
+      if (workspace.workspaceId !== current.workspaceId || normalizePath(resolveWorkspaceDirectory(current.workspaceId)) !== normalizePath(worktree.path)) throw new Error('Worktree workspace changed');
+      const remaining = await canonicalClient.listSessions(workspace.workspaceId);
+      assertCurrent();
+      if (Object.keys(remaining.errors).length > 0) throw new Error('Worktree session discovery is incomplete');
+      const archivedMember = remaining.items.find((session) => session.sessionId === sessionId);
+      if (!archivedMember || archivedMember.archivedAt === undefined || getMultiRunIdentity(archivedMember, archivedMember.projectId)?.key !== run.key) {
+        result.failures.push({ sessionId, reason: 'membership-changed' });
+        continue;
+      }
+      if (remaining.items.some((session) => session.sessionId !== sessionId && session.archivedAt === undefined)) {
         result.failures.push({ sessionId, reason: 'worktree-in-use' });
         continue;
       }

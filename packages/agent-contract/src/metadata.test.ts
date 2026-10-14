@@ -26,12 +26,11 @@ const multirun = {
 const metadata = {
   title: 'Title', folder: 'folder_1', isPinned: true, color: 'blue', icon: 'star', notes: 'Notes',
   openchamber: {
-    goal, assist: { recap: 'Recap', suggestion: 'Suggest', forMessageID: 'message_1', generatedAt: 1 },
     knowledge_context_delivered: 'cursor', context_obligatory_last_compaction_message_id: 'message_1',
     project_context_pins: { notes: ['note_1'], plans: ['plan_1'] },
     context_obligatory_messages: [{ id: 'message_1', createdAt: 1, role: 'user' }], linked_issues: links,
     work: { state: 'done', openedAt: 1, openedBy: 'user', doneAt: 2, suggestDoneAt: null },
-    reviewOffer: { at: 3 }, btwSessionID: 'session_2', reviewSessionID: 'session_3', kind: 'review',
+    reviewOffer: { at: 3 }, btwSessionID: 'session_2', reviewSessionID: 'session_3', btwPromoted: true, kind: 'review',
     originalSessionID: 'session_1', btwBoundaryMessageID: 'message_2', multirun,
   },
 };
@@ -77,15 +76,17 @@ test('metadata patches support typed null deletion and reject malformed patch va
     title: null, folder: null, isPinned: null, color: null, icon: null, notes: null, openchamber: {
       goal: null, assist: null, knowledge_context_delivered: null, context_obligatory_last_compaction_message_id: null,
       project_context_pins: null, context_obligatory_messages: null, linked_issues: null, work: null, reviewOffer: null,
-      btwSessionID: null, reviewSessionID: null, kind: null, originalSessionID: null, btwBoundaryMessageID: null, multirun: null,
+      btwSessionID: null, reviewSessionID: null, btwPromoted: null, kind: null, originalSessionID: null, btwBoundaryMessageID: null, multirun: null,
     },
   } };
   expect(SessionMetadataPatchSchema.parse(cleared)).toEqual(cleared);
+  expect(SessionMetadataPatchSchema.parse({ changes: { openchamber: { btwPromoted: true } } })).toEqual({ changes: { openchamber: { btwPromoted: true } } });
   for (const invalid of [
     { changes: { title: 1 } }, { changes: { openchamber: { goal: 'bad' } } },
     { changes: { openchamber: { assist: { suggestion: 1 } } } },
     { changes: { openchamber: { reviewOffer: { at: 'bad' } } } },
     { changes: { openchamber: { knowledge_context_delivered: 1 } } },
+    { changes: { openchamber: { btwPromoted: 'yes' } } },
     { changes: { openchamber: { unknown: null } } },
   ]) expect(SessionMetadataPatchSchema.safeParse(invalid).success).toBe(false);
   const nestedDeletion = { changes: { openchamber: {

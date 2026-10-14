@@ -8,7 +8,8 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { normalizePath } from '@/lib/pathNormalization';
-import type { Session } from '@/lib/opencode/model';
+import type { Model, Session } from '@openchamber/agent-contract';
+import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -37,9 +38,8 @@ type BarMode =
   | { kind: 'keep'; sessionId: string }
   | { kind: 'fuse'; excluded: ReadonlySet<string> };
 
-const modelLabelFor = (member: MultiRunMember, providers: ReturnType<typeof useConfigStore.getState>['providers']): string => {
-  const provider = providers.find((entry) => entry.id === member.identity.providerID);
-  const name = provider?.models.find((entry) => entry.id === member.identity.modelID)?.name || member.identity.modelID;
+const modelLabelFor = (member: MultiRunMember, models: readonly Model[]): string => {
+  const name = models.find((entry) => entry.provider === member.identity.providerID && entry.modelId === member.identity.modelID)?.name || member.identity.modelID;
   return member.identity.index && member.identity.index > 1 ? `${name} #${member.identity.index}` : name;
 };
 
@@ -59,7 +59,7 @@ function useVariantPrompts(run: MultiRunSummary | null, sessionById: ReadonlyMap
     for (const [variant, sessionId] of firstLaneByVariant) {
       const session = sessionById.get(sessionId);
       if (!session || prompts.has(variant)) continue;
-      loadLaneFirstPrompt(sessionId, session.directory).then((prompt) => {
+      loadLaneFirstPrompt(sessionId).then((prompt) => {
         if (cancelled || !prompt?.text) return;
         setPrompts((current) => new Map(current).set(variant, prompt.text));
       }, () => undefined);
@@ -117,10 +117,10 @@ function PromptCaption({ prompt, expanded, onToggle }: { prompt: string; expande
 function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
   const { t } = useI18n();
   const { run, sessionById } = useMultiRun(runKey);
-  const providers = useConfigStore((state) => state.providers);
-  const currentProviderId = useConfigStore((state) => state.currentProviderId);
-  const currentModelId = useConfigStore((state) => state.currentModelId);
-  const currentAgentName = useConfigStore((state) => state.currentAgentName);
+  const models = useConfigStore((state) => state.models);
+  const currentProviderId = useConfigStore((state) => state.providerId);
+  const currentModelId = useConfigStore((state) => state.modelId);
+  const currentAgentName = useConfigStore((state) => state.agentId);
   const projects = useProjectsStore((state) => state.projects);
   const activeSessionIds = useGlobalSessionStatusStore((state) => state.activeSessionIds);
   const blockingBySession = useGlobalBlockingRequestsStore((state) => state.bySession);
@@ -141,7 +141,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
   );
   const members = React.useMemo<LaneSummaryInput[]>(() => (run?.memberIds ?? []).map((sessionId) => {
     const session = sessionById.get(sessionId);
-    const directory = normalizePath(session?.directory);
+    const directory = normalizePath(session ? resolveWorkspaceDirectory(session.workspaceId) : null);
     return { sessionId, session, worktreePath: directory && !projectRoots.has(directory) ? directory : null };
   }), [projectRoots, run?.memberIds, sessionById]);
   const summaries = useLaneSummaries(members, activeSessionIds);
@@ -153,7 +153,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
     const auto = run?.autoFusion;
     const providerID = auto?.providerID ?? currentProviderId;
     const modelID = auto?.modelID ?? currentModelId;
-    if (providerID && modelID) setJudge([{ providerID, modelID, variant: auto?.variant, instanceId: generateInstanceId() }]);
+    if (providerID && modelID) setJudge([{ providerId: providerID, modelId: modelID, variant: auto?.variant, instanceId: generateInstanceId() }]);
   }, [currentModelId, currentProviderId, judge.length, run?.autoFusion]);
 
   if (!run) {
@@ -168,13 +168,17 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
   }
 
   const laneIds = run.lanes.map((lane) => lane.sessionId);
-  const finishedLaneIds = laneIds.filter((id) => !activeSessionIds.has(id) && sessionById.get(id)?.time.idle);
+  const finishedLaneIds = laneIds.filter((id) => {
+    const reply = summaries.get(id)?.reply;
+    return !activeSessionIds.has(id) && reply?.state === 'ready' && reply.status !== null
+      && ['completed', 'failed', 'cancelled'].includes(reply.status);
+  });
   const busyLaneCount = laneIds.filter((id) => activeSessionIds.has(id)).length;
   const isolated = run.lanes.some((lane) => worktreeById.get(lane.sessionId));
   const memberById = new Map([...run.lanes, ...run.fusions].map((member) => [member.sessionId, member]));
   const nameOf = (sessionId: string): string => {
     const member = memberById.get(sessionId);
-    return member ? modelLabelFor(member, providers) : '';
+    return member ? modelLabelFor(member, models) : '';
   };
   const autoFusionHere = run.autoFusion?.launcherId === RUN_LAUNCHER_ID && run.fusions.length === 0;
   const statusOf = (sessionId: string): LaneStatus | null => {
@@ -198,7 +202,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
   const openChat = (sessionId: string) => {
     const session = sessionById.get(sessionId);
     useUIStore.getState().closeMainSurfaces();
-    useSessionUIStore.getState().setCurrentSession(sessionId, session?.directory ?? null);
+    useSessionUIStore.getState().setCurrentSession(sessionId, session ? resolveWorkspaceDirectory(session.workspaceId) : null);
   };
   const openDiff = (sessionId: string) => {
     const directory = worktreeById.get(sessionId);
@@ -250,7 +254,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
       await startRunFusion({
         run,
         sourceIds: fuseSources,
-        judge: resolveFusionJudge({ providerID: selection.providerID, modelID: selection.modelID, variant: selection.variant, agent: judgeAgent || undefined }),
+        judge: resolveFusionJudge({ providerId: selection.providerId, modelId: selection.modelId, variant: selection.variant, agent: judgeAgent || undefined }),
         sessionById,
       });
       setBar({ kind: 'idle' });
@@ -332,7 +336,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
         key={member.sessionId}
         session={session}
         providerID={member.identity.providerID}
-        modelLabel={modelLabelFor(member, providers)}
+        modelLabel={modelLabelFor(member, models)}
         variantLabel={!isFusion && run.variants.length > 1 ? multiRunVariantLabel(member.identity.runGroup) : null}
         isFusion={isFusion}
         busy={activeSessionIds.has(member.sessionId)}
@@ -363,13 +367,13 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
       return (
         <span className="inline-flex flex-wrap items-center gap-1.5">
           <span className="inline-flex h-8 items-center gap-1.5 rounded-[9px] border border-border px-2.5 typography-meta text-foreground">
-            <ProviderLogo providerId={pending.providerID} className="size-3.5" />
-            {pending.displayName || pending.modelID}
+            <ProviderLogo providerId={pending.providerId} className="size-3.5" />
+            {pending.displayName || pending.modelId}
           </span>
           <ModelEffortMenu
             appearance="trigger"
-            providerID={pending.providerID}
-            modelID={pending.modelID}
+            providerID={pending.providerId}
+            modelID={pending.modelId}
             variant={pending.variant}
             onChange={(variant) => setPendingModel({ runGroup, model: { ...pending, variant } })}
           />
@@ -478,7 +482,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
                 {autoFusionHere && run.autoFusion ? (
                   <span className="inline-flex items-center gap-1 text-foreground">
                     <FusionIcon className="size-3.5 text-[var(--primary-base)]" />
-                    {t('multirun.overview.meta.autoFusion', { model: resolveFusionJudge(run.autoFusion).modelName ?? run.autoFusion.modelID })}
+                    {t('multirun.overview.meta.autoFusion', { model: resolveFusionJudge({ providerId: run.autoFusion.providerID, modelId: run.autoFusion.modelID }).modelName ?? run.autoFusion.modelID })}
                   </span>
                 ) : null}
               </div>
@@ -570,14 +574,14 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
                 maxModels={1}
                 showChips={false}
                 dropdownSide="top"
-                addButtonLabel={judge[0] ? (judge[0].displayName || judge[0].modelID) : t('multirun.fusion.model.placeholder')}
-                triggerIcon={judge[0] ? <ProviderLogo providerId={judge[0].providerID} className="mr-1 size-3.5" /> : undefined}
+                addButtonLabel={judge[0] ? (judge[0].displayName || judge[0].modelId) : t('multirun.fusion.model.placeholder')}
+                triggerIcon={judge[0] ? <ProviderLogo providerId={judge[0].providerId} className="mr-1 size-3.5" /> : undefined}
               />
               {judge[0] ? (
                 <ModelEffortMenu
                   appearance="trigger"
-                  providerID={judge[0].providerID}
-                  modelID={judge[0].modelID}
+                  providerID={judge[0].providerId}
+                  modelID={judge[0].modelId}
                   variant={judge[0].variant}
                   onChange={(variant) => setJudge((current) => current.map((entry) => ({ ...entry, variant })))}
                 />

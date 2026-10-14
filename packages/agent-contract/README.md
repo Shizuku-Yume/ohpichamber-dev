@@ -2,6 +2,8 @@
 
 Shared JSON wire types and Zod validation for the Canonical Agent API at `/api/agent/v1`. The Host, Agent Service and clients import this package; OMP SDK objects stay private to the Agent Service. The separate `@openchamber/sdk` package remains the Guest extension contract.
 
+Session metadata retains typed OpenChamber workflow fields, including review offers and the `btwPromoted` marker. `SessionMetadataPatch` accepts native field updates and explicit `null` deletion; review-offer timestamps and promotion markers are validated rather than carried in an untyped extension object.
+
 `src/index.ts` exports each DTO and its `<Type>Schema`. Public package imports resolve to compiled JavaScript and declarations in `dist/`, so Node Hosts do not need a TypeScript loader or Bun. The package depends on Zod, not an agent SDK, UI framework or runtime implementation.
 
 From this directory:

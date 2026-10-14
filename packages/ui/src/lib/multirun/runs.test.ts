@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { withMultiRunMembership, type MultiRunMembership } from './identity';
 import { buildMultiRunIndex, multiRunVariantLabel } from './runs';
 
@@ -10,15 +10,15 @@ const membership = (id: string, overrides: Partial<MultiRunMembership> = {}): Mu
 });
 const session = (id: string, marker: MultiRunMembership | null, extra: Partial<Session> = {}): Session => {
   const result: Session = {
-    id, projectID: 'project', directory: `/worktrees/${id}`, title: id,
-    cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    time: { created: Number(id.replace(/\D/g, '')) || 1, updated: 1 },
+    sessionId: id, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: id,
+    createdAt: Number(id.replace(/\D/g, '')) || 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    metadata: { title: id }, metadataRevision: '1', archiveRevision: '0',
     ...extra,
   };
-  if (marker) result.metadata = withMultiRunMembership({}, marker);
+  if (marker) result.metadata = withMultiRunMembership(result, marker);
   return result;
 };
-const scope = () => '/repo';
+const scope = (session: Session) => session.projectId;
 
 describe('buildMultiRunIndex', () => {
   test('groups members by launch, orders variants then creation, fusions first', () => {
@@ -44,7 +44,7 @@ describe('buildMultiRunIndex', () => {
   test('a single active member is an ordinary session again (after Keep)', () => {
     const index = buildMultiRunIndex([
       session('s1', membership('s1')),
-      session('s2', membership('s2'), { time: { created: 2, updated: 2, archived: 5 } }),
+      session('s2', membership('s2'), { createdAt: 2, updatedAt: 2, archivedAt: 5 }),
     ], scope);
     expect(index.runs.size).toBe(0);
     expect(index.runKeyBySessionId.size).toBe(0);
@@ -54,8 +54,8 @@ describe('buildMultiRunIndex', () => {
     const original = session('s1', membership('s1'));
     const index = buildMultiRunIndex([
       original,
-      { ...original, id: 'fork' },
-      session('s2', membership('s2'), { parentID: 's1' }),
+      { ...original, sessionId: 'fork' },
+      session('s2', membership('s2'), { parentSessionId: 's1' }),
     ], scope);
     expect(index.runs.size).toBe(0);
   });

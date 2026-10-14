@@ -43,7 +43,7 @@ async function readJson<T>(response: Response, schema: z.ZodType<T>) {
   return schema.safeParse(await response.json().catch(() => null));
 }
 
-async function request<T>(path: string, schema: z.ZodType<T>, init: RequestInit = {}): Promise<T> {
+async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
   const response = await runtimeFetch(path, init);
   if (!response.ok) {
     const problem = await readJson(response, C.ProblemDetailsSchema);
@@ -53,6 +53,11 @@ async function request<T>(path: string, schema: z.ZodType<T>, init: RequestInit 
       status: response.status, detail: 'The canonical operation failed.', code: 'SERVICE_UNAVAILABLE', retryable: response.status >= 500,
     }));
   }
+  return response;
+}
+
+async function request<T>(path: string, schema: z.ZodType<T>, init: RequestInit = {}): Promise<T> {
+  const response = await requestResponse(path, init);
   const result = await readJson(response, schema);
   if (!result.success) throw result.error;
   return result.data;
@@ -88,6 +93,11 @@ export class CanonicalClient {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workspaceId, metadata, data }),
     });
+  }
+
+  async readAttachment(workspaceId: string, attachmentId: string): Promise<Blob> {
+    const response = await requestResponse(`/api/agent/v1/attachments/${id(attachmentId)}${query({ workspaceId })}`);
+    return response.blob();
   }
 
   listProjects(): Promise<ProjectList> { return request('/api/agent/v1/projects', C.ProjectListSchema); }

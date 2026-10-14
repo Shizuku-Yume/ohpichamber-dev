@@ -150,6 +150,13 @@ On 2026-10-14, Task 15 independently migrated provider discovery in Defaults set
 
 Focused Defaults settings verification passed 1 test in its worker. Separate parent runs passed ArchiveView's 5 tests / 30 assertions and retention's 18 tests / 42 assertions after two missing archive delimiters were repaired. Archive tests logged unavailable localhost Host probes; this is not a connected UI proof. Guest Shell verification returned 5 passed / 5 failed because session-tree/project scopes omitted expected jobs; Guest/sidebar/catalog continuation and Task 32 child navigation remain open. The task Progress record owns the exact commands and retained Host-only filesystem extraction callers for Task 17. No full package, Web/Electron/mobile or Composer skill/slash-command acceptance was exercised.
 
+### Task 16 canonical utility and residual caller closure
+
+Task 16 now uses canonical stateless completion and native session/history/delivery contracts for utility generation, multi-run and remaining helpers. Scoped model availability follows the prepared target; multi-run attachments are read with source-workspace authority and re-admitted into each destination. Canonical materialization, captured agent selection, explicit cancellation and revision-aware metadata publication retain lane isolation. BTW fork boundaries use completed native Turns. Task 14 retains ownership of composer caller updates and cancellation publication; Task 17 retains the documented non-agent wrapper retirement.
+
+Owner evidence: contract build, 124 cases across 18 focused suites, and 13/13 isolated utility/multi-run test files passed. Changed TS/JS lint passed on 73 files with zero findings. The real Canonical Client → AgentService → native SDK proof passed eight assertions, including concurrent native failed/completed isolation and exact 9 requests / 1 cancellation / 2 controlled failures; all owned processes and temporary roots were cleaned. Receipt: `/home/shizuku/Project/ohpichamber-omp-artifacts/m316-canonical-proof-receipt.json`. Dead-code inventory ran once and remains nonblocking baseline/removal-owner work; the four Task 16-owned exports/types were removed. Immediate pre-admission cancellation can still race admission and return `COMPLETION_NOT_FOUND`; no new retention or retry semantics were introduced.
+
+
 ## Reusable findings
 
 ### Inherited guidance is not the target architecture

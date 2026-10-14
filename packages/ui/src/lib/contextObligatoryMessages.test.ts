@@ -1,31 +1,25 @@
 import { describe, expect, test } from 'bun:test';
-
+import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 import { getContextObligatoryMessages, withContextObligatoryMessage } from './contextObligatoryMessages';
 
-describe('context obligatory message metadata', () => {
-  test('preserves sibling metadata while pinning and unpinning without duplicates', () => {
-    const message = { id: 'msg_1', createdAt: 10, role: 'user' as const };
-    const initial = { openchamber: { goal: { id: 'goal_1' } }, external: true };
-    const pinned = withContextObligatoryMessage(initial, message, true);
-    const repinned = withContextObligatoryMessage(pinned, message, true);
-    const session = { metadata: repinned } as never;
+const sessionWith = (metadata: SessionMetadata): Session => ({
+  sessionId: 'session_1', projectId: 'project_1', workspaceId: 'workspace_1', displayPath: 'repo', rootSessionId: 'session_1',
+  createdAt: 1, updatedAt: 10, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata, metadataRevision: '1', archiveRevision: '0',
+});
 
-    expect(getContextObligatoryMessages(session)).toEqual([message]);
-    expect((repinned.openchamber as Record<string, unknown>).goal).toEqual({ id: 'goal_1' });
-    expect(withContextObligatoryMessage(repinned, message, false)).toEqual({
-      external: true,
-      openchamber: { goal: { id: 'goal_1' }, context_obligatory_messages: [] },
-    });
+describe('context obligatory metadata', () => {
+  test('sorts pinned messages chronologically with deterministic ID ties', () => {
+    const session = sessionWith({ openchamber: { context_obligatory_messages: [
+      { id: 'message_b', createdAt: 2, role: 'assistant' }, { id: 'message_a', createdAt: 2, role: 'user' }, { id: 'message_c', createdAt: 1, role: 'user' },
+    ] } });
+    expect(getContextObligatoryMessages(session).map((message) => message.id)).toEqual(['message_c', 'message_a', 'message_b']);
   });
 
-  test('reads pins in conversation order, not pin order', () => {
-    const late = { id: 'msg_3', createdAt: 30, role: 'assistant' as const };
-    const early = { id: 'msg_1', createdAt: 10, role: 'user' as const };
-    const sameTime = { id: 'msg_2', createdAt: 10, role: 'assistant' as const };
-    let metadata = withContextObligatoryMessage({}, late, true);
-    metadata = withContextObligatoryMessage(metadata, sameTime, true);
-    metadata = withContextObligatoryMessage(metadata, early, true);
-
-    expect(getContextObligatoryMessages({ metadata } as never)).toEqual([early, sameTime, late]);
+  test('pins and unpins one message without disturbing other metadata', () => {
+    const message = { id: 'message_1', createdAt: 1, role: 'user' as const };
+    const metadata = withContextObligatoryMessage({ title: 'Keep' }, message, true);
+    expect(metadata).toEqual({ title: 'Keep', openchamber: { context_obligatory_messages: [message] } });
+    expect(withContextObligatoryMessage(metadata, message, false)).toEqual({ title: 'Keep', openchamber: { context_obligatory_messages: [] } });
   });
 });

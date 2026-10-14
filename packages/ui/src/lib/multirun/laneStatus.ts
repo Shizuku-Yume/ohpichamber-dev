@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
 import type { LaneReplyState } from './useLaneSummaries';
 
@@ -7,8 +7,8 @@ import type { LaneReplyState } from './useLaneSummaries';
  * - `permission` / `question`: a blocking request waits for the user, so the
  *   turn cannot move on (a blocked session also counts as busy, so this wins);
  * - `working`: the turn is live;
- * - `failed` / `stopped`: OpenCode recorded the turn as failed or interrupted;
- * - `notStarted`: no turn has ended and none is running;
+ * - `failed` / `stopped`: the canonical turn failed or was cancelled;
+ * - `notStarted`: no recorded turn and none is running;
  * - `noReply`: the turn ended normally without any answer text;
  * - `finished`: the turn ended normally. It says nothing about quality.
  */
@@ -17,16 +17,18 @@ export type LaneStatus = 'permission' | 'question' | 'working' | 'failed' | 'sto
 export type LaneBlockingState = 'permission' | 'question' | null;
 
 export function resolveLaneStatus(input: {
-  session: Pick<Session, 'outcome' | 'time'>;
+  session: Pick<Session, 'runtimeStatus'>;
   busy: boolean;
   blocking: LaneBlockingState;
   reply: LaneReplyState | undefined;
 }): LaneStatus {
   if (input.blocking) return input.blocking;
   if (input.busy) return 'working';
-  if (input.session.outcome === 'failed') return 'failed';
-  if (input.session.outcome === 'interrupted') return 'stopped';
-  if (!input.session.time.idle) return 'notStarted';
+  if (input.session.runtimeStatus === 'unavailable') return 'failed';
+  if (input.reply?.state === 'ready' && input.reply.status === 'failed') return 'failed';
+  if (input.reply?.state === 'ready' && input.reply.status === 'cancelled') return 'stopped';
+  if (input.reply?.state !== 'ready') return 'finished';
+  if (input.reply.status === null) return 'notStarted';
   if (input.reply?.state === 'ready' && !input.reply.text) return 'noReply';
   return 'finished';
 }

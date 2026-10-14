@@ -1,11 +1,12 @@
-import { ModelCatalogSchema, ProviderCatalogSchema, CompletionRequestSchema, CompletionResultSchema } from '@openchamber/agent-contract';
+import { ModelCatalogSchema, ProviderCatalogSchema, CompletionRequestSchema, CompletionResultSchema, CompletionCancelResultSchema } from '@openchamber/agent-contract';
+import { z } from 'zod';
 
 let service = null;
 let resolveWorkspaceScope = null;
 
 export function configureAgentService(next, options = {}) {
-  if (!next || typeof next.request !== 'function') throw new TypeError('Agent service is required');
-  if (typeof options.resolveWorkspaceScope !== 'function') throw new TypeError('Workspace scope resolver is required');
+  if (!next || !(next.request instanceof Function)) throw new TypeError('Agent service is required');
+  if (!(options.resolveWorkspaceScope instanceof Function)) throw new TypeError('Workspace scope resolver is required');
   service = next;
   resolveWorkspaceScope = options.resolveWorkspaceScope;
   modelCache.clear();
@@ -24,9 +25,10 @@ export const getAgentService = () => service;
 const modelCache = new Map();
 const providerCache = new Map();
 const MODEL_CACHE_TTL_MS = 30_000;
+const workspaceIdSchema = z.string().refine(value => value.trim().length > 0);
 
 const workspace = async (workspaceId) => {
-  if (typeof workspaceId !== 'string' || !workspaceId.trim()) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400, code: 'INVALID_REQUEST' });
+  if (!workspaceIdSchema.safeParse(workspaceId).success) throw Object.assign(new Error('workspaceId is required'), { statusCode: 400, code: 'INVALID_REQUEST' });
   if (!resolveWorkspaceScope) throw Object.assign(new Error('Workspace scope resolver is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
   const scope = await resolveWorkspaceScope(workspaceId);
   if (!scope || scope.workspaceId !== workspaceId) throw Object.assign(new Error('Workspace scope is unavailable'), { statusCode: 404, code: 'SESSION_NOT_FOUND' });
@@ -66,10 +68,38 @@ export async function listProviderInfos(_service, workspaceId) {
 
 export async function completeSmallModel(input, { signal } = {}) {
   const parsed = CompletionRequestSchema.parse(input);
-  return CompletionResultSchema.parse(await request(
-    `/api/agent/v1/workspaces/${encodeURIComponent(parsed.workspaceId)}/completions`,
-    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(parsed), signal },
-  ));
+  await workspace(parsed.workspaceId);
+  signal?.throwIfAborted();
+  const owner = service;
+  if (!owner) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
+  const pathname = `/api/agent/v1/workspaces/${encodeURIComponent(parsed.workspaceId)}/completions`;
+  let cancellation;
+  const cancel = () => {
+    if (cancellation) return;
+    cancellation = owner.request(`${pathname}/${encodeURIComponent(parsed.completionId)}/cancel`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ completionId: parsed.completionId }),
+    }).then(async (response) => {
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.detail || 'Completion cancellation failed');
+      const result = CompletionCancelResultSchema.parse(body);
+      if (result.completionId !== parsed.completionId) throw new Error('Completion cancellation identity mismatch');
+    });
+    void cancellation.catch(() => {});
+  };
+  signal?.addEventListener('abort', cancel, { once: true });
+  try {
+    const response = await owner.request(pathname, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(parsed),
+    });
+    const body = await response.json();
+    if (!response.ok) throw Object.assign(new Error(body?.detail || 'Completion failed'), { statusCode: response.status, code: body?.code });
+    const result = CompletionResultSchema.parse(body);
+    if (result.completionId !== parsed.completionId || result.selection.providerId !== parsed.selection.providerId || result.selection.modelId !== parsed.selection.modelId) throw new Error('Completion identity mismatch');
+    if (cancellation) await cancellation;
+    return result;
+  } finally {
+    signal?.removeEventListener('abort', cancel);
+  }
 }
 
 export function findModelInfo(models, providerID, modelID) {

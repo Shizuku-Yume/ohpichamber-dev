@@ -1,7 +1,7 @@
 /**
  * Client-side text sanitization for TTS output.
  * Removes markdown, URLs, file paths, and other non-speakable content.
- * Applied as a fallback when server-side summarization is skipped.
+ * Applied when canonical utility summarization is skipped or unavailable.
  */
 export function sanitizeForTTS(text: string): string {
     if (!text) return '';

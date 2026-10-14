@@ -1,5 +1,6 @@
-import { opencodeClient } from '@/lib/opencode/client';
-import type { Session } from '@/lib/opencode/model';
+import { canonicalClient } from '@/api/canonicalClient';
+import type { ModelSelection, Session } from '@openchamber/agent-contract';
+import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 import type { GitWorktreeSnapshotResult } from '@/lib/api/types';
 import { getGitRangeDiff, snapshotGitWorktree } from '@/lib/gitApi';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
@@ -10,15 +11,15 @@ import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
 import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
 import { registerMultiRunSession } from '@/stores/useMultiRunStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { sendMessage } from '@/sync/session-actions';
+import { observeLaneSession } from './observation';
 import { createMultiRunSession } from './createSession';
 import { getMultiRunIdentity, type MultiRunIdentity } from './identity';
 import { resolveRunMemberLocation, runSnapshotRef, type RunMemberLocation } from './keep';
 import { loadLaneDiffStat, loadLaneFirstPrompt, loadLaneLastReply, type LaneDiffStat } from './laneData';
 import { multiRunVariantLabel, type MultiRunSummary } from './runs';
 
-export type FusionJudge = {
-  providerID: string;
-  modelID: string;
+export type FusionJudge = ModelSelection & {
   variant?: string;
   agent?: string;
   /** Display name for the fusion session title. */
@@ -83,15 +84,17 @@ async function loadFusionSources(
   const sources = await Promise.all(sourceIds.map(async (sessionId): Promise<FusionSource | null> => {
     const cached = sessionById.get(sessionId);
     if (!cached) throw new Error('Fusion source membership changed');
-    const session = await opencodeClient.getSession(sessionId, cached.directory);
+    const listed = await canonicalClient.listSessions(cached.workspaceId);
+    const session = listed.items.find((candidate) => candidate.sessionId === sessionId);
+    if (!session || listed.errors[sessionId] || listed.errors[cached.workspaceId]) throw new Error('Fusion source could not be read');
     assertCurrent();
     const location = await resolveRunMemberLocation(session, run);
     assertCurrent();
-    const identity = getMultiRunIdentity(session, location?.project.path ?? session.directory);
+    const identity = getMultiRunIdentity(session, session.projectId);
     if (!identity || identity.key !== run.key || identity.role !== 'run') {
       throw new Error('Fusion source membership changed');
     }
-    const reply = await loadLaneLastReply(sessionId, session.directory);
+    const reply = await loadLaneLastReply(sessionId);
     assertCurrent();
     if (!reply) return null;
     return { session, identity, label: laneLabel(identity, run.variants.length), reply, location };
@@ -107,7 +110,7 @@ async function loadVariantPrompts(sources: readonly FusionSource[], assertCurren
   }
   const prompts = new Map<string, string>();
   for (const [variant, source] of firstByVariant) {
-    const prompt = await loadLaneFirstPrompt(source.session.id, source.session.directory);
+    const prompt = await loadLaneFirstPrompt(source.session.sessionId);
     assertCurrent();
     if (prompt?.text) prompts.set(variant, prompt.text);
   }
@@ -137,9 +140,8 @@ export async function startRunFusion(input: {
 }): Promise<{ sessionId: string; directory: string; mode: FusionMode }> {
   const { run, judge } = input;
   const runtimeKey = getRuntimeKey();
-  const client = opencodeClient.getSdkClient();
   const assertCurrent = () => {
-    if (getRuntimeKey() !== runtimeKey || opencodeClient.getSdkClient() !== client) throw new Error('Runtime changed');
+    if (getRuntimeKey() !== runtimeKey) throw new Error('Runtime changed');
   };
 
   const sources = await loadFusionSources(run, input.sourceIds, input.sessionById, assertCurrent);
@@ -152,7 +154,8 @@ export async function startRunFusion(input: {
   const prompts = await loadVariantPrompts(sources, assertCurrent);
   const project = sources.find((source) => source.location)?.location?.project ?? null;
   const first = sources[0];
-  const projectDirectory = project?.path ?? first.session.directory;
+  const projectDirectory = project?.path ?? resolveWorkspaceDirectory(first.session.workspaceId);
+  if (!projectDirectory) throw new Error('Fusion source directory is unknown');
 
   let directory = projectDirectory;
   const context: Array<{ text: string }> = [];
@@ -163,7 +166,7 @@ export async function startRunFusion(input: {
     for (const source of sources) {
       const worktreePath = source.location?.worktree?.path;
       if (!worktreePath) throw new Error('Fusion source has no worktree');
-      snapshots.push(await snapshotGitWorktree(worktreePath, { ref: runSnapshotRef(run, source.session.id) }));
+      snapshots.push(await snapshotGitWorktree(worktreePath, { ref: runSnapshotRef(run, source.session.sessionId) }));
       assertCurrent();
     }
     const baseCommit = snapshots[0].head;
@@ -230,33 +233,33 @@ export async function startRunFusion(input: {
   const visiblePrompt = await renderMagicPrompt('session.fusion.visible');
   assertCurrent();
   const fusionSession = await createMultiRunSession({
-    title: `${run.title} · ${judge.modelName ?? judge.modelID}`,
+    title: `${run.title} · ${judge.modelName ?? judge.modelId}`,
     directory,
     identity: {
       group: first.identity.group,
       groupSlug: first.identity.groupSlug,
-      providerID: judge.providerID,
-      modelID: judge.modelID,
+      providerID: judge.providerId,
+      modelID: judge.modelId,
       role: 'fusion',
       title: run.title,
     },
-    selection: { model: { providerID: judge.providerID, id: judge.modelID, variant: judge.variant }, agent: judge.agent },
+    selection: { providerId: judge.providerId, modelId: judge.modelId, variant: judge.variant ?? null, agentId: judge.agent ?? null, reasoningEffort: null },
   }, assertCurrent);
   registerMultiRunSession(fusionSession, directory);
   if (createdWorktree && project) {
-    useSessionUIStore.getState().setWorktreeMetadata(fusionSession.id, { ...createdWorktree, kind: 'standard' });
+    useSessionUIStore.getState().setWorktreeMetadata(fusionSession.sessionId, { ...createdWorktree, kind: 'standard' });
   }
 
   assertCurrent();
-  await opencodeClient.sendMessage({
+  await observeLaneSession({ sessionId: fusionSession.sessionId, directory }, assertCurrent);
+  await sendMessage({
     runtimeKey,
-    id: fusionSession.id,
-    providerID: judge.providerID,
-    model: { providerID: judge.providerID, id: judge.modelID, variant: judge.variant },
-    agent: judge.agent,
-    text: visiblePrompt,
-    context,
-    directory,
+    sessionId: fusionSession.sessionId,
+    request: {
+      options: { providerId: judge.providerId, modelId: judge.modelId, variant: judge.variant ?? null, agentId: judge.agent ?? null, reasoningEffort: null },
+      input: { text: visiblePrompt, attachments: [], context: context.map((part) => ({ kind: 'instruction', text: part.text })) },
+    },
   });
-  return { sessionId: fusionSession.id, directory, mode };
+  assertCurrent();
+  return { sessionId: fusionSession.sessionId, directory, mode };
 }

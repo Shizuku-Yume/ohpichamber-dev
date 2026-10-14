@@ -1,18 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import type { Metadata, Session } from '@/lib/opencode/model';
+import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 import { getSessionWork, isDoneSuggested, isReviewSuggested, isSessionInWork, withSessionWorkState } from './sessionWorkMetadata';
 
-// SAFETY: fixture carries the identity fields and what the work helpers read.
-const session = (metadata: Metadata, idle = 100): Session => ({
-  id: 'ses_1',
-  projectID: 'prj',
-  directory: '/repo',
-  title: 't',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 200, idle },
-  metadata,
-} as Session);
+const session = (metadata: SessionMetadata, updatedAt = 100): Session => ({
+  sessionId: 'ses_1', projectId: 'prj', workspaceId: 'ws', displayPath: 'repo', rootSessionId: 'ses_1',
+  createdAt: 1, updatedAt, epoch: 'e', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata, metadataRevision: '1', archiveRevision: '0',
+});
 
 describe('session work metadata', () => {
   test('reads membership from the stored state, and anything else as not in work', () => {
@@ -38,11 +32,11 @@ describe('session work metadata', () => {
   });
 
   test('the user tracks and closes; closing keeps when and by whom it opened and drops the hint', () => {
-    const base: Metadata = { openchamber: { goal: { id: 'g' } } };
+    const base: SessionMetadata = { openchamber: { goal: { id: 'g' } } };
     const tracked = withSessionWorkState(base, 'open', 10);
     expect(tracked).toEqual({ openchamber: { goal: { id: 'g' }, work: { state: 'open', openedAt: 10, openedBy: 'user' } } });
 
-    const hinted: Metadata = { openchamber: { work: { state: 'open', openedAt: 5, openedBy: 'jev', suggestDoneAt: 8 } } };
+    const hinted: SessionMetadata = { openchamber: { work: { state: 'open', openedAt: 5, openedBy: 'jev', suggestDoneAt: 8 } } };
     const closed = withSessionWorkState(hinted, 'done', 20);
     expect(getSessionWork(session(closed))).toEqual({ state: 'done', doneAt: 20, openedAt: 5, openedBy: 'jev' });
 

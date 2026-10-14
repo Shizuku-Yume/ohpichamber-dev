@@ -9,20 +9,15 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
 import { useI18n } from '@/lib/i18n';
-import { ModelPickerList, type ModelPickerEntry, type ModelPickerProvider } from '@/components/model-picker/ModelPickerList';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
+import { ModelPickerList, type ModelPickerEntry } from '@/components/model-picker/ModelPickerList';
+import { listModelVariantIds } from '@/lib/modelVariants';
+import type { MultiRunModelSelection } from '@/types/multirun';
 
 /** Chip height class - shared between chips and add button */
 const CHIP_HEIGHT_CLASS = 'h-7';
 
 /** UI-only type with instanceId for React keys and duplicate tracking */
-export interface ModelSelectionWithId {
-  providerID: string;
-  modelID: string;
-  displayName?: string;
-  variant?: string;
-  instanceId: string;
-}
+export type ModelSelectionWithId = MultiRunModelSelection & { instanceId: string };
 
 // eslint-disable-next-line react-refresh/only-export-components -- Utility is tightly coupled with ModelMultiSelect
 export const generateInstanceId = (): string => {
@@ -39,12 +34,12 @@ const ModelChip: React.FC<{
   totalSameModel: number;
   onRemove: () => void;
 }> = ({ model, instanceIndex, totalSameModel, onRemove }) => {
-  const displayName = model.displayName || `${model.providerID}/${model.modelID}`;
+  const displayName = model.displayName || `${model.providerId}/${model.modelId}`;
   const label = totalSameModel > 1 ? `${displayName} (${instanceIndex})` : displayName;
 
   return (
     <div className={cn('flex items-center gap-1.5 px-2 rounded-md bg-interactive-selection/20 border border-border/30', CHIP_HEIGHT_CLASS)}>
-      <ProviderLogo providerId={model.providerID} className="h-3.5 w-3.5" />
+      <ProviderLogo providerId={model.providerId} className="h-3.5 w-3.5" />
       <span className="typography-meta font-medium truncate max-w-[140px]">
         {label}
       </span>
@@ -112,7 +107,8 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   addButtonAriaLabel,
 }) => {
   const { t } = useI18n();
-  const providers = useConfigStore((state) => state.providers) as ModelPickerProvider[];
+  const providers = useConfigStore((state) => state.providers);
+  const models = useConfigStore((state) => state.models);
   const toggleFavoriteModel = useUIStore((state) => state.toggleFavoriteModel);
   const isFavoriteModel = useUIStore((state) => state.isFavoriteModel);
   const { favoriteModelsList, recentModelsList } = useModelLists();
@@ -132,7 +128,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   const modelCounts = React.useMemo(() => {
     const counts = new Map<string, number>();
     for (const m of selectedModels) {
-      const key = `${m.providerID}:${m.modelID}`;
+      const key = `${m.providerId}:${m.modelId}`;
       counts.set(key, (counts.get(key) || 0) + 1);
     }
     return counts;
@@ -141,7 +137,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   // Get instance index for a specific model selection
   const getInstanceIndex = React.useCallback((model: ModelSelectionWithId): number => {
     const sameModels = selectedModels.filter(
-      m => m.providerID === model.providerID && m.modelID === model.modelID
+      m => m.providerId === model.providerId && m.modelId === model.modelId
     );
     return sameModels.findIndex(m => m.instanceId === model.instanceId) + 1;
   }, [selectedModels]);
@@ -220,9 +216,9 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
 
   const handleSelectModel = React.useCallback((entry: ModelPickerEntry) => {
     const nextModel = {
-      providerID: entry.providerID,
-      modelID: entry.modelID,
-      displayName: (entry.model.name as string) || entry.modelID,
+      providerId: entry.providerId,
+      modelId: entry.modelId,
+      displayName: entry.model.name || entry.modelId,
       instanceId: generateInstanceId(),
     };
     if (isSingleSelect && selectedModels.length > 0 && onUpdate) {
@@ -296,6 +292,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
             >
               <ModelPickerList
                 providers={providers}
+                models={models}
                 providerOrder={providerOrder}
                 favoriteModels={favoriteModelsList}
                 recentModels={recentModelsList}
@@ -304,14 +301,14 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
                 onSearchQueryChange={setSearchQuery}
                 onSelect={handleSelectModel}
                 labels={labels}
-                selectionCount={(entry) => modelCounts.get(`${entry.providerID}:${entry.modelID}`) || 0}
+                selectionCount={(entry) => modelCounts.get(`${entry.providerId}:${entry.modelId}`) || 0}
                 disabled={!canAddModel}
                 maxHeightClassName="flex-1"
                 maxHeightStyle={{ maxHeight: availableHeight ? `${availableHeight}px` : '300px' }}
                 stickyHeaders
                 tooltipsEnabled={isOpen}
-                isFavorite={(entry) => isFavoriteModel(entry.providerID, entry.modelID)}
-                onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerID, entry.modelID)}
+                isFavorite={(entry) => isFavoriteModel(entry.providerId, entry.modelId)}
+                onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerId, entry.modelId)}
                 onEscape={() => {
                   setIsOpen(false);
                   setSearchQuery('');
@@ -325,14 +322,11 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
         {showChips && selectedModels.length > 0 && (
           <div className="flex flex-col gap-2 w-full">
             {selectedModels.map((model, index) => {
-              const key = `${model.providerID}:${model.modelID}`;
+              const key = `${model.providerId}:${model.modelId}`;
               const totalSameModel = modelCounts.get(key) || 1;
               const instanceIndex = getInstanceIndex(model);
 
-              const provider = providers.find((p) => p.id === model.providerID);
-              const providerModel = provider?.models?.find((m: Record<string, unknown>) => (m as { id?: string }).id === model.modelID) as
-                | { variants?: ModelVariantSource }
-                | undefined;
+              const providerModel = models.find((entry) => entry.provider === model.providerId && entry.modelId === model.modelId);
               const variantKeys = listModelVariantIds(providerModel?.variants);
               const hasVariants = variantKeys.length > 0;
 

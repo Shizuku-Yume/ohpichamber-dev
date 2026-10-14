@@ -1,6 +1,6 @@
-import { requestSmallModel } from '@/lib/smallModelRequest';
+import { completionText, requestSmallModel, type SmallModelRequest } from '@/lib/smallModelRequest';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { getSessionLastAssistantModel } from '@/sync/session-actions';
+import { getSyncMessages, getSyncSessionDirectory } from '@/sync/sync-refs';
 
 // Selections shorter than this are already note-sized — summarizing them
 // would only add latency and risk losing the exact wording.
@@ -18,8 +18,8 @@ const NOTES_SYSTEM_PROMPT = [
 /**
  * Distills a chat selection into a compact note via the small model. Falls
  * back to the original text on any failure or when no small model is
- * available within the session's provider (explicit settings/config picks
- * are still honored server-side).
+ * available within the session's provider. Explicit profile picks are honored
+ * by the canonical generation owner.
  */
 export async function summarizeSelectionForNotes(text: string, sessionId?: string | null): Promise<string> {
   const trimmed = text.trim();
@@ -30,30 +30,21 @@ export async function summarizeSelectionForNotes(text: string, sessionId?: strin
   try {
     // The selection's session provider is authoritative — the text came from
     // that conversation. The composer picker only serves as a fallback.
-    const sessionModel = sessionId ? getSessionLastAssistantModel(sessionId) : null;
+    const directory = sessionId ? getSyncSessionDirectory(sessionId) : undefined;
+    if (sessionId && !directory) return trimmed;
+    const sessionModel = sessionId ? getSyncMessages(sessionId, directory ?? undefined).findLast(message => message.role === 'assistant' && message.providerId && message.modelId) : undefined;
     const { currentProviderId, currentModelId } = useConfigStore.getState();
-    const preferredProviderID = sessionModel?.providerID || currentProviderId || '';
-    const preferredModelID = sessionModel?.modelID || currentModelId || '';
-    const response = await requestSmallModel({
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: trimmed,
-        system: NOTES_SYSTEM_PROMPT,
-        sessionID: sessionId || undefined,
-        // Read by servers before 2026-10; newer ones stay on the named provider anyway.
-        restrictToPreferredProvider: true,
-        ...(preferredProviderID ? { preferredProviderID } : {}),
-        ...(preferredModelID ? { preferredModelID } : {}),
-      }),
-    // No small model is not an error here: the note keeps the original text.
-    }, { silentStatuses: [404] });
-    if (!response.ok) {
-      return trimmed;
-    }
-    const payload = await response.json().catch(() => null) as { text?: unknown } | null;
-    const summary = typeof payload?.text === 'string' ? payload.text.trim() : '';
-    return summary || trimmed;
+    const providerId = sessionModel?.providerId || currentProviderId || '';
+    const modelId = sessionModel?.modelId || currentModelId || '';
+    const request: SmallModelRequest = {
+      prompt: trimmed,
+      system: NOTES_SYSTEM_PROMPT,
+      sessionId,
+      directory,
+    };
+    if (providerId && modelId) request.preferred = { providerId, modelId };
+    const result = await requestSmallModel(request, { silentUnavailable: true });
+    return completionText(result).trim() || trimmed;
   } catch {
     return trimmed;
   }
@@ -77,26 +68,18 @@ const GOAL_OBJECTIVE_SYSTEM_PROMPT = [
  * via the small model. Returns null on any failure — callers fall back to a
  * head+tail excerpt.
  */
-export async function distillGoalObjective(planContent: string): Promise<string | null> {
+export async function distillGoalObjective(planContent: string, scope: Pick<SmallModelRequest, 'workspaceId' | 'directory' | 'sessionId' | 'preferred' | 'signal'> = {}): Promise<string | null> {
   try {
     const { currentProviderId, currentModelId } = useConfigStore.getState();
-    const response = await requestSmallModel({
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: planContent,
-        system: GOAL_OBJECTIVE_SYSTEM_PROMPT,
-        // Read by servers before 2026-10; newer ones stay on the named provider anyway.
-        restrictToPreferredProvider: true,
-        ...(currentProviderId ? { preferredProviderID: currentProviderId } : {}),
-        ...(currentModelId ? { preferredModelID: currentModelId } : {}),
-      }),
+    const result = await requestSmallModel({
+      ...scope,
+      prompt: planContent,
+      system: GOAL_OBJECTIVE_SYSTEM_PROMPT,
+      preferred: scope.preferred ?? (currentProviderId && currentModelId ? { providerId: currentProviderId, modelId: currentModelId } : undefined),
     });
-    if (!response.ok) return null;
-    const payload = await response.json().catch(() => null) as { text?: unknown } | null;
-    const distilled = typeof payload?.text === 'string' ? payload.text.trim() : '';
-    return distilled || null;
+    return completionText(result).trim() || null;
   } catch {
+    scope.signal?.throwIfAborted();
     return null;
   }
 }

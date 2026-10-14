@@ -1,14 +1,13 @@
-import { opencodeClient } from '@/lib/opencode/client';
-import type { FilePart, Part } from '@/lib/opencode/model';
-import { flattenAssistantTextParts, flattenUserTextParts } from '@/lib/messages/messageText';
+import { canonicalClient } from '@/api/canonicalClient';
+import type { Message, ModelSelection, PromptAttachment, Turn, TurnStatus } from '@openchamber/agent-contract';
 import { getGitStatus } from '@/lib/gitApi';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { structuredErrorText } from '@/lib/opencode/projection';
 
 export type LanePrompt = {
   messageId: string;
+  turnId: string;
   text: string;
-  files: Array<{ mime: string; filename?: string; url: string }>;
+  files: PromptAttachment[];
 };
 
 export type LaneDiffStat = {
@@ -17,44 +16,94 @@ export type LaneDiffStat = {
   deletions: number;
 };
 
-const isFilePart = (part: Part): part is FilePart => part.type === 'file';
+const messageText = (message: Message): string => message.parts
+  .filter((part) => part.type === 'text').map((part) => part.content).join('\n');
 
-/** The user message that started the lane, with its attachments. Null when there is none yet. */
-export async function loadLaneFirstPrompt(sessionId: string, directory: string): Promise<LanePrompt | null> {
-  const page = await opencodeClient.getSessionMessages(sessionId, { limit: 10, order: 'asc' }, directory);
-  const first = page.items.find((record) => record.info.role === 'user');
-  if (!first) return null;
-  return {
-    messageId: first.info.id,
-    text: flattenUserTextParts(first.parts),
-    files: first.parts.filter(isFilePart).map((part) => ({ mime: part.mime, filename: part.filename, url: part.url })),
-  };
+/** Native pages are chronological; continue until the first user prompt is found. */
+export async function loadLaneFirstPrompt(sessionId: string): Promise<LanePrompt | null> {
+  const runtimeKey = getRuntimeKey();
+  let cursor: string | undefined;
+  let branch: string | undefined;
+  do {
+    const page = await canonicalClient.getHistory(sessionId, { limit: 100, cursor });
+    const identity = JSON.stringify(page.branch);
+    if (branch !== undefined && branch !== identity) throw new Error('History branch changed');
+    branch = identity;
+    if (getRuntimeKey() !== runtimeKey) throw new Error('Runtime changed');
+    const first = page.messages.find((message) => message.role === 'user');
+    if (first) return {
+      messageId: first.messageId,
+      turnId: first.turnId,
+      text: messageText(first),
+      files: first.parts.filter((part) => part.type === 'attachment').map(({ type: _type, partId: _partId, ...attachment }) => attachment),
+    };
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return null;
+}
+
+/** The comparison source is the original answer's model, never a later tail. */
+export async function loadLaneTurnModel(sessionId: string, turnId: string): Promise<ModelSelection | null> {
+  const runtimeKey = getRuntimeKey();
+  let cursor: string | undefined;
+  let branch: string | undefined;
+  do {
+    const page = await canonicalClient.getHistory(sessionId, { limit: 100, cursor });
+    if (getRuntimeKey() !== runtimeKey) throw new Error('Runtime changed');
+    const identity = JSON.stringify(page.branch);
+    if (branch !== undefined && branch !== identity) throw new Error('History branch changed');
+    branch = identity;
+    const message = page.messages.find((entry) => entry.turnId === turnId && entry.role === 'assistant' && entry.providerId && entry.modelId);
+    if (message?.providerId && message.modelId) return { providerId: message.providerId, modelId: message.modelId };
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return null;
 }
 
 export type LaneLastTurn = {
   /** Latest assistant reply text; empty when it has not answered yet. */
   text: string;
-  /** Error OpenCode recorded on the newest assistant message, if any. */
+  /** Error on the newest assistant turn, not on an individual tool result. */
   error: string | null;
+  status: TurnStatus | null;
+  cost: number | null;
+  finishedAt: number | null;
 };
 
-/** The lane's latest reply text and the error its newest step recorded. */
-export async function loadLaneLastTurn(sessionId: string, directory: string): Promise<LaneLastTurn> {
-  const page = await opencodeClient.getSessionMessages(sessionId, { limit: 50 }, directory);
-  // v2 pages messages newest first, so the first assistant record is the last reply.
-  let error: string | null = null;
-  for (const record of page.items) {
-    if (record.info.role !== 'assistant') continue;
-    if (error === null && record.info.error) error = structuredErrorText(record.info.error).trim() || null;
-    const text = flattenAssistantTextParts(record.parts).trim();
-    if (text) return { text, error };
-  }
-  return { text: '', error };
+/** Read every native page so the last nonempty reply is never a first-page reply. */
+export async function loadLaneLastTurn(sessionId: string): Promise<LaneLastTurn> {
+  const runtimeKey = getRuntimeKey();
+  let cursor: string | undefined;
+  let branch: string | undefined;
+  let text = '';
+  let latestAssistantTurnId: string | undefined;
+  let latestTurn: Turn | undefined;
+  let cost: number | null = null;
+  do {
+    const page = await canonicalClient.getHistory(sessionId, { limit: 100, cursor });
+    const identity = JSON.stringify(page.branch);
+    if (branch !== undefined && branch !== identity) throw new Error('History branch changed');
+    branch = identity;
+    if (getRuntimeKey() !== runtimeKey) throw new Error('Runtime changed');
+    for (const message of page.messages) {
+      if (message.role !== 'assistant') continue;
+      latestAssistantTurnId = message.turnId;
+      if (message.usage) cost = (cost ?? 0) + message.usage.cost.total;
+      const reply = messageText(message).trim();
+      if (reply) text = reply;
+    }
+    latestTurn = page.turns.find((turn) => turn.turnId === latestAssistantTurnId) ?? latestTurn;
+    // A failed/cancelled turn can terminate before it creates an assistant message.
+    const newest = page.turns.at(-1);
+    if (newest) latestTurn = newest;
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return { text, error: latestTurn?.error?.trim() || null, status: latestTurn?.status ?? null, cost, finishedAt: latestTurn?.finishedAt ?? null };
 }
 
 /** Text of the lane's latest assistant reply; an empty string when it has not answered yet. */
-export async function loadLaneLastReply(sessionId: string, directory: string): Promise<string> {
-  return (await loadLaneLastTurn(sessionId, directory)).text;
+export async function loadLaneLastReply(sessionId: string): Promise<string> {
+  return (await loadLaneLastTurn(sessionId)).text;
 }
 
 /**

@@ -1,4 +1,5 @@
 import React from 'react';
+import type { RunStatus } from '@openchamber/agent-contract';
 import { toast } from '@/components/ui';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
@@ -9,13 +10,12 @@ import { useMultiRunSessions } from './useMultiRuns';
 import { RUN_LAUNCHER_ID } from './launcher';
 
 /** Resolves the judge's display name and context window from the provider catalog. */
-export const resolveFusionJudge = (selection: { providerID: string; modelID: string; variant?: string; agent?: string }): FusionJudge => {
-  const provider = useConfigStore.getState().providers.find((entry) => entry.id === selection.providerID);
-  const model = provider?.models.find((entry) => entry.id === selection.modelID);
+export const resolveFusionJudge = (selection: FusionJudge): FusionJudge => {
+  const model = useConfigStore.getState().getProviderModel(selection.providerId, selection.modelId);
   return {
     ...selection,
-    modelName: model?.name || selection.modelID,
-    contextLimit: model?.limit?.context || undefined,
+    modelName: model?.name || selection.modelId,
+    contextLimit: model?.contextWindow || undefined,
   };
 };
 
@@ -28,9 +28,16 @@ const seenRunningLaneIds = new Set<string>();
 type FusionStart = (run: MultiRunSummary) => Promise<void>;
 export type AutoFusionFailure = 'no-outputs' | 'failed';
 
+
+/** Terminal live evidence only: absence and in-progress outcomes never finish a lane. */
+export const isAutoFusionLaneFinished = (input: { seenRunning: boolean; busy: boolean; outcome: RunStatus | null | undefined }): boolean => (
+  input.seenRunning && !input.busy
+  && (input.outcome === 'completed' || input.outcome === 'failed' || input.outcome === 'cancelled')
+);
 function useRunAutoFusion(onStartFailed: (failure: AutoFusionFailure) => void): void {
   const { index, sessionById } = useMultiRunSessions();
   const activeSessionIds = useGlobalSessionStatusStore((state) => state.activeSessionIds);
+  const observedById = useGlobalSessionStatusStore((state) => state.observedById);
   const failureRef = React.useRef(onStartFailed);
   failureRef.current = onStartFailed;
 
@@ -43,7 +50,7 @@ function useRunAutoFusion(onStartFailed: (failure: AutoFusionFailure) => void): 
         await startRunFusion({
           run,
           sourceIds: run.lanes.map((lane) => lane.sessionId),
-          judge: resolveFusionJudge(autoFusion),
+          judge: resolveFusionJudge({ providerId: autoFusion.providerID, modelId: autoFusion.modelID, variant: autoFusion.variant, agent: autoFusion.agent }),
           sessionById,
         });
       } catch (error) {
@@ -56,14 +63,14 @@ function useRunAutoFusion(onStartFailed: (failure: AutoFusionFailure) => void): 
       for (const lane of run.lanes) {
         if (activeSessionIds.has(lane.sessionId)) seenRunningLaneIds.add(lane.sessionId);
       }
-      const finished = run.lanes.every((lane) => (
-        seenRunningLaneIds.has(lane.sessionId)
-        && !activeSessionIds.has(lane.sessionId)
-        && sessionById.get(lane.sessionId)?.outcome !== undefined
-      ));
+      const finished = run.lanes.every((lane) => isAutoFusionLaneFinished({
+        seenRunning: seenRunningLaneIds.has(lane.sessionId),
+        busy: activeSessionIds.has(lane.sessionId),
+        outcome: observedById.get(lane.sessionId)?.outcome,
+      }));
       if (finished) void start(run);
     }
-  }, [activeSessionIds, index, sessionById]);
+  }, [activeSessionIds, observedById, index, sessionById]);
 }
 
 /** Mounted once per shell that can launch runs. */

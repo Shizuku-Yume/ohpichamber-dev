@@ -1,8 +1,6 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
-import { normalizePath } from '@/lib/pathNormalization';
+import type { Session } from '@openchamber/agent-contract';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllLiveSessions } from '@/sync/sync-context';
 import { buildMultiRunIndex, readMultiRunIdentity, type MultiRunIndex, type MultiRunSummary } from './runs';
 
@@ -11,9 +9,7 @@ export type MultiRunSessions = {
   sessionById: ReadonlyMap<string, Session>;
 };
 
-const resolveLegacyScope = (session: Session): string | null => normalizePath(
-  useSessionUIStore.getState().getWorktreeMetadata(session.id)?.projectDirectory ?? session.directory,
-);
+const resolveLegacyScope = (session: Session): string => session.projectId;
 
 /**
  * Runs across every project, from the global session cache overlaid with the
@@ -25,13 +21,13 @@ export function useMultiRunSessions(): MultiRunSessions {
   const liveSessions = useAllLiveSessions();
   return React.useMemo(() => {
     const sessionById = new Map<string, Session>();
-    for (const session of activeSessions) sessionById.set(session.id, session);
-    for (const session of liveSessions) sessionById.set(session.id, session);
+    for (const session of activeSessions) sessionById.set(session.sessionId, session);
+    for (const session of liveSessions) sessionById.set(session.sessionId, session);
     return { index: buildMultiRunIndex(sessionById.values(), resolveLegacyScope), sessionById };
   }, [activeSessions, liveSessions]);
 }
 
-const isActiveRoot = (session: Session): boolean => !session.time?.archived && !session.parentID;
+const isActiveRoot = (session: Session): boolean => !session.archivedAt && !session.parentSessionId;
 
 /**
  * Title of a run, read straight from the global session cache. A primitive
@@ -62,12 +58,12 @@ export function useMultiRunTitle(runKey: string | null): string | null {
 export function useMultiRunMemberIds(sessionId: string | null): readonly string[] {
   const joined = useGlobalSessionsStore(React.useCallback((state) => {
     if (!sessionId) return '';
-    const own = state.activeSessions.find((session) => session.id === sessionId);
+    const own = state.activeSessions.find((session) => session.sessionId === sessionId);
     const key = own && isActiveRoot(own) ? readMultiRunIdentity(own, resolveLegacyScope(own))?.key : undefined;
     if (!key) return '';
     const ids = state.activeSessions
       .filter((session) => isActiveRoot(session) && readMultiRunIdentity(session, resolveLegacyScope(session))?.key === key)
-      .map((session) => session.id);
+      .map((session) => session.sessionId);
     return ids.length >= 2 ? ids.join('\n') : '';
   }, [sessionId]));
   return React.useMemo(() => (joined ? joined.split('\n') : []), [joined]);

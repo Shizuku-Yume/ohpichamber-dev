@@ -1,31 +1,21 @@
 import { describe, expect, test } from 'bun:test';
-import type { Metadata, Session } from '@/lib/opencode/model';
+import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 import { applyForkInheritance, withoutSourceOwnedLinks, type ForkInheritanceDeps } from './sessionForkInheritance';
 
 const goal = (objectiveFile: boolean) => ({
-  id: 'goal_1',
-  objective: objectiveFile ? '' : 'Ship it',
-  objectiveFile,
-  status: 'paused',
-  tokensUsed: 10,
-  turnsUsed: 2,
+  id: 'goal_1', objective: objectiveFile ? '' : 'Ship it', objectiveFile, status: 'paused' as const, tokensUsed: 10, turnsUsed: 2,
 });
 
-const forkWith = (metadata: Metadata): Session => ({
-  id: 'ses_fork',
-  projectID: 'proj_1',
-  directory: '/repo',
-  title: 'Forked',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
-  metadata,
+const forkWith = (metadata: SessionMetadata): Session => ({
+  sessionId: 'ses_fork', projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'repo', rootSessionId: 'ses_fork',
+  createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata, metadataRevision: '1', archiveRevision: '0',
 });
 
 const harness = (fork: Session, overrides: Partial<ForkInheritanceDeps> = {}) => {
   const reads: string[] = [];
   const writes: Array<[string, string]> = [];
-  const patches: Metadata[] = [];
+  const patches: SessionMetadata[] = [];
   const deps: ForkInheritanceDeps = {
     readGoalId: async () => 'goal_1',
     readObjective: async (sessionId) => {
@@ -51,22 +41,21 @@ describe('withoutSourceOwnedLinks', () => {
   });
 
   test('keeps the goal and drops the source btw and review links', () => {
-    const metadata: Metadata = {
-      other: 1,
+    const metadata: SessionMetadata = {
       openchamber: { goal: goal(false), btwSessionID: 'ses_btw', reviewSessionID: 'ses_review' },
     };
-    expect(withoutSourceOwnedLinks(metadata)).toEqual({ other: 1, openchamber: { goal: goal(false) } });
+    expect(withoutSourceOwnedLinks(metadata)).toEqual({ openchamber: { goal: goal(false) } });
   });
 
   test('drops the btw marker when the source is a btw thread', () => {
-    const metadata: Metadata = {
+    const metadata: SessionMetadata = {
       openchamber: { kind: 'btw', originalSessionID: 'ses_parent', btwBoundaryMessageID: 'msg_1' },
     };
     expect(withoutSourceOwnedLinks(metadata)).toEqual({});
   });
 
   test('keeps a review marker and returns the same object when nothing changes', () => {
-    const metadata: Metadata = { openchamber: { kind: 'review', originalSessionID: 'ses_parent', goal: goal(false) } };
+    const metadata: SessionMetadata = { openchamber: { kind: 'review', originalSessionID: 'ses_parent', goal: goal(false) } };
     expect(withoutSourceOwnedLinks(metadata)).toBe(metadata);
   });
 });

@@ -1,358 +1,97 @@
-import { describe, expect, test } from 'bun:test';
-import type { AssistantMessage, Message, Part, Session, SyntheticMessage, TextPart } from '@/lib/opencode/model';
-import { collectSessionTitleTurns, formatSessionTitleContext, generatedSessionTitleSchema, generateSessionTitle } from './sessionTitle';
-import { configureRuntimeUrlResolver } from './runtime-url';
-import { createContextPart, type ContextPartPayload } from './messages/contextParts';
-import { formatMessageText } from './messages/messageMarkdown';
-import { formatSessionAsMarkdown } from './exportSession';
-import { ChildStoreManager } from '@/sync/child-store';
-import { SessionMessageLoader, type SessionMessagePageSource } from '@/sync/session-message-loader';
-import { loadSessionTitleTurns } from '@/sync/session-title-context';
-import { cancelSessionTitleGeneration, generateAndSaveSessionTitle, runSessionTitleGeneration } from '@/sync/session-title-generation';
-import { getRuntimeKey } from './runtime-switch';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import type { Message, Model, Turn } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import { collectNativeTitleTurns } from '@/sync/session-title-context';
+import { invalidateSettingsCache } from './persistence';
+import { switchRuntimeEndpoint } from './runtime-switch';
+import { formatSessionTitleContext, generatedSessionTitleSchema, generateSessionTitle } from './sessionTitle';
 
-type RecordEntry = { info: Message; parts: Part[] };
-const textPart = (text: string): TextPart => ({
-  id: 'part', messageID: 'message', sessionID: 'session', type: 'text', text,
-});
-function user(id: string, parts: Part[] = [textPart(`Request ${id}`)]): RecordEntry {
-  return {
-    info: { id, sessionID: 'session', role: 'user', time: { created: 1 } },
-    parts,
+const message = (id: string, role: 'user' | 'assistant', turnId: string, content: string): Message => {
+  const result: Message = {
+    messageId: id, sessionId: 'session-a', turnId, role, createdAt: 1,
+    parts: [{ type: 'text', partId: `${id}-text`, content }],
   };
-}
-function assistant(turnID: string, options: Partial<AssistantMessage> = {}, parts: Part[] = [textPart(`Answer ${turnID}`)]): RecordEntry {
-  return {
-    info: {
-      id: `answer-${turnID}`, sessionID: 'session', role: 'assistant',
-      time: { created: 2, completed: 3 }, finish: 'stop', providerID: 'provider', modelID: 'model', agent: 'build',
-      cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, ...options,
-    }, parts,
-  };
-}
-/** Legacy inline context: a text part that carries context metadata. */
-const contextPart = (payload: ContextPartPayload): TextPart => ({
-  ...textPart(''),
-  ...createContextPart(payload),
-});
-/** Attached context is its own synthetic message, sent ahead of the prompt. */
-const contextMessage = (payload: ContextPartPayload): RecordEntry => ({
-  info: {
-    id: `context-${payload.kind}`, sessionID: 'session', role: 'synthetic', time: { created: 1 },
-    ...createContextPart(payload),
-  } satisfies SyntheticMessage,
-  parts: [],
-});
-const pair = (id: string) => [user(id), assistant(id)];
-const session: Session = {
-  id: 'session', title: 'Original', projectID: 'project', directory: '/project',
-  cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 2 },
+  if (role === 'assistant') {
+    result.providerId = 'provider';
+    result.modelId = 'model';
+  }
+  return result;
 };
+const pair = (id: string) => ({
+  user: message(`${id}-user`, 'user', id, `Question ${id}`),
+  assistant: message(`${id}-answer`, 'assistant', id, `Answer ${id}`),
+});
+const turn = (id: string, status: Turn['status'] = 'completed'): Turn => ({ turnId: id, sessionId: 'session-a', runId: 'run-a', status, userMessageId: `${id}-user`, assistantMessageIds: [`${id}-answer`], startedAt: 1, finishedAt: 2 });
+const model: Model = { provider: 'provider', modelId: 'model', name: 'Model', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null };
+let restorers: Array<() => void>;
+beforeEach(() => {
+  switchRuntimeEndpoint({ apiBaseUrl: 'https://title.test', runtimeKey: `title-${crypto.randomUUID()}` });
+  invalidateSettingsCache();
+  const fetcher = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
+  const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => ({ workspaceId, revision: '0', models: [model] }));
+  restorers = [() => fetcher.mockRestore(), () => catalog.mockRestore()];
+});
+afterEach(() => { for (const restore of restorers.reverse()) restore(); invalidateSettingsCache(); });
 
-describe('session title context', () => {
-  test('selects the latest three completed pairs, ignoring intermediate and unfinished steps', () => {
-    const records = [
-      ...pair('old'), ...pair('one'), user('two'),
-      assistant('two', { finish: 'tool-calls' }, [textPart('Progress noise')]), assistant('two'),
-      ...pair('three'), user('running'), assistant('running', { time: { created: 4 } }),
-    ];
-    const turns = collectSessionTitleTurns(records);
-    expect(turns.map((turn) => turn.user.info.id)).toEqual(['one', 'two', 'three']);
-    const context = formatSessionTitleContext(turns);
-    expect(context).not.toContain('Progress noise');
-    expect(context).not.toContain('Request old');
-    expect(context).not.toContain('Request running');
-    expect(context.indexOf('Request one')).toBeLessThan(context.indexOf('Answer one'));
-    expect(context.indexOf('Answer one')).toBeLessThan(context.indexOf('Request two'));
+describe('native title context', () => {
+  test('uses the last three completed native turns, never failed or running turns', () => {
+    const ids = ['old', 'one', 'two', 'three', 'running', 'failed'];
+    const messages = ids.flatMap(id => Object.values(pair(id)));
+    const turns = ids.map(id => turn(id, id === 'running' ? 'running' : id === 'failed' ? 'failed' : 'completed'));
+    const collected = collectNativeTitleTurns(messages, turns);
+    expect(collected.map(item => item.user.turnId)).toEqual(['one', 'two', 'three']);
+    expect(formatSessionTitleContext(collected)).not.toContain('running');
+    expect(collectNativeTitleTurns(messages, turns, 'two-user').map(item => item.user.turnId)).toEqual(['old', 'one']);
+    expect(collectNativeTitleTurns(messages, turns, 'not-loaded')).toEqual([]);
   });
-
-  test('does not promote a prior final when a newer response to the same user is unfinished', () => {
-    expect(collectSessionTitleTurns([...pair('one'), assistant('one', { id: 'later', finish: 'tool-calls' })])).toEqual([]);
-  });
-
-  test('excludes failed turns, empty prompts and reverted history', () => {
-    const records = [
-      ...pair('real'),
-      user('error'), assistant('error', { error: { type: 'MessageAbortedError', message: 'aborted' } }),
-      user('empty', [textPart('   ')]), assistant('empty'), ...pair('reverted'),
-    ];
-    expect(collectSessionTitleTurns(records, 'reverted').map((turn) => turn.user.info.id)).toEqual(['real']);
-    expect(collectSessionTitleTurns(records, 'not-loaded')).toEqual([]);
-    expect(collectSessionTitleTurns([])).toEqual([]);
-  });
-
-  test('retains annotation-only user messages', () => {
-    const records = [
-      contextMessage({ kind: 'chat-quote', quote: 'Earlier answer', text: 'Fix this detail' }),
-      user('quote', []),
-      assistant('quote'),
-    ];
-    const context = formatSessionTitleContext(collectSessionTitleTurns(records));
-    expect(context).toContain('> Earlier answer');
-    expect(context).toContain('**User comment:**\n\nFix this detail');
-  });
-
-  test('ignores server plugin prompts that carry no attached context', () => {
-    const plumbing: RecordEntry = {
-      info: { id: 'plumbing', sessionID: 'session', role: 'synthetic', time: { created: 1 }, text: 'The user is returning after a break.' },
-      parts: [],
-    };
-    expect(collectSessionTitleTurns([plumbing, user('quote', []), assistant('quote')])).toEqual([]);
-    const context = formatSessionTitleContext(collectSessionTitleTurns([plumbing, ...pair('one')]));
-    expect(context).not.toContain('returning after a break');
-  });
-
-  test('bounds oversized turns without losing replies after large quoted sources', () => {
-    const turns = collectSessionTitleTurns(['one', 'two', 'three'].flatMap((id) => [
-      contextMessage({ kind: 'code-comment', source: 'file', fileLabel: 'big.ts', startLine: 1, endLine: 10000, language: 'ts', code: 'x'.repeat(100000), text: `Fix ${id}` }),
-      user(id, []),
-      assistant(id, {}, [textPart('y'.repeat(100000))]),
-    ]));
-    const context = formatSessionTitleContext(turns);
-    expect(context.length).toBeLessThan(24500);
+  test('bounds large text and excludes reasoning/tool output while retaining attachments', () => {
+    const first = pair('one');
+    first.user.parts = [{ type: 'attachment', partId: 'attachment-part', attachmentId: 'attachment-a', name: 'large.ts', mediaType: 'text/plain', size: 10, uri: 'attachment://attachment-a' }];
+    first.assistant.parts.push({ type: 'reasoning', partId: 'thought', content: 'Private reasoning noise' });
+    const big = pair('two');
+    big.user.parts[0] = { type: 'text', partId: 'big-user', content: 'x'.repeat(100_000) };
+    big.assistant.parts[0] = { type: 'text', partId: 'big-answer', content: 'y'.repeat(100_000) };
+    const context = formatSessionTitleContext([first, big]);
+    expect(context).toContain('large.ts');
+    expect(context).not.toContain('Private reasoning noise');
+    expect(context.length).toBeLessThan(16_500);
     expect(context).toContain('[Content omitted]');
-    for (const id of ['one', 'two', 'three']) expect(context).toContain(`Fix ${id}`);
   });
-
-  test('matches OpenCode cleanup by removing thinking and taking the first nonempty line', () => {
-    expect(generatedSessionTitleSchema.parse({ text: ' \n<think>Reasoning\ncontinued</think>\n<think>More reasoning</think>\n Нова назва \nExplanation' })).toBe('Нова назва');
-    expect(generatedSessionTitleSchema.parse({ text: 'Title\nExplanation' })).toBe('Title');
-    expect(generatedSessionTitleSchema.parse({ text: ' "Нова назва" ' })).toBe('"Нова назва"');
-    for (const payload of [{ text: '' }, { text: '  \n ' }, { text: '<think>Only reasoning</think>' }, { text: 5 }, {}]) {
-      expect(() => generatedSessionTitleSchema.parse(payload)).toThrow();
-    }
-  });
-
-  test('preserves titles up to 100 characters and truncates longer ones to 97 plus ellipsis', () => {
-    for (const length of [50, 70, 100]) {
-      const text = 'н'.repeat(length);
-      expect(generatedSessionTitleSchema.parse({ text })).toBe(text);
-    }
+  test('retains established title cleanup, rejects empty output and caps long titles', () => {
+    expect(generatedSessionTitleSchema.parse({ text: '\n<think>Noise</think>\nНова назва\nExplanation' })).toBe('Нова назва');
     expect(generatedSessionTitleSchema.parse({ text: 'н'.repeat(101) })).toBe('н'.repeat(97) + '...');
+    for (const text of ['', '  ', '<think>Only reasoning</think>']) expect(() => generatedSessionTitleSchema.parse({ text })).toThrow();
   });
 });
 
-describe('Markdown export of attached context', () => {
-  test('exports quote and reply exactly once with paragraph separation, including child sessions', () => {
-    const record = user('one', [textPart('My request'), contextPart({ kind: 'file-quote', fileLabel: 'plan.md', startLine: 2, endLine: 4, quote: 'First line\n\nLast line', text: 'My comment' })]);
-    const output = formatSessionAsMarkdown([record], 'Title', [{ title: 'Child', records: [record], children: [] }]);
-    expect(output).toContain('My request\n\nQuoted from `plan.md`, lines 2-4:');
-    expect(output).toContain('> First line\n> \n> Last line\n\n**User comment:**\n\nMy comment');
-    expect(output.match(/My comment/g)).toHaveLength(2);
-    expect(output).not.toContain('Comment on this fragment');
-  });
-
-  test('formats browser, PR, code and terminal contexts without mixing comments into quotes', () => {
-    const contexts: ContextPartPayload[] = [
-      { kind: 'browser-annotation', pageUrl: 'https://example.com', prompt: 'Button', text: 'Move it' },
-      { kind: 'pr-comment', label: '#7 review', body: 'Reviewer comment', text: 'Agreed' },
-      { kind: 'pr-check', label: 'CI', output: 'Build failed', text: 'Fix build' },
-      { kind: 'code-comment', source: 'diff', fileLabel: 'app.ts', startLine: 1, endLine: 2, side: 'modified', language: 'ts', code: 'const x = 1;', text: 'Change x' },
-      { kind: 'terminal', terminalId: 'term', terminalLabel: 'Shell', startLine: 1, endLine: 1, output: 'Log output' },
-    ];
-    const output = formatMessageText(contexts.map(contextPart), { user: true });
-    for (const content of ['Button', 'Reviewer comment', 'Build failed', 'const x = 1;', 'Log output']) expect(output).toContain(`> ${content}`);
-    for (const comment of ['Move it', 'Agreed', 'Fix build', 'Change x']) expect(output).toContain(`**User comment:**\n\n${comment}`);
-    expect(output).not.toContain('<terminal_context>');
-    expect(output).toContain('> ```ts\n> const x = 1;\n> ```');
-  });
-
-  test('preserves legacy terminal context and malformed metadata as readable text', () => {
-    const output = formatMessageText([
-      textPart('Check this\n\n<terminal_context>\n- Shell lines 1-1:\n  1 | failure\n</terminal_context>'),
-      { ...textPart('Legacy comment'), metadata: { openchamberContext: { kind: 'broken' } } },
-    ], { user: true });
-    expect(output).toContain('> failure');
-    expect(output).toContain('Check this');
-    expect(output).toContain('Legacy comment');
-  });
-});
-
-describe('bounded history loading', () => {
-  test('uses the real shared loader and stops paging as soon as three pairs are available', async () => {
-    let requests = 0;
-    const childStores = new ChildStoreManager();
-    // Records that go through a child store come back ordered by creation
-    // time, so this fixture stamps each pair with its own slot.
-    const orderedPair = (ordinal: number, id: string): RecordEntry[] => {
-      const created = ordinal * 10;
-      const prompt = user(id);
-      return [
-        { ...prompt, info: { id: `msg_${ordinal}_1`, sessionID: 'session', role: 'user', time: { created } } },
-        assistant(id, { id: `msg_${ordinal}_2`, time: { created: created + 1, completed: created + 2 } }),
-      ];
-    };
-    // v2 pages messages newest-first through the loader's page source rather
-    // than through an HTTP client, so the fake returns pages directly.
-    const sdk: SessionMessagePageSource = {
-      getSessionMessages: async () => {
-        requests += 1;
-        return {
-          items: requests === 1 ? orderedPair(3, 'three') : [...orderedPair(1, 'one'), ...orderedPair(2, 'two')],
-          cursor: { next: requests === 1 ? 'older' : 'much-older' },
-        };
-      },
-    };
-    const loader = new SessionMessageLoader(childStores, { sdk, runtimeKey: 'test' });
-    const target = { sessionID: 'session', directory: '/project' };
-    const release = loader.retainSessionHistory(target);
-    try {
-      const turns = await loadSessionTitleTurns({
-        loader, target, signal: new AbortController().signal,
-        getRecords: () => {
-          const state = childStores.getChild('/project')?.getState();
-          return (state?.message.session ?? []).map((info) => ({ info, parts: state?.part[info.id] ?? [] }));
-        },
-      });
-      expect(turns).toHaveLength(3);
-      expect(requests).toBe(2);
-      expect(loader.getSnapshot(target).complete).toBe(false);
-    } finally { release(); loader.dispose(); childStores.disposeAll(); }
-  });
-
-  test('does not use cached partial turns when the authoritative loader failed', async () => {
-    const error = new Error('offline');
-    const loader = {
-      ensure: async () => {}, loadOlder: async () => {},
-      getSnapshot: (): ReturnType<SessionMessageLoader['getSnapshot']> => ({ status: 'error', loadingKind: null, error, resolved: true, limit: 50, cursor: 'older', complete: false, generation: 0, updatedAt: 1 }),
-    };
-    await expect(loadSessionTitleTurns({ loader, target: { sessionID: 'session', directory: '/project' }, getRecords: () => pair('cached'), signal: new AbortController().signal })).rejects.toThrow('offline');
-  });
-
-  test('an explicit retry refreshes a failed loader even when older messages remain cached', async () => {
-    let state: ReturnType<SessionMessageLoader['getSnapshot']> = {
-      status: 'error', loadingKind: null, error: new Error('offline'), resolved: true,
-      limit: 50, cursor: undefined, complete: true, generation: 0, updatedAt: 1,
-    };
-    const loader = {
-      ensure: async (_target: { directory: string; sessionID: string }, options?: { force?: boolean }) => {
-        expect(options?.force).toBe(true);
-        state = { ...state, status: 'ready', error: null, generation: 1 };
-      },
-      loadOlder: async () => {},
-      getSnapshot: () => state,
-    };
-    const turns = await loadSessionTitleTurns({ loader, target: { sessionID: 'session', directory: '/project' }, getRecords: () => pair('recovered'), signal: new AbortController().signal });
-    expect(turns).toHaveLength(1);
-  });
-});
-
-describe('generation lifecycle', () => {
-  const turns = collectSessionTitleTurns(pair('one'));
-  test('calls the existing Small Model route with the target directory and provider', async () => {
-    let calls = 0;
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input, init) => {
-      const request = new Request(input, init);
-      expect(new URL(request.url).pathname).toBe('/api/small-model/generate');
-      expect(request.method).toBe('POST');
-      expect(await request.json()).toMatchObject({
-        directory: '/project', preferredProviderID: 'provider', preferredModelID: 'model', restrictToPreferredProvider: true,
-      });
-      calls += 1;
-      return calls === 1 ? Response.json({ text: 'A useful title' }) : new Response('Unavailable', { status: 503 });
-    };
-    configureRuntimeUrlResolver({ apiBaseUrl: 'http://session-title.test' });
-    try {
-      const input = { turns, directory: '/project', signal: new AbortController().signal };
-      expect(await generateSessionTitle(input)).toBe('A useful title');
-      await expect(generateSessionTitle(input)).rejects.toThrow('Session title generation failed');
-      expect(calls).toBe(2);
-    } finally { globalThis.fetch = originalFetch; configureRuntimeUrlResolver({ apiBaseUrl: '' }); }
-  });
-
-  test('saves only after generation and a fresh metadata read', async () => {
-    const events: string[] = [];
-    await generateAndSaveSessionTitle({
-      signal: new AbortController().signal,
-      prepare: async () => ({ session, turns }),
-      generate: async () => { events.push('generate'); return 'New title'; },
-      readSession: async () => { events.push('read'); return session; },
-      saveTitle: async (title) => { events.push(title); },
+describe('native title completion', () => {
+  test('uses the prepared workspace and last assistant provider without a session generation fallback', async () => {
+    const resolve = spyOn(canonicalClient, 'resolveWorkspace');
+    const complete = spyOn(canonicalClient, 'complete').mockImplementation(async (workspaceId, input) => {
+      expect(workspaceId).toBe('workspace-prepared');
+      expect(input.selection).toEqual({ providerId: 'provider', modelId: 'model' });
+      expect(input.prompt).toContain('Question one');
+      return { completionId: input.completionId, selection: input.selection, status: 'completed', output: { kind: 'text', text: 'A useful title' }, finishReason: 'complete', usage: null };
     });
-    expect(events).toEqual(['generate', 'read', 'New title']);
+    restorers.push(() => resolve.mockRestore(), () => complete.mockRestore());
+    expect(await generateSessionTitle({ turns: [pair('one')], directory: '/repo', workspaceId: 'workspace-prepared', signal: new AbortController().signal })).toBe('A useful title');
+    expect(resolve).not.toHaveBeenCalled();
   });
-
-  test('preserves newer manual titles, moves, archives and reverts', async () => {
-    const mutations: Session[] = [
-      { ...session, title: 'Manual' }, { ...session, directory: '/moved' },
-      { ...session, time: { ...session.time, archived: 10 } }, { ...session, revert: { messageID: 'reverted' } },
-    ];
-    for (const current of mutations) {
-      let saved = false;
-      await generateAndSaveSessionTitle({
-        signal: new AbortController().signal, prepare: async () => ({ session, turns }),
-        generate: async () => 'AI title', readSession: async () => current, saveTitle: async () => { saved = true; },
-      });
-      expect(saved).toBe(false);
-    }
+  test('provider failure cannot become a title and empty context dispatches nothing', async () => {
+    const complete = spyOn(canonicalClient, 'complete').mockImplementation(async (_workspace, input) => ({ completionId: input.completionId, selection: input.selection, status: 'failed', error: { code: 'PROVIDER_FAILURE', detail: 'Provider refused', retryable: false } }));
+    restorers.push(() => complete.mockRestore());
+    const input = { directory: '/repo', workspaceId: 'workspace-prepared', signal: new AbortController().signal };
+    await expect(generateSessionTitle({ ...input, turns: [pair('one')] })).rejects.toThrow('Provider refused');
+    await expect(generateSessionTitle({ ...input, turns: [] })).rejects.toThrow('No completed turns');
+    expect(complete).toHaveBeenCalledTimes(1);
   });
-
-  test('generation failure and cancellation never save a title', async () => {
-    for (const cancel of [false, true]) {
-      const controller = new AbortController();
-      let saved = false;
-      await expect(generateAndSaveSessionTitle({
-        signal: controller.signal, prepare: async () => ({ session, turns }),
-        generate: async () => { if (cancel) { controller.abort(); return 'AI title'; } throw new Error('model offline'); },
-        readSession: async () => session, saveTitle: async () => { saved = true; },
-      })).rejects.toThrow();
-      expect(saved).toBe(false);
-    }
-  });
-
-  test('deduplicates across menus, cancels on a manual save, and permits retry after cleanup', async () => {
-    const target = { runtimeKey: getRuntimeKey(), directory: '/project', sessionID: 'session' };
-    let finish = () => {};
-    const gate = new Promise<void>((resolve) => { finish = resolve; });
-    let calls = 0;
-    let saved = false;
-    const first = runSessionTitleGeneration(target, async (signal) => {
-      calls += 1;
-      await gate;
-      signal.throwIfAborted();
-      saved = true;
-    });
-    await runSessionTitleGeneration(target, async () => { calls += 1; });
-    expect(calls).toBe(1);
-    cancelSessionTitleGeneration(target.sessionID);
-    finish();
-    await first;
-    expect(saved).toBe(false);
-    await runSessionTitleGeneration(target, async () => { calls += 1; });
-    expect(calls).toBe(2);
-  });
-
-  test('failed operations release pending state and unrelated directories can run independently', async () => {
-    const target = { runtimeKey: getRuntimeKey(), directory: '/project', sessionID: 'session' };
-    await expect(runSessionTitleGeneration(target, async () => { throw new Error('failure'); })).rejects.toThrow('failure');
-    let calls = 0;
-    await runSessionTitleGeneration(target, async () => {
-      await runSessionTitleGeneration({ ...target, directory: '/other' }, async () => { calls += 1; });
-      calls += 1;
-    });
-    expect(calls).toBe(2);
-  });
-
-  test('a runtime switch cancels the operation even when the same runtime key returns', async () => {
-    const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
-    const events = new EventTarget();
-    Object.defineProperty(globalThis, 'window', { configurable: true, value: events });
-    try {
-      const target = { runtimeKey: getRuntimeKey(), directory: '/project', sessionID: 'session' };
-      let saved = false;
-      await runSessionTitleGeneration(target, async (signal) => {
-        events.dispatchEvent(new Event('openchamber:runtime-endpoint-will-change'));
-        // Returning to the same key cannot make an aborted operation current.
-        expect(getRuntimeKey()).toBe(target.runtimeKey);
-        signal.throwIfAborted();
-        saved = true;
-      });
-      expect(saved).toBe(false);
-    } finally {
-      if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
-      else Reflect.deleteProperty(globalThis, 'window');
-    }
+  test('missing target message selection never redirects generation to the composer', async () => {
+    const complete = spyOn(canonicalClient, 'complete');
+    restorers.push(() => complete.mockRestore());
+    const source = pair('one');
+    delete source.assistant.providerId;
+    delete source.assistant.modelId;
+    await expect(generateSessionTitle({ turns: [source], directory: '/repo', workspaceId: 'workspace-prepared', signal: new AbortController().signal })).rejects.toThrow('Completed turn model selection is unavailable');
+    expect(complete).not.toHaveBeenCalled();
   });
 });

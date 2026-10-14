@@ -76,10 +76,15 @@ export function useSessionAiRename(sessionID: string, directory: string | null |
     const normalizedDirectory = normalizePath(directory);
     if (!normalizedDirectory) return;
     await runSessionTitleGeneration({ runtimeKey, directory: normalizedDirectory, sessionID }, async (signal) => {
+      let workspaceId: string | undefined;
       await generateAndSaveSessionTitle({
         signal,
-        prepare,
-        generate: (turns, requestSignal) => generateSessionTitle({ turns, directory: normalizedDirectory, signal: requestSignal }),
+        prepare: async (requestSignal) => {
+          const prepared = await prepare(requestSignal);
+          workspaceId = prepared.session.workspaceId;
+          return prepared;
+        },
+        generate: (turns, requestSignal) => generateSessionTitle({ turns, workspaceId, directory: normalizedDirectory, signal: requestSignal }),
         readSession: async () => {
           const native = await readNativeTitleSession(sessionID);
           return { session: native.session, metadata: native.metadata };

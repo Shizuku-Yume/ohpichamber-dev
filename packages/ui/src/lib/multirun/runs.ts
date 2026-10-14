@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { getMultiRunIdentity, type MultiRunIdentity } from './identity';
 
 /** One member session of a run: a lane (`run`) or a fused result (`fusion`). */
@@ -45,7 +45,7 @@ const identityCache = new WeakMap<Session, { scope: string | null; identity: Mul
 export const readMultiRunIdentity = (session: Session, scope: string | null): MultiRunIdentity | null => {
   const cached = identityCache.get(session);
   if (cached && cached.scope === scope) return cached.identity;
-  const identity = getMultiRunIdentity(session, scope ?? session.directory);
+  const identity = getMultiRunIdentity(session, scope ?? session.workspaceId);
   identityCache.set(session, { scope, identity });
   return identity;
 };
@@ -70,8 +70,8 @@ export function buildMultiRunIndex(
   const members = new Map<string, Array<{ session: Session; identity: MultiRunIdentity }>>();
   const seen = new Set<string>();
   for (const session of sessions) {
-    if (seen.has(session.id) || session.time?.archived || session.parentID) continue;
-    seen.add(session.id);
+    if (seen.has(session.sessionId) || session.archivedAt || session.parentSessionId) continue;
+    seen.add(session.sessionId);
     const identity = readMultiRunIdentity(session, resolveLegacyScope(session));
     if (!identity) continue;
     const list = members.get(identity.key);
@@ -86,10 +86,10 @@ export function buildMultiRunIndex(
     const lanes = list
       .filter((entry) => entry.identity.role === 'run')
       .sort((a, b) => variantRank(a.identity.runGroup) - variantRank(b.identity.runGroup)
-        || a.session.time.created - b.session.time.created || a.session.id.localeCompare(b.session.id));
+        || a.session.createdAt - b.session.createdAt || a.session.sessionId.localeCompare(b.session.sessionId));
     const fusions = list
       .filter((entry) => entry.identity.role === 'fusion')
-      .sort((a, b) => b.session.time.created - a.session.time.created || a.session.id.localeCompare(b.session.id));
+      .sort((a, b) => b.session.createdAt - a.session.createdAt || a.session.sessionId.localeCompare(b.session.sessionId));
     const ordered = [...fusions, ...lanes];
     const titled = ordered.find((entry) => entry.identity.title);
     const withAutoFusion = lanes.find((entry) => entry.identity.autoFusion);
@@ -97,16 +97,16 @@ export function buildMultiRunIndex(
       key,
       title: titled?.identity.title ?? list[0].identity.groupSlug,
       groupSlug: list[0].identity.groupSlug,
-      lanes: Object.freeze(lanes.map(({ session, identity }) => ({ sessionId: session.id, identity }))),
-      fusions: Object.freeze(fusions.map(({ session, identity }) => ({ sessionId: session.id, identity }))),
-      memberIds: Object.freeze(ordered.map((entry) => entry.session.id)),
+      lanes: Object.freeze(lanes.map(({ session, identity }) => ({ sessionId: session.sessionId, identity }))),
+      fusions: Object.freeze(fusions.map(({ session, identity }) => ({ sessionId: session.sessionId, identity }))),
+      memberIds: Object.freeze(ordered.map((entry) => entry.session.sessionId)),
       providerIDs: Object.freeze([...new Set(lanes.map((entry) => entry.identity.providerID))]),
       variants: Object.freeze([...new Set(lanes.map((entry) => entry.identity.runGroup))]),
-      createdAt: Math.min(...list.map((entry) => entry.session.time.created)),
-      lastActivity: Math.max(...list.map((entry) => entry.session.time.updated ?? entry.session.time.created)),
+      createdAt: Math.min(...list.map((entry) => entry.session.createdAt)),
+      lastActivity: Math.max(...list.map((entry) => entry.session.updatedAt)),
       autoFusion: withAutoFusion?.identity.autoFusion,
     }));
-    for (const entry of list) runKeyBySessionId.set(entry.session.id, key);
+    for (const entry of list) runKeyBySessionId.set(entry.session.sessionId, key);
   }
   return Object.freeze({ runs, runKeyBySessionId });
 }

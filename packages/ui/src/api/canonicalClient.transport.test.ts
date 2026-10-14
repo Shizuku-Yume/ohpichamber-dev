@@ -1,7 +1,8 @@
+import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import * as C from '@openchamber/agent-contract';
-import { CanonicalClient } from './canonicalClient';
+import { CanonicalApiError, CanonicalClient } from './canonicalClient';
 import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver, type RuntimeUrlResolver } from '../lib/runtime-url';
 
 const sessionId = 'session_expected';
@@ -20,7 +21,7 @@ const snapshot = (session = runtimeSession): C.SessionSnapshot => ({
   turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' },
 });
 const prompt: C.RunCreateRequest = {
-  input: { text: 'hello', attachments: [] },
+  input: { text: 'hello', context: [], attachments: [] },
   options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
 };
 const worker: C.CatalogWorkerIdentity = { rootSessionId: runtimeSession.rootSessionId, workspaceId, workerGeneration: generation };
@@ -50,26 +51,53 @@ let handler: (request: IncomingMessage, response: ServerResponse) => void;
 let server: Server;
 let previousResolver: RuntimeUrlResolver;
 let calls: string[];
-const json = (response: ServerResponse, payload: unknown) => { response.writeHead(200, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(payload)); };
-const respondWith = (payload: unknown) => { handler = (_request, response) => json(response, payload); };
+const json = (response: ServerResponse, payload: C.JsonValue) => { response.writeHead(200, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(payload)); };
+const respondWith = (payload: C.JsonValue) => { handler = (_request, response) => json(response, payload); };
 
 beforeEach(async () => {
   calls = [];
   handler = (_request, response) => { response.writeHead(404); response.end(); };
   server = createServer((request, response) => { calls.push(`${request.method} ${request.url}`); handler(request, response); });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  if (!address || typeof address === 'string') throw new Error('Loopback server did not bind a TCP port');
+  // SAFETY: the completed listen callback above binds a TCP port on loopback, so address() is a TCP address.
+  const address = server.address() as AddressInfo;
   previousResolver = getRuntimeUrlResolver();
   configureRuntimeUrlResolver({ apiBaseUrl: `http://127.0.0.1:${address.port}` });
 });
 afterEach(async () => {
   setRuntimeUrlResolver(previousResolver);
+  const closed = new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   server.closeAllConnections();
-  await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  await closed;
 });
 
 describe('CanonicalClient real HTTP scope boundary', () => {
+  test('reads exact attachment bytes with explicit source workspace scope', async () => {
+    handler = (_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+      response.end(Buffer.from([0, 127, 255]));
+    };
+    const bytes = await client.readAttachment('workspace/source', 'attachment/a');
+    expect(new Uint8Array(await bytes.arrayBuffer())).toEqual(new Uint8Array([0, 127, 255]));
+    expect(calls).toEqual(['GET /api/agent/v1/attachments/attachment%2Fa?workspaceId=workspace%2Fsource']);
+  });
+
+  test('attachment owner failures preserve native ProblemDetails', async () => {
+    const problem = { type: 'urn:ohpichamber:problem:UNAUTHORIZED', title: 'Attachment operation failed', status: 403, detail: 'Attachment scope is not authorized', code: 'UNAUTHORIZED', retryable: false };
+    handler = (_request, response) => {
+      response.writeHead(403, { 'Content-Type': 'application/problem+json' });
+      response.end(JSON.stringify(problem));
+    };
+    try {
+      await client.readAttachment(workspaceId, 'attachment');
+      throw new Error('Expected owner rejection');
+    } catch (error) {
+      expect(error).toBeInstanceOf(CanonicalApiError);
+      if (!(error instanceof CanonicalApiError)) throw error;
+      expect(error.problem).toEqual(problem);
+    }
+    expect(calls).toHaveLength(1);
+  });
   test('rejects other-session snapshots, history, metadata, queue and deletion receipts', async () => {
     for (const invoke of [() => client.getSession(sessionId), () => client.getSnapshot(sessionId)]) {
       respondWith(snapshot({ ...runtimeSession, sessionId: 'session_other' }));

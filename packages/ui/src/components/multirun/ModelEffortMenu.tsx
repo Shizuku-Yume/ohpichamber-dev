@@ -22,7 +22,7 @@ export function ModelEffortMenu({ providerID, modelID, variant, onChange, appear
 }): React.ReactNode {
   const { t } = useI18n();
   const variants = useConfigStore(React.useCallback((state) => {
-    const model = state.providers.find((provider) => provider.id === providerID)?.models.find((entry) => entry.id === modelID);
+    const model = state.getProviderModel(providerID, modelID);
     return listModelVariantIds(model?.variants).join('\n');
   }, [modelID, providerID]));
   if (!variants) return null;

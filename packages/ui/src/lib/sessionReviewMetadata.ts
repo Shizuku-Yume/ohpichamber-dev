@@ -1,81 +1,27 @@
-import type { Metadata, Session } from '@/lib/opencode/model';
+import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 
-export type SessionMetadataRecord = Metadata;
+export type SessionMetadataRecord = SessionMetadata;
 
-type OpenChamberMetadata = {
-  kind?: 'review';
-  originalSessionID?: string;
-  reviewSessionID?: string;
-};
+export const getSessionMetadata = (session: Session | null | undefined): SessionMetadataRecord => session?.metadata ?? {};
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value && typeof value === 'object' && !Array.isArray(value));
+export const getReviewSessionID = (session: Session | null | undefined): string | null => session?.metadata?.openchamber?.reviewSessionID ?? null;
+export const getOriginalSessionID = (session: Session | null | undefined): string | null => session?.metadata?.openchamber?.originalSessionID ?? null;
+export const isReviewSession = (session: Session | null | undefined): boolean => session?.metadata?.openchamber?.kind === 'review' && getOriginalSessionID(session) !== null;
 
-export const getSessionMetadata = (session: Session | null | undefined): SessionMetadataRecord => (
-  session?.metadata ?? {}
-);
+export const withReviewSessionLink = (metadata: SessionMetadata, reviewSessionID: string): SessionMetadata => ({
+  ...metadata,
+  openchamber: { ...(metadata.openchamber ?? {}), reviewSessionID },
+});
 
-const getOpenChamberMetadata = (metadata: SessionMetadataRecord): OpenChamberMetadata => {
-  const value = metadata.openchamber;
-  return isRecord(value) ? value as OpenChamberMetadata : {};
-};
+export const withReviewSessionMarker = (metadata: SessionMetadata, originalSessionID: string): SessionMetadata => ({
+  ...metadata,
+  openchamber: { ...(metadata.openchamber ?? {}), kind: 'review', originalSessionID },
+});
 
-export const getReviewSessionID = (session: Session | null | undefined): string | null => {
-  const value = getOpenChamberMetadata(getSessionMetadata(session)).reviewSessionID;
-  return typeof value === 'string' && value.trim().length > 0 ? value : null;
-};
-
-export const getOriginalSessionID = (session: Session | null | undefined): string | null => {
-  const value = getOpenChamberMetadata(getSessionMetadata(session)).originalSessionID;
-  return typeof value === 'string' && value.trim().length > 0 ? value : null;
-};
-
-export const isReviewSession = (session: Session | null | undefined): boolean =>
-  getOpenChamberMetadata(getSessionMetadata(session)).kind === 'review' && Boolean(getOriginalSessionID(session));
-
-export const withReviewSessionLink = (
-  metadata: SessionMetadataRecord,
-  reviewSessionID: string,
-): SessionMetadataRecord => {
-  const current = getOpenChamberMetadata(metadata);
-  return {
-    ...metadata,
-    openchamber: {
-      ...current,
-      reviewSessionID,
-    },
-  };
-};
-
-export const withReviewSessionMarker = (
-  metadata: SessionMetadataRecord,
-  originalSessionID: string,
-): SessionMetadataRecord => {
-  const current = getOpenChamberMetadata(metadata);
-  return {
-    ...metadata,
-    openchamber: {
-      ...current,
-      kind: 'review' as const,
-      originalSessionID,
-    },
-  };
-};
-
-export const withoutReviewSessionLink = (
-  metadata: SessionMetadataRecord,
-  reviewSessionID: string,
-): SessionMetadataRecord => {
-  const current = getOpenChamberMetadata(metadata);
-  if (current.reviewSessionID !== reviewSessionID) return metadata;
-
-  const restOpenChamber = { ...current };
-  delete restOpenChamber.reviewSessionID;
-  const next: SessionMetadataRecord = { ...metadata };
-  if (Object.keys(restOpenChamber).length > 0) {
-    next.openchamber = restOpenChamber;
-  } else {
-    delete next.openchamber;
-  }
-  return next;
+export const withoutReviewSessionLink = (metadata: SessionMetadata, reviewSessionID: string): SessionMetadata => {
+  if (metadata.openchamber?.reviewSessionID !== reviewSessionID) return metadata;
+  const { reviewSessionID: _reviewSessionID, ...rest } = metadata.openchamber;
+  if (Object.keys(rest).length > 0) return { ...metadata, openchamber: rest };
+  const { openchamber: _openchamber, ...without } = metadata;
+  return without;
 };

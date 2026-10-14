@@ -9,6 +9,8 @@ import {
 } from '@openchamber/sdk';
 
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { canonicalClient } from '@/api/canonicalClient';
+import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 
 export type GuestGenerateProxyResult =
   | { ok: true; result: GenerateResult }
@@ -45,12 +47,9 @@ const parseGuestGenerateResponse = async (response: Response): Promise<GuestGene
 };
 
 /**
- * One-off text generation for a guest through the server's Small Model,
- * which resolves and authenticates the model itself. The open project only
- * informs which OpenCode config decides the model; it never enters the prompt.
- * `composer` is the composer's provider, which the model stays on, and its
- * model, used when that provider has no small one; the host sets both, never
- * the guest.
+ * One-off generation through the Guest grant owner. The Host authorizes the
+ * canonical workspace and calls its canonical completion domain service.
+ * Provider preferences come from the Host UI, never from guest content.
  */
 export const guestGenerate = async (
   guestId: string,
@@ -59,21 +58,28 @@ export const guestGenerate = async (
   composer: { providerID: string | null; modelID: string | null },
 ): Promise<GuestGenerateProxyResult> => {
   const headers = new Headers({ 'Content-Type': 'application/json' });
-  if (directory) {
-    headers.set('x-opencode-directory', directory);
-  }
   if (composer.providerID) {
     headers.set('x-openchamber-provider', composer.providerID);
     if (composer.modelID) headers.set('x-openchamber-model', composer.modelID);
   }
+  let changed = false;
+  const unsubscribe = subscribeRuntimeEndpointWillChange(() => { changed = true; });
   try {
+    if (!directory) return failed('HOST_REJECTED', FAILED_MESSAGE);
+    const runtimeKey = getRuntimeKey();
+    const workspace = await canonicalClient.resolveWorkspace(directory);
+    if (changed || getRuntimeKey() !== runtimeKey) return failed('HOST_REJECTED', FAILED_MESSAGE);
     const response = await runtimeFetch(`/api/guests/${guestId}/generate`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(request),
+      body: JSON.stringify({ ...request, workspaceId: workspace.workspaceId }),
     });
-    return parseGuestGenerateResponse(response);
+    if (changed || getRuntimeKey() !== runtimeKey) return failed('HOST_REJECTED', FAILED_MESSAGE);
+    const result = await parseGuestGenerateResponse(response);
+    return changed || getRuntimeKey() !== runtimeKey ? failed('HOST_REJECTED', FAILED_MESSAGE) : result;
   } catch {
     return failed('HOST_REJECTED', FAILED_MESSAGE);
+  } finally {
+    unsubscribe();
   }
 };

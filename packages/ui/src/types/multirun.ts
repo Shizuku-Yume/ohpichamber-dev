@@ -1,28 +1,22 @@
-interface MultiRunModelSelection {
-  providerID: string;
-  modelID: string;
+import type { ModelSelection, PromptAttachment } from '@openchamber/agent-contract';
+
+export type MultiRunModelSelection = ModelSelection & {
   displayName?: string;
   variant?: string;
-}
+  reasoningEffort?: string;
+};
 
-export interface MultiRunFileAttachment {
-  mime: string;
-  filename: string;
-  url: string;
-}
 
 export interface MultiRunGroup {
   prompt: string;
   models: MultiRunModelSelection[];
   /** Files that belong to this prompt variant only (for example resolved @mentions). */
-  files?: MultiRunFileAttachment[];
+  files?: PromptAttachment[];
 }
 
-export interface MultiRunAutoFusion {
-  providerID: string;
-  modelID: string;
+export interface MultiRunAutoFusion extends ModelSelection {
   variant?: string;
-  agent?: string;
+  agentId?: string;
 }
 
 export interface CreateMultiRunParams {
@@ -35,7 +29,9 @@ export interface CreateMultiRunParams {
   worktreeBaseBranch?: string;
   isolateRuns?: boolean;
   /** Files sent with every variant. */
-  files?: MultiRunFileAttachment[];
+  files?: PromptAttachment[];
+  /** Workspace owning shared and variant attachment references; required when files are present. */
+  attachmentWorkspaceId?: string;
   setupCommands?: string[];
   /** Fuse the lanes automatically once all of them finish. */
   autoFusion?: MultiRunAutoFusion;

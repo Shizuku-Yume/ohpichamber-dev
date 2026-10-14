@@ -75,19 +75,20 @@ request, including JSON body delivery. Compact usage cards and Settings display
 refresh errors alongside retained data. The mobile popover makes at most one
 refresh attempt per opening, so a failed first load cannot create a retry loop.
 
-`useSmallModelStore` answers one question: can OpenChamber's background model
-(the Small Model) run right now? `GET /api/small-model` says `available: false`
-on, for instance, a fresh install on OpenCode's free tier, where chat works but
-a stateless generation has nothing to run on. Session renaming, the session goal
-and the walkthrough depend on it, so their entry points read the store through
-`hooks/useSmallModelAvailability` and show a disabled control with the reason
-instead of failing after the click. Cached per runtime + directory for a
-minute, refetched only while the control that asks is open; a config change
-(provider login, settings save) or a runtime switch drops every answer. A failed
-or malformed fetch keeps the previous answer: an unreachable server is not
-evidence that the model went away. Callers with a graceful fallback (a note kept
-verbatim, a reply spoken in full) do not consult it; they silence the 404 on
-`requestSmallModel` instead.
+`useSmallModelStore` derives background generation availability from the
+canonical workspace model catalog and effective profile Small Model override.
+It is cached for a minute by runtime, directory, workspace, and the selected
+provider/model; concurrent readers share one discovery. Explicit prepared
+utility scopes outrank composer selection. Configuration changes and runtime
+switches invalidate answers, and generation guards reject requests completed
+after invalidation (including switching away and back). Failed discovery keeps
+the prior authoritative answer instead of claiming the model disappeared.
+`hooks/useSmallModelAvailability` subscribes to composer provider/model changes
+for open controls; prepared target controls stay pinned to their own selection.
+Notes and spoken summaries keep their original text on generation failure;
+`lib/smallModelRequest.ts` returns canonical completion results, never legacy
+HTTP compatibility payloads. The [Small Model owner](../../../web/server/lib/small-model/DOCUMENTATION.md)
+documents canonical selection, cancellation, and retained surface behavior.
 
 ### UI state stores
 

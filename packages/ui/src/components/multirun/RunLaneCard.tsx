@@ -5,13 +5,12 @@ import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { LaneSummary } from '@/lib/multirun/useLaneSummaries';
 import type { LaneStatus } from '@/lib/multirun/laneStatus';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
 import { LaneStatusIcon } from './LaneStatusIcon';
 
-const costFormatter = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const formatDuration = (milliseconds: number): string => {
   const seconds = Math.max(0, Math.round(milliseconds / 1000));
@@ -22,8 +21,8 @@ const formatDuration = (milliseconds: number): string => {
   return `${seconds}s`;
 };
 
-/** Time the member has worked: from creation to its last idle, live while it runs. */
-function LaneDuration({ session, busy }: { session: Session; busy: boolean }): React.ReactNode {
+/** Elapsed time since creation, live while the member runs. */
+function LaneDuration({ session, busy, finishedAt }: { session: Session; busy: boolean; finishedAt: number | null }): React.ReactNode {
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
     if (!busy) return;
@@ -31,9 +30,9 @@ function LaneDuration({ session, busy }: { session: Session; busy: boolean }): R
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [busy]);
-  const end = busy ? now : session.time.idle;
-  if (!end) return null;
-  return <span className="inline-flex items-center gap-1"><Icon name="time" className="size-3" />{formatDuration(end - session.time.created)}</span>;
+  const end = busy ? now : finishedAt;
+  if (end === null) return null;
+  return <span className="inline-flex items-center gap-1"><Icon name="time" className="size-3" />{formatDuration(end - session.createdAt)}</span>;
 }
 
 export type RunLaneCardProps = {
@@ -177,8 +176,8 @@ export function RunLaneCard({
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 typography-micro text-muted-foreground">
         {changes}
-        <LaneDuration session={session} busy={busy} />
-        {session.cost > 0 ? <span>{costFormatter.format(session.cost)}</span> : null}
+        {reply?.state === 'ready' && reply.cost !== null ? <span>${reply.cost.toFixed(4)}</span> : null}
+        <LaneDuration session={session} busy={busy} finishedAt={reply?.state === 'ready' ? reply.finishedAt : null} />
       </div>
       {fuseSource ? null : (
         <div className="flex items-center gap-1.5">

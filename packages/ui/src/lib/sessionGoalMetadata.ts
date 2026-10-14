@@ -1,20 +1,12 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
-// Session goal driven by the server's session-goal runtime, stored under
-// session.metadata.openchamber.goal. The UI writes goals (create/edit/
-// pause/resume/clear) by patching this metadata; the server loop accounts
-// usage, checks progress with Jev or the small model, and auto-continues the
-// session until the goal settles.
 export type SessionGoalStatus = 'active' | 'paused' | 'blocked' | 'budgetLimited' | 'complete';
-
-const SESSION_GOAL_STATUSES: SessionGoalStatus[] = ['active', 'paused', 'blocked', 'budgetLimited', 'complete'];
 
 export const SESSION_GOAL_OBJECTIVE_CHAR_LIMIT = 5000;
 
 export interface SessionGoalPayload {
   id: string;
   objective: string;
-  /** True when the objective text lives in a server-side file keyed by session id. */
   objectiveFile: boolean;
   status: SessionGoalStatus;
   tokenBudget: number | null;
@@ -28,45 +20,23 @@ export interface SessionGoalPayload {
   updatedAt: number;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-
-const isGoalStatus = (value: unknown): value is SessionGoalStatus =>
-  typeof value === 'string' && (SESSION_GOAL_STATUSES as string[]).includes(value);
-
 export function getSessionGoal(session: Session | null | undefined): SessionGoalPayload | null {
-  const metadata = (session as { metadata?: unknown } | null | undefined)?.metadata;
-  if (!isRecord(metadata)) return null;
-  const namespace = metadata.openchamber;
-  if (!isRecord(namespace)) return null;
-  const goal = namespace.goal;
-  if (!isRecord(goal)) return null;
-
-  const id = typeof goal.id === 'string' ? goal.id : '';
-  const objective = typeof goal.objective === 'string' ? goal.objective.trim() : '';
-  const objectiveFile = goal.objectiveFile === true;
-  if (!id || (!objective && !objectiveFile) || !isGoalStatus(goal.status)) return null;
-
-  const tokenBudget = typeof goal.tokenBudget === 'number' && Number.isFinite(goal.tokenBudget) && goal.tokenBudget > 0
-    ? Math.floor(goal.tokenBudget)
-    : null;
-  const asCount = (value: unknown): number =>
-    typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-
+  const goal = session?.metadata?.openchamber?.goal;
+  if (!goal?.id || (!goal.objective && !goal.objectiveFile) || !goal.status) return null;
   return {
-    id,
-    objective: objective.slice(0, SESSION_GOAL_OBJECTIVE_CHAR_LIMIT),
-    objectiveFile,
+    id: goal.id,
+    objective: (goal.objective ?? '').trim().slice(0, SESSION_GOAL_OBJECTIVE_CHAR_LIMIT),
+    objectiveFile: goal.objectiveFile === true,
     status: goal.status,
-    tokenBudget,
-    tokensUsed: asCount(goal.tokensUsed),
-    turnsUsed: asCount(goal.turnsUsed),
-    statusReason: typeof goal.statusReason === 'string' ? goal.statusReason : '',
-    evaluationProviderID: typeof goal.evaluationProviderID === 'string' ? goal.evaluationProviderID : '',
-    evaluationModelID: typeof goal.evaluationModelID === 'string' ? goal.evaluationModelID : '',
-    lastAccountedMessageID: typeof goal.lastAccountedMessageID === 'string' ? goal.lastAccountedMessageID : '',
-    createdAt: typeof goal.createdAt === 'number' ? goal.createdAt : 0,
-    updatedAt: typeof goal.updatedAt === 'number' ? goal.updatedAt : 0,
+    tokenBudget: goal.tokenBudget ?? null,
+    tokensUsed: goal.tokensUsed ?? 0,
+    turnsUsed: goal.turnsUsed ?? 0,
+    statusReason: goal.statusReason ?? '',
+    evaluationProviderID: goal.evaluationProviderID ?? '',
+    evaluationModelID: goal.evaluationModelID ?? '',
+    lastAccountedMessageID: goal.lastAccountedMessageID ?? '',
+    createdAt: goal.createdAt ?? 0,
+    updatedAt: goal.updatedAt ?? 0,
   };
 }
 

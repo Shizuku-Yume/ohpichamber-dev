@@ -3,7 +3,7 @@ import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useI18n } from '@/lib/i18n';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { loadLaneFirstPrompt } from '@/lib/multirun/laneData';
 import { askOtherModels, NotFirstTurnError } from '@/lib/multirun/runActions';
 import { useUIStore } from '@/stores/useUIStore';
@@ -32,7 +32,7 @@ export function AskOtherModelsDialog({
     let cancelled = false;
     setModels([]);
     setEligibility('checking');
-    loadLaneFirstPrompt(session.id, session.directory).then(
+    loadLaneFirstPrompt(session.sessionId).then(
       (prompt) => {
         if (!cancelled) setEligibility(prompt?.messageId === turnUserMessageId ? 'eligible' : 'not-first-turn');
       },
@@ -41,7 +41,7 @@ export function AskOtherModelsDialog({
       },
     );
     return () => { cancelled = true; };
-  }, [open, session.directory, session.id, turnUserMessageId]);
+  }, [open, session.sessionId, turnUserMessageId]);
 
   const handleStart = async () => {
     setIsStarting(true);
