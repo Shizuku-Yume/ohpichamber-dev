@@ -1,6 +1,6 @@
 import type { GuestEndedShell, GuestRunningShell, GuestRunningShellsSnapshot, GuestShellOutputResult, GuestShellsScope } from '@openchamber/sdk';
 import { GUEST_SHELLS_MAX, HostRequestError } from '@openchamber/sdk';
-import { OpencodeApiError, opencodeClient } from '@/lib/opencode/client';
+import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { sessionsInTree, useBackgroundShellsStore, type EndedShell, type TrackedShell } from '@/sync/background-shells';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -29,7 +29,7 @@ const scopeSessionIds = (scope: GuestShellsScope): ReadonlySet<string> | null =>
     }
     const ids = new Set<string>();
     for (const session of sessions.values()) {
-      if (directories.has(normalizePath(session.directory) ?? session.directory)) ids.add(session.id);
+      if (directories.has(normalizePath(session.displayPath) ?? session.displayPath)) ids.add(session.sessionId);
     }
     return ids;
   }
@@ -37,7 +37,7 @@ const scopeSessionIds = (scope: GuestShellsScope): ReadonlySet<string> | null =>
   const store = useBackgroundShellsStore.getState();
   for (const shell of store.byId.values()) known.add(shell.sessionID);
   for (const shell of store.ended.values()) known.add(shell.sessionID);
-  return new Set(sessionsInTree(known, scope.sessionId, (id) => sessions.get(id)?.parentID ?? undefined));
+  return new Set(sessionsInTree(known, scope.sessionId, (id) => sessions.get(id)?.parentSessionId ?? undefined));
 };
 
 const guestShell = (shell: TrackedShell): GuestRunningShell => ({
@@ -77,14 +77,13 @@ export const readGuestShells = (scope: GuestShellsScope): GuestRunningShellsSnap
  */
 export const readGuestShellOutput = async (shellId: string, cursor?: number, tailBytes?: number): Promise<GuestShellOutputResult> => {
   const store = useBackgroundShellsStore.getState();
-  const ended = store.ended.get(shellId);
-  if (ended?.status === 'stopped') throw new HostRequestError('NOT_FOUND', 'A stopped shell keeps no output.');
-  const shell = store.byId.get(shellId) ?? ended;
+  const shell = store.byId.get(shellId) ?? store.ended.get(shellId);
   if (!shell) throw new HostRequestError('NOT_FOUND', 'OpenChamber has not seen that shell.');
   try {
-    return await opencodeClient.readShellOutput(shell.id, shell.directory, cursor, tailBytes);
+    const result = await canonicalClient.getShellOutput(shell.sessionID, { jobId: shell.jobId, epoch: shell.epoch, workerGeneration: shell.workerGeneration }, String(cursor ?? 0), tailBytes ?? 65536);
+    return { shellId, cursor: Number(result.cursor), output: result.output, ended: result.ended };
   } catch (error) {
-    if (error instanceof OpencodeApiError && error.status === 404) throw new HostRequestError('NOT_FOUND', 'OpenCode no longer keeps that shell\'s output.');
+    if (error instanceof CanonicalApiError && error.problem.status === 404) throw new HostRequestError('NOT_FOUND', 'The host no longer keeps that shell output.');
     throw error;
   }
 };
