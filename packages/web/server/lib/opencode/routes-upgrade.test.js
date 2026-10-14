@@ -140,36 +140,3 @@ describe('OpenCode upgrade routes', () => {
   });
 });
 
-describe('OpenCode v1 migration routes', () => {
-  it('rejects external, bundled and unsupported runtimes before running an installer', async () => {
-    for (const installation of ['external', 'bundled', 'managed']) {
-      const installOpenCodeV2 = vi.fn();
-      const { app } = createApp({
-        getOpenCodeCompatibility: async () => ({ state: 'incompatible', version: '1.18.30', installation, canInstall: false }),
-        installOpenCodeV2,
-      });
-      await request(app).post('/api/opencode/install-v2').send({ binary: '/untrusted', command: 'untrusted' }).expect(409);
-      expect(installOpenCodeV2).not.toHaveBeenCalled();
-    }
-  });
-
-  it('shares installation and restart across concurrent requests and permits retry after failure', async () => {
-    let finish;
-    const installOpenCodeV2 = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
-    const { app } = createApp({
-      getOpenCodeCompatibility: async () => ({ state: 'incompatible', version: '1.18.30', installation: 'managed', canInstall: true }),
-      installOpenCodeV2,
-    });
-    const first = request(app).post('/api/opencode/install-v2').then(response => response);
-    const second = request(app).post('/api/opencode/install-v2').then(response => response);
-    await vi.waitFor(() => expect(installOpenCodeV2).toHaveBeenCalledTimes(1));
-    finish();
-    const replies = await Promise.all([first, second]);
-    expect(replies.map(reply => reply.status)).toEqual([200, 200]);
-    installOpenCodeV2.mockRejectedValueOnce(new Error('private installer output'));
-    const failed = await request(app).post('/api/opencode/install-v2').expect(500);
-    expect(JSON.stringify(failed.body)).not.toContain('private installer output');
-    installOpenCodeV2.mockResolvedValueOnce(undefined);
-    await request(app).post('/api/opencode/install-v2').expect(200);
-  });
-});

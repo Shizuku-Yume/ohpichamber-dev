@@ -17,22 +17,6 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict = {
-  "opencodeCompatibility.bundled": "OpenCode is inbegrepen bij OpenChamber. Werk OpenChamber bij om OpenCode v2 te krijgen.",
-  "opencodeCompatibility.title": "OpenCode v2 vereist",
-  "opencodeCompatibility.outdatedTitle": "OpenCode bijwerken",
-  "opencodeCompatibility.outdatedLocal": "OpenCode {version} is geïnstalleerd. Deze versie van OpenChamber vereist OpenCode {minimum} of nieuwer.",
-  "opencodeCompatibility.outdatedExternal": "Uw verbonden server draait OpenCode {version}. Werk die bij naar OpenCode {minimum} of nieuwer en verbind opnieuw.",
-  "opencodeCompatibility.update": "OpenCode bijwerken",
-  "opencodeCompatibility.local": "OpenCode {version} is geïnstalleerd. Deze versie van OpenChamber vereist OpenCode v2.",
-  "opencodeCompatibility.external": "Uw verbonden server draait OpenCode {version}. Installeer OpenCode v2 op die server en verbind opnieuw.",
-  "opencodeCompatibility.installDescription": "OpenChamber installeert v2 met het officiële installatieprogramma en herstart daarna OpenCode.",
-  "opencodeCompatibility.install": "Bijwerken naar OpenCode v2",
-  "opencodeCompatibility.reconnect": "Opnieuw controleren",
-  "opencodeCompatibility.guide": "Installatiegids",
-  "opencodeCompatibility.installing": "OpenCode v2 wordt geïnstalleerd…",
-  "opencodeCompatibility.reconnecting": "Opnieuw verbinden…",
-  "opencodeCompatibility.failed": "Kan de bewerking niet voltooien. Probeer het opnieuw of volg de installatiegids en verbind opnieuw.",
-
   'sessions.aiRename.action': 'Hernoemen met AI',
   'sessions.aiRename.generating': 'Sessietitel genereren...',
   'sessions.aiRename.checking': 'Afgeronde beurten controleren...',

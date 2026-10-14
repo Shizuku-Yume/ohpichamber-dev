@@ -18,22 +18,6 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
-  "opencodeCompatibility.bundled": "OpenCode 隨 OpenChamber 一起提供。請更新 OpenChamber 以取得 OpenCode v2。",
-  "opencodeCompatibility.title": "需要 OpenCode v2",
-  "opencodeCompatibility.outdatedTitle": "請更新 OpenCode",
-  "opencodeCompatibility.outdatedLocal": "已安裝 OpenCode {version}。此版本的 OpenChamber 需要 OpenCode {minimum} 或更新版本。",
-  "opencodeCompatibility.outdatedExternal": "連線的伺服器正在執行 OpenCode {version}。請將其更新至 OpenCode {minimum} 或更新版本，然後重新連線。",
-  "opencodeCompatibility.update": "更新 OpenCode",
-  "opencodeCompatibility.local": "已安裝 OpenCode {version}。此版本的 OpenChamber 需要 OpenCode v2。",
-  "opencodeCompatibility.external": "連線的伺服器正在執行 OpenCode {version}。請在該伺服器上安裝 OpenCode v2，然後重新連線。",
-  "opencodeCompatibility.installDescription": "OpenChamber 將使用官方安裝程式安裝 v2，然後重新啟動 OpenCode。",
-  "opencodeCompatibility.install": "更新至 OpenCode v2",
-  "opencodeCompatibility.reconnect": "重新檢查",
-  "opencodeCompatibility.guide": "安裝指南",
-  "opencodeCompatibility.installing": "正在安裝 OpenCode v2…",
-  "opencodeCompatibility.reconnecting": "正在重新連線…",
-  "opencodeCompatibility.failed": "無法完成操作。請重試，或按照安裝指南操作後重新連線。",
-
   'sessions.aiRename.action': '使用 AI 重新命名',
   'sessions.aiRename.generating': '正在產生工作階段標題...',
   'sessions.aiRename.checking': '正在檢查已完成的對話回合...',

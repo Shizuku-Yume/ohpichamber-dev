@@ -1,5 +1,4 @@
-import { installOpenCodeV2, supportsOpenCodeV2Install } from './lib/opencode/v2-install.js';
-import { describeOpenCodeCompatibility, readOpenCodeCliVersion, readExternalOpenCodeVersion, readOpenCodeInfo, isSupportedOpenCodeVersion } from './lib/opencode/compatibility.js';
+import { readOpenCodeInfo, isSupportedOpenCodeVersion } from './lib/opencode/compatibility.js';
 import 'reflect-metadata';
 import express from 'express';
 import compression from 'compression';
@@ -1476,19 +1475,6 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
 });
 
 
-const getOpenCodeCompatibility = async () => {
-  if (isExternalOpenCode || ENV_SKIP_OPENCODE_START) {
-    const base = ENV_CONFIGURED_OPENCODE_HOST?.origin || openCodeBaseUrl || `http://127.0.0.1:${openCodePort || ENV_EFFECTIVE_PORT}`;
-    const version = await readExternalOpenCodeVersion(base, getOpenCodeAuthHeaders()).catch(() => null);
-    return describeOpenCodeCompatibility(version, 'external', false);
-  }
-  const binary = ensureOpencodeCliEnv();
-  const installation = isBundledOpenCodeCliPath(binary) ? 'bundled' : 'managed';
-  const version = await readOpenCodeCliVersion(resolveManagedOpenCodeLaunchSpec(binary)).catch(() => null);
-  // A CLI pinned by the administrator is theirs to replace, never ours.
-  const pinnedByPolicy = Boolean(readEnterprisePolicy().opencodeBinary);
-  return describeOpenCodeCompatibility(version, installation, supportsOpenCodeV2Install() && !pinnedByPolicy, binary || null);
-};
 
 const getOpenCodeUpgradeCapability = () => {
   const activeBinary = lastOpenCodeLaunchDiagnostics?.sourceBinary
@@ -2453,15 +2439,6 @@ async function main(options = {}) {
     refreshOpenCodeAfterConfigChange,
     getOpenCodeResolutionSnapshot,
     getOpenCodeUpgradeCapability,
-    getOpenCodeCompatibility,
-    installOpenCodeV2: async () => {
-      const binary = await installOpenCodeV2({
-        env: { ...getLoginShellEnvSnapshot(), ...process.env, PATH: buildManagedOpenCodePath() },
-      });
-      await persistSettings({ opencodeBinary: binary });
-      await refreshOpenCodeAfterConfigChange('OpenCode v2 installation');
-      await waitForOpenCodeReady();
-    },
     upgradeOpenCodeCli: () => runOpenCodeCliUpgrade(
       resolveManagedOpenCodeLaunchSpec(lastOpenCodeLaunchDiagnostics?.sourceBinary || resolvedOpencodeBinary),
       { env: { ...getLoginShellEnvSnapshot(), ...process.env, PATH: buildManagedOpenCodePath() }, cwd: os.homedir() },

@@ -29,8 +29,6 @@ export const registerOpenCodeRoutes = (app, dependencies) => {
     getOpenCodeResolutionSnapshot,
     getOpenCodeUpgradeCapability,
     upgradeOpenCodeCli,
-    getOpenCodeCompatibility,
-    installOpenCodeV2,
     formatSettingsResponse,
     readSettingsFromDiskMigrated,
     persistSettings,
@@ -113,29 +111,6 @@ export const registerOpenCodeRoutes = (app, dependencies) => {
     }
   });
 
-  app.get('/api/opencode/compatibility', async (_req, res) => {
-    try { res.json(await getOpenCodeCompatibility()); }
-    catch { res.status(503).json({ error: 'Could not check OpenCode compatibility.' }); }
-  });
-
-  let installInFlight = null;
-  app.post('/api/opencode/install-v2', async (_req, res) => {
-    try {
-      if (!installInFlight) {
-        installInFlight = (async () => {
-          const compatibility = await getOpenCodeCompatibility();
-          if (!compatibility.canInstall) return false;
-          await installOpenCodeV2();
-          return true;
-        })().finally(() => { installInFlight = null; });
-      }
-      const installed = await installInFlight;
-      if (!installed) return res.status(409).json({ success: false, error: 'Automatic OpenCode v2 installation is unavailable for this runtime.' });
-      return res.json({ success: true });
-    } catch {
-      return res.status(500).json({ success: false, error: 'OpenCode v2 installation or restart failed. Retry or use the installation guide.' });
-    }
-  });
 
   let upgradeInFlight = null;
   app.post('/api/opencode/upgrade', async (_req, res) => {

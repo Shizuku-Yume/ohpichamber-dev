@@ -1,4 +1,3 @@
-import { OpenCodeCompatibilityGate } from '@/components/update/OpenCodeCompatibilityGate';
 import React from 'react';
 
 import { AboutSettings } from '@/components/sections/openchamber/AboutSettings';
@@ -1436,12 +1435,5 @@ function MobileAppContent({ apis }: MobileAppProps) {
 }
 
 export function MobileApp(props: MobileAppProps) {
-  const endpoint = React.useSyncExternalStore(
-    (notify) => subscribeRuntimeEndpointChanged(() => notify()),
-    getRuntimeApiBaseUrl,
-    getRuntimeApiBaseUrl,
-  );
-  // Native connection selection must mount before there is a server to probe.
-  if (isCapacitorMobileApp() && !endpoint) return <MobileAppContent {...props} />;
-  return <OpenCodeCompatibilityGate><MobileAppContent {...props} /></OpenCodeCompatibilityGate>;
+  return <MobileAppContent {...props} />;
 }

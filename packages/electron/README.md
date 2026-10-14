@@ -109,15 +109,15 @@ command and the OS protocol handler. `external-url-policy.mjs` validates schemes
 again in main, with the same exclusions as the shared UI classifier. Native
 opening failures do not fall back to a browser window for application links.
 
-The compatibility gate can reuse the embedded managed OpenCode CLI preflight
-through `desktop_managed_opencode_compatible`. Main matches the requested
-API origin to the local backend and reads the lifecycle-owned preflight promise.
-A pending check is shared; successful checks allow UI initialization before
-server health becomes ready. Restart invalidates the result. This avoids a second
-CLI version process during startup.
-External OpenCode, remote instances, HMR backends without an embedded handle,
-and unavailable IPC retain the HTTP compatibility check. The renderer discards
-IPC results if its endpoint changes while the read is pending.
+The shared application no longer probes or gates startup on an OpenCode CLI
+version, and the `desktop_managed_opencode_compatible` IPC command is retired.
+Web/PWA, Electron, hosted mobile and Capacitor mount the canonical client through
+the existing authentication, bootstrap and connection-recovery flow. Agent
+availability comes from the authenticated `/api/agent/v1` boundary, not a native
+CLI preflight. Capacitor can still mount connection selection without a Host.
+The inherited backend lifecycle preflight remains only for unmigrated legacy
+consumers; its presence is not an OMP readiness signal. Packaged Bun/Agent Service
+staging and final lifecycle/proxy/config/auth retirement remain Task 17 blockers.
 
 ## Main Files
 

@@ -18,22 +18,6 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
-  "opencodeCompatibility.bundled": "OpenCode は OpenChamber に同梱されています。OpenCode v2 を利用するには OpenChamber を更新してください。",
-  "opencodeCompatibility.title": "OpenCode v2 が必要です",
-  "opencodeCompatibility.outdatedTitle": "OpenCode を更新してください",
-  "opencodeCompatibility.outdatedLocal": "OpenCode {version} がインストールされています。このバージョンの OpenChamber には OpenCode {minimum} 以降が必要です。",
-  "opencodeCompatibility.outdatedExternal": "接続先のサーバーは OpenCode {version} を使用しています。OpenCode {minimum} 以降に更新してから再接続してください。",
-  "opencodeCompatibility.update": "OpenCode を更新",
-  "opencodeCompatibility.local": "OpenCode {version} がインストールされています。このバージョンの OpenChamber には OpenCode v2 が必要です。",
-  "opencodeCompatibility.external": "接続先のサーバーは OpenCode {version} を使用しています。そのサーバーに OpenCode v2 をインストールしてから再接続してください。",
-  "opencodeCompatibility.installDescription": "OpenChamber が公式インストーラーで v2 をインストールし、OpenCode を再起動します。",
-  "opencodeCompatibility.install": "OpenCode v2 に更新",
-  "opencodeCompatibility.reconnect": "再確認",
-  "opencodeCompatibility.guide": "インストールガイド",
-  "opencodeCompatibility.installing": "OpenCode v2 をインストール中…",
-  "opencodeCompatibility.reconnecting": "再接続中…",
-  "opencodeCompatibility.failed": "操作を完了できませんでした。再試行するか、インストールガイドに従って再接続してください。",
-
   'sessions.aiRename.action': 'AIで名前を変更',
   'sessions.aiRename.generating': 'セッション名を生成中...',
   'sessions.aiRename.checking': '完了したやり取りを確認中...',

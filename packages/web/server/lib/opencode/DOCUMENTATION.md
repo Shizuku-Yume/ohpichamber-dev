@@ -248,38 +248,18 @@ credentials. Requests from multiple clients share the in-flight operation. The
 executor supplies EOF and bounds captured output; installation has no fixed time
 limit.
 
-### Migrating an installed v1 CLI
+### Retired startup compatibility gate
 
-`GET /api/opencode/compatibility` reads the local CLI version without starting
-its server, or probes an external server's JSON version contract (`/api/info`,
-then v1's `/global/health` even when the first probe fails or hangs). When
-`OPENCODE_HOST`/`OPENCODE_PORT` points at a server that identifies as v1 or a
-2.x below the minimum, startup attaches to it as external and not ready rather
-than spawning a managed instance, so this check reports its version. A confirmed
-managed v1 CLI on macOS, Linux or Windows (x64/arm64) advertises `canInstall`;
-bundled binaries and external connections do not.
+Task 17 removes the shared UI OpenCode compatibility gate, its native Electron
+preflight reuse command, `GET /api/opencode/compatibility`, and
+`POST /api/opencode/install-v2` with its one-time v1 installer. Application startup
+uses the canonical client and authenticated `/api/agent/v1` availability instead;
+no startup recovery action installs or selects an OpenCode engine.
 
-`POST /api/opencode/install-v2` rechecks that capability and shares one operation
-across concurrent clients. `v2-install.js` resolves a validated stable v2
-release from npm. On macOS/Linux it downloads the official
-`https://opencode.ai/v2/install` script and runs it with that release and
-`--no-modify-path`. That script is bash, so on Windows it downloads the npm
-platform package the script would fetch (`@opencode/cli-windows-arm64` on
-arm64, `@opencode/cli-windows-x64-baseline` on x64, like the desktop bundle), checks it against the `sha512` integrity
-npm publishes, and unpacks `opencode.exe` with the system `tar.exe`. Both
-paths then verify the resulting executable.
-It installs into the host user's standard `~/.opencode/bin`. Existing npm/Bun
-packages remain installed; the host selects the new binary through
-`opencodeBinary`, restarts OpenCode, and waits for v2 readiness before replying.
+The lifecycle's version validation remains for still-unmigrated legacy consumers,
+as do their proxy/config/auth owners and the separate upgrade UI. These are final
+retirement blockers, not alternate canonical readiness or fallback engines.
 
-A filesystem lock prevents separate hosts sharing a home from installing at
-the same time. The installer has a five-minute deadline and owns its subprocess
-group. Existing executable/shim files are restored after an installation or
-verification failure. If rollback fails, backups and the lock remain under
-`.opencode/bin/.openchamber-install` for manual recovery. A successful install
-followed by a settings/restart failure keeps v2 on disk; Check again can retry
-the restart. A host crash may also leave the lock for manual recovery.
-Installer output is discarded, not forwarded to clients or logs.
 
 ## Public exports (response-envelope.js)
 - `unwrapOpenCodeResponse(body)`: strips OpenCode 2.x's response envelope. A single record (`GET /api/session/:id`, one message) arrives as `{ data }`, some routes as `{ location, data }`, pages as `{ data, cursor }`. Records and plain lists are unwrapped; pages keep the envelope for their cursor. Every server-side OpenCode read goes through it: unwrapping only on `location` left record envelopes in place, so `parentID` and message ids read as missing.
@@ -381,7 +361,7 @@ ConPTY or Console Window Host behavior.
 
 ## Public exports (env-runtime.js)
 - `createOpenCodeEnvRuntime(dependencies)`: creates runtime that owns OpenCode CLI environment and binary discovery state.
-- OpenCode CLI resolution order is persisted settings, environment overrides, bundled Desktop CLI when available, PATH, known install locations, then platform shell discovery. A path pinned by the administrator (`opencodeBinary` in the machine policy file, `../enterprise-mode.js`) comes before all of them and has no fallback: `applyOpencodeBinaryFromSettings()` and `ensureOpencodeCliEnv()` resolve only that path (source `policy`), an unusable pin fails strict start with `OPENCODE_BINARY_INVALID`, and a removed pin hands resolution back to the order above. While pinned, the install-v2 and upgrade capabilities report unsupported (`reason: 'policy'`) and upgrade status never announces a newer version.
+- OpenCode CLI resolution order is persisted settings, environment overrides, bundled Desktop CLI when available, PATH, known install locations, then platform shell discovery. A path pinned by the administrator (`opencodeBinary` in the machine policy file, `../enterprise-mode.js`) comes before all of them and has no fallback: `applyOpencodeBinaryFromSettings()` and `ensureOpencodeCliEnv()` resolve only that path (source `policy`), an unusable pin fails strict start with `OPENCODE_BINARY_INVALID`, and a removed pin hands resolution back to the order above. While pinned, the upgrade capability reports unsupported (`reason: 'policy'`) and upgrade status never announces a newer version.
 - Automatic bundled resolution under `OPENCHAMBER_RUNTIME=desktop` stays in runtime state and is returned to the managed launch function, including on OpenCode restart. It does not populate `process.env.OPENCODE_BINARY`: AppImage updater relaunch inherits that environment and would mistake the previous bundle path for an explicit override. Explicit settings/env selections and non-desktop or non-bundled resolution retain their existing environment behavior. This prevents future inheritance; it does not reinterpret overrides already inherited from older releases.
 - The login-shell snapshot (`$SHELL -lic 'echo __OPENCHAMBER_ENV__; env -0'`, parsed from after the last marker line so text an rc file prints to stdout never fuses with the first variable) is taken synchronously at import time, so it blocks whatever process embeds the server for as long as the user's shell startup files take. An embedding host that already probed the shell hands its result over before importing the server through `login-shell-env.js` (`provideLoginShellEnvSnapshot(snapshot | null)`); the runtime then uses that and never probes, `null` included. Desktop does this on macOS and Linux; on Windows the server keeps its own registry-based snapshot. The handoff is a module slot, never an environment variable: the snapshot is the user's whole shell environment and `process.env` reaches every child.
 - Returned API:

@@ -18,22 +18,6 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
-  "opencodeCompatibility.bundled": "O OpenCode está incluído no OpenChamber. Atualize o OpenChamber para obter o OpenCode v2.",
-  "opencodeCompatibility.title": "OpenCode v2 necessário",
-  "opencodeCompatibility.outdatedTitle": "Atualize o OpenCode",
-  "opencodeCompatibility.outdatedLocal": "O OpenCode {version} está instalado. Esta versão do OpenChamber requer o OpenCode {minimum} ou mais recente.",
-  "opencodeCompatibility.outdatedExternal": "O servidor conectado está usando o OpenCode {version}. Atualize-o para o OpenCode {minimum} ou mais recente e conecte-se novamente.",
-  "opencodeCompatibility.update": "Atualizar OpenCode",
-  "opencodeCompatibility.local": "O OpenCode {version} está instalado. Esta versão do OpenChamber requer o OpenCode v2.",
-  "opencodeCompatibility.external": "O servidor conectado está usando o OpenCode {version}. Instale o OpenCode v2 nesse servidor e conecte-se novamente.",
-  "opencodeCompatibility.installDescription": "O OpenChamber instalará a v2 com o instalador oficial e depois reiniciará o OpenCode.",
-  "opencodeCompatibility.install": "Atualizar para OpenCode v2",
-  "opencodeCompatibility.reconnect": "Verificar novamente",
-  "opencodeCompatibility.guide": "Guia de instalação",
-  "opencodeCompatibility.installing": "Instalando OpenCode v2…",
-  "opencodeCompatibility.reconnecting": "Reconectando…",
-  "opencodeCompatibility.failed": "Não foi possível concluir a operação. Tente novamente ou siga o guia de instalação e reconecte-se.",
-
   'sessions.aiRename.action': 'Renomear com IA',
   'sessions.aiRename.generating': 'Gerando título da sessão...',
   'sessions.aiRename.checking': 'Verificando turnos concluídos...',

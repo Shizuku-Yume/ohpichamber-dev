@@ -1,4 +1,3 @@
-import { OpenCodeCompatibilityGate } from '@/components/update/OpenCodeCompatibilityGate';
 import React from 'react';
 import { AppStartupOverlay } from '@/components/ui/AppStartupOverlay';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -902,6 +901,4 @@ function App({ apis }: AppProps) {
   );
 }
 
-export default function CompatibleApp(props: AppProps) {
-  return <OpenCodeCompatibilityGate><App {...props} /></OpenCodeCompatibilityGate>;
-}
+export default App;

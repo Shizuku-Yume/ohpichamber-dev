@@ -18,22 +18,6 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict: Record<I18nKey, string> = {
-  "opencodeCompatibility.bundled": "OpenCode는 OpenChamber에 포함되어 있습니다. OpenCode v2를 사용하려면 OpenChamber를 업데이트하세요.",
-  "opencodeCompatibility.title": "OpenCode v2가 필요합니다",
-  "opencodeCompatibility.outdatedTitle": "OpenCode를 업데이트하세요",
-  "opencodeCompatibility.outdatedLocal": "OpenCode {version}이 설치되어 있습니다. 이 버전의 OpenChamber에는 OpenCode {minimum} 이상이 필요합니다.",
-  "opencodeCompatibility.outdatedExternal": "연결된 서버에서 OpenCode {version}을 사용하고 있습니다. OpenCode {minimum} 이상으로 업데이트한 후 다시 연결하세요.",
-  "opencodeCompatibility.update": "OpenCode 업데이트",
-  "opencodeCompatibility.local": "OpenCode {version}이 설치되어 있습니다. 이 버전의 OpenChamber에는 OpenCode v2가 필요합니다.",
-  "opencodeCompatibility.external": "연결된 서버에서 OpenCode {version}을 사용하고 있습니다. 해당 서버에 OpenCode v2를 설치한 후 다시 연결하세요.",
-  "opencodeCompatibility.installDescription": "OpenChamber가 공식 설치 프로그램으로 v2를 설치한 다음 OpenCode를 다시 시작합니다.",
-  "opencodeCompatibility.install": "OpenCode v2로 업데이트",
-  "opencodeCompatibility.reconnect": "다시 확인",
-  "opencodeCompatibility.guide": "설치 안내",
-  "opencodeCompatibility.installing": "OpenCode v2 설치 중…",
-  "opencodeCompatibility.reconnecting": "다시 연결 중…",
-  "opencodeCompatibility.failed": "작업을 완료하지 못했습니다. 다시 시도하거나 설치 안내에 따라 설치한 후 다시 연결하세요.",
-
   'sessions.aiRename.action': 'AI로 이름 변경',
   'sessions.aiRename.generating': '세션 제목 생성 중...',
   'sessions.aiRename.checking': '완료된 대화 확인 중...',

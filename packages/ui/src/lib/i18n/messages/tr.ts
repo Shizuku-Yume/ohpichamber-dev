@@ -17,22 +17,6 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict = {
-  "opencodeCompatibility.bundled": "OpenCode, OpenChamber ile birlikte gelir. OpenCode v2 için OpenChamber’ı güncelleyin.",
-  "opencodeCompatibility.title": "OpenCode v2 gerekli",
-  "opencodeCompatibility.outdatedTitle": "OpenCode’u güncelleyin",
-  "opencodeCompatibility.outdatedLocal": "OpenCode {version} yüklü. Bu OpenChamber sürümü OpenCode {minimum} veya daha yenisini gerektirir.",
-  "opencodeCompatibility.outdatedExternal": "Bağlı sunucuda OpenCode {version} çalışıyor. Sunucuyu OpenCode {minimum} veya daha yeni bir sürüme güncelleyip yeniden bağlanın.",
-  "opencodeCompatibility.update": "OpenCode’u güncelle",
-  "opencodeCompatibility.local": "OpenCode {version} yüklü. Bu OpenChamber sürümü OpenCode v2 gerektirir.",
-  "opencodeCompatibility.external": "Bağlı sunucuda OpenCode {version} çalışıyor. Bu sunucuya OpenCode v2 yükleyip yeniden bağlanın.",
-  "opencodeCompatibility.installDescription": "OpenChamber, resmî yükleyiciyle v2 sürümünü yükleyecek ve ardından OpenCode’u yeniden başlatacak.",
-  "opencodeCompatibility.install": "OpenCode v2’ye güncelle",
-  "opencodeCompatibility.reconnect": "Tekrar kontrol et",
-  "opencodeCompatibility.guide": "Kurulum kılavuzu",
-  "opencodeCompatibility.installing": "OpenCode v2 yükleniyor…",
-  "opencodeCompatibility.reconnecting": "Yeniden bağlanılıyor…",
-  "opencodeCompatibility.failed": "İşlem tamamlanamadı. Yeniden deneyin veya kurulum kılavuzunu izleyip yeniden bağlanın.",
-
   'sessions.aiRename.action': 'Yapay zekâ ile yeniden adlandır',
   'sessions.aiRename.generating': 'Oturum başlığı oluşturuluyor...',
   'sessions.aiRename.checking': 'Tamamlanan konuşma turları kontrol ediliyor...',

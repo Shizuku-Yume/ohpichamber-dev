@@ -31,6 +31,51 @@ Surfaces:
 - Hosted mobile: uses the active remote Host and its authenticated canonical namespace.
 - Capacitor mobile: uses the configured remote Host and existing Origin/auth policy; no local Agent Service or credential store is added.
 
-The final retirement checkboxes above remain open. Task 15 migrated Defaults/Archive/retention only; Guest/sidebar/AgentsPage are not complete. Retained App/MobileApp compatibility gates, client consumers and legacy settings/config routes still require the OpenCode lifecycle/proxy. Isolated-space archive import still calls the OpenCode session import/remove owner. Credential handoff remains explicit and its source cannot be removed while the owning cutover is incomplete. Host FS/Git/PTY/Guest/editor/theme behavior is intentionally retained. No package selectors, compatibility adapters or fallback engines were introduced.
+The final retirement checkboxes above remain open. Task 15 migrated Defaults/Archive/retention only; Guest/sidebar/AgentsPage are not complete. Legacy client consumers and settings/config routes still require the OpenCode lifecycle/proxy. Isolated-space archive import still calls the OpenCode session import/remove owner. Credential handoff remains explicit and its source cannot be removed while the owning cutover is incomplete. Host FS/Git/PTY/Guest/editor/theme behavior is intentionally retained. No package selectors, compatibility adapters or fallback engines were introduced.
 
 Implementation checks were not run; the coordinator owns integrated tests, type-check, lint, builds, dead-code and real Web/Electron launch/stream/abort/reopen/shutdown certification. Packaged Bun/Agent Service staging must be completed before packaged Electron can be certified without OpenCode.
+
+## Startup compatibility gate retirement (2026-10-14)
+
+Continues baseline `b064d648a` with one complete lane: remove the App/MobileApp
+OpenCode gate and page-load compatibility prefetch, the UI compatibility client,
+the Electron preflight-reuse IPC/helper, the Host compatibility/install-v2 routes,
+and the one-time v1 CLI installer and obsolete tests/locale strings. The existing
+canonical bootstrap, authentication and connection-recovery owners remain; no
+replacement version gate or engine adapter is added. Backend lifecycle version
+validation is deliberately retained only because legacy callers remain.
+
+Surface decisions:
+- Web/PWA: mounts the canonical client without an OpenCode version request or
+  install/reconnect overlay; existing auth/bootstrap handles availability.
+- Electron: same shared startup; no native OpenCode compatibility IPC. The Node
+  Host stays in-process, supervising the separate Bun Agent Service.
+- Hosted mobile: same canonical startup against its selected authenticated Host.
+- Capacitor: always mounts connection selection/content, including with no
+  endpoint; selected remote Host availability uses existing connection recovery.
+
+The authenticated `/api/agent/v1` proxy, Origin checks, external auth and internal
+secret checks are unchanged. FS/Git/PTY/Guest/editor/theme capabilities and Task 15
+agent/settings files are untouched. Package scripts were inspected: Electron's
+`package` still stages `resources/opencode-cli` with its prepare/verify helpers,
+while Agent Service build emits external-package Bun entries. Removing those
+scripts now would break retained legacy startup and would not stage the Bun
+runtime, worker entry or native SDK dependencies. Packaged Agent Service staging
+therefore remains an explicit blocker, not a claimed cutover.
+
+Remaining blockers: legacy Guest/sidebar/AgentsPage and settings/config clients;
+OpenCode upgrade controls; lifecycle/proxy/config/auth owners and credential
+handoff/importer source; isolated-space OpenCode archive import; Web CLI
+`checkOpenCodeCLI` still rejects `serve` without the inherited binary and startup
+still calls `bootstrapOpenCodeAtStartup`; packaged Bun, worker and native SDK
+staging; final Web/Electron OpenCode-absent acceptance and Task 18. No implementation
+checks ran. Coordinator owns focused suites, type-check/lint/build/dead-code and
+real HMR/bundled Web/Electron acceptance.
+
+Independent source review (`ContinueTask17Cutover.ReviewGateRetirement`) passed
+with no blocking findings after correcting its initial wrong-tree findings.
+The reviewer confirmed unchanged auth/Origin/internal-secret boundaries and
+intentional retained lifecycle version validation. Its unused compatibility and
+installer dependency pass-through observation was removed from
+`feature-routes-runtime.js`. Generated bundles are not tracked in this worktree;
+coordinator rebuild/acceptance remains unperformed rather than silently claimed.

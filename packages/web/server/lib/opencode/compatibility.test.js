@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describeOpenCodeCompatibility, readOpenCodeCliVersion, readExternalOpenCodeVersion, readOpenCodeInfo, requireOpenCodeV2, UnsupportedOpenCodeVersionError } from './compatibility.js';
+import { isSupportedOpenCodeVersion, readOpenCodeCliVersion, readExternalOpenCodeVersion, readOpenCodeInfo, requireOpenCodeV2, UnsupportedOpenCodeVersionError } from './compatibility.js';
 
 const cli = (output, code = 0) => ({ binary: process.execPath, args: ['-e', `console.log(${JSON.stringify(output)}); process.exit(${code})`, '--'] });
 
@@ -49,27 +49,11 @@ describe('OpenCode compatibility', () => {
 
   it('accepts 2.x from the minimum on and nothing older or of another major', () => {
     for (const version of ['2.0.20', '2.0.21', '2.1.0', '2.0.20-beta.1']) {
-      expect(describeOpenCodeCompatibility(version, 'managed', true).state).toBe('compatible');
+      expect(isSupportedOpenCodeVersion(version)).toBe(true);
     }
     for (const version of ['1.18.32', '2.0.19', '2.0.9', '3.0.0']) {
-      expect(describeOpenCodeCompatibility(version, 'managed', true).state).toBe('incompatible');
+      expect(isSupportedOpenCodeVersion(version)).toBe(false);
     }
-    expect(describeOpenCodeCompatibility('2.0.19', 'managed', true).minimumVersion).toBe('2.0.20');
   });
 
-  it('reports which local CLI was checked', () => {
-    expect(describeOpenCodeCompatibility('2.0.16', 'managed', true, '/opt/homebrew/bin/opencode').binary).toBe('/opt/homebrew/bin/opencode');
-    expect(describeOpenCodeCompatibility('2.0.16', 'external', false).binary).toBeNull();
-  });
-
-  it('only offers installation for a known managed CLI older than the minimum', () => {
-    expect(describeOpenCodeCompatibility('1.18.32', 'managed', true)).toMatchObject({ state: 'incompatible', canInstall: true });
-    expect(describeOpenCodeCompatibility('2.0.19', 'managed', true)).toMatchObject({ state: 'incompatible', canInstall: true });
-    for (const installation of ['external', 'bundled']) {
-      expect(describeOpenCodeCompatibility('1.18.32', installation, true).canInstall).toBe(false);
-    }
-    for (const version of [null, '2.0.20', '3.0.0']) {
-      expect(describeOpenCodeCompatibility(version, 'managed', true).canInstall).toBe(false);
-    }
-  });
 });

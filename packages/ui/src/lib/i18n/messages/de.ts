@@ -17,22 +17,6 @@ import { mcpGridI18n } from './mcp-grid.i18n';
 import { pluginsGridI18n } from './plugins-grid.i18n';
 
 export const dict = {
-  "opencodeCompatibility.bundled": "OpenCode ist in OpenChamber enthalten. Aktualisieren Sie OpenChamber, um OpenCode v2 zu erhalten.",
-  "opencodeCompatibility.title": "OpenCode v2 erforderlich",
-  "opencodeCompatibility.outdatedTitle": "OpenCode aktualisieren",
-  "opencodeCompatibility.outdatedLocal": "OpenCode {version} ist installiert. Diese Version von OpenChamber benötigt OpenCode {minimum} oder neuer.",
-  "opencodeCompatibility.outdatedExternal": "Der verbundene Server verwendet OpenCode {version}. Aktualisiere ihn auf OpenCode {minimum} oder neuer und verbinde dich erneut.",
-  "opencodeCompatibility.update": "OpenCode aktualisieren",
-  "opencodeCompatibility.local": "OpenCode {version} ist installiert. Diese Version von OpenChamber benötigt OpenCode v2.",
-  "opencodeCompatibility.external": "Der verbundene Server verwendet OpenCode {version}. Installiere dort OpenCode v2 und verbinde dich erneut.",
-  "opencodeCompatibility.installDescription": "OpenChamber installiert v2 mit dem offiziellen Installationsprogramm und startet OpenCode anschließend neu.",
-  "opencodeCompatibility.install": "Auf OpenCode v2 aktualisieren",
-  "opencodeCompatibility.reconnect": "Erneut prüfen",
-  "opencodeCompatibility.guide": "Installationsanleitung",
-  "opencodeCompatibility.installing": "OpenCode v2 wird installiert…",
-  "opencodeCompatibility.reconnecting": "Verbindung wird hergestellt…",
-  "opencodeCompatibility.failed": "Der Vorgang konnte nicht abgeschlossen werden. Versuche es erneut oder folge der Installationsanleitung und verbinde dich erneut.",
-
   'sessions.aiRename.action': 'Mit KI umbenennen',
   'sessions.aiRename.generating': 'Sitzungstitel wird generiert...',
   'sessions.aiRename.checking': 'Abgeschlossene Antworten werden geprüft...',
