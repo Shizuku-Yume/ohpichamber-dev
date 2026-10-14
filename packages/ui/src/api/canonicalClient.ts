@@ -10,7 +10,7 @@ import type {
   SessionCreateRequest, SessionDeleteAck, SessionMetadataPatch, SessionMetadataState, SessionSnapshot, ShellJob,
   ShellOutput, ShellSnapshot, ShellStartRequest, ShellStopRequest, SkillsApplyRequest, SkillsApplyResult,
   SkillsCatalogState, SkillExpandRequest, SkillExpandResult, CompletionRequest, CompletionResult, CompletionCancelRequest, CompletionCancelResult,
-  MCPCatalogRead, MCPReconnectRequest, MCPOAuthRequest, MCPOAuthResult, SteerAck, SteerRequest, Workspace,
+  MCPCatalogRead, MCPConfigureRequest, MCPApplyRequest, MCPApplyResult, MCPReconnectRequest, MCPOAuthRequest, MCPOAuthResult, SteerAck, SteerRequest, Workspace,
   WorkspaceList, ProjectList, QueueAppendRequest, QueueDeleteRequest, QueueReorderRequest, QueueState,
 } from '@openchamber/agent-contract';
 
@@ -181,7 +181,15 @@ export class CanonicalClient {
     void (async () => {
       try {
         const response = await runtimeFetch(`/api/agent/v1/sessions/${id(sessionId)}/events`, { signal: controller.signal, headers: { Accept: 'text/event-stream', 'Last-Event-ID': cursor } });
-        if (!response.ok || !response.body) throw new Error(`Canonical event stream failed (${response.status})`);
+        if (!response.ok || !response.body) {
+          const payload = await readJson(response);
+          const problem = C.ProblemDetailsSchema.safeParse(payload);
+          if (problem.success) throw new CanonicalApiError(problem.data);
+          throw new CanonicalApiError(C.ProblemDetailsSchema.parse({
+            type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Agent event stream unavailable',
+            status: response.status, detail: 'The canonical event stream failed.', code: 'SERVICE_UNAVAILABLE', retryable: response.status >= 500,
+          }));
+        }
         const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
         let buffer = '';
         let eventName = '';
@@ -210,6 +218,7 @@ export class CanonicalClient {
           }
         }
         reader.releaseLock();
+        if (!controller.signal.aborted) onError(new Error('Canonical event stream ended unexpectedly'));
       } catch (error) { if (!controller.signal.aborted) onError(error); }
     })();
     return () => controller.abort();
