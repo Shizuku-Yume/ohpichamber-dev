@@ -1919,7 +1919,7 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
   await forkAfterMessage(sessionId, messageId)
 }
 
-export async function fetchMessagesForSession(sessionID: string, directory?: string | null): Promise<void> {
+export async function fetchMessagesForSession(sessionId: string, directory?: string | null): Promise<void> {
   const resolvedDir = directory ?? dir()
   if (!resolvedDir) return
   await getImperativeSessionMessageLoader()?.ensure(
