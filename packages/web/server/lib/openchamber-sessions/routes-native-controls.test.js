@@ -61,6 +61,7 @@ const fixture = async () => {
     resolveSessionScope: (id) => store.getSession(id), resolveHostSessionScope: (id) => store.getSession(id),
     resolveWorkspaceScope: (id) => store.getWorkspace(id), registerSessionScope: async () => true,
     resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt, beforeDispatch: async () => {}, onPromptAccepted: async () => {},
+    directCommandAdmissionStore: owner.directCommandAdmissionStore,
     archiveStore: owner.archiveStore, sessionMetadataStore: owner.sessionMetadataStore,
   });
   return { owner, store, source, destination, native, makeService };
