@@ -1,9 +1,10 @@
 import { useCallback } from 'react';
 import { create } from 'zustand';
-import type { CanonicalEvent, RunningShell, ShellJob, ShellJobIdentity, ShellSnapshot } from '@openchamber/agent-contract';
+import type { CanonicalEvent, ShellJob, ShellJobIdentity, ShellSnapshot } from '@openchamber/agent-contract';
 import { normalizePath } from '@/lib/pathNormalization';
 import { compareCounters } from './event-reducer';
 
+export type RunningShell = Extract<ShellJob, { status: 'running' }>;
 export type TrackedShell = RunningShell & { directory: string };
 export type EndedShell = Extract<ShellJob, { status: 'ended' }> & { directory: string };
 type BackgroundShellsState = { byId: ReadonlyMap<string, TrackedShell>; sessionIds: ReadonlySet<string>; ended: ReadonlyMap<string, EndedShell> };

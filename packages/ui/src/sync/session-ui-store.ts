@@ -525,8 +525,8 @@ export type SessionUIState = {
 
 
 const resolveDirectoryKey = (session: Session): string | null => {
-  return normalizePath(getSyncSessionDirectory(session.sessionId))
-    ?? normalizePath(resolveGlobalSessionDirectory(session))
+  return normalizePath(resolveGlobalSessionDirectory(session))
+    ?? normalizePath(getSyncSessionDirectory(session.sessionId))
 }
 
 const safeStorage = getDeferredSafeStorage()
@@ -572,8 +572,8 @@ const getAttachmentForSession = (sessionId: string | null | undefined): SessionW
 
 /**
  * Resolve the Host directory for a native session without reading a path from
- * the Session DTO. The sync ownership index is authoritative when available;
- * the global projection is the cold/sidebar fallback.
+ * the Session DTO. The admitted workspace mapping is authoritative; the sync
+ * ownership index is the live-store fallback when that mapping is unavailable.
  */
 const getAuthoritativeSessionDirectory = (sessionId: string): string | null => {
   const target = getAllSyncSessions().find((s) => s.sessionId === sessionId)

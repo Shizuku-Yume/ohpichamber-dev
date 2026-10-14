@@ -6,7 +6,8 @@ export type BlockingPermissionRequest = ApprovalRequest;
 export type BlockingFormRequest = QuestionRequest;
 type PendingBlockingRequests = { directory: string; permissions: readonly BlockingPermissionRequest[]; forms: readonly BlockingFormRequest[] };
 type GlobalBlockingRequestsState = { bySession: ReadonlyMap<string, PendingBlockingRequests> };
-const EMPTY: readonly never[] = [];
+const EMPTY_PERMISSIONS: readonly ApprovalRequest[] = [];
+const EMPTY_FORMS: readonly QuestionRequest[] = [];
 export const useGlobalBlockingRequestsStore = create<GlobalBlockingRequestsState>(() => ({ bySession: new Map() }));
 const snapshots = new Map<string, { epoch: string; sequence: string }>();
 const requests = new Map<string, Map<string, ApprovalRequest | QuestionRequest>>();
@@ -20,7 +21,7 @@ const upsertRequest = <T extends { approvalId?: string; questionId?: string }>(l
   const next = [...list]; next[index] = request; return next;
 };
 const withoutRequest = <T extends { approvalId?: string; questionId?: string }>(list: readonly T[], id: string | undefined): readonly T[] | null => {
-  if (!id) return list.length === 0 ? null : EMPTY;
+  if (!id) return list.length === 0 ? null : [];
   const next = list.filter((entry) => (entry.approvalId ?? entry.questionId) !== id);
   return next.length === list.length ? null : next;
 };
@@ -47,7 +48,7 @@ class Reducer {
     else this.draft.set(sessionId, entry);
   }
   ask(directory: string, request: BlockingPermissionRequest | BlockingFormRequest): void {
-    const sessionId = request.sessionId; const existing = this.current(sessionId) ?? { directory, permissions: EMPTY, forms: EMPTY };
+    const sessionId = request.sessionId; const existing = this.current(sessionId) ?? { directory, permissions: EMPTY_PERMISSIONS, forms: EMPTY_FORMS };
     if ('approvalId' in request) {
       const permissions = upsertRequest(existing.permissions, request);
       if (permissions || existing.directory !== directory) this.write(sessionId, { directory, permissions: permissions ?? existing.permissions, forms: existing.forms });
@@ -62,7 +63,7 @@ class Reducer {
     if (!next) return;
     this.write(sessionId, kind === 'permissions' ? { ...existing, permissions: next } : { ...existing, forms: next });
   }
-  remove(sessionId: string): void { if (this.current(sessionId)) this.write(sessionId, { ...this.current(sessionId)!, permissions: EMPTY, forms: EMPTY }); }
+  remove(sessionId: string): void { if (this.current(sessionId)) this.write(sessionId, { ...this.current(sessionId)!, permissions: EMPTY_PERMISSIONS, forms: EMPTY_FORMS }); }
   publish(): void { if (this.draft) useGlobalBlockingRequestsStore.setState({ bySession: this.draft }); }
 }
 export const applyGlobalBlockingRequestEvents = (rawDirectory: string, payloads: readonly CanonicalEvent[]): void => {

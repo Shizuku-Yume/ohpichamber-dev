@@ -805,9 +805,8 @@ function MobileAppContent({ apis }: MobileAppProps) {
   // The instance the splash says we are connecting to. Read once on mount —
   // auto-connect targets the most-recent saved connection from the same list.
   const autoConnectLabel = React.useMemo(() => getAutoConnectTargetLabel(), []);
-  // Bumped to force a re-render (and thus a fresh `sdk` prop for SyncProvider)
-  // after a same-device transport swap — reconnects the sync layer in place with
-  // no remount. The value itself is unused; only the re-render matters.
+  // Bumped to force a re-render after a same-device transport swap so the
+  // sync layer can reconnect without remounting.
   const [, bumpTransportSwitch] = React.useReducer((count: number) => count + 1, 0);
   const isNativeMobileApp = React.useMemo(() => isCapacitorMobileApp(), []);
   const lastNativeResumeSyncEventAtRef = React.useRef(0);
@@ -980,11 +979,9 @@ function MobileAppContent({ apis }: MobileAppProps) {
       // change) does the full reset.
       const sameDevice = Boolean(detail.runtimeKey) && detail.runtimeKey === detail.previousRuntimeKey;
       if (sameDevice) {
-        // Transport-only swap for the same device: rebind the SDK to the new
-        // transport and force a re-render so SyncProvider receives the new `sdk`
-        // prop. Its event-pipeline + bootstrap effects (keyed on `sdk`) then
-        // reconnect over the new transport WITHOUT remounting — so the message
-        // pagination refs, the open session, and the whole view are preserved.
+        // Transport-only swap for the same device: reconnect the active sync
+        // transport and force a re-render without remounting, preserving the
+        // message pagination refs, open session, and whole view.
         // No key bump, no flash, no bounce to the draft.
         reconnectAppForTransportSwitch();
         bumpTransportSwitch();
@@ -1408,7 +1405,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
 
   return (
     <ErrorBoundary>
-      <SyncProvider key={runtimeEndpointEpoch} sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
+      <SyncProvider key={runtimeEndpointEpoch} directory={currentDirectory || ''}>
         <RuntimeAPIProvider apis={apis}>
           <TooltipProvider delayDuration={300} skipDelayDuration={150}>
             <div className="h-full bg-background text-foreground">

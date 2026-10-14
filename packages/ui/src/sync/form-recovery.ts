@@ -27,7 +27,7 @@ export async function recoverPendingFormWithRetry(
   },
 ): Promise<boolean> {
   const isCancelled = options?.isCancelled ?? (() => false)
-  const sleep = options?.sleep ?? ((delayMs) => { const { promise, resolve } = Promise.withResolvers<void>(); setTimeout(resolve, delayMs); return promise })
+  const sleep = options?.sleep ?? ((delayMs) => new Promise<void>((resolve) => { setTimeout(resolve, delayMs) }))
 
   for (const delayMs of RECOVERY_DELAYS_MS) {
     if (delayMs > 0) await sleep(delayMs)

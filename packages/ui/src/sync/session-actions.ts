@@ -123,7 +123,6 @@ export async function sendMessage(input: SessionSendInput): Promise<void> {
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
 }
 
-const MESSAGE_REFETCH_LIMIT = 100
 // Reference set by SyncProvider — allows actions to access the stores
 let _childStores: ChildStoreManager | null = null
 let _getDirectory: () => string = () => ""
@@ -183,7 +182,7 @@ function invalidateSessionLoads(sessionId: string, directories: Iterable<string 
   const loader = getImperativeSessionMessageLoader()
   if (!loader) return
   for (const directory of new Set(directories)) {
-    if (directory) loader.invalidateSession({ directory, sessionID: sessionId })
+    if (directory) loader.invalidateSession({ directory, sessionId })
   }
 }
 
@@ -634,7 +633,7 @@ export async function createSession(
     registerWorkspaceDirectory(workspace.workspaceId, effectiveDirectory)
     _childStores?.ensureChild(effectiveDirectory, { bootstrap: false })
     publishCanonicalSession(session, effectiveDirectory)
-    getImperativeSessionMessageLoader()?.initializeCreatedSession({ directory: effectiveDirectory, sessionID: session.sessionId })
+    getImperativeSessionMessageLoader()?.initializeCreatedSession({ directory: effectiveDirectory, sessionId: session.sessionId })
     if (navigation === "open") useSessionUIStore.getState().setCurrentSession(session.sessionId, effectiveDirectory, selectionTransition)
     useSessionUIStore.getState().markSessionAsOpenChamberCreated(session.sessionId)
     return session
@@ -852,7 +851,7 @@ function removeSessionFromLiveStores(sessionId: string, preferredDirectory?: str
     if (archive) {
       patch.session_status = { ...current.session_status }
       delete patch.session_status[sessionId]
-      patch.sessionStatusInvalidated = { ...current.sessionStatusInvalidated, [sessionId]: true }
+      patch.sessionStatusInvalidated = { ...(current.sessionStatusInvalidated ?? {}), [sessionId]: true }
     }
     store.setState(patch)
   }
@@ -901,7 +900,7 @@ function removeSessionsFromLiveStores(sessionIds: Iterable<string>, preferredDir
     }
     if (archive) {
       patch.session_status = { ...current.session_status }
-      patch.sessionStatusInvalidated = { ...current.sessionStatusInvalidated }
+      patch.sessionStatusInvalidated = { ...(current.sessionStatusInvalidated ?? {}) }
       for (const id of removed) {
         delete patch.session_status[id]
         patch.sessionStatusInvalidated[id] = true
@@ -1417,7 +1416,7 @@ async function restoreArchivedSession(sessionId: string, expectedRuntimeKey: str
         store.setState((current) => {
           if (current.sessionStatusInvalidated !== before.sessionStatusInvalidated
             || current.session_status[sessionId] !== before.session_status[sessionId]) return current
-          const invalidated = { ...current.sessionStatusInvalidated }
+          const invalidated: Record<string, true> = { ...(current.sessionStatusInvalidated ?? {}) }
           delete invalidated[sessionId]
           return { ...installSessionSnapshot(current, snapshot), sessionStatusInvalidated: invalidated }
         })
@@ -1748,9 +1747,9 @@ export async function refetchSessionMessages(sessionId: string): Promise<void> {
   const { store, directory } = dirStoreForSession(sessionId)
   const loader = getImperativeSessionMessageLoader()
   if (loader && directory) {
-    await loader.refreshTail({ directory, sessionID: sessionId }, MESSAGE_REFETCH_LIMIT)
+    await loader.refresh({ directory, sessionId })
     if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
-    const snapshot = loader.getSnapshot({ directory, sessionID: sessionId })
+    const snapshot = loader.getSnapshot({ directory, sessionId })
     if (snapshot.status === "error") throw snapshot.error ?? new Error("Session message refresh failed")
     return
   }
@@ -1924,7 +1923,7 @@ export async function fetchMessagesForSession(sessionID: string, directory?: str
   const resolvedDir = directory ?? dir()
   if (!resolvedDir) return
   await getImperativeSessionMessageLoader()?.ensure(
-    { directory: resolvedDir, sessionID },
+    { directory: resolvedDir, sessionId },
     { reason: "navigation" },
   )
 }

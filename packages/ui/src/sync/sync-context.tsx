@@ -43,18 +43,20 @@ const externallyViewedSessions = new Map<string, number>()
 
 export function setActiveSession(directory: string, sessionId: string) {
   const previous = activeTarget
-  activeTarget = directory && sessionId ? { directory: normalizePath(directory), sessionId } : null
+  const normalized = normalizePath(directory)
+  activeTarget = normalized && sessionId ? { directory: normalized, sessionId } : null
   const loader = getImperativeSessionMessageLoader()
   if (previous) loader?.scheduleCacheRetention(previous.directory)
   if (activeTarget) loader?.touchSessionCache(activeTarget)
 }
 export function setExternallyViewedSession(directory: string, sessionId: string, viewed: boolean) {
-  if (!directory || !sessionId) return
-  const key = `${normalizePath(directory)}\n${sessionId}`
+  const normalized = normalizePath(directory)
+  if (!normalized || !sessionId) return
+  const key = `${normalized}\n${sessionId}`
   if (viewed) externallyViewedSessions.set(key, Date.now() + 15_000)
   else {
     externallyViewedSessions.delete(key)
-    getImperativeSessionMessageLoader()?.scheduleCacheRetention(directory)
+    getImperativeSessionMessageLoader()?.scheduleCacheRetention(normalized)
   }
 }
 
@@ -156,7 +158,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     if (!isCurrent()) return
     const store = childStores.getChild(target.directory)
     if (!store || store.getState().snapshot[target.sessionId]?.cursor !== snapshot.cursor) return
-    const invalidated = { ...store.getState().sessionStatusInvalidated }
+    const invalidated: Record<string, true> = { ...(store.getState().sessionStatusInvalidated ?? {}) }
     delete invalidated[target.sessionId]
     store.setState({ sessionStatusInvalidated: invalidated, sessionStatusReady: true })
     applyGlobalSessionStatusSnapshot(target.directory, { [target.sessionId]: snapshot.session.runtimeStatus }, [target.sessionId], { [target.sessionId]: snapshot.session.activeRunId })
@@ -169,8 +171,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
   if (!messageLoaderRef.current) messageLoaderRef.current = new SessionMessageLoader(childStores, { client, runtimeKey: props.runtimeKey, isCurrent, onSnapshot })
   const messageLoader = messageLoaderRef.current
   const disposalRef = useRef<number | NodeJS.Timeout | undefined>(undefined)
-  const currentDirectoryRef = useRef(normalizePath(props.directory))
-  currentDirectoryRef.current = normalizePath(props.directory)
+  const currentDirectoryRef = useRef<string>(normalizePath(props.directory) ?? "")
+  currentDirectoryRef.current = normalizePath(props.directory) ?? ""
   const directoryListeners = useRef(new Set<() => void>())
   const currentDirectory = useMemo<CurrentDirectorySource>(() => ({
     get: () => currentDirectoryRef.current,
@@ -256,7 +258,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
         if (store && isCurrent()) {
           const state = store.getState()
           store.setState({
-            sessionStatusInvalidated: { ...state.sessionStatusInvalidated, [target.sessionId]: true },
+            sessionStatusInvalidated: { ...(state.sessionStatusInvalidated ?? {}), [target.sessionId]: true },
             session_status: { ...state.session_status, [target.sessionId]: "unavailable" },
           })
           applyGlobalSessionStatusSnapshot(target.directory, { [target.sessionId]: "unavailable" }, [target.sessionId])
@@ -372,22 +374,34 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
 
 export function useDirectoryStore(directory?: string, options?: { bootstrap?: boolean; priority?: DirectoryBootstrapPriority; reason?: DirectoryBootstrapReason }): StoreApi<DirectoryStore> {
   const runtime = useSyncRuntime()
-  const dir = useSyncExternalStore(runtime.currentDirectory.subscribe, () => normalizePath(directory ?? runtime.currentDirectory.get()), () => normalizePath(directory ?? runtime.currentDirectory.get()))
+  const dir = useSyncExternalStore(
+    runtime.currentDirectory.subscribe,
+    () => normalizePath(directory ?? runtime.currentDirectory.get()) ?? "",
+    () => normalizePath(directory ?? runtime.currentDirectory.get()) ?? "",
+  )
+  if (!dir) throw new Error("Sync hooks require an active directory")
   const store = runtime.childStores.ensureChild(dir, options)
   useEffect(() => { runtime.childStores.pin(dir); return () => runtime.childStores.unpin(dir) }, [dir, runtime.childStores])
   return store
+}
+export function useSessionMessageLoadState(sessionId: string, directory?: string): SessionMessageLoadState {
+  const runtime = useSyncRuntime()
+  const current = useSyncDirectory()
+  const target = useMemo<SessionMessageTarget | null>(() => {
+    const resolved = normalizePath(directory ?? current)
+    return resolved && sessionId ? { directory: resolved, sessionId } : null
+  }, [current, directory, sessionId])
+  return useSyncExternalStore(
+    useCallback((notify) => target ? runtime.messageLoader.subscribe(target, notify) : () => {}, [runtime.messageLoader, target]),
+    useCallback(() => target ? runtime.messageLoader.getSnapshot(target) : EMPTY_LOAD, [runtime.messageLoader, target]),
+    () => EMPTY_LOAD,
+  )
 }
 export function useDirectorySync<T>(selector: (state: State) => T, directory?: string): T { return useStore(useDirectoryStore(directory), selector) }
 export function useSyncDirectory() { return useSyncSystem().directory }
 export function useChildStoreManager() { return useSyncRuntime().childStores }
 export function useSessionMessageLoader() { return useSyncRuntime().messageLoader }
 
-export function useSessionMessageLoadState(sessionId: string, directory?: string): SessionMessageLoadState {
-  const runtime = useSyncRuntime()
-  const current = useSyncDirectory()
-  const target = useMemo(() => ({ directory: normalizePath(directory ?? current), sessionId }), [current, directory, sessionId])
-  return useSyncExternalStore(useCallback((notify) => sessionId && target.directory ? runtime.messageLoader.subscribe(target, notify) : () => {}, [runtime.messageLoader, sessionId, target]), useCallback(() => sessionId && target.directory ? runtime.messageLoader.getSnapshot(target) : EMPTY_LOAD, [runtime.messageLoader, sessionId, target]), () => EMPTY_LOAD)
-}
 export function useSessionMessages(sessionId: string, directory?: string): Message[] {
   const store = useDirectoryStore(directory)
   return useSyncExternalStore(useCallback((notify) => subscribeDirectorySessionMessages(store, sessionId, notify), [store, sessionId]), useCallback(() => store.getState().message[sessionId] ?? EMPTY_MESSAGES, [store, sessionId]), () => EMPTY_MESSAGES)
