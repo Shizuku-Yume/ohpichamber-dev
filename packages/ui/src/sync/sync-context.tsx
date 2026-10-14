@@ -218,8 +218,10 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
       const activeRunIds: Record<string, string | null> = {}
       const committed = store.getState()
       for (const item of committed.session) {
-        statuses[item.sessionId] = committed.sessionStatusInvalidated?.[item.sessionId] ? "unavailable" : item.runtimeStatus
-        activeRunIds[item.sessionId] = statuses[item.sessionId] === "unavailable" ? null : item.activeRunId
+        const snapshot = committed.snapshot[item.sessionId]
+        const liveSession = snapshot?.session.workspaceId === workspace.workspaceId && snapshot.session.epoch === committed.sessionEpoch[item.sessionId] ? snapshot.session : undefined
+        statuses[item.sessionId] = committed.sessionStatusInvalidated?.[item.sessionId] ? "unavailable" : liveSession?.runtimeStatus ?? item.runtimeStatus
+        activeRunIds[item.sessionId] = statuses[item.sessionId] === "unavailable" ? null : liveSession ? liveSession.activeRunId : item.activeRunId
       }
       const previousStatuses = committed.session_status
       const unchangedStatuses = Object.keys(previousStatuses).length === Object.keys(statuses).length && Object.entries(statuses).every(([id, status]) => previousStatuses[id] === status)

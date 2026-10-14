@@ -1,15 +1,17 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import React, { act } from "react"
 import { createRoot } from "react-dom/client"
 import type { CanonicalClient } from "@/api/canonicalClient"
-import type { Message, Session, ShellSnapshot, Workspace } from '@openchamber/agent-contract'
-import { SyncProvider, useChildStoreManager, useSyncDirectory } from "./sync-context"
+import type { Message, Session, SessionSnapshot, ShellSnapshot, Workspace } from '@openchamber/agent-contract'
+import { SyncProvider, useChildStoreManager, useSyncDirectory, handleEvents } from "./sync-context"
+import { useGlobalSessionStatusStore, applyGlobalSessionStatusEvents } from "./global-session-status"
+import { installSessionSnapshot } from "./event-reducer"
 import { usePrefetchSessionMessages } from "./use-sync"
 import { ChildStoreManager } from "./child-store"
 import { installHookTestDom } from "../components/session/sidebar/test-utils/testDom"
 import { useSessionUIStore } from "./session-ui-store"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
-import { deferred, nativeClient as createCanonicalClient } from './session-message-loader-test-fixtures'
+import { deferred, nativeClient as createCanonicalClient, nativeSnapshot } from './session-message-loader-test-fixtures'
 
 const workspace = (directory: string): Workspace => ({ workspaceId: `workspace-${directory.slice(1).replaceAll('/', '-')}`, projectId: 'project-1', name: 'Workspace', displayPath: '.' })
 const shellSnapshot = (workspaceId: string): ShellSnapshot => ({ scope: { kind: 'workspace', workspaceId }, epoch: 'shell-epoch', revision: '0', running: [], ended: [], recovery: { priorEpochs: 'invalidated' } })
@@ -101,6 +103,99 @@ describe("SyncProvider native scope and selection boundaries", () => {
       expect(store.getState().session_status[current.sessionId]).toBe("idle")
       expect(store.getState().sessionStatusReady).toBe(true)
     } finally {
+      await act(async () => root.unmount())
+      dom.restore()
+    }
+  })
+  test("late idle discovery preserves an accepted live run snapshot", async () => {
+    const dom = installHookTestDom()
+    const root = createRoot(dom.container)
+    const directory = "/workspace/live-authority"
+    const resolved = workspace(directory)
+    const listed = session("live-session", resolved.workspaceId)
+    const pending = deferred<{ items: Session[]; errors: Record<string, string> }>()
+    const client = createNativeClient()
+    client.listSessions = () => pending.promise
+    const sibling = { ...session("materializing-sibling", resolved.workspaceId), runtimeStatus: "running" as const, activeRunId: "sibling-run" }
+    const materializing = deferred<SessionSnapshot>()
+    const materializationStarted = deferred<void>()
+    client.getSnapshot = () => { materializationStarted.resolve(); return materializing.promise }
+    let manager: ChildStoreManager | undefined
+    const Probe = () => { manager = useChildStoreManager(); return null }
+    try {
+      await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
+      if (!manager) throw new Error("Directory manager was not mounted")
+      const store = manager.ensureChild(directory, { bootstrap: false })
+      const initial = { ...nativeSnapshot(listed.sessionId), session: listed, cursor: `${listed.epoch}:0` }
+      store.setState((state) => installSessionSnapshot(state, initial))
+      await act(async () => {
+        pending.resolve({ items: [listed, sibling], errors: {} })
+        await materializationStarted.promise
+        expect(handleEvents({ directory, sessionId: listed.sessionId }, [{ type: "run.started", sessionId: listed.sessionId, epoch: listed.epoch, sequence: "1", timestamp: 2, runId: "live-run", createdAt: 2 }], manager!)).toBe(true)
+        materializing.resolve({ ...nativeSnapshot(sibling.sessionId), session: sibling, cursor: `${sibling.epoch}:0`, activeRun: { runId: "sibling-run", sessionId: sibling.sessionId, status: "running", createdAt: 1 } })
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(store.getState().session_status[listed.sessionId]).toBe("running")
+      expect(store.getState().snapshot[listed.sessionId]?.session.activeRunId).toBe("live-run")
+      expect(useGlobalSessionStatusStore.getState().activeSessionIds.has(listed.sessionId)).toBe(true)
+      applyGlobalSessionStatusEvents(directory, [{ type: "run.completed", sessionId: listed.sessionId, epoch: listed.epoch, sequence: "2", timestamp: 3, runId: "older-run", finishedAt: 3 }])
+      expect(useGlobalSessionStatusStore.getState().activeSessionIds.has(listed.sessionId)).toBe(true)
+    } finally {
+      await act(async () => root.unmount())
+      dom.restore()
+    }
+  })
+
+  test("polling preserves blocked live state, unavailable fences, and terminal run clearing", async () => {
+    const dom = installHookTestDom()
+    const root = createRoot(dom.container)
+    const directory = "/workspace/poll-authority"
+    const listed = session("poll-live-session", workspace(directory).workspaceId)
+    const sibling = session("poll-sibling", listed.workspaceId)
+    const client = createNativeClient()
+    let discoveries = 0
+    client.listSessions = async () => { discoveries += 1; return { items: [listed, sibling], errors: {} } }
+    let poll: (() => void) | undefined
+    const originalInterval = globalThis.setInterval
+    const interval = spyOn(globalThis, "setInterval").mockImplementation((handler, timeout, ...args) => {
+      if (timeout === 15_000 && typeof handler === "function") poll = () => handler(...args)
+      return originalInterval(handler, timeout, ...args)
+    })
+    let manager: ChildStoreManager | undefined
+    const Probe = () => { manager = useChildStoreManager(); return null }
+    try {
+      await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
+      if (!manager || !poll) throw new Error("Discovery poll was not mounted")
+      const store = manager.ensureChild(directory, { bootstrap: false })
+      manager.pin(directory)
+      store.setState((state) => installSessionSnapshot(state, { ...nativeSnapshot(listed.sessionId), session: listed, cursor: `${listed.epoch}:0` }))
+      const target = { directory, sessionId: listed.sessionId }
+      expect(handleEvents(target, [
+        { type: "run.started", sessionId: listed.sessionId, epoch: listed.epoch, sequence: "1", timestamp: 2, runId: "poll-run", createdAt: 2 },
+        { type: "session.status", sessionId: listed.sessionId, epoch: listed.epoch, sequence: "2", timestamp: 3, runtimeStatus: "awaiting_approval", activeRunId: "poll-run" },
+      ], manager)).toBe(true)
+      const before = discoveries
+      await act(async () => { poll!(); await Promise.resolve(); await Promise.resolve() })
+      expect(discoveries).toBe(before + 1)
+      expect(store.getState().session_status[listed.sessionId]).toBe("awaiting_approval")
+      expect(store.getState().snapshot[listed.sessionId]?.session.activeRunId).toBe("poll-run")
+      expect(store.getState().session.map((item) => item.sessionId)).toEqual([listed.sessionId, sibling.sessionId])
+      expect(useGlobalSessionsStore.getState().activeSessions.some((item) => item.sessionId === sibling.sessionId)).toBe(true)
+      expect(useGlobalSessionStatusStore.getState().statusById.get(listed.sessionId)?.status).toBe("awaiting_approval")
+      store.setState({ sessionStatusInvalidated: { [listed.sessionId]: true }, session_status: { [listed.sessionId]: "unavailable" } })
+      await act(async () => { poll!(); await Promise.resolve(); await Promise.resolve() })
+      expect(store.getState().session_status[listed.sessionId]).toBe("unavailable")
+      expect(useGlobalSessionStatusStore.getState().activeSessionIds.has(listed.sessionId)).toBe(false)
+      store.setState((state) => installSessionSnapshot(state, { ...state.snapshot[listed.sessionId]!, session: { ...state.snapshot[listed.sessionId]!.session, headSequence: "3", runtimeStatus: "idle", activeRunId: null }, activeRun: null, cursor: `${listed.epoch}:3` }))
+      // A stale discovery row with a run must not resurrect a terminal snapshot.
+      client.listSessions = async () => ({ items: [{ ...listed, headSequence: "4", runtimeStatus: "running", activeRunId: "stale-run" }, sibling], errors: {} })
+      await act(async () => { poll!(); await Promise.resolve(); await Promise.resolve() })
+      expect(store.getState().session_status[listed.sessionId]).toBe("idle")
+      expect(store.getState().snapshot[listed.sessionId]?.session.activeRunId).toBeNull()
+      expect(useGlobalSessionStatusStore.getState().activeSessionIds.has(listed.sessionId)).toBe(false)
+    } finally {
+      interval.mockRestore()
       await act(async () => root.unmount())
       dom.restore()
     }
