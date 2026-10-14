@@ -32,6 +32,7 @@ export const createStartupPipelineRuntime = (dependencies) => {
       setupProxy,
       scheduleOpenCodeApiDetection,
       bootstrapOpenCodeAtStartup,
+      startAgentService,
       onListenerReady = null,
       staticRoutesRuntime,
       process,
@@ -131,10 +132,10 @@ export const createStartupPipelineRuntime = (dependencies) => {
     });
     tunnelRuntimeContext.setActivePort(startupResult.activePort);
     if (onListenerReady) await onListenerReady();
+    serverStartupRuntime.attachProcessHandlers({ attachSignals });
+    void startAgentService();
     scheduleOpenCodeApiDetection();
     void bootstrapOpenCodeAtStartup();
-
-    serverStartupRuntime.attachProcessHandlers({ attachSignals });
 
     return {
       terminalRuntime,

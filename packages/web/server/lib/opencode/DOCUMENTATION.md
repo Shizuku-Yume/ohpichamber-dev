@@ -81,7 +81,6 @@ and OpenChamber resolves the directory itself.
   is reported separately so valid siblings remain available. No extension code runs.
 - `packages/web/server/lib/opencode/proxy.js`: OpenCode API/SSE forwarding and readiness-gate route registration.
 - `packages/web/server/lib/opencode/session-runtime.js`: session status/attention/activity runtime for OpenCode SSE events.
-- `packages/web/server/lib/opencode/watcher.js`: global SSE watcher runtime for push/session event fanout.
 - `packages/web/server/lib/opencode/shared.js`: shared utilities for config, markdown, skills, and git helpers.
 - `packages/web/server/lib/opencode/config-v2.js`: the canonical OpenCode 2 shape layer — section-key resolution (v2 first, v1 fallback), permission map -> rule array translation, model `provider/model#variant` split/join, and the agent/command/MCP/provider/plugin entity conversions. Pure functions with no filesystem access. See "Entity routes (v2 shapes)" below.
 - `packages/web/server/lib/opencode/worktree-directory.js`: resolves OpenCode's `worktree.directory` into the absolute parent directory for new worktrees — relative paths start at the canonical checkout, absolute paths are used as-is, and a leading `~` means home. Pure; `shared.js` reads the merged config on the canonical checkout. Null when unset, so `packages/web/server/lib/git/service.js` keeps the data-dir default.
@@ -929,18 +928,6 @@ reads the in-memory state only: the durable bootstrap store takes a cross-proces
 file lock per read, which must not sit on every proxied request.
 
 This server gate covers web, Electron, hosted mobile, and Capacitor connections.
-
-## Public exports (watcher.js)
-- `createOpenCodeWatcherRuntime(dependencies)`: creates global event watcher runtime backed by the shared upstream SSE reader.
-- Returned API:
-  - `start()`
-  - `stop()`
-- Behavior:
-  - Waits for OpenCode readiness before attaching the watcher.
-  - In production wiring, subscribes to the shared global message-stream hub instead of opening its own `/api/event` connection.
-  - Can still create its own `/api/event` reader when no shared hub is provided, which keeps module tests and isolated reuse simple.
-  - Reuses event-stream parsing, `Last-Event-ID`, stall timeout, and reconnect behavior.
-  - Translates each v2 wire event through `lib/event-stream/translate-v2.js` before handing it to notification/session side effects, so those consumers keep speaking the server's own event vocabulary.
 
 ## Storage and configuration
 - Provider auth: read from the running OpenCode over `GET /api/credential` (2.0.20+); OpenCode 2.x owns credentials.

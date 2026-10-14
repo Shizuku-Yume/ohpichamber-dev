@@ -102,6 +102,12 @@ export function createHostAgentRuntime({
     return closePromise;
   };
   return {
+    start: () => {
+      if (closePromise) throw new Error('The Host Agent runtime is closed');
+      return service.start();
+    },
+    stop: () => service.stop(),
+    close,
     service, resolveWorkspaceScope, resolveWorkspaceDirectory: scopeRuntime.resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope,
     resolveHostRelocationScope: scopeRuntime.resolveRelocationSourceScope,
   };

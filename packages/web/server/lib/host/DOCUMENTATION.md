@@ -34,6 +34,10 @@ The Host modules do not own OpenCode lifecycle, proxying, SSE watching, snippets
 
 Settings are persisted atomically with profile/device/surface scope handling. Theme imports validate package identity, checksums, archive bounds, and authored palette data. Project and network routes preserve path validation and rebinding protections. Startup continues to publish the listener before managed lifecycle work, serves static/PWA routes, and records the same diagnostic phases. Managed-process cleanup remains asynchronous and verifies process identity before reaping.
 
+The production startup pipeline starts the canonical Agent Service after publishing the Host listener and attaching process handlers. Web and Electron share this pipeline; Electron still embeds the Node Host in its main process. Service startup failure is reported and leaves canonical operations unavailable rather than redirecting them to OpenCode. Existing legacy startup remains only for callers not yet migrated.
+
+`createHostAgentRuntime` exposes `start()` and `stop()` for supervisor lifecycle and `close()` for final Host teardown. Stopping the service preserves the approval policy store for a later start; final close stops the service and closes that store, and prevents another start.
+
 The agent-service registry records the actual Linux process birth identity when registering it. Reaping requires that identity and the recorded binary/entrypoint, checked again before signalling; an assigned ephemeral port is not compared with the literal `--port 0` command. Missing birth verification leaves the process untouched. Non-Linux agent orphan reaping remains unverified and refuses to guess identity. Legacy managed registrations remain until task17 retires their callers.
 
 ## Operational session state
@@ -81,7 +85,7 @@ Every store read, conversion, explicit import, and write is admitted through its
 - Guest scope actions remain capability-scoped; scoped asset tokens do not authorize the canonical gateway namespace, and opaque-origin mutations are refused.
 - VS Code is retired; this change adds no support for it.
 
-The composed Node Host/Bun scenario has verified these boundaries on Linux, including cold service reopen, scoped Guest actions, metadata/archive access while the service is stopped, explicit credential handoff, and canonical completion notification fan-out. Owning evidence is recorded in `.workflow/development.md`. Requirements, source quality, and final trust reviews passed; application activation remains task 17 after all UI callers migrate.
+The composed Node Host/Bun scenario has verified these boundaries on Linux, including cold service reopen, scoped Guest actions, metadata/archive access while the service is stopped, explicit credential handoff, and canonical completion notification fan-out. Owning evidence is recorded in `.workflow/development.md`. Task 17 now wires production service startup and final shutdown ownership; integrated Web/Electron launch certification and final legacy retirement remain blocked by unmigrated callers and packaged Agent Service staging.
 
 ## Canonical gateway and credential handoff
 

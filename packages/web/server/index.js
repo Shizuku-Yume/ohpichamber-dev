@@ -1793,6 +1793,7 @@ const ensureGlobalWatcherStarted = async () => {
 };
 const startAgentService = async () => {
   await hostAgentRuntime.start();
+  if (isShuttingDown) return hostAgentRuntime.service.getState();
   permissionAutoAcceptRuntime.start();
   await ensureGlobalWatcherStarted();
   await convertLegacyQueue();
@@ -2538,6 +2539,9 @@ async function main(options = {}) {
     setupProxy,
     scheduleOpenCodeApiDetection,
     bootstrapOpenCodeAtStartup,
+    startAgentService: () => startAgentService().catch((error) => {
+      console.error('Agent Service startup failed:', error instanceof Error ? error.message : String(error));
+    }),
     // Git's credential helper reaches the server through a file that names
     // the port, so it is written once the port is known and before OpenCode,
     // whose shells will use it, starts.
@@ -2612,6 +2616,9 @@ async function main(options = {}) {
     getPort: () => tunnelRuntimeContext.getActivePort(),
     startAgentService,
     stopAgentService: async () => {
+      permissionAutoAcceptRuntime.stop();
+      await scheduledTasksRuntime.stop();
+      await messageQueueRuntime.stop();
       await globalMessageStreamHub.stop();
       await hostAgentRuntime.stop();
       sessionRuntime.interruptBusySessionsAfterRestart();

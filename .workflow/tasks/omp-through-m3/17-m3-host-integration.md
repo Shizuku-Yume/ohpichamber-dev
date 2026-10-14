@@ -20,3 +20,17 @@
 - [ ] Finish the explicit credential handoff before its source disappears, then remove the one-time importer and legacy credential reader at this cutover.
 - [ ] Keep external editor launch, theme import and retained host capabilities working.
 - [ ] Update module ownership docs and package scripts without adding compatibility adapters.
+
+## Bounded implementation (2026-10-14)
+
+Production startup now launches the existing supervised Bun Agent Service after the Host listener and process handlers are ready. The Host runtime exposes the lifecycle operations its entrypoint and shutdown owner already call (`start`, `stop`, final `close`). Service-only stop drains permission, scheduled-task and queue producers before stopping the event hub and supervisor. Startup failures remain canonical unavailability; no canonical request falls back to OpenCode. The unused OpenCode `watcher.js` and its retired tests were removed; production notification/session fan-out already uses the canonical global event hub.
+
+Surfaces:
+- Web/PWA: the Node Host starts the Bun service and serves the existing authenticated `/api/agent/v1` namespace.
+- Electron: the same Web startup pipeline runs inside main; the Bun service remains separate. Native privileges, per-window auth and server shutdown remain owned by Electron and the Host.
+- Hosted mobile: uses the active remote Host and its authenticated canonical namespace.
+- Capacitor mobile: uses the configured remote Host and existing Origin/auth policy; no local Agent Service or credential store is added.
+
+The final retirement checkboxes above remain open. Task 15 migrated Defaults/Archive/retention only; Guest/sidebar/AgentsPage are not complete. Retained App/MobileApp compatibility gates, client consumers and legacy settings/config routes still require the OpenCode lifecycle/proxy. Isolated-space archive import still calls the OpenCode session import/remove owner. Credential handoff remains explicit and its source cannot be removed while the owning cutover is incomplete. Host FS/Git/PTY/Guest/editor/theme behavior is intentionally retained. No package selectors, compatibility adapters or fallback engines were introduced.
+
+Implementation checks were not run; the coordinator owns integrated tests, type-check, lint, builds, dead-code and real Web/Electron launch/stream/abort/reopen/shutdown certification. Packaged Bun/Agent Service staging must be completed before packaged Electron can be certified without OpenCode.

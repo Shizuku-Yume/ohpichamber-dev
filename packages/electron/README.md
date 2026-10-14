@@ -6,7 +6,7 @@ This package owns the native shell: windows, menus, deep links, native notificat
 
 ### Migration status
 
-Electron is retained in OhPiChamber. This inherited baseline embeds the Node.js Host Gateway and bundles OpenCode. The later OMP cutover replaces agent execution with the separate Bun Agent Service while keeping the host in process. See [migration architecture](../../.workflow/omp-migration/architecture.md).
+Electron is retained in OhPiChamber. It embeds the Node.js Host Gateway; the shared Web startup pipeline now starts the separate supervised Bun Agent Service behind `/api/agent/v1`. The inherited OpenCode lifecycle and packaging remain for unmigrated consumers, so this is not the final OMP-only cutover. Packaged Bun/Agent Service staging remains outstanding. See [migration architecture](../../.workflow/omp-migration/architecture.md).
 
 ## How It Runs
 
@@ -78,8 +78,8 @@ resolve, then navigate, with the splash reporting the connection attempt.
 profile; see `scripts/perf/DOCUMENTATION.md`.
 
 Quit, relaunch, and update installation await the in-process server's `stop()`
-before exiting Electron. This lets the backend release its terminals, managed
-OpenCode process, and guest services. `server-shutdown.mjs` bounds the server
+before exiting Electron. This lets the backend release its terminals, supervised
+Bun Agent Service, managed OpenCode process, and guest services. `server-shutdown.mjs` bounds the server
 wait to 35 seconds, allowing the terminal runtime's 20-second grace plus the
 remaining backend cleanup. It uses the detached OpenCode killer only if normal
 shutdown fails or times out. An external OpenCode server remains externally
