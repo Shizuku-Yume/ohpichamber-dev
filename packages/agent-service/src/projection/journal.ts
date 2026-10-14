@@ -238,6 +238,7 @@ export class SessionJournal {
         if (message.role === 'system') this.addSystem(message);
         this.branch.leafMessageId = message.messageId;
         this.branch.branchVersion = (BigInt(this.branch.branchVersion) + 1n).toString();
+        delete this.branch.revert;
         return;
       }
       case 'part.started': {

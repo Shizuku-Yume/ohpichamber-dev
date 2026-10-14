@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { JsonValueSchema, type ApprovalRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
 import { cfgBashPatterns } from '@oh-my-pi/pi-coding-agent/exec/settings';
@@ -296,4 +296,109 @@ test('actual SDK steer/follow-up admission retains queued identity, captured con
     ]);
     expect(harness.fatal()).toBe(false);
   } finally { release.resolve(); unsubscribe(); await harness.close(); }
+}, 30000);
+
+test('actual native undo/redo retains sibling transcript and cold-reopen selection without changing workspace files', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  let cold: WorkerSession | undefined;
+  try {
+    const manager = harness.worker.session.sessionManager;
+    const attachment = { attachmentId: 'accepted-upload', name: 'retained.txt', mediaType: 'text/plain', size: 7, uri: 'attachment://accepted-upload' };
+    let timestamp = Date.now();
+    for (const index of [1, 2]) {
+      const userId = manager.appendMessage({ role: 'user', content: `Prompt ${index}`, timestamp: timestamp++ });
+      manager.appendCustomEntry('ohpichamber.canonical.v1', { nativeEntryId: userId, messageId: `user-${index}`, turnId: `turn-${index}`,
+        runId: `run-${index}`, userMessageId: `user-${index}`, virtualUser: false, attachments: index === 2 ? [attachment] : [] });
+      const assistantId = manager.appendMessage({ role: 'assistant', content: [{ type: 'text', text: `Reply ${index}` }], api: 'openai-completions',
+        provider: 'native-fixture', model: 'native-model', stopReason: 'stop', timestamp: timestamp++,
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
+      manager.appendCustomEntry('ohpichamber.canonical.v1', { nativeEntryId: assistantId, messageId: `assistant-${index}`, turnId: `turn-${index}`,
+        runId: `run-${index}`, userMessageId: `user-${index}`, virtualUser: false, attachments: [] });
+    }
+    await manager.flush();
+    await writeFile(join(harness.root, 'workspace-proof.txt'), 'Not rolled back');
+    const before = harness.worker.seed();
+    const treeIds = manager.getEntries().map(entry => entry.id);
+    const selectedAssistant = await harness.worker.operation({ type: 'branch', request: { action: 'revert', messageId: 'assistant-1',
+      branchId: before.branch.branchId, branchVersion: before.branch.branchVersion } });
+    if (selectedAssistant.type !== 'branch') throw new Error('Native assistant selection is required');
+    expect(selectedAssistant.seed.messages.map(message => message.messageId)).toEqual(['user-1', 'assistant-1']);
+    const fullSelection = await harness.worker.operation({ type: 'branch', request: { action: 'restore',
+      branchId: selectedAssistant.result.branch.branchId, branchVersion: selectedAssistant.result.branch.branchVersion } });
+    if (fullSelection.type !== 'branch') throw new Error('Native tree restore is required');
+    const reverted = await harness.worker.operation({ type: 'branch', request: { action: 'revert', messageId: 'user-2',
+      branchId: fullSelection.result.branch.branchId, branchVersion: fullSelection.result.branch.branchVersion } });
+    if (reverted.type !== 'branch') throw new Error('Native branch response is required');
+    expect(reverted.result).toMatchObject({ sessionId: rootSessionId, branch: { revert: { messageId: 'user-2' } }, draft: { text: 'Prompt 2', attachments: [attachment] } });
+    expect(reverted.seed.messages.map(message => message.messageId)).toEqual(['user-1', 'assistant-1']);
+    expect(manager.getEntries().map(entry => entry.id)).toEqual(expect.arrayContaining(treeIds));
+    expect(await readFile(join(harness.root, 'workspace-proof.txt'), 'utf8')).toBe('Not rolled back');
+    const earliest = await harness.worker.operation({ type: 'branch', request: { action: 'revert', messageId: 'user-1',
+      branchId: reverted.result.branch.branchId, branchVersion: reverted.result.branch.branchVersion } });
+    if (earliest.type !== 'branch') throw new Error('Repeated native undo is required');
+    expect(earliest.seed.messages).toEqual([]);
+    await harness.worker.close();
+    cold = await WorkerSession.open({ type: 'bootstrap', rootSessionId, workerGeneration: 'cold-generation', projectId: 'project',
+      workspaceId: 'workspace', agentDirectoryId: 'source', cwd: harness.root, agentDirectory: dirname(harness.mcpConfigPath),
+      sessionFile: harness.worker.sessionFile, sessionsDirectory: dirname(harness.worker.sessionFile) }, () => {},
+      () => { throw new Error('Branch recovery must not request interaction'); }, () => { throw new Error('Branch recovery must not fail'); },
+      async () => {}, async () => { throw new Error('Branch recovery must not invoke Host tools'); }, () => {});
+    const coldSeed = cold.seed();
+    expect(coldSeed.branch).toEqual(earliest.seed.branch);
+    expect(coldSeed.messages).toEqual(earliest.seed.messages);
+    const marker = cold.session.sessionManager.getBranch().findLast(entry => entry.type === 'custom' && entry.customType === 'ohpichamber.branch.v1');
+    if (marker?.type !== 'custom') throw new Error('Durable native branch marker is required');
+    const selection = z.object({ restoreLeafId: z.string() }).parse(marker.data);
+    expect(cold.session.sessionManager.getEntry(selection.restoreLeafId)).toBeDefined();
+    const restored = await cold.operation({ type: 'branch', request: { action: 'restore', branchId: coldSeed.branch.branchId, branchVersion: coldSeed.branch.branchVersion } });
+    if (restored.type !== 'branch') throw new Error('Native redo response is required');
+    expect(restored.seed.messages).toEqual(before.messages);
+    expect(restored.result.branch.revert).toBeUndefined();
+    expect(harness.requests).toHaveLength(0);
+  } finally { await cold?.close(); await harness.close(); }
+}, 30000);
+
+test('native branch CAS rejects stale owner/version and redo expires after a new prompt', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  try {
+    const manager = harness.worker.session.sessionManager;
+    manager.appendMessage({ role: 'user', content: 'Original prompt', timestamp: Date.now() });
+    manager.appendMessage({ role: 'assistant', content: [{ type: 'text', text: 'Original reply' }], api: 'openai-completions', provider: 'native-fixture',
+      model: 'native-model', stopReason: 'stop', timestamp: Date.now(),
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
+    await manager.flush();
+    const before = harness.worker.seed();
+    const target = before.messages.find(message => message.role === 'user')!;
+    const leaf = manager.getLeafId();
+    await expect(harness.worker.operation({ type: 'branch', request: { action: 'revert', messageId: target.messageId,
+      branchId: 'another-branch', branchVersion: before.branch.branchVersion } })).rejects.toMatchObject({ code: 'RESYNC_REQUIRED' });
+    expect(manager.getLeafId()).toBe(leaf);
+    const reverted = await harness.worker.operation({ type: 'branch', request: { action: 'revert', messageId: target.messageId,
+      branchId: before.branch.branchId, branchVersion: before.branch.branchVersion } });
+    if (reverted.type !== 'branch') throw new Error('Native branch response is required');
+    await expect(harness.worker.operation({ type: 'branch', request: { action: 'restore', branchId: before.branch.branchId,
+      branchVersion: before.branch.branchVersion } })).rejects.toMatchObject({ code: 'RESYNC_REQUIRED' });
+    const restored = await harness.worker.operation({ type: 'branch', request: { action: 'restore', branchId: reverted.result.branch.branchId,
+      branchVersion: reverted.result.branch.branchVersion } });
+    if (restored.type !== 'branch') throw new Error('Native restore response is required');
+    expect(restored.result.branch.revert).toBeUndefined();
+    expect(restored.seed.messages).toEqual(before.messages);
+    const again = await harness.worker.operation({ type: 'branch', request: { action: 'revert', messageId: target.messageId,
+      branchId: restored.result.branch.branchId, branchVersion: restored.result.branch.branchVersion } });
+    if (again.type !== 'branch') throw new Error('Native branch response is required');
+    const terminal = Promise.withResolvers<void>();
+    const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+    try {
+      await harness.worker.operation({ type: 'prompt', runId: 'new-branch-run', request: prompt('A new branch prompt') });
+      await expect(harness.worker.operation({ type: 'branch', request: { action: 'restore', branchId: again.result.branch.branchId,
+        branchVersion: again.result.branch.branchVersion } })).rejects.toMatchObject({ code: 'RUN_ACTIVE' });
+      await terminal.promise;
+      const history = await harness.worker.operation({ type: 'history', request: { sessionId: rootSessionId } });
+      if (history.type !== 'history') throw new Error('Native history response is required');
+      expect(history.history.branch.revert).toBeUndefined();
+      await expect(harness.worker.operation({ type: 'branch', request: { action: 'restore', branchId: history.history.branch.branchId,
+        branchVersion: history.history.branch.branchVersion } })).rejects.toMatchObject({ code: 'RESYNC_REQUIRED' });
+    } finally { unsubscribe(); }
+    expect(harness.fatal()).toBe(false);
+  } finally { await harness.close(); }
 }, 30000);

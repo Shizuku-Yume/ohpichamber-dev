@@ -8,12 +8,12 @@ import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
-import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run } from '@openchamber/agent-contract';
+import { JsonObjectSchema, MCPOAuthPublicConfigurationSchema, SessionBranchRequestSchema, type Agent, type CapturedSendOptions, type JsonObject, type Run, type SessionBranchRequest } from '@openchamber/agent-contract';
 import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { WorkerInteraction as NativeInteraction } from './interaction.ts';
-import { WorkerProjection } from './projection.ts';
+import { BRANCH_TYPE, resolveCanonicalMessage, selectedBranchRevert, WorkerProjection, type BranchSelection } from './projection.ts';
 import { WorkerCatalogs, credentialReference } from './catalogs.ts';
 import { WorkerMcp, readNativeMcpConfigurationIfPresent } from './mcp.ts';
 import { WorkerShell } from './shell.ts';
@@ -47,6 +47,7 @@ export class WorkerSession {
   private closed = false;
   private skillsApplying = false;
   private failed = false;
+  private controllingBranch = false;
 
   private constructor(
     readonly session: AgentSession,
@@ -349,6 +350,60 @@ export class WorkerSession {
     await this.session.sessionManager.flush();
     return { text, options: { throwOnDrop: true, images, runCommands: false, expandPromptTemplates: false }, context: contextMessages };
   }
+  private async selectBranch(input: SessionBranchRequest): Promise<Extract<WorkerOperationResult, { type: 'branch' }>> {
+    const request = SessionBranchRequestSchema.parse(input);
+    if (this.preparation || this.projection.activeRun() || this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+    this.controllingBranch = true;
+    const manager = this.session.sessionManager;
+    let previousLeaf: string | null = manager.getLeafId();
+    let previousRevert: BranchSelection | null = null;
+    let navigated = false;
+    let navigationStarted = false;
+    try {
+      await this.promptTask;
+      await this.bind();
+      if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
+      if (this.preparation || this.projection.activeRun() || this.session.isStreaming) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+      const before = this.projection.seed();
+      if (before.branch.branchId !== request.branchId || before.branch.branchVersion !== request.branchVersion) {
+        throw new ProjectionError(409, 'RESYNC_REQUIRED', 'The selected branch has changed');
+      }
+      previousLeaf = manager.getLeafId();
+      previousRevert = selectedBranchRevert(manager.getBranch());
+      const targetId = request.action === 'revert'
+        ? resolveCanonicalMessage(manager, this.sessionId, request.messageId, true) : previousRevert?.restoreLeafId;
+      if (!targetId) throw new ProjectionError(409, 'RESYNC_REQUIRED', 'The requested branch selection is unavailable');
+      const targetMessage = request.action === 'revert' ? before.messages.find(message => message.messageId === request.messageId) : undefined;
+      navigationStarted = true;
+      const navigation = await this.session.navigateTree(targetId, { summarize: false, allowAskReopen: false });
+      navigated = manager.getLeafId() !== previousLeaf;
+      if (navigation.cancelled || navigation.aborted || navigation.reopenAsk) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native tree navigation was not committed');
+      await manager.appendEntriesAtomically(() => manager.appendCustomEntry(BRANCH_TYPE, {
+        restoreLeafId: request.action === 'revert' ? previousRevert?.restoreLeafId ?? previousLeaf : null,
+        revertedMessageId: request.action === 'revert' ? request.messageId : null,
+      }));
+      this.projection.resetSelection();
+      const seed = this.projection.seed();
+      this.interaction.cancelAll();
+      return { type: 'branch', seed, result: { sessionId: this.sessionId, branch: seed.branch,
+        draft: navigation.editorText === undefined ? null : { text: navigation.editorText,
+          attachments: targetMessage?.parts.flatMap(part => part.type === 'attachment'
+            ? [{ attachmentId: part.attachmentId, mediaType: part.mediaType, name: part.name, size: part.size, uri: part.uri }] : []) ?? [] },
+      } };
+    } catch (error) {
+      if (navigationStarted && (navigated || manager.getLeafId() !== previousLeaf)) {
+        // The native context may already have switched. Retire it rather than
+        // allowing a prompt against a failed selection or stale agent context.
+        try {
+          if (previousLeaf === null) manager.resetLeaf(); else manager.branch(previousLeaf);
+          await manager.appendEntriesAtomically(() => manager.appendCustomEntry(BRANCH_TYPE, previousRevert ?? { restoreLeafId: null, revertedMessageId: null }));
+        } catch {
+          throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'The prior native branch selection could not be persisted');
+        } finally { this.fail(); }
+      }
+      throw error;
+    } finally { this.controllingBranch = false; }
+  }
 
   operation(operation: WorkerOperation): Promise<WorkerOperationResult> {
     const task = this.executeOperation(operation);
@@ -359,6 +414,7 @@ export class WorkerSession {
 
   private async executeOperation(operation: WorkerOperation): Promise<WorkerOperationResult> {
     if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
+    if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
     switch (operation.type) {
       case 'catalog': {
         const applying = operation.operation.type === 'skills.apply';
@@ -468,6 +524,8 @@ export class WorkerSession {
       case 'history':
         await this.binding;
         return { type: 'history', history: this.projection.history(operation.request) };
+      case 'branch':
+        return this.selectBranch(operation.request);
       case 'delete':
         if (this.preparation || this.projection.activeRun()) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         await this.bind();
