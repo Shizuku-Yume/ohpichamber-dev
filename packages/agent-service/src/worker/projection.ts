@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { dirname, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
@@ -20,8 +21,44 @@ const ReferenceSchema = z.strictObject({
 });
 type Reference = z.infer<typeof ReferenceSchema>;
 export const BRANCH_TYPE = 'ohpichamber.branch.v1';
-export const BranchSelectionSchema = z.strictObject({ restoreLeafId: EntityIdSchema.nullable(), revertedMessageId: EntityIdSchema.nullable() });
+const BranchSelectionSchema = z.strictObject({ restoreLeafId: EntityIdSchema.nullable(), revertedMessageId: EntityIdSchema.nullable() });
 export type BranchSelection = z.infer<typeof BranchSelectionSchema>;
+const PRIVATE_ROOTS_TYPE = 'ohpichamber.private-roots.v1';
+const PrivateRootSchema = z.strictObject({ root: z.string().min(1).refine(isAbsolute), label: z.enum(['workspace', 'agent-directory', 'session-storage']) });
+const PrivateRootsSchema = z.array(PrivateRootSchema);
+type PrivateRoot = z.infer<typeof PrivateRootSchema>;
+const PRIVATE_PATH_DELIMITERS = ' \t\n\r\"\'`=:,;()[]{}<>';
+function startsPrivatePath(text: string, index: number, context = ''): boolean {
+  const previous = index > 0 ? text[index - 1] : context.at(-1);
+  return previous === undefined || PRIVATE_PATH_DELIMITERS.includes(previous)
+    || (index >= 7 ? text.startsWith('file://', index - 7) : context.slice(index - 7) + text.slice(0, index) === 'file://');
+}
+function endsPrivatePath(text: string, index: number): boolean {
+  return index === text.length || text[index] === '/' || PRIVATE_PATH_DELIMITERS.includes(text[index]!);
+}
+
+function storedPrivateRoots(manager: SessionManager): PrivateRoot[] {
+  const roots = new Map<string, PrivateRoot>();
+  for (const entry of manager.getEntries()) {
+    if (entry.type !== 'custom' || entry.customType !== PRIVATE_ROOTS_TYPE) continue;
+    for (const value of PrivateRootsSchema.parse(entry.data)) roots.set(value.root, value);
+  }
+  return [...roots.values()];
+}
+
+function storageRoots(manager: SessionManager): PrivateRoot[] {
+  const file = manager.getSessionFile();
+  return file ? [{ root: file, label: 'session-storage' }, { root: dirname(file), label: 'session-storage' },
+    { root: manager.getArtifactsDir(), label: 'session-storage' }] : [];
+}
+
+/** Private scope context stays in the native tree, never a second transcript store. */
+export async function rememberPrivateRoots(manager: SessionManager, scope: { cwd: string; agentDirectory: string }): Promise<void> {
+  const known = new Set(storedPrivateRoots(manager).map((value) => value.root));
+  const added = PrivateRootsSchema.parse([{ root: scope.cwd, label: 'workspace' }, { root: scope.agentDirectory, label: 'agent-directory' }, ...storageRoots(manager)])
+    .filter((value) => { if (known.has(value.root)) return false; known.add(value.root); return true; });
+  if (added.length) await manager.appendEntriesAtomically(() => manager.appendCustomEntry(PRIVATE_ROOTS_TYPE, added));
+}
 
 function opaqueNativeId(kind: 'message' | 'turn' | 'run', sessionId: string, entryId: string): string {
   return `${kind}:${createHash('sha256').update(JSON.stringify([sessionId, kind, entryId])).digest('hex')}`;
@@ -113,9 +150,73 @@ export class WorkerProjection {
   private readonly queuedPrompts = new WeakMap<NativeMessage, { messageId: string; attachments: PromptAttachment[] }>();
   private entryOffset: number;
   private stopReason: 'error' | 'aborted' | undefined;
+  private readonly privateRoots: PrivateRoot[];
+  private readonly textSuffixes = new Map<string, { suffix: string; context: string }>();
 
   constructor(private readonly manager: SessionManager, private readonly sessionId: string) {
     this.entryOffset = manager.getBranch().length;
+    const roots = new Map(storedPrivateRoots(manager).map((value) => [value.root, value]));
+    for (const value of storageRoots(manager)) roots.set(value.root, value);
+    const cwd = manager.getHeader()?.cwd;
+    if (cwd) roots.set(cwd, { root: cwd, label: 'workspace' });
+    this.privateRoots = [...roots.values()].sort((left, right) => right.root.length - left.root.length);
+  }
+
+  publicText(text: string, context = ''): string {
+    for (const { root, label } of this.privateRoots) {
+      let next = '';
+      let copied = 0;
+      for (let index = text.indexOf(root); index >= 0; index = text.indexOf(root, index + root.length)) {
+        if (!startsPrivatePath(text, index, context) || (!root.endsWith('/') && !endsPrivatePath(text, index + root.length))) continue;
+        next += text.slice(copied, index) + `[${label}]`;
+        copied = index + root.length;
+      }
+      if (copied) text = next + text.slice(copied);
+    }
+    return text;
+  }
+
+  private publicValue<T>(value: T): T {
+    if (typeof value === 'string') return this.publicText(value) as T;
+    if (Array.isArray(value)) {
+      let next: unknown[] | undefined;
+      for (let index = 0; index < value.length; index++) {
+        const item = this.publicValue(value[index]);
+        if (item !== value[index]) { next ??= value.slice(); next[index] = item; }
+      }
+      return (next ?? value) as T;
+    }
+    if (value !== null && typeof value === 'object') {
+      const object = value as Record<string, unknown>;
+      let next: Record<string, unknown> | undefined;
+      for (const key of Object.keys(object)) {
+        const publicKey = this.publicText(key);
+        const item = this.publicValue(object[key]);
+        if (publicKey !== key || item !== object[key]) {
+          next ??= { ...object };
+          if (publicKey !== key) delete next[key];
+          next[publicKey] = item;
+        }
+      }
+      return (next ?? value) as T;
+    }
+    return value;
+  }
+
+  private publicDelta(id: string, delta: string): string {
+    const pending = this.textSuffixes.get(id);
+    const context = pending?.context ?? '';
+    const text = (pending?.suffix ?? '') + delta;
+    let length = 0;
+    for (const { root } of this.privateRoots) {
+      for (let count = Math.min(root.length, text.length); count > length; count--) {
+        if (text.endsWith(root.slice(0, count)) && startsPrivatePath(text, text.length - count, context)) { length = count; break; }
+      }
+    }
+    const emitted = length ? text.slice(0, -length) : text;
+    const preceding = emitted.length >= 7 ? emitted.slice(-7) : context.slice(-(7 - emitted.length)) + emitted;
+    this.textSuffixes.set(id, { suffix: length ? text.slice(-length) : '', context: preceding });
+    return this.publicText(emitted, context);
   }
 
   seed(): ProjectionSeed { return this.readHistory(); }
@@ -172,6 +273,7 @@ export class WorkerProjection {
         emit({ type: 'message.created', messageId, turnId: turn.turnId,
           role: native.role === 'toolResult' ? 'system' : native.role, ...nativeMetadata });
         for (const part of parts(native, messageId, current.attachments)) {
+          if (native.role === 'assistant' && (part.type === 'text' || part.type === 'reasoning')) part.content = this.publicDelta(part.partId, part.content);
           emit({ type: 'part.started', messageId, part });
           const index = native.role === 'toolResult' ? 0 : native.content instanceof Array
             ? native.content.findIndex((item, index) => part.partId === partId(messageId, index)) : 0;
@@ -193,9 +295,12 @@ export class WorkerProjection {
             emit({ type: 'part.started', messageId: current.messageId, part });
             break;
           }
-          case 'text_delta': case 'thinking_delta':
-            emit({ type: 'part.delta', partId: partId(current.messageId, update.contentIndex), delta: update.delta });
+          case 'text_delta': case 'thinking_delta': {
+            const id = partId(current.messageId, update.contentIndex);
+            const delta = this.publicDelta(id, update.delta);
+            if (delta) emit({ type: 'part.delta', partId: id, delta });
             break;
+          }
           case 'toolcall_end': {
             const call = update.toolCall;
             const part: Part = { type: 'tool_call', partId: partId(current.messageId, update.contentIndex),
@@ -215,6 +320,7 @@ export class WorkerProjection {
         if (!current || !visible(event.message)) break;
         for (const part of parts(event.message, current.messageId, current.attachments)) {
           const index = Number(part.partId.slice(current.messageId.length + 1));
+          this.textSuffixes.delete(part.partId);
           if (!current.started.has(index) && part.type !== 'attachment') {
             emit({ type: 'part.started', messageId: current.messageId, part });
           }
@@ -260,12 +366,16 @@ export class WorkerProjection {
         break;
       default: break;
     }
+    for (let index = 0; index < result.length; index++) {
+      // Deltas already carry the bounded stream context; do not reinterpret a chunk as a new path.
+      if (result[index]!.event.type !== 'part.delta') result[index] = this.publicValue(result[index]!);
+    }
     return result;
   }
 
-  failRun(error: string, timestamp: number): ProjectionInput[] { return this.finish('failed', timestamp, error); }
-  cancelRun(timestamp: number): ProjectionInput[] { return this.finish('cancelled', timestamp); }
-  completeRun(timestamp: number): ProjectionInput[] { return this.finish('completed', timestamp); }
+  failRun(error: string, timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicValue(this.finish('failed', timestamp, error)); }
+  cancelRun(timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicValue(this.finish('cancelled', timestamp)); }
+  completeRun(timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicValue(this.finish('completed', timestamp)); }
 
   private recordTurn(status: 'completed' | 'failed' | 'cancelled', finishedAt: number, error?: string): void {
     if (!this.turn?.open || !this.run) return;
@@ -420,9 +530,9 @@ export class WorkerProjection {
     const header = this.manager.getHeader();
     const createdAt = header ? Date.parse(header.timestamp) : Date.now();
     const selection = selectedBranchRevert(entries);
-    return { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt),
+    return this.publicValue({ createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt),
       branch: { branchId: `branch:${this.sessionId}`, branchVersion: (version + BigInt(virtualTurns.size)).toString(), leafMessageId,
-        ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : {}) }, turns, messages,
-    };
+        ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : undefined) }, turns, messages,
+    });
   }
 }

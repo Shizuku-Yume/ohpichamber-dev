@@ -13,7 +13,7 @@ import type { WorkerBootstrapMessage, WorkerInteraction, WorkerOperation, Worker
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { WorkerInteraction as NativeInteraction } from './interaction.ts';
-import { BRANCH_TYPE, resolveCanonicalMessage, selectedBranchRevert, WorkerProjection, type BranchSelection } from './projection.ts';
+import { BRANCH_TYPE, rememberPrivateRoots, resolveCanonicalMessage, selectedBranchRevert, WorkerProjection, type BranchSelection } from './projection.ts';
 import { WorkerCatalogs, credentialReference } from './catalogs.ts';
 import { WorkerMcp, readNativeMcpConfigurationIfPresent } from './mcp.ts';
 import { WorkerShell } from './shell.ts';
@@ -224,6 +224,7 @@ export class WorkerSession {
       await manager.ensureOnDisk();
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
+      await rememberPrivateRoots(manager, input);
       owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize);
       capturePolicy = async () => {
         const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId) : null;
@@ -386,7 +387,7 @@ export class WorkerSession {
       const seed = this.projection.seed();
       this.interaction.cancelAll();
       return { type: 'branch', seed, result: { sessionId: this.sessionId, branch: seed.branch,
-        draft: navigation.editorText === undefined ? null : { text: navigation.editorText,
+        draft: navigation.editorText === undefined ? null : { text: this.projection.publicText(navigation.editorText),
           attachments: targetMessage?.parts.flatMap(part => part.type === 'attachment'
             ? [{ attachmentId: part.attachmentId, mediaType: part.mediaType, name: part.name, size: part.size, uri: part.uri }] : []) ?? [] },
       } };

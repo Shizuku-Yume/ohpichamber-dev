@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import { SessionJournal } from '../projection/journal.ts';
-import { WorkerProjection } from './projection.ts';
+import { rememberPrivateRoots, WorkerProjection } from './projection.ts';
 
 type NativeMessage = Extract<AgentSessionEvent, { type: 'message_start' }>['message'];
 type Assistant = Extract<NativeMessage, { role: 'assistant' }>;
@@ -82,6 +82,95 @@ test('completed native compaction emits opaque canonical transition only', async
     expect(projection.consume({ type: 'auto_compaction_end', action: 'context-full', result: { summary: 'retry', firstKeptEntryId: 'native-entry', tokensBefore: 40 }, aborted: false, willRetry: true })).toEqual([]);
     expect(projection.consume({ type: 'auto_compaction_end', action: 'context-full', result: undefined, aborted: false, willRetry: false })).toEqual([]);
   } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('configured private roots are withheld across split native deltas without changing other paths or native inputs', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-private-projection-'));
+  const cwd = join(root, 'workspace');
+  const storage = join(root, 'storage');
+  const agentDirectory = join(cwd, '.omp');
+  const manager = SessionManager.create(cwd, storage);
+  try {
+    await manager.ensureOnDisk();
+    await rememberPrivateRoots(manager, { cwd, agentDirectory });
+    const projection = new WorkerProjection(manager, 'session');
+    projection.beginRun('run', 1);
+    const prefix = `Read ${cwd.slice(0, 5)}`;
+    const native = assistant([{ type: 'text', text: prefix }], 'stop', 2);
+    const started = projection.consume({ type: 'message_start', message: native });
+    let streamed = started.flatMap(({ event }) => event.type === 'part.started' && event.part.type === 'text' ? [event.part.content] : []).join('');
+    const remaining = `${cwd.slice(5)}/secret.txt; /usr/share/public.txt`;
+    for (const delta of remaining) {
+      const events = projection.consume({ type: 'message_update', message: native,
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta, partial: native } });
+      streamed += events.flatMap(({ event }) => event.type === 'part.delta' ? [event.delta] : []).join('');
+      expect(streamed).not.toContain(cwd);
+    }
+    expect(streamed).toBe('Read [workspace]/secret.txt; /usr/share/public.txt');
+    expect(native.content).toEqual([{ type: 'text', text: prefix }]);
+    expect(projection.publicText(`${cwd}-other/file /unrelated${cwd}/file`)).toBe(`${cwd}-other/file /unrelated${cwd}/file`);
+    const unrelated = `${cwd}-other/file /unrelated${cwd}/file`;
+    let unchanged = '';
+    for (const delta of [` ${cwd}-other/file /unrelated`, `${cwd}/file`]) {
+      unchanged += projection.consume({ type: 'message_update', message: native,
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta, partial: native } })
+        .flatMap(({ event }) => event.type === 'part.delta' ? [event.delta] : []).join('');
+    }
+    expect(unchanged).toBe(` ${unrelated}`);
+    const toolInput = { path: `${agentDirectory}/settings.json`, other: '/usr/share/public.txt' };
+    const toolStarted = projection.consume({ type: 'tool_execution_start', toolCallId: 'call', toolName: 'read', args: toolInput });
+    expect(toolStarted[0]?.event).toMatchObject({ type: 'tool.started', input: { path: '[agent-directory]/settings.json', other: '/usr/share/public.txt' } });
+    expect(toolInput.path).toBe(`${agentDirectory}/settings.json`);
+    const toolResult = { content: [{ type: 'text' as const, text: `${storage}/private.json` }], details: { path: `${cwd}/file` } };
+    const toolCompleted = projection.consume({ type: 'tool_execution_end', toolCallId: 'call', toolName: 'read', result: toolResult, isError: false });
+    expect(toolCompleted[0]?.event).toMatchObject({ type: 'tool.completed', output: {
+      content: [{ type: 'text', text: '[session-storage]/private.json' }], details: { path: '[workspace]/file' },
+    } });
+    expect(toolResult.details.path).toBe(`${cwd}/file`);
+    const failure = projection.failRun(`Cannot read ${cwd}/file`, 3);
+    expect(failure.find(({ event }) => event.type === 'run.failed')?.event).toMatchObject({ type: 'run.failed', error: 'Cannot read [workspace]/file' });
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('native custom root context survives relocation, branch selection and cold reopen without rewriting native messages', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-private-history-'));
+  const source = join(root, 'source');
+  const destination = join(root, 'destination');
+  const sourceStorage = join(root, 'source-storage');
+  const destinationStorage = join(root, 'destination-storage');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(source, { recursive: true });
+  await mkdir(destination, { recursive: true });
+  const manager = SessionManager.create(source, sourceStorage);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    await rememberPrivateRoots(manager, { cwd: source, agentDirectory });
+    const input = { role: 'user' as const, content: `Read ${source}/file`, timestamp: 1 };
+    const userId = manager.appendMessage(input);
+    manager.appendMessage(assistant([{ type: 'text', text: `Wrote ${source}/file` }], 'stop', 2));
+    await manager.flush();
+    await manager.moveTo(destination, destinationStorage);
+    await rememberPrivateRoots(manager, { cwd: destination, agentDirectory });
+    manager.branch(userId);
+    await manager.appendEntriesAtomically(() => manager.appendCustomEntry('privacy-test.selected-branch', null));
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    reopened = await SessionManager.open(file, destinationStorage, undefined, { initialCwd: destination, throwIfMissing: true });
+    const projection = new WorkerProjection(reopened, 'session');
+    expect(projection.seed().messages[0]?.parts).toMatchObject([{ type: 'text', content: 'Read [workspace]/file' }]);
+    expect(projection.publicText(`${source}/old ${destination}/new ${sourceStorage}/old ${destinationStorage}/new ${agentDirectory}/settings /usr/share/public.txt`))
+      .toBe('[workspace]/old [workspace]/new [session-storage]/old [session-storage]/new [agent-directory]/settings /usr/share/public.txt');
+    expect(reopened.getEntries().find((entry) => entry.type === 'message' && entry.id === userId)).toMatchObject({ message: input });
+  } finally {
+    await reopened?.close();
     await manager.close();
     await rm(root, { recursive: true, force: true });
   }

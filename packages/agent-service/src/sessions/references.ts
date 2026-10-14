@@ -9,7 +9,7 @@ import { WorkerBootstrapSchema } from '../protocol.ts';
 const SessionReferenceSchema = WorkerBootstrapSchema.omit({ env: true, observationEpoch: true, catalogRevision: true, mcpConfiguration: true, skillSources: true }).required({ sessionFile: true })
   .extend({ displayPath: DisplayPathSchema, createdAt: TimestampSchema, updatedAt: TimestampSchema });
 export type SessionReference = Readonly<z.infer<typeof SessionReferenceSchema>>;
-export const SessionRelocationIntentSchema = z.strictObject({
+const SessionRelocationIntentSchema = z.strictObject({
   transactionId: EntityIdSchema, source: SessionReferenceSchema, destination: SessionReferenceSchema,
   sourceHeader: z.strictObject({ id: z.string().min(1), cwd: z.string().min(1), additionalDirectories: z.array(z.string()).optional(), previousSessionFiles: z.array(z.string()).optional() }),
   environment: z.record(z.string(), z.string()).optional(),
