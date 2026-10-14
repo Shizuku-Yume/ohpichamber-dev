@@ -1,0 +1,362 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import * as C from '@openchamber/agent-contract';
+import { CanonicalClient } from './canonicalClient';
+import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver, type RuntimeUrlResolver } from '../lib/runtime-url';
+
+const sessionId = 'session_expected';
+const workspaceId = 'workspace_expected';
+const epoch = 'epoch_expected';
+const generation = 'worker_expected';
+const client = new CanonicalClient();
+const runtimeSession: C.RuntimeSession = {
+  sessionId, rootSessionId: 'root_expected', projectId: 'project_expected', workspaceId, displayPath: '.',
+  epoch, headSequence: '0', createdAt: 1, updatedAt: 1, runtimeStatus: 'idle', activeRunId: null,
+};
+const snapshot = (session = runtimeSession): C.SessionSnapshot => ({
+  session, cursor: `${session.epoch}:${session.headSequence}`, activeRun: null,
+  branch: { branchId: 'branch_expected', branchVersion: '1', leafMessageId: null },
+  window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false },
+  turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' },
+});
+const prompt: C.RunCreateRequest = {
+  input: { text: 'hello', attachments: [] },
+  options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
+};
+const worker: C.CatalogWorkerIdentity = { rootSessionId: runtimeSession.rootSessionId, workspaceId, workerGeneration: generation };
+const agent: C.Agent = { agentId: 'agent/a', name: 'Agent', description: '', model: null, allowedTools: [] };
+const model: C.Model = {
+  modelId: 'model_expected', provider: 'provider_expected', name: 'Model', modalities: ['text'], contextWindow: 1000,
+  maxOutputTokens: 100, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null,
+};
+const completion: C.CompletionRequest = {
+  workspaceId, completionId: 'completion_expected', selection: { providerId: model.provider, modelId: model.modelId },
+  prompt: 'hello', format: { kind: 'text' }, overflow: 'reject', variant: null, reasoningEffort: null,
+};
+const job: C.ShellJob = {
+  jobId: 'job_expected', sessionId, epoch, workerGeneration: generation, workspaceId, projectId: runtimeSession.projectId,
+  command: 'echo hello', background: false, startedAt: 1, outputCursor: '0', status: 'running',
+};
+const skills: C.SkillsCatalogState = {
+  worker, agentDirectoryId: 'agent_directory_expected', runtimeStatus: 'ready', persistedSources: { workspace: '1', agent: '1' },
+  appliedSources: { workspace: '1', agent: '1' }, catalogRevision: '1', skills: [],
+};
+const mcp: C.MCPCatalogRead = {
+  configuration: { workspaceId, persistedRevision: '1', config: { servers: [] } },
+  workerCatalog: { worker, runtimeStatus: 'ready', appliedRevision: '1', catalogRevision: '1', activeServers: [], tools: [] },
+};
+
+let handler: (request: IncomingMessage, response: ServerResponse) => void;
+let server: Server;
+let previousResolver: RuntimeUrlResolver;
+let calls: string[];
+const json = (response: ServerResponse, payload: unknown) => { response.writeHead(200, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(payload)); };
+const respondWith = (payload: unknown) => { handler = (_request, response) => json(response, payload); };
+
+beforeEach(async () => {
+  calls = [];
+  handler = (_request, response) => { response.writeHead(404); response.end(); };
+  server = createServer((request, response) => { calls.push(`${request.method} ${request.url}`); handler(request, response); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Loopback server did not bind a TCP port');
+  previousResolver = getRuntimeUrlResolver();
+  configureRuntimeUrlResolver({ apiBaseUrl: `http://127.0.0.1:${address.port}` });
+});
+afterEach(async () => {
+  setRuntimeUrlResolver(previousResolver);
+  server.closeAllConnections();
+  await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+});
+
+describe('CanonicalClient real HTTP scope boundary', () => {
+  test('agent update/delete and credential deletion reach their identity-bearing routes', async () => {
+    handler = (request, response) => {
+      if (request.url === `/api/agent/v1/workspaces/${workspaceId}/agents/agent%2Fa` && request.method === 'PUT') return json(response, { revision: '1', agentId: agent.agentId, agent });
+      if (request.url === `/api/agent/v1/workspaces/${workspaceId}/agents/agent%2Fa` && request.method === 'DELETE') return json(response, { revision: '2', agentId: agent.agentId, agent: null });
+      if (request.url === `/api/agent/v1/workspaces/${workspaceId}/providers/provider_expected/credential/credential%2Fa` && request.method === 'DELETE') return json(response, { revision: '1', providerId: 'provider_expected', auth: { status: 'missing' } });
+      response.writeHead(404); response.end();
+    };
+    expect((await client.updateAgent(workspaceId, { expectedRevision: '0', agent })).agent).toEqual(agent);
+    expect((await client.deleteAgent(workspaceId, { expectedRevision: '1', agentId: agent.agentId })).agent).toBeNull();
+    expect((await client.deleteProviderCredential(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_expected', credentialRef: 'credential/a' })).auth.status).toBe('missing');
+  });
+
+  test('rejects other-session snapshots, history, metadata, queue and deletion receipts', async () => {
+    for (const invoke of [() => client.getSession(sessionId), () => client.getSnapshot(sessionId)]) {
+      respondWith(snapshot({ ...runtimeSession, sessionId: 'session_other' }));
+      await expect(invoke()).rejects.toThrow('requested scope');
+    }
+    respondWith({ sessionId: 'session_other', branch: snapshot().branch, turns: [], messages: [], nextCursor: null });
+    await expect(client.getHistory(sessionId)).rejects.toThrow('requested scope');
+    respondWith({ sessionId: 'session_other', revision: '0', metadata: null });
+    await expect(client.getSessionMetadata(sessionId)).rejects.toThrow('requested scope');
+    await expect(client.patchSessionMetadata(sessionId, { changes: { title: 'Title' } })).rejects.toThrow('requested scope');
+    respondWith({ sessionId: 'session_other', revision: '0', items: [] });
+    await expect(client.getQueue(sessionId)).rejects.toThrow('requested scope');
+    await expect(client.appendQueue(sessionId, { expectedRevision: '0', content: 'hello', request: prompt })).rejects.toThrow('requested scope');
+    await expect(client.reorderQueue(sessionId, { expectedRevision: '0', queueItemIds: [] })).rejects.toThrow('requested scope');
+    await expect(client.deleteQueueItem(sessionId, 'item_expected', { expectedRevision: '0', queueItemId: 'item_expected' })).rejects.toThrow('requested scope');
+    respondWith({ sessionId: 'session_other', deletedSessionIds: ['session_other'] });
+    await expect(client.deleteSession(sessionId)).rejects.toThrow('requested scope');
+  });
+
+  test('rejects session creation, fork and archive receipts outside the requested ownership', async () => {
+    const other = { ...runtimeSession, sessionId: 'session_child', workspaceId: 'workspace_other', metadata: null, metadataRevision: '0', archiveRevision: '0' };
+    respondWith({ session: other });
+    await expect(client.createSession({ projectId: runtimeSession.projectId, workspaceId, options: prompt.options })).rejects.toThrow('requested scope');
+    await expect(client.forkSession(runtimeSession, { mode: 'full' })).rejects.toThrow('requested scope');
+    respondWith({ archived: [{ id: 'session_other', archivedAt: 2 }], failedIds: [] });
+    await expect(client.archiveSessions([sessionId])).rejects.toThrow('requested scope');
+    respondWith({ restored: [], failedIds: ['session_other'] });
+    await expect(client.unarchiveSessions([sessionId])).rejects.toThrow('requested scope');
+  });
+
+  test('rejects out-of-workspace discovery and catalogs but accepts authoritative empty scope', async () => {
+    respondWith({ items: [{ ...runtimeSession, workspaceId: 'workspace_other', metadata: null, metadataRevision: '0', archiveRevision: '0' }], errors: {} });
+    await expect(client.listSessions(workspaceId)).rejects.toThrow('requested scope');
+    respondWith({ items: [{ workspaceId, projectId: 'project_other', name: 'Workspace' }], errors: {} });
+    await expect(client.listWorkspaces(runtimeSession.projectId)).rejects.toThrow('requested scope');
+    for (const [field, invoke] of [
+      ['models', () => client.getModels(workspaceId)], ['providers', () => client.getProviders(workspaceId)], ['agents', () => client.getAgents(workspaceId)],
+    ] as const) {
+      respondWith({ workspaceId: 'workspace_other', revision: '0', [field]: [] });
+      await expect(invoke()).rejects.toThrow('requested scope');
+      respondWith({ workspaceId, revision: '0', [field]: [] });
+      expect((await invoke()).workspaceId).toBe(workspaceId);
+    }
+    respondWith({ items: [], errors: {} });
+    expect(await client.listSessions(workspaceId)).toEqual({ items: [], errors: {} });
+  });
+
+  test('rejects unrelated run, steering and follow-up receipts', async () => {
+    respondWith({ run: { runId: 'run_other', sessionId, status: 'cancelled', createdAt: 1, finishedAt: 2 } });
+    await expect(client.abortRun(sessionId, 'run_expected')).rejects.toThrow('requested scope');
+    await expect(client.abortSession(sessionId, 'run_expected')).rejects.toThrow('requested scope');
+    respondWith({ run: { runId: 'run_expected', sessionId: 'session_other', status: 'running', createdAt: 1 } });
+    await expect(client.createRun(sessionId, prompt)).rejects.toThrow('requested scope');
+    respondWith({ sessionId: 'session_other', runId: 'run_expected', acceptedAt: 1 });
+    await expect(client.steer(sessionId, prompt)).rejects.toThrow('requested scope');
+    respondWith({ sessionId: 'session_other', followUpId: 'followup_expected', acceptedAt: 1 });
+    await expect(client.followUp(sessionId, prompt)).rejects.toThrow('requested scope');
+  });
+
+  test('rejects unrelated interaction identity or generation', async () => {
+    const reply: C.ApprovalReply = { version: '1', epoch, workerGeneration: generation, decision: 'approve' };
+    const approval: C.ApprovalRequest = {
+      approvalId: 'approval_other', sessionId, turnId: 'turn', toolCallId: 'tool', toolName: 'bash', actionType: 'bash_command',
+      commandSummary: '', details: {}, version: '2', epoch, workerGeneration: generation, status: 'approved',
+      requestedAt: 1, resolvedAt: 2, resolution: { decision: 'approve' },
+    };
+    respondWith(approval);
+    await expect(client.respondApproval(sessionId, 'approval_expected', reply)).rejects.toThrow('requested scope');
+    respondWith({ ...approval, approvalId: 'approval_expected', workerGeneration: 'worker_other' });
+    await expect(client.respondApproval(sessionId, 'approval_expected', reply)).rejects.toThrow('requested scope');
+    respondWith({ questionId: 'question_other', sessionId, turnId: 'turn', prompt: '?', version: '2', epoch, workerGeneration: generation, status: 'cancelled', requestedAt: 1, resolvedAt: 2 });
+    await expect(client.respondQuestion(sessionId, 'question_expected', { version: '1', epoch, workerGeneration: generation, action: 'cancel' })).rejects.toThrow('requested scope');
+  });
+
+  test('rejects mismatched mutation result identities', async () => {
+    respondWith({ revision: '1', agentId: 'agent_other', agent: null });
+    await expect(client.updateAgent(workspaceId, { expectedRevision: '0', agent })).rejects.toThrow('requested scope');
+    await expect(client.createAgent(workspaceId, { expectedRevision: '0', agent })).rejects.toThrow('requested scope');
+    await expect(client.deleteAgent(workspaceId, { expectedRevision: '0', agentId: agent.agentId })).rejects.toThrow('requested scope');
+    respondWith({ revision: '1', providerId: 'provider_other', provider: null });
+    await expect(client.deleteProvider(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_expected' })).rejects.toThrow('requested scope');
+    await expect(client.configureProvider(workspaceId, 'provider_expected', { expectedRevision: '0', configuration: { providerId: 'provider_expected', name: 'Provider', endpoint: 'https://provider.example', protocol: 'responses', credentialRef: null } })).rejects.toThrow('requested scope');
+    respondWith({ revision: '1', selection: { providerId: model.provider, modelId: 'model_other' }, model: null });
+    await expect(client.configureModel(workspaceId, model.provider, model.modelId, { expectedRevision: '0', model })).rejects.toThrow('requested scope');
+    await expect(client.deleteModel(workspaceId, model.provider, model.modelId, { expectedRevision: '0', selection: completion.selection })).rejects.toThrow('requested scope');
+    respondWith({ revision: '1', providerId: 'provider_other', auth: { status: 'missing' } });
+    await expect(client.writeProviderCredential(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_expected', credential: { method: 'api-key', apiKey: 'secret' } })).rejects.toThrow('requested scope');
+    await expect(client.deleteProviderCredential(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_expected', credentialRef: 'credential' })).rejects.toThrow('requested scope');
+  });
+
+  test('rejects path/body scope conflicts before any network dispatch', async () => {
+    const operations = [
+      () => client.configureProvider(workspaceId, 'provider_expected', { expectedRevision: '0', configuration: { providerId: 'provider_other', name: 'Other', endpoint: 'https://provider.example', protocol: 'responses', credentialRef: null } }),
+      () => client.deleteProvider(workspaceId, 'provider_expected', { expectedRevision: '0', providerId: 'provider_other' }),
+      () => client.configureModel(workspaceId, model.provider, model.modelId, { expectedRevision: '0', model: { ...model, provider: 'provider_other' } }),
+      () => client.deleteModel(workspaceId, model.provider, model.modelId, { expectedRevision: '0', selection: { ...completion.selection, modelId: 'model_other' } }),
+      () => client.writeProviderCredential(workspaceId, model.provider, { expectedRevision: '0', providerId: 'provider_other', credential: { method: 'api-key', apiKey: 'secret' } }),
+      () => client.deleteProviderCredential(workspaceId, model.provider, { expectedRevision: '0', providerId: 'provider_other', credentialRef: 'credential' }),
+      () => client.deleteQueueItem(sessionId, 'item_expected', { expectedRevision: '0', queueItemId: 'item_other' }),
+      () => client.stopShell(sessionId, { job: { jobId: job.jobId, sessionId: 'session_other', epoch, workerGeneration: generation } }),
+      () => client.complete(workspaceId, { ...completion, workspaceId: 'workspace_other' }),
+      () => client.cancelCompletion(workspaceId, completion.completionId, { completionId: 'completion_other' }),
+    ];
+    for (const operation of operations) await expect(Promise.resolve().then(async () => { await operation(); })).rejects.toThrow('does not match the route');
+    expect(calls).toEqual([]);
+  });
+
+  test('rejects other Shell scope, output cursor and job generation', async () => {
+    respondWith({ scope: { kind: 'workspace', workspaceId: 'workspace_other' }, epoch, revision: '0', running: [], ended: [], recovery: { priorEpochs: 'invalidated' } });
+    await expect(client.getShellSnapshot({ kind: 'workspace', workspaceId })).rejects.toThrow('requested scope');
+    respondWith({ scope: { kind: 'session', sessionId }, epoch, revision: '1', running: [{ ...job, sessionId: 'session_other' }], ended: [], recovery: { priorEpochs: 'invalidated' } });
+    await expect(client.getShellSnapshot({ kind: 'session', sessionId })).rejects.toThrow('requested scope');
+    respondWith({ ...job, sessionId: 'session_other' });
+    await expect(client.startShell(sessionId, { command: 'echo hello', background: false })).rejects.toThrow('requested scope');
+    const identity = { jobId: job.jobId, epoch, workerGeneration: generation };
+    respondWith({ job: { ...identity, sessionId, workerGeneration: 'worker_other' }, requestedCursor: '0', startCursor: '0', cursor: '0', skippedBytes: '0', output: '', ended: false });
+    await expect(client.getShellOutput(sessionId, identity, '0', 100)).rejects.toThrow('requested scope');
+    respondWith({ job: { ...identity, sessionId }, requestedCursor: '1', startCursor: '1', cursor: '1', skippedBytes: '0', output: '', ended: false });
+    await expect(client.getShellOutput(sessionId, identity, '0', 100)).rejects.toThrow('requested scope');
+    respondWith({ job: { ...job, jobId: 'job_other', status: 'ended', endedAt: 2, termination: { reason: 'stopped', exitCode: null } } });
+    await expect(client.stopShell(sessionId, { job: { ...identity, sessionId } })).rejects.toThrow('requested scope');
+  });
+
+  test('binds MCP and skills to root worker scope, not the addressed child session', async () => {
+    respondWith(mcp);
+    expect((await client.getMcpCatalog(runtimeSession)).workerCatalog.worker.rootSessionId).toBe(runtimeSession.rootSessionId);
+    expect(calls).toHaveLength(1);
+    respondWith({ ...mcp, workerCatalog: { ...mcp.workerCatalog, worker: { ...worker, rootSessionId: 'root_other' } } });
+    await expect(client.getMcpCatalog(runtimeSession)).rejects.toThrow('requested scope');
+    respondWith({ ...skills, worker: { ...worker, workspaceId: 'workspace_other' } });
+    await expect(client.getSkillsCatalog(runtimeSession)).rejects.toThrow('requested scope');
+    respondWith({ serverId: 'server_other', worker, persistedRevision: '1', status: 'unauthenticated', authenticated: false });
+    await expect(client.getMcpOAuth(runtimeSession, 'server_expected')).rejects.toThrow('requested scope');
+    respondWith({ serverId: 'server_expected', worker: { ...worker, workerGeneration: 'worker_other' }, persistedRevision: '1', status: 'unauthenticated', authenticated: false });
+    await expect(client.submitMcpOAuth(runtimeSession, 'server_expected', { action: 'disconnect', persistedRevision: '1', workerGeneration: generation })).rejects.toThrow('requested scope');
+    respondWith({ worker, skillId: 'skill_other', catalogRevision: '1', message: 'Expanded' });
+    await expect(client.expandSkill(runtimeSession, { skillId: 'skill_expected', catalogRevision: '1', workerGeneration: generation, arguments: '' })).rejects.toThrow('requested scope');
+    respondWith({ ...mcp, workerCatalog: { ...mcp.workerCatalog, worker: { ...worker, workerGeneration: 'worker_other' } } });
+    await expect(client.reconnectMcp(runtimeSession, 'server_expected', { persistedRevision: '1', expectedCatalogRevision: '1', workerGeneration: generation })).rejects.toThrow('requested scope');
+  });
+
+  test('rejects wrong MCP apply workspace and selected skill source scope without extra authority reads', async () => {
+    respondWith({ kind: 'mcp', status: 'no-active-workers', configuration: { workspaceId: 'workspace_other', persistedRevision: '1', config: { servers: [] } }, workers: [] });
+    await expect(client.configureMcp(runtimeSession, { expectedPersistedRevision: '0', config: { servers: [] } })).rejects.toThrow('requested scope');
+    await expect(client.applyMcp(runtimeSession, { persistedRevision: '1' })).rejects.toThrow('requested scope');
+    respondWith({ kind: 'skills', status: 'no-active-workers', scope: { kind: 'agent', agentDirectoryId: 'agent_directory_other' }, sourceRevision: '1', workers: [] });
+    await expect(client.applySkills({ ...runtimeSession, agentDirectoryId: skills.agentDirectoryId }, { scope: 'agent', sourceRevision: '1' })).rejects.toThrow('requested scope');
+    expect(calls).toHaveLength(3);
+  });
+
+  test('rejects completion identity and model-selection substitutions', async () => {
+    for (const result of [
+      { completionId: 'completion_other', selection: completion.selection },
+      { completionId: completion.completionId, selection: { ...completion.selection, providerId: 'provider_other' } },
+      { completionId: completion.completionId, selection: { ...completion.selection, modelId: 'model_other' } },
+    ]) {
+      respondWith({ ...result, status: 'completed', output: { kind: 'text', text: 'Output' }, finishReason: 'complete', usage: null });
+      await expect(client.complete(workspaceId, completion)).rejects.toThrow('requested scope');
+    }
+    respondWith({ completionId: 'completion_other', status: 'cancelled' });
+    await expect(client.cancelCompletion(workspaceId, completion.completionId)).rejects.toThrow('requested scope');
+  });
+});
+
+type StreamObservation = { events: C.CanonicalEvent[]; invalidations: C.StreamInvalidated[]; errors: unknown[] };
+const statusEvent: C.CanonicalEvent = { type: 'session.status', sessionId, epoch, sequence: '1', timestamp: 1, runtimeStatus: 'idle', activeRunId: null };
+const invalidation: C.StreamInvalidated = { type: 'stream.invalidated', sessionId, epoch, reason: 'EPOCH_CHANGED' };
+const frame = (event: C.CanonicalEvent | C.StreamInvalidated, newline = '\n') => `event: ${event.type}${newline}data: ${JSON.stringify(event)}${newline}${newline}`;
+
+// The server leaves the response open: only cancellation by the real client can release it.
+async function observeStream(chunks: string[], options: { abort?: boolean; throwOnEvent?: boolean; throwOnInvalidated?: boolean; contentType?: string } = {}): Promise<StreamObservation> {
+  let closed!: () => void;
+  const disconnected = new Promise<void>(resolve => { closed = resolve; });
+  let opened!: () => void;
+  const connected = new Promise<void>(resolve => { opened = resolve; });
+  handler = (_request, response) => {
+    response.on('close', closed);
+    response.writeHead(200, { 'Content-Type': options.contentType ?? 'text/event-stream' });
+    response.flushHeaders();
+    opened();
+    let index = 0;
+    const send = () => {
+      if (response.destroyed || index === chunks.length) return;
+      response.write(chunks[index++], send);
+    };
+    send();
+  };
+  const result: StreamObservation = { events: [], invalidations: [], errors: [] };
+  const stop = client.subscribeSessionEvents(sessionId, `${epoch}:0`, event => {
+    result.events.push(event);
+    if (options.throwOnEvent) throw new Error('Consumer failed');
+  }, event => { result.invalidations.push(event); if (options.throwOnInvalidated) throw new Error('Invalidation consumer failed'); }, error => { result.errors.push(error); });
+  try {
+    await connected;
+    if (options.abort) stop();
+    await disconnected;
+    if (!options.abort && result.invalidations.length === 0 && result.errors.length === 0) throw new Error('Client did not terminate the stream');
+    return result;
+  } finally { stop(); }
+}
+
+describe('CanonicalClient real SSE protocol boundary', () => {
+  test('rejects another session before either event callback and disconnects exactly once', async () => {
+    for (const event of [{ ...statusEvent, sessionId: 'session_other' }, { ...invalidation, sessionId: 'session_other' }]) {
+      const result = await observeStream([frame(event), frame(invalidation)]);
+      expect(result.events).toEqual([]);
+      expect(result.invalidations).toEqual([]);
+      expect(result.errors).toHaveLength(1);
+    }
+  });
+
+  test('accepts LF, CRLF and CR framing including a split CRLF newline', async () => {
+    for (const newline of ['\n', '\r\n', '\r']) {
+      const result = await observeStream([frame(statusEvent, newline), frame(invalidation, newline)]);
+      expect(result.events).toEqual([statusEvent]);
+      expect(result.invalidations).toEqual([invalidation]);
+      expect(result.errors).toEqual([]);
+    }
+    const result = await observeStream(['event: session.status\r', '\ndata: ' + JSON.stringify(statusEvent) + '\r', '\n\r', '\n' + frame(invalidation, '\r\n')]);
+    expect(result.events).toEqual([statusEvent]);
+    expect(result.invalidations).toEqual([invalidation]);
+    expect(result.errors).toEqual([]);
+  });
+
+  test('resets event names for empty frames and ignores comments while joining data lines', async () => {
+    const result = await observeStream([
+      'event: stream.invalidated\n\n: heartbeat\n\n',
+      'data: {\ndata: "type":"session.status","sessionId":"session_expected","epoch":"epoch_expected",\ndata: "sequence":"1","timestamp":1,"runtimeStatus":"idle","activeRunId":null}\n\n',
+      frame(invalidation),
+    ]);
+    expect(result.events).toEqual([statusEvent]);
+    expect(result.invalidations).toEqual([invalidation]);
+    expect(result.errors).toEqual([]);
+  });
+
+  test('parse and consumer failures cancel the open response and publish one owner failure', async () => {
+    const invalid = await observeStream(['data: not-json\n\n', frame(statusEvent)]);
+    expect(invalid.events).toEqual([]);
+    expect(invalid.errors).toHaveLength(1);
+    const consumer = await observeStream([frame(statusEvent), frame(statusEvent)], { throwOnEvent: true });
+    expect(consumer.events).toEqual([statusEvent]);
+    expect(consumer.errors).toHaveLength(1);
+    expect(consumer.invalidations).toEqual([]);
+  });
+
+  test('rejects nested wrong-session entities and protocol event-name/content-type conflicts', async () => {
+    const event: C.CanonicalEvent = { type: 'queue.updated', sessionId, epoch, sequence: '1', timestamp: 1, queue: { sessionId: 'session_other', revision: '0', items: [] } };
+    const nested = await observeStream([frame(event)]);
+    expect(nested.events).toEqual([]);
+    expect(nested.errors).toHaveLength(1);
+    const name = await observeStream(['event: stream.invalidated\ndata: ' + JSON.stringify(statusEvent) + '\n\n']);
+    expect(name.events).toEqual([]);
+    expect(name.invalidations).toEqual([]);
+    expect(name.errors).toHaveLength(1);
+    const content = await observeStream([frame(statusEvent)], { contentType: 'application/json' });
+    expect(content.events).toEqual([]);
+    expect(content.errors).toHaveLength(1);
+    const consumer = await observeStream([frame(invalidation)], { throwOnInvalidated: true });
+    expect(consumer.invalidations).toEqual([invalidation]);
+    expect(consumer.errors).toHaveLength(1);
+  });
+
+  test('intentional abort cancels an idle open response without an owner error', async () => {
+    const result = await observeStream([], { abort: true });
+    expect(result).toEqual({ events: [], invalidations: [], errors: [] });
+  });
+
+  test('EOF after a partial frame reports one failure and never publishes incomplete JSON', async () => {
+    handler = (_request, response) => { response.writeHead(200, { 'Content-Type': 'text/event-stream' }); response.end('data: {"type":"session.status"'); };
+    const events: C.CanonicalEvent[] = [];
+    const errors: unknown[] = [];
+    await new Promise<void>((resolve, reject) => {
+      const stop = client.subscribeSessionEvents(sessionId, `${epoch}:0`, event => events.push(event), () => reject(new Error('Unexpected invalidation')), error => { errors.push(error); stop(); resolve(); });
+    });
+    expect(events).toEqual([]);
+    expect(errors).toHaveLength(1);
+  });
+});
