@@ -1,5 +1,5 @@
 import { credentialAccessToken } from './selected-credential.js';
-import { buildResult, toUsageWindow, toNumber, formatMoney, asNonEmptyString } from '../utils/index.js';
+import { buildResult, toUsageWindow, toNumber, formatMoney, asNonEmptyString, asObject } from '../utils/index.js';
 
 export const providerId = 'kilo';
 export const providerName = 'Kilo Code';

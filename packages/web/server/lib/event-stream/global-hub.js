@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { translateWireEvent } from './translate-v2.js';
 import { CanonicalEventSchema, CursorSchema, EntityIdSchema, SessionSnapshotSchema, StreamInvalidatedSchema } from '@openchamber/agent-contract';
 
 const REPLAY_LIMIT = 2048;
@@ -15,6 +16,7 @@ export function createGlobalMessageStreamHub({
   }
   const sessions = new Map();
   const eventSubscribers = new Set();
+  const spaceEventSubscribers = new Set();
   const snapshotSubscribers = new Set();
   const frameSubscribers = new Set();
   const statusSubscribers = new Set();
@@ -67,6 +69,22 @@ export function createGlobalMessageStreamHub({
         } catch { console.warn('Canonical frame subscriber failed'); }
       }
     });
+    delivery = run.catch(() => {});
+    return run;
+  };
+
+  const injectEvent = ({ payload, directory, spaceId }) => {
+    const record = {
+      payload,
+      directory,
+      spaceId,
+      translated: () => translateWireEvent(payload).map((event) => ({
+        ...event,
+        properties: { ...event.properties, directory: event.properties.directory || (directory === 'global' ? undefined : directory) },
+      })),
+    };
+    const subscribers = spaceId === null ? eventSubscribers : spaceEventSubscribers;
+    const run = delivery.then(() => notify(subscribers, record));
     delivery = run.catch(() => {});
     return run;
   };
@@ -222,6 +240,7 @@ export function createGlobalMessageStreamHub({
     async start(sessionIds = []) { started = true; await Promise.all(sessionIds.map((id) => subscribeSession(id))); },
     subscribeSession,
     unsubscribeSession,
+    injectEvent,
     stop() {
       if (stopping) return stopping;
       started = false;
@@ -233,7 +252,7 @@ export function createGlobalMessageStreamHub({
     isConnected() { for (const entry of sessions.values()) if (entry.connected) return true; return false; },
     isSessionConnected: (sessionId) => sessions.get(sessionId)?.connected === true,
     hasConnected: () => everConnected,
-    subscribeEvent: (subscriber) => subscribe(eventSubscribers, subscriber),
+    subscribeEvent: (subscriber, { spaces = false } = {}) => subscribe(spaces ? spaceEventSubscribers : eventSubscribers, subscriber),
     subscribeSnapshot: (subscriber) => subscribe(snapshotSubscribers, subscriber),
     subscribeFrame: (subscriber) => subscribe(frameSubscribers, subscriber),
     subscribeStatus: (subscriber) => subscribe(statusSubscribers, subscriber),

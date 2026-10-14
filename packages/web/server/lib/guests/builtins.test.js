@@ -47,7 +47,7 @@ const fixture = async () => {
   await fs.writeFile(path.join(bundle, 'registry.json'), JSON.stringify({ version: 1, extensions: [{ id, directory: 'fixture' }] }));
   releases.push(await registerBuiltInGuests({ persistPath, root: bundle }));
   const app = express();
-  registerGuestRoutes(app, { openchamberDataDir: data, openchamberVersion: '1.23.2', resolveGitBinaryForSpawn: () => 'git', resolveOptionalProjectDirectory: () => ({ directory: project }) });
+  registerGuestRoutes(app, { openchamberDataDir: data, openchamberVersion: '1.23.2', resolveGitBinaryForSpawn: () => 'git', resolveOptionalProjectDirectory: () => ({ directory: project }), resolveWorkspaceScope: async (workspaceId) => ({ workspaceId, cwd: project }) });
   return { root, bundle, packageRoot, persistPath, api: request(app) };
 };
 

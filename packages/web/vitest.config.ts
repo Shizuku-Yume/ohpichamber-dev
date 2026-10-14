@@ -31,6 +31,9 @@ export default defineConfig({
     // UI integration fixtures with Vite asset imports cannot execute in Bun's
     // raw TS loader. Keep them beside their UI owner and run them here.
     include: [...configDefaults.include, '../ui/src/**/*.vitest.tsx'],
+    // These suites use Node's test context and are run with `node --test`; Vitest loads their
+    // modules but cannot register the Node-owned tests.
+    exclude: [...configDefaults.exclude, 'server/lib/host/legacy-attachment-importer.test.js', 'server/lib/message-queue/sqlite-store.test.js'],
     // The Git suites drive a real `git` binary against temporary repositories.
     // Those subprocess round-trips routinely pass the 5s default, and which
     // cases exceed it shifts with machine load, so the default made a valid

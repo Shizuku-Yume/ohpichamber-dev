@@ -17,12 +17,15 @@
  * `data.level` is the plan tier (for example "lite") and becomes `planLabel`.
  */
 import { credentialAccessToken } from './selected-credential.js';
-import { buildResult,
-toUsageWindow,
-toNumber,
-resolveWindowSeconds,
-resolveWindowLabel,
-normalizeTimestamp } from '../utils/index.js'
+import {
+  asNonEmptyString,
+  buildResult,
+  toUsageWindow,
+  toNumber,
+  resolveWindowSeconds,
+  resolveWindowLabel,
+  normalizeTimestamp
+} from '../utils/index.js';
 
 export const providerId = 'zhipuai-coding-plan';
 export const providerName = 'Zhipu AI Coding Plan';
@@ -138,7 +141,7 @@ export const fetchQuota = async ({ credential } = {}) => {
       // TIME_LIMIT unit=5 means 1 month (30 days)
       const monthSeconds = 30 * 24 * 60 * 60;
       const resetAt = mcpToolsTimeLimit?.nextResetTime ? normalizeTimestamp(mcpToolsTimeLimit.nextResetTime) : null;
-      const usedPercent = typeof mcpToolsTimeLimit?.percentage === 'number' ? mcpToolsTimeLimit.percentage : null;
+      const usedPercent = toNumber(mcpToolsTimeLimit?.percentage);
 
       windows['MCP Tools'] = toUsageWindow({
         usedPercent,

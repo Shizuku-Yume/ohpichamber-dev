@@ -271,7 +271,7 @@ describe('createSpacesHost: sessions and events', () => {
     const spaces = new Map([[ID, { port: space.port, running: true }]]);
     const host = createSpacesHost({ dataDir: temporary(), place: fakePlace(spaces), logger, setTimer: () => null, clearTimer: () => {} });
     hosts.push(host);
-    const hub = createGlobalMessageStreamHub({ buildOpenCodeUrl: (p) => `http://127.0.0.1:1${p}`, getOpenCodeAuthHeaders: () => ({}), deltaCoalesceWindowMs: 0, fetchImpl: async () => { throw new Error('no host upstream here'); } });
+    const hub = createGlobalMessageStreamHub({ service: { request: async () => new Response(null, { status: 500 }) }, resolveSessionScope: async () => ({ projectId: 'project', workspaceId: 'workspace', cwd: '/home/me', rootSessionId: 'session' }) });
     const received = [];
     hub.subscribeEvent((event) => received.push(event), { spaces: true });
     await host.startEvents(hub);

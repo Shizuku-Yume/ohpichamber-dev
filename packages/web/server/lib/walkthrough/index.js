@@ -91,6 +91,7 @@ const fail = (message, statusCode, extra = {}) =>
 // that comes back attaches to the running job instead of starting a second one,
 // and cancelling is an explicit request rather than a side effect of leaving.
 const jobs = new Map();
+const schemaRefusedBy = new Set();
 
 const addReadContext = (result, readContext) => {
   if (readContext) result.readContext = readContext;
@@ -480,18 +481,28 @@ async function runGeneration({ workspaceId, directory, source, repoRoot, key, fo
   const { prompt, system } = buildPrompt({ digest, fileCount, hunkCount, source, previousWalkthrough, language });
 
 
-  const raw = await generateSmallModelText({
+  const requestOptions = {
     prompt,
     system,
     directory,
     workspaceId,
     model: `${model.providerID}/${model.modelID}`,
-    responseSchema,
     onOverflow: 'error',
     timeoutMs: generationTimeoutMs(hunkCount),
     maxOutputTokens: model.outputTokens ?? MIN_OUTPUT_TOKENS,
     signal,
-  });
+  };
+  const modelKey = modelLabel(model);
+  let raw;
+  try {
+    raw = await generateSmallModelText({ ...requestOptions, responseSchema: schemaRefusedBy.has(modelKey) ? undefined : responseSchema });
+  } catch (error) {
+    const status = error?.statusCode ?? error?.status;
+    if (schemaRefusedBy.has(modelKey) || !responseSchema || !Number.isInteger(status) || status < 400 || status >= 500) throw error;
+    schemaRefusedBy.add(modelKey);
+    setStage(repoRoot, key, 'retrying', readContext);
+    raw = await generateSmallModelText({ ...requestOptions, responseSchema: undefined });
+  }
 
   setStage(repoRoot, key, 'assembling', readContext);
 

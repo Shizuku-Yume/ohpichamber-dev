@@ -108,6 +108,7 @@ describe('walkthrough routes', () => {
     app.use(express.json());
     validateReadContext = vi.fn(async (context) => ({ ...context, instance: 'github.com' }));
     resolveWorkspaceScope = vi.fn(async (workspaceId) => workspaceId === 'workspace' ? { workspaceId, cwd: '/repo' } : null);
+    getWalkthroughService = vi.fn(async () => service);
     registerWalkthroughRoutes(app, { getWalkthroughService, validateReadContext, resolveWorkspaceScope });
     server = app.listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
@@ -358,15 +359,15 @@ describe('walkthrough routes', () => {
     const target = { source: PR_SOURCE, context: { ...PR_CONTEXT, directory: '/repo' } };
 
     try {
-      await clientFetchWalkthrough('/repo', target);
+      await clientFetchWalkthrough('/repo', target, { workspaceId: 'workspace' });
 
-      const generation = clientGenerateWalkthrough('/repo', target);
+      const generation = clientGenerateWalkthrough('/repo', target, { workspaceId: 'workspace' });
       await vi.waitFor(() => expect(generationRequestCount).toBe(1));
       releaseJob();
       await generation;
 
-      expect(await clientFetchWalkthroughStage('/repo', target)).toBeNull();
-      await clientCancelWalkthroughGeneration('/repo', target);
+      expect(await clientFetchWalkthroughStage('/repo', target, undefined, 'workspace')).toBeNull();
+      await clientCancelWalkthroughGeneration('/repo', target, { workspaceId: 'workspace' });
     } finally {
       setRuntimeUrlResolver(previousResolver);
     }

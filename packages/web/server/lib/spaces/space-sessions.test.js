@@ -64,7 +64,7 @@ describe('filterSpaceSessionRecords', () => {
       isHostSessionId: never,
       claimedBy: nobody,
     });
-    expect(result.records[0]).toEqual({ id: 's1', location: { directory: `/spaces/${ID}/repo` }, title: 's1', revert: { messageID: 'm' } });
+    expect(result.records[0]).toEqual({ id: 's1', location: { directory: `/spaces/${ID}/repo` }, revert: { messageID: 'm', files: ['x'] } });
   });
 });
 

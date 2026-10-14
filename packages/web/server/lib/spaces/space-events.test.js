@@ -34,10 +34,8 @@ const jsonResponse = (status, body) => {
 };
 
 const makeHub = () => createGlobalMessageStreamHub({
-  buildOpenCodeUrl: (path) => `http://127.0.0.1:1${path}`,
-  getOpenCodeAuthHeaders: () => ({}),
-  deltaCoalesceWindowMs: 0,
-  fetchImpl: async () => { throw new Error('the host upstream is not part of this test'); },
+  service: { request: async () => new Response(null, { status: 500 }) },
+  resolveSessionScope: async () => ({ projectId: 'project', workspaceId: 'workspace', cwd: '/home/me', rootSessionId: 'session' }),
 });
 
 describe('reconnectDelayAfter', () => {

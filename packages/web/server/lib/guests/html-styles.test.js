@@ -20,7 +20,7 @@ describe('approved origins in the frame policy', () => {
     await fs.writeFile(path.join(packageRoot, 'package.json'), JSON.stringify({ name: 'guest', version: '1.0.0', openchamber: { apiVersion: 1, contributes: { panel: { id: 'fonts-guest', name: 'Fonts', icon: 'apps', entry: 'index.html' }, origins: ['https://fonts.example.com'] } } }));
     const persistPath = path.join(root, 'extensions.json');
     await writeExtensionStore(persistPath, { paths: [packageRoot], sources: { [packageRoot]: 'path' } });
-    const app = express(); registerGuestRoutes(app, { openchamberDataDir: root });
+    const app = express(); registerGuestRoutes(app, { openchamberDataDir: root, resolveWorkspaceScope: async (workspaceId) => ({ workspaceId, cwd: root }) });
     const policy = async () => (await request(app).get('/api/guests/fonts-guest/index.html').set('Host', 'oc.test').expect(200)).headers['content-security-policy'];
 
     expect(await policy()).not.toContain('https://fonts.example.com');
@@ -74,7 +74,7 @@ describe('guest document styles', () => {
     await fs.writeFile(path.join(packageRoot, 'main.js'), script);
     await fs.writeFile(path.join(packageRoot, 'package.json'), JSON.stringify({ name: 'guest', version: '1.0.0', openchamber: { apiVersion: 1, contributes: { panel: { id: 'old-guest', name: 'Old guest', icon: 'apps', entry: 'index.html' } } } }));
     await writeExtensionStore(path.join(root, 'extensions.json'), { paths: [packageRoot], sources: { [packageRoot]: 'path' } });
-    const app = express(); registerGuestRoutes(app, { openchamberDataDir: root });
+    const app = express(); registerGuestRoutes(app, { openchamberDataDir: root, resolveWorkspaceScope: async (workspaceId) => ({ workspaceId, cwd: root }) });
     for (const suffix of ['', '?oc_url_token=fixture-scope']) {
       const response = await request(app).get(`/api/guests/old-guest/index.html${suffix}`).set('Host', 'oc.example:3000').expect(200);
       // Sandboxed and off the network: its own package path is the one place it may connect.
@@ -98,7 +98,7 @@ describe('guest document styles', () => {
       if (req.headers.origin === 'openchamber-ui://app') res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
       next();
     });
-    registerGuestRoutes(uiApp, { openchamberDataDir: root });
+    registerGuestRoutes(uiApp, { openchamberDataDir: root, resolveWorkspaceScope: async (workspaceId) => ({ workspaceId, cwd: root }) });
     const fromUi = await request(uiApp).get('/api/guests/old-guest/main.js').set('Origin', 'openchamber-ui://app').expect(200);
     expect(fromUi.headers['access-control-allow-origin']).toBe('openchamber-ui://app');
     const fromFrame = await request(uiApp).get('/api/guests/old-guest/main.js').set('Origin', 'null').expect(200);

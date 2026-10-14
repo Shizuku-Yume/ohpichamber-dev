@@ -14,6 +14,8 @@ const createRuntime = (server, overrides = {}) => {
     setIsShuttingDown: vi.fn(),
     syncToHmrState: vi.fn(),
     openCodeWatcherRuntime: { stop: vi.fn() },
+    hostAgentRuntime: { close: vi.fn() },
+    hostSessionState: { close: vi.fn() },
     sessionRuntime: { dispose: vi.fn() },
     scheduledTasksRuntime: { stop: vi.fn() },
     getHealthCheckInterval: () => null,

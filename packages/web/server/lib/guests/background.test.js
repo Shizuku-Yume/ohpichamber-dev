@@ -60,7 +60,7 @@ test('background install serves sandboxed assets and storage obeys approval and 
   const { root, packageRoot } = await fixture();
   await fs.writeFile(path.join(packageRoot, 'index.html'), '<script src="main.js"></script>');
   await fs.writeFile(path.join(packageRoot, 'main.js'), 'void 0;');
-  const app = express(); registerGuestRoutes(app, { openchamberDataDir: root, resolveGitBinaryForSpawn: () => 'git' });
+  const app = express(); registerGuestRoutes(app, { openchamberDataDir: root, resolveGitBinaryForSpawn: () => 'git', resolveWorkspaceScope: async (workspaceId) => ({ workspaceId, cwd: root }) });
   const installed = await request(app).post('/api/guests').send({ path: packageRoot }).expect(201);
   expect(installed.body.guest.backgroundEntry).toBe('index.html');
   expect(installed.body.guest.entry).toBeUndefined();
