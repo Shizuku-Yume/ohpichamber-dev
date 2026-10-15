@@ -8,7 +8,6 @@ test('waits for backend-owned children before allowing Electron to exit', async 
   let options;
   const cleanup = new Promise((resolve) => { release = resolve; });
   const stopping = stopEmbeddedServer({ stop(input) { options = input; return cleanup; } }, {
-    launchFallback() { assert.fail('normal shutdown must not launch another process'); },
     warn() { assert.fail('normal shutdown must succeed'); },
   }).then(() => { stopped = true; });
   await new Promise((resolve) => setImmediate(resolve));
@@ -20,22 +19,17 @@ test('waits for backend-owned children before allowing Electron to exit', async 
 });
 
 for (const failure of ['error', 'deadline']) {
-  test(`uses the current managed process for fallback on ${failure}`, async () => {
+  test(`reports Host shutdown failure without killing unrelated processes on ${failure}`, async () => {
     const warnings = [];
-    const kills = [];
-    const info = { managed: true, pid: 123, port: 45678 };
     await stopEmbeddedServer({
       stop: () => failure === 'error' ? Promise.reject(new Error('fixture')) : new Promise(() => {}),
-      getOpenCodeProcessInfo: () => info,
-    }, { timeoutMs: 10, launchFallback: (value) => kills.push(value), warn: (error) => warnings.push(error) });
+    }, { timeoutMs: 10, warn: (error) => warnings.push(error) });
     assert.equal(warnings.length, 1);
-    assert.deepEqual(kills, [info]);
   });
 }
 
 test('remote-only Desktop has no local backend to stop', async () => {
   await stopEmbeddedServer(null, {
-    launchFallback() { assert.fail('external OpenCode is not owned by Desktop'); },
     warn() { assert.fail('missing local backend is normal'); },
   });
 });
@@ -46,7 +40,6 @@ test('the default deadline leaves room for terminal grace and subsequent cleanup
   let stopped = false;
   const cleanup = new Promise(resolve => { release = resolve; });
   const stopping = stopEmbeddedServer({ stop: () => cleanup }, {
-    launchFallback() { assert.fail('a 20-second terminal shutdown is within the desktop deadline'); },
     warn() { assert.fail('normal shutdown must succeed'); },
   }).then(() => { stopped = true; });
   t.mock.timers.tick(25_000);

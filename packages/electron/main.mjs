@@ -14,7 +14,7 @@ import updaterPkg from 'electron-updater';
 import { ElectronSshManager } from './ssh-manager.mjs';
 import { replaceFileWithRetry } from './windows-file-replace.mjs';
 import { createTrayController } from './tray.mjs';
-import { resolveManagedOpenCodeCwd } from './opencode-cwd.mjs';
+import { resolveAgentRuntime } from './agent-runtime.mjs';
 import { stopEmbeddedServer } from './server-shutdown.mjs';
 import { resolveStartupUrlProbePlan } from './startup-url-selection.mjs';
 import { clearAppCache } from './app-cache.mjs';
@@ -262,7 +262,6 @@ const INSTALLED_APPS_CACHE_FILE = 'discovered-apps.json';
 // entries written by an older build are treated as stale and refresh immediately.
 const INSTALLED_APPS_CACHE_VERSION = 2;
 const LINUX_DESKTOP_ENTRIES_CACHE_TTL_MS = 30_000;
-const OPENCODE_SHUTDOWN_GRACE_MS = 100;
 const { autoUpdater } = updaterPkg;
 
 const state = {
@@ -1459,9 +1458,8 @@ import { pathLooksUserConfigured, mergePathValues } from '@openchamber/web/serve
 import { provideLoginShellEnvSnapshot } from '@openchamber/web/server/lib/host/login-shell-env.js';
 
 // Merge the user's login-shell env (PATH, etc.) into this process before we
-// import/start the server in-process. The server and its children (opencode
-// CLI, git, etc.) inherit process.env directly now — there is no sidecar
-// subprocess to hand a custom env to.
+// import/start the in-process Node Host. Its supervised Agent Service, git and
+// terminal children inherit this environment.
 const inheritUserShellEnv = async () => {
   const shellEnv = await startShellEnvironmentProbe();
   // The server would otherwise snapshot the same shell again, synchronously,
@@ -1553,17 +1551,17 @@ const spawnLocalServer = async () => {
       : lanAccessBlockedByMissingPassword ? 'missing-password' : undefined,
     OPENCHAMBER_DIST_DIR: resolveWebDistDir(),
     OPENCHAMBER_RUNTIME: 'desktop',
-    // OpenCode uses process cwd as a fallback directory; app userData would make
-    // packaged desktop look like a separate empty workspace.
-    OPENCHAMBER_OPENCODE_CWD: resolveManagedOpenCodeCwd({
-      env: process.env,
-      homedir: () => os.homedir(),
-    }),
     OPENCHAMBER_DESKTOP_NOTIFY: 'true',
     OPENCHAMBER_UI_PASSWORD: desktopUiPassword || undefined,
     OPENCHAMBER_SKIP_API_COMPRESSION: process.env.OPENCHAMBER_SKIP_API_COMPRESSION || 'true',
     NO_PROXY: process.env.NO_PROXY || 'localhost,127.0.0.1',
     no_proxy: process.env.no_proxy || 'localhost,127.0.0.1',
+  });
+
+  const agentRuntime = resolveAgentRuntime(app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'));
+  assignInjectedEnv(process.env, {
+    OHPICHAMBER_BUN: agentRuntime.bunPath,
+    OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT: agentRuntime.entrypoint,
   });
 
   const { startWebUiServer } = await import('@openchamber/web/server/index.js');
@@ -1613,86 +1611,6 @@ const spawnLocalServer = async () => {
   return url;
 };
 
-const launchDetachedOpenCodeKiller = (processInfo) => {
-  if (!processInfo?.managed) return;
-  const pid = Number(processInfo.pid);
-  const port = Number(processInfo.port);
-  const hasPid = Number.isFinite(pid) && pid > 0;
-  const hasPort = Number.isFinite(port) && port > 0;
-  if (!hasPid && !hasPort) return;
-  const normalizedPid = hasPid ? String(Math.trunc(pid)) : '0';
-  const normalizedPort = Number.isFinite(port) && port > 0 ? String(Math.trunc(port)) : '0';
-
-  if (process.platform === 'win32') {
-    if (!hasPid) return;
-    const script = `
-$ErrorActionPreference = 'SilentlyContinue'
-$targetPid = ${normalizedPid}
-$graceMs = ${Math.max(0, Math.trunc(OPENCODE_SHUTDOWN_GRACE_MS))}
-function Stop-ProcessTree([int]$processId, [bool]$force) {
-  if ($processId -le 0) { return }
-  $children = Get-CimInstance Win32_Process -Filter "ParentProcessId=$processId"
-  foreach ($child in $children) {
-    Stop-ProcessTree ([int]$child.ProcessId) $force
-  }
-  if ($force) {
-    Stop-Process -Id $processId -Force
-  } else {
-    Stop-Process -Id $processId
-  }
-}
-Stop-ProcessTree $targetPid $false
-Start-Sleep -Milliseconds $graceMs
-Stop-ProcessTree $targetPid $true
-`;
-    const encodedScript = Buffer.from(script, 'utf16le').toString('base64');
-    const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-    const child = spawn(powershell, [
-      '-NoLogo',
-      '-NoProfile',
-      '-NonInteractive',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-WindowStyle',
-      'Hidden',
-      '-EncodedCommand',
-      encodedScript,
-    ], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-    child.unref();
-    return;
-  }
-
-  if (hasPid) {
-    try {
-      process.kill(-pid, 'SIGTERM');
-    } catch {
-    }
-    try {
-      process.kill(pid, 'SIGTERM');
-    } catch {
-    }
-  }
-
-  const script = [
-    'pid="$1"',
-    'port="$2"',
-    'grace="$3"',
-    'if [ "$pid" -gt 0 ] 2>/dev/null; then kill -TERM "$pid" 2>/dev/null; kill -TERM "-$pid" 2>/dev/null; fi',
-    'sleep "$grace"',
-    'if [ "$pid" -gt 0 ] 2>/dev/null; then kill -KILL "-$pid" 2>/dev/null; kill -KILL "$pid" 2>/dev/null; fi',
-    'if [ "$port" -gt 0 ] 2>/dev/null && command -v lsof >/dev/null 2>&1; then for target in $(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null; lsof -ti ":$port" 2>/dev/null); do [ "$target" = "$$" ] || kill -KILL "$target" 2>/dev/null; done; fi',
-  ].join('; ');
-  const child = spawn('/bin/sh', ['-c', script, 'openchamber-opencode-killer', normalizedPid, normalizedPort, String(OPENCODE_SHUTDOWN_GRACE_MS / 1000)], {
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-  });
-  child.unref();
-};
 
 const killSidecar = async () => {
   const handle = state.serverHandle;
@@ -1701,7 +1619,6 @@ const killSidecar = async () => {
   if (!handle) return;
 
   await stopEmbeddedServer(handle, {
-    launchFallback: launchDetachedOpenCodeKiller,
     warn: (error) => log.warn('[electron] embedded server shutdown failed:', error),
   });
 };

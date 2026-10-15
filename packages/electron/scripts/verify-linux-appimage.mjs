@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { normalizeTargetArchitecture } from './target-architecture.mjs';
-import { parseOpenCodeCliVersion, readPinnedOpenCodeCliVersion } from './opencode-cli-version.mjs';
+import { verifyAgentPayload } from './verify-agent-runtime.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const electronRoot = path.resolve(__dirname, '..');
@@ -65,21 +65,10 @@ const collectFiles = (root, predicate) => {
   return matches;
 };
 
-const defaultCliVersion = (binaryPath) => {
-  const result = spawnSync(binaryPath, ['--version'], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 15000,
-  });
-  if (result.status !== 0) throw new Error(`Failed to run packaged OpenCode CLI: ${binaryPath}`);
-  return parseOpenCodeCliVersion(result.stdout);
-};
-
 export const verifyExtractedPayload = ({
   root,
   targetArchitecture,
-  expectedOpenCodeVersion,
-  runCliVersion = defaultCliVersion,
+  runBunVersion,
 }) => {
   const desktopPath = path.join(root, 'openchamber.desktop');
   if (!fs.existsSync(desktopPath)) throw new Error(`Missing desktop entry: ${desktopPath}`);
@@ -90,11 +79,16 @@ export const verifyExtractedPayload = ({
   if (!/^Exec=AppRun(?:\s|$)/m.test(desktop)) throw new Error('Desktop identity mismatch: expected AppImage AppRun entrypoint');
 
   assertElfArchitecture(path.join(root, 'openchamber'), targetArchitecture, 'Electron executable');
-  const cliPath = path.join(root, 'resources', 'opencode-cli', 'opencode');
-  assertElfArchitecture(cliPath, targetArchitecture, 'OpenCode CLI');
-  const actualVersion = runCliVersion(cliPath);
-  if (actualVersion !== expectedOpenCodeVersion) {
-    throw new Error(`OpenCode CLI version mismatch: expected ${expectedOpenCodeVersion}, got ${actualVersion || '(empty)'}`);
+  const agentRoot = path.join(root, 'resources', 'agent-runtime');
+  assertElfArchitecture(path.join(agentRoot, 'bun'), targetArchitecture, 'Bun executable');
+  const agent = verifyAgentPayload(agentRoot, { platform: 'linux', architecture: targetArchitecture, runBunVersion });
+  const manifest = readJson(path.join(agentRoot, 'manifest.json'));
+  const agentNativeModules = manifest.files.filter(item => item.path.endsWith('.node'));
+  if (!agentNativeModules.length) throw new Error('Agent native payload is empty');
+  for (const item of agentNativeModules) {
+    // ONNX ships multiple platforms; only the selected platform is executable.
+    if (item.path.includes('/bin/napi-v6/') && !item.path.includes(`/linux/${targetArchitecture}/`)) continue;
+    assertElfArchitecture(path.join(agentRoot, item.path), targetArchitecture, 'Agent native module');
   }
 
   const unpackedModules = path.join(root, 'resources', 'app.asar.unpacked', 'node_modules');
@@ -111,7 +105,7 @@ export const verifyExtractedPayload = ({
     }
   }
   for (const modulePath of nativeModules) assertElfArchitecture(modulePath, targetArchitecture, 'Native module');
-  return { nativeModuleCount: nativeModules.length, openCodeVersion: actualVersion };
+  return { nativeModuleCount: nativeModules.length, ...agent };
 };
 
 const findAppImage = (version, architecture) => {
@@ -146,10 +140,9 @@ const main = () => {
     const result = verifyExtractedPayload({
       root: extractAppImage(appImagePath, temporaryDirectory),
       targetArchitecture: target,
-      expectedOpenCodeVersion: readPinnedOpenCodeCliVersion(),
     });
     console.log(`[electron] verified Linux ${target} AppImage: ${appImagePath}`);
-    console.log(`[electron] verified OpenCode CLI ${result.openCodeVersion} and ${result.nativeModuleCount} native modules`);
+    console.log(`[electron] verified Bun ${result.bunVersion}, ${result.packageCount} Agent packages and ${result.nativeModuleCount} Host native modules`);
   } finally {
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   }
