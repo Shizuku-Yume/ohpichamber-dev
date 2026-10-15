@@ -131,6 +131,44 @@ async function loginCookie() {
 }
 
 describe('canonical Host authenticated real-service boundary', () => {
+  it('authorizes workspace MCP Settings independently of session admission and rejects foreign workspace access', async () => {
+    servicePhase = 'ready';
+    const configuration = { workspaceId: 'workspace_1', persistedRevision: '0', config: { servers: [] } };
+    requestService = async () => Response.json(configuration);
+    const endpoint = '/api/agent/v1/workspaces/workspace_1/mcp/config';
+    assertProblem(await request(app).get(endpoint), 401, 'UNAUTHORIZED');
+    expect(requests).toHaveLength(0);
+    const response = await request(app).get(endpoint).set('Authorization', `Bearer ${token}`).expect(200);
+    expect(response.body).toEqual(configuration);
+    assertProblem(await request(app).get('/api/agent/v1/workspaces/workspace_foreign/mcp/config').set('Authorization', `Bearer ${token}`), 403, 'UNAUTHORIZED');
+    expect(requests).toHaveLength(1);
+  });
+  it('keeps policy-authorized MCP secret and OAuth operations available in enterprise mode', async () => {
+    servicePhase = 'ready';
+    policyEnabled = true;
+    const endpoint = '/api/agent/v1/workspaces/workspace_1/mcp/servers/server_1';
+    requestService = async () => Response.json({ workspaceId: 'workspace_1', serverId: 'server_1', persistedRevision: '0', credentialRef: 'credential_1' });
+    const response = await request(app).put(`${endpoint}/credentials`).set('Authorization', `Bearer ${token}`).send({ persistedRevision: '0', value: 'private-value' }).expect(200);
+    expect(JSON.stringify(response.body)).not.toContain('private-value');
+    expect(requests).toHaveLength(1);
+    requestService = async () => Response.json({ serverId: 'server_1', worker: { rootSessionId: 'session_1', workspaceId: 'workspace_1', workerGeneration: 'generation_1' }, persistedRevision: '0', status: 'unauthenticated', authenticated: false });
+    await request(app).post(`${endpoint}/oauth`).set('Authorization', `Bearer ${token}`).send({ action: 'disconnect', persistedRevision: '0', workerGeneration: 'generation_1' }).expect(200);
+    expect(requests).toHaveLength(2);
+  });
+
+  it('preserves native MCP connection failure and rejects secret-bearing private responses', async () => {
+    servicePhase = 'ready';
+    const endpoint = '/api/agent/v1/workspaces/workspace_1/mcp/servers/server_1';
+    const failed = { workspaceId: 'workspace_1', serverId: 'server_1', persistedRevision: '1', status: 'failed', error: { code: 'MCP_APPLY_FAILED', detail: 'Connection failed', retryable: true } };
+    requestService = async () => Response.json(failed);
+    const response = await request(app).post(`${endpoint}/test`).set('Authorization', `Bearer ${token}`).send({ persistedRevision: '1' }).expect(200);
+    expect(response.body).toEqual(failed);
+    requestService = async () => Response.json({ workspaceId: 'workspace_1', serverId: 'server_1', persistedRevision: '1', credentialRef: 'credential_1', value: 'private-value' });
+    const refused = await request(app).put(`${endpoint}/credentials`).set('Authorization', `Bearer ${token}`).send({ persistedRevision: '1', value: 'private-value' });
+    assertProblem(refused, 503, 'SERVICE_UNAVAILABLE');
+    expect(JSON.stringify(refused.body)).not.toContain('private-value');
+  });
+
   it('registers local owners once and mounts their relative routes behind authentication before native forwarding', async () => {
     expect(localRegistrations).toEqual({ queue: 1, session: 1, attachment: 1 });
     const paths = ['/api/agent/v1/sessions/session_1/queue', '/api/agent/v1/sessions/session_1/history', '/api/agent/v1/attachments/attachment_1'];

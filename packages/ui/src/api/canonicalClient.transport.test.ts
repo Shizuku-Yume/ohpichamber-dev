@@ -221,6 +221,55 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     await expect(client.stopShell(sessionId, { job: { ...identity, sessionId } })).rejects.toThrow();
   });
 
+  test('manages a workspace MCP catalog without creating or reading any session', async () => {
+    const configuration = mcp.configuration;
+    respondWith(configuration);
+    expect(await client.getWorkspaceMcpConfig(workspaceId)).toEqual(configuration);
+    respondWith({ kind: 'mcp', status: 'no-active-workers', configuration, workers: [] });
+    expect((await client.configureWorkspaceMcp(workspaceId, { expectedPersistedRevision: '0', config: configuration.config })).status).toBe('no-active-workers');
+    expect((await client.applyWorkspaceMcp(workspaceId, { persistedRevision: '1' })).workers).toEqual([]);
+    respondWith({ workspaceId, serverId: 'server_expected', persistedRevision: '1', status: 'connected', toolCount: 2 });
+    expect((await client.testWorkspaceMcpServer(workspaceId, 'server_expected', { persistedRevision: '1' })).toolCount).toBe(2);
+    expect(calls).toEqual([
+      `GET /api/agent/v1/workspaces/${workspaceId}/mcp/config`,
+      `PUT /api/agent/v1/workspaces/${workspaceId}/mcp/config`,
+      `POST /api/agent/v1/workspaces/${workspaceId}/mcp/apply`,
+      `POST /api/agent/v1/workspaces/${workspaceId}/mcp/servers/server_expected/test`,
+    ]);
+  });
+
+  test('rejects MCP workspace, server, revision and OAuth generation substitutions', async () => {
+    respondWith({ ...mcp.configuration, workspaceId: 'workspace_other' });
+    await expect(client.getWorkspaceMcpConfig(workspaceId)).rejects.toThrow();
+    const outcome = { workspaceId, serverId: 'server_expected', persistedRevision: '1', status: 'connected', toolCount: 1 };
+    for (const change of [{ workspaceId: 'workspace_other' }, { serverId: 'server_other' }, { persistedRevision: '2' }]) {
+      respondWith({ ...outcome, ...change });
+      await expect(client.testWorkspaceMcpServer(workspaceId, 'server_expected', { persistedRevision: '1' })).rejects.toThrow();
+    }
+    respondWith({ serverId: 'server_expected', worker: { ...worker, workerGeneration: 'worker_other' }, persistedRevision: '1', status: 'unauthenticated', authenticated: false });
+    await expect(client.submitWorkspaceMcpOAuth(workspaceId, 'server_expected', { action: 'disconnect', persistedRevision: '1', workerGeneration: generation })).rejects.toThrow();
+  });
+
+  test('rejects replacement OAuth flows and binds credential writes to the selected workspace revision', async () => {
+    respondWith({ serverId: 'server_expected', worker, persistedRevision: '1', status: 'pending', authenticated: false, pendingFlow: { flowId: 'flow_other', authorizationUrl: 'https://example.com/authorize' } });
+    await expect(client.submitWorkspaceMcpOAuth(workspaceId, 'server_expected', { action: 'cancel', persistedRevision: '1', workerGeneration: generation, flowId: 'flow_expected' })).rejects.toThrow();
+    for (const change of [{ workspaceId: 'workspace_other' }, { serverId: 'server_other' }, { persistedRevision: '2' }]) {
+      respondWith({ workspaceId, serverId: 'server_expected', persistedRevision: '1', credentialRef: 'credential_ref', ...change });
+      await expect(client.writeWorkspaceMcpCredential(workspaceId, 'server_expected', { persistedRevision: '1', value: 'private' })).rejects.toThrow();
+    }
+  });
+
+  test('preserves workspace reconnect no-worker probe failure instead of claiming runtime application', async () => {
+    const result = { workspaceId, serverId: 'server_expected', persistedRevision: '1', status: 'no-active-workers', workers: [], probe: { workspaceId, serverId: 'server_expected', persistedRevision: '1', status: 'failed', error: { code: 'MCP_APPLY_FAILED', detail: 'Connection failed', retryable: true } } };
+    respondWith(result);
+    expect(await client.reconnectWorkspaceMcpServer(workspaceId, 'server_expected', { persistedRevision: '1' })).toEqual(result);
+  });
+
+  test('rejects secret-bearing MCP credential responses rather than exposing values', async () => {
+    respondWith({ workspaceId, serverId: 'server_expected', persistedRevision: '1', credentialRef: 'credential_ref', value: 'private' });
+    await expect(client.writeWorkspaceMcpCredential(workspaceId, 'server_expected', { persistedRevision: '1', value: 'private' })).rejects.toThrow();
+  });
+
   test('binds MCP and skills to root worker scope, not the addressed child session', async () => {
     respondWith(mcp);
     expect((await client.getMcpCatalog(runtimeSession)).workerCatalog.worker.rootSessionId).toBe(runtimeSession.rootSessionId);

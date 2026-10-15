@@ -239,6 +239,36 @@ export class CanonicalClient {
     const expected = { ...job.job };
     return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs/${id(expected.jobId)}/stop`, scoped(C.ShellStopResultSchema, result => sameJob(result.job, expected)), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ShellStopRequestSchema, job, body => body.job.sessionId === sessionId) }).then((result) => result.job);
   }
+  getWorkspaceMcpConfig(workspaceId: string): Promise<C.MCPConfigurationState> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/mcp/config`, scoped(C.MCPConfigurationStateSchema, result => result.workspaceId === workspaceId));
+  }
+  configureWorkspaceMcp(workspaceId: string, input: MCPConfigureRequest): Promise<MCPApplyResult> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/mcp/config`, scoped(C.MCPApplyResultSchema, result => result.configuration.workspaceId === workspaceId), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.MCPConfigureRequestSchema, input) });
+  }
+  applyWorkspaceMcp(workspaceId: string, input: MCPApplyRequest): Promise<MCPApplyResult> {
+    const { persistedRevision } = input;
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/mcp/apply`, scoped(C.MCPApplyResultSchema, result => result.configuration.workspaceId === workspaceId && result.configuration.persistedRevision === persistedRevision), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.MCPApplyRequestSchema, input) });
+  }
+  testWorkspaceMcpServer(workspaceId: string, serverId: string, input: C.MCPConnectionTestRequest): Promise<C.MCPConnectionTestResult> {
+    const { persistedRevision } = input;
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/mcp/servers/${id(serverId)}/test`, scoped(C.MCPConnectionTestResultSchema, result => result.workspaceId === workspaceId && result.serverId === serverId && result.persistedRevision === persistedRevision), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.MCPConnectionTestRequestSchema, input) });
+  }
+  reconnectWorkspaceMcpServer(workspaceId: string, serverId: string, input: C.MCPWorkspaceReconnectRequest): Promise<C.MCPWorkspaceReconnectResult> {
+    const { persistedRevision } = input;
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/mcp/servers/${id(serverId)}/reconnect`, scoped(C.MCPWorkspaceReconnectResultSchema, result => result.workspaceId === workspaceId && result.serverId === serverId && result.persistedRevision === persistedRevision), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.MCPWorkspaceReconnectRequestSchema, input) });
+  }
+  writeWorkspaceMcpCredential(workspaceId: string, serverId: string, input: C.MCPSecretWriteRequest): Promise<C.MCPSecretWriteResult> {
+    const { persistedRevision } = input;
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/mcp/servers/${id(serverId)}/credentials`, scoped(C.MCPSecretWriteResultSchema, result => result.workspaceId === workspaceId && result.serverId === serverId && result.persistedRevision === persistedRevision), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.MCPSecretWriteRequestSchema, input) });
+  }
+  getWorkspaceMcpOAuth(workspaceId: string, serverId: string): Promise<MCPOAuthResult> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/mcp/servers/${id(serverId)}/oauth`, scoped(C.MCPOAuthResultSchema, result => result.serverId === serverId && result.worker.workspaceId === workspaceId));
+  }
+  submitWorkspaceMcpOAuth(workspaceId: string, serverId: string, input: MCPOAuthRequest): Promise<MCPOAuthResult> {
+    const { persistedRevision, workerGeneration } = input;
+    const flowId = input.action === 'complete' || input.action === 'cancel' ? input.flowId : undefined;
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/mcp/servers/${id(serverId)}/oauth`, scoped(C.MCPOAuthResultSchema, result => result.serverId === serverId && result.worker.workspaceId === workspaceId && result.worker.workerGeneration === workerGeneration && result.persistedRevision === persistedRevision && (flowId === undefined || result.status !== 'pending' || result.pendingFlow.flowId === flowId)), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.MCPOAuthRequestSchema, input) });
+  }
   getMcpCatalog(scope: CanonicalSessionScope): Promise<MCPCatalogRead> {
     const session = { ...scope };
     return request(`/api/agent/v1/sessions/${id(session.sessionId)}/mcp/catalog`, scoped(C.MCPCatalogReadSchema, result => sameWorker(result.workerCatalog.worker, session)));
