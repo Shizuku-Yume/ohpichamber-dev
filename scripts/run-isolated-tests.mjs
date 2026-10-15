@@ -13,7 +13,7 @@
 //   instead of being listed here, so adding a test never requires editing a
 //   list that then rots.
 //
-// Usage: node scripts/run-isolated-tests.mjs <root> [...roots]
+// Usage: node scripts/run-isolated-tests.mjs <root> [...roots] [--exclude <dir>]
 
 import { spawn } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -26,15 +26,20 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-bundle', 'build', 'out'
 const MAX_PARALLEL = 4;
 const bunExecutable = resolveBunExecutable();
 
+// Staged dependency trees (a packaged runtime's own sources) are not this
+// repository's tests, so a caller names them instead of the runner guessing.
+const excluded = [];
+const isExcluded = (full) => excluded.some((dir) => full === dir || full.startsWith(`${dir}${path.sep}`));
+
 const collect = (root, found = []) => {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (entry.name.startsWith('.') && entry.name !== '.') continue;
     const full = path.join(root, entry.name);
     if (entry.isDirectory()) {
-      if (!SKIP_DIRS.has(entry.name)) collect(full, found);
+      if (!SKIP_DIRS.has(entry.name) && !isExcluded(full)) collect(full, found);
       continue;
     }
-    if (TEST_FILE.test(entry.name)) found.push(full);
+    if (TEST_FILE.test(entry.name) && !isExcluded(full)) found.push(full);
   }
   return found;
 };
@@ -110,7 +115,21 @@ const run = ({ command, args }) => new Promise((resolve) => {
   });
 });
 
-const roots = process.argv.slice(2);
+const roots = [];
+const args = process.argv.slice(2);
+for (let index = 0; index < args.length; index += 1) {
+  if (args[index] === '--exclude') {
+    const value = args[index + 1];
+    if (!value) {
+      console.error('run-isolated-tests: --exclude expects a directory');
+      process.exit(1);
+    }
+    excluded.push(path.resolve(value));
+    index += 1;
+    continue;
+  }
+  roots.push(args[index]);
+}
 if (roots.length === 0) {
   console.error('run-isolated-tests: expected at least one root directory');
   process.exit(1);
