@@ -4,7 +4,7 @@
 This module provides server-side Text-to-Speech services using OpenAI's TTS API. The historical shared text summarization endpoint now lives in `packages/web/server/lib/text/` as an API-compatible stub because the previous Zen model provider is unavailable.
 
 ## Entrypoints and structure
-- `packages/web/server/lib/tts/index.js`: Public entrypoint imported by `packages/web/server/index.js`.
+- `packages/web/server/lib/tts/index.js`: barrel re-exporting `TTSService`, `createTTSService` and `TTS_VOICES`; `route-module-exports.test.js` pins those names. `packages/web/server/index.js` imports `routes.js`, `service.js` and `capability-runtime.js` directly.
 - `packages/web/server/lib/tts/routes.js`: Express route registration for `/api/voice/*`, `/api/tts/*`, and `/api/stt/*` endpoints.
 - `packages/web/server/lib/tts/capability-runtime.js`: runtime helper for probing local macOS `say` TTS voice capability.
 - `packages/web/server/lib/tts/service.js`: TTS service implementation with OpenAI integration.
@@ -102,7 +102,7 @@ The server-side TTS approach bypasses mobile Safari's audio context restrictions
 
 ### Adding new TTS features
 1. Add new methods to `packages/web/server/lib/tts/service.js` TTSService class.
-2. Export public functions from `packages/web/server/lib/tts/index.js`.
+2. Export the new function from the owning module and import it in `packages/web/server/index.js` (the module has no barrel entrypoint).
 3. Follow existing patterns for API key resolution and error handling.
 4. Ensure all text is sanitized before TTS synthesis.
 5. Consider adding new voice options to `TTS_VOICES` constant.

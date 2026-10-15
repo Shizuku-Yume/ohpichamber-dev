@@ -221,19 +221,17 @@ Why: only navigation tools use the compact static path; all other tools need obs
 
 ## Quick map of files in this folder
 
-- Text: `AssistantTextPart.tsx`, `UserTextPart.tsx`
-- User-attached context (inline code comments, terminal selections, browser
-  annotations, PR comments/checks): `UserContextPart.tsx`. `UserTextPart`
-  routes to it when the part's metadata carries an `openchamberContext`
-  payload (see `lib/messages/contextParts.ts`, which owns both the send-time
-  builder and the read-back parser). Linked GitHub issues/PRs and Linear
-  issues are instead converted to link file-parts in
-  `normalizeUserDisplayParts.ts`. Legacy pre-metadata messages still render
-  via text sniffing (`<terminal_context>` blocks, `GitHub issue context (JSON)`
-  and `Linear issue context (JSON)` prefixes). Context cards and linked issue
-  links are retained on mobile; phone shells open their URLs rather than
-  relying on a desktop side panel, and custom schemes still use confirmation.
-- Tools: `ToolPart.tsx`, `ToolPartDiffPreview.tsx`, `PlainDiffFallback.tsx`, `ProgressiveGroup.tsx`, `toolPresentation.tsx`, `toolRenderUtils.ts`, `ToolRevealOnMount.tsx`, `GuestToolTable.tsx`
+- Text: `AssistantTextPart.tsx`, `UserTextPart.tsx`. `UserTextPart` owns the
+  user side: it sniffs legacy pre-metadata messages (`<terminal_context>`
+  blocks, `GitHub issue context (JSON)` and `Linear issue context (JSON)`
+  prefixes) and shows them as context cards. Canonical parts carry the context
+  prompt text itself instead of structured metadata (`lib/messages/contextParts.ts`
+  owns the send-time builder and the read-back parser), and linked GitHub/Linear
+  references render through `lib/linkedIssues.ts` from the composer, work-status
+  and sidebar owners. Context cards and linked issue links are retained on
+  mobile; phone shells open their URLs rather than relying on a desktop side
+  panel, and custom schemes still use confirmation.
+- Tools: `ToolPart.tsx`, `ProgressiveGroup.tsx`, `toolPresentation.tsx`, `toolRenderUtils.ts`, `ToolRevealOnMount.tsx`, `GuestToolTable.tsx`
 - Reasoning/justification: `ReasoningPart.tsx`, `JustificationBlock.tsx`
 - Status/placeholders: `WorkingPlaceholder.tsx`, `SessionActiveSpinner.tsx`, `MigratingPart.tsx`, `BusyDots.tsx`
 - Utility renderers: `VirtualizedCodeBlock.tsx`, `MinDurationShineText.tsx`
