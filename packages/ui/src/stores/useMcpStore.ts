@@ -1,260 +1,134 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { McpServerStatus } from '@/lib/opencode/model';
-import { opencodeClient } from '@/lib/opencode/client';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import type { MCPCatalogState, MCPServerConfig, MCPConnectionTestResult } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import { resolveMcpDirectory, useMcpConfigStore } from './useMcpConfigStore';
 
-type McpStatusMap = Record<string, McpServerStatus>;
-type McpRuntimeDiagnostic = {
-  status: 'failed';
-  error: string;
+export interface McpServerRuntimeState {
+  configuration: MCPServerConfig;
+  catalogs: MCPCatalogState[];
+  probe?: MCPConnectionTestResult;
+}
+export const isMcpServerConnected = (entry: McpServerRuntimeState | undefined): boolean =>
+  !!entry?.catalogs.some(catalog => catalog.activeServers.includes(entry.configuration.serverId));
+export const getMcpServerError = (entry: McpServerRuntimeState | undefined): string | undefined =>
+  entry?.probe?.error?.detail;
+export const getMcpServerStatus = (entry: McpServerRuntimeState | undefined): 'ready' | 'unavailable' | 'disabled' | 'unapplied' => {
+  if (!entry) return 'unapplied';
+  if (!entry.configuration.enabled) return 'disabled';
+  if (entry.probe?.status === 'failed' || entry.catalogs.some(catalog => catalog.runtimeStatus === 'unavailable')) return 'unavailable';
+  return isMcpServerConnected(entry) ? 'ready' : 'unapplied';
 };
-type McpRuntimeDiagnosticMap = Record<string, McpRuntimeDiagnostic>;
-
+type McpStatusMap = Record<string, McpServerRuntimeState>;
 const EMPTY_STATUS: McpStatusMap = {};
-const EMPTY_DIAGNOSTICS: McpRuntimeDiagnosticMap = {};
-
-type McpHealth = {
-  connected: number;
-  total: number;
-  hasFailed: boolean;
-  hasAuthRequired: boolean;
+let generation = 0;
+let operationRevision = 0;
+const inFlight = new Map<string, Promise<void>>();
+const directoryKey = (directory?: string | null): string => { try { return resolveMcpDirectory(directory); } catch { return ''; } };
+export const computeMcpHealth = (status: McpStatusMap | null | undefined) => {
+  const entries = Object.values(status ?? {});
+  return { connected: entries.filter(isMcpServerConnected).length, total: entries.length,
+    hasFailed: entries.some(entry => getMcpServerStatus(entry) === 'unavailable') };
 };
-
-const normalizeDirectory = (directory: string | null | undefined): string | null => {
-  if (typeof directory !== 'string') return null;
-  const trimmed = directory.trim();
-  if (!trimmed) return null;
-  const normalized = trimmed.replace(/\\/g, '/');
-  return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
-};
-
-const toKey = (directory: string | null | undefined): string => normalizeDirectory(directory) ?? '__global__';
-
-export const computeMcpHealth = (status: McpStatusMap | null | undefined): McpHealth => {
-  const entries = Object.entries(status ?? {});
-  const connected = entries.filter(([, s]) => s?.status.status === 'connected').length;
-  const total = entries.length;
-  const hasFailed = entries.some(([, s]) => s?.status.status === 'failed');
-  const hasAuthRequired = entries.some(([, s]) => s?.status.status === 'needs_auth');
-  return { connected, total, hasFailed, hasAuthRequired };
-};
-
-type RefreshOptions = {
-  directory?: string | null;
-  silent?: boolean;
-};
-
-const ensureFreshInFlight = new Map<string, Promise<void>>();
-// Bumped on every runtime switch. Status is keyed by directory alone and two
-// instances can hold the same project path, so a request already in flight for
-// the previous instance would otherwise write its servers over the new one's.
-let mcpGeneration = 0;
-
-type TestConnectionResult = {
-  status?: McpServerStatus;
-  error?: string;
-  warning?: string;
-};
-
+type RefreshOptions = { directory?: string | null; silent?: boolean };
 interface McpStore {
   byDirectory: Record<string, McpStatusMap>;
-  diagnosticsByDirectory: Record<string, McpRuntimeDiagnosticMap>;
   loadingKeys: Record<string, boolean>;
   lastErrorKeys: Record<string, string | null>;
-  /** When each directory's status was last fetched successfully. */
   refreshedAtKeys: Record<string, number>;
-
   getStatusForDirectory: (directory?: string | null) => McpStatusMap;
-  getDiagnosticForDirectory: (directory?: string | null) => McpRuntimeDiagnosticMap;
   getErrorForDirectory: (directory?: string | null) => string | null;
   refresh: (options?: RefreshOptions) => Promise<void>;
-  /**
-   * Refresh only when the directory has no status yet or the last successful
-   * fetch is older than `maxAgeMs`. Mount-time consumers use this so a panel
-   * that remounts on every session switch does not refetch on every switch.
-   */
   ensureFresh: (options: RefreshOptions & { maxAgeMs: number }) => Promise<void>;
-  /**
-   * Re-read a directory whose status is already held, after OpenCode announced
-   * a change there. A directory nobody asked about is left alone: reading it
-   * would make OpenCode start it, MCP servers included.
-   */
   refreshIfHeld: (directory: string) => Promise<void>;
-  connect: (name: string, directory?: string | null) => Promise<void>;
-  disconnect: (name: string, directory?: string | null) => Promise<void>;
-  testConnection: (name: string, directory?: string | null) => Promise<TestConnectionResult>;
-  /**
-   * MCP status is keyed by directory alone, and two instances can hold the same
-   * project path — so on a switch the previous instance's servers would be
-   * reported for the new one. Drop everything and let consumers re-ask.
-   */
+  connect: (serverId: string, directory?: string | null) => Promise<void>;
+  disconnect: (serverId: string, directory?: string | null) => Promise<void>;
+  reconnect: (serverId: string, directory?: string | null) => Promise<void>;
+  testConnection: (serverId: string, directory?: string | null) => Promise<MCPConnectionTestResult>;
   resetForRuntimeSwitch: () => void;
 }
-
-export const useMcpStore = create<McpStore>()(
-  devtools((set, get) => ({
-    byDirectory: {},
-    diagnosticsByDirectory: {},
-    loadingKeys: {},
-    lastErrorKeys: {},
-    refreshedAtKeys: {},
-
+export const useMcpStore = create<McpStore>()(devtools((set, get) => {
+  const toggle = async (serverId: string, enabled: boolean, directory?: string | null) => {
+    const owner = generation;
+    operationRevision += 1;
+    const result = await useMcpConfigStore.getState().updateMcp(serverId, { enabled }, directory);
+    if (owner !== generation) return;
+    await get().refresh({ directory, silent: true });
+    if (!result.ok) throw new Error(result.error);
+  };
+  return {
+    byDirectory: {}, loadingKeys: {}, lastErrorKeys: {}, refreshedAtKeys: {},
     resetForRuntimeSwitch: () => {
-      mcpGeneration += 1;
-      ensureFreshInFlight.clear();
-      set({
-        byDirectory: {},
-        diagnosticsByDirectory: {},
-        loadingKeys: {},
-        lastErrorKeys: {},
-        refreshedAtKeys: {},
-      });
+      generation += 1;
+      inFlight.clear();
+      useMcpConfigStore.getState().resetForRuntimeSwitch();
+      set({ byDirectory: {}, loadingKeys: {}, lastErrorKeys: {}, refreshedAtKeys: {} });
     },
-
-    getStatusForDirectory: (directory) => {
-      const key = toKey(directory ?? useDirectoryStore.getState().currentDirectory);
-      return get().byDirectory[key] ?? EMPTY_STATUS;
-    },
-
-    getDiagnosticForDirectory: (directory) => {
-      const key = toKey(directory ?? useDirectoryStore.getState().currentDirectory);
-      return get().diagnosticsByDirectory[key] ?? EMPTY_DIAGNOSTICS;
-    },
-
-    getErrorForDirectory: (directory) => {
-      const key = toKey(directory ?? useDirectoryStore.getState().currentDirectory);
-      return get().lastErrorKeys[key] ?? null;
-    },
-
-    refresh: async (options) => {
-      const directory = normalizeDirectory(options?.directory ?? useDirectoryStore.getState().currentDirectory);
-      const key = toKey(directory);
-
-      if (!options?.silent) {
-        set((state) => ({
-          loadingKeys: { ...state.loadingKeys, [key]: true },
-          lastErrorKeys: { ...state.lastErrorKeys, [key]: null },
-        }));
-      }
-
-      const generation = mcpGeneration;
+    getStatusForDirectory: directory => get().byDirectory[directoryKey(directory)] ?? EMPTY_STATUS,
+    getErrorForDirectory: directory => get().lastErrorKeys[directoryKey(directory)] ?? null,
+    refresh: async options => {
+      const owner = generation;
+      const revision = operationRevision;
+      const key = directoryKey(options?.directory);
+      if (!options?.silent) set(state => ({ loadingKeys: { ...state.loadingKeys, [key]: true } }));
       try {
-        const servers = await opencodeClient.listMcpServers(directory);
-        if (generation !== mcpGeneration) return;
-        const data: McpStatusMap = Object.fromEntries(servers.map((server) => [server.name, server]));
-
-        set((state) => ({
-          byDirectory: { ...state.byDirectory, [key]: data },
-          diagnosticsByDirectory: {
-            ...state.diagnosticsByDirectory,
-            [key]: Object.fromEntries(
-              Object.entries(state.diagnosticsByDirectory[key] ?? {}).filter(([name]) => !data[name])
-            ),
-          },
-          loadingKeys: { ...state.loadingKeys, [key]: false },
-          lastErrorKeys: { ...state.lastErrorKeys, [key]: null },
-          refreshedAtKeys: { ...state.refreshedAtKeys, [key]: Date.now() },
-        }));
+        const directory = resolveMcpDirectory(options?.directory);
+        const workspace = await canonicalClient.resolveWorkspace(directory);
+        const [configuration, sessions] = await Promise.all([
+          canonicalClient.getWorkspaceMcpConfig(workspace.workspaceId), canonicalClient.listSessions(workspace.workspaceId),
+        ]);
+        if (Object.keys(sessions.errors).length) throw new Error(Object.values(sessions.errors).join('\n'));
+        const roots = sessions.items.filter(session => session.sessionId === session.rootSessionId && session.runtimeStatus !== 'unavailable');
+        const catalogs = await Promise.all(roots.map(session => canonicalClient.getMcpCatalog(session)));
+        if (owner !== generation || revision !== operationRevision) return;
+        const previous = get().byDirectory[key];
+        const entries = Object.fromEntries(configuration.config.servers.map(server => [server.serverId, {
+          configuration: server, catalogs: catalogs.map(result => result.workerCatalog),
+          ...(previous?.[server.serverId]?.probe?.persistedRevision === configuration.persistedRevision ? { probe: previous[server.serverId].probe } : {}),
+        }]));
+        set(state => ({ byDirectory: { ...state.byDirectory, [key]: entries },
+          refreshedAtKeys: { ...state.refreshedAtKeys, [key]: Date.now() }, lastErrorKeys: { ...state.lastErrorKeys, [key]: null } }));
       } catch (error) {
-        if (generation !== mcpGeneration) return;
-        const message = error instanceof Error ? error.message : 'Failed to load MCP status';
-        set((state) => ({
-          loadingKeys: { ...state.loadingKeys, [key]: false },
-          lastErrorKeys: { ...state.lastErrorKeys, [key]: message },
-        }));
+        if (owner === generation) set(state => ({ lastErrorKeys: { ...state.lastErrorKeys, [key]: error instanceof Error ? error.message : String(error) } }));
+      } finally {
+        if (owner === generation) set(state => ({ loadingKeys: { ...state.loadingKeys, [key]: false } }));
       }
     },
-
     ensureFresh: async ({ maxAgeMs, ...options }) => {
-      const key = toKey(normalizeDirectory(options.directory ?? useDirectoryStore.getState().currentDirectory));
-      const refreshedAt = get().refreshedAtKeys[key];
-      if (refreshedAt !== undefined && Date.now() - refreshedAt < maxAgeMs) return;
-      const inFlight = ensureFreshInFlight.get(key);
-      if (inFlight) return inFlight;
-      const request = get().refresh(options).finally(() => {
-        ensureFreshInFlight.delete(key);
-      });
-      ensureFreshInFlight.set(key, request);
-      return request;
+      const key = directoryKey(options.directory);
+      if (Date.now() - (get().refreshedAtKeys[key] ?? 0) < maxAgeMs) return;
+      const current = inFlight.get(key);
+      if (current) return current;
+      const request = get().refresh(options);
+      inFlight.set(key, request);
+      try { await request; } finally { if (inFlight.get(key) === request) inFlight.delete(key); }
     },
-
-    refreshIfHeld: async (directory) => {
-      const normalized = normalizeDirectory(directory);
-      if (!normalized || !get().byDirectory[toKey(normalized)]) return;
-      await get().refresh({ directory: normalized, silent: true });
-    },
-
-    connect: async (name, directory) => {
-      const normalized = normalizeDirectory(directory ?? useDirectoryStore.getState().currentDirectory);
-      const key = toKey(normalized);
-      try {
-        await opencodeClient.connectMcpServer(name, normalized);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Connection failed';
-        set((state) => ({
-          diagnosticsByDirectory: {
-            ...state.diagnosticsByDirectory,
-            [key]: {
-              ...(state.diagnosticsByDirectory[key] ?? {}),
-              [name]: { status: 'failed', error: message },
-            },
-          },
-        }));
-        throw error;
+    refreshIfHeld: async directory => { if (get().byDirectory[directoryKey(directory)]) await get().refresh({ directory, silent: true }); },
+    connect: (serverId, directory) => toggle(serverId, true, directory),
+    disconnect: (serverId, directory) => toggle(serverId, false, directory),
+    reconnect: async (serverId, directory) => {
+      const owner = generation;
+      operationRevision += 1;
+      const workspace = await canonicalClient.resolveWorkspace(resolveMcpDirectory(directory));
+      const current = await canonicalClient.getWorkspaceMcpConfig(workspace.workspaceId);
+      const result = await canonicalClient.reconnectWorkspaceMcpServer(workspace.workspaceId, serverId, { persistedRevision: current.persistedRevision });
+      if (owner !== generation) return;
+      await get().refresh({ directory, silent: true });
+      if (result.status === 'partial' || result.status === 'failed' || result.probe?.status === 'failed') {
+        throw new Error(result.workers.filter(worker => worker.outcome === 'failed').map(worker => worker.error.detail).join('\n') || result.probe?.error?.detail);
       }
-      await get().refresh({ directory: normalized, silent: true });
     },
-
-    disconnect: async (name, directory) => {
-      const normalized = normalizeDirectory(directory ?? useDirectoryStore.getState().currentDirectory);
-      await opencodeClient.disconnectMcpServer(name, normalized);
-      await get().refresh({ directory: normalized, silent: true });
+    testConnection: async (serverId, directory) => {
+      const owner = generation;
+      const key = resolveMcpDirectory(directory);
+      const workspace = await canonicalClient.resolveWorkspace(key);
+      const current = await canonicalClient.getWorkspaceMcpConfig(workspace.workspaceId);
+      const probe = await canonicalClient.testWorkspaceMcpServer(workspace.workspaceId, serverId, { persistedRevision: current.persistedRevision });
+      const server = current.config.servers.find(entry => entry.serverId === serverId);
+      if (owner === generation && server) set(state => ({ byDirectory: { ...state.byDirectory, [key]: {
+        ...state.byDirectory[key], [serverId]: { configuration: server, catalogs: state.byDirectory[key]?.[serverId]?.catalogs ?? [], probe },
+      } } }));
+      return probe;
     },
-
-    testConnection: async (name, directory) => {
-      const normalized = normalizeDirectory(directory ?? useDirectoryStore.getState().currentDirectory);
-      const key = toKey(normalized);
-      const previousStatus = get().getStatusForDirectory(normalized)[name];
-      const wasConnected = previousStatus?.status.status === 'connected';
-      let errorMessage: string | undefined;
-      let warningMessage: string | undefined;
-
-      try {
-        await opencodeClient.connectMcpServer(name, normalized);
-      } catch (error) {
-        errorMessage = error instanceof Error ? error.message : 'Connection failed';
-        set((state) => ({
-          diagnosticsByDirectory: {
-            ...state.diagnosticsByDirectory,
-            [key]: {
-              ...(state.diagnosticsByDirectory[key] ?? {}),
-              [name]: { status: 'failed', error: errorMessage ?? 'Connection failed' },
-            },
-          },
-        }));
-      }
-
-      await get().refresh({ directory: normalized, silent: true });
-      const currentStatus = get().getStatusForDirectory(normalized)[name];
-      const observedStatus = currentStatus;
-
-      if (!wasConnected && currentStatus?.status.status === 'connected') {
-        try {
-          await opencodeClient.disconnectMcpServer(name, normalized);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Disconnect failed';
-          warningMessage = `Connection test succeeded, but cleanup disconnect failed: ${message}`;
-        }
-        await get().refresh({ directory: normalized, silent: true });
-      }
-
-      return {
-        status: observedStatus ?? get().getStatusForDirectory(normalized)[name],
-        error: errorMessage,
-        warning: warningMessage,
-      };
-    },
-
-  }))
-);
+  };
+}, { name: 'mcp-store' }));

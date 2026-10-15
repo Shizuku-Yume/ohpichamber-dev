@@ -1,4 +1,5 @@
-import { afterEach, expect, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
+import type { MCPApplyResult, MCPServerConfig } from '@openchamber/agent-contract';
 import { Window } from 'happy-dom';
 
 const browser = new Window({ url: 'http://localhost/' });
@@ -13,6 +14,18 @@ Object.assign(globalThis, {
   cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser), IS_REACT_ACT_ENVIRONMENT: true,
 });
 const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ home: '/test' }));
+mock.module('@/hooks/useSettingsDirectory', () => ({ useSettingsDirectory: () => '/repo' }));
+mock.module('./McpOAuthSignIn', () => ({ McpOAuthSignIn: () => null }));
+const secretWrites: Array<{ value: string; persistedRevision: string }> = [];
+// DOM globals and canonical transport seams must exist before importing the editor.
+const real = await import('@/api/canonicalClient');
+mock.module('@/api/canonicalClient', () => ({ ...real, canonicalClient: {
+  resolveWorkspace: async () => ({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' }),
+  writeWorkspaceMcpCredential: async (_workspaceId: string, _serverId: string, request: { value: string; persistedRevision: string }) => {
+    secretWrites.push(request);
+    return { workspaceId: 'workspace', serverId: 'tools', persistedRevision: '3', credentialRef: 'private_ref' };
+  },
+} }));
 const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
@@ -21,45 +34,69 @@ const { useMcpStore } = await import('@/stores/useMcpStore');
 const { McpPage } = await import('./McpPage');
 const container = document.createElement('div');
 document.body.appendChild(container);
-const root = createRoot(container);
-afterEach(async () => { await act(async () => root.unmount()); fetchSpy.mockRestore(); browser.close(); });
+let root: ReturnType<typeof createRoot>;
+const server: MCPServerConfig = { serverId: 'tools', label: 'Tools', enabled: true, transport: { type: 'http', url: 'https://initial.test' } };
+const applyResult = (servers: MCPServerConfig[]): MCPApplyResult => ({ kind: 'mcp', status: 'no-active-workers', workers: [], configuration: { workspaceId: 'workspace', persistedRevision: '3', config: { servers } } });
+beforeEach(() => {
+  secretWrites.length = 0;
+  root = createRoot(container);
+  useMcpStore.getState().resetForRuntimeSwitch();
+  useMcpConfigStore.setState({ selectedMcpName: 'tools', serversByDirectory: { '/repo': [server] }, configurationsByDirectory: { '/repo': applyResult([server]).configuration } });
+});
+afterEach(async () => { await act(async () => root.unmount()); });
+const edit = async (field: HTMLInputElement, value: string, blur = true) => {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  if (!setter) throw new Error('Missing input setter');
+  await act(async () => { setter.call(field, value); field.dispatchEvent(new Event('input', { bubbles: true })); });
+  if (blur) await act(async () => { field.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
+};
 
-test('an MCP catalog echo preserves a newer draft before and after save completion', async () => {
+test('a native catalog echo preserves a newer draft while serialized autosave is in flight', async () => {
   const writes: Array<{ value: string; finish: () => void }> = [];
-  const server = { name: 'test', type: 'remote' as const, url: 'https://initial.test' };
-  useMcpStore.setState({ refresh: async () => {} });
-  useMcpConfigStore.setState({
-    selectedMcpName: 'test', serversByDirectory: { __default__: [server] },
-    getMcpByName: () => useMcpConfigStore.getState().serversByDirectory.__default__?.[0] ?? null,
-    updateMcp: async (_name, config) => new Promise((resolve) => {
-      writes.push({ value: config.url ?? '', finish: () => resolve({ ok: true }) });
-    }),
-  });
+  useMcpConfigStore.setState({ updateMcp: async (_serverId, config) => {
+    const result = Promise.withResolvers<{ ok: true; result: MCPApplyResult }>();
+    writes.push({ value: config.transport?.type === 'http' ? config.transport.url : '', finish: () => result.resolve({ ok: true, result: applyResult([{ ...server, ...config }]) }) });
+    return result.promise;
+  } });
   await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
-  const field = [...container.querySelectorAll<HTMLInputElement>('input')].find((entry) => entry.value === server.url);
-  if (!field) throw new Error('Missing MCP URL field');
-  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-  if (!setValue) throw new Error('Missing input setter');
-  const edit = async (value: string, blur = true) => {
-    await act(async () => { setValue.call(field, value); field.dispatchEvent(new Event('input', { bubbles: true })); });
-    if (blur) await act(async () => { field.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
-  };
-  await edit('https://older.test ');
-  await edit('https://newer.test', false);
-  expect(writes.map((write) => write.value)).toEqual(['https://older.test ']);
-  const echo = () => useMcpConfigStore.setState({ serversByDirectory: { __default__: [{ ...server, url: 'https://older.test' }] } });
-  await act(async () => { echo(); });
+  const field = container.querySelector<HTMLInputElement>('input[aria-label="Server URL"]');
+  if (!field) throw new Error('Missing URL field');
+  await edit(field, 'https://older.test');
+  await edit(field, 'https://newer.test', false);
+  expect(writes.map(write => write.value)).toEqual(['https://older.test']);
+  await act(async () => { useMcpConfigStore.setState({ serversByDirectory: { '/repo': [{ ...server, transport: { type: 'http', url: 'https://older.test' } }] } }); });
   expect(field.value).toBe('https://newer.test');
   await act(async () => { writes[0].finish(); });
-  await act(async () => { echo(); });
   expect(field.value).toBe('https://newer.test');
   await act(async () => { field.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
-  expect(writes.map((write) => write.value)).toEqual(['https://older.test ', 'https://newer.test']);
-  await act(async () => { echo(); });
-  expect(field.value).toBe('https://newer.test');
-  await act(async () => {
-    useMcpConfigStore.setState({ selectedMcpName: 'other', serversByDirectory: { __default__: [{ ...server, name: 'other', url: 'https://older.test ' }] } });
-  });
-  expect(field.value).toBe('https://older.test ');
+  expect(writes.map(write => write.value)).toEqual(['https://older.test', 'https://newer.test']);
   await act(async () => { writes[1].finish(); });
 });
+
+test('header values are written privately and only opaque references reach configuration', async () => {
+  const configs: Array<Partial<MCPServerConfig>> = [];
+  useMcpConfigStore.setState({ updateMcp: async (_serverId, config) => { configs.push(config); return { ok: true, result: applyResult([{ ...server, ...config }]) }; } });
+  await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
+  const key = container.querySelector<HTMLInputElement>('input[aria-label="Key"]');
+  const value = container.querySelector<HTMLInputElement>('input[type="password"]');
+  if (!key || !value) throw new Error('Missing private credential fields');
+  await edit(key, 'X-Api-Key', false); await edit(value, 'never-in-config', false);
+  const section = value.closest('section');
+  const save = section?.querySelector('button:last-child');
+  if (!save) throw new Error('Missing credential save');
+  await act(async () => { save.dispatchEvent(new Event('click', { bubbles: true })); });
+  expect(secretWrites).toEqual([{ value: 'never-in-config', persistedRevision: '3' }]);
+  expect(configs[0].transport).toEqual({ type: 'http', url: 'https://initial.test', headerCredentialRefs: { 'X-Api-Key': 'private_ref' } });
+  expect(JSON.stringify(configs)).not.toContain('never-in-config');
+  expect(value.value).toBe('');
+});
+
+test('worker apply failures remain visible even though persistence succeeded', async () => {
+  const result: MCPApplyResult = { ...applyResult([server]), status: 'failed', workers: [{ worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'generation' }, outcome: 'failed', revisions: { runtimeStatus: 'unavailable', appliedRevision: null, catalogRevision: '0' }, error: { code: 'MCP_APPLY_FAILED', detail: 'The worker could not connect.', retryable: true } }] };
+  useMcpConfigStore.setState({ applyResultsByDirectory: { '/repo': result }, errorsByDirectory: { '/repo': 'Runtime application incomplete.' } });
+  await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain('Runtime application incomplete.');
+  expect(container.querySelector('[role="status"]')?.textContent).toContain('The worker could not connect.');
+});
+
+afterAll(() => { fetchSpy.mockRestore(); browser.close(); });

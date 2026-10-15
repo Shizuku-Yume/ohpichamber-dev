@@ -435,32 +435,14 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     const baseName = 'new-mcp-server';
     let newName = baseName;
     let counter = 1;
-    while (mcpServers.some((server) => server.name === newName)) {
+    while (mcpServers.some((server) => server.serverId === newName)) {
       newName = `${baseName}-${counter}`;
       counter += 1;
     }
 
     const draft: McpDraft = {
-      name: newName,
-      scope: 'user',
-      type: 'local',
-      command: [],
-      url: '',
-      environment: [],
-      headers: [],
-      oauthEnabled: true,
-      oauthClientId: '',
-      oauthClientSecret: '',
-      oauthScope: '',
-      oauthRedirectUri: '',
-      oauthCallbackPort: '',
-      oauthAuthServerMetadataUrl: '',
-      protocol: 'legacy',
-      timeoutStartup: '',
-      timeoutCatalog: '',
-      timeoutExecution: '',
-      codemode: 'default',
-      disabled: false,
+      serverId: newName, label: newName, enabled: true,
+      transport: { type: 'stdio', command: '', args: [] },
     };
 
     setMcpDraft(draft);

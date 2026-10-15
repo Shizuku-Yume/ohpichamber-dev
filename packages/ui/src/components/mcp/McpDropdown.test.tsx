@@ -3,7 +3,7 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { opencodeClient } from '@/lib/opencode/client';
+import { canonicalClient } from '@/api/canonicalClient';
 import { I18nProvider } from '@/lib/i18n';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useMcpConfigStore } from '@/stores/useMcpConfigStore';
@@ -11,13 +11,13 @@ import { useMcpStore } from '@/stores/useMcpStore';
 
 type LoadMcpConfigs = (options?: { force?: boolean; directory?: string | null }) => Promise<boolean>;
 
-// Reading MCP status boots the directory's whole stdio server fleet as an
-// OpenCode side effect, so these tests spy on the status read itself and
-// assert which mounts are allowed to issue it.
+// These consumers read existing workspace configuration and real root catalogs.
 describe('MCP dropdown status reads', () => {
   let root: Root | null = null;
   let restoreGlobals: () => void;
   let listSpy: ReturnType<typeof spyOn>;
+  let configSpy: ReturnType<typeof spyOn>;
+  let sessionsSpy: ReturnType<typeof spyOn>;
   let originalLoadMcpConfigs: LoadMcpConfigs;
   let dom: Window;
   const loadMcpConfigs = mock(async () => true);
@@ -65,14 +65,15 @@ describe('MCP dropdown status reads', () => {
     useDirectoryStore.setState({ currentDirectory: 'C:/proj-a' });
     useMcpStore.setState({
       byDirectory: {},
-      diagnosticsByDirectory: {},
       loadingKeys: {},
       lastErrorKeys: {},
       refreshedAtKeys: {},
     });
     originalLoadMcpConfigs = useMcpConfigStore.getState().loadMcpConfigs;
     useMcpConfigStore.setState({ loadMcpConfigs });
-    listSpy = spyOn(opencodeClient, 'listMcpServers').mockImplementation(async () => []);
+    listSpy = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async () => ({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' }));
+    configSpy = spyOn(canonicalClient, 'getWorkspaceMcpConfig').mockImplementation(async () => ({ workspaceId: 'workspace', persistedRevision: '0', config: { servers: [] } }));
+    sessionsSpy = spyOn(canonicalClient, 'listSessions').mockImplementation(async () => ({ items: [], errors: {} }));
   });
 
   afterEach(async () => {
@@ -82,6 +83,8 @@ describe('MCP dropdown status reads', () => {
       await act(async () => mounted.unmount());
     }
     listSpy.mockRestore();
+    configSpy.mockRestore();
+    sessionsSpy.mockRestore();
     useMcpConfigStore.setState({ loadMcpConfigs: originalLoadMcpConfigs });
     restoreGlobals();
   });

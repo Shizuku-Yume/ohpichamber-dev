@@ -1,180 +1,88 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { McpDraft } from './useMcpConfigStore';
+import type { MCPApplyResult, MCPConfigurationState, MCPConfigureRequest, MCPServerConfig } from '@openchamber/agent-contract';
 
-/** The parts of the MCP write body these tests make claims about. */
-type CapturedMcpBody = {
-  protocol?: string | null;
-  codemode?: boolean | null;
-  oauth?: {
-    client_id?: string;
-    callback_port?: number;
-    auth_server_metadata_url?: string;
-  } | false;
-};
-
-type CapturedRequest = { url: string; method: string; body: CapturedMcpBody };
-
-let captured: CapturedRequest[] = [];
-let listResponse: unknown[] = [];
-
-const runtimeFetchMock = async (url: string, init?: RequestInit) => {
-  const method = init?.method ?? 'GET';
-  if (method === 'GET') {
-    return new Response(JSON.stringify(listResponse), { headers: { 'Content-Type': 'application/json' } });
-  }
-  captured.push({ url, method, body: JSON.parse(String(init?.body ?? '{}')) });
-  return new Response(JSON.stringify({}), { headers: { 'Content-Type': 'application/json' } });
-};
-
-mock.module('@/lib/runtime-fetch', () => ({ runtimeFetch: runtimeFetchMock }));
-
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: { getDirectory: () => '/workspace/project' },
-}));
-
-mock.module('@/stores/useProjectsStore', () => ({
-  useProjectsStore: {
-    getState: () => ({ getActiveProject: () => ({ path: '/workspace/project' }) }),
+const server: MCPServerConfig = { serverId: 'tools', label: 'Tools', enabled: true, transport: { type: 'stdio', command: 'mcp-tools', args: [] } };
+let current: MCPConfigurationState;
+let readFailure: Error | null;
+let writeFailure: Error | null;
+let captured: MCPConfigureRequest[];
+let pendingRead: Promise<MCPConfigurationState> | null;
+const realClient = await import('@/api/canonicalClient');
+const { CanonicalApiError } = realClient;
+const resolveWorkspace = mock(async (directory: string) => ({ workspaceId: directory === '/other' ? 'other' : 'workspace', projectId: 'project', name: 'Workspace' }));
+mock.module('@/api/canonicalClient', () => ({ ...realClient, canonicalClient: {
+  resolveWorkspace,
+  getWorkspaceMcpConfig: async () => { if (readFailure) throw readFailure; return pendingRead ?? current; },
+  configureWorkspaceMcp: async (_workspaceId: string, request: MCPConfigureRequest): Promise<MCPApplyResult> => {
+    captured.push(request);
+    if (writeFailure) throw writeFailure;
+    current = { ...current, persistedRevision: String(BigInt(current.persistedRevision) + 1n), config: request.config };
+    return { kind: 'mcp', status: 'no-active-workers', configuration: current, workers: [] };
   },
-}));
-
-mock.module('@/lib/configUpdate', () => ({
-  startConfigUpdate: mock(() => undefined),
-  finishConfigUpdate: mock(() => undefined),
-  updateConfigUpdateMessage: mock(() => undefined),
-}));
-
-mock.module('@/stores/useAgentsStore', () => ({
-  refreshAfterOpenCodeRestart: mock(async () => undefined),
-}));
-
+  applyWorkspaceMcp: async (): Promise<MCPApplyResult> => ({ kind: 'mcp', status: 'no-active-workers', configuration: current, workers: [] }),
+} }));
 const { useMcpConfigStore } = await import('./useMcpConfigStore');
 
-/** What the MCP page hands the store for a remote server with nothing set. */
-const remoteDraft = (overrides: Partial<McpDraft> = {}): McpDraft => ({
-  name: 'example',
-  scope: 'user',
-  type: 'remote',
-  command: [],
-  url: 'https://mcp.example.com',
-  environment: [],
-  headers: [],
-  oauthEnabled: true,
-  oauthClientId: '',
-  oauthClientSecret: '',
-  oauthScope: '',
-  oauthRedirectUri: '',
-  oauthCallbackPort: '',
-  oauthAuthServerMetadataUrl: '',
-  protocol: 'legacy',
-  timeoutStartup: '',
-  timeoutCatalog: '',
-  timeoutExecution: '',
-  codemode: 'default',
-  disabled: false,
-  ...overrides,
+beforeEach(() => {
+  useMcpConfigStore.getState().resetForRuntimeSwitch();
+  current = { workspaceId: 'workspace', persistedRevision: '4', config: { servers: [server] } };
+  captured = []; readFailure = null; writeFailure = null; pendingRead = null; resolveWorkspace.mockClear();
 });
-
-const lastBody = () => captured[captured.length - 1].body;
-
-describe('useMcpConfigStore MCP body', () => {
-  beforeEach(() => {
-    captured = [];
-    listResponse = [];
+describe('workspace MCP configuration consumers', () => {
+  test('read and toggle use workspace CAS without creating a session', async () => {
+    expect(await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' })).toBe(true);
+    const result = await useMcpConfigStore.getState().updateMcp('tools', { enabled: false }, '/repo');
+    expect(result.ok).toBe(true);
+    expect(captured).toEqual([{ expectedPersistedRevision: '4', config: { servers: [{ ...server, enabled: false }] } }]);
+    expect(useMcpConfigStore.getState().getMcpByName('tools', '/repo')?.enabled).toBe(false);
+    expect(resolveWorkspace.mock.calls.map(call => call[0])).toEqual(['/repo', '/repo']);
   });
-
-  test('saving legacy writes a removal so the config file stays clean', async () => {
-    await useMcpConfigStore.getState().updateMcp('example', remoteDraft({ protocol: 'legacy' }));
-    expect(lastBody().protocol).toBeNull();
+  test('failed authoritative reads and failed writes preserve the last valid configuration', async () => {
+    await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+    readFailure = new Error('offline');
+    expect(await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' })).toBe(false);
+    expect(useMcpConfigStore.getState().getMcpServersForDirectory('/repo')).toEqual([server]);
+    writeFailure = new Error('conflict');
+    const result = await useMcpConfigStore.getState().deleteMcp('tools', '/repo');
+    expect(result.ok).toBe(false);
+    expect(useMcpConfigStore.getState().getMcpServersForDirectory('/repo')).toEqual([server]);
   });
-
-  test('Code Mode default writes a removal so OpenCode decides; on and off write the value', async () => {
-    await useMcpConfigStore.getState().updateMcp('example', remoteDraft({ codemode: 'default' }));
-    expect(lastBody().codemode).toBeNull();
-
-    await useMcpConfigStore.getState().updateMcp('example', remoteDraft({ codemode: 'on' }));
-    expect(lastBody().codemode).toBe(true);
-
-    await useMcpConfigStore.getState().updateMcp('example', remoteDraft({ codemode: 'off' }));
-    expect(lastBody().codemode).toBe(false);
+  test('partial apply exposes failure but retains the persisted revision for the next edit', async () => {
+    await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+    const partial: MCPApplyResult = { kind: 'mcp', status: 'partial', configuration: { ...current, persistedRevision: '5', config: { servers: [{ ...server, enabled: false }] } }, workers: [
+      { worker: { workspaceId: 'workspace', rootSessionId: 'root_a', workerGeneration: 'generation_a' }, outcome: 'applied', revisions: { runtimeStatus: 'ready', appliedRevision: '5', catalogRevision: '2' } },
+      { worker: { workspaceId: 'workspace', rootSessionId: 'root_b', workerGeneration: 'generation_b' }, outcome: 'failed', revisions: { runtimeStatus: 'ready', appliedRevision: '4', catalogRevision: '1' }, error: { code: 'MCP_APPLY_FAILED', detail: 'Worker could not apply.', retryable: true } },
+    ] };
+    writeFailure = new CanonicalApiError({ type: 'urn:problem:MCP_APPLY_FAILED', title: 'Incomplete', status: 503, detail: 'Worker could not apply.', code: 'MCP_APPLY_FAILED', retryable: true, details: { result: partial } });
+    const result = await useMcpConfigStore.getState().updateMcp('tools', { enabled: false }, '/repo');
+    expect(result.ok).toBe(false);
+    expect(result.result).toEqual(partial);
+    expect(useMcpConfigStore.getState().configurationsByDirectory['/repo'].persistedRevision).toBe('5');
+    writeFailure = null;
+    await useMcpConfigStore.getState().updateMcp('tools', { label: 'Renamed' }, '/repo');
+    expect(captured[1].expectedPersistedRevision).toBe('5');
   });
-
-  test('saving a non-default protocol writes the value', async () => {
-    await useMcpConfigStore.getState().updateMcp('example', remoteDraft({ protocol: 'auto' }));
-    expect(lastBody().protocol).toBe('auto');
-
-    await useMcpConfigStore.getState().updateMcp('example', remoteDraft({ protocol: '2026-07-28' }));
-    expect(lastBody().protocol).toBe('2026-07-28');
+  test('an older load cannot resurrect a server deleted after that load started', async () => {
+    await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+    let finish!: (value: MCPConfigurationState) => void;
+    pendingRead = new Promise(resolve => { finish = resolve; });
+    const old = current;
+    const loading = useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+    await useMcpConfigStore.getState().deleteMcp('tools', '/repo');
+    finish(old); await loading;
+    expect(useMcpConfigStore.getState().getMcpServersForDirectory('/repo')).toEqual([]);
   });
-
-  test('a local server carries the protocol too', async () => {
-    await useMcpConfigStore.getState().createMcp(remoteDraft({
-      type: 'local',
-      url: '',
-      command: ['npx', 'some-mcp'],
-      protocol: 'auto',
-    }));
-    expect(lastBody().protocol).toBe('auto');
+  test('a runtime switch drops old reads, drafts and configuration', async () => {
+    let finish!: (value: MCPConfigurationState) => void;
+    pendingRead = new Promise(resolve => { finish = resolve; });
+    const loading = useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+    useMcpConfigStore.getState().resetForRuntimeSwitch();
+    finish(current); await loading;
+    expect(useMcpConfigStore.getState().getMcpServersForDirectory('/repo')).toEqual([]);
+    expect(useMcpConfigStore.getState().configurationsByDirectory).toEqual({});
   });
-
-  test('the metadata URL is written into the oauth block', async () => {
-    await useMcpConfigStore.getState().updateMcp('example', remoteDraft({
-      oauthAuthServerMetadataUrl: '  https://auth.example.com/.well-known/oauth-authorization-server  ',
-    }));
-    expect(lastBody().oauth).toEqual({
-      auth_server_metadata_url: 'https://auth.example.com/.well-known/oauth-authorization-server',
-    });
-  });
-
-  test('emptying the metadata URL removes the key but keeps the rest of the block', async () => {
-    await useMcpConfigStore.getState().updateMcp('example', remoteDraft({
-      oauthClientId: 'id',
-      oauthCallbackPort: '4242',
-      oauthAuthServerMetadataUrl: '',
-    }));
-    expect(lastBody().oauth).toEqual({ client_id: 'id', callback_port: 4242 });
-  });
-
-  test('a server with OAuth turned off stays off', async () => {
-    await useMcpConfigStore.getState().updateMcp('example', remoteDraft({
-      oauthEnabled: false,
-      oauthAuthServerMetadataUrl: 'https://auth.example.com/meta',
-    }));
-    expect(lastBody().oauth).toBe(false);
-  });
-});
-
-describe('useMcpConfigStore round trip', () => {
-  beforeEach(() => {
-    captured = [];
-    listResponse = [];
-  });
-
-  test('a stored entry exposes protocol and the metadata URL to the editor', async () => {
-    listResponse = [{
-      name: 'example',
-      type: 'remote',
-      url: 'https://mcp.example.com',
-      protocol: '2026-07-28',
-      oauth: {
-        client_id: 'id',
-        auth_server_metadata_url: 'https://auth.example.com/meta',
-      },
-    }];
-    await useMcpConfigStore.getState().loadMcpConfigs({ force: true });
-
-    const entry = useMcpConfigStore.getState().getMcpByName('example');
-    expect(entry?.protocol).toBe('2026-07-28');
-    expect(entry?.type === 'remote' && entry.oauth !== false ? entry.oauth?.auth_server_metadata_url : null)
-      .toBe('https://auth.example.com/meta');
-  });
-
-  test('a v1 entry without either key still loads', async () => {
-    listResponse = [{ name: 'old', type: 'local', command: ['a'], legacy: true }];
-    await useMcpConfigStore.getState().loadMcpConfigs({ force: true });
-
-    const entry = useMcpConfigStore.getState().getMcpByName('old');
-    expect(entry?.legacy).toBe(true);
-    expect(entry?.protocol).toBeUndefined();
+  test('unregistered directory fails instead of silently loading a global workspace', async () => {
+    expect(await useMcpConfigStore.getState().loadMcpConfigs({ directory: null })).toBe(false);
+    expect(resolveWorkspace).not.toHaveBeenCalled();
   });
 });

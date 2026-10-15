@@ -1,7 +1,7 @@
 import React from 'react';
 import { useI18n } from '@/lib/i18n';
 import { Switch } from '@/components/ui/switch';
-import { useMcpStore } from '@/stores/useMcpStore';
+import { getMcpServerStatus, isMcpServerConnected, useMcpStore } from '@/stores/useMcpStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { McpIcon } from '@/components/icons/McpIcon';
 import { runBackgroundNetworkTask } from '@/lib/background-network';
@@ -48,37 +48,23 @@ export const WorkStatusMcpSection: React.FC<Props> = ({ directory }) => {
     [mcpStatus],
   );
   const mcpConnected = React.useMemo(
-    () => mcpServers.filter(([, entry]) => entry?.status.status === 'connected').length,
+    () => mcpServers.filter(([, entry]) => isMcpServerConnected(entry)).length,
     [mcpServers],
   );
 
-  // A server waiting on authorization cannot be reconnected into working
-  // order: `connect` just repeats the attempt that produced `needs_auth`.
-  // OpenCode v2 owns the OAuth flow now, so the panel says what is missing
-  // instead of pretending it can start it.
-  const reportNeedsAuth = React.useCallback(() => {
-    toast.message(t('chat.workStatus.mcp.needsAuthHint'));
-  }, [t]);
 
   const handleToggle = React.useCallback(async (name: string, next: boolean) => {
-    // Switching on a server that is waiting for sign-in cannot connect: it only
-    // repeats the attempt that produced `needs_auth`. Authorization is the real
-    // action, and the dropdown already routes the same switch that way — the
-    // two surfaces must not disagree about what this control does.
-    const status = (mcpStatus ?? {})[name]?.status.status;
-    if (next && status === 'needs_auth') {
-      reportNeedsAuth();
-      return;
-    }
 
     setBusyServer(name);
     try {
       if (next) await connect(name, directory);
       else await disconnect(name, directory);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('mcpDropdown.status.unknownError'));
     } finally {
       setBusyServer((current) => (current === name ? null : current));
     }
-  }, [connect, disconnect, directory, mcpStatus, reportNeedsAuth]);
+  }, [connect, disconnect, directory, t]);
 
   useReportWorkStatusPresence('mcp', mcpServers.length > 0);
 
@@ -92,10 +78,9 @@ export const WorkStatusMcpSection: React.FC<Props> = ({ directory }) => {
       summary={`${mcpConnected}/${mcpServers.length}`}
     >
       {mcpServers.map(([name, entry]) => {
-        const connected = entry?.status.status === 'connected';
+        const connected = entry.configuration.enabled;
         const busy = busyServer === name;
-        const needsAuth = entry?.status.status === 'needs_auth';
-        const failed = entry?.status.status === 'failed';
+        const failed = getMcpServerStatus(entry) === 'unavailable';
         return (
           <WorkStatusRow
             key={name}
@@ -111,17 +96,7 @@ export const WorkStatusMcpSection: React.FC<Props> = ({ directory }) => {
             )}
             label={name}
             muted={!connected}
-            // A server asking for sign-in or reporting a failure is asking to be
-            // acted on; the state is the affordance, so it is the button.
-            value={needsAuth ? (
-              <WorkStatusRowAction
-                tone="warning"
-                disabled={busy}
-                onClick={reportNeedsAuth}
-              >
-                {t('chat.workStatus.mcp.needsAuth')}
-              </WorkStatusRowAction>
-            ) : failed ? (
+            value={failed ? (
               <WorkStatusRowAction
                 tone="error"
                 disabled={busy}

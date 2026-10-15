@@ -2,7 +2,7 @@ import React from 'react';
 import { useI18n } from '@/lib/i18n';
 import { Icon } from '@/components/icon/Icon';
 import { useSkillsStore } from '@/stores/useSkillsStore';
-import { useMcpStore } from '@/stores/useMcpStore';
+import { isMcpServerConnected, useMcpStore } from '@/stores/useMcpStore';
 import { useSession } from '@/sync/sync-context';
 import { getDistinctLinkedIssues, getLinkedGitHubPullRequests, getLinkedGitLabThreads, getLinkedSidebarIssues, getGitHubThreadRef, getGitLabThreadRef, isLinkedChange } from '@/lib/linkedIssues';
 import type { PrVisualSummary } from '@/stores/useGitHubPrStatusStore';
@@ -252,7 +252,7 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
   // context, so counting it here contradicts the MCP section right above,
   // which shows the same servers switched off.
   const mcpCount = React.useMemo(
-    () => Object.values(mcpStatus ?? {}).filter((entry) => entry?.status.status === 'connected').length,
+    () => Object.values(mcpStatus ?? {}).filter(isMcpServerConnected).length,
     [mcpStatus],
   );
 

@@ -417,28 +417,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
     if (result.id.startsWith('mcp.')) {
       const store = useMcpConfigStore.getState();
-      const name = nextUniqueName('new-mcp-server', store.mcpServers.map((server) => server.name));
+      const name = nextUniqueName('new-mcp-server', store.mcpServers.map((server) => server.serverId));
       store.setMcpDraft({
-        name,
-        scope: 'user',
-        type: 'local',
-        command: [],
-        url: '',
-        environment: [],
-        headers: [],
-        oauthEnabled: true,
-        oauthClientId: '',
-        oauthClientSecret: '',
-        oauthScope: '',
-        oauthRedirectUri: '',
-        oauthCallbackPort: '',
-        oauthAuthServerMetadataUrl: '',
-        protocol: 'legacy',
-        timeoutStartup: '',
-        timeoutCatalog: '',
-        timeoutExecution: '',
-        codemode: 'default',
-        disabled: false,
+        serverId: name, label: name, enabled: true,
+        transport: { type: 'stdio', command: '', args: [] },
       });
       store.setSelectedMcp(name);
       return result.id === 'mcp.create' ? 'mcp.server' : result.id;

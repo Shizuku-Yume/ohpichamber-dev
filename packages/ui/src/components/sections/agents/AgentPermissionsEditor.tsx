@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { selectMcpServersForDirectory, useMcpConfigStore } from '@/stores/useMcpConfigStore';
-import { useMcpStore } from '@/stores/useMcpStore';
+import { getMcpServerStatus, useMcpStore } from '@/stores/useMcpStore';
 import {
   useAgentsStore,
   type PermissionEffect,
@@ -167,7 +167,7 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
   // --- Rows: built-in and OpenChamber tools, then one row per MCP server, then
   // whatever else the agent already names (custom keys, single MCP tools). ---
   const mcpKeys = React.useMemo(
-    () => mcpServers.map((server) => ({ key: `${server.name}_*`, server: server.name })),
+    () => mcpServers.map((server) => ({ key: `${server.serverId}_*`, server: server.serverId })),
     [mcpServers],
   );
   const toolKeys = React.useMemo(() => {
@@ -180,17 +180,15 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
   }, [mcpKeys, model.keys]);
 
   const mcpStatusLabel = (server: string): string | null => {
-    const status = mcpStatus?.[server]?.status.status;
+    const status = getMcpServerStatus(mcpStatus?.[server]);
     switch (status) {
-      case 'connected':
+      case 'ready':
         return t('settings.mcp.page.status.label.connected');
-      case 'failed':
+      case 'unavailable':
         return t('settings.mcp.page.status.label.failed');
-      case 'needs_auth':
-        return t('settings.mcp.page.status.label.needsAuth');
       case 'disabled':
         return t('settings.agents.page.permissionsEditor.mcpStatus.disabled');
-      case 'pending':
+      case 'unapplied':
         return t('settings.agents.page.permissionsEditor.mcpStatus.pending');
       default:
         return null;
