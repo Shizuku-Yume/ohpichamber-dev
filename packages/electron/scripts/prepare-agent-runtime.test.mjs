@@ -48,3 +48,22 @@ test('omits absent optional and incompatible optional platform packages', t => {
   pkg(path.join(source, 'node_modules/wrong'), { name: 'wrong', version: '1', os: ['win32'] });
   assert.deepEqual(stageDependencyClosure(source, output, { platform: 'linux' }).map(item => item.name), ['service']);
 });
+
+test('stages installed packages shadowed by Bun builtins from their actual nearest owner', t => {
+  const { root, pkg, source, output } = fixture(t);
+  pkg(source, { name: 'service', version: '1', dependencies: { puppeteer: '1', ws: 'outer' } });
+  const installed = path.join(root, 'store', 'puppeteer', 'node_modules');
+  const puppeteer = path.join(installed, 'puppeteer');
+  pkg(puppeteer, { name: 'puppeteer', version: '1', dependencies: { ws: 'inner' } });
+  pkg(path.join(installed, 'ws'), { name: 'ws', version: 'inner' }, 'module.exports = "inner-owner";');
+  pkg(path.join(source, 'node_modules/ws'), { name: 'ws', version: 'outer' }, 'module.exports = "outer-owner";');
+  fs.symlinkSync(path.relative(path.join(source, 'node_modules'), puppeteer), path.join(source, 'node_modules/puppeteer'), 'dir');
+  const packages = stageDependencyClosure(source, output);
+  assert.deepEqual(packages.filter(item => item.name === 'ws').map(item => item.version).sort(), ['inner', 'outer']);
+  const stagedPuppeteer = packages.find(item => item.name === 'puppeteer');
+  const stagedWs = path.join(output, stagedPuppeteer.path, 'node_modules/ws');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(stagedWs, 'package.json'), 'utf8')).version, 'inner');
+  fs.rmSync(source, { recursive: true });
+  fs.rmSync(path.join(root, 'store'), { recursive: true });
+  assert.equal(fs.readFileSync(path.join(stagedWs, 'index.cjs'), 'utf8'), 'module.exports = "inner-owner";');
+});

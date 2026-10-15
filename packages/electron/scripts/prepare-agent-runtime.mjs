@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -14,10 +13,18 @@ const compatible = (values, actual) => !values || (!values.includes(`!${actual}`
   && (values.every(value => value.startsWith('!')) || values.includes(actual)));
 
 function installedDependency(name, owner) {
-  const require = createRequire(path.join(owner, 'package.json'));
-  for (const directory of require.resolve.paths(name) ?? []) {
-    const candidate = path.join(directory, name, 'package.json');
-    if (fs.existsSync(candidate)) return fs.realpathSync(path.dirname(candidate));
+  // Resolve installed package directories, not runtime entrypoints. Bun treats
+  // names such as "ws" as builtins (resolve.paths returns null), but those
+  // names still represent real declared packages in the installed SDK closure.
+  let directory = owner;
+  while (true) {
+    if (path.basename(directory) !== 'node_modules') {
+      const candidate = path.join(directory, 'node_modules', name, 'package.json');
+      if (fs.existsSync(candidate)) return fs.realpathSync(path.dirname(candidate));
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
   }
   return null;
 }
