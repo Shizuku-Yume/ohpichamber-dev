@@ -24,13 +24,17 @@ mock.module('@/components/ui', () => ({
   toast: { info: () => undefined, error: () => undefined, success: () => undefined },
 }));
 let mockIdCounter = 0;
+mock.module('@/lib/host-filesystem', () => ({
+  hostFilesystem: {
+    getDirectory: () => '/repo',
+    setDirectory: () => undefined,
+  },
+}));
 mock.module('@/lib/opencode/client', () => ({
   OpencodeApiError: Error,
   normalizeOpencodeError: (operation: string, error: unknown) => new Error(`${operation}: ${String(error)}`),
   ascendingId: (prefix: string) => `${prefix}_${(mockIdCounter += 1).toString(16).padStart(12, '0')}`,
   opencodeClient: {
-    getDirectory: () => '/repo',
-    setDirectory: () => undefined,
     getSdkClient: () => ({}),
     getScopedSdkClient: () => ({}),
   },

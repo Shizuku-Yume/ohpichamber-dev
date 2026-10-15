@@ -48,13 +48,14 @@ describe('shouldInlineDiffs', () => {
 
 const spies: Array<{ mockRestore(): void }> = [];
 afterEach(() => { for (const spy of spies.splice(0)) spy.mockRestore(); });
+function sessionFixture(sessionId: string): Session {
+  const session: Session = { sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1,
+    epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: {}, metadataRevision: '1', archiveRevision: '0' };
+  session.metadata = withMultiRunMembership(session, { version: 1, sessionID: sessionId, group: { kind: 'id', id: '9f512893-6e63-4e49-a534-5de733ca103e' }, groupSlug: 'run', role: 'run', providerID: 'provider', modelID: 'model' });
+  return session;
+}
 function sourceFixture() {
-  const sessions = ['a', 'b'].map((sessionId): Session => {
-    const session: Session = { sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1,
-      epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: {}, metadataRevision: '1', archiveRevision: '0' };
-    session.metadata = withMultiRunMembership(session, { version: 1, sessionID: sessionId, group: { kind: 'id', id: '9f512893-6e63-4e49-a534-5de733ca103e' }, groupSlug: 'run', role: 'run', providerID: 'provider', modelID: 'model' });
-    return session;
-  });
+  const sessions = ['a', 'b'].map(sessionFixture);
   const run = [...buildMultiRunIndex(sessions, (session) => session.projectId).runs.values()][0];
   spies.push(spyOn(keep, 'resolveRunMemberLocation').mockResolvedValue(null));
   const create = spyOn(canonicalClient, 'createSession');
@@ -67,26 +68,26 @@ describe('canonical fusion source authority', () => {
     const api = sourceFixture();
     spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: api.sessions, errors: { a: 'read_failed' } }));
     await expect(startRunFusion(api.input)).rejects.toThrow('Fusion source could not be read');
-    expect(api.create).not.toHaveBeenCalled();
+    expect(api.create.mock.calls.length).toBe(0);
   });
   test('fresh changed membership invalidates cached source selection', async () => {
     const api = sourceFixture();
     spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: api.sessions.map((session) => ({ ...session, metadata: null })), errors: {} }));
     await expect(startRunFusion(api.input)).rejects.toThrow('Fusion source membership changed');
-    expect(api.create).not.toHaveBeenCalled();
+    expect(api.create.mock.calls.length).toBe(0);
   });
   test('successfully empty native histories do not create a fusion', async () => {
     const api = sourceFixture();
     spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: api.sessions, errors: {} }));
     spies.push(spyOn(canonicalClient, 'getHistory').mockImplementation(async (sessionId) => ({ sessionId, branch: { branchId: 'branch', branchVersion: '1', leafMessageId: null }, messages: [], turns: [], nextCursor: null })));
     await expect(startRunFusion(api.input)).rejects.toBeInstanceOf(NoFusionOutputsError);
-    expect(api.create).not.toHaveBeenCalled();
+    expect(api.create.mock.calls.length).toBe(0);
   });
   test('history errors abort before creating a result', async () => {
     const api = sourceFixture();
     spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: api.sessions, errors: {} }));
     spies.push(spyOn(canonicalClient, 'getHistory').mockRejectedValue(new Error('History failed')));
     await expect(startRunFusion(api.input)).rejects.toThrow('History failed');
-    expect(api.create).not.toHaveBeenCalled();
+    expect(api.create.mock.calls.length).toBe(0);
   });
 });

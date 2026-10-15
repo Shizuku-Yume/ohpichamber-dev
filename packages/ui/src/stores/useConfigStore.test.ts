@@ -18,6 +18,7 @@ let listAgentsCalls = 0;
 let liveAgents: TestAgent[] = [];
 let listAgentsImpl: ((directory?: string | null) => Promise<TestAgent[]>) | null = null;
 let getProvidersForConfigImpl: ((directory?: string | null) => Promise<TestProviderResponse>) | null = null;
+let resolvedWorkspaceDirectories: string[] = [];
 let withDirectoryCalls: Array<string | null> = [];
 let currentFetchDirectory: string | null = DIRECTORY;
 let configListener: ((event: { scopes: string[]; source?: string; timestamp: number }) => void | Promise<void>) | null = null;
@@ -89,6 +90,17 @@ const providerResponse = (id: string, modelId = `${id}-model`, variantIds?: stri
   default: { providerID: id, id: modelId },
 });
 
+let canonicalResponsePromises = new Map<string, Promise<TestProviderResponse>>();
+const canonicalResponseFor = (workspaceId: string): Promise<TestProviderResponse> => {
+  const existing = canonicalResponsePromises.get(workspaceId);
+  if (existing) return existing;
+  const directory = workspaceId.slice('workspace:'.length);
+  const response = getProvidersForConfigImpl
+    ? getProvidersForConfigImpl(directory)
+    : Promise.resolve(providerResponse(liveProviderIdsByDirectory.get(directory) ?? liveProviderId, `${liveProviderIdsByDirectory.get(directory) ?? liveProviderId}-model`, liveProviderVariants));
+  canonicalResponsePromises.set(workspaceId, response);
+  return response;
+};
 type TestProviderResponse = ReturnType<typeof providerResponse>;
 
 const testAgent = (name: string, options?: Partial<TestAgent>): Agent => ({
@@ -145,19 +157,12 @@ mock.module('@/stores/useProjectsStore', () => ({
 
 let directoryAvailability: 'available' | 'missing' | 'unknown' = 'available';
 
-mock.module('@/lib/opencode/client', () => ({
-  OpencodeApiError: Error,
-  normalizeOpencodeError: (operation: string, error: unknown) => new Error(`${operation}: ${String(error)}`),
-  opencodeClient: {
+mock.module('@/lib/host-filesystem', () => ({
+  hostFilesystem: {
     setDirectory: mock(() => undefined),
     getDirectory: mock(() => DIRECTORY),
     getFilesystemHome: async () => '/workspace',
     getSystemInfo: async () => ({ homeDirectory: '/workspace' }),
-    checkHealth: () => checkHealthImpl(),
-    probeHealth: (options?: { waitMs?: number }) => {
-      probeHealthOptions.push(options);
-      return probeHealthImpl ? probeHealthImpl() : checkHealthImpl().then((healthy) => (healthy ? 'healthy' : 'unhealthy'));
-    },
     withDirectory: mock(async (directory: string | null, callback: () => Promise<unknown>) => {
       withDirectoryCalls.push(directory);
       const previous = currentFetchDirectory;
@@ -168,6 +173,19 @@ mock.module('@/lib/opencode/client', () => ({
         currentFetchDirectory = previous;
       }
     }),
+    getDirectoryAvailability: mock(async () => directoryAvailability),
+  },
+}));
+
+mock.module('@/lib/opencode/client', () => ({
+  OpencodeApiError: Error,
+  normalizeOpencodeError: (operation: string, error: unknown) => new Error(`${operation}: ${String(error)}`),
+  opencodeClient: {
+    checkHealth: () => checkHealthImpl(),
+    probeHealth: (options?: { waitMs?: number }) => {
+      probeHealthOptions.push(options);
+      return probeHealthImpl ? probeHealthImpl() : checkHealthImpl().then((healthy) => (healthy ? 'healthy' : 'unhealthy'));
+    },
     getProviders: mock(async () => {
       getProvidersCalls += 1;
       const id = liveProviderIdsByDirectory.get(currentFetchDirectory ?? '') ?? liveProviderId;
@@ -191,8 +209,65 @@ mock.module('@/lib/opencode/client', () => ({
       return {};
     }),
     clearConfigCache: mock(() => undefined),
-    getDirectoryAvailability: mock(async () => directoryAvailability),
     invalidateAgentList: mock(() => undefined),
+  },
+}));
+class TestCanonicalApiError extends Error {
+  readonly problem: { status: number };
+  constructor(problem: { status: number; detail?: string }) {
+    super(problem.detail ?? 'Canonical API error');
+    this.name = 'CanonicalApiError';
+    this.problem = problem;
+  }
+}
+
+mock.module('@/api/canonicalClient', () => ({
+  CanonicalApiError: TestCanonicalApiError,
+  canonicalClient: {
+    resolveWorkspace: mock(async (directory: string) => {
+      resolvedWorkspaceDirectories.push(directory);
+      return { workspaceId: `workspace:${directory}`, projectId: 'project', name: 'Workspace' };
+    }),
+    getProviders: mock(async (workspaceId: string) => {
+      getProvidersCalls += 1;
+      const response = await canonicalResponseFor(workspaceId);
+      return {
+        workspaceId,
+        revision: '0',
+        providers: response.providers.map((provider) => ({
+          providerId: provider.id,
+          name: provider.name,
+          endpoint: null,
+          protocol: null,
+          authMethods: [],
+          auth: { status: 'missing' as const },
+        })),
+      };
+    }),
+    getModels: mock(async (workspaceId: string) => {
+      const responsePromise = canonicalResponseFor(workspaceId);
+      canonicalResponsePromises.delete(workspaceId);
+      const response = await responsePromise;
+      return {
+        workspaceId,
+        revision: '0',
+        models: response.models.map((model) => ({
+          modelId: model.modelID,
+          provider: model.providerID,
+          name: model.name,
+          modalities: ['text' as const],
+          contextWindow: 1000,
+          maxOutputTokens: 1000,
+          reasoningEffortSupported: false,
+          reasoningOptions: [],
+          variants: model.variants.map((variant) => ({ variant: variant.id, label: variant.id, reasoningEffort: null })),
+          toolsSupported: model.capabilities.tools,
+          enabled: model.enabled,
+          status: model.status,
+          pricing: { inputPerMillionTokens: 0, outputPerMillionTokens: 0, cacheReadPerMillionTokens: 0, cacheWritePerMillionTokens: 0 },
+        })),
+      };
+    }),
   },
 }));
 
@@ -276,8 +351,10 @@ describe('useConfigStore provider persistence', () => {
     liveProviderIdsByDirectory = new Map<string, string>();
     liveProviderVariants = undefined;
     getProvidersCalls = 0;
+    canonicalResponsePromises = new Map<string, Promise<TestProviderResponse>>();
     getConfigCalls = 0;
     listAgentsCalls = 0;
+    resolvedWorkspaceDirectories = [];
     liveAgents = [];
     listAgentsImpl = null;
     getProvidersForConfigImpl = null;
@@ -346,6 +423,26 @@ describe('useConfigStore provider persistence', () => {
     expect(useConfigStore.getState().currentModelId).toBe('chosen-model');
     expect(useConfigStore.getState().currentVariant).toBe('high');
     expect(useConfigStore.getState().currentVariantSelection.override).toBe('high');
+  });
+
+  test('resolves the workspace and merges canonical providers with enabled models', async () => {
+    getProvidersForConfigImpl = async () => ({
+      providers: [providerInfo('alpha'), providerInfo('beta')],
+      models: [model('alpha', 'first'), { ...model('alpha', 'disabled'), enabled: false }, model('beta', 'second')],
+      default: { providerID: 'alpha', id: 'first' },
+    });
+
+    await useConfigStore.getState().loadProviders({ directory: DIRECTORY });
+
+    expect(resolvedWorkspaceDirectories).toEqual([DIRECTORY]);
+    expect(useConfigStore.getState().providers.map((entry) => ({
+      id: entry.id,
+      models: entry.models.map((item) => item.modelID),
+      canonicalAuth: entry.canonicalAuth,
+    }))).toEqual([
+      { id: 'alpha', models: ['first'], canonicalAuth: { status: 'missing' } },
+      { id: 'beta', models: ['second'], canonicalAuth: { status: 'missing' } },
+    ]);
   });
 
   test('worktree catalog uses its own directory and retains its manual model across switches', async () => {

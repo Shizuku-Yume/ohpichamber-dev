@@ -5,14 +5,9 @@ import type { Session } from '@/lib/opencode/model';
 import { useSessionPrefetch, type SessionHoverPrefetch } from './useSessionPrefetch';
 import { installHookTestDom } from '../test-utils/testDom';
 
-const session = (id: string): Session => ({
-  id,
-  projectID: 'project',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  title: id,
-  directory: '/workspace',
-  time: { created: 1, updated: 1 },
+const session = (sessionId: string): Session => ({
+  sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/workspace', rootSessionId: sessionId, title: sessionId,
+  createdAt: 1, updatedAt: 1, epoch: 1, headSequence: 0, runtimeStatus: 'idle', activeRunId: null,
 });
 
 describe('session prefetch demand', () => {

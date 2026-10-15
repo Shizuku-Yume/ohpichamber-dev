@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { ChatDraftIdentity } from '@/lib/chatDraftPersistence';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 import { runForkCommand, type ForkCommandDeps } from '../forkCommand';
 

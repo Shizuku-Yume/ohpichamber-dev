@@ -1,5 +1,5 @@
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@/lib/opencode/model';
 import React, { act } from 'react';
@@ -50,14 +50,10 @@ const installMinimalDom = () => {
   };
 };
 
-const session = (id: string, directory: string | null): Session => {
-  // SAFETY: Sidebar projection reads only id, directory, and time from session fixtures.
-  return {
-    id,
-    directory,
-    time: { created: 1, updated: 1 },
-  } as Session;
-};
+const session = (sessionId: string, displayPath: string | null): Session => ({
+  sessionId, projectId: 'project', workspaceId: 'workspace', displayPath, rootSessionId: sessionId,
+  createdAt: 1, updatedAt: 1, epoch: 1, headSequence: 0, runtimeStatus: 'idle', activeRunId: null, title: sessionId,
+});
 
 describe('projectSidebarActiveSessions', () => {
   test('keeps global precedence and order, then appends missing live sessions', () => {
@@ -82,7 +78,7 @@ describe('projectSidebarActiveSessions', () => {
   });
 
   test('retains active global records from deleted worktrees', () => {
-    const restored = { ...session('restored', '/deleted/worktrees/feature'), time: { created: 1, updated: 1 } };
+    const restored = { ...session('restored', '/deleted/worktrees/feature'), updatedAt: 1 };
 
     expect(projectSidebarActiveSessions({
       globalActiveSessions: [restored],
@@ -184,13 +180,12 @@ describe('projectSidebarCollection', () => {
   });
 
   test('keeps a ranked managed root and its active child in the Chats hierarchy', () => {
-    const managedRoot = { ...session('managed-root', '/home/.config/openchamber/chats/2026-08-24/session-root'), time: { created: 1, updated: 1 } };
+    const managedRoot = { ...session('managed-root', '/home/.config/openchamber/chats/2026-08-24/session-root'), createdAt: 1, updatedAt: 1 };
     const managedChild = {
       ...session('managed-child', '/home/.config/openchamber/chats/2026-08-24/session-root'),
-      parentID: 'managed-root',
-      time: { created: 2, updated: 2 },
+      parentSessionId: 'managed-root', createdAt: 2, updatedAt: 2,
     };
-    const projectRoot = { ...session('project-root', '/workspace/a'), time: { created: 3, updated: 3 } };
+    const projectRoot = { ...session('project-root', '/workspace/a'), createdAt: 3, updatedAt: 3 };
 
     const projection = buildSidebarSessionProjection({
       globalActiveSessions: [projectRoot, managedRoot, managedChild],
@@ -211,17 +206,17 @@ describe('useRecentSessionCollection', () => {
   test('updates mounted Recent membership when global active status changes', async () => {
     const dom = installMinimalDom();
     const root: Root = createRoot(dom.container);
-    const oldSession = { ...session('old-root', '/workspace/a'), time: { created: 1, updated: 1 } };
+    const oldSession = { ...session('old-root', '/workspace/a'), createdAt: 1, updatedAt: 1 };
     let renderedIds: string[] = [];
     let renderCount = 0;
-    let timeReadCount = 0;
-    Object.defineProperty(oldSession, 'time', {
+    let updatedReadCount = 0;
+    Object.defineProperty(oldSession, 'updatedAt', {
       get: () => {
-        timeReadCount += 1;
-        return { created: 1, updated: 1 };
+        updatedReadCount += 1;
+        return 1;
       },
     });
-    timeReadCount = 0;
+    updatedReadCount = 0;
     const Harness = () => {
       renderCount += 1;
       const recent = useRecentSessionCollection({
@@ -247,7 +242,7 @@ describe('useRecentSessionCollection', () => {
       });
       expect(renderedIds).toEqual(['old-root']);
       const activeRenderCount = renderCount;
-      const activeDeriveOperationCount = timeReadCount;
+      const activeDeriveOperationCount = updatedReadCount;
 
       await act(async () => {
         applyGlobalSessionStatusEvent('/other-workspace', {
@@ -256,7 +251,7 @@ describe('useRecentSessionCollection', () => {
         });
       });
       expect(renderCount).toBe(activeRenderCount);
-      expect(timeReadCount).toBe(activeDeriveOperationCount);
+      expect(updatedReadCount).toBe(activeDeriveOperationCount);
     } finally {
       await act(async () => root.unmount());
       replaceGlobalSessionStatusById(new Map());
@@ -296,7 +291,7 @@ describe('getDescendantIds', () => {
 });
 
 describe('buildActiveSessionNode', () => {
-  const archived = (id: string): Session => ({ ...session(id, '/workspace'), time: { created: 1, updated: 1, archived: 2 } });
+  const archived = (sessionId: string): Session => ({ ...session(sessionId, '/workspace'), archivedAt: 2 });
 
   test('nests every active descendant so archive reaches grandchildren', () => {
     const child = session('child', '/workspace');
@@ -344,11 +339,11 @@ describe('buildActiveSessionNode', () => {
   });
 });
 
-const originalHomeInfo = opencodeClient.getFilesystemHomeInfo;
-opencodeClient.getFilesystemHomeInfo = async () => ({
+const originalHomeInfo = hostFilesystem.getFilesystemHomeInfo;
+hostFilesystem.getFilesystemHomeInfo = async () => ({
   home: '/home',
   canonicalChatsRoot: '/HOME/.config/openchamber/chats',
   canonicalLegacyChatsRoot: '/HOME/.config/openchamber/chats',
 });
 await ensureChatsRootDirectory();
-opencodeClient.getFilesystemHomeInfo = originalHomeInfo;
+hostFilesystem.getFilesystemHomeInfo = originalHomeInfo;

@@ -57,8 +57,8 @@ let holdLookup: Promise<void> = Promise.resolve();
 let clientDirectory: string | undefined = MAC_PROJECT;
 let onRuntimeEndpointChanged: (detail: EndpointChange) => void = () => undefined;
 
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: {
+mock.module('@/lib/host-filesystem', () => ({
+  hostFilesystem: {
     setDirectory: (directory: string | undefined) => {
       clientDirectory = directory;
     },

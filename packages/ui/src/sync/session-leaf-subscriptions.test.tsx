@@ -3,6 +3,7 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { OpenCode } from '@opencode/client'
 import { opencodeClient } from '@/lib/opencode/client'
+import { hostFilesystem } from '@/lib/host-filesystem';
 import type { Message, Session } from '@/lib/opencode/model'
 import {
   areModelChoicesEqual,
@@ -120,8 +121,8 @@ describe('session leaf subscriptions', () => {
     previousSurface = window.__OPENCHAMBER_SURFACE__
     window.__OPENCHAMBER_SURFACE__ = 'desktop'
     const spies = [
-      spyOn(opencodeClient, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home' }),
-      spyOn(opencodeClient, 'getFilesystemHome').mockResolvedValue('/home'),
+      spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home' }),
+      spyOn(hostFilesystem, 'getFilesystemHome').mockResolvedValue('/home'),
       spyOn(opencodeClient, 'getLocation').mockResolvedValue({
         directory: CURRENT_DIR,
         project: { id: 'project', directory: CURRENT_DIR, canonical: CURRENT_DIR },

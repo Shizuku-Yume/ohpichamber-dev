@@ -84,7 +84,7 @@ test('archive search uses exact IDs and preserves title search and archive membe
 test('the chats of a deleted space are grouped under its name and cannot be restored', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = Object.assign(async () => new Response(JSON.stringify({
-    archives: [{ spaceId: 'a1b2c3d4e5f6', name: 'Fix login', directory: '/data/spaces/archive/a1b2c3d4e5f6' }],
+    archives: [{ spaceId: 'a1b2c3d4e5f6', name: 'Fix login', workspaceId: 'space-workspace' }],
   }), { status: 200 }), originalFetch);
   try {
     registerWorkspaceDirectory('space-workspace', '/data/spaces/archive/a1b2c3d4e5f6');

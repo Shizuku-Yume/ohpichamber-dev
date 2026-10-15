@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import type { Model } from '@openchamber/agent-contract';
+import type { Model, ModelCatalog } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { invalidateSettingsCache } from '@/lib/persistence';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
@@ -17,7 +17,7 @@ beforeEach(() => {
   useSmallModelStore.getState().invalidate();
   models = [model]; fail = false;
   const scope = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async directory => ({ workspaceId: directory, projectId: 'p', name: directory }));
-  const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => {
+  const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async (workspaceId): Promise<ModelCatalog> => {
     if (fail) throw new Error('offline');
     return { workspaceId, revision: '0', models };
   });

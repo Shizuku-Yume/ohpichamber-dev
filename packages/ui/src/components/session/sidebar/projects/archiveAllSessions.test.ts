@@ -1,18 +1,27 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { SessionGroup, SessionNode } from '../types';
 import { selectArchiveAllSessionIds } from './archiveAllSessions';
 
-const session = (id: string, archived?: number): Session => ({
-  id,
-  projectID: 'p',
-  directory: '/repo',
-  title: id,
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1, archived },
+const session = (sessionId: string, archivedAt?: number): Session => ({
+  sessionId,
+  rootSessionId: sessionId,
+  projectId: 'p',
+  workspaceId: 'workspace',
+  displayPath: '/repo',
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: 'epoch',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  metadata: null,
+  metadataRevision: '0',
+  archiveRevision: '0',
+  archivedAt,
 });
+ 
 
 const node = (value: Session, children: SessionNode[] = []): SessionNode => ({ session: value, children, worktree: null });
 
@@ -36,7 +45,7 @@ describe('selectArchiveAllSessionIds', () => {
     ];
     const kept = new Set(['pinned', 'running']);
 
-    expect(selectArchiveAllSessionIds(groups, (s) => kept.has(s.id))).toEqual(['a', 'b']);
+    expect(selectArchiveAllSessionIds(groups, (s) => kept.has(s.sessionId))).toEqual(['a', 'b']);
   });
 
   test('ignores the archived bucket and already archived sessions', () => {

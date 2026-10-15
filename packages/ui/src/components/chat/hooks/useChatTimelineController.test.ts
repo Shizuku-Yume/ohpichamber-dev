@@ -1,7 +1,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { describe, expect, test } from 'bun:test';
-import type { Message } from '@/lib/opencode/model';
+import type { Message } from '@openchamber/agent-contract';
 
 import {
     isOlderHistoryPrependCommit,
@@ -223,15 +223,15 @@ describe('useChatTimelineController identity lifecycle', () => {
         const calls: string[] = [];
         const sessionId = 'shared-session';
         const message = {
-            info: { id: 'msg_1', sessionID: sessionId, role: 'user', time: { created: 1 } } as Message,
+            info: { id: 'msg_1', sessionID: sessionId, role: 'user', time: { created: 1 } } satisfies Message,
             parts: [],
         };
         const olderMessage = {
-            info: { id: 'msg_0', sessionID: sessionId, role: 'user', time: { created: 0 } } as Message,
+            info: { id: 'msg_0', sessionID: sessionId, role: 'user', time: { created: 0 } } satisfies Message,
             parts: [],
         };
         const assistantMessage = {
-            info: { id: 'msg_2', sessionID: sessionId, role: 'assistant', time: { created: 2 } } as Message,
+            info: { id: 'msg_2', sessionID: sessionId, role: 'assistant', time: { created: 2 } } satisfies Message,
             parts: [],
         };
         const scrollMetrics = {

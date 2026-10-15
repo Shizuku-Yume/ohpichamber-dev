@@ -9,15 +9,15 @@ import {
   findRemovedAuthoritativeSessions,
 } from './authoritativeSessionCleanup';
 
-// SAFETY: cleanup identity tests only consume the SDK session ID and directory fields.
-const session = (id: string, directory = '/repo'): Session => ({ id, directory }) as Session;
-
+// SAFETY: cleanup identity tests only consume canonical session ID and display path fields.
+const session = (sessionId: string, displayPath = '/repo'): Session => ({
+  sessionId, projectId: 'project', workspaceId: 'workspace', displayPath, rootSessionId: sessionId,
+  createdAt: 1, updatedAt: 1, epoch: 1, headSequence: 1, runtimeStatus: 'idle', activeRunId: null, title: sessionId,
+});
 const cleanups: Array<{ runtimeKey: string; directory: string; sessionId: string }> = [];
 mock.module('@/lib/runtime-switch', () => ({ getRuntimeKey: () => 'runtime' }));
 mock.module('@/sync/session-actions', () => ({
-  reconcileExternallyDeletedSession: (identity: { runtimeKey: string; directory: string; sessionId: string }) => {
-    cleanups.push(identity);
-  },
+  reconcileExternallyDeletedSession: (identity: { runtimeKey: string; directory: string; sessionId: string }) => { cleanups.push(identity); },
 }));
 const { useAuthoritativeSessionCleanup } = await import('./useAuthoritativeSessionCleanup');
 const { useSpacesStore } = await import('@/lib/spaces/spaces-store');
@@ -63,8 +63,7 @@ describe('authoritative session cleanup', () => {
   test('treats archive membership as retained authority', () => {
     const previous = buildAuthoritativeSessionIdentityMap([session('archived')]);
     const current = buildAuthoritativeSessionIdentityMap([
-      // SAFETY: cleanup identity tests only consume the SDK session ID and directory fields.
-      { ...session('archived'), time: { archived: 10 } } as Session,
+      { ...session('archived'), archivedAt: 10 },
     ]);
 
     expect(findRemovedAuthoritativeSessions(previous, current)).toEqual([]);
@@ -93,7 +92,7 @@ describe('authoritative session cleanup', () => {
     const baseline = [session('session', '/repo-a')];
     act(() => root.render(React.createElement(CleanupProbe, { sessions: baseline, revision: 0 })));
     act(() => root.render(React.createElement(CleanupProbe, { sessions: baseline, revision: 1 })));
-    act(() => root.render(React.createElement(CleanupProbe, { sessions: [{ ...session('session', '/repo-a'), time: { created: 0, updated: 0, archived: 1 } }], revision: 2 })));
+    act(() => root.render(React.createElement(CleanupProbe, { sessions: [{ ...session('session', '/repo-a'), archivedAt: 1 }], revision: 2 })));
     act(() => root.render(React.createElement(CleanupProbe, { sessions: [session('session', '/repo-b')], revision: 3 })));
     expect(cleanups).toEqual([]);
 

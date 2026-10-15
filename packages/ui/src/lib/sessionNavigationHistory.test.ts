@@ -1,17 +1,21 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { navigateSessionHistory } from './sessionNavigationHistory';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 
-const session = (id: string): Session => ({
-  id,
-  title: id,
-  directory: '/repo',
-  projectID: 'p1',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
+const session = (sessionId: string): Session => ({
+  sessionId,
+  projectId: 'p1',
+  workspaceId: 'w1',
+  displayPath: 'repo',
+  rootSessionId: sessionId,
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: 'e',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
 });
 
 describe('sessionNavigationHistory', () => {

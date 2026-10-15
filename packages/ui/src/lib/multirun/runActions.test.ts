@@ -78,7 +78,7 @@ describe('canonical multi-run metadata actions', () => {
     const write = spyOn(canonicalClient, 'patchSessionMetadata');
     spies.push(write);
     await expect(renameRun(api.run, 'Renamed', api.sessionById)).rejects.toThrow('Runtime changed');
-    expect(write).not.toHaveBeenCalled();
+    expect(write.mock.calls.length).toBe(0);
     expect(api.published).toEqual([]);
   });
   test('new model lanes retain the source profile captured before history awaits', async () => {

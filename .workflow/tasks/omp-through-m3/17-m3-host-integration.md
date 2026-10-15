@@ -133,4 +133,55 @@ and comments implying automatic legacy bootstrap were removed in this lane.
 
 ## Current integrated verification (2026-10-15)
 
-The production cutover is integrated through `a76afadc6`, `3ea7b1e1d`, `9b4477362`, `de59dda11`, and `3f4afa751`. Host startup tests pass `4`; Electron package tests pass `43/43` files and Electron syntax type-check passes. The UI OpenCode startup gate and its sole session-action wait are now removed. Workflow/docs validation passes. Full Web acceptance remains open: retained OpenCode proxy/worktree readiness tests fail `11` targeted cases (`20` pass) on expected `503` behavior, and credential handoff/importer, isolated-space archive, packaged Bun/worker/native SDK staging, upgrade controls and remaining legacy lifecycle/config callers are not cut over. Task 17 remains active until those owners and the W7/W10 OpenCode-absent Web/Electron proof are complete.
+Production cutover baseline remains integrated through `a76afadc6`, `3ea7b1e1d`, `9b4477362`, `de59dda11`, and `3f4afa751`, with the Web repair packet committed as `e1b4b7d62`. Host startup tests pass; Electron package tests pass 43/43 files; Electron syntax type-check passes; the UI OpenCode startup gate is removed; and the full Web Vitest suite passes (386 files, 6,441 tests; 9 files, 136 tests skipped).
+
+The sessionless workspace MCP backend (`7ab670325`) and legacy retirement (`3c4b8e7a6`) are manually integrated in this worktree:
+- Task 16 `authorizationRootId` is preserved in `CompletionWorkerBootstrapSchema` and propagated through stateless worker completion bootstrap.
+- Task 32 `WorkerReplySchema` optional `subagent.toolCallId`, `worker/index.ts` parent tool-call forwarding, and supervisor `onSubagent` callbacks are preserved.
+- Canonical workspace MCP is the sole configuration and settings authority. Obsolete `/api/config/mcp*` routes, `packages/web/server/lib/opencode/mcp.js`, and unused list/connect/disconnect SDK wrappers are removed. Public DTOs use precise `connected`/`failed` discriminators, and UI store narrowings are aligned.
+- Focused verification passed:
+  - Agent contract build passed.
+  - Agent Service type-check passed (preparing 13 source-derived SDK declarations, before final lint-only edits).
+  - 19 native session+MCP tests passed (123 assertions).
+  - 68 contract/stateless tests passed (254 assertions).
+  - MCP UI isolated runner passed (3/3 files).
+  - 3 Web config/shared regression files passed (`server/lib/opencode/config-v2.test.js`, `server/lib/opencode/shared.test.js`, `server/lib/opencode/provider-model-shared.test.js`), retaining `cleanStringMap` for still-used provider conversion.
+  - Real `AgentService` + subprocess worker HTTP smoke passed: workspace registration, config write/read, local MCP handshake with 1 tool and 0 sessions, restart/persisted config, stale CAS 409, unauthenticated 403, and no-worker reconnect with a second handshake. The smoke used a controlled allow policy callback only; temporary probe scripts and runtime state were removed. This proves the private service boundary, not connected Host/Web/Electron production behavior.
+  - Authored backend oxlint errors were repaired in three files (`catalog.ts` conditional spread, `catalog-mcp.test.ts` request parameter type, `worker/mcp.ts` headers widening); final scoped recheck is pending.
+
+Packaged staging status:
+- Commits `7d0cfa7a6` (staging pinned Bun runtime outside ASAR) and `f3a7c17f0` (dependency resolution from installed owner directories) are in `m1-integration` ancestry.
+- In an earlier isolated packaged-closure tree, `bun run --cwd packages/electron prepare:agent-runtime` and 4/4 staging tests passed (not rerun here). This supersedes "staging absent", but is distinct from full packaged Electron certification without OpenCode.
+
+Isolated-space archive status:
+- Native OMP transfer is now implemented across the space bridge, Host catalog and Agent Service. The space returns a complete parent-first manifest; Host quarantines raw uncompressed bounded ustar bundles and selects the private destination and opaque `archive_<spaceId>` workspace identity.
+- The Agent Service owns transcript/artifact/subagent serialization, structured native image/blob references, SHA-256 verification, cold projection and persistent deleted-space provenance. Host does not parse or synthesize JSONL or import SDK objects. Compressed hostile bundles and direct archive extraction are refused.
+- Archive admission is catalog-owned and rollback is limited to newly registered imports; prior entries and shared global blobs remain intact. Imported roots/children are browsable and deletable after restart without live workers and reject run, mutation, reopen, branch, fork and relocation with canonical `SESSION_READ_ONLY` 409. Non-native-owned non-image attachment bytes are explicitly refused; no attachment preview proof is claimed.
+- This source phase has not run integrated checks or live Docker/packaged certification. Focused native transfer/cold-read/delete/rollback smoke and final type/lint/test verification remain parent-owned.
+
+Task 17 remains active:
+- Existing UI type-check, unrelated lint baseline and connected Web/Electron acceptance items remain as recorded above; zero diagnostics is not claimed.
+- Packaged Electron certification and remaining legacy execution/lifecycle consumer cutovers are not complete.
+
+## Integrated wave landed (2026-10-16)
+
+The uncommitted lane work is now committed on `omp-through-m3/recovery-20261013` in this worktree: `752207d61` (canonical workspace MCP and session archive as the sole owners; contract/service/web/electron), `3cee89866` (retained UI callers cut to the canonical client; legacy compatibility client, update toast, CLI settings, restart helpers and background-subagent projections removed), `1c17409d4` (web test repairs), `2be70dd12` (Electron suite stops scanning the staged `resources/agent-runtime` dependency tree; dead `session-activity.js` probe and its documentation section removed).
+
+Verified here, Linux x64, Node 24.18.0 / Bun 1.4.2:
+- `bun run --cwd packages/web test`: 386 files / 6430 tests pass (the three failures in `space-opencode.test.js` and `fs/routes.test.js` were repaired).
+- `bun run --cwd packages/electron test`: 43/43 files pass after the exclusion. Before it, the staged runtime's own dependency tests reported 133 false failures.
+- `bun run --cwd packages/sdk test`: 23/23 files. `bun test packages/agent-service/src`: 101 pass. `bun run --cwd packages/agent-contract build` then agent-service/web/electron type-checks pass; `packages/ui` build fails only on its test project.
+- Real startup smoke: `bun server/index.js --port 3111` starts the Host, supervises `bun --no-env-file packages/agent-service/dist/index.js --port 0`, and `GET /api/agent/v1/ready` answers `{"ready":true,"engine":"omp","version":"1.0.0"}`; `/api/agent/v1/sessions` answers 401 without UI auth.
+- `bun run docs:validate` 696 pages / 58 sidebar links; `.workflow/bin/workflow validate` 42 task files.
+
+Measured remaining work (not estimates):
+- `packages/ui` production sources type-check clean; the **test project does not**. 94 test files still carry legacy OpenCode fixtures; the first migration pass reduced the error count from 1016 to roughly 780 and is unfinished.
+- The retained UI still imports legacy modules: 33 non-test files take types from `@/lib/opencode/model`, 15 call `@/lib/opencode/client`, and the `@/lib/opencode/{tools,websearch,session-stats,events,plugins,integration-catalog,projection,background-shell,ids}` helpers have no canonical owner yet. W7/W10 cannot pass before those callers move.
+- Host legacy execution owners are still registered from `packages/web/server/index.js`: `lifecycle.js`, `env-runtime.js`, `env-config.js`, `auth-state-runtime.js`, `hmr-state-runtime.js`, `feature-routes-runtime.js`, `core-routes.js`, `server-utils-runtime.js` (proxy wiring), `bootstrap-runtime.js`, `session-runtime.js`, `shutdown-runtime.js`, `managed-config-file.js`, `cli-upgrade.js`, `upgrade-capability.js`, `opencode-resolution-runtime.js`, `compatibility.js`, `cli-options.js`, `cli-entry-runtime.js`.
+- Dead once their last importer goes: `response-envelope.js` and `prompt-response.js`, reachable only through the already-dead `packages/web/server/lib/openchamber-sessions/opencode-client.js`.
+- Host-owned modules still parked under `lib/opencode/`: `path-utils.js`, `models-metadata.js`, `openchamber-routes.js`, `npm-registry-config.js`, `worktree-directory.js`, `shared.js`.
+- `packages/electron/README.md` still documents `prepare:opencode-cli`, the OpenCode binary discovery order and `OPENCHAMBER_OPENCODE_CLI_VERSION`; `early-startup.mjs` still probes `~/.opencode/bin`; `ssh-manager.mjs` still runs remote `openchamber serve`.
+- Isolated spaces still write OpenCode container config and call the container's `/api/credential` (`space-opencode.js`), import `../opencode/auth.js` and `../opencode/proxy.js`, and expose `POST /api/spaces/:id/restart-opencode`.
+- The isolated-space **archive import** is canonical now: Host selects scope and calls Agent Service `/internal/archive/import` with rollback through `DELETE /api/agent/v1/sessions/:id`; no legacy OpenCode import owner is reached.
+
+Next concrete step: finish the `packages/ui` test-project migration, then move the 33/15 legacy UI callers to the canonical client and contract, then retire the Host execution owners above. Each of those is a separate slice; none of them may add an adapter or fallback.

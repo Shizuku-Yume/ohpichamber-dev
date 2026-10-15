@@ -42,8 +42,8 @@ describe('sortProjectsByOrder', () => {
 
 describe('rankByLatestActivity', () => {
   const sessions = new Map([
-    ['a', [{ time: { updated: 10 } }, { time: { updated: 40 } }]],
-    ['b', [{ time: { updated: 30 } }]],
+    ['a', [{ updatedAt: 10 }, { updatedAt: 40 }]],
+    ['b', [{ updatedAt: 30 }]],
   ]);
   const projects = [{ id: 'c' }, { id: 'a' }, { id: 'd' }, { id: 'b' }];
 

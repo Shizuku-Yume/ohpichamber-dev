@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { ConnectionInfo, IntegrationInfo } from '@opencode/client';
+import type { ProviderAuthState } from '@openchamber/agent-contract';
 import { requiresProviderAuth } from './providerAvailability';
 import {
   findIntegrationForProvider,
@@ -9,6 +10,7 @@ import {
   getProviderCardStatus,
   getSignInIntegrationId,
   getSignInMethods,
+  hasCanonicalStoredApiKey,
   providerHasCredentials,
   shouldAutoOpenAuthPanel,
   shouldShowApiKeyAuth,
@@ -118,6 +120,48 @@ describe('provider credential state helpers', () => {
     expect(providerHasCredentials({ connections: [], optionsApiKey: null })).toBe(false);
   });
 
+  test('canonical stored API keys satisfy provider auth without integration rows', () => {
+    const auth: ProviderAuthState = {
+      status: 'configured',
+      credentialRef: 'provider_credential',
+      method: 'api-key',
+      source: 'stored-credential',
+    };
+    expect(providerHasCredentials({ canonicalAuth: auth })).toBe(true);
+    expect(hasCanonicalStoredApiKey(auth)).toBe(true);
+    expect(getProviderCardStatus({ integrations: null, providerId: 'anthropic', canonicalAuth: auth }))
+      .toEqual({ kind: 'connected' });
+    const managedEnvironment: ProviderAuthState = {
+      status: 'configured',
+      credentialRef: 'provider_environment',
+      method: 'api-key',
+      source: 'managed-environment',
+    };
+    expect(providerHasCredentials({ canonicalAuth: managedEnvironment })).toBe(true);
+    expect(getProviderCardStatus({
+      integrations: [integration()], providerId: 'anthropic', canonicalAuth: managedEnvironment,
+    })).toEqual({ kind: 'environment' });
+    expect(getProviderCardStatus({
+      integrations: null, providerId: 'anthropic', canonicalAuth: managedEnvironment,
+    })).toEqual({ kind: 'environment' });
+    const storedOAuth: ProviderAuthState = {
+      status: 'configured',
+      credentialRef: 'provider_oauth',
+      method: 'oauth',
+      source: 'stored-credential',
+    };
+    expect(getProviderCardStatus({
+      integrations: [integration()], providerId: 'anthropic', canonicalAuth: storedOAuth,
+    })).toEqual({ kind: 'connected' });
+    expect(hasCanonicalStoredApiKey(storedOAuth)).toBe(false);
+    expect(hasCanonicalStoredApiKey({
+      status: 'configured', credentialRef: 'provider_credential', method: 'oauth', source: 'stored-credential',
+    })).toBe(false);
+    expect(hasCanonicalStoredApiKey({
+      status: 'configured', credentialRef: 'provider_credential', method: 'api-key', source: 'managed-environment',
+    })).toBe(false);
+    expect(hasCanonicalStoredApiKey({ status: 'missing' })).toBe(false);
+  });
   test('OAuth-only provider without credentials opens the panel and hides models', () => {
     const hasCredentials = providerHasCredentials({ connections: [] });
     expect(hasCredentials).toBe(false);

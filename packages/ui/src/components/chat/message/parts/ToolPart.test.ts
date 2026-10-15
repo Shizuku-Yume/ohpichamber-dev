@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import { getStreamingOutputAppend, getToolOutput, renderTerminalOutput } from './toolOutput';
-import { readTaskTagSessionIdFromOutput } from './taskSessionIdParser';
 import { parseDiffToUnified, tryParseJsonOutput } from '../toolRenderers';
 import { getStreamingThrottleText } from '../../hooks/useStreamingTextThrottle';
 
@@ -151,15 +150,6 @@ describe('streaming output transitions', () => {
     });
 });
 
-describe('readTaskTagSessionIdFromOutput', () => {
-    test('parses task tags without state attributes', () => {
-        expect(readTaskTagSessionIdFromOutput('<task id="ses_abc123">')).toBe('ses_abc123');
-    });
-
-    test('parses task tags with additional attributes', () => {
-        expect(readTaskTagSessionIdFromOutput('<task id="ses_def456" state="completed">')).toBe('ses_def456');
-    });
-});
 
 describe('OpenChamber tool output', () => {
     test('keeps the result envelope in the generic JSON rendering pipeline', () => {

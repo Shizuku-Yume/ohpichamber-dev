@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Message, Part } from '@/lib/opencode/model'
+import type { Message, Part } from '@openchamber/agent-contract'
 
 import {
   extractAssistantModelChoice,
@@ -7,108 +7,72 @@ import {
   shouldPreserveManualModelOverride,
 } from './userModelChoice'
 
-const userMessage = (id: string): Message => ({
-  id,
-  sessionID: 'ses_1',
+const userMessage = (messageId: string): Message => ({
+  messageId,
+  sessionId: 'ses_1',
+  turnId: `turn-${messageId}`,
   role: 'user',
-  time: { created: 1 },
+  createdAt: 1,
+  parts: [],
 })
 
-const assistantMessage = (id: string, modelID: string, options: { agent?: string; variant?: string } = {}): Message => ({
-  id,
-  sessionID: 'ses_1',
+const assistantMessage = (messageId: string, modelId: string, providerId = 'provider', parts: Part[] = [{ type: 'text', partId: `part-${messageId}`, content: 'reply' }]): Message => ({
+  messageId,
+  sessionId: 'ses_1',
+  turnId: `turn-${messageId}`,
   role: 'assistant',
-  time: { created: 2, completed: 3 },
-  agent: options.agent ?? 'custom-agent',
-  providerID: 'provider',
-  modelID,
-  ...(options.variant ? { variant: options.variant } : {}),
-})
-
-const textPart = (id: string, messageID: string, text: string): Part => ({
-  id,
-  sessionID: 'ses_1',
-  messageID,
-  type: 'text',
-  text,
+  createdAt: 2,
+  parts,
+  providerId,
+  modelId,
 })
 
 describe('findLatestUserModelChoice', () => {
   test('returns the model the latest answered turn ran on', () => {
-    const messages = [
+    const choice = findLatestUserModelChoice([
       userMessage('u1'),
       assistantMessage('a1', 'model-a'),
       userMessage('u2'),
       assistantMessage('a2', 'model-b'),
-    ]
-    const partsById: Record<string, Part[]> = {
-      a1: [textPart('p1', 'a1', 'first')],
-      a2: [textPart('p2', 'a2', 'second')],
-    }
-
-    const choice = findLatestUserModelChoice(messages, (id) => partsById[id])
+    ])
     expect(choice?.id).toBe('a2')
-    expect(choice?.modelID).toBe('model-b')
-    expect(choice?.providerID).toBe('provider')
-    expect(choice?.agent).toBe('custom-agent')
+    expect(choice?.modelId).toBe('model-b')
+    expect(choice?.providerId).toBe('provider')
   })
 
   test('skips messages whose parts have not loaded yet', () => {
-    const messages = [assistantMessage('a1', 'model-a'), assistantMessage('a2', 'model-b')]
-    const partsById: Record<string, Part[]> = {
-      a1: [textPart('p1', 'a1', 'first')],
-      // a2 parts missing
-    }
-
-    const choice = findLatestUserModelChoice(messages, (id) => partsById[id])
+    const choice = findLatestUserModelChoice([
+      assistantMessage('a1', 'model-a'),
+      assistantMessage('a2', 'model-b', 'provider', []),
+    ])
     expect(choice?.id).toBe('a1')
-    expect(choice?.modelID).toBe('model-a')
+    expect(choice?.modelId).toBe('model-a')
   })
 
   test('returns null when the session has no answered turn', () => {
-    expect(findLatestUserModelChoice([userMessage('u1')], () => undefined)).toBeNull()
+    expect(findLatestUserModelChoice([userMessage('u1')])).toBeNull()
   })
 })
 
 describe('shouldPreserveManualModelOverride', () => {
   test('preserves manual override when it differs from the candidate message model', () => {
-    expect(shouldPreserveManualModelOverride({
-      selectionSource: 'manual',
-      savedSessionModel: { providerId: 'provider', modelId: 'model-b' },
-      candidate: { providerID: 'provider', modelID: 'model-a' },
-    })).toBe(true)
+    expect(shouldPreserveManualModelOverride({ selectionSource: 'manual', savedSessionModel: { providerId: 'provider', modelId: 'model-b' }, candidate: { providerId: 'provider', modelId: 'model-a' } })).toBe(true)
   })
-
   test('does not preserve when selection matches the candidate', () => {
-    expect(shouldPreserveManualModelOverride({
-      selectionSource: 'manual',
-      savedSessionModel: { providerId: 'provider', modelId: 'model-b' },
-      candidate: { providerID: 'provider', modelID: 'model-b' },
-    })).toBe(false)
+    expect(shouldPreserveManualModelOverride({ selectionSource: 'manual', savedSessionModel: { providerId: 'provider', modelId: 'model-b' }, candidate: { providerId: 'provider', modelId: 'model-b' } })).toBe(false)
   })
-
   test('does not preserve auto selections', () => {
-    expect(shouldPreserveManualModelOverride({
-      selectionSource: 'auto',
-      savedSessionModel: { providerId: 'provider', modelId: 'model-b' },
-      candidate: { providerID: 'provider', modelID: 'model-a' },
-    })).toBe(false)
+    expect(shouldPreserveManualModelOverride({ selectionSource: 'auto', savedSessionModel: { providerId: 'provider', modelId: 'model-b' }, candidate: { providerId: 'provider', modelId: 'model-a' } })).toBe(false)
   })
-
   test('preserves manual override when candidate has no model', () => {
-    expect(shouldPreserveManualModelOverride({
-      selectionSource: 'manual',
-      savedSessionModel: { providerId: 'provider', modelId: 'model-b' },
-      candidate: { providerID: undefined, modelID: undefined },
-    })).toBe(true)
+    expect(shouldPreserveManualModelOverride({ selectionSource: 'manual', savedSessionModel: { providerId: 'provider', modelId: 'model-b' }, candidate: { providerId: undefined, modelId: undefined } })).toBe(true)
   })
 })
 
 describe('extractAssistantModelChoice', () => {
-  test('reads the variant off the assistant message', () => {
-    expect(extractAssistantModelChoice(assistantMessage('a1', 'model-b', { variant: 'high' }))?.variant).toBe('high')
+  test('reads model identity off the assistant message', () => {
+    expect(extractAssistantModelChoice(assistantMessage('a1', 'model-b'))).toMatchObject({ id: 'a1', providerId: 'provider', modelId: 'model-b' })
   })
-
   test('ignores non-assistant messages', () => {
     expect(extractAssistantModelChoice(userMessage('u1'))).toBeNull()
   })

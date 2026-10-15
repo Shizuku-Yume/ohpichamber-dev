@@ -4,6 +4,7 @@ import { ChildStoreManager } from "./child-store"
 import { SessionMessageLoader, type LoaderConfiguration } from "./session-message-loader"
 import { deferred, nativeApproval, nativeClient, nativeHistory, nativeHostSession, nativeMessage, nativeQuestion, nativeSnapshot } from "./session-message-loader-test-fixtures"
 import { clearRuntimeSessionPrefetch, getSessionPrefetch, setSessionPrefetch } from "./session-prefetch-cache"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 
 const cleanups: Array<() => void> = []
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup() })
@@ -565,5 +566,84 @@ describe("native selection recovery cache boundary", () => {
     await loader.refresh(target)
     expect(store.getState().message[target.sessionId]).toEqual([])
     expect(loader.getSnapshot(target)).toMatchObject({ resolved: true, cursor: undefined, complete: true })
+  })
+})
+
+describe("history-only canonical child sessions", () => {
+  const childTarget = { directory: "/loader-repo", sessionId: "history-only-child" }
+  function seedChild() {
+    const original = useGlobalSessionsStore.getState()
+    const child = { ...nativeHostSession(nativeSnapshot(childTarget.sessionId)), parentSessionId: "session-root", rootSessionId: "session-root" }
+    useGlobalSessionsStore.getState().upsertSession(child)
+    cleanups.push(() => useGlobalSessionsStore.setState(original))
+    return child
+  }
+
+  test("opens and paginates using history and the projected Host row, without snapshot or journal attachment", async () => {
+    const child = seedChild()
+    const recent = nativeMessage(childTarget.sessionId, "recent", 2)
+    const older = nativeMessage(childTarget.sessionId, "older", 1)
+    const calls: Array<string | undefined> = []
+    let forbiddenCalls = 0
+    const forbidden = async () => { forbiddenCalls += 1; throw new Error("Child snapshot/metadata/queue is unavailable") }
+    let snapshotCallbacks = 0
+    const { loader, store } = setup({ onSnapshot: () => { snapshotCallbacks += 1 }, client: nativeClient({
+      getSnapshot: forbidden, getSessionMetadata: forbidden, getQueue: forbidden,
+      getHistory: async (sessionId, options) => {
+        expect(sessionId).toBe(childTarget.sessionId)
+        calls.push(options?.cursor)
+        return nativeHistory(options?.cursor ? [older] : [recent], options?.cursor ? null : "older-page", nativeSnapshot(childTarget.sessionId))
+      },
+    }) })
+    await loader.ensure(childTarget)
+    expect(store.getState().session.find(row => row.sessionId === childTarget.sessionId)).toEqual(child)
+    expect(store.getState().message[childTarget.sessionId]).toEqual([recent])
+    expect(store.getState().snapshot[childTarget.sessionId]).toBeUndefined()
+    expect(store.getState().sessionCursor[childTarget.sessionId]).toBeUndefined()
+    expect(loader.getSnapshot(childTarget)).toMatchObject({ status: "ready", resolved: true, complete: false, cursor: "older-page" })
+    await loader.loadOlder(childTarget)
+    expect(store.getState().message[childTarget.sessionId]).toEqual([older, recent])
+    expect(loader.getSnapshot(childTarget)).toMatchObject({ status: "ready", complete: true })
+    expect(calls).toEqual([undefined, "older-page"])
+    expect(snapshotCallbacks).toBe(0)
+    expect(forbiddenCalls).toBe(0)
+  })
+
+  test("history failure preserves previous child messages", async () => {
+    seedChild()
+    const error = new Error("child history unavailable")
+    const { loader, store } = setup({ client: nativeClient({ getHistory: async () => { throw error } }) })
+    const messages = [nativeMessage(childTarget.sessionId)]
+    store.setState({ message: { [childTarget.sessionId]: messages } })
+    await loader.refresh(childTarget)
+    expect(store.getState().message[childTarget.sessionId]).toBe(messages)
+    expect(loader.getSnapshot(childTarget)).toMatchObject({ status: "error", error })
+  })
+
+  test("runtime reconfiguration rejects a delayed child history response", async () => {
+    seedChild()
+    const pending = deferred<HistoryPage>()
+    const { loader, store } = setup({ client: nativeClient({ getHistory: () => pending.promise }) })
+    const loading = loader.ensure(childTarget)
+    loader.configure({ runtimeKey: "runtime-b", client: nativeClient() })
+    pending.resolve(nativeHistory([nativeMessage(childTarget.sessionId)], null, nativeSnapshot(childTarget.sessionId)))
+    await loading
+    expect(store.getState().message[childTarget.sessionId]).toBeUndefined()
+    expect(store.getState().snapshot[childTarget.sessionId]).toBeUndefined()
+  })
+
+  test("older child history rejects another branch and preserves the visible page", async () => {
+    seedChild()
+    const recent = nativeMessage(childTarget.sessionId, "recent", 2)
+    const { loader, store } = setup({ client: nativeClient({ getHistory: async (_sessionId, options) => {
+      const page = nativeHistory([recent], options?.cursor ? null : "older-page", nativeSnapshot(childTarget.sessionId))
+      if (options?.cursor) page.branch = { ...page.branch, branchVersion: "2" }
+      return page
+    } }) })
+    await loader.ensure(childTarget)
+    const previous = store.getState().message[childTarget.sessionId]
+    await loader.loadOlder(childTarget)
+    expect(loader.getSnapshot(childTarget).status).toBe("error")
+    expect(store.getState().message[childTarget.sessionId]).toBe(previous)
   })
 })

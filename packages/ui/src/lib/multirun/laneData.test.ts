@@ -43,7 +43,7 @@ describe('canonical lane history', () => {
     ));
     const spy = pages(values);
     expect(await loadLaneLastTurn('session')).toEqual({ text: 'reply 101', error: null, status: 'completed', cost: null, finishedAt: 20 });
-    expect(spy).toHaveBeenCalledTimes(102);
+    expect(spy.mock.calls.length).toBe(102);
   });
   test('failed tool-only latest turn preserves previous text and native usage', async () => {
     const assistant = message('answer', 'assistant', 'last useful text');
@@ -79,6 +79,6 @@ describe('canonical lane history', () => {
     const spy = spyOn(canonicalClient, 'getHistory').mockImplementation(async () => { key = 'next'; return page([], [], '1'); });
     spies.push(spy);
     await expect(loadLaneLastTurn('session')).rejects.toThrow('Runtime changed');
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls.length).toBe(1);
   });
 });

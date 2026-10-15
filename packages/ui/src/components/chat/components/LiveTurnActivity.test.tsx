@@ -13,6 +13,7 @@ import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { SyncProvider } from '@/sync/sync-context';
 import { useUIStore } from '@/stores/useUIStore';
+import { DedicatedMobileAppProvider, type MobileAppActions } from '@/apps/mobileAppContext';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { projectTurnRecords } from '../lib/turns/projectTurnRecords';
 import type { ChatMessageEntry, TurnChangedFile, TurnRecord } from '../lib/turns/types';
@@ -75,11 +76,12 @@ function turn(messages: ChatMessageEntry[]): TurnRecord {
     }, ...messages]).turns[0];
 }
 
-function Harness({ record, retired = false, changedFiles, isLatestTurn = true }: {
+function Harness({ record, retired = false, changedFiles, isLatestTurn = true, mobileActions = null }: {
     record: TurnRecord;
     retired?: boolean;
     changedFiles?: TurnChangedFile[];
     isLatestTurn?: boolean;
+    mobileActions?: MobileAppActions | null;
 }) {
     const [expanded, setExpanded] = React.useState(false);
     const renderMessage = (message: ChatMessageEntry) => (
@@ -88,7 +90,7 @@ function Harness({ record, retired = false, changedFiles, isLatestTurn = true }:
                 messageId={message.info.id} parts={message.parts} isUser={false}
                 isMessageCompleted={message.info.role === 'assistant' && Boolean(message.info.finish)}
                 messageFinish={message.info.role === 'assistant' ? message.info.finish : undefined}
-                isMobile={false} copiedCode={null} onCopyCode={() => undefined} expandedTools={new Set()}
+                isMobile={mobileActions !== null} copiedCode={null} onCopyCode={() => undefined} expandedTools={new Set()}
                 onToggleTool={() => undefined} onShowPopup={() => undefined} streamPhase="completed" allowAnimation={false}
                 hasTextContent={message.parts.some((part) => part.type === 'text')} showReasoningTraces
                 turnGroupingContext={{
@@ -99,7 +101,7 @@ function Harness({ record, retired = false, changedFiles, isLatestTurn = true }:
             />
         </div>
     );
-    return <RuntimeAPIContext.Provider value={runtimeApis}>
+    const content = <RuntimeAPIContext.Provider value={runtimeApis}>
         <SyncProvider sdk={sdk} directory="/project">
             <I18nProvider>
                 <LiveTurnActivity turn={record} hasLaterAssistant={retired} expanded={expanded}
@@ -107,6 +109,9 @@ function Harness({ record, retired = false, changedFiles, isLatestTurn = true }:
             </I18nProvider>
         </SyncProvider>
     </RuntimeAPIContext.Provider>;
+    return mobileActions
+        ? <DedicatedMobileAppProvider actions={mobileActions}>{content}</DedicatedMobileAppProvider>
+        : content;
 }
 
 // The first test pays for loading the real message body and for its first
@@ -142,7 +147,11 @@ describe('live Activity with the real message body', () => {
         container = document.createElement('div');
         document.body.append(container);
         root = createRoot(container);
-        useUIStore.setState({ chatRenderMode: 'live', collapsibleThinkingBlocks: false, showSplitAssistantMessageActions: false });
+        useUIStore.setState({
+            chatRenderMode: 'live', collapsibleThinkingBlocks: false, showSplitAssistantMessageActions: false,
+            contextPanelByDirectory: {}, pendingDiffFile: 'existing.ts', pendingDiffScope: 'working',
+            pendingFileFocusPath: null, isMobile: false,
+        });
         useDirectoryStore.setState({ currentDirectory: '/project' });
         useI18nStore.getState().setLocale('en');
         MessageBody = (await import('../message/MessageBody')).default;
@@ -243,8 +252,8 @@ describe('live Activity with the real message body', () => {
         expect(toggle.getAttribute('aria-expanded')).toBe('true');
         expect(toggle.getAttribute('aria-label')).toBe('Show fewer files');
         expect(Array.from(container.querySelectorAll('button[aria-label^="Open src/file-"]'), (button) => button.getAttribute('title')))
-            .toEqual(files.map((file) => file.file));
-        expect(toggle.previousElementSibling?.getAttribute('title')).toBe('src/file-99.ts');
+            .toEqual(files.map((file) => `Open ${file.file}`));
+        expect(toggle.previousElementSibling?.getAttribute('title')).toBe('Open src/file-99.ts');
         await act(async () => root.render(<Harness record={record} changedFiles={[...files]} />));
         expect(toggle.getAttribute('aria-expanded')).toBe('true');
         await act(async () => {
@@ -261,17 +270,44 @@ describe('live Activity with the real message body', () => {
         expect(container.querySelectorAll('button[aria-label^="Відкрити src/file-"]')).toHaveLength(4);
     });
 
-    test('a file without line counts shows its name alone, and one outside the turn diff is not a button', async () => {
+    test('changed files open current file contents without substituting a working-tree diff', async () => {
         const record = turn([assistant('final', [text('answer', 'Done')], 'stop')]);
         await act(async () => root.render(<Harness record={record} changedFiles={[
             { file: 'src/a.ts' },
             { file: 'src/b.ts', additions: 1, deletions: 2 },
-            { file: 'src/c.ts', additions: 1, deletions: 0, inTurnDiff: false },
+            { file: 'src/c.ts', additions: 1, deletions: 0 },
         ]} />));
         expect(container.querySelector('button[aria-label="Open src/a.ts"]')?.textContent).toBe('a.ts');
         expect(container.querySelector('button[aria-label="Open src/b.ts"]')?.textContent).toBe('b.ts+1/-2');
-        expect(container.querySelector('button[aria-label="Open src/c.ts"]')).toBeNull();
-        expect(container.querySelector('span[title="src/c.ts"]')?.textContent).toBe('c.ts+1/-0');
+        const fileButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open src/c.ts"]');
+        expect(fileButton?.textContent).toBe('c.ts+1/-0');
+        await act(async () => fileButton?.click());
+        const state = useUIStore.getState();
+        expect(state.pendingFileFocusPath).toBe('/project/src/c.ts');
+        expect(state.contextPanelByDirectory['/project']?.tabs.some((tab) => tab.mode === 'file' && tab.targetPath === '/project/src/c.ts')).toBe(true);
+        expect(state.contextPanelByDirectory['/project']?.tabs.some((tab) => tab.mode === 'diff')).toBe(false);
+        expect(state.pendingDiffScope).toBe('working');
+        expect(state.pendingDiffFile).toBe('existing.ts');
+    });
+
+    test('mobile changed files open the existing Files surface without opening Changes', async () => {
+        const record = turn([assistant('final', [text('answer', 'Done')], 'stop')]);
+        let filesOpened = 0;
+        let changesOpened = 0;
+        const mobileActions: MobileAppActions = {
+            openFiles: () => { filesOpened += 1; },
+            openChanges: () => { changesOpened += 1; },
+            openSettings: () => undefined,
+            openSourceBoard: () => undefined,
+        };
+        useUIStore.setState({ isMobile: true });
+        await act(async () => root.render(<Harness record={record} changedFiles={[{ file: '/project/src/mobile.ts' }]} mobileActions={mobileActions} />));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Open /project/src/mobile.ts"]')?.click());
+        expect(filesOpened).toBe(1);
+        expect(changesOpened).toBe(0);
+        expect(useUIStore.getState().pendingFileFocusPath).toBe('/project/src/mobile.ts');
+        expect(useUIStore.getState().pendingDiffScope).toBe('working');
+        expect(useUIStore.getState().pendingDiffFile).toBe('existing.ts');
     });
 
     test('keeps historical files informational and withholds the list before stop', async () => {

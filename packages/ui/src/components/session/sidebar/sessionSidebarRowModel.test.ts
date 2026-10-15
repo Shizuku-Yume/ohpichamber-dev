@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { SessionGroup, SessionNode } from './types';
 import type { ProjectSection } from './projects/sessionProjectRender';
 import { buildSessionSidebarRowModel, countSessionSearchMatches, resolveSessionSidebarStickyHeader, runExpansionKey, type SessionSidebarActivityItem, type SessionSidebarRowModelArgs } from './sessionSidebarRowModel';
@@ -25,13 +25,17 @@ const pinnedIds = (...ids: string[]): Set<string> => new Set(
 );
 
 // SAFETY: the row model only reads the supplied session identity, title, directory, parent, and lifecycle fields.
-const session = (id: string, parentID?: string): Session => ({
-  id,
-  title: id,
-  directory: '/repo',
-  parentID,
-  time: { created: 1, updated: 1 },
-} as Session);
+const session = (sessionId: string, parentSessionId?: string): Session => ({
+  sessionId,
+  title: sessionId,
+  projectId: 'project-a',
+  workspaceId: 'workspace',
+  displayPath: '/repo',
+  parentSessionId,
+  rootSessionId: parentSessionId ? 'parent' : sessionId,
+  createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: null, metadataRevision: '0', archiveRevision: '0',
+});
 
 const node = (id: string, children: SessionNode[] = []): SessionNode => ({ session: session(id), children, worktree: null });
 
@@ -92,7 +96,7 @@ describe('buildSessionSidebarRowModel', () => {
     input.workSessionIds = new Set(['working']);
 
     const model = buildSessionSidebarRowModel(input);
-    const sessionRows = model.rows.flatMap((row) => (row.kind === 'session' ? [`${row.renderContext}:${row.node.session.id}`] : []));
+    const sessionRows = model.rows.flatMap((row) => (row.kind === 'session' ? [`${row.renderContext}:${row.node.session.sessionId}`] : []));
 
     expect(model.rows[0]).toMatchObject({ kind: 'activity-header', activityKey: 'work' });
     expect(sessionRows).toEqual(['recent:working', 'recent:other', 'project:other']);
@@ -108,7 +112,7 @@ describe('buildSessionSidebarRowModel', () => {
     input.keepWorkInGroup = true;
 
     const model = buildSessionSidebarRowModel(input);
-    const sessionRows = model.rows.flatMap((row) => (row.kind === 'session' ? [`${row.renderContext}:${row.node.session.id}`] : []));
+    const sessionRows = model.rows.flatMap((row) => (row.kind === 'session' ? [`${row.renderContext}:${row.node.session.sessionId}`] : []));
 
     expect(model.rows[0]).toMatchObject({ kind: 'activity-header', activityKey: 'work' });
     expect(sessionRows).toEqual(['recent:working', 'project:other', 'project:working']);
@@ -125,7 +129,7 @@ describe('buildSessionSidebarRowModel', () => {
 
     const rows = buildSessionSidebarRowModel(input).rows.filter((row) => row.kind === 'folder-header' || row.kind === 'session');
 
-    expect(rows.map((row) => (row.kind === 'session' ? `${row.renderContext}:${row.node.session.id}` : row.displayName))).toEqual([
+    expect(rows.map((row) => (row.kind === 'session' ? `${row.renderContext}:${row.node.session.sessionId}` : row.displayName))).toEqual([
       'recent:in-folder', 'Outer', 'project:in-folder', 'project:top-level',
     ]);
   });
@@ -148,7 +152,7 @@ describe('buildSessionSidebarRowModel', () => {
     input.workSessionIds = new Set(['ses_parent']);
 
     const model = buildSessionSidebarRowModel(input);
-    const rows = model.rows.flatMap((row) => (row.kind === 'session' ? [row.node.session.id] : []));
+    const rows = model.rows.flatMap((row) => (row.kind === 'session' ? [row.node.session.sessionId] : []));
 
     expect(model.searchMatchCount).toBe(1);
     expect(rows).toEqual(['ses_parent', 'ses_child', 'ses_other']);
@@ -164,7 +168,7 @@ describe('buildSessionSidebarRowModel', () => {
 
     const rows = buildSessionSidebarRowModel(input).rows;
     const headers = rows.flatMap((row) => (row.kind === 'activity-header' ? [row.activityKey] : []));
-    const sessions = rows.flatMap((row) => (row.kind === 'session' ? [`${row.renderContext}:${row.node.session.id}`] : []));
+    const sessions = rows.flatMap((row) => (row.kind === 'session' ? [`${row.renderContext}:${row.node.session.sessionId}`] : []));
 
     expect(headers).toEqual(['work', 'timeline']);
     expect(sessions).toEqual(['timeline:working', 'timeline:other']);
@@ -189,7 +193,7 @@ describe('buildSessionSidebarRowModel', () => {
 
     const model = buildSessionSidebarRowModel(input);
     const rows = model.rows.filter((row) => row.kind === 'session');
-    expect(rows.map((row) => row.node.session.id)).toEqual(['working', 'root']);
+    expect(rows.map((row) => row.node.session.sessionId)).toEqual(['working', 'root']);
     expect(rows.map((row) => row.blockingBadgeSessionScopes?.[1]?.sessionIDs)).toEqual([['worker'], ['child']]);
     expect(rows.every((row) => row.node.children.length === 0)).toBe(true);
     expect(model.selectionEntries.map((entry) => entry.id)).toEqual(['working', 'root']);
@@ -212,7 +216,7 @@ describe('buildSessionSidebarRowModel', () => {
     input.workSessionIds = new Set(['ses_parent']);
 
     const model = buildSessionSidebarRowModel(input);
-    const rows = model.rows.flatMap((row) => (row.kind === 'session' ? [row.node.session.id] : []));
+    const rows = model.rows.flatMap((row) => (row.kind === 'session' ? [row.node.session.sessionId] : []));
 
     expect(model.searchMatchCount).toBe(1);
     expect(rows).toEqual(['ses_parent', 'ses_child', 'ses_other']);

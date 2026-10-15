@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -11,14 +11,12 @@ import {
   type SessionSubtreeStore,
 } from './sessionSubtreeActions';
 
-const session = (id: string): Session => ({
-  id,
-  projectID: 'project',
-  title: id,
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  directory: '/workspace',
-  time: { created: 1, updated: 1 },
+const session = (sessionId: string): Session => ({
+  sessionId, rootSessionId: sessionId,
+  projectId: 'project', workspaceId: 'workspace', displayPath: '.',
+  createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0',
+  runtimeStatus: 'idle', activeRunId: null,
+  metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 
 const t = (key: I18nKey) => key;
@@ -117,10 +115,10 @@ describe('runSessionSubtreeAction', () => {
 });
 
 describe('collectSessionSubtreeIds', () => {
-  const linked = (id: string, parentID: string | null, archived?: number): Session => {
-    // SAFETY: the subtree walk reads only id, parentID, and time.archived.
-    return { ...session(id), parentID, time: { created: 1, updated: 1, ...(archived ? { archived } : {}) } } as Session;
-  };
+  const linked = (id: string, parentSessionId: string | null, archivedAt?: number): Session => ({
+    ...session(id), parentSessionId: parentSessionId ?? undefined,
+    rootSessionId: parentSessionId ? 'root' : id, archivedAt,
+  });
 
   beforeEach(() => {
     useGlobalSessionsStore.setState({

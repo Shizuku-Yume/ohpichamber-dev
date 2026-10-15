@@ -25,8 +25,8 @@ const searchFilesMock = mock(() => {
   return request.promise;
 });
 
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: {
+mock.module('@/lib/host-filesystem', () => ({
+  hostFilesystem: {
     searchFiles: searchFilesMock,
   },
 }));
@@ -43,6 +43,36 @@ describe('useFileSearchStore', () => {
       cacheKeys: [],
       inFlight: {},
     });
+  });
+
+  test('forwards Host search filters and directory scope', async () => {
+    const searchPromise = useFileSearchStore.getState().searchFiles(' /project ', ' foo ', 25, {
+      includeHidden: true,
+      respectGitignore: false,
+      type: 'directory',
+    });
+    expect(searchFilesMock).toHaveBeenLastCalledWith('foo', {
+      directory: '/project',
+      limit: 25,
+      type: 'directory',
+      includeHidden: true,
+      respectGitignore: false,
+    });
+    searchRequests[0].resolve([]);
+    await searchPromise;
+  });
+
+  test('forwards default Host search filters', async () => {
+    const searchPromise = useFileSearchStore.getState().searchFiles('/project', 'foo');
+    expect(searchFilesMock).toHaveBeenLastCalledWith('foo', {
+      directory: '/project',
+      limit: 60,
+      type: 'file',
+      includeHidden: false,
+      respectGitignore: true,
+    });
+    searchRequests[0].resolve([]);
+    await searchPromise;
   });
 
   test('does not cache a stale in-flight search after invalidation', async () => {

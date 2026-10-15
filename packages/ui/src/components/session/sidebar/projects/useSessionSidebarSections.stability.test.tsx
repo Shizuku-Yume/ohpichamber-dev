@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { I18nProvider } from '@/lib/i18n';
 import { useSessionGrouping } from './useSessionGrouping';
@@ -13,14 +13,21 @@ import { useSessionSidebarSections } from './useSessionSidebarSections';
 // a real change to one project rebuilds that project only, and an update that
 // changes nothing a project renders keeps every reference.
 
-const session = (id: string, directory: string, title = id): Session => ({
-  id,
-  projectID: 'project',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  title,
-  directory,
-  time: { created: 1, updated: 1 },
+const session = (sessionId: string, directory: string, title = sessionId): Session => ({
+  sessionId,
+  rootSessionId: sessionId,
+  projectId: 'project',
+  workspaceId: 'workspace',
+  displayPath: directory,
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: 'epoch',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  metadata: { title },
+  metadataRevision: '0',
+  archiveRevision: '0',
 });
 
 const worktree = (projectDirectory: string, name: string): WorktreeMetadata => ({

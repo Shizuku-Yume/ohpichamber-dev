@@ -1,21 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { I18nProvider } from '@/lib/i18n';
 import type { DeleteSessionConfirmState } from '../shell/ConfirmDialogs';
 import { useSessionActions } from './useSessionActions';
 import { installHookTestDom } from '../test-utils/testDom';
 
-const session = (id: string): Session => ({
-  id,
-  projectID: 'project',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  title: id,
-  directory: '/workspace',
-  time: { created: 1, updated: 1 },
+const session = (sessionId: string): Session => ({
+  sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/workspace',
+  createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: { title: sessionId }, metadataRevision: '0', archiveRevision: '0',
 });
 
 describe('explicit session row behavior', () => {

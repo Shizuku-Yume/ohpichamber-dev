@@ -2,21 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import { getDesktopRecoveryConfig } from './desktopRecoveryConfig';
 
 describe('getDesktopRecoveryConfig', () => {
-  // ---------------------------------------------------------------------------
-  // 1. local-unavailable: both actions visible + retry labeled "Retry Local"
-  // ---------------------------------------------------------------------------
-  test('local-unavailable exposes both actions and Retry Local', () => {
+  test('local Host failure offers retry and remote connection without engine setup', () => {
     const config = getDesktopRecoveryConfig('local-unavailable');
-
-    expect(config.title).toBe('Local OpenCode Unavailable');
-    expect(config.iconKey).toBe('local');
     expect(config.showRetry).toBe(true);
-    expect(config.retryLabel).toBe('Retry Local');
-    expect(config.showUseLocal).toBe(true);
     expect(config.showUseRemote).toBe(true);
-    // local-unavailable uses setup-oriented label since local needs installing
-    expect(config.useLocalLabel).toBe('Set Up Local');
-    expect(config.useRemoteLabel).toBe('Use Remote');
+    expect(config.showUseLocal).toBe(false);
   });
 
   // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { getPinnedSessionKey } from '@/stores/useSessionPinnedStore';
@@ -18,11 +18,11 @@ import {
 } from './sessionNodeItemUtils';
 import type { SessionNode } from '../types';
 
-const session = (id: string, title: string): Session => ({
-  id,
-  title,
-  time: { created: 1, updated: 1 },
-} as Session);
+const session = (sessionId: string, title: string): Session => ({
+  sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/repo',
+  metadata: { title }, createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadataRevision: '0', archiveRevision: '0',
+});
 
 const rootWithChild = (childSession: Session): SessionNode => ({
   session: session('root', 'Root'),
@@ -46,9 +46,9 @@ describe('computeNodeStructureKey', () => {
 });
 
 describe('selectBlockingBadgeSessionScopes', () => {
-  const withDirectory = (node: SessionNode, directory: string | null): SessionNode => ({
+  const withDirectory = (node: SessionNode, displayPath: string | null): SessionNode => ({
     ...node,
-    session: { ...node.session, directory } as Session,
+    session: { ...node.session, displayPath },
   });
 
   test('rolls up the hidden subtree by owning directory when a parent is collapsed', () => {
@@ -123,12 +123,12 @@ describe('nodeHasPinnedMembershipChange', () => {
 describe('selectFolderRootNodes', () => {
   test('does not render assigned descendants again beside their assigned parent tree', () => {
     const grandchild: SessionNode = {
-      session: { ...session('grandchild', 'Grandchild'), parentID: 'child' } as Session,
+      session: { ...session('grandchild', 'Grandchild'), parentSessionId: 'child' },
       children: [],
       worktree: null,
     };
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentID: 'root' } as Session,
+      session: { ...session('child', 'Child'), parentSessionId: 'root' },
       children: [grandchild],
       worktree: null,
     };
@@ -148,7 +148,7 @@ describe('selectFolderRootNodes', () => {
 
   test('keeps a child as a folder root when none of its ancestors are assigned', () => {
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentID: 'root' } as Session,
+      session: { ...session('child', 'Child'), parentSessionId: 'root' },
       children: [],
       worktree: null,
     };
@@ -163,7 +163,7 @@ describe('selectFolderRootNodes', () => {
 
   test('keeps a child when an assigned ancestor is not available in the group', () => {
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentID: 'missing-root' } as Session,
+      session: { ...session('child', 'Child'), parentSessionId: 'missing-root' },
       children: [],
       worktree: null,
     };
@@ -288,7 +288,7 @@ describe('resolveSessionPrLookup', () => {
   });
 });
 
-const originalHomeInfo = opencodeClient.getFilesystemHomeInfo;
-opencodeClient.getFilesystemHomeInfo = async () => ({ home: '/home/test' });
+const originalHomeInfo = hostFilesystem.getFilesystemHomeInfo;
+hostFilesystem.getFilesystemHomeInfo = async () => ({ home: '/home/test' });
 await ensureChatsRootDirectory();
-opencodeClient.getFilesystemHomeInfo = originalHomeInfo;
+hostFilesystem.getFilesystemHomeInfo = originalHomeInfo;

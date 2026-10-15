@@ -18,6 +18,9 @@ let root: Root;
 let host: HTMLDivElement;
 let dom: Window;
 let restorers: Array<() => void>;
+let modelFetchCount = 0;
+let resolvedWorkspace = false;
+let requestedWorkspace: string | null = null;
 let descriptors: Record<string, PropertyDescriptor | undefined>;
 beforeEach(() => {
   dom = new Window({ url: 'https://availability-hook.test' });
@@ -31,8 +34,15 @@ beforeEach(() => {
   invalidateSettingsCache();
   useSmallModelStore.getState().invalidate();
   useConfigStore.setState({ currentProviderId: 'composer', currentModelId: 'haiku' });
-  const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace-composer', projectId: 'project-a', name: 'A' });
-  const models = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => ({ workspaceId, revision: '0', models: [{ provider: 'composer', modelId: 'haiku', name: 'Haiku', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }] }));
+  const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async directory => {
+    resolvedWorkspace = true;
+    return { workspaceId: 'workspace-composer', projectId: 'project-a', name: directory };
+  });
+  const models = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => {
+    modelFetchCount += 1;
+    requestedWorkspace = workspaceId;
+    return { workspaceId, revision: '0', models: [{ provider: 'composer', modelId: 'haiku', name: 'Haiku', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }] };
+  });
   const fetcher = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
   restorers = [() => resolve.mockRestore(), () => models.mockRestore(), () => fetcher.mockRestore()];
   host = document.createElement('div');
@@ -56,24 +66,24 @@ describe('observable canonical availability subscription', () => {
     expect(host.textContent).toBe('available');
     await act(async () => { useConfigStore.setState({ currentProviderId: 'missing', currentModelId: 'missing-model' }); });
     expect(host.textContent).toBe('unavailable');
-    expect(canonicalClient.getModels).toHaveBeenCalledTimes(2);
+    expect(modelFetchCount).toBe(2);
   });
   test('prepared target preference and workspace outrank an available composer selection', async () => {
     const scope = { workspaceId: 'workspace-target', preferred: { providerId: 'target', modelId: 'target-model' } };
     await act(async () => root.render(<Availability scope={scope} />));
     expect(host.textContent).toBe('unavailable');
-    expect(canonicalClient.getModels).toHaveBeenCalledWith('workspace-target');
-    expect(canonicalClient.resolveWorkspace).not.toHaveBeenCalled();
+    expect(requestedWorkspace).toBe('workspace-target');
+    expect(resolvedWorkspace).toBe(false);
     await act(async () => { useConfigStore.setState({ currentProviderId: 'another', currentModelId: 'another-model' }); });
     expect(host.textContent).toBe('unavailable');
-    expect(canonicalClient.getModels).toHaveBeenCalledTimes(1);
+    expect(modelFetchCount).toBe(1);
   });
   test('a closed control does not fetch when its selection changes and refreshes when opened', async () => {
     await act(async () => root.render(<Availability active={false} />));
     await act(async () => { useConfigStore.setState({ currentProviderId: 'missing', currentModelId: 'missing-model' }); });
-    expect(canonicalClient.getModels).not.toHaveBeenCalled();
+    expect(modelFetchCount).toBe(0);
     await act(async () => root.render(<Availability />));
     expect(host.textContent).toBe('unavailable');
-    expect(canonicalClient.getModels).toHaveBeenCalledTimes(1);
+    expect(modelFetchCount).toBe(1);
   });
 });

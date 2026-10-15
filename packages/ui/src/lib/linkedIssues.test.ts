@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 import type { SessionMetadataRecord } from './sessionReviewMetadata';
 import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedIssueId, buildLinkedLinearIssue, getDistinctLinkedIssues, getGitLabThreadRef, getLinkedGitHubPullRequests, getLinkedGitLabThreads, getLinkedIssues, getLinkedSidebarChanges, getLinkedSidebarIssues, withLinkedIssue, type LinkedIssue } from './linkedIssues';
 
@@ -16,8 +16,11 @@ const issue = (overrides: Partial<LinkedRepositoryIssue> = {}): LinkedRepository
   ...overrides,
 });
 
-const sessionWith = (linked: unknown): Session =>
-  ({ metadata: { openchamber: { linked_issues: linked } } } as unknown as Session);
+const sessionWith = (linked: unknown): Session => ({
+  sessionId: 'session-1', projectId: 'project-1', workspaceId: 'workspace-1', displayPath: 'repo', rootSessionId: 'session-1',
+  createdAt: 1, updatedAt: 1, epoch: 'e', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: { openchamber: { linked_issues: linked } } satisfies SessionMetadata, metadataRevision: '1', archiveRevision: '0',
+});
 
 describe('buildLinkedIssueId', () => {
   test('is stable per repository and number', () => {

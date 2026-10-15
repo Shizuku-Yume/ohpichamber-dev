@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { I18nProvider } from '@/lib/i18n';
 import { useSessionActions } from '../sessions/useSessionActions';
@@ -10,26 +10,30 @@ import { createSessionOwnershipIndex } from '../sessions/sessionOwnership';
 import { useSessionGrouping } from './useSessionGrouping';
 import type { SessionNode } from '../types';
 
-type FixtureSession = Session & { parentID?: string };
-const session = (id: string, parentID?: string): Session => {
-  const value: FixtureSession = {
-    id,
-    projectID: 'project',
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    title: id,
-    directory: '/workspace',
-    time: { created: 1, updated: 1 },
-  };
-  if (parentID) value.parentID = parentID;
-  return value;
-};
+const session = (sessionId: string, parentSessionId?: string): Session => ({
+  sessionId,
+  parentSessionId,
+  rootSessionId: parentSessionId ?? sessionId,
+  projectId: 'project',
+  workspaceId: 'workspace',
+  displayPath: '/workspace',
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: 'epoch',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  metadata: null,
+  metadataRevision: '0',
+  archiveRevision: '0',
+});
+ 
 
 const collectIds = (nodes: SessionNode[]): string[] => {
   const ids: string[] = [];
   const visit = (items: SessionNode[]): void => {
     for (const node of items) {
-      ids.push(node.session.id);
+      ids.push(node.session.sessionId);
       visit(node.children);
     }
   };
@@ -133,7 +137,8 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     const worktree = (name: string): WorktreeMetadata => ({
       source: 'sdk', name, path: `/workspace/.wt/${name}`, projectDirectory: '/workspace', branch: name, label: name,
     });
-    const busy = { ...session('busy'), directory: '/workspace/.wt/zeta', time: { created: 1, updated: 99 } };
+    const busy = { ...session('busy'), displayPath: '/workspace/.wt/zeta', updatedAt: 99 };
+
     const worktreeOrder = (worktreeSortOrder: 'recent' | 'a-z') => {
       const state: { build?: ReturnType<typeof useSessionGrouping>['buildGroupedSessions'] } = {};
       const Harness = () => {
@@ -192,7 +197,8 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
   test('keeps active unknown-directory sessions in their resolved project root group', () => {
     type GroupingCapture = { buildGroupedSessions?: ReturnType<typeof useSessionGrouping>['buildGroupedSessions'] };
     const state: GroupingCapture = {};
-    const restored = { ...session('restored'), directory: '/deleted/worktree', time: { created: 1, updated: 1 } };
+    const restored = { ...session('restored'), displayPath: '/deleted/worktree', createdAt: 1, updatedAt: 1 };
+
     const ownership = createSessionOwnershipIndex(
       [restored],
       [{ id: 'configured-workspace', normalizedPath: '/workspace' }],
@@ -241,7 +247,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     const buildGroupedSessions = state.buildGroupedSessions;
     if (!buildGroupedSessions) throw new Error('grouping callback was not mounted');
 
-    const archived = (value: Session): Session => ({ ...value, time: { ...value.time, archived: 2 } });
+    const archived = (value: Session): Session => ({ ...value, archiveRevision: '2' });
     const groups = buildGroupedSessions(
       [
         session('active-parent'),

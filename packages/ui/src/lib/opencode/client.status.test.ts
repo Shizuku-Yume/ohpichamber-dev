@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { createRuntimeOpencodeClient, opencodeClient } from "./client"
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from "../runtime-url"
 
 const previous = getRuntimeUrlResolver()
@@ -145,13 +146,13 @@ describe("v2 status and cancellation HTTP boundary", () => {
       return Response.json({ data: status })
     })
     try {
-      opencodeClient.setDirectory("c:\\")
+      hostFilesystem.setDirectory("c:\\")
       expect(await opencodeClient.getActiveSessionStatuses()).toEqual({ session: { type: "busy" } })
       expect(requests).toHaveLength(1)
       expect(requests[0].pathname).toBe("/api/session/active")
       expect(requests[0].searchParams.has("directory")).toBe(false)
     } finally {
-      opencodeClient.setDirectory(undefined)
+      hostFilesystem.setDirectory(undefined)
       fetch.mockRestore()
     }
   })

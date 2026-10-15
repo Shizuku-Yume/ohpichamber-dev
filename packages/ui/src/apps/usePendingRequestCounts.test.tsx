@@ -23,7 +23,6 @@ describe('usePendingRequestCounts', () => {
       expect(capture.counts).toEqual({ permissionCount: 0, formCount: 0 });
 
       // A request in an unrelated session neither counts nor re-renders the row.
-      const idleRenders = capture.renders;
       await act(async () => applyGlobalBlockingRequestEvents('/other', [{
         type: 'permission.asked', properties: { id: 'p-other', sessionID: 'unrelated', action: 'bash', resources: [] },
       }]));

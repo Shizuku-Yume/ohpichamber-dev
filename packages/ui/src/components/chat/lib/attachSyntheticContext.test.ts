@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, Part, SyntheticMessage, TextPart, UserMessage } from '@/lib/opencode/model';
+import type { Message, Part, SyntheticMessage, TextPart, UserMessage } from '@openchamber/agent-contract';
 import { CONTEXT_METADATA_KEY, readContextPart } from '@/lib/messages/contextParts';
 
 import { attachSyntheticContext } from './attachSyntheticContext';

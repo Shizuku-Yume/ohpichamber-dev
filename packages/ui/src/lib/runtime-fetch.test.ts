@@ -21,7 +21,7 @@ describe('buildRuntimeFetchUrl', () => {
       expect(buildRuntimeFetchUrl('/api/config/settings')).toBe('https://api.example/api/config/settings');
       expect(buildRuntimeFetchUrl('/auth/session')).toBe('https://api.example/auth/session');
       expect(buildRuntimeFetchUrl('/health')).toBe('https://api.example/health');
-      expect(buildRuntimeFetchUrl('/api/find/file', { query: 'x' })).toBe('https://api.example/api/find/file?query=x');
+      expect(buildRuntimeFetchUrl('/api/fs/search', { query: 'x' })).toBe('https://api.example/api/fs/search?query=x');
     } finally {
       setRuntimeUrlResolver(previous);
     }

@@ -1,52 +1,46 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { computeRollup } from './useSubagentCostRollup';
 
-function makeSession(id: string, cost: number, parentID?: string): Session {
-  return {
-    id,
-    projectID: 'project',
-    directory: '/project',
-    title: id,
-    time: { created: 0, updated: 0 },
-    cost,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    parentID,
+function makeSession(sessionId: string, parentSessionId?: string): Session {
+  const session: Session = {
+    sessionId,
+    projectId: 'project',
+    workspaceId: 'workspace',
+    displayPath: sessionId,
+    rootSessionId: parentSessionId ? 'root' : sessionId,
+    createdAt: 0,
+    updatedAt: 0,
+    epoch: '0',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
   };
+  if (parentSessionId) session.parentSessionId = parentSessionId;
+  return session;
 }
 
 const sessions: Session[] = [
-  makeSession('root', 1),
-  makeSession('a', 2, 'root'),
-  makeSession('b', 3, 'root'),
-  makeSession('a1', 5, 'a'),
+  makeSession('root'),
+  makeSession('a', 'root'),
+  makeSession('b', 'root'),
+  makeSession('a1', 'a'),
 ];
 
 describe('computeRollup', () => {
-  test('sums own cost plus every descendant', () => {
+  test('preserves descendant count while cost is unavailable', () => {
     const result = computeRollup(sessions, 'root');
-    expect(result.totalCost).toBe(11);
+    expect(result.totalCost).toBeNull();
     expect(result.subagentCount).toBe(3);
-  });
-
-  test('splits the total into the session own cost and the subagent share', () => {
-    const result = computeRollup(sessions, 'root');
-    expect(result.ownCost).toBe(1);
-    expect(result.subagentCost).toBe(10);
-    expect(result.ownCost + result.subagentCost).toBe(result.totalCost);
-  });
-
-  test('reports a zero subagent share for a session with no children', () => {
-    const result = computeRollup(sessions, 'a1');
-    expect(result.ownCost).toBe(5);
+    expect(result.ownCost).toBe(0);
     expect(result.subagentCost).toBe(0);
-    expect(result.totalCost).toBe(5);
+    expect(result.perChildCost.size).toBe(0);
   });
 
-  test('maps each direct child to its own subtree cost', () => {
-    const result = computeRollup(sessions, 'root');
-    expect(result.perChildCost.get('a')).toBe(7);
-    expect(result.perChildCost.get('b')).toBe(3);
+  test('returns no descendants or cost for a session with no children', () => {
+    const result = computeRollup(sessions, 'a1');
+    expect(result.totalCost).toBeNull();
+    expect(result.subagentCount).toBe(0);
   });
 
   test('returns null total for a null sessionId', () => {
@@ -58,12 +52,6 @@ describe('computeRollup', () => {
   test('returns null total for an unknown sessionId', () => {
     const result = computeRollup(sessions, 'missing');
     expect(result.totalCost).toBeNull();
-  });
-
-  test('sum of perChildCost plus root cost equals totalCost', () => {
-    const result = computeRollup(sessions, 'root');
-    const childSum = Array.from(result.perChildCost.values()).reduce((sum, v) => sum + v, 0);
-    const rootOwnCost = 1;
-    expect(childSum + rootOwnCost).toBe(result.totalCost);
+    expect(result.subagentCount).toBe(0);
   });
 });

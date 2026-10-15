@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { flushPendingSessionWrites, persistManagedChatSessions, readManagedChatSessions } from '@/sync/persist-cache';
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
@@ -27,8 +27,9 @@ const ids = (records: readonly Session[]) => records.map((record) => record.sess
 const savedDirectory = '/srv/chats/day/session-saved';
 let runtime = 0;
 const nextRuntime = () => switchRuntimeEndpoint({ apiBaseUrl: 'https://native-store-chats.test', runtimeKey: `native-store-chats-${++runtime}` });
-let home = spyOn(opencodeClient, 'getFilesystemHomeInfo');
+let home = spyOn(hostFilesystem, 'getFilesystemHomeInfo');
 let resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace');
+let subagents = spyOn(canonicalClient, 'listSubagents');
 const originalStorage = globalThis.localStorage;
 
 beforeEach(() => {
@@ -36,7 +37,8 @@ beforeEach(() => {
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: new TestStorage() });
   nextRuntime();
   useGlobalSessionsStore.getState().resetForRuntimeSwitch();
-  home = spyOn(opencodeClient, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
+  home = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
+  subagents = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
   resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async (directory) => ({
     workspaceId: directory === savedDirectory ? 'wsp_saved' : 'wsp_hint', projectId: 'pro_chats', name: 'Chat',
   }));
@@ -46,6 +48,7 @@ afterEach(() => {
   flushPendingSessionWrites();
   home.mockRestore();
   resolveWorkspace.mockRestore();
+  subagents.mockRestore();
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: originalStorage });
 });
 

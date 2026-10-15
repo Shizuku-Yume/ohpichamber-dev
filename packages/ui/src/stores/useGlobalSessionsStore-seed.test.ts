@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { flushPendingSessionWrites, persistGlobalSessionSnapshot, readGlobalSessionSnapshot } from '@/sync/persist-cache';
 import { clearLastActiveSession, persistLastActiveSession, readLastActiveSession } from '@/sync/last-session-cache';
@@ -34,8 +34,9 @@ const ids = (records: readonly Session[]) => records.map((record) => record.sess
 let runtime = 0;
 const nextRuntime = () => switchRuntimeEndpoint({ apiBaseUrl: 'https://native-store-seed.test', runtimeKey: `native-store-seed-${++runtime}` });
 const originalStorage = globalThis.localStorage;
-let home = spyOn(opencodeClient, 'getFilesystemHomeInfo');
+let home = spyOn(hostFilesystem, 'getFilesystemHomeInfo');
 let resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace');
+let subagents = spyOn(canonicalClient, 'listSubagents');
 
 const startFromSnapshot = (sessions: Session[]) => {
   persistGlobalSessionSnapshot(sessions);
@@ -48,14 +49,16 @@ beforeEach(() => {
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: new TestStorage() });
   nextRuntime();
   useGlobalSessionsStore.getState().resetForRuntimeSwitch();
-  home = spyOn(opencodeClient, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
+  home = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
   resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'wsp_hint', projectId: 'pro_hint', name: 'Hint' });
+  subagents = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
 });
 
 afterEach(() => {
   flushPendingSessionWrites();
   home.mockRestore();
   resolveWorkspace.mockRestore();
+  subagents.mockRestore();
   clearLastActiveSession(getRuntimeKey());
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: originalStorage });
 });

@@ -1,39 +1,46 @@
 import { describe, expect, test } from 'bun:test';
-import type { AssistantMessage, Part, SyntheticMessage, ToolState, UserMessage } from '@/lib/opencode/model';
+import type { Message, Part, ToolStatus } from '@openchamber/agent-contract';
 
-import { createParsedStatus, getActiveAssistantContext, hasBackgroundableWork } from './useAssistantStatus';
+import { createParsedStatus, getActiveAssistantContext } from './useAssistantStatus';
 
-const userMessage = (id: string): UserMessage => ({
-    id,
+const userMessage = (messageId: string): Message => ({
+    messageId,
     role: 'user',
-    sessionID: 'ses_1',
-    time: { created: 1 },
+    sessionId: 'ses_1',
+    turnId: `turn_${messageId}`,
+    createdAt: 1,
+    parts: [],
 });
 
-const assistantMessage = (id: string, providerID: string, modelID: string): AssistantMessage => ({
-    id,
-    role: 'assistant',
-    sessionID: 'ses_1',
-    time: { created: 2 },
-    agent: 'build',
-    providerID,
-    modelID,
-});
+const assistantMessage = (messageId: string, providerId: string, modelId: string): Message => {
+    const message: Message = {
+        messageId,
+        role: 'assistant',
+        sessionId: 'ses_1',
+        turnId: `turn_${messageId}`,
+        createdAt: 2,
+        parts: [],
+    };
+    if (providerId) message.providerId = providerId;
+    if (modelId) message.modelId = modelId;
+    return message;
+};
 
-const syntheticMessage = (id: string): SyntheticMessage => ({
-    id,
-    role: 'synthetic',
-    sessionID: 'ses_1',
-    time: { created: 3 },
-    text: 'server plugin prompt',
+const systemMessage = (messageId: string): Message => ({
+    messageId,
+    role: 'system',
+    sessionId: 'ses_1',
+    turnId: `turn_${messageId}`,
+    createdAt: 3,
+    parts: [],
 });
 
 describe('getActiveAssistantContext', () => {
     test('keeps the model when plumbing messages land after the assistant', () => {
         const assistant = assistantMessage('assistant_1', 'anthropic', 'claude-opus-4-1');
 
-        expect(getActiveAssistantContext([userMessage('user_1'), assistant, syntheticMessage('synthetic_1')])).toEqual({
-            assistantId: assistant.id,
+        expect(getActiveAssistantContext([userMessage('user_1'), assistant, systemMessage('system_1')])).toEqual({
+            assistantId: assistant.messageId,
             model: {
                 providerId: 'anthropic',
                 modelId: 'claude-opus-4-1',
@@ -41,17 +48,14 @@ describe('getActiveAssistantContext', () => {
         });
     });
 
-    test('reports the model recorded on the newest assistant message', () => {
+    test('does not guess a model when a newer prompt follows', () => {
         const prompt = userMessage('user_1');
         const assistant = assistantMessage('assistant_1', 'anthropic', 'claude-opus-4-1');
         const laterPrompt = userMessage('user_2');
 
         expect(getActiveAssistantContext([prompt, assistant, laterPrompt])).toEqual({
-            assistantId: assistant.id,
-            model: {
-                providerId: 'anthropic',
-                modelId: 'claude-opus-4-1',
-            },
+            assistantId: assistant.messageId,
+            model: null,
         });
     });
 
@@ -62,7 +66,7 @@ describe('getActiveAssistantContext', () => {
         const secondAssistant = assistantMessage('assistant_2', 'openai', 'gpt-5.6-sol');
 
         expect(getActiveAssistantContext([firstUser, firstAssistant, secondUser, secondAssistant])).toEqual({
-            assistantId: secondAssistant.id,
+            assistantId: secondAssistant.messageId,
             model: {
                 providerId: 'openai',
                 modelId: 'gpt-5.6-sol',
@@ -74,7 +78,7 @@ describe('getActiveAssistantContext', () => {
         const assistant = assistantMessage('assistant_1', '', '');
 
         expect(getActiveAssistantContext([assistant])).toEqual({
-            assistantId: assistant.id,
+            assistantId: assistant.messageId,
             model: null,
         });
     });
@@ -86,79 +90,37 @@ describe('getActiveAssistantContext', () => {
         });
     });
 
-    test('shows the session record model while a prompt sent after a finished turn waits for its answer', () => {
-        // A v2 user message records no model; the send switched the session
-        // first, so the session record names the model the new turn runs on.
-        const previousAssistant = { ...assistantMessage('assistant_1', 'anthropic', 'claude-opus-4-1'), time: { created: 2, completed: 3 } };
+    test('does not guess a model for a newer prompt when completion is not represented', () => {
+        const previousAssistant = assistantMessage('assistant_1', 'anthropic', 'claude-opus-4-1');
         const messages = [userMessage('user_1'), previousAssistant, userMessage('user_2')];
 
-        expect(getActiveAssistantContext(messages, { providerID: 'openai', id: 'gpt-5.6-sol' })).toEqual({
-            assistantId: previousAssistant.id,
-            model: { providerId: 'openai', modelId: 'gpt-5.6-sol' },
+        expect(getActiveAssistantContext(messages, { providerId: 'openai', modelId: 'gpt-5.6-sol' })).toEqual({
+            assistantId: previousAssistant.messageId,
+            model: null,
         });
-        // Without a session record nothing is shown: naming the previous turn's
-        // model would name the wrong one.
-        expect(getActiveAssistantContext(messages)).toEqual({ assistantId: previousAssistant.id, model: null });
     });
 
-    test('a turn still running keeps its model when a prompt is queued behind it', () => {
+    test('does not guess an active model when a prompt is queued behind an assistant', () => {
         const running = assistantMessage('assistant_1', 'anthropic', 'claude-opus-4-1');
 
         expect(getActiveAssistantContext([userMessage('user_1'), running, userMessage('user_2')])).toEqual({
-            assistantId: running.id,
-            model: { providerId: 'anthropic', modelId: 'claude-opus-4-1' },
+            assistantId: running.messageId,
+            model: null,
         });
     });
 });
 
-describe('hasBackgroundableWork', () => {
-    const tool = (name: string, state: Extract<Part, { type: 'tool' }>['state']): Part => ({
-        id: `prt_${name}`,
-        sessionID: 'ses_1',
-        messageID: 'msg_1',
-        type: 'tool',
-        callID: `call_${name}`,
-        tool: name,
-        state,
-    });
-
-    test('a running command or subagent can go to the background', () => {
-        expect(hasBackgroundableWork([tool('shell', { status: 'running', input: { command: 'bun test' }, time: { start: 1 } })])).toBe(true);
-        expect(hasBackgroundableWork([tool('subagent', { status: 'running', input: { agent: 'explore' }, time: { start: 1 } })])).toBe(true);
-    });
-
-    test('other tools, pending calls and settled calls cannot', () => {
-        expect(hasBackgroundableWork([tool('read', { status: 'running', input: {}, time: { start: 1 } })])).toBe(false);
-        expect(hasBackgroundableWork([tool('shell', { status: 'pending', input: {}, raw: '' })])).toBe(false);
-        expect(hasBackgroundableWork([tool('shell', {
-            status: 'completed',
-            input: { command: 'sleep 300', background: true },
-            output: 'Command moved to the background',
-            metadata: { status: 'running', shellID: 'sh_1' },
-            time: { start: 1, end: 2 },
-        })])).toBe(false);
-    });
-});
 
 describe('createParsedStatus', () => {
-    const toolState = (status: 'running' | 'pending' | 'completed'): ToolState => {
-        if (status === 'completed') {
-            return { status: 'completed', input: {}, output: '', time: { start: 1, end: 2 } };
-        }
-        if (status === 'pending') {
-            return { status: 'pending', input: {}, raw: '' };
-        }
-        return { status: 'running', input: {}, time: { start: 1 } };
-    };
+    const toolState = (status: 'running' | 'pending' | 'completed' | 'failed'): ToolStatus => status === 'pending' ? 'pending_approval' : status;
 
-    const tool = (id: string, name: string, status: 'running' | 'pending' | 'completed' = 'running'): Part => ({
-        id,
-        sessionID: 'ses_1',
-        messageID: 'msg_1',
-        type: 'tool',
-        callID: `call_${id}`,
-        tool: name,
-        state: toolState(status),
+    const tool = (id: string, name: string, status: 'running' | 'pending' | 'completed' | 'failed' = 'running'): Part => ({
+        type: 'tool_call',
+        partId: id,
+        toolCallId: `call_${id}`,
+        toolName: name,
+        input: {},
+        status: toolState(status),
     });
 
     const statusOf = (parts: Part[]) => createParsedStatus(parts, 'ses_1:msg_1');
@@ -185,6 +147,15 @@ describe('createParsedStatus', () => {
 
     test('counts only unfinished calls', () => {
         expect(statusOf([tool('1', 'read'), tool('2', 'read', 'completed')]).statusText).toBe('reading a file');
+    });
+    test('failed and completed calls are not active', () => {
+        expect(statusOf([tool('1', 'read', 'completed')]).activePartType).toBeUndefined();
+        expect(statusOf([tool('2', 'shell', 'failed')]).activePartType).toBeUndefined();
+    });
+
+    test('canonical text and reasoning parts remain neutral without completion data', () => {
+        expect(statusOf([{ type: 'text', partId: 'text_1', content: 'hello' }]).activePartType).toBeUndefined();
+        expect(statusOf([{ type: 'reasoning', partId: 'reason_1', content: 'thinking' }]).activePartType).toBeUndefined();
     });
 
     test('shows the newest kind when different tools run together', () => {

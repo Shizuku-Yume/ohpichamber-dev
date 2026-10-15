@@ -1,43 +1,37 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { createServer } from 'node:http';
 import { Window } from 'happy-dom';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { I18nProvider } from '@/lib/i18n';
-import type { RunningShell } from '@/lib/opencode/background-shell';
-import { opencodeClient } from '@/lib/opencode/client';
-import type { SyncEvent } from '@/lib/opencode/events';
-import type { Session } from '@/lib/opencode/model';
+import type { CanonicalEvent, RunningShell, Session, ShellJob } from '@openchamber/agent-contract';
+import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from '@/lib/runtime-url';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { applyBackgroundShellEvents, resetBackgroundShells } from '@/sync/background-shells';
 import { BackgroundShellsStrip } from './BackgroundShellsStrip';
 
-const session = (id: string, parentID?: string): Session => ({
-  id, parentID, projectID: 'project', directory: '/repo', title: id, cost: 0,
-  time: { created: 1, updated: 1 },
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+const session = (sessionId: string, parentSessionId?: string): Session => ({
+  sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId,
+  projectId: 'project', workspaceId: 'workspace', displayPath: '.',
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0',
+  runtimeStatus: 'idle', activeRunId: null,
+  metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 
-const shell = (id: string, sessionID: string, command: string, startedAt = Date.now()): RunningShell => ({
-  id, sessionID, command, file: `/tmp/${id}.out`, startedAt,
+const shell = (jobId: string, sessionId: string, command: string, startedAt = Date.now()): RunningShell => ({
+  jobId, sessionId, epoch: 'epoch', workerGeneration: 'worker',
+  workspaceId: 'workspace', projectId: 'project', command,
+  startedAt, outputCursor: '0', background: true, status: 'running',
 });
 
-const startEvent = (value: RunningShell): SyncEvent => ({ type: 'shell.started', properties: { shell: value } });
+const shellEvent = (job: ShellJob): CanonicalEvent => ({
+  type: 'shell.updated', job, sessionId: job.sessionId,
+  epoch: job.epoch, sequence: '1', timestamp: job.startedAt,
+});
 
-/** Starts commands whose calls went to the background. */
 const start = (...shells: RunningShell[]) => act(async () => {
-  applyBackgroundShellEvents('/repo', shells.flatMap((value): SyncEvent[] => [
-    startEvent(value),
-    {
-      type: 'message.tool.transition',
-      properties: {
-        sessionID: value.sessionID,
-        messageID: 'msg_1',
-        partID: `call_${value.id}`,
-        transition: { kind: 'success', output: '', metadata: { status: 'running', shellID: value.id }, executed: true, end: value.startedAt },
-      },
-    },
-  ]));
+  applyBackgroundShellEvents('/repo', shells.map(shellEvent));
 });
 
 describe('BackgroundShellsStrip', () => {
@@ -89,10 +83,8 @@ describe('BackgroundShellsStrip', () => {
     expect(host.innerHTML).toBe('');
   });
 
-  test('a command the turn is still waiting for stays out', async () => {
-    await act(async () => {
-      applyBackgroundShellEvents('/repo', [startEvent(shell('sh_waited', 'ses_root', 'bun run type-check'))]);
-    });
+  test('a foreground command the turn is still waiting for stays out', async () => {
+    await start({ ...shell('sh_waited', 'ses_root', 'bun run type-check'), background: false });
     expect(host.innerHTML).toBe('');
   });
 
@@ -118,27 +110,48 @@ describe('BackgroundShellsStrip', () => {
     expect(buttons().filter((item) => item.textContent === 'Stop')).toHaveLength(2);
   });
 
-  test('stop goes through the shared stop flow, addressed to the session that owns the command', async () => {
-    const stop = spyOn(opencodeClient, 'stopBackgroundShell').mockResolvedValue(undefined);
+  test('stops the owning canonical job and waits for its end event before removing the row', async () => {
+    const running = shell('sh_child', 'ses_child', 'vite preview');
+    const ended: ShellJob = { ...running, status: 'ended', endedAt: Date.now(), termination: { reason: 'stopped', exitCode: null } };
+    const requests: { method: string | undefined; url: string | undefined; body: unknown }[] = [];
+    let received!: () => void;
+    const requestReceived = new Promise<void>((resolve) => { received = resolve; });
+    const server = createServer(async (request, response) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      requests.push({ method: request.method, url: request.url, body: JSON.parse(Buffer.concat(chunks).toString()) });
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ job: ended }));
+      received();
+    });
+    const previousResolver = getRuntimeUrlResolver();
     try {
-      await start(shell('sh_child', 'ses_child', 'vite preview'));
-      await act(async () => button('Stop')?.click());
-      expect(stop.mock.calls).toEqual([[{
-        sessionID: 'ses_child',
-        sessionDirectory: '/repo',
-        shellID: 'sh_child',
-        shellDirectory: '/repo',
-        command: 'vite preview',
-      }]]);
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Expected loopback TCP listener');
+      configureRuntimeUrlResolver({ apiBaseUrl: `http://127.0.0.1:${address.port}` });
+      await start(running);
+      await act(async () => {
+        button('Stop')?.click();
+        await requestReceived;
+      });
+      expect(requests).toEqual([{
+        method: 'POST',
+        url: '/api/agent/v1/sessions/ses_child/shell/jobs/sh_child/stop',
+        body: { job: { sessionId: 'ses_child', jobId: 'sh_child', epoch: 'epoch', workerGeneration: 'worker' } },
+      }]);
+      expect(host.textContent).toContain('vite preview');
       expect(button('Stop')?.disabled).toBe(true);
 
-      // The row leaves when OpenCode reports the end.
       await act(async () => {
-        applyBackgroundShellEvents('/repo', [{ type: 'shell.ended', properties: { shellID: 'sh_child', end: { kind: 'removed' }, endedAt: 2000 } }]);
+        applyBackgroundShellEvents('/repo', [shellEvent(ended)]);
       });
       expect(host.innerHTML).toBe('');
     } finally {
-      stop.mockRestore();
+      setRuntimeUrlResolver(previousResolver);
+      const closed = new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      server.closeAllConnections();
+      await closed;
     }
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { AssistantMessage, Message, Part, Session, SessionStatus, SyntheticMessage, ToolPart, UserMessage } from '@/lib/opencode/model';
+import type { AssistantMessage, Message, Part, Session, SessionStatus, SyntheticMessage, ToolPart, UserMessage } from '@openchamber/agent-contract';
 
 import { selectRunningSubagentRuns, withRunningSubagentRuns } from './runningSubagentRuns';
 import type { ChatMessageEntry } from './turns/types';

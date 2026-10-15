@@ -82,6 +82,7 @@ mock.module("@/lib/startupTrace", () => ({
 }))
 
 const { OpencodeApiError, createRuntimeOpencodeClient, opencodeClient } = await import(`./client?client-test=${Date.now()}`)
+const { hostFilesystem } = await import('@/lib/host-filesystem')
 const { readProjectConfigError } = await import("./configError")
 
 const sessionInfo = {
@@ -98,7 +99,7 @@ beforeEach(() => {
   requests.length = 0
   responses.length = 0
   runtimeKey = "test-runtime"
-  opencodeClient.setDirectory(undefined)
+  hostFilesystem.setDirectory(undefined)
   opencodeClient.clearConfigCache()
 })
 
@@ -155,7 +156,7 @@ describe('runtime routing responses', () => {
 describe("request fidelity", () => {
   test("project creation uses the OpenChamber directory route", async () => {
     responses.push(json({ success: true, restarted: false, path: "/repo/new" }))
-    expect(await opencodeClient.createDirectory("/repo/new", { asProject: true }))
+    expect(await hostFilesystem.createDirectory("/repo/new", { asProject: true }))
       .toEqual({ success: true, path: "/repo/new" })
     expect(requests[0].url.pathname).toBe("/api/openchamber/directory")
     expect(requests[0].method).toBe("POST")
@@ -165,7 +166,7 @@ describe("request fidelity", () => {
   test("project activation uses the OpenChamber directory route without creation", async () => {
     const result = { success: true, restarted: false, path: "/repo/existing" }
     responses.push(json(result))
-    expect(await opencodeClient.setOpenCodeWorkingDirectory("/repo/existing")).toEqual(result)
+    expect(await hostFilesystem.setWorkingDirectory("/repo/existing")).toEqual(result)
     expect(requests[0].url.pathname).toBe("/api/openchamber/directory")
     expect(requests[0].method).toBe("POST")
     expect(requests[0].body).toEqual({ path: "/repo/existing" })
@@ -184,7 +185,7 @@ describe("request fidelity", () => {
   })
 
   test("releasing a location names its directory, never OpenCode's own", async () => {
-    opencodeClient.setDirectory("/repo/current")
+    hostFilesystem.setDirectory("/repo/current")
     responses.push(noContent())
     await opencodeClient.releaseLocation("/chats/2026-10-03/session-a b")
     expect(requests[0].url.pathname).toBe("/api/debug/location")
@@ -196,7 +197,7 @@ describe("request fidelity", () => {
   })
 
   test("a global list sends no directory scope at all", async () => {
-    opencodeClient.setDirectory("/repo/app")
+    hostFilesystem.setDirectory("/repo/app")
     responses.push(json({ data: [], cursor: {} }))
     await opencodeClient.listSessionsPage({ global: true })
     expect(requests[0].url.searchParams.has("directory")).toBe(false)
@@ -228,14 +229,14 @@ describe("request fidelity", () => {
     expect((await opencodeClient.listSessionsPage({ global: true })).spaces).toBeUndefined()
   })
 test('Windows drive roots remain absolute in directory selection and SDK client identity', () => {
-  const previous = opencodeClient.getDirectory();
+  const previous = hostFilesystem.getDirectory();
   try {
-    opencodeClient.setDirectory('c:\\');
-    expect(opencodeClient.getDirectory()).toBe('C:/');
+    hostFilesystem.setDirectory('c:\\');
+    expect(hostFilesystem.getDirectory()).toBe('C:/');
     expect(opencodeClient.getScopedSdkClient('c:\\')).toBe(opencodeClient.getScopedSdkClient('C:/'));
     expect(opencodeClient.getScopedSdkClient('C:/')).not.toBe(opencodeClient.getScopedSdkClient('C:'));
   } finally {
-    opencodeClient.setDirectory(previous);
+    hostFilesystem.setDirectory(previous);
   }
 });
 
@@ -248,13 +249,14 @@ test('Windows separators and UNC representations share SDK clients without lower
     .not.toBe(opencodeClient.getScopedSdkClient('/repo/project'));
 });
 
-test('a drive-root system-info fallback stays absolute', async () => {
-  responses.push(json({ directory: 'C:/', project: { id: 'project', directory: 'C:/', canonical: 'C:/' } }));
-  expect((await opencodeClient.getSystemInfo()).homeDirectory).toBe('C:/');
+test('a Host drive-root home stays absolute', async () => {
+  responses.push(json({ home: 'C:/' }));
+  expect((await hostFilesystem.getSystemInfo()).homeDirectory).toBe('C:/');
+  expect(requests[0].url.pathname).toBe('/api/fs/home');
 });
 
   test("the current directory scopes calls that pass none", async () => {
-    opencodeClient.setDirectory("/repo/current")
+    hostFilesystem.setDirectory("/repo/current")
     responses.push(json({ location: {}, data: [] }))
     await opencodeClient.listAgents()
     expect(requests[0].url.pathname).toBe("/api/agent")

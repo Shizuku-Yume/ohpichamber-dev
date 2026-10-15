@@ -1,83 +1,55 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { buildChildrenIndex, computeSubtreeCost, formatCost } from './subagentCost';
 
-const NO_TOKENS = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } };
-
-function makeSession(id: string, cost: number, parentID?: string): Session {
-  return {
-    id,
-    projectID: 'project',
-    directory: '/project',
-    title: id,
-    time: { created: 0, updated: 0 },
-    cost,
-    tokens: NO_TOKENS,
-    parentID,
+function makeSession(sessionId: string, parentSessionId?: string): Session {
+  const session: Session = {
+    sessionId,
+    projectId: 'project',
+    workspaceId: 'workspace',
+    displayPath: sessionId,
+    rootSessionId: parentSessionId ?? sessionId,
+    createdAt: 0,
+    updatedAt: 0,
+    epoch: '0',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
   };
+  if (parentSessionId) session.parentSessionId = parentSessionId;
+  return session;
 }
 
-describe('buildChildrenIndex', () => {
-  test('groups sessions by parentID', () => {
-    const root = makeSession('root', 1);
-    const childA = makeSession('a', 2, 'root');
-    const childB = makeSession('b', 3, 'root');
+describe('buildChildrenIndex', () =>
+  test('groups sessions by parentSessionId', () => {
+    const root = makeSession('root');
+    const childA = makeSession('a', 'root');
+    const childB = makeSession('b', 'root');
     const index = buildChildrenIndex([root, childA, childB]);
     expect(index.get('root')).toEqual([childA, childB]);
-  });
-});
+  }));
 
-describe('formatCost', () => {
+describe('formatCost', () =>
   test('prefixes with $ and trims trailing zeros', () => {
     expect(formatCost(1.5)).toBe('$1.5');
     expect(formatCost(0.0001)).toBe('$0.0001');
     expect(formatCost(2)).toBe('$2');
-  });
-});
+  }));
 
-describe('computeSubtreeCost', () => {
-  test('sums a flat root with two direct children', () => {
-    const root = makeSession('root', 1);
-    const childA = makeSession('a', 2, 'root');
-    const childB = makeSession('b', 3, 'root');
-    const sessions = [root, childA, childB];
-    const sessionsById = new Map(sessions.map((s) => [s.id, s]));
-    const childrenByParent = buildChildrenIndex(sessions);
-    expect(computeSubtreeCost('root', sessionsById, childrenByParent)).toBe(6);
-  });
+describe('computeSubtreeCost', () =>
+  test('returns null because canonical sessions do not expose spend', () => {
+    const root = makeSession('root');
+    const sessionsById = new Map([[root.sessionId, root]]);
+    const childrenByParent = buildChildrenIndex([root]);
+    expect(computeSubtreeCost('root', sessionsById, childrenByParent)).toBeNull();
+  }));
 
-  test('rolls up cost through nested descendants', () => {
-    const root = makeSession('root', 1);
-    const child = makeSession('child', 2, 'root');
-    const grandchild = makeSession('grandchild', 4, 'child');
-    const sessions = [root, child, grandchild];
-    const sessionsById = new Map(sessions.map((s) => [s.id, s]));
-    const childrenByParent = buildChildrenIndex(sessions);
-    expect(computeSubtreeCost('root', sessionsById, childrenByParent)).toBe(7);
-    expect(computeSubtreeCost('child', sessionsById, childrenByParent)).toBe(6);
-  });
-
-  test('does not double-count or infinite-loop on a cycle', () => {
-    const a = makeSession('a', 1, 'b');
-    const b = makeSession('b', 2, 'a');
-    const sessions = [a, b];
-    const sessionsById = new Map(sessions.map((s) => [s.id, s]));
-    const childrenByParent = buildChildrenIndex(sessions);
-    expect(computeSubtreeCost('a', sessionsById, childrenByParent)).toBe(3);
-  });
-
-  test('treats zero cost as zero, not a break', () => {
-    const root = makeSession('root', 0);
-    const child = makeSession('child', 0, 'root');
-    const sessions = [root, child];
-    const sessionsById = new Map(sessions.map((s) => [s.id, s]));
-    const childrenByParent = buildChildrenIndex(sessions);
-    expect(computeSubtreeCost('root', sessionsById, childrenByParent)).toBe(0);
-  });
-
-  test('returns 0 for an unknown id', () => {
+describe('computeSubtreeCost unknown session', () =>
+  test('returns null for an unknown id', () => {
     const sessionsById = new Map<string, Session>();
     const childrenByParent = new Map<string, Session[]>();
-    expect(computeSubtreeCost('missing', sessionsById, childrenByParent)).toBe(0);
-  });
-});
+    expect(computeSubtreeCost('missing', sessionsById, childrenByParent)).toBeNull();
+  }));
+
+
+

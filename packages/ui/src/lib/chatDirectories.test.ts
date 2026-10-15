@@ -1,19 +1,19 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { createChatDirectory, deleteChatDirectory, ensureChatsRootDirectory, getChatsRoot, getChatsRootFromDirectory, isChatDirectoryForHome, isChatDirectoryPath, subscribeChatsRoot, warmChatsRootDirectory } from './chatDirectories';
 
 let runtime = 0;
 const nextRuntime = () => switchRuntimeEndpoint({ apiBaseUrl: 'https://chats.test', runtimeKey: `chats-${++runtime}` });
-let home = spyOn(opencodeClient, 'getFilesystemHomeInfo');
-let mkdir = spyOn(opencodeClient, 'createDirectory');
+let home = spyOn(hostFilesystem, 'getFilesystemHomeInfo');
+let mkdir = spyOn(hostFilesystem, 'createDirectory');
 let request = spyOn(globalThis, 'fetch');
 const deleteRequests = () => request.mock.calls.filter(([input]) => String(input).includes('/fs/delete'));
 
 beforeEach(() => {
   nextRuntime();
-  home = spyOn(opencodeClient, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
-  mkdir = spyOn(opencodeClient, 'createDirectory').mockResolvedValue({ success: true, path: '/unused' });
+  home = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
+  mkdir = spyOn(hostFilesystem, 'createDirectory').mockResolvedValue({ success: true, path: '/unused' });
   request = spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}'));
 });
 afterEach(() => { home.mockRestore(); mkdir.mockRestore(); request.mockRestore(); });

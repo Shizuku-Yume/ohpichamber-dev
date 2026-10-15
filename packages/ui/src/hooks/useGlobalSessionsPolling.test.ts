@@ -3,6 +3,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import type { SessionPage } from '@/lib/opencode/client';
@@ -228,7 +229,7 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   }
   const fetch = spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }));
-  const home = spyOn(opencodeClient, 'getFilesystemHomeInfo')
+  const home = spyOn(hostFilesystem, 'getFilesystemHomeInfo')
     .mockRejectedValueOnce(new Error('startup unavailable'))
     .mockResolvedValue({ home: '/home/user', chatsRoot: '/chats' });
   const host = spyOn(opencodeClient, 'getHostSessionStatusSnapshot').mockResolvedValue(null);
@@ -267,7 +268,7 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
     expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
     expect(clock.delay()).toBe(1_000);
     await act(async () => clock.fire());
-    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.id)).toEqual(['restored']);
+    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['restored']);
     expect(useGlobalSessionsStore.getState().status).toBe('ready');
     expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
     expect(list.mock.calls.every(([options]) => options?.global === true)).toBe(true);
@@ -280,17 +281,17 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
     expect(clock.pending.size).toBe(0);
     list.mockResolvedValue(session('new-runtime'));
     await act(async () => switchRuntimeEndpoint({ apiBaseUrl: 'http://sessions.test', runtimeKey: 'startup-b' }));
-    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.id)).toEqual(['new-runtime']);
+    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['new-runtime']);
     expect(clock.pending.size).toBe(1);
     const seedsBeforeOldCompletion = host.mock.calls.length;
     await act(async () => resolveOldPage(session('stale')));
-    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.id)).toEqual(['new-runtime']);
+    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['new-runtime']);
     expect(host.mock.calls.length).toBe(seedsBeforeOldCompletion);
     expect(clock.pending.size).toBe(1);
     // The app may reset stores when the endpoint changes but runtime identity stays the same.
     list.mockResolvedValue(session('reconnected'));
     await act(async () => switchRuntimeEndpoint({ apiBaseUrl: 'http://reconnected.test', runtimeKey: 'startup-b' }));
-    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.id)).toEqual(['reconnected']);
+    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['reconnected']);
     expect(clock.pending.size).toBe(1);
     await act(async () => root.render(React.createElement(Harness, { enabled: false })));
     expect(clock.pending.size).toBe(0);

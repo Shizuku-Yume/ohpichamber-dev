@@ -1,11 +1,16 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { getSessionNodesActivityState } from './collapsedActivityState';
 import type { SessionNode } from '../types';
 
-// SAFETY: the fixture supplies the minimal SDK identity fields used by the activity projection.
-const node = (id: string, parentID?: string, children: SessionNode[] = []): SessionNode => ({
-  session: { id, parentID } as Session,
+const node = (sessionId: string, parentSessionId?: string, children: SessionNode[] = []): SessionNode => ({
+  session: {
+    sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId,
+    projectId: 'project-a', workspaceId: 'workspace-a', displayPath: '.',
+    createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0',
+    runtimeStatus: 'idle', activeRunId: null,
+    metadata: null, metadataRevision: '0', archiveRevision: '0',
+  } satisfies Session,
   children,
   worktree: null,
 });

@@ -26,11 +26,11 @@ describe('session row order authority', () => {
 
   test('reads current session archive metadata rather than selection-time state', () => {
     const selected = new Set(['duplicate']);
-    const session = { time: { archived: 1 } };
+    const session = { archivedAt: 1 };
     const sessions = new Map([['duplicate', session]]);
     expect(deriveSessionRowSelectionArchived(selected, sessions)).toBe(true);
 
-    session.time.archived = 0;
+    session.archivedAt = 0;
     expect(deriveSessionRowSelectionArchived(selected, sessions)).toBe(false);
   });
 });

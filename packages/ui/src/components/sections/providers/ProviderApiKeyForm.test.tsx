@@ -44,7 +44,8 @@ const cloudflareGatewayKey: IntegrationKeyMethod = {
 
 const render = async (keyMethod: IntegrationKeyMethod | undefined) => {
   const requests: IntegrationKeyRequest[] = [];
-  let saved = 0;
+  const canonicalKeys: string[] = [];
+  const savedSources: Array<'canonical' | 'integration'> = [];
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -54,7 +55,8 @@ const render = async (keyMethod: IntegrationKeyMethod | undefined) => {
         integrationId="cloudflare-ai-gateway"
         keyMethod={keyMethod}
         connectKey={async (request) => { requests.push(request); }}
-        onSaved={() => { saved += 1; }}
+        writeCanonicalKey={async (key) => { canonicalKeys.push(key); }}
+        onSaved={(source) => { savedSources.push(source); }}
       />
     </I18nProvider>,
   ));
@@ -73,7 +75,9 @@ const render = async (keyMethod: IntegrationKeyMethod | undefined) => {
   return {
     host,
     requests,
-    saved: () => saved,
+    canonicalKeys,
+    savedSources: () => savedSources,
+    saved: () => savedSources.length,
     input,
     type: (selector: string, text: string) => act(async () => {
       const element = input(selector);
@@ -120,7 +124,8 @@ test('the key is sent with the answered fields', async () => {
     key: 'cfut_TEST',
     answer: { accountId: '0'.repeat(32), gatewayId: 'default' },
   }]);
-  expect(form.saved()).toBe(1);
+  expect(form.canonicalKeys).toEqual([]);
+  expect(form.savedSources()).toEqual(['integration']);
   expect(form.input('input[type="password"]').value).toBe('');
 });
 
@@ -130,7 +135,9 @@ test('a key method without a form sends the bare key', async () => {
   await form.type('input[type="password"]', 'sk-test');
   await form.save();
 
-  expect(form.requests).toEqual([{ integrationID: 'cloudflare-ai-gateway', key: 'sk-test' }]);
+  expect(form.requests).toEqual([]);
+  expect(form.canonicalKeys).toEqual(['sk-test']);
+  expect(form.savedSources()).toEqual(['canonical']);
 });
 
 test('a provider OpenCode has no integration for takes a bare key', async () => {
@@ -138,5 +145,7 @@ test('a provider OpenCode has no integration for takes a bare key', async () => 
   await form.type('input[type="password"]', 'sk-test');
   await form.save();
 
-  expect(form.requests).toEqual([{ integrationID: 'cloudflare-ai-gateway', key: 'sk-test' }]);
+  expect(form.requests).toEqual([]);
+  expect(form.canonicalKeys).toEqual(['sk-test']);
+  expect(form.savedSources()).toEqual(['canonical']);
 });

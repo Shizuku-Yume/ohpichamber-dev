@@ -19,10 +19,11 @@
 - [x] Keep live activity derived from live channels, not persisted history.
 - [x] Preserve partial output and unrelated session state on one request failure.
 - [x] Update only necessary user-facing strings through the locale pattern and keep controls accessible.
-- [ ] Render subagent timeline links and navigation from Task 32 Canonical Client methods and ToolCallPart/ToolResultPart (`toolName: "task"`) without OpenCode fallbacks.
+- [x] Render subagent timeline links and navigation from Task 32 Canonical Client methods and ToolCallPart/ToolResultPart (`toolName: "task"`) without OpenCode fallbacks.
 ## Progress
 
 - Canonical session actions already own run, abort, steer, follow-up, approval and question CAS calls; the composer now uses canonical prompt selection and Host `RuntimeAPIs.files` for inline attachment existence checks, with no OpenCode command/catalog fallback.
 - Added native `Message[]` transcript Markdown/text conversion and migrated export coverage to canonical `Part.content`; system prompt plumbing is excluded.
-- Focused check: `bun test packages/ui/src/sync/session-actions.test.ts packages/ui/src/lib/exportSession.test.ts packages/ui/src/lib/messages/messageText.test.ts` — 80 passed, 0 failed.
-- Task 32 integration point: its `CanonicalClient.listSubagents()` and child-history projection populate `ChildSessionExport` at the export/timeline seam; Task 32 remains owner of endpoint, registry, child projection, and cursor/history authority. Child timeline navigation is intentionally not implemented in this non-child slice.
+- Focused checks: session actions/export/message text — 80 passed, 0 failed; `ToolPart.subagent-row.test.tsx` — 5 passed, 0 failed, 20 assertions (390 ms). The latter covers exact parent/tool-call joins, batched children, failure retention, and grouped rows' addressed session/directory.
+- `ToolPart` reads `canonicalClient.listSubagents(sessionId)` and matches exact `parentSessionId` and `toolCallId`, without output parsing. Desktop opens a read-only context tab; pinned columns reuse `openSession`; mobile selects the child in place. `TurnActivity` and `ProgressiveGroup` thread session/directory through the memoized row.
+- Task 32 owns child registry/history/cursor authority. Connected Web/Electron acceptance remains open under Task 18; component tests do not close the task.

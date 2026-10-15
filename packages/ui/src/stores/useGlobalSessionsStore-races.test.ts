@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import type { Session } from '@openchamber/agent-contract';
+import type { Session, Subagent } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { flushPendingSessionWrites } from '@/sync/persist-cache';
@@ -25,15 +25,17 @@ let runtime = 0;
 let request = deferred<SessionDiscoveryResult>();
 let list = spyOn(canonicalClient, 'listSessions');
 let resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace');
-let home = spyOn(opencodeClient, 'getFilesystemHomeInfo');
+let home = spyOn(hostFilesystem, 'getFilesystemHomeInfo');
+let subagents = spyOn(canonicalClient, 'listSubagents');
 
 beforeEach(async () => {
   flushPendingSessionWrites();
   switchRuntimeEndpoint({ apiBaseUrl: 'https://native-global-races.test', runtimeKey: `native-global-races-${++runtime}` });
-  home = spyOn(opencodeClient, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
+  home = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
   await ensureChatsRootDirectory();
   request = deferred<SessionDiscoveryResult>();
   list = spyOn(canonicalClient, 'listSessions').mockImplementation(() => request.promise);
+  subagents = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
   resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async (directory) => ({
     workspaceId: directory === '/repo' ? 'wsp_repo' : directory === '/other' ? 'wsp_other' : 'wsp_hint',
     projectId: directory === '/other' ? 'pro_other' : 'pro_repo', name: 'Workspace',
@@ -48,6 +50,7 @@ afterEach(() => {
   list.mockRestore();
   resolveWorkspace.mockRestore();
   home.mockRestore();
+  subagents.mockRestore();
 });
 
 describe('native global mutation reconciliation', () => {
@@ -214,5 +217,124 @@ describe('native discovery completeness scopes', () => {
     await useGlobalSessionsStore.getState().loadSessions();
     expect(ids(useGlobalSessionsStore.getState().activeSessions)).toEqual(['ses_new']);
     expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
+  });
+});
+
+describe('canonical sidebar child discovery', () => {
+  const child = (status: Subagent['status'] = 'running'): Subagent => ({
+    subagentId: 'sub_worker', parentSessionId: 'ses_root', childSessionId: 'ses_child', role: 'Worker', status,
+  });
+  const discover = async (directory: boolean) => {
+    list.mockResolvedValue({ items: [session('ses_root')], errors: {} });
+    return directory ? useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo'])
+      : useGlobalSessionsStore.getState().loadSessions();
+  };
+
+  test.each([false, true])('projects canonical children and indexes hierarchy (directory=%s)', async (directory) => {
+    subagents.mockResolvedValue([child()]);
+    await discover(directory);
+    const state = useGlobalSessionsStore.getState();
+    expect(state.entityById.get('ses_child')).toEqual(session('ses_child', {
+      parentSessionId: 'ses_root', rootSessionId: 'ses_root', metadata: { title: 'Worker' },
+      runtimeStatus: 'running', activeRunId: 'subagent:sub_worker',
+    }));
+    expect(state.structure.activeRootIds).toEqual(['ses_root']);
+    expect(state.structure.activeChildrenByParentId.get('ses_root')).toEqual(['ses_child']);
+    expect(ids(state.sessionsByDirectory.get('/repo') ?? [])).toEqual(['ses_child', 'ses_root']);
+    expect(subagents.mock.calls.map(([id]) => id)).toEqual(['ses_root']);
+    const first = state.entityById.get('ses_child');
+    await discover(directory);
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_child')).toEqual(first);
+  });
+
+  test.each([false, true])('failed child discovery preserves known children, successful omission removes them (directory=%s)', async (directory) => {
+    subagents.mockResolvedValue([child('completed')]);
+    await discover(directory);
+    const previous = useGlobalSessionsStore.getState().entityById.get('ses_child');
+    expect(previous).toMatchObject({ runtimeStatus: 'idle', activeRunId: null });
+    subagents.mockRejectedValue(new Error('child discovery offline'));
+    await discover(directory);
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_child')).toBe(previous);
+    subagents.mockResolvedValue([]);
+    await discover(directory);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(false);
+    expect(useGlobalSessionsStore.getState().structure.activeChildrenByParentId.has('ses_root')).toBe(false);
+  });
+
+  test('directory root omission alone cannot erase a previously discovered child', async () => {
+    subagents.mockResolvedValue([child()]);
+    await discover(true);
+    list.mockResolvedValue({ items: [], errors: {} });
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo']);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(true);
+  });
+
+  test('successful child omission cannot be undone by a stale live-directory fallback', async () => {
+    subagents.mockResolvedValue([child()]);
+    await discover(true);
+    const previous = useGlobalSessionsStore.getState().activeSessions;
+    subagents.mockResolvedValue([]);
+    await useGlobalSessionsStore.getState().refreshSessionsForDirectories(['/repo'], previous);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(false);
+  });
+
+  test('bounds concurrent child reads across active roots', async () => {
+    list.mockResolvedValue({ items: [session('ses_a'), session('ses_b'), session('ses_c')], errors: {} });
+    const firstTwo = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<Subagent[]>();
+    let active = 0;
+    let maximum = 0;
+    subagents.mockImplementation(async () => {
+      active += 1;
+      maximum = Math.max(maximum, active);
+      if (active === 2) firstTwo.resolve();
+      try { return await release.promise; }
+      finally { active -= 1; }
+    });
+    const loading = useGlobalSessionsStore.getState().loadSessions();
+    await firstTwo.promise;
+    expect(subagents.mock.calls).toHaveLength(2);
+    release.resolve([]);
+    await loading;
+    expect(subagents.mock.calls).toHaveLength(3);
+    expect(maximum).toBe(2);
+  });
+
+  test.each([false, true])('runtime switch ignores delayed child responses (directory=%s)', async (directory) => {
+    const started = Promise.withResolvers<void>();
+    const pending = Promise.withResolvers<Subagent[]>();
+    subagents.mockImplementation(() => { started.resolve(); return pending.promise; });
+    const loading = discover(directory);
+    await started.promise;
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+    useGlobalSessionsStore.getState().applySnapshot([], [], 'idle');
+    pending.resolve([child()]);
+    await loading;
+    expect(useGlobalSessionsStore.getState().entityById.size).toBe(0);
+    expect(useGlobalSessionsStore.getState().status).toBe('idle');
+  });
+
+  test('rejects conflicting parent and child identities and skips child and archived discovery', async () => {
+    const existingChild = session('ses_other_child', { parentSessionId: 'ses_other', rootSessionId: 'ses_other' });
+    useGlobalSessionsStore.getState().upsertSession(existingChild);
+    list.mockResolvedValue({ items: [session('ses_root'), session('ses_archived', { archivedAt: 3 }), existingChild], errors: {} });
+    subagents.mockResolvedValue([
+      { ...child(), parentSessionId: 'ses_wrong' },
+      { ...child(), childSessionId: 'ses_root' },
+      { ...child(), childSessionId: 'ses_other_child' },
+    ]);
+    await useGlobalSessionsStore.getState().loadSessions();
+    expect(subagents.mock.calls.map(([id]) => id)).toEqual(['ses_root']);
+    expect(useGlobalSessionsStore.getState().entityById.has('ses_child')).toBe(false);
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_other_child')?.parentSessionId).toBe('ses_other');
+  });
+
+  test('title projection remains valid when root metadata is confirmed missing', async () => {
+    list.mockResolvedValue({ items: [session('ses_root', { metadata: null, metadataRevision: '0' })], errors: {} });
+    subagents.mockResolvedValue([child('failed')]);
+    await useGlobalSessionsStore.getState().loadSessions();
+    expect(useGlobalSessionsStore.getState().entityById.get('ses_child')).toMatchObject({
+      metadata: { title: 'Worker' }, metadataRevision: '1', runtimeStatus: 'idle', activeRunId: null,
+    });
   });
 });

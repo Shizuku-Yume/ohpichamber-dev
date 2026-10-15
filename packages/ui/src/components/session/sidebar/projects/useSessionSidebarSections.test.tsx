@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { I18nProvider } from '@/lib/i18n';
 import { useSessionGrouping } from './useSessionGrouping';
 import { useSessionSidebarSections } from './useSessionSidebarSections';
@@ -10,14 +10,21 @@ import type { SessionFoldersMap } from '@/stores/useSessionFoldersStore';
 
 const CHATS_ROOT = '/home/user/.config/openchamber/chats';
 
-const chatSession = (id: string, title: string): Session => ({
-  id,
-  projectID: 'chats',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  title,
-  directory: `${CHATS_ROOT}/2026-08-28/session-${id}`,
-  time: { created: 1, updated: 1 },
+const chatSession = (sessionId: string, title: string): Session => ({
+  sessionId,
+  rootSessionId: sessionId,
+  projectId: 'chats',
+  workspaceId: 'workspace',
+  displayPath: `${CHATS_ROOT}/2026-08-28/session-${sessionId}`,
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: 'epoch',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  metadata: { title },
+  metadataRevision: '0',
+  archiveRevision: '0',
 });
 
 const chatsGroup = (sessions: Session[]): SessionGroup => ({
@@ -56,8 +63,8 @@ const renderSections = (
     });
     captured = useSessionSidebarSections({
       normalizedProjects: projectSessions ? [{ id: 'project', path: CHATS_ROOT, normalizedPath: CHATS_ROOT }] : [],
-      getSessionsForProject: () => projectSessions?.filter((session) => !session.time.archived) ?? [],
-      getArchivedSessionsForProject: () => projectSessions?.filter((session) => Boolean(session.time.archived)) ?? [],
+      getSessionsForProject: () => projectSessions?.filter((session) => session.archiveRevision === '0') ?? [],
+      getArchivedSessionsForProject: () => projectSessions?.filter((session) => session.archiveRevision !== '0') ?? [],
       availableWorktreesByProject: new Map(),
       projectRepoStatus: new Map(),
       projectRootBranches: new Map(),
@@ -88,8 +95,8 @@ describe('sidebar search over standalone groups', () => {
   const targetId = 'ses_f88b1a2b3c4d';
 
   test('finds project sessions in flat results without searching their archived bucket', () => {
-    const active = { ...chatSession(targetId, 'Active'), directory: CHATS_ROOT };
-    const archived = { ...chatSession('ses_archived', 'Archived'), directory: CHATS_ROOT, time: { created: 1, updated: 1, archived: 2 } };
+    const active = { ...chatSession(targetId, 'Active'), displayPath: CHATS_ROOT };
+    const archived = { ...chatSession('ses_archived', 'Archived'), displayPath: CHATS_ROOT, archiveRevision: '2' };
     const group = chatsGroup([]);
     const sections = renderSections(group, targetId, [active, archived]);
     expect(sections.flatSectionsForRender[0].groups[0].sessions.map((node) => node.session.id)).toEqual([targetId]);

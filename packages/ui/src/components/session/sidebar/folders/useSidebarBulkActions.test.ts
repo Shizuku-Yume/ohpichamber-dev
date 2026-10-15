@@ -22,16 +22,15 @@ describe('bulk delete confirmation authority', () => {
   test('executes only the unchanged immutable target snapshot', () => {
     const value = { sessionIds: ['a', 'b'], sessionCount: 2, archivedBucket: true };
     const sessions = new Map([
-      ['a', { time: { archived: 1 } }],
-      ['b', { time: { archived: 2 } }],
+      ['a', { updatedAt: 1 }],
+      ['b', { updatedAt: 2 }],
     ]);
 
     expect(resolveBulkDeleteConfirmation(value, sessions)).toEqual({ ready: true, value });
   });
 
   test('requires confirmation again when targets change, keeping a requested delete a delete', () => {
-    const value = { sessionIds: ['a', 'b'], sessionCount: 2, archivedBucket: true };
-    const sessions = new Map([['a', { time: { archived: 0 } }]]);
+    const sessions = new Map([['a', { updatedAt: 0 }]]);
 
     expect(resolveBulkDeleteConfirmation(value, sessions)).toEqual({
       ready: false,
@@ -40,8 +39,7 @@ describe('bulk delete confirmation authority', () => {
   });
 
   test('turns a requested archive into a delete once every target is already archived', () => {
-    const value = { sessionIds: ['a', 'b'], sessionCount: 2, archivedBucket: false };
-    const sessions = new Map([['a', { time: { archived: 1 } }], ['b', { time: { archived: 2 } }]]);
+    const sessions = new Map([['a', { updatedAt: 1 }], ['b', { updatedAt: 2 }]]);
 
     expect(resolveBulkDeleteConfirmation(value, sessions)).toEqual({
       ready: false,

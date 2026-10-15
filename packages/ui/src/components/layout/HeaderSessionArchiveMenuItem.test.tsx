@@ -21,10 +21,10 @@ const { HeaderSessionArchiveMenuItem } = await import('./HeaderSessionArchiveMen
 const initialSessions = useGlobalSessionsStore.getState();
 const initialUI = useSessionUIStore.getState();
 const Item: SessionTabMenuComponents['Item'] = (props) => <button {...props} />;
-const session = (id: string, archived?: number): Session => ({
-  id, title: id, directory: '/workspace', projectID: 'project', cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1, archived },
+const session = (sessionId: string, archivedAt?: number): Session => ({
+  sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.',
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: archivedAt === undefined ? null : { archivedAt }, metadataRevision: '0', archiveRevision: '0',
 });
 let root: Root;
 let archiveRequests: number;
@@ -80,9 +80,9 @@ const renderMenuItem = async () => {
   return button;
 };
 
-for (const archived of [undefined, 0]) {
-  test(`active sessions with archive timestamp ${archived} keep archive confirmation`, async () => {
-    useGlobalSessionsStore.getState().upsertSession(session('target', archived));
+for (const archivedAt of [undefined, 0]) {
+  test(`active sessions with archive timestamp ${archivedAt} keep archive confirmation`, async () => {
+    useGlobalSessionsStore.getState().upsertSession(session('target', archivedAt));
     const button = await renderMenuItem();
     expect(button.textContent).toBe('Archive');
     expect(button.querySelector('use')?.getAttribute('href')).toBe('#oc-inbox-archive');
@@ -127,12 +127,12 @@ test('waits for confirmation and leaves a failed restore available for retry', a
   expect(archiveRequests).toBe(0);
   expect(errorMessages).toEqual(['Failed to restore session']);
   expect(successMessages).toEqual([]);
-  expect(useGlobalSessionsStore.getState().entityById.get('target')?.time.archived).toBe(2);
+  expect(useGlobalSessionsStore.getState().entityById.get('target')?.metadata?.archivedAt).toBe(2);
   expect(button.textContent).toBe('Restore');
 });
 
 test('offers no restore for an archived subsession, which comes back only with its parent', async () => {
-  useGlobalSessionsStore.getState().upsertSession({ ...session('target', 2), parentID: 'parent' });
+  useGlobalSessionsStore.getState().upsertSession({ ...session('target', 2), parentSessionId: 'parent' });
   await act(async () => root.render(
     <I18nProvider>
       <HeaderSessionArchiveMenuItem sessionId="target" Item={Item} onArchive={() => { archiveRequests += 1; }} />

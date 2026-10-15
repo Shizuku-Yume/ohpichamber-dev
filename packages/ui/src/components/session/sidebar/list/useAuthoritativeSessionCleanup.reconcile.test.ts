@@ -11,13 +11,11 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSpacesStore } from '@/lib/spaces/spaces-store';
 const { useAuthoritativeSessionCleanup } = await import('./useAuthoritativeSessionCleanup');
 
-// SAFETY: the cleanup identity path reads only `id` and `directory`; the rest
-// of the record is filled to satisfy the SDK session shape.
-const session = (id: string, directory = '/repo'): Session => ({
-  id, directory, projectID: 'project', title: id,
-  time: { created: 1, updated: 1 }, cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-} as Session);
+// SAFETY: the cleanup identity path reads only canonical session identity fields.
+const session = (sessionId: string, displayPath = '/repo'): Session => ({
+  sessionId, projectId: 'project', workspaceId: 'workspace', displayPath, rootSessionId: sessionId,
+  createdAt: 1, updatedAt: 1, epoch: 1, headSequence: 0, runtimeStatus: 'idle', activeRunId: null, title: sessionId,
+});
 
 const CleanupProbe: React.FC<{ sessions: Session[]; revision: number }> = ({ sessions, revision }) => {
   useAuthoritativeSessionCleanup({ enabled: true, hasAuthoritativeGlobalSessions: true, sessions });

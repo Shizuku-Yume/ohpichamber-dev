@@ -28,9 +28,12 @@ const listCommandsMock = async (directory?: string | null) => {
 const getDirectoryMock = () => getDirectoryImpl();
 const runtimeFetchMock = async () => runtimeFetchImpl();
 
+mock.module('@/lib/host-filesystem', () => ({
+  hostFilesystem: { getDirectory: getDirectoryMock },
+}));
+
 mock.module('@/lib/opencode/client', () => ({
   opencodeClient: {
-    getDirectory: getDirectoryMock,
     listCommands: listCommandsMock,
   },
 }));

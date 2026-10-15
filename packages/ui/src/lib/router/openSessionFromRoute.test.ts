@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -10,12 +10,20 @@ const SESSION_ID = 'ses_linear_open';
 const PROJECT_DIR = '/projects/linear-from-url';
 const OTHER_DIR = '/projects/linear-from-url-other';
 
-const buildSession = (id: string, directory: string): Session => ({
-  id,
-  title: id,
-  directory,
-  time: { created: 1, updated: 2 },
-} as Session);
+const buildSession = (sessionId: string, displayPath: string): Session => ({
+  sessionId,
+  projectId: 'project-linear',
+  workspaceId: 'workspace-linear',
+  displayPath,
+  rootSessionId: sessionId,
+  createdAt: 1,
+  updatedAt: 2,
+  epoch: 'epoch-linear',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  title: sessionId,
+});
 
 describe('openSessionFromRoute', () => {
   beforeEach(() => {

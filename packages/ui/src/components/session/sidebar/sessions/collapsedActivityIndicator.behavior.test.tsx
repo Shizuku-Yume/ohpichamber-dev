@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { replaceGlobalSessionStatusById } from '@/sync/global-session-status';
 import { applyGlobalBlockingRequestEvents, resetGlobalBlockingRequests } from '@/sync/global-blocking-requests';
 import { useNotificationStore } from '@/sync/notification-store';
@@ -9,8 +9,16 @@ import { useCollapsedSessionActivityState } from './collapsedActivityState';
 import type { SessionNode } from '../types';
 import { installHookTestDom } from '../test-utils/testDom';
 
-// SAFETY: the fixture supplies the minimal SDK identity used by the selector.
-const node = (id: string): SessionNode => ({ session: { id } as Session, children: [], worktree: null });
+const node = (sessionId: string): SessionNode => ({
+  session: {
+    sessionId, rootSessionId: sessionId,
+    projectId: 'project-a', workspaceId: 'workspace-a', displayPath: '.',
+    createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0',
+    runtimeStatus: 'idle', activeRunId: null,
+    metadata: null, metadataRevision: '0', archiveRevision: '0',
+  } satisfies Session,
+  children: [], worktree: null,
+});
 
 describe('collapsed activity scalar selector', () => {
   test('does not rerender for unrelated updates and rerenders for relevant scalar changes', async () => {

@@ -36,7 +36,7 @@ describe('SessionSidebarRows initialization', () => {
 
 describe('SessionSidebarRows section spacing', () => {
   // SAFETY: spacing reads only the row identity, kind, and position fields.
-  const node = (id: string): SessionNode => ({ session: { id, title: id, directory: '/repo', time: { created: 1, updated: 1 } } as Session, children: [], worktree: null });
+  const node = (id: string): SessionNode => ({ session: { sessionId: id, projectId: 'project-a', workspaceId: 'workspace-a', displayPath: '/repo', rootSessionId: id, createdAt: 1, updatedAt: 1, epoch: 1, headSequence: 0, runtimeStatus: 'idle', activeRunId: null, title: id } as Session, children: [], worktree: null });
   const item = (id: string): SessionSidebarActivityItem => ({ node: node(id), projectId: 'project-a', groupDirectory: '/repo', secondaryMeta: null });
   const input = (showRecentSection: boolean): SessionSidebarRowModelArgs => {
     const sections: ProjectSection[] = [{

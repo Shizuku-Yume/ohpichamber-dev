@@ -47,8 +47,8 @@ let loggedIn = false;
 let homeReads = 0;
 const directoriesSet: string[] = [];
 
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: {
+mock.module('@/lib/host-filesystem', () => ({
+  hostFilesystem: {
     setDirectory: (directory: string) => {
       directoriesSet.push(directory);
     },

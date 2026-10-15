@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { AssistantMessage, Part, ToolPart, ToolStateCompleted } from '@/lib/opencode/model';
+import type { AssistantMessage, Part, ToolPart, ToolStateCompleted } from '@openchamber/agent-contract';
 import { getLiveFinalMessage, getTurnsWithLaterAssistant, hasLiveActivity } from './liveActivity';
 import { projectTurnRecords } from './projectTurnRecords';
 import { summarizeLiveActivity } from './liveActivitySummary';

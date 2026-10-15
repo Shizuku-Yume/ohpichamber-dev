@@ -8,8 +8,8 @@ mock.module('@/sync/sync-refs', () => ({ getAllSyncSessionMap: () => new Map() }
 mock.module('@/sync/session-ui-store', () => ({
   useSessionUIStore: { getState: () => ({ getDirectoryForSession: () => '/project' }) },
 }));
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: { getDirectory: () => '/fallback' },
+mock.module('@/lib/host-filesystem', () => ({
+  hostFilesystem: { getDirectory: () => '/fallback' },
 }));
 
 const { usePermissionStore } = await import('./permissionStore');

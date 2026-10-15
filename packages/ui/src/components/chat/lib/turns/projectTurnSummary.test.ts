@@ -37,8 +37,8 @@ describe('projectTurnChangedFiles', () => {
         expect(projectTurnChangedFiles([
             assistant('a', [edit('one', '/project/src/a.ts'), edit('two', '/project/src/b.ts')], 'stop'),
         ])).toEqual([
-            { file: '/project/src/a.ts', additions: 2, deletions: 1, inTurnDiff: true },
-            { file: '/project/src/b.ts', additions: 2, deletions: 1, inTurnDiff: true },
+            { file: '/project/src/a.ts', additions: 2, deletions: 1 },
+            { file: '/project/src/b.ts', additions: 2, deletions: 1 },
         ]);
     });
 
@@ -48,14 +48,14 @@ describe('projectTurnChangedFiles', () => {
             state: { status: 'completed', input: { filePath: '/project/src/c.ts', content: 'x' }, metadata: {}, output: '', time: { start: 1, end: 2 } },
         };
         expect(projectTurnChangedFiles([assistant('a', [write], 'stop')]))
-            .toEqual([{ file: '/project/src/c.ts', inTurnDiff: true }]);
+            .toEqual([{ file: '/project/src/c.ts' }]);
     });
 
     test('a turn that edited nothing yields no files', () => {
         expect(projectTurnChangedFiles([assistant('a', [], 'stop')])).toBeUndefined();
     });
 
-    test('v2 has no working-tree snapshot, so a subagent turn lists nothing of its own', () => {
+    test('native has no working-tree snapshot, so a subagent turn lists nothing of its own', () => {
         const task: ToolPart = {
             id: 'child', callID: 'child', type: 'tool', tool: 'task', messageID: 'assistant', sessionID: 'session',
             state: { status: 'completed', input: {}, metadata: { sessionId: 'child-session' }, output: '', time: { start: 1, end: 2 } },
@@ -73,7 +73,7 @@ describe('projectTurnRecords changed files', () => {
         expect(streaming.turns[0]?.changedFiles).toBeUndefined();
 
         const finished = projectTurnRecords([user(), assistant('a', parts, 'stop')], options);
-        expect(finished.turns[0]?.changedFiles).toEqual([{ file: '/project/src/a.ts', additions: 2, deletions: 1, inTurnDiff: true }]);
+        expect(finished.turns[0]?.changedFiles).toEqual([{ file: '/project/src/a.ts', additions: 2, deletions: 1 }]);
     });
 
     test('leaves files out while the setting is off', () => {

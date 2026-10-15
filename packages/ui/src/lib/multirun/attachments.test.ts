@@ -31,15 +31,15 @@ describe('native lane attachment ownership', () => {
     const upload = spyOn(canonicalClient, 'uploadAttachment');
     spies.push(read, upload);
     expect(await admitLaneAttachments({ files: [attachment], sourceWorkspaceId: 'same', destinationWorkspaceId: 'same', assertCurrent })).toEqual([attachment]);
-    expect(read).not.toHaveBeenCalled();
-    expect(upload).not.toHaveBeenCalled();
+    expect(read.mock.calls.length).toBe(0);
+    expect(upload.mock.calls.length).toBe(0);
   });
   test('source owner failures propagate without dispatching source references', async () => {
     spies.push(spyOn(canonicalClient, 'readAttachment').mockRejectedValue(new Error('Attachment owner mismatch')));
     const upload = spyOn(canonicalClient, 'uploadAttachment');
     spies.push(upload);
     await expect(admitLaneAttachments({ files: [attachment], sourceWorkspaceId: 'source', destinationWorkspaceId: 'lane', assertCurrent })).rejects.toThrow('Attachment owner mismatch');
-    expect(upload).not.toHaveBeenCalled();
+    expect(upload.mock.calls.length).toBe(0);
   });
   test('runtime switch after read prevents uploading into another runtime', async () => {
     let current = true;
@@ -47,6 +47,6 @@ describe('native lane attachment ownership', () => {
     const upload = spyOn(canonicalClient, 'uploadAttachment');
     spies.push(upload);
     await expect(admitLaneAttachments({ files: [attachment], sourceWorkspaceId: 'source', destinationWorkspaceId: 'lane', assertCurrent: () => { if (!current) throw new Error('Runtime changed'); } })).rejects.toThrow('Runtime changed');
-    expect(upload).not.toHaveBeenCalled();
+    expect(upload.mock.calls.length).toBe(0);
   });
 });

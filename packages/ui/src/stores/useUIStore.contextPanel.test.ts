@@ -104,6 +104,39 @@ describe('useUIStore context panel tabs', () => {
     expect(useUIStore.getState().contextPanelByDirectory['/repo'].activeTabId).toBe(diffTabs[0].id);
   });
 
+  test('drops a persisted Last turn tab instead of presenting it as working-tree changes', async () => {
+    const directory = '/repo';
+    useUIStore.persist.setOptions({ storage: {
+      getItem: () => ({
+        version: 20,
+        state: {
+          contextPanelByDirectory: {
+            [directory]: {
+              isOpen: true, expanded: false, widthByMode: {}, touchedAt: 1,
+              activeTabId: 'diff',
+              tabs: [
+                { id: 'diff', mode: 'diff', diffScope: 'turn', touchedAt: 1 },
+                { id: 'file:/repo/kept.ts', mode: 'file', targetPath: '/repo/kept.ts', touchedAt: 2 },
+              ],
+            },
+          },
+        },
+      }),
+      setItem: () => undefined,
+      removeItem: () => undefined,
+    } });
+    try {
+      useUIStore.setState(useUIStore.getInitialState(), true);
+      await useUIStore.persist.rehydrate();
+      const tabs = getContextPanelTabs(directory);
+      expect(tabs.map((tab) => tab.mode)).toEqual(['file']);
+      expect(tabs[0].targetPath).toBe('/repo/kept.ts');
+      expect(useUIStore.getState().contextPanelByDirectory[directory].activeTabId).toBe(tabs[0].id);
+    } finally {
+      useUIStore.persist.setOptions(originalPersistOptions);
+    }
+  });
+
   test('preserves Commit mode when context tabs are normalized', () => {
     useUIStore.getState().openContextPanelTab('/repo', { mode: 'diff', diffScope: 'commit' });
     useUIStore.getState().openContextPanelTab('/repo', { mode: 'file', targetPath: '/repo/README.md' });

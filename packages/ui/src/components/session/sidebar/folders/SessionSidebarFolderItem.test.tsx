@@ -26,9 +26,9 @@ test('a collapsed virtual folder shows live and unread descendants without mount
   document.body.append(container);
   const root = createRoot(container);
   const originalNotifications = useNotificationStore.getState();
-  const session = (id: string, parentID?: string): Session => ({
-    id, parentID, title: id, directory: '/repo', projectID: 'project', cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, time: { created: 1, updated: 1 },
+  const session = (sessionId: string, parentSessionId?: string): Session => ({
+    sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/repo', title: sessionId,
+    createdAt: 1, updatedAt: 1, epoch: 1, headSequence: 0, runtimeStatus: 'idle', activeRunId: null,
   });
   const sessions = [{ session: session('parent'), worktree: null, children: [{ session: session('child', 'parent'), worktree: null, children: [] }] }];
   const render = (notifyOnSubtasks = false, isCollapsed = true, archivedBucket = false) => root.render(

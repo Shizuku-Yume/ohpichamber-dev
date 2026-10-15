@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { Session } from "@/lib/opencode/model"
+import type { Session } from '@openchamber/agent-contract'
 import {
   displayedPermissionMode,
   nextPermissionMode,
@@ -7,8 +7,24 @@ import {
   type PermissionModeMap,
 } from "./permissionAutoAccept"
 
-function makeSession(id: string, parentID?: string): Session {
-  return { id, parentID } as Session
+function makeSession(sessionId: string, parentSessionId?: string): Session {
+  return {
+    sessionId,
+    projectId: "project_1",
+    workspaceId: "workspace_1",
+    displayPath: ".",
+    ...(parentSessionId ? { parentSessionId } : {}),
+    rootSessionId: parentSessionId ?? sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: "epoch_1",
+    headSequence: "0",
+    runtimeStatus: "idle",
+    activeRunId: null,
+    metadata: null,
+    metadataRevision: "0",
+    archiveRevision: "0",
+  }
 }
 
 describe("resolvePermissionMode", () => {
@@ -16,7 +32,7 @@ describe("resolvePermissionMode", () => {
     expect(resolvePermissionMode({
       modes: {},
       sessions: [makeSession("s1")],
-      sessionID: "s1",
+      sessionId: "s1",
     })).toBe("ask")
   })
 
@@ -25,7 +41,7 @@ describe("resolvePermissionMode", () => {
     expect(resolvePermissionMode({
       modes,
       sessions: [makeSession("s1")],
-      sessionID: "s1",
+      sessionId: "s1",
     })).toBe("safety")
   })
 
@@ -39,7 +55,7 @@ describe("resolvePermissionMode", () => {
     expect(resolvePermissionMode({
       modes,
       sessions,
-      sessionID: "child",
+      sessionId: "child",
     })).toBe("auto")
   })
 
@@ -49,8 +65,8 @@ describe("resolvePermissionMode", () => {
     expect(resolvePermissionMode({
       modes: { parent: "auto" },
       sessions: [],
-      sessionById: new Map([[parent.id, parent], [child.id, child]]),
-      sessionID: "child",
+      sessionById: new Map([[parent.sessionId, parent], [child.sessionId, child]]),
+      sessionId: "child",
     })).toBe("auto")
   })
 
@@ -64,7 +80,7 @@ describe("resolvePermissionMode", () => {
     expect(resolvePermissionMode({
       modes,
       sessions,
-      sessionID: "child",
+      sessionId: "child",
     })).toBe("ask")
   })
 
@@ -77,7 +93,7 @@ describe("resolvePermissionMode", () => {
     expect(resolvePermissionMode({
       modes,
       sessions,
-      sessionID: "child",
+      sessionId: "child",
     })).toBe("ask")
   })
 })

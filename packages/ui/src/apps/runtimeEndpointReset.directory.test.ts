@@ -94,12 +94,12 @@ describe('working directory across a real host switch', () => {
     installWindow();
     stubFetch();
     const { useDirectoryStore } = await import('@/stores/useDirectoryStore');
-    const { opencodeClient } = await import('@/lib/opencode/client');
+    const { hostFilesystem } = await import('@/lib/host-filesystem');
     const { switchRuntimeEndpoint } = await import('@/lib/runtime-switch');
     const { installRuntimeEndpointReset } = await import('./runtimeEndpointReset');
     await settle();
     expect(useDirectoryStore.getState()).toMatchObject({ currentDirectory: LOCAL_DIRECTORY, homeDirectory: LOCAL_HOME, isHomeReady: true });
-    expect(opencodeClient.getDirectory()).toBe(LOCAL_DIRECTORY);
+    expect(hostFilesystem.getDirectory()).toBe(LOCAL_DIRECTORY);
 
     const uninstall = installRuntimeEndpointReset();
     try {
@@ -107,12 +107,12 @@ describe('working directory across a real host switch', () => {
       switchRuntimeEndpoint({ apiBaseUrl: REMOTE, runtimeKey: 'host:remote' });
       // Forgotten at once, before any answer.
       expect(useDirectoryStore.getState()).toMatchObject({ currentDirectory: '/', isHomeReady: false });
-      expect(opencodeClient.getDirectory()).toBeUndefined();
+      expect(hostFilesystem.getDirectory()).toBeUndefined();
 
       await settle();
       // No project is open on that host yet: the app works in its chats root.
       expect(useDirectoryStore.getState()).toMatchObject({ currentDirectory: REMOTE_CHATS, homeDirectory: REMOTE_HOME, isHomeReady: true });
-      expect(opencodeClient.getDirectory()).toBe(REMOTE_CHATS);
+      expect(hostFilesystem.getDirectory()).toBe(REMOTE_CHATS);
       const homeLookups = seen.filter((request) => request.path === '/api/fs/home');
       expect(homeLookups.length).toBeGreaterThan(0);
       expect(homeLookups.every((request) => request.origin === REMOTE)).toBe(true);

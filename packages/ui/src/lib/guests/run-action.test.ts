@@ -12,7 +12,7 @@ import { parseGuestCatalogJson } from './parse';
 import { runGuestAction, useGuestActionHostStore } from './run-action';
 import { useGuestsStore } from './store';
 import { runGuestSessionAction } from './session-action';
-import type { SessionMessageRecord } from '@/lib/exportSession';
+import type { Message } from '@openchamber/agent-contract';
 
 const item: GuestMessageItem = { kind: 'message', action: 'count', sessionId: 's1', sessionTitle: 'Session', directory: '/repo', messageId: 'm1', role: 'assistant', text: 'Hello' };
 const entry: GuestActionEntry = {
@@ -164,8 +164,8 @@ describe('guest action execution', () => {
       currentRequest().complete({ ok: true });
       await empty;
 
-      let finish: (records: SessionMessageRecord[]) => void = () => {};
-      const history = new Promise<SessionMessageRecord[]>((resolve) => { finish = resolve; });
+      let finish: (records: Message[]) => void = () => {};
+      const history = new Promise<Message[]>((resolve) => { finish = resolve; });
       const stale = runGuestSessionAction({ ...input, loadRecords: () => history });
       dom.dispatchEvent(new dom.CustomEvent('openchamber:runtime-endpoint-changed'));
       finish([]);

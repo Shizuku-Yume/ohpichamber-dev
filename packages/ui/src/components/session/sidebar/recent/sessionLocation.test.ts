@@ -1,14 +1,19 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { createSessionOwnershipIndex } from '../sessions/sessionOwnership';
 import { deriveTimelineActivityItems } from './activitySections';
 import { resolveSidebarSessionLocations } from './sessionLocation';
 
 const projects = [{ id: 'repo', normalizedPath: '/repo', label: 'Repo' }];
-const session = (id: string, directory: string): Session => ({
-  id, directory, title: id, projectID: 'opencode-repo', cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1, archived: 0 },
+const session = (sessionId: string, displayPath: string): Session => ({
+  sessionId,
+  rootSessionId: sessionId,
+  projectId: 'opencode-repo',
+  workspaceId: 'workspace',
+  displayPath,
+  createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 
 const worktreeMeta = (path: string, branch: string): WorktreeMetadata => ({
@@ -44,8 +49,8 @@ describe('resolveSidebarSessionLocations', () => {
         availableWorktreesByProject: new Map(), gitBranches: new Map(),
         homeDirectory: null, hideBranchMatchingProjectLabel,
       });
-      expect(locations.get(restored.id)).toEqual({
-        projectId: 'repo', groupDirectory: restored.directory, projectLabel: 'Repo',
+      expect(locations.get(restored.sessionId)).toEqual({
+        projectId: 'repo', groupDirectory: restored.displayPath, projectLabel: 'Repo',
         branchLabel: null, inSpace: false, worktree: null,
       });
       const items = deriveTimelineActivityItems({
@@ -61,7 +66,7 @@ describe('resolveSidebarSessionLocations', () => {
   test('keeps worktree metadata and the distinct Recent/Timeline branch-label policies', () => {
     const record = session('worktree', '/worktrees/feature');
     const worktree: WorktreeMetadata = {
-      path: record.directory, projectDirectory: '/repo', branch: 'Repo', label: 'feature',
+      path: record.displayPath, projectDirectory: '/repo', branch: 'Repo', label: 'feature',
     };
     const availableWorktreesByProject = new Map([['/repo', [worktree]]]);
     const ownership = createSessionOwnershipIndex([record], projects, availableWorktreesByProject);
@@ -71,8 +76,8 @@ describe('resolveSidebarSessionLocations', () => {
         availableWorktreesByProject, gitBranches: new Map(), homeDirectory: null,
         hideBranchMatchingProjectLabel,
       });
-      expect(locations.get(record.id)?.worktree).toBe(worktree);
-      expect(locations.get(record.id)?.branchLabel).toBe(hideBranchMatchingProjectLabel ? null : 'Repo');
+      expect(locations.get(record.sessionId)?.worktree).toBe(worktree);
+      expect(locations.get(record.sessionId)?.branchLabel).toBe(hideBranchMatchingProjectLabel ? null : 'Repo');
     }
   });
 
@@ -97,10 +102,10 @@ describe('resolveSidebarSessionLocations', () => {
     const locations = resolveLocations([exact, sub, deeper], availableWorktreesByProject);
 
     for (const record of [exact, sub, deeper]) {
-      expect(locations.get(record.id)?.projectId).toBe('repo');
-      expect(locations.get(record.id)?.worktree).toBe(worktree);
-      expect(locations.get(record.id)?.branchLabel).toBe('feature-1');
-      expect(locations.get(record.id)?.groupDirectory).toBe(record.directory);
+      expect(locations.get(record.sessionId)?.projectId).toBe('repo');
+      expect(locations.get(record.sessionId)?.worktree).toBe(worktree);
+      expect(locations.get(record.sessionId)?.branchLabel).toBe('feature-1');
+      expect(locations.get(record.sessionId)?.groupDirectory).toBe(record.displayPath);
     }
   });
 

@@ -3,7 +3,7 @@ import type { Session } from "@openchamber/agent-contract"
 import { canonicalClient } from "@/api/canonicalClient"
 import { cyclePermissionMode } from "../../components/chat/permissionAutoAccept"
 import { ensureChatsRootDirectory } from "@/lib/chatDirectories"
-import { opencodeClient } from "@/lib/opencode/client"
+import { hostFilesystem } from '@/lib/host-filesystem'
 import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from "@/lib/runtime-switch"
 import * as branchNames from "@/lib/git/branchNameGenerator"
 import * as openchamberConfig from "@/lib/openchamberConfig"
@@ -125,11 +125,11 @@ beforeEach(async () => {
     permissionAutoAcceptCalls.push([sessionId, mode])
     await originalPermission.setSessionMode(sessionId, mode)
   })
-  spyOn(opencodeClient, "getFilesystemHomeInfo").mockResolvedValue({ home: "/home/test" })
-  spyOn(opencodeClient, "createDirectory").mockImplementation(async path => ({ success: true, path }))
-  spyOn(opencodeClient, "getDirectoryAvailability").mockResolvedValue("available")
-  spyOn(opencodeClient, "getDirectory").mockReturnValue(null)
-  spyOn(opencodeClient, "setDirectory").mockImplementation(() => undefined)
+  spyOn(hostFilesystem, "getFilesystemHomeInfo").mockResolvedValue({ home: "/home/test" })
+  spyOn(hostFilesystem, "createDirectory").mockImplementation(async path => ({ success: true, path }))
+  spyOn(hostFilesystem, "getDirectoryAvailability").mockResolvedValue("available")
+  spyOn(hostFilesystem, "getDirectory").mockReturnValue(undefined)
+  spyOn(hostFilesystem, "setDirectory").mockImplementation(() => undefined)
   await ensureChatsRootDirectory()
   spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     if (String(input).includes("/auth/url-token")) return Response.json({ token: "issue-token", expiresAt: 999 })

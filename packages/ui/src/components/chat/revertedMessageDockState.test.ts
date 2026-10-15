@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import type { State } from '@/sync/types';
 
 import { EMPTY_REVERTED_MESSAGE_DOCK_STATE, buildRevertedMessageDockState } from './revertedMessageDockState';
@@ -9,13 +9,16 @@ const message = (id: string, role: 'user' | 'assistant'): Message => ({
     role,
     sessionID: 'ses_1',
     time: { created: 1 },
-} as Message);
+});
 
 const textPart = (id: string, text: string): Part => ({
     id,
+    sessionID: 'ses_1',
+    messageID: 'message_1',
     type: 'text',
     text,
-} as Part);
+});
+
 
 const state = (partial: Partial<State>): Pick<State, 'session' | 'message' | 'part'> => ({
     session: [],

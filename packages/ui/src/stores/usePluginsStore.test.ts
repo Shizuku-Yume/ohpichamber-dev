@@ -18,12 +18,13 @@ mock.module('@/stores/useProjectsStore', () => ({
   },
 }));
 
+mock.module('@/lib/host-filesystem', () => ({
+  hostFilesystem: { getDirectory: () => '/fallback/project' },
+}));
+
 mock.module('@/lib/opencode/client', () => ({
   OpencodeApiError: Error,
   normalizeOpencodeError: (operation: string, error: unknown) => new Error(`${operation}: ${String(error)}`),
-  opencodeClient: {
-    getDirectory: () => '/fallback/project',
-  },
 }));
 
 mock.module('@/stores/useAgentsStore', () => ({

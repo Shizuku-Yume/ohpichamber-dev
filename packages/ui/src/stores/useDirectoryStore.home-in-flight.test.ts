@@ -46,8 +46,8 @@ let homeReads = 0;
 let answerPageLoadRead: () => void = () => undefined;
 const directoriesSet: string[] = [];
 
-mock.module('@/lib/opencode/client', () => ({
-  opencodeClient: {
+mock.module('@/lib/host-filesystem', () => ({
+  hostFilesystem: {
     setDirectory: (directory: string) => {
       directoriesSet.push(directory);
     },
