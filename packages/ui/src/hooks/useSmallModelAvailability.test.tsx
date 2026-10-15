@@ -23,6 +23,9 @@ let resolvedWorkspace = false;
 let requestedWorkspace: string | null = null;
 let descriptors: Record<string, PropertyDescriptor | undefined>;
 beforeEach(() => {
+  modelFetchCount = 0;
+  resolvedWorkspace = false;
+  requestedWorkspace = null;
   dom = new Window({ url: 'https://availability-hook.test' });
   const globals = { window: dom, document: dom.document, navigator: dom.navigator, HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, Event: dom.Event, CustomEvent: dom.CustomEvent, IS_REACT_ACT_ENVIRONMENT: true };
   descriptors = {};
