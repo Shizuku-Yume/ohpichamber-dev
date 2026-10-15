@@ -20,7 +20,7 @@ describe("native session message records", () => {
     const item = message("message-1", "assistant", 1, [part])
     const messages = [item]
     const current = buildSessionMessageRecordsSnapshot(state(messages), "session-1")
-    const same = buildSessionMessageRecordsSnapshot({ ...state(messages), status: "ready" }, "session-1", current)
+    const same = buildSessionMessageRecordsSnapshot({ ...state(messages), status: "complete" }, "session-1", current)
     expect(same).toBe(current)
     expect(same.byId.get("message-1")?.parts).toEqual([part])
     const replacement = message("message-1", "assistant", 1, [part, { type: "text", partId: "part-2", content: "done" }])

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "bun:test"
+import { afterEach, describe, expect, jest, test } from "bun:test"
 import type { HistoryPage, Message, QuestionRequest, SessionSnapshot } from "@openchamber/agent-contract"
 import { ChildStoreManager } from "./child-store"
 import { SessionMessageLoader, type SessionMessageTarget } from "./session-message-loader"
@@ -7,12 +7,14 @@ import { nativeClient, nativeHistory, nativeMessage, nativeSnapshot, nativeTurn 
 const cleanups: Array<() => void> = []
 afterEach(() => {
   for (const cleanup of cleanups.splice(0).reverse()) cleanup()
-  vi.useRealTimers()
+  jest.useRealTimers()
 })
 const flush = async () => { for (let index = 0; index < 8; index += 1) await Promise.resolve() }
 const IDLE_TTL_MS = 40
 const COUNT_ONLY_TTL_MS = 60 * 60 * 1000
-const waitIdle = async () => { vi.advanceTimersByTime(IDLE_TTL_MS * 2); await flush() }
+// The retention runtime arms a timer and compares wall-clock time, so the idle
+// window is advanced on the fake clock and the pending work is drained after.
+const waitIdle = async () => { await flush(); jest.advanceTimersByTime(IDLE_TTL_MS * 3); await flush() }
 
 function transcript(sessionId: string, turns = 8, steps = 12): Message[] {
   const messages: Message[] = []
@@ -38,7 +40,7 @@ function snapshotFor(sessionId: string, messages: Message[]): SessionSnapshot {
 }
 
 function setup(surface: "desktop" | "mobile" = "desktop", recordsFor = transcript, idleTtlMs = COUNT_ONLY_TTL_MS) {
-  vi.useFakeTimers()
+  jest.useFakeTimers()
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window")
   Object.defineProperty(globalThis, "window", { configurable: true, value: { __OPENCHAMBER_SURFACE__: surface } })
   cleanups.push(() => {

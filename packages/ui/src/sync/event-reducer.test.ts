@@ -181,6 +181,6 @@ describe("native canonical event reducer", () => {
     expect(next.sessionCursor["session-1"]).toBeUndefined()
     expect(next.permission["session-1"]).toBeUndefined()
     expect(next.snapshot["session-2"]).toBe(sibling)
-    expect(next.sessionDeletedRevision["session-1"]).toBeGreaterThan(0)
+    expect(next.sessionDeletedRevision?.["session-1"] ?? 0).toBeGreaterThan(0)
   })
 })

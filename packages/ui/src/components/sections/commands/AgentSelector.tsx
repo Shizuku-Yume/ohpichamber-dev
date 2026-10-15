@@ -31,7 +31,8 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     const [agents, setAgents] = React.useState<Agent[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [isUnavailable, setIsUnavailable] = React.useState(false);
-    const workspaceDirectory = directory ?? useEffectiveDirectory() ?? null;
+    const effectiveDirectory = useEffectiveDirectory();
+    const workspaceDirectory = directory ?? effectiveDirectory ?? null;
     const isReady = !isLoading && !isUnavailable;
     const selectedAgent = agents.find((agent) => agent.name === agentName);
     const selectedAgentLabel = selectedAgent ? selectedAgent.name : agentName;

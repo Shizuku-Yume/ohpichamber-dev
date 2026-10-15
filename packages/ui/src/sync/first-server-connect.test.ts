@@ -46,7 +46,7 @@ async function mount(client: CanonicalClient) {
       manager = owner;
       retries = 0;
       const retry = owner.retryFailedBootstraps.bind(owner);
-      spyOn(owner, 'retryFailedBootstraps').mockImplementation(() => { retries += 1; retry(); });
+      spyOn(owner, 'retryFailedBootstraps').mockImplementation(() => { retries += 1; return retry(); });
     }
     return null;
   };
