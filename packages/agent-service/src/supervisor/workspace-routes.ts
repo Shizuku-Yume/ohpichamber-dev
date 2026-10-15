@@ -5,12 +5,15 @@ import {
   ProviderConfigureRequestSchema, ProviderDeleteRequestSchema, ModelConfigureRequestSchema, ModelDeleteRequestSchema,
   ProviderCredentialWriteRequestSchema, ProviderCredentialDeleteRequestSchema,
   CompletionRequestSchema, CompletionCancelRequestSchema, EntityIdSchema,
+  MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPConnectionTestRequestSchema, MCPWorkspaceReconnectRequestSchema, MCPOAuthRequestSchema, MCPSecretWriteRequestSchema,
 } from '@openchamber/agent-contract';
 import type { WorkspaceCatalogs } from './workspaces.ts';
 import type { WorkerRegistry } from './workers.ts';
 import { WorkerOperationError } from './workers.ts';
 import type { CatalogOperation, CatalogResult } from '../catalogs/protocol.ts';
 import { PrivateCredentialResolveRequestSchema, PrivateCredentialHandoffRequestSchema } from '../catalogs/private-credentials.ts';
+import type { CatalogCoordinator } from './catalog.ts';
+import type { McpOperation } from '../worker/mcp/protocol.ts';
 
 function id(value: string): string {
   try { return EntityIdSchema.parse(decodeURIComponent(value)); }
@@ -29,8 +32,58 @@ function unwrap(result: CatalogResult) {
 
 /** Exact workspace catalog paths; private native envelopes never become canonical responses. */
 export class WorkspaceRoutes {
-  constructor(private readonly catalogs: WorkspaceCatalogs, private readonly workers: WorkerRegistry) {}
+  constructor(private readonly catalogs: WorkspaceCatalogs, private readonly workers: WorkerRegistry, private readonly mcp: CatalogCoordinator) {}
   async handle(request: IncomingMessage, url: URL, readBody: <T>(request: IncomingMessage, schema: z.ZodType<T>) => Promise<T>) {
+    const mcpRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/mcp\/(config|apply|servers\/([^/]+)\/(test|reconnect|oauth|credentials))$/.exec(url.pathname);
+    if (mcpRoute) {
+      const workspaceId = id(mcpRoute[1]);
+      this.catalogs.get(workspaceId);
+      const execute = async (operation: McpOperation) => {
+        const root = await this.catalogs.stateless(workspaceId);
+        const result = await this.workers.request(root, { type: 'mcp', operation });
+        if (result.type !== 'mcp') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        return result.result;
+      };
+      if (mcpRoute[2] === 'config' && request.method === 'GET') return { status: 200, body: await this.mcp.readWorkspaceMcpConfig(workspaceId) };
+      if (mcpRoute[2] === 'config' && request.method === 'PUT') return { status: 200, body: await this.mcp.configureWorkspaceMcp(workspaceId, await readBody(request, MCPConfigureRequestSchema)) };
+      if (mcpRoute[2] === 'apply' && request.method === 'POST') return { status: 200, body: await this.mcp.applyWorkspaceMcp(workspaceId, await readBody(request, MCPApplyRequestSchema)) };
+      if (mcpRoute[3] === undefined) return null;
+      const serverId = id(mcpRoute[3]);
+      const action = mcpRoute[4];
+      if (action === 'reconnect' && request.method === 'POST') {
+        const body = await readBody(request, MCPWorkspaceReconnectRequestSchema);
+        return { status: 200, body: await this.mcp.reconnectWorkspaceMcp(workspaceId, serverId, body, async configuration => {
+          const result = await execute({ type: 'test', serverId, configuration });
+          if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result;
+        }) };
+      }
+      if (action === 'test' && request.method === 'POST') {
+        const body = await readBody(request, MCPConnectionTestRequestSchema);
+        return { status: 200, body: await this.mcp.withWorkspaceMcp(workspaceId, body.persistedRevision, async configuration => {
+          const result = await execute({ type: 'test', serverId, configuration });
+          if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result;
+        }) };
+      }
+      if (action === 'oauth' && (request.method === 'GET' || request.method === 'POST')) {
+        const body = request.method === 'POST' ? await readBody(request, MCPOAuthRequestSchema) : undefined;
+        return { status: 200, body: await this.mcp.workspaceOAuth(serverId, workspaceId, body?.persistedRevision, body?.workerGeneration, async configuration => {
+          const result = await execute(body ? { type: 'oauth', serverId, request: body, configuration } : { type: 'oauth.status', serverId, configuration });
+          if (result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result;
+        }) };
+      }
+      if (action === 'credentials' && request.method === 'PUT') {
+        const body = await readBody(request, MCPSecretWriteRequestSchema);
+        return { status: 200, body: await this.mcp.withWorkspaceMcp(workspaceId, body.persistedRevision, async configuration => {
+          const result = await execute({ type: 'secret.write', serverId, request: body, configuration });
+          if (result.type !== 'secret.written') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          return result.result;
+        }) };
+      }
+      return null;
+    }
     const privateCredential = /^\/internal\/workspaces\/([^/]+)\/credentials\/(resolve|handoff)$/.exec(url.pathname);
     if (privateCredential && request.method === 'POST') {
       const workspaceId = id(privateCredential[1]);

@@ -26,6 +26,7 @@ import { createSpaceManager } from './manager.js';
 import { createSpaceRecords } from './space-records.js';
 import { createSpaceEventSources } from './space-events.js';
 import { createSpaceOpenCode } from './space-opencode.js';
+import { createSpaceNativeArchiveSource } from './space-native-archive.js';
 import { createSpaceSessionIndex, mergeSessionLists } from './space-sessions.js';
 import { createSpaceWebSocketForwarder } from './websocket.js';
 import { createDockerPlace } from './places/docker.js';
@@ -174,6 +175,7 @@ export function createSpacesHost({
   });
 
   const spaceOpenCode = createSpaceOpenCode({ exec: dockerPlace.exec, requestInside: dispatcher.requestInside });
+  const nativeArchiveSource = createSpaceNativeArchiveSource({ requestInside: dispatcher.requestInside });
 
   const index = createSpaceSessionIndex({ logger });
   let events = null;
@@ -262,10 +264,9 @@ export function createSpacesHost({
         // The space's own list, read whole; a stopped space that did not start has none to give.
         listChats: async () => {
           if (!running) throw new SpaceError('space_not_running', 'The space is not running');
-          const { records: chats, complete } = await readSpaceSessions(spaceId);
-          return { chats: chats.map((chat) => ({ id: chat?.id, title: chat?.title })), complete };
+          return nativeArchiveSource.listChats(spaceId);
         },
-        exportChat: (chatId) => spaceOpenCode.exportChat(spaceId, chatId),
+        exportChat: (chatId, destination, options) => nativeArchiveSource.exportChat(spaceId, chatId, destination, options),
       },
     }) : null,
     // A key named by an environment variable is read from the host's own environment, now, and

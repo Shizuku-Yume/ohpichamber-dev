@@ -1,6 +1,4 @@
-// The chat archive with a stand-in space and a stand-in host OpenCode that records what it imported.
-// What is under test is all-or-nothing, the order of the import, what a space may not claim, and
-// that an archived chat cannot be run through any route that acts on a session.
+// Host catalog/rollback contracts; native transcript and bundle tests belong to Agent Service.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -40,21 +38,22 @@ const archiveWith = ({ chats, failImportOf = null, dataDir = null, host = new Ma
     folders.push(dataDir);
   }
   const removed = [];
-  const hostOpenCode = {
+  const nativeArchive = {
     importChat: async (chat) => {
-      if (failImportOf === chat.info.id || host.has(chat.info.id)) throw Object.assign(new Error('conflict'), { status: 409 });
-      if (chat.info.parentID && !host.has(chat.info.parentID)) throw Object.assign(new Error('parent missing'), { status: 404 });
-      host.set(chat.info.id, chat);
+      if (failImportOf === chat.sessionId || host.has(chat.sessionId)) throw Object.assign(new Error('conflict'), { status: 409 });
+      expect(fs.readFileSync(chat.bundlePath, 'utf8')).toBe('opaque native bytes');
+      fs.mkdirSync(chat.directory, { recursive: true });
+      host.set(chat.sessionId, chat);
     },
     removeChat: async (id) => { removed.push(id); host.delete(id); },
   };
-  const archive = createSpaceArchive({ dataDir, hostOpenCode, logger: quiet, now });
+  const archive = createSpaceArchive({ dataDir, nativeArchive, logger: quiet, now });
   const source = {
-    listChats: async () => ({ chats: (chats ?? []).map(({ info }) => ({ id: info.id, title: info.title })), complete: true }),
-    exportChat: async (id) => {
+    listChats: async () => ({ chats: (chats ?? []).map(({ info }) => ({ id: info.id, title: info.title, parentSessionId: info.parentID })), complete: true }),
+    exportChat: async (id, destination) => {
       const chat = chats.find((entry) => entry.info.id === id);
       if (chat.fail) throw chat.fail;
-      return { info: chat.info, messages: [{ id: `msg_${id}`, type: 'user', text: 'hi' }] };
+      fs.writeFileSync(destination, 'opaque native bytes');
     },
   };
   const save = (allowUnsaved = false) => archive.saveChats({ spaceId: SPACE, name: 'Fix login', projectDirectory: '/home/me/project', source, allowUnsaved });
@@ -70,21 +69,22 @@ const through = (archive, method, requestPath) => {
 };
 
 describe('saving the chats of a space', () => {
-  it('imports parents before children at the archive\'s directory, stamped archived, and lists the archive', async () => {
-    // The child is listed first, as a space may list them.
+  it('imports opaque bundles at the Host-selected directory and lists the archive', async () => {
     const { archive, host, save, dataDir } = archiveWith({ chats: [{ info: infoOf(CHILD, { parentID: PARENT }) }, { info: infoOf(PARENT) }] });
     expect(await save()).toEqual({ saved: 2, tooLarge: [], failed: 0, listed: true });
-    expect(Array.from(host.keys())).toEqual([PARENT, CHILD]);
+    expect(Array.from(host.keys())).toEqual([CHILD, PARENT]);
     const directory = path.join(dataDir, 'spaces', 'archive', SPACE);
-    expect(host.get(CHILD).info).toMatchObject({ parentID: PARENT, location: { directory }, time: { archived: 1234 } });
+    expect(host.get(CHILD)).toMatchObject({ parentSessionId: PARENT, directory, archivedAt: 1234 });
     expect(fs.statSync(directory).isDirectory()).toBe(true);
-    expect(archive.listArchives()).toEqual([{ spaceId: SPACE, name: 'Fix login', projectDirectory: '/home/me/project', directory, archivedAt: 1234 }]);
+    expect(archive.listArchives()).toEqual([{ spaceId: SPACE, name: 'Fix login', workspaceId: `archive_${SPACE}`, archivedAt: 1234 }]);
+    expect(archive.listArchiveCatalog()).toEqual([{ spaceId: SPACE, name: 'Fix login', workspaceId: `archive_${SPACE}`, projectDirectory: '/home/me/project', directory, archivedAt: 1234 }]);
   });
 
-  it('refuses every tool of every agent in an archived chat, in OpenCode itself', async () => {
-    const { host, save } = archiveWith({ chats: [{ info: infoOf(PARENT, { permissions: [{ action: '*', resource: '*', effect: 'allow' }] }) }] });
+  it('records deleted-space provenance rather than synthesizing OpenCode permissions', async () => {
+    const { host, save } = archiveWith({ chats: [{ info: infoOf(PARENT) }] });
     await save();
-    expect(host.get(PARENT).info.permissions).toEqual([{ action: '*', resource: '*', effect: 'deny' }]);
+    expect(host.get(PARENT)).toMatchObject({ sessionId: PARENT, spaceId: SPACE });
+    expect(host.get(PARENT)).not.toHaveProperty('messages');
   });
 
   it('keeps the chats an earlier delete saved when the same space is saved again, and counts them as saved', async () => {
@@ -106,14 +106,16 @@ describe('saving the chats of a space', () => {
   it('stops taking chats out when the whole save runs out of time', async () => {
     let clock = 0;
     const { host, save } = archiveWith({ chats: [{ info: infoOf(PARENT) }, { info: infoOf(OTHER) }], now: () => { clock += 20 * 60_000; return clock; } });
-    await expect(save()).rejects.toMatchObject({ code: 'chats_not_saved', details: { failed: 1 } });
+    await expect(save()).rejects.toMatchObject({ code: 'chats_not_saved' });
     expect(host.size).toBe(0);
   });
 
-  it('never hangs a chat under a session that is not in the same archive', async () => {
-    const { host, save } = archiveWith({ chats: [{ info: infoOf(CHILD, { parentID: HOST_SESSION }) }] });
-    await save();
-    expect(host.get(CHILD).info).not.toHaveProperty('parentID');
+  it('does not accept a colliding Host session identity', async () => {
+    const host = new Map([[HOST_SESSION, { existing: true }]]);
+    const { save, removed } = archiveWith({ host, chats: [{ info: infoOf(HOST_SESSION) }] });
+    await expect(save()).rejects.toMatchObject({ code: 'chats_not_saved' });
+    expect(host.get(HOST_SESSION)).toEqual({ existing: true });
+    expect(removed).toEqual([]);
   });
 
   it('saves nothing when one chat cannot be taken out, naming a chat too large by its title', async () => {

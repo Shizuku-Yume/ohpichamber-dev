@@ -17,6 +17,8 @@ import type {
   SkillsWorkerApplyOutcome, SkillExpandRequest, SkillExpandResult, SkillSourceRevisions,
   SkillInstallResult, SkillSourceScope, CatalogOperationError, MCPOAuthRequest, MCPOAuthResult,
 } from '@openchamber/agent-contract';
+import { MCPWorkspaceReconnectResultSchema } from '@openchamber/agent-contract';
+import type { MCPConnectionTestResult, MCPWorkspaceReconnectResult } from '@openchamber/agent-contract';
 import { WorkerOperationError } from './workers.ts';
 
 const CatalogWorkerIdentityWithOwnerSchema = CatalogWorkerIdentitySchema.extend({ agentDirectoryId: EntityIdSchema });
@@ -66,7 +68,7 @@ export class CatalogCoordinatorError extends Error {
   constructor(
     readonly status: 409 | 503,
     readonly code: CatalogCoordinatorErrorCode,
-    readonly details: { result?: MCPApplyResult | SkillsApplyResult; currentRevision?: string },
+    readonly details: { result?: MCPApplyResult | SkillsApplyResult | (MCPWorkspaceReconnectResult & { kind?: never }); currentRevision?: string },
   ) {
     super(code);
     this.name = 'CatalogCoordinatorError';
@@ -255,23 +257,7 @@ export class CatalogCoordinator {
   async configure(rootSessionId: string, request: MCPConfigureRequest): Promise<MCPApplyResult> {
     return this.serial(async () => {
       const worker = await this.resolveWorker(rootSessionId);
-      const input = MCPConfigureRequestSchema.parse(request);
-      const current = this.workspace(worker.identity.workspaceId).configuration;
-      if (input.expectedPersistedRevision !== current.persistedRevision) {
-        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: current.persistedRevision });
-      }
-      const next: MCPConfigurationState = {
-        workspaceId: current.workspaceId,
-        persistedRevision: nextRevision(current.persistedRevision),
-        config: MCPConfigSchema.parse(input.config),
-      };
-      try { await this.options.commitMcp(current.workspaceId, input, next); }
-      catch { throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', {}); }
-      const owner = this.workspace(current.workspaceId);
-      owner.configuration = next;
-      try { await this.persist(); }
-      catch { throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', {}); }
-      return this.applyMcpNow(worker.identity.workspaceId, { persistedRevision: next.persistedRevision });
+      return this.configureMcpNow(worker.identity.workspaceId, request);
     });
   }
 
@@ -279,6 +265,97 @@ export class CatalogCoordinator {
     return this.serial(async () => {
       const worker = await this.resolveWorker(rootSessionId);
       return this.applyMcpNow(worker.identity.workspaceId, request);
+    });
+  }
+
+  /** Workspace Settings has a real stateless owner, not an admitted transcript worker. */
+  async withWorkspaceMcp<T>(workspaceId: string, revision: string | undefined, operation: (configuration: MCPConfigurationState) => Promise<T>): Promise<T> {
+    return this.serial(async () => {
+      EntityIdSchema.parse(workspaceId);
+      const owner = this.workspace(workspaceId);
+      await this.ensureHydrated(workspaceId, owner.agentDirectoryIds[0]);
+      if (revision !== undefined && revision !== owner.configuration.persistedRevision) {
+        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: owner.configuration.persistedRevision });
+      }
+      return operation(owner.configuration);
+    });
+  }
+
+  async workspaceOAuth(serverId: string, workspaceId: string, revision: string | undefined, workerGeneration: string | undefined, operation: (configuration: MCPConfigurationState) => Promise<MCPOAuthResult>): Promise<MCPOAuthResult> {
+    EntityIdSchema.parse(serverId);
+    const configuration = await this.withWorkspaceMcp(workspaceId, revision, async current => current);
+    const result = await operation(configuration);
+    return this.serial(async () => {
+      const current = this.workspace(workspaceId).configuration;
+      if (current.persistedRevision !== configuration.persistedRevision) {
+        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: current.persistedRevision });
+      }
+      const parsed = MCPOAuthResultSchema.parse(result);
+      if (parsed.serverId !== serverId || parsed.persistedRevision !== configuration.persistedRevision || parsed.worker.workspaceId !== workspaceId
+        || (workerGeneration !== undefined && parsed.worker.workerGeneration !== workerGeneration)) {
+        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+      }
+      return parsed;
+    });
+  }
+
+  readWorkspaceMcpConfig(workspaceId: string): Promise<MCPConfigurationState> {
+    return this.withWorkspaceMcp(workspaceId, undefined, async configuration => configuration);
+  }
+
+  configureWorkspaceMcp(workspaceId: string, request: MCPConfigureRequest): Promise<MCPApplyResult> {
+    return this.withWorkspaceMcp(workspaceId, request.expectedPersistedRevision, () => this.configureMcpNow(workspaceId, request));
+  }
+
+  applyWorkspaceMcp(workspaceId: string, request: MCPApplyRequest): Promise<MCPApplyResult> {
+    return this.withWorkspaceMcp(workspaceId, request.persistedRevision, () => this.applyMcpNow(workspaceId, request));
+  }
+
+  private async configureMcpNow(workspaceId: string, request: MCPConfigureRequest): Promise<MCPApplyResult> {
+    const input = MCPConfigureRequestSchema.parse(request);
+    const owner = this.workspace(workspaceId);
+    const current = owner.configuration;
+    if (input.expectedPersistedRevision !== current.persistedRevision) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: current.persistedRevision });
+    const next: MCPConfigurationState = { workspaceId, persistedRevision: nextRevision(current.persistedRevision), config: MCPConfigSchema.parse(input.config) };
+    try { await this.options.commitMcp(workspaceId, input, next); }
+    catch (error) {
+      if (error instanceof WorkerOperationError) throw error;
+      throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', {});
+    }
+    owner.configuration = next;
+    try { await this.persist(); }
+    catch { throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', {}); }
+    return this.applyMcpNow(workspaceId, { persistedRevision: next.persistedRevision });
+  }
+
+  reconnectWorkspaceMcp(workspaceId: string, serverId: string, request: MCPApplyRequest, probe: (configuration: MCPConfigurationState) => Promise<MCPConnectionTestResult>): Promise<MCPWorkspaceReconnectResult> {
+    return this.withWorkspaceMcp(workspaceId, MCPApplyRequestSchema.parse(request).persistedRevision, async configuration => {
+      EntityIdSchema.parse(serverId);
+      if (!configuration.config.servers.some(server => server.serverId === serverId && server.enabled)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+      const outcomes: MCPWorkerApplyOutcome[] = [];
+      for (const worker of await this.snapshotWorkers(item => item.identity.workspaceId === workspaceId)) {
+        let previous: MCPCatalogRead;
+        try { previous = await this.cachedMcp(worker, configuration); }
+        catch { previous = { configuration, workerCatalog: { worker: ownerIdentity(worker), runtimeStatus: 'unavailable', appliedRevision: null, catalogRevision: '0', activeServers: [], tools: [] } }; }
+        try {
+          const result = await worker.mcp.reconnect(serverId, { persistedRevision: configuration.persistedRevision, expectedCatalogRevision: previous.workerCatalog.catalogRevision, workerGeneration: worker.identity.workerGeneration }, configuration);
+          if (!await this.live(worker)) { this.dropWorker(worker); outcomes.push({ worker: ownerIdentity(worker), outcome: 'retired' }); continue; }
+          this.mcpSnapshots.set(worker.identity.rootSessionId, result);
+          const { runtimeStatus, appliedRevision, catalogRevision } = result.workerCatalog;
+          outcomes.push({ worker: ownerIdentity(worker), outcome: 'applied', revisions: { runtimeStatus, appliedRevision, catalogRevision } });
+        } catch (error) {
+          if (!await this.live(worker)) { this.dropWorker(worker); outcomes.push({ worker: ownerIdentity(worker), outcome: 'retired' }); continue; }
+          const { runtimeStatus, appliedRevision, catalogRevision } = previous.workerCatalog;
+          outcomes.push({ worker: ownerIdentity(worker), outcome: 'failed', revisions: { runtimeStatus, appliedRevision, catalogRevision }, error: operationError(error instanceof Error ? error : undefined, 'MCP_RECONNECT_FAILED', 'MCP reconnect failed; the prior catalog is retained.') });
+        }
+      }
+      await this.finalizeMcpOutcomes(outcomes);
+      const status = aggregate(outcomes);
+      const payload: MCPWorkspaceReconnectResult = { workspaceId, serverId, persistedRevision: configuration.persistedRevision, status, workers: outcomes };
+      if (status === 'no-active-workers') payload.probe = await probe(configuration);
+      const result = MCPWorkspaceReconnectResultSchema.parse(payload);
+      if (status === 'partial' || status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_RECONNECT_FAILED', { result });
+      return result;
     });
   }
 
@@ -292,6 +369,7 @@ export class CatalogCoordinator {
     for (const worker of await this.snapshotWorkers(item => item.identity.workspaceId === workspaceId)) {
       outcomes.push(await this.applyMcpWorker(worker, input, configuration));
     }
+    await this.finalizeMcpOutcomes(outcomes);
     const result = { kind: 'mcp' as const, status: aggregate(outcomes), configuration, workers: outcomes } satisfies MCPApplyResult;
     if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', { result });
     return result;
@@ -617,6 +695,17 @@ export class CatalogCoordinator {
     return current;
   }
 
+  private async finalizeMcpOutcomes(outcomes: MCPWorkerApplyOutcome[]): Promise<void> {
+    for (let index = 0; index < outcomes.length; index++) {
+      const outcome = outcomes[index];
+      if (outcome.outcome === 'retired') continue;
+      const worker = this.workers.get(outcome.worker.rootSessionId);
+      if (!worker || worker.identity.workerGeneration !== outcome.worker.workerGeneration || !await this.live(worker)) {
+        if (worker?.identity.workerGeneration === outcome.worker.workerGeneration) this.dropWorker(worker);
+        outcomes[index] = { worker: outcome.worker, outcome: 'retired' };
+      }
+    }
+  }
   private async live(worker: CatalogWorker): Promise<boolean> {
     try { return await worker.isLive(); } catch { return false; }
   }

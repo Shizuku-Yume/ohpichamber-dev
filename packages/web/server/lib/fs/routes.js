@@ -2,6 +2,7 @@ import { createRealpathCache } from '../path-realpath-cache.js';
 import { redactGitText } from '../git/redaction.js';
 import { resolveByteRange } from './byte-range.js';
 import { createWorkspaceFileNameIndex } from './workspace-file-names.js';
+import { createFsSearchRuntime } from './search.js';
 import nodeFsPromises from 'node:fs/promises';
 import nodePath from 'node:path';
 
@@ -970,6 +971,48 @@ export const registerFsRoutes = (app, dependencies) => {
         return sendOsPermissionDenied(res, 'Access to directory denied');
       }
       return res.status(500).json({ error: 'Failed to stat directory' });
+    }
+  });
+
+  const filesystemSearch = createFsSearchRuntime({ fsPromises, path, spawn, resolveGitBinaryForSpawn });
+  app.get('/api/fs/search', async (req, res) => {
+    const directory = typeof req.query.directory === 'string' ? req.query.directory.trim() : '';
+    const query = typeof req.query.query === 'string' ? req.query.query : '';
+    const type = req.query.type ?? 'file';
+    const limit = req.query.limit === undefined ? 60 : Number(req.query.limit);
+    if (!directory || (type !== 'file' && type !== 'directory') || !Number.isInteger(limit) || limit < 1 || limit > 1000) {
+      return res.status(400).json({ error: 'A directory, file or directory type, and limit between 1 and 1000 are required' });
+    }
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    res.on('close', abort);
+    try {
+      const resolved = await resolveWorkspacePathFromContext({
+        req, targetPath: directory, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots,
+      });
+      if (!resolved.ok) return res.status(400).json({ error: resolved.error });
+      const canonicalRoot = await fsPromises.realpath(resolved.resolved);
+      const canonicalBase = await fsPromises.realpath(resolved.base);
+      if (!isPathWithinRoot(canonicalRoot, canonicalBase, path, os)) {
+        return res.status(400).json({ error: 'Path is outside of active workspace' });
+      }
+      const stats = await fsPromises.stat(canonicalRoot);
+      if (!stats.isDirectory()) return res.status(400).json({ error: 'Specified path is not a directory', reason: 'not-directory' });
+      const hits = await filesystemSearch.searchFilesystemFiles(resolved.resolved, {
+        query, limit, type, includeHidden: req.query.includeHidden === 'true',
+        respectGitignore: req.query.respectGitignore !== 'false', signal: controller.signal, strict: true,
+      });
+      if (!controller.signal.aborted) return res.json(hits);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      if (isOsPermissionError(error)) return sendOsPermissionDenied(res, 'Access to directory denied');
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+        return res.status(404).json({ error: 'Directory not found', reason: 'not-found' });
+      }
+      return res.status(500).json({ error: 'Failed to search directory' });
+    } finally {
+      controller.abort();
+      res.off('close', abort);
     }
   });
 

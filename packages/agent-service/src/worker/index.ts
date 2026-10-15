@@ -115,7 +115,11 @@ process.on('message', raw => {
     }, () => { void stop(1); }, authorization.authorize, hostActions.invoke, snapshot => {
       send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot });
     }, payload => {
-      send({ type: 'subagent', workerGeneration: command.workerGeneration, subagentId: payload.id, status: payload.status, role: payload.agent, ...(payload.description ? { solutionSpace: payload.description } : {}), ...(payload.sessionFile ? { sessionFile: payload.sessionFile } : {}) });
+      const reply: Extract<WorkerReply, { type: 'subagent' }> = { type: 'subagent', workerGeneration: command.workerGeneration, subagentId: payload.id, status: payload.status, role: payload.agent };
+      if (payload.parentToolCallId) reply.toolCallId = payload.parentToolCallId;
+      if (payload.description) reply.solutionSpace = payload.description;
+      if (payload.sessionFile) reply.sessionFile = payload.sessionFile;
+      send(reply);
     }).then(owned => {
       resources = owned;
       if (stopping) return;

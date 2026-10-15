@@ -27,10 +27,11 @@ const shouldSkipSearchDirectory = (name, includeHidden) => {
   return FILE_SEARCH_EXCLUDED_DIRS.has(name.toLowerCase());
 };
 
-const listDirectoryEntries = async (dirPath, fsPromises) => {
+const listDirectoryEntries = async (dirPath, fsPromises, strict) => {
   try {
     return await fsPromises.readdir(dirPath, { withFileTypes: true });
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return [];
   }
 };
@@ -97,7 +98,7 @@ const fuzzyMatchScoreNormalized = (normalizedQuery, candidate) => {
 
 export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinaryForSpawn }) => {
   const searchFilesystemFiles = async (rootPath, options) => {
-    const { limit, query, includeHidden, respectGitignore } = options;
+    const { limit, query, includeHidden, respectGitignore, type = 'file', signal, strict = false } = options;
     const includeHiddenEntries = Boolean(includeHidden);
     const normalizedQuery = query.trim().toLowerCase();
     const matchAll = normalizedQuery.length === 0;
@@ -108,16 +109,17 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
     const candidates = [];
 
     while (queue.length > 0 && candidates.length < collectLimit) {
+      signal?.throwIfAborted();
       const batch = queue.splice(0, FILE_SEARCH_MAX_CONCURRENCY);
 
       const dirResults = await Promise.all(
         batch.map(async (dir) => {
+          const dirents = await listDirectoryEntries(dir, fsPromises, strict && dir === rootPath);
           if (!shouldRespectGitignore) {
-            return { dir, dirents: await listDirectoryEntries(dir, fsPromises), ignoredPaths: new Set() };
+            return { dir, dirents, ignoredPaths: new Set() };
           }
 
           try {
-            const dirents = await listDirectoryEntries(dir, fsPromises);
             const pathsToCheck = dirents.map((dirent) => dirent.name).filter(Boolean);
             if (pathsToCheck.length === 0) {
               return { dir, dirents, ignoredPaths: new Set() };
@@ -129,6 +131,7 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
                 windowsHide: true,
                 // Diagnostics are unused here. An unread pipe can block Git forever.
                 stdio: ['ignore', 'pipe', 'ignore'],
+                signal,
               });
 
               let stdout = '';
@@ -146,12 +149,14 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
 
             return { dir, dirents, ignoredPaths: ignoredNames };
           } catch {
-            return { dir, dirents: await listDirectoryEntries(dir, fsPromises), ignoredPaths: new Set() };
+            signal?.throwIfAborted();
+            return { dir, dirents, ignoredPaths: new Set() };
           }
         })
       );
 
       for (const { dir: currentDir, dirents, ignoredPaths } of dirResults) {
+        signal?.throwIfAborted();
         for (const dirent of dirents) {
           const entryName = dirent.name;
           if (!entryName || (!includeHiddenEntries && entryName.startsWith('.'))) {
@@ -172,10 +177,8 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
               visited.add(entryPath);
               queue.push(entryPath);
             }
-            continue;
-          }
-
-          if (!dirent.isFile()) {
+            if (type !== 'directory') continue;
+          } else if (type === 'directory' || !dirent.isFile()) {
             continue;
           }
 

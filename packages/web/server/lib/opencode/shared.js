@@ -12,7 +12,7 @@ import {
   printParseErrorCode,
   SyntaxKind,
 } from 'jsonc-parser';
-import { readSectionEntry, readMcpEntry } from './config-v2.js';
+import { readSectionEntry } from './config-v2.js';
 import { resolveWorktreeDirectory } from './worktree-directory.js';
 
 // ============== PATH CONSTANTS ==============
@@ -571,22 +571,10 @@ function throwIfLayerError(layers, filePath) {
   throw error;
 }
 
-/**
- * Look one entry up in a config layer, accepting both OpenCode 2 section keys
- * and the v1 keys v2 still decodes. `sectionKind` is `agents`, `commands`,
- * `providers`, or `mcp`.
- */
-function lookupSectionEntry(config, sectionKind, entryName) {
-  if (sectionKind === 'mcp') {
-    return readMcpEntry(config, entryName);
-  }
-  return readSectionEntry(config, sectionKind, entryName);
-}
-
 function getJsonEntrySource(layers, sectionKind, entryName) {
   const { userConfig, projectConfig, customConfig, paths } = layers;
   const found = (config, filePath) => {
-    const entry = lookupSectionEntry(config, sectionKind, entryName);
+    const entry = readSectionEntry(config, sectionKind, entryName);
     if (entry.value === undefined) return null;
     return {
       section: entry.value,

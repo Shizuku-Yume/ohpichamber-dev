@@ -253,28 +253,6 @@ async function discoverSkills(workingDirectory) {
   return Array.from(skills.values());
 }
 
-function mergeDiscoveredSkills(primarySkills = [], fallbackSkills = []) {
-  const merged = [];
-  const seenNames = new Set();
-
-  const appendSkill = (skill) => {
-    const name = typeof skill?.name === 'string' ? skill.name.trim() : '';
-    if (!name || seenNames.has(name)) {
-      return;
-    }
-    seenNames.add(name);
-    merged.push(skill);
-  };
-
-  for (const skill of primarySkills || []) {
-    appendSkill(skill);
-  }
-  for (const skill of fallbackSkills || []) {
-    appendSkill(skill);
-  }
-
-  return merged;
-}
 
 // "Only when asked" is written as two frontmatter keys: the portable
 // `disable-model-invocation` (Claude Code, OpenCode 2.0.23+) and OpenCode's own
@@ -843,7 +821,6 @@ async function renameSkillNow(oldName, newName, workingDirectory) {
 export {
   getSkillSources,
   discoverSkills,
-  mergeDiscoveredSkills,
   createSkill,
   updateSkill,
   deleteSkill,

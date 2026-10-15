@@ -41,7 +41,6 @@ import { registerOpenCodeRoutes } from './routes.js';
 import { getProviderSources, removeProviderConfig, upsertProviderConfig } from './providers.js';
 import { getAgentSources, getAgentConfig, getAgentPermissions, createAgent, updateAgent, deleteAgent, listDisabledAgents } from './agents.js';
 import { getCommandSources, getCommandConfig, createCommand, updateCommand, deleteCommand } from './commands.js';
-import { listMcpConfigs, getMcpConfig, createMcpConfig, updateMcpConfig, deleteMcpConfig } from './mcp.js';
 import { listSnippets, getSnippet, createSnippet, updateSnippet, deleteSnippet, expandSnippets } from './snippets.js';
 import {
   listPluginEntries,
@@ -57,7 +56,7 @@ import {
   decodePluginId,
 } from './plugins.js';
 import { SKILL_DIR, SKILL_SCOPE, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile } from './shared.js';
-import { getSkillSources, discoverSkills, mergeDiscoveredSkills, createSkill, updateSkill, deleteSkill, renameSkill, isManagedSkillPath } from './skills.js';
+import { getSkillSources, discoverSkills, createSkill, updateSkill, deleteSkill, renameSkill, isManagedSkillPath } from './skills.js';
 import { getCuratedSkillsSources } from '../skills-catalog/curated-sources.js';
 import { getCacheKey, scanWithCache } from '../skills-catalog/cache.js';
 import { parseSkillRepoSource } from '../skills-catalog/source.js';
@@ -353,11 +352,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       createCommand,
       updateCommand,
       deleteCommand,
-      listMcpConfigs,
-      getMcpConfig,
-      createMcpConfig,
-      updateMcpConfig,
-      deleteMcpConfig,
       listSnippets,
       getSnippet,
       createSnippet,
@@ -572,22 +566,13 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       snapshotRoot: path.join(openchamberDataDir, 'git-ssh-operation-keys'),
     });
     registerSkillRoutes(app, {
-      fs,
-      path,
-      os,
       resolveProjectDirectory,
       resolveOptionalProjectDirectory,
       readSettingsFromDisk,
       sanitizeSkillCatalogs,
       isUnsafeSkillRelativePath,
-      refreshOpenCodeAfterConfigChange,
-      clientReloadDelayMs,
-      buildOpenCodeUrl,
-      getOpenCodeAuthHeaders,
-      getOpenCodePort,
       getSkillSources,
       discoverSkills,
-      mergeDiscoveredSkills,
       createSkill,
       updateSkill,
       deleteSkill,

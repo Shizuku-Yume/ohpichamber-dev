@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { lstat } from 'node:fs/promises';
 import { z } from 'zod';
 import {
@@ -15,18 +15,20 @@ import {
   type MCPOAuthResult, type MCPReconnectRequest, type MCPServerConfig,
   type MCPTool, type MCPWorkerApplyOutcome,
 } from '@openchamber/agent-contract';
+import type { MCPConnectionTestResult } from '@openchamber/agent-contract';
 import { parseCallbackInput } from '@oh-my-pi/pi-ai/oauth/callback-server';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent';
 import { readMCPConfigFile, writeMCPConfigFile } from '@oh-my-pi/pi-coding-agent/mcp/config-writer';
 import { MCPManager, type MCPAuthHandler, type MCPLoadResult } from '@oh-my-pi/pi-coding-agent/mcp/manager';
 import { discoverOAuthEndpoints, type OAuthEndpoints } from '@oh-my-pi/pi-coding-agent/mcp/oauth-discovery';
 import {
-  MCPOAuthFlow, mcpOAuthCredentialId,
+  MCPOAuthFlow,
   type MCPOAuthConfig, type MCPStoredOAuthCredential,
 } from '@oh-my-pi/pi-coding-agent/mcp/oauth-flow';
 import { refreshStoredManagedMcpOAuthCredential } from '@oh-my-pi/pi-coding-agent/mcp/oauth-credentials';
 import type { MCPConfigFile, MCPHttpServerConfig, MCPSseServerConfig, MCPServerConfig as SDKMCPServerConfig } from '@oh-my-pi/pi-coding-agent/mcp/types';
 import type { AuthStorage as SDKAuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
+import { ProjectionError } from '../projection/journal.ts';
 
 export * from './mcp/protocol.ts';
 
@@ -188,6 +190,27 @@ export class WorkerMcp extends MCPManager {
         && manager.getConnection(name)?.tools !== undefined);
     return MCPCatalogReadSchema.parse({
       configuration, workerCatalog: { ...this.#catalog, runtimeStatus: usable ? 'ready' : 'unavailable' },
+    });
+  }
+
+  /** A real isolated handshake; never publishes session tools or replaces a live connection. */
+  test(serverId: string, captured: MCPConfigurationState): Promise<MCPConnectionTestResult> {
+    return this.#serialize(async () => {
+      const configuration = this.#capture(captured);
+      const owner = { workspaceId: configuration.workspaceId, serverId: EntityIdSchema.parse(serverId), persistedRevision: configuration.persistedRevision };
+      const server = configuration.config.servers.find(candidate => candidate.serverId === serverId);
+      if (!server) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP server is not configured.', false);
+      // Authorization failures must remain refusals, not connection failures.
+      await this.deps.authorizeServer(server);
+      let manager: MCPManager | undefined;
+      try {
+        manager = await this.#stage(server);
+        return { ...owner, status: 'connected', toolCount: manager.getTools().length };
+      } catch (error) {
+        if (error instanceof ProjectionError) throw error;
+        return { ...owner, status: 'failed', error: error instanceof NativeMcpError ? error.operationError
+          : { code: 'MCP_RECONNECT_FAILED', detail: 'MCP connection test failed.', retryable: true } };
+      } finally { if (manager) await this.#release([manager]); }
     });
   }
 
@@ -407,7 +430,14 @@ export class WorkerMcp extends MCPManager {
           throw new NativeMcpError('MCP_OAUTH_FAILED', 'MCP OAuth endpoints could not be discovered.', true);
         }
       }
-      const { publicConfig: finalPublicConfig, flowConfig, requiresCallbackInput } = this.#resolveOAuthConfigs(entry.server, oauthInput, discovered);
+      let clientSecret: string | undefined;
+      if (oauthInput?.clientSecretRef) {
+        const provider = await this.deps.resolveCredentialRef(oauthInput.clientSecretRef);
+        const credential = this.deps.authStorage.credentials.get(provider);
+        if (credential?.type !== 'api_key') throw new NativeMcpError('MCP_CREDENTIAL_UNAVAILABLE', 'MCP OAuth client secret is unavailable.', false);
+        clientSecret = credential.key;
+      }
+      const { publicConfig: finalPublicConfig, flowConfig, requiresCallbackInput } = this.#resolveOAuthConfigs(entry.server, oauthInput, discovered, clientSecret);
       entry.requiresCallbackInput = requiresCallbackInput;
       await this.deps.authorizeOAuth(entry.server, finalPublicConfig);
       await this.#assertPersistedFlow(entry);
@@ -573,14 +603,33 @@ export class WorkerMcp extends MCPManager {
       return { type: 'stdio', command: await this.deps.resolveCommand(server.transport), args: server.transport.args,
         cwd: this.deps.cwd, env, envPolicy: 'literal', enabled: true };
     }
-    const remote: MCPHttpServerConfig | MCPSseServerConfig = { type: server.transport.type, url: server.transport.url, enabled: true };
-    if (!server.transport.credentialRef) return remote;
-    const provider = await this.deps.resolveCredentialRef(server.transport.credentialRef);
-    const credential = this.deps.authStorage.credentials.get(provider);
-    if (!credential) throw new NativeMcpError('MCP_CREDENTIAL_UNAVAILABLE', 'An MCP credential is not available.', false);
-    return credential.type === 'oauth'
-      ? { ...remote, auth: { type: 'oauth', credentialId: provider } }
-      : { ...remote, headers: { Authorization: `Bearer ${credential.key}` }, headerPolicy: 'origin-locked' };
+    let remote: MCPHttpServerConfig | MCPSseServerConfig = { type: server.transport.type, url: server.transport.url, enabled: true };
+    if (server.transport.credentialRef) {
+      const provider = await this.deps.resolveCredentialRef(server.transport.credentialRef);
+      const credential = this.deps.authStorage.credentials.get(provider);
+      if (!credential) throw new NativeMcpError('MCP_CREDENTIAL_UNAVAILABLE', 'An MCP credential is not available.', false);
+      remote = credential.type === 'oauth'
+        ? { ...remote, auth: { type: 'oauth', credentialId: provider } }
+        : { ...remote, headers: { Authorization: `Bearer ${credential.key}` }, headerPolicy: 'origin-locked' };
+    }
+    const headerCredentialRefs = server.transport.headerCredentialRefs ?? {};
+    const headers = { ...remote.headers };
+    for (const [name, reference] of Object.entries(headerCredentialRefs)) {
+      const provider = await this.deps.resolveCredentialRef(reference);
+      const credential = this.deps.authStorage.credentials.get(provider);
+      if (!credential) throw new NativeMcpError('MCP_CREDENTIAL_UNAVAILABLE', 'An MCP credential is not available.', false);
+      if (credential.type === 'oauth') {
+        const refreshed = await refreshStoredManagedMcpOAuthCredential(this.deps.authStorage, provider);
+        if (!refreshed.credential) throw new NativeMcpError('MCP_CREDENTIAL_UNAVAILABLE', 'An MCP credential is not available.', false);
+        headers[name] = refreshed.credential.access;
+      } else headers[name] = credential.key;
+    }
+    if (!server.transport.credentialRef) {
+      const provider = await this.#credentialProvider({ ...server, transport: server.transport });
+      if (this.deps.authStorage.credentials.get(provider)?.type === 'oauth') remote = { ...remote, auth: { type: 'oauth', credentialId: provider } };
+    }
+    if (Object.keys(headers).length > 0) return { ...remote, headers, headerPolicy: 'origin-locked' };
+    return remote;
   }
 
   async #stage(server: MCPServerConfig): Promise<MCPManager> {
@@ -777,7 +826,7 @@ export class WorkerMcp extends MCPManager {
   async #credentialProvider(server: RemoteServerConfig): Promise<string> {
     return server.transport.credentialRef
       ? await this.deps.resolveCredentialRef(server.transport.credentialRef)
-      : mcpOAuthCredentialId(server.transport.url);
+      : `openchamber-mcp-oauth-${createHash('sha256').update(JSON.stringify([this.deps.worker.workspaceId, server.serverId, server.transport.url])).digest('hex')}`;
   }
   async #isAuthenticated(server: RemoteServerConfig): Promise<boolean> {
     const provider = await this.#credentialProvider(server);
@@ -807,6 +856,7 @@ export class WorkerMcp extends MCPManager {
     server: RemoteServerConfig,
     input: MCPOAuthConfigInput | undefined,
     discovered: OAuthEndpoints | null,
+    clientSecret: string | undefined,
   ) {
     const authorizationUrl = input?.authorizationUrl ?? discovered?.authorizationUrl;
     const tokenUrl = input?.tokenUrl ?? discovered?.tokenUrl;
@@ -857,7 +907,7 @@ export class WorkerMcp extends MCPManager {
     if (publicConfig.issuerUrl !== undefined) flowConfig.issuerUrl = publicConfig.issuerUrl;
     if (publicConfig.registrationUrl !== undefined) flowConfig.registrationUrl = publicConfig.registrationUrl;
     if (publicConfig.clientId !== undefined) flowConfig.clientId = publicConfig.clientId;
-    if (input?.clientSecret !== undefined) flowConfig.clientSecret = input.clientSecret;
+    if (clientSecret !== undefined) flowConfig.clientSecret = clientSecret;
     if (publicConfig.scopes !== undefined) flowConfig.scopes = publicConfig.scopes;
     if (publicConfig.prompt !== undefined) flowConfig.prompt = publicConfig.prompt;
     if (publicConfig.redirectUri !== undefined) flowConfig.redirectUri = publicConfig.redirectUri;

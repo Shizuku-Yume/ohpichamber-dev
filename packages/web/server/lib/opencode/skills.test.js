@@ -4,27 +4,9 @@ import fsPromises from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import yaml from 'yaml';
-import { createSkill, discoverSkills, getSkillSources, mergeDiscoveredSkills, renameSkill, updateSkill } from './skills.js';
+import { createSkill, discoverSkills, getSkillSources, renameSkill, updateSkill } from './skills.js';
 
 describe('skills', () => {
-  it('merges locally discovered skills missing from OpenCode live discovery', () => {
-    const merged = mergeDiscoveredSkills(
-      [
-        { name: 'existing-opencode-skill', path: '/home/jkker/.config/opencode/skills/existing-opencode-skill/SKILL.md', source: 'opencode' },
-        { name: 'existing-agent-skill', path: '/home/jkker/.agents/skills/existing-agent-skill/SKILL.md', source: 'agents' },
-      ],
-      [
-        { name: 'existing-agent-skill', path: '/home/jkker/.agents/skills/existing-agent-skill/SKILL.md', source: 'agents' },
-        { name: 'new-agent-skill', path: '/home/jkker/.agents/skills/new-agent-skill/SKILL.md', source: 'agents' },
-      ],
-    );
-
-    expect(merged.map((skill) => skill.name)).toEqual([
-      'existing-opencode-skill',
-      'existing-agent-skill',
-      'new-agent-skill',
-    ]);
-  });
 
   it('discovers repository-local .agents skills for the project directory', async () => {
     const tempRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'oc-project-agents-'));

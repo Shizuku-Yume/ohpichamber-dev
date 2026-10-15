@@ -72,10 +72,42 @@ const fixture = async () => {
     directCommandAdmissionStore: owner.directCommandAdmissionStore,
     archiveStore: owner.archiveStore, sessionMetadataStore: owner.sessionMetadataStore,
   });
-  return { owner, store, source, destination, native, makeService };
+  return { owner, root, store, source, destination, native, makeService };
 };
 
 describe('Host native session control saga', () => {
+  it('refuses native mutations for deleted-space sessions before dispatch', async () => {
+    const { root, store, destination, native, makeService } = await fixture();
+    const spaceId = 'a1b2c3d4e5f6';
+    const archiveDirectory = path.join(root, 'archive', spaceId);
+    fs.mkdirSync(archiveDirectory, { recursive: true });
+    const workspace = await store.ensureWorkspace({
+      hostProjectId: `archive_${spaceId}`,
+      projectId: `archive_${spaceId}`,
+      workspaceId: `archive_${spaceId}`,
+      projectDirectory: archiveDirectory,
+      workspaceDirectory: archiveDirectory,
+      agentDirectory: path.join(root, 'agent'),
+      name: 'Deleted space archive',
+    });
+    const sessionId = 'deleted-space-session';
+    await store.bindSession({ sessionId, rootSessionId: sessionId, workspaceId: workspace.workspaceId });
+    const service = makeService();
+    const mutations = [
+      () => service.send(sessionId, {}),
+      () => service.steer(sessionId, {}),
+      () => service.followUp(sessionId, {}),
+      () => service.fork(sessionId, {}),
+      () => service.selectBranch(sessionId, { action: 'restore', branchId: 'branch-owner', branchVersion: '3' }),
+      () => service.relocate(sessionId, { workspaceId: destination.workspaceId }),
+      () => service.control(sessionId, { type: 'abort', runId: 'run-1' }),
+    ];
+
+    for (const mutate of mutations) {
+      await expect(mutate()).rejects.toMatchObject({ statusCode: 409, code: 'SESSION_READ_ONLY' });
+    }
+    expect(native.calls).toEqual([]);
+  });
   it('publishes all admitted family identities at the destination and retains Host metadata and archive revisions', async () => {
     const { owner, store, destination, makeService } = await fixture();
     await owner.sessionMetadataStore.setSessionMetadata('public-child', { title: 'Retained child' });

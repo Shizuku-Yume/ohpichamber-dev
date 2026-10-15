@@ -28,11 +28,6 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
     createCommand,
     updateCommand,
     deleteCommand,
-    listMcpConfigs,
-    getMcpConfig,
-    createMcpConfig,
-    updateMcpConfig,
-    deleteMcpConfig,
     listSnippets,
     getSnippet,
     createSnippet,
@@ -40,17 +35,6 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
     deleteSnippet,
     expandSnippets,
   } = dependencies;
-
-  // Persist to disk immediately; OpenCode restart is deferred to an explicit
-  // Apply & Restart so settings edits do not interrupt live sessions.
-  const completeMcpMutation = async (res, action, name, applyChange) => {
-    const result = applyChange();
-    const past = action === 'delete' ? 'deleted' : `${action}d`;
-    return res.json(buildAppliedResponse(
-      `MCP server "${name}" ${past}.`,
-      result,
-    ));
-  };
 
   app.use(['/api/config/agents/:name', '/api/config/commands/:name'], (req, res, next) => {
     if (!isSafeEntityName(req.params.name)) {
@@ -197,91 +181,6 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
     } catch (error) {
       console.error('Failed to delete agent:', error);
       res.status(500).json({ error: error.message || 'Failed to delete agent' });
-    }
-  });
-
-  app.get('/api/config/mcp', async (req, res) => {
-    try {
-      const { directory, error } = await resolveOptionalProjectDirectory(req);
-      if (error) {
-        return res.status(400).json({ error });
-      }
-      const configs = listMcpConfigs(directory);
-      res.json(configs);
-    } catch (error) {
-      console.error('[API:GET /api/config/mcp] Failed:', error);
-      res.status(500).json({ error: error.message || 'Failed to list MCP configs' });
-    }
-  });
-
-  app.get('/api/config/mcp/:name', async (req, res) => {
-    try {
-      const name = req.params.name;
-      const { directory, error } = await resolveOptionalProjectDirectory(req);
-      if (error) {
-        return res.status(400).json({ error });
-      }
-      const config = getMcpConfig(name, directory);
-      if (!config) {
-        return res.status(404).json({ error: `MCP server "${name}" not found` });
-      }
-      res.json(config);
-    } catch (error) {
-      console.error('[API:GET /api/config/mcp/:name] Failed:', error);
-      res.status(500).json({ error: error.message || 'Failed to get MCP config' });
-    }
-  });
-
-  app.post('/api/config/mcp/:name', async (req, res) => {
-    try {
-      const name = req.params.name;
-      const { scope, ...config } = req.body || {};
-      const { directory, error } = await resolveOptionalProjectDirectory(req);
-      if (error) {
-        return res.status(400).json({ error });
-      }
-      console.log(`[API:POST /api/config/mcp] Creating MCP server: ${name}`);
-
-      await completeMcpMutation(res, 'create', name, () => createMcpConfig(name, config, directory, scope));
-    } catch (error) {
-      console.error('[API:POST /api/config/mcp/:name] Failed:', error);
-      res.status(500).json({ error: error.message || 'Failed to create MCP server' });
-    }
-  });
-
-  app.patch('/api/config/mcp/:name', async (req, res) => {
-    try {
-      const name = req.params.name;
-      const updates = req.body;
-      const { directory, error } = await resolveOptionalProjectDirectory(req);
-      if (error) {
-        return res.status(400).json({ error });
-      }
-      console.log(`[API:PATCH /api/config/mcp] Updating MCP server: ${name}`);
-
-      await completeMcpMutation(res, 'update', name, () => updateMcpConfig(name, updates, directory));
-    } catch (error) {
-      console.error('[API:PATCH /api/config/mcp/:name] Failed:', error);
-      if (error?.message === `MCP server "${req.params.name}" not found`) {
-        return res.status(404).json({ error: error.message });
-      }
-      res.status(500).json({ error: error.message || 'Failed to update MCP server' });
-    }
-  });
-
-  app.delete('/api/config/mcp/:name', async (req, res) => {
-    try {
-      const name = req.params.name;
-      const { directory, error } = await resolveOptionalProjectDirectory(req);
-      if (error) {
-        return res.status(400).json({ error });
-      }
-      console.log(`[API:DELETE /api/config/mcp] Deleting MCP server: ${name}`);
-
-      await completeMcpMutation(res, 'delete', name, () => deleteMcpConfig(name, directory));
-    } catch (error) {
-      console.error('[API:DELETE /api/config/mcp/:name] Failed:', error);
-      res.status(500).json({ error: error.message || 'Failed to delete MCP server' });
     }
   });
 

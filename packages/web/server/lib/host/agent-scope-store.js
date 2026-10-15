@@ -8,6 +8,8 @@ import { MetadataCorruptError, MetadataReadError, MetadataWriteError, createMeta
 const DirectorySchema = z.string().min(1).refine((directory) => path.isAbsolute(directory));
 const WorkspaceInputSchema = z.strictObject({
   hostProjectId: EntityIdSchema,
+  projectId: EntityIdSchema.optional(),
+  workspaceId: EntityIdSchema.optional(),
   projectDirectory: DirectorySchema,
   workspaceDirectory: DirectorySchema,
   agentDirectory: DirectorySchema,
@@ -109,7 +111,8 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
       ]);
       return withTransaction(db, () => {
         const projectRow = db.prepare(`SELECT ${projectColumns} FROM host_agent_projects p WHERE p.directory = ?`).get(projectDirectory);
-        const projectId = projectRow ? parseRow(ProjectRowSchema, projectRow).projectId : `pro_${randomUUID()}`;
+        const projectId = value.projectId ?? (projectRow ? parseRow(ProjectRowSchema, projectRow).projectId : `pro_${randomUUID()}`);
+        if (projectRow && parseRow(ProjectRowSchema, projectRow).projectId !== projectId) throw new MetadataWriteError('A project directory cannot change its canonical identity');
         if (!projectRow) {
           db.prepare('INSERT INTO host_agent_projects (project_id, host_project_id, directory, name, display_path) VALUES (?, ?, ?, ?, ?)')
             .run(projectId, value.hostProjectId, projectDirectory, value.name, value.displayPath ?? null);
@@ -120,17 +123,16 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
         const existing = db.prepare('SELECT workspace_id FROM host_agent_workspaces WHERE project_id = ? AND cwd = ?').get(projectId, cwd);
         if (existing) {
           const scope = readWorkspace(existing.workspace_id);
-          if (scope.agentDirectory !== agentDirectory) {
-            throw new MetadataWriteError('An existing workspace cannot change its selected agent directory');
-          }
+          if (scope.agentDirectory !== agentDirectory || (value.workspaceId && scope.workspaceId !== value.workspaceId))
+            throw new MetadataWriteError('An existing workspace cannot change its selected Host identity');
           return scope;
         }
         const directoryRow = db.prepare('SELECT agent_directory_id FROM host_agent_directories WHERE directory = ?').get(agentDirectory);
         const agentDirectoryId = directoryRow ? EntityIdSchema.parse(directoryRow.agent_directory_id) : `agd_${randomUUID()}`;
-        if (!directoryRow) {
-          db.prepare('INSERT INTO host_agent_directories (agent_directory_id, directory) VALUES (?, ?)').run(agentDirectoryId, agentDirectory);
-        }
-        const workspaceId = `ws_${randomUUID()}`;
+        if (!directoryRow) db.prepare('INSERT INTO host_agent_directories (agent_directory_id, directory) VALUES (?, ?)').run(agentDirectoryId, agentDirectory);
+        const workspaceId = value.workspaceId ?? `ws_${randomUUID()}`;
+        if (db.prepare('SELECT workspace_id FROM host_agent_workspaces WHERE workspace_id = ?').get(workspaceId))
+          throw new MetadataWriteError('The requested canonical workspace identity is already assigned');
         db.prepare('INSERT INTO host_agent_workspaces (workspace_id, project_id, cwd, agent_directory_id) VALUES (?, ?, ?, ?)')
           .run(workspaceId, projectId, cwd, agentDirectoryId);
         return readWorkspace(workspaceId);
@@ -172,6 +174,11 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
           .run(value.sessionId, value.rootSessionId, value.workspaceId, workspace.agentDirectoryId);
         return readSession(value.sessionId);
       });
+    } catch (error) { throw writeFailure(error); }
+  });
+  const removeSessionFamily = (rootSessionId) => lifecycle.run(() => {
+    try {
+      return withTransaction(db, () => db.prepare('DELETE FROM host_agent_sessions WHERE root_session_id = ?').run(EntityIdSchema.parse(rootSessionId)).changes);
     } catch (error) { throw writeFailure(error); }
   });
   const listSessionFamily = (rootSessionId) => lifecycle.run(() => {
@@ -260,5 +267,5 @@ export const createAgentScopeStore = ({ database, fsPromises = fs.promises }) =>
       return { items, errors };
     } catch (error) { throw readFailure(error); }
   });
-  return { ensureWorkspace, getWorkspace, bindSession, getSession, listSessionFamily, getRelocation, createRelocation, rebindSessionFamily, rollbackSessionFamily, clearRelocation, listProjects, listWorkspaces, flush: lifecycle.flush, close: lifecycle.close };
+  return { ensureWorkspace, getWorkspace, bindSession, getSession, removeSessionFamily, listSessionFamily, getRelocation, createRelocation, rebindSessionFamily, rollbackSessionFamily, clearRelocation, listProjects, listWorkspaces, flush: lifecycle.flush, close: lifecycle.close };
 };

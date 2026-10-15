@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
-import { RuntimeSessionSchema, type RuntimeSession } from '@openchamber/agent-contract';
+import { JsonValueSchema, RuntimeSessionSchema, SubagentSchema, type RuntimeSession } from '@openchamber/agent-contract';
 import type { WorkerBootstrap } from '../protocol.ts';
+import { z } from 'zod';
 import { WorkerRegistry } from '../supervisor/workers.ts';
 import { SessionRegistry } from './registry.ts';
 
@@ -46,7 +47,7 @@ async function fixture() {
     if (!sourceFile || !sourceArtifacts) throw new Error('Real native storage is required');
     const childDirectory = join(sourceArtifacts, 'task', 'retained-child');
     await mkdir(childDirectory, { recursive: true });
-    const child = SessionManager.create(sourceCwd, childDirectory);
+    const child = await SessionManager.open(join(childDirectory, 'child.jsonl'), childDirectory, undefined, { initialCwd: sourceCwd, parentSession: sourceFile });
     child.appendMessage({ role: 'user', content: 'Retained child task', timestamp: Date.now() });
     child.appendMessage(assistant('Retained child reply'));
     await child.ensureOnDisk();
@@ -65,7 +66,7 @@ async function fixture() {
     await sessions.open(source);
     const destination = { rootSessionId, projectId: 'project', workspaceId: 'destination-workspace', cwd: destinationCwd,
       agentDirectory, agentDirectoryId: 'retained-owner', displayPath: 'destination', env: source.env };
-    return { root, source, destination, sourceArtifacts, childRelative, childBytes,
+    return { root, source, destination, sourceArtifacts, childFile, childRelative, childBytes,
       get sessions() { return sessions; }, get workers() { return workers; },
       destinationFile: join(SessionManager.getDefaultSessionDir(destinationCwd, agentDirectory), basename(sourceFile)),
       restart: async () => { await sessions.close(); await workers.close(); ({ workers, sessions } = createRegistry()); await sessions.initialize(); },
@@ -88,6 +89,11 @@ test('native SDK relocation replaces worker scope and preserves public identity,
   try {
     const before = harness.sessions.journal(rootSessionId).snapshot();
     const priorScope = harness.workers.authorizationScope(rootSessionId)!;
+    await harness.sessions.onSubagent(rootSessionId, priorScope.workerGeneration, {
+      subagentId: 'relocated-child', status: 'completed', role: 'child-proof', sessionFile: harness.childFile,
+    });
+    const childSessionId = harness.sessions.listSubagents(rootSessionId)[0]?.childSessionId;
+    if (!childSessionId) throw new Error('Native child session identity is required');
     const prepared = await harness.sessions.prepareRelocation(rootSessionId, { transactionId: 'move-commit',
       sourceWorkspaceId: harness.source.workspaceId, destination: harness.destination }, admit);
     expect(prepared.session).toMatchObject({ sessionId: rootSessionId, rootSessionId, workspaceId: harness.destination.workspaceId, runtimeStatus: 'idle' });
@@ -100,7 +106,9 @@ test('native SDK relocation replaces worker scope and preserves public identity,
     await expect(harness.sessions.finalizeRelocation(rootSessionId, { transactionId: 'mismatched-transaction', action: 'commit' }, admit))
       .rejects.toMatchObject({ code: 'SESSION_RELOCATION_CONFLICT' });
     expect(harness.sessions.relocation(rootSessionId).relocation?.transactionId).toBe('move-commit');
+    await expect(harness.sessions.history({ sessionId: childSessionId })).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
     const finalized = await harness.sessions.finalizeRelocation(rootSessionId, { transactionId: 'move-commit', action: 'commit' }, admit);
+    expect(JSON.stringify(await harness.sessions.history({ sessionId: childSessionId }))).toContain('Retained child reply');
     expect(finalized.session).toMatchObject({ sessionId: rootSessionId, workspaceId: harness.destination.workspaceId });
     const after = harness.sessions.journal(rootSessionId).snapshot();
     expect(after.messages).toEqual(before.messages);
@@ -132,6 +140,39 @@ test('native SDK relocation replaces worker scope and preserves public identity,
     await harness.sessions.reopen(harness.destination);
     expect(harness.sessions.runtime(rootSessionId).workspaceId).toBe(harness.destination.workspaceId);
     expect(harness.sessions.journal(rootSessionId).snapshot().messages).toEqual(before.messages);
+    expect(JSON.stringify(await harness.sessions.history({ sessionId: childSessionId }))).toContain('Retained child reply');
+  } finally { await harness.close(); }
+}, 60000);
+
+test('durable relocation intent repairs child paths when restart follows native move before index rewrite', async () => {
+  const harness = await fixture();
+  const index = join(harness.root, 'service-state', 'session-references.json');
+  try {
+    const generation = harness.workers.authorizationScope(rootSessionId)?.workerGeneration;
+    if (!generation) throw new Error('Live root worker generation is required');
+    await harness.sessions.onSubagent(rootSessionId, generation, {
+      subagentId: 'recovery-child', status: 'completed', role: 'recovery-proof', sessionFile: harness.childFile,
+    });
+    const child = harness.sessions.listSubagents(rootSessionId)[0];
+    if (!child) throw new Error('Native child reference is required');
+    await harness.sessions.prepareRelocation(rootSessionId, { transactionId: 'repair-child-path',
+      sourceWorkspaceId: harness.source.workspaceId, destination: harness.destination }, admit);
+    const childReferenceSchema = SubagentSchema.extend({ rootSessionId: z.string(), workspaceId: z.string(), projectId: z.string(), sessionFile: z.string() });
+    const referenceIndexSchema = z.object({
+      references: z.record(z.string(), JsonValueSchema),
+      subagents: z.record(z.string(), z.array(childReferenceSchema)),
+      relocations: z.record(z.string(), JsonValueSchema),
+    });
+    const state = referenceIndexSchema.parse(JSON.parse(await readFile(index, 'utf8')));
+    state.subagents[rootSessionId]![0] = { ...state.subagents[rootSessionId]![0]!, sessionFile: harness.childFile, workspaceId: harness.source.workspaceId };
+    await writeFile(index, JSON.stringify(state));
+    await harness.restart();
+    await harness.sessions.finalizeRelocation(rootSessionId, { transactionId: 'repair-child-path', action: 'commit' }, admit);
+    expect(JSON.stringify(await harness.sessions.history({ sessionId: child.childSessionId }))).toContain('Retained child reply');
+    const repaired = referenceIndexSchema.parse(JSON.parse(await readFile(index, 'utf8')));
+    expect(repaired.subagents[rootSessionId]?.[0]).toMatchObject({
+      childSessionId: child.childSessionId, workspaceId: harness.destination.workspaceId,
+    });
   } finally { await harness.close(); }
 }, 60000);
 
@@ -226,5 +267,80 @@ test('service native branch selection expires stream epochs and survives cold re
       await harness.sessions.branch(rootSessionId, { action: 'restore', branchId: reopened.branch.branchId, branchVersion: reopened.branch.branchVersion });
       expect(harness.sessions.journal(rootSessionId).snapshot().messages).toEqual(before.messages);
     } finally { subscription.unsubscribe(); }
+  } finally { await harness.close(); }
+}, 60000);
+
+test('native child lifecycle preserves nested parent links and history across cold reopen', async () => {
+  const harness = await fixture();
+  let parentManager: SessionManager | undefined;
+  let grandchildManager: SessionManager | undefined;
+  try {
+    let scope = harness.workers.authorizationScope(rootSessionId);
+    if (!scope) throw new Error('Live root worker generation is required');
+    parentManager = await SessionManager.open(harness.childFile, dirname(harness.childFile), undefined, { throwIfMissing: true });
+    const parentArtifacts = parentManager.getArtifactsDir();
+    if (!parentArtifacts) throw new Error('Native child artifacts are required');
+    const grandchildDirectory = join(parentArtifacts, 'task', 'nested-child');
+    await mkdir(grandchildDirectory, { recursive: true });
+    grandchildManager = await SessionManager.open(join(grandchildDirectory, 'grandchild.jsonl'), grandchildDirectory, undefined,
+      { initialCwd: harness.source.cwd, parentSession: harness.childFile });
+    grandchildManager.appendMessage({ role: 'user', content: 'Nested child task', timestamp: Date.now() });
+    grandchildManager.appendMessage(assistant('Nested child reply'));
+    await grandchildManager.ensureOnDisk();
+    await grandchildManager.flush();
+    const grandchildFile = grandchildManager.getSessionFile();
+    if (!grandchildFile) throw new Error('Native nested session file is required');
+
+    const direct = { subagentId: 'child-lifecycle', toolCallId: 'native-parent-task', role: 'child-proof', sessionFile: harness.childFile };
+    await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, { ...direct, status: 'started' });
+    let child = harness.sessions.listSubagents(rootSessionId)[0];
+    if (!child) throw new Error('Direct native child was not persisted');
+    expect(child.toolCallId).toBe('native-parent-task');
+    const idleRootChild = RuntimeSessionSchema.parse(harness.sessions.runtime(child.childSessionId));
+    expect(idleRootChild).toMatchObject({ runtimeStatus: 'idle', activeRunId: null, rootSessionId });
+    await harness.restart();
+    expect(RuntimeSessionSchema.parse(harness.sessions.runtime(child.childSessionId))).toMatchObject({ runtimeStatus: 'unavailable', activeRunId: null });
+    await harness.sessions.reopen(harness.source);
+    scope = harness.workers.authorizationScope(rootSessionId);
+    if (!scope) throw new Error('Reopened root worker generation is required');
+    const { toolCallId: _toolCallId, ...settled } = direct;
+    await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, { ...settled, status: 'completed' });
+    child = harness.sessions.listSubagents(rootSessionId)[0]!;
+    expect(child.toolCallId).toBe('native-parent-task');
+    await harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, {
+      subagentId: 'grandchild-lifecycle', status: 'completed', role: 'nested-proof', sessionFile: grandchildFile,
+    });
+    expect(harness.sessions.listSubagents(rootSessionId)).toHaveLength(1);
+    const nested = harness.sessions.listSubagents(child.childSessionId);
+    expect(nested).toHaveLength(1);
+    expect(nested[0]).toMatchObject({ subagentId: 'grandchild-lifecycle', parentSessionId: child.childSessionId, role: 'nested-proof' });
+    expect(JSON.stringify(await harness.sessions.history({ sessionId: nested[0]!.childSessionId }))).toContain('Nested child reply');
+    await grandchildManager.close(); grandchildManager = undefined;
+    await parentManager.close(); parentManager = undefined;
+
+    await harness.restart();
+    expect(harness.sessions.listSubagents(rootSessionId)).toEqual([child]);
+    expect(harness.sessions.listSubagents(child.childSessionId)).toEqual(nested);
+    expect(JSON.stringify(await harness.sessions.history({ sessionId: nested[0]!.childSessionId }))).toContain('Nested child reply');
+  } finally {
+    await grandchildManager?.close();
+    await parentManager?.close();
+    await harness.close();
+  }
+}, 60000);
+
+test('root deletion drains pending child lifecycle writes and removes persisted child indexes', async () => {
+  const harness = await fixture();
+  try {
+    const scope = harness.workers.authorizationScope(rootSessionId);
+    if (!scope) throw new Error('Live root worker generation is required');
+    const pending = harness.sessions.onSubagent(rootSessionId, scope.workerGeneration, {
+      subagentId: 'deleting-child', status: 'completed', role: 'delete-proof', sessionFile: harness.childFile,
+    });
+    const deletion = harness.sessions.delete(rootSessionId);
+    await Promise.all([pending, deletion]);
+    expect(() => harness.sessions.listSubagents(rootSessionId)).toThrow();
+    await harness.restart();
+    expect(() => harness.sessions.listSubagents(rootSessionId)).toThrow();
   } finally { await harness.close(); }
 }, 60000);

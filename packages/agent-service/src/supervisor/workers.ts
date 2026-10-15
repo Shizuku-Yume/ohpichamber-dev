@@ -16,11 +16,11 @@ interface WorkerLifecycleCallbacks {
   onOpened?: (rootSessionId: string, generation: string, sessionFile: string, seed: ProjectionSeed) => void;
   onEvents?: (rootSessionId: string, generation: string, inputs: ProjectionInput[]) => void;
   onInteraction?: (rootSessionId: string, generation: string, interaction: WorkerInteraction) => void;
-  onSubagent?: (rootSessionId: string, generation: string, subagent: { subagentId: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; solutionSpace?: string; sessionFile?: string }) => void;
+  onSubagent?: (rootSessionId: string, generation: string, subagent: { subagentId: string; toolCallId?: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; solutionSpace?: string; sessionFile?: string }) => void;
   onExit?: (rootSessionId: string, generation: string) => void;
 }
 
-export type StatelessWorkerInput = Omit<CompletionWorkerBootstrap, 'type' | 'workerGeneration'> & {
+export type StatelessWorkerInput = Omit<CompletionWorkerBootstrap, 'type' | 'workerGeneration' | 'authorizationRootId'> & {
   rootSessionId: string;
   env?: Record<string, string>;
 };
@@ -179,7 +179,7 @@ export class WorkerRegistry {
     const { rootSessionId: authorizationRootId, ...statelessBootstrap } = bootstrap;
     const command = owner.kind === 'session'
       ? WorkerBootstrapMessageSchema.parse({ ...bootstrap, type: 'bootstrap', workerGeneration, approvalPolicies })
-      : CompletionWorkerBootstrapSchema.parse({ ...statelessBootstrap, type: 'completion.bootstrap', workerGeneration });
+      : CompletionWorkerBootstrapSchema.parse({ ...statelessBootstrap, authorizationRootId, type: 'completion.bootstrap', workerGeneration });
     const ready = Promise.withResolvers<void>();
     const exited = Promise.withResolvers<void>();
     const env: NodeJS.ProcessEnv = { ...process.env, ...privateEnvironment, PI_CODING_AGENT_DIR: input.agentDirectory };

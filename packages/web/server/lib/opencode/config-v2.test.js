@@ -13,16 +13,12 @@ import {
   fromAgentEntity,
   isLegacyAgentFrontmatter,
   toCommandEntity,
-  toMcpEntity,
   toProviderEntity,
   toPluginEntity,
   fromPluginEntity,
   readSectionEntry,
   writeSectionEntry,
   deleteSectionEntry,
-  readMcpEntries,
-  readLayeredMcpEntries,
-  writeMcpEntry,
   parseWebSearchSelection,
   writeWebSearchSelection,
   findWebSearchProjectOverride,
@@ -186,122 +182,6 @@ describe('command entity', () => {
       model: 'anthropic/claude-sonnet-4-5#high',
       subagent: true,
     });
-  });
-});
-
-describe('mcp entity', () => {
-  it('migrates a v1 local server', () => {
-    expect(toMcpEntity({
-      type: 'local',
-      command: ['npx', '@playwright/mcp'],
-      enabled: true,
-      timeout: 30000,
-    })).toEqual({
-      type: 'local',
-      command: ['npx', '@playwright/mcp'],
-      disabled: false,
-      timeout: { catalog: 30000, execution: 30000 },
-    });
-  });
-
-  it('migrates v1 camelCase OAuth to snake_case', () => {
-    expect(toMcpEntity({
-      type: 'remote',
-      url: 'https://mcp.example.com',
-      oauth: { clientId: 'id', clientSecret: 'secret', callbackPort: 4242, redirectUri: 'http://localhost/cb' },
-      enabled: false,
-    })).toEqual({
-      type: 'remote',
-      url: 'https://mcp.example.com',
-      oauth: {
-        client_id: 'id',
-        client_secret: 'secret',
-        callback_port: 4242,
-        redirect_uri: 'http://localhost/cb',
-      },
-      disabled: true,
-    });
-  });
-
-  it('keeps a non-default protocol on both transports', () => {
-    expect(toMcpEntity({ type: 'local', command: ['a'], protocol: 'auto' }).protocol).toBe('auto');
-    expect(toMcpEntity({
-      type: 'remote',
-      url: 'https://mcp.example.com',
-      protocol: '2026-07-28',
-    }).protocol).toBe('2026-07-28');
-  });
-
-  it('drops the protocol key for legacy, for an unknown value and for a removal', () => {
-    // The editor saves "legacy" as `null`: absent is what OpenCode calls legacy,
-    // so the config file only ever names a non-default negotiation.
-    expect(toMcpEntity({ type: 'local', command: ['a'], protocol: null })).not.toHaveProperty('protocol');
-    expect(toMcpEntity({ type: 'local', command: ['a'], protocol: 'made-up' })).not.toHaveProperty('protocol');
-    expect(toMcpEntity({ type: 'local', command: ['a'], protocol: 'legacy' }).protocol).toBe('legacy');
-  });
-
-  it('keeps auth_server_metadata_url and drops it again when emptied', () => {
-    expect(toMcpEntity({
-      type: 'remote',
-      url: 'https://mcp.example.com',
-      oauth: {
-        client_id: 'id',
-        auth_server_metadata_url: 'https://auth.example.com/.well-known/oauth-authorization-server',
-      },
-    }).oauth).toEqual({
-      client_id: 'id',
-      auth_server_metadata_url: 'https://auth.example.com/.well-known/oauth-authorization-server',
-    });
-
-    // An emptied field arrives as '' because the editor rebuilds the whole
-    // oauth block; the key must not survive.
-    expect(toMcpEntity({
-      type: 'remote',
-      url: 'https://mcp.example.com',
-      oauth: { client_id: 'id', auth_server_metadata_url: '   ' },
-    }).oauth).toEqual({ client_id: 'id' });
-
-    // Nothing left in the block at all removes `oauth` itself.
-    expect(toMcpEntity({
-      type: 'remote',
-      url: 'https://mcp.example.com',
-      oauth: { auth_server_metadata_url: '' },
-    })).not.toHaveProperty('oauth');
-  });
-
-  it('reads v1 mcp.<name> and v2 mcp.servers, with v2 winning', () => {
-    const config = {
-      mcp: {
-        timeout: { catalog: 1000 },
-        legacy: { type: 'local', command: ['a'] },
-        shared: { type: 'local', command: ['old'] },
-        servers: { shared: { type: 'local', command: ['new'] } },
-      },
-    };
-    const entries = readMcpEntries(config);
-    expect([...entries.keys()]).toEqual(['legacy', 'shared']);
-    expect(entries.get('shared').value.command).toEqual(['new']);
-  });
-
-  it('applies layer precedence after normalizing each layer', () => {
-    // A raw deep merge would leave user `mcp.servers.shared` next to project
-    // `mcp.shared`, and the v2 spelling would then shadow the project override.
-    const user = { mcp: { servers: { shared: { type: 'remote', url: 'https://global' }, only: { type: 'local', command: ['u'] } } } };
-    const project = { mcp: { shared: { type: 'remote', url: 'https://project' } } };
-    const entries = readLayeredMcpEntries([user, project]);
-    expect(entries.get('shared')).toEqual({
-      value: { type: 'remote', url: 'https://project' },
-      key: 'mcp',
-      legacy: true,
-    });
-    expect(entries.get('only').value.command).toEqual(['u']);
-    expect(readLayeredMcpEntries([project, user]).get('shared').value.url).toBe('https://global');
-  });
-
-  it('rewrites a v1 mcp entry into mcp.servers in place', () => {
-    const config = { mcp: { legacy: { type: 'local', command: ['a'] } } };
-    writeMcpEntry(config, 'legacy', { type: 'local', command: ['b'] });
-    expect(config.mcp).toEqual({ servers: { legacy: { type: 'local', command: ['b'] } } });
   });
 });
 

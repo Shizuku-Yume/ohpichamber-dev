@@ -79,6 +79,7 @@ export const RunSchema = z.strictObject({
 export type Run = z.infer<typeof RunSchema>;
 export const SubagentSchema = z.strictObject({
   subagentId: EntityIdSchema, parentSessionId: EntityIdSchema, childSessionId: EntityIdSchema,
+  toolCallId: EntityIdSchema.optional(),
   role: z.string(), solutionSpace: z.string().optional(), status: z.enum(['idle', 'running', 'completed', 'failed']),
 });
 export type Subagent = z.infer<typeof SubagentSchema>;

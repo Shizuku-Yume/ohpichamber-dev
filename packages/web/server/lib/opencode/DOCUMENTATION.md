@@ -470,8 +470,12 @@ Persistence path normalization (`normalizePathForPersistence` / `normalizeSettin
 
 ## Entity routes (v2 shapes)
 
-Everything OpenChamber persists into OpenCode config now speaks OpenCode 2.
-This section is the contract the Settings UI builds on.
+The retained legacy entity routes persist OpenCode 2 configuration. MCP is no
+longer owned here: shared UI uses the Canonical Client and authenticated Host
+Gateway workspace MCP routes, backed by the Agent Service's workspace owner.
+Web and Electron use that shared boundary; hosted mobile and Capacitor use
+the same shared UI transport. This retirement does not certify packaged or
+mobile runtime acceptance.
 
 ### Ownership: which directory is written
 
@@ -515,7 +519,6 @@ normalizer applies.
 | Agents | `agents` | `agent` |
 | Commands | `commands` | `command` |
 | Providers | `providers` | `provider` |
-| MCP servers | `mcp.servers` | `mcp.<name>` (each layer normalized on its own, then custom > project > user; a raw merge would let a user-file `mcp.servers.<name>` shadow a project-file `mcp.<name>` override) |
 | Plugins | `plugins` | `plugin` (including `[spec, options]` tuples) |
 | Permissions | `permissions` rule array | `permission` map, `tools` map |
 
@@ -572,15 +575,6 @@ One shape per entity for the web routes. The conversions live in `config-v2.js`.
   "model": "anthropic/claude-sonnet-4-5#high",
   "subagent": true
 }
-
-// McpEntity — `type` is required; v2 drops a v1 entry that only had `enabled`
-{ "type": "local", "command": ["npx", "@playwright/mcp"], "cwd": "…",
-  "environment": {}, "disabled": false, "codemode": true,
-  "timeout": { "startup": 0, "catalog": 30000, "execution": 30000 } }
-{ "type": "remote", "url": "https://mcp.example.com", "headers": {},
-  "oauth": { "client_id": "…", "client_secret": "…", "scope": "…",
-             "callback_port": 4242, "redirect_uri": "…" },
-  "disabled": false, "timeout": { "catalog": 30000, "execution": 30000 } }
 
 // ProviderEntity
 {
@@ -677,11 +671,12 @@ with a `CommandEntity`.
 `POST` / `PATCH` / `DELETE /api/config/commands/:name` mirror the agent routes;
 `subtask` is accepted as the v1 name for `subagent`.
 
-`GET /api/config/mcp` — array of `McpEntity` extended with
-`{ name, scope, sectionKey, legacy }`.
-`GET /api/config/mcp/:name` — one such entry, or 404.
-`POST` / `PATCH` / `DELETE /api/config/mcp/:name` — body is an `McpEntity`
-(plus `scope` on create). Answers `{ success: true, message, path }`.
+MCP configuration, apply, reconnect and OAuth use
+`/api/agent/v1/workspaces/:workspaceId/mcp/...`, not `/api/config/mcp` or legacy
+OpenCode SDK methods. The service owns workspace persistence and root-worker
+catalogs; the Host preserves authorization and credential policy. Existing
+session-scoped canonical MCP operations remain available for live sessions.
+See the canonical contracts in `.workflow/omp-migration/contracts.md`.
 
 `PUT /api/provider` — body accepts either spelling: v2 `{ package, settings,
 headers }` or v1 `{ npm, options }`. The stored entry is always a
@@ -692,9 +687,8 @@ headers }` or v1 `{ npm, options }`. The stored entry is always a
 - `registerConfigEntityRoutes(app, dependencies)`: registers configuration entity routes:
   - Agents: `/api/config/agents/:name`, `/api/config/agents/:name/config`, `/api/config/agents/:name/permissions`
   - Commands: `/api/config/commands/:name` and `/api/config/commands/:name/config`
-  - MCP servers: `/api/config/mcp` and `/api/config/mcp/:name`
   - Snippets: `/api/config/snippets`, `/api/config/snippets/:name`, and `/api/config/snippets/expand`
-- Agent/command/MCP write routes persist config to disk and return plain success. OpenCode 2 watches those files and rebuilds the affected entity itself, so there is nothing left to apply.
+- Agent/command write routes persist config to disk and return plain success. OpenCode 2 watches those files and rebuilds the affected entity itself, so there is nothing left to apply.
 
 ## Public exports (config-mutation-response.js)
 - `buildAppliedResponse(message, details?)`: success payload for a config mutation that is already live (`{ success: true, message }`, no restart flags). `details` carries the file the write landed in (`{ path, scope, source }`) so the caller can name the config file that changed, including a v1 file rewritten in place in v2 shape.
@@ -858,6 +852,7 @@ within a ten-minute overall deadline.
 ## Public exports (skill-routes.js)
 - `registerSkillRoutes(app, dependencies)`: registers skills-related routes:
   - Skills config CRUD and metadata under `/api/config/skills*`
+  - Host filesystem discovery is authoritative for lists, detail, supporting files, and catalog installed-name resolution. These routes do not contact an agent daemon or apply OpenCode process-env visibility flags; successful empty lists are complete answers. The shared skills UI reloads Host state directly after CRUD/install without waiting for an OpenCode restart.
   - Skill rename via `PATCH /api/config/skills/:name` with `{ renameTo }` (directory rename preserves `SKILL.md` body and supporting files; restricted to managed skill roots under `.opencode/skills|skill`, `.claude/skills`, and `.agents/skills`)
   - Skill list responses include authoritative `renamable` derived from the same managed-root policy used by rename
   - `GET /api/config/skills` leaves `sources.md.supportingFiles` out: listing every file of every skill cost seconds when a skill bundles a `.venv` or `node_modules`, and no list consumer reads it. `GET /api/config/skills/:name` still returns it

@@ -56,6 +56,7 @@ for (const policyError of [
       }
       const bootstrap: CompletionWorkerBootstrap = {
         type: 'completion.bootstrap', workerGeneration: 'completion-policy-generation',
+        authorizationRootId: 'completion-policy-owner',
         workspaceId, projectId: 'completion-policy-project', cwd,
         agentDirectory, agentDirectoryId: 'completion-policy-agent', catalogRevision: '4',
       };
@@ -109,6 +110,7 @@ test('workspace credential handoff persists an SDK credential for private resolu
   await mkdir(agentDirectory, { recursive: true });
   const bootstrap: CompletionWorkerBootstrap = {
     type: 'completion.bootstrap', workerGeneration: 'handoff-generation',
+    authorizationRootId: 'handoff-owner',
     workspaceId: 'handoff-workspace', projectId: 'handoff-project', cwd,
     agentDirectory, agentDirectoryId: 'handoff-agent', catalogRevision: '0',
   };

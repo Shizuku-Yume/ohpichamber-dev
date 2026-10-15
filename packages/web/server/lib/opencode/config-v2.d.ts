@@ -37,33 +37,6 @@ export interface CommandEntity {
   subagent?: boolean;
 }
 
-export interface McpTimeout {
-  startup?: number;
-  catalog?: number;
-  execution?: number;
-}
-
-export interface McpOAuth {
-  client_id?: string;
-  client_secret?: string;
-  scope?: string;
-  callback_port?: number;
-  redirect_uri?: string;
-}
-
-export interface McpEntity {
-  type: 'local' | 'remote';
-  command?: string[];
-  cwd?: string;
-  environment?: Record<string, string>;
-  url?: string;
-  headers?: Record<string, string>;
-  oauth?: McpOAuth | false;
-  disabled?: boolean;
-  codemode?: boolean;
-  timeout?: McpTimeout;
-}
-
 export interface ModelCompatibility {
   reasoningField?: string;
   requireReasoning?: boolean;
@@ -151,13 +124,6 @@ export type CommandFrontmatter = Record<string, unknown> & Omit<CommandEntity, '
 
 export function fromCommandEntity(entity: unknown): { fields: CommandFrontmatter; template: string };
 export function isLegacyCommandFrontmatter(frontmatter: unknown): boolean;
-
-export function toMcpEntity(raw: unknown): McpEntity;
-export function readMcpEntry(config: unknown, name: string): SectionLookup;
-export function readMcpEntries(config: unknown): Map<string, SectionLookup>;
-export function readLayeredMcpEntries(configs: unknown[]): Map<string, SectionLookup>;
-export function writeMcpEntry(config: Record<string, unknown>, name: string, value: unknown): string;
-export function deleteMcpEntry(config: Record<string, unknown>, name: string): boolean;
 
 export function toProviderPackage(value: unknown): string | undefined;
 export function toNpmPackage(value: unknown): string | undefined;

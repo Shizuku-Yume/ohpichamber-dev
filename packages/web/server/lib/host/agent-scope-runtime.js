@@ -15,11 +15,10 @@ const publicWorkspace = (scope) => ({
   name: scope.cwd === scope.projectDirectory ? scope.name : path.basename(scope.cwd),
   displayPath: displayPath(scope),
 });
-
 /** Configured Host projects and their registered worktrees are the directory authority, not client path hints. */
 export const createHostAgentScopeRuntime = ({
   store, readSettings, sanitizeProjects, validateDirectoryPath, getWorktrees, managedChatsScope,
-  agentDirectory = path.join(os.homedir(), '.omp', 'agent'), fsPromises = fs.promises,
+  getArchiveCatalog = () => [], agentDirectory = path.join(os.homedir(), '.omp', 'agent'), fsPromises = fs.promises,
 }) => {
   const readProjects = async () => sanitizeProjects((await readSettings()).projects) ?? [];
   const initialize = async () => {
@@ -27,6 +26,24 @@ export const createHostAgentScopeRuntime = ({
     if (managedChatsScope) await fsPromises.mkdir(managedChatsScope.root, { recursive: true, mode: 0o700 });
   };
   const selectedDirectory = () => fsPromises.realpath(agentDirectory);
+const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspaceId)?.[1] ?? null;
+
+  const archiveScope = async (spaceId, directory) => ({
+    projectId: `archive_${spaceId}`, workspaceId: `archive_${spaceId}`, cwd: directory,
+    agentDirectory: await selectedDirectory(),
+  });
+  const registerArchiveWorkspace = (scope) => store.ensureWorkspace({
+    hostProjectId: scope.projectId, projectId: scope.projectId, workspaceId: scope.workspaceId,
+    projectDirectory: scope.cwd, workspaceDirectory: scope.cwd, agentDirectory: scope.agentDirectory,
+    name: 'Deleted space archive', displayPath: '.',
+  });
+  const registerArchiveSession = async (session, children, scope) => {
+    const workspace = await registerArchiveWorkspace(scope);
+    const rootSessionId = session.rootSessionId;
+    await store.bindSession({ sessionId: session.sessionId, rootSessionId, workspaceId: workspace.workspaceId, agentDirectoryId: workspace.agentDirectoryId });
+    for (const child of children) await store.bindSession({ sessionId: child.childSessionId, rootSessionId, workspaceId: workspace.workspaceId, agentDirectoryId: workspace.agentDirectoryId });
+    return workspace;
+  };
   const validateDirectory = async (directory) => {
     const validated = await validateDirectoryPath(directory);
     if (!validated.ok) throw new MetadataReadError('A configured Host workspace is unavailable');
@@ -103,6 +120,16 @@ export const createHostAgentScopeRuntime = ({
         }
       } catch (error) { errors['managed-chats'] = failureCode(error); }
     }
+    for (const entry of getArchiveCatalog()) {
+      const workspaceId = `archive_${entry.spaceId}`;
+      try {
+        let scope = await store.getWorkspace(workspaceId);
+        if (!scope) scope = await registerArchiveWorkspace(await archiveScope(entry.spaceId, entry.directory));
+        const allowed = await authorize(scope);
+        if (allowed) scopes.push(allowed);
+        else errors[workspaceId] = 'METADATA_READ_FAILED';
+      } catch (error) { errors[workspaceId] = failureCode(error); }
+    }
     return { scopes: [...new Map(scopes.map((scope) => [scope.workspaceId, scope])).values()], errors };
   };
   const authorize = async (scope) => {
@@ -113,6 +140,13 @@ export const createHostAgentScopeRuntime = ({
       if (scope.projectDirectory !== projectDirectory || !contains(projectDirectory, scope.cwd)) return null;
       const cwd = await validateDirectory(scope.cwd);
       return cwd === scope.cwd ? { ...scope, displayPath: displayPath(scope) } : null;
+    }
+    const spaceId = archiveSpaceId(scope.workspaceId);
+    if (spaceId) {
+      const catalogEntry = getArchiveCatalog().find((entry) => entry.spaceId === spaceId && entry.directory === scope.cwd);
+      if (!catalogEntry || scope.projectId !== `archive_${spaceId}` || scope.projectDirectory !== scope.cwd) return null;
+      const directory = await fsPromises.realpath(scope.cwd);
+      return directory === scope.cwd && scope.agentDirectory === selectedAgentDirectory ? { ...scope, displayPath: '.' } : null;
     }
     const project = projects.find((item) => item.id === scope.hostProjectId);
     if (!project) return null;
@@ -229,5 +263,5 @@ export const createHostAgentScopeRuntime = ({
     const { scopes, errors } = await discover();
     return { items: scopes.filter((scope) => projectId === undefined || scope.projectId === projectId).map(publicWorkspace), errors };
   };
-  return { initialize, createChatWorkspace, resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, resolveRelocationSourceScope, registerSessionScope, listProjects, listWorkspaces };
+  return { initialize, createChatWorkspace, archiveScope, registerArchiveSession, resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, resolveRelocationSourceScope, registerSessionScope, listProjects, listWorkspaces };
 };

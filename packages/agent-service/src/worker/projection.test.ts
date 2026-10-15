@@ -35,8 +35,8 @@ for (const outcome of ['failed', 'cancelled'] as const) {
       deliver({ role: 'user', content: 'Run a tool, then continue.', timestamp: timestamp++ });
       const call = assistant([{ type: 'toolCall', id: 'call', name: 'bash', arguments: { command: 'printf fixture' } }], 'toolUse', timestamp++);
       deliver(call);
-      const result = { role: 'toolResult' as const, toolCallId: 'call', toolName: 'bash', content: [{ type: 'text' as const, text: 'fixture' }], isError: outcome === 'cancelled', timestamp: timestamp++ };
-      journal.append(projection.consume({ type: 'tool_execution_end', toolCallId: 'call', toolName: 'bash', result: { content: result.content }, isError: result.isError }));
+      const result = { role: 'toolResult' as const, toolCallId: 'call', toolName: 'bash', content: [{ type: 'text' as const, text: 'fixture' }], details: { diff: { path: 'fixture.txt', oldText: 'before', newText: 'after' } }, isError: outcome === 'cancelled', timestamp: timestamp++ };
+      journal.append(projection.consume({ type: 'tool_execution_end', toolCallId: 'call', toolName: 'bash', result: { content: result.content, details: result.details }, isError: result.isError }));
       deliver(result);
       journal.append(projection.consume({ type: 'turn_end', message: call, toolResults: [result] }));
       const terminal = assistant([{ type: 'text', text: 'Partial continuation' }], outcome === 'failed' ? 'error' : 'aborted', timestamp++);
@@ -58,6 +58,8 @@ for (const outcome of ['failed', 'cancelled'] as const) {
       const restored = new WorkerProjection(reopened, 'session').seed();
       expect(restored.turns).toEqual(history.turns);
       expect(restored.messages).toEqual(history.messages);
+      const restoredTool = restored.messages.flatMap(message => message.parts).find(part => part.type === 'tool_result');
+      expect(restoredTool).toMatchObject({ output: { details: result.details } });
     } finally {
       await reopened?.close();
       await manager.close();

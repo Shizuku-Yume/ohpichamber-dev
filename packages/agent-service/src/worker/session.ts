@@ -16,8 +16,9 @@ import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts'
 import { ProjectionError } from '../projection/journal.ts';
 import { WorkerInteraction as NativeInteraction } from './interaction.ts';
 import { BRANCH_TYPE, rememberPrivateRoots, resolveCanonicalMessage, selectedBranchRevert, WorkerProjection, type BranchSelection } from './projection.ts';
-import { WorkerCatalogs, credentialReference } from './catalogs.ts';
+import { WorkerCatalogs } from './catalogs.ts';
 import { WorkerMcp, readNativeMcpConfigurationIfPresent } from './mcp.ts';
+import { NativeMcpCredentials } from './mcp-credentials.ts';
 import { WorkerShell } from './shell.ts';
 import { WorkerCompletion } from './completion.ts';
 import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
@@ -147,14 +148,10 @@ export class WorkerSession {
       api.on('tool_result', event => { interaction.forgetToolCall(event.toolCallId); });
       api.on('tool_approval_resolved', event => { interaction.forgetToolCall(event.toolCallId, false); });
     };
+    const mcpCredentials = new NativeMcpCredentials(authStorage, input.workspaceId);
     const mcp = input.mcpConfigPath ? new WorkerMcp({
       cwd: input.cwd, configPath: input.mcpConfigPath, worker, authStorage,
-      resolveCredentialRef: async reference => {
-        await authStorage.credentials.reload();
-        const row = authStorage.credentials.list().find(candidate => candidate.disabledCause === null && credentialReference(candidate.provider, candidate.id) === reference);
-        if (!row) throw new ProjectionError(403, 'UNAUTHORIZED', 'MCP credential reference is unavailable');
-        return row.provider;
-      },
+      resolveCredentialRef: reference => mcpCredentials.resolve(reference),
       // authorizeServer already checked the Host-resolved command before this resolver is called.
       resolveCommand: async transport => transport.command,
       authorizeServer: server => authorize({ type: 'mcp-server', server }),
@@ -447,6 +444,8 @@ export class WorkerSession {
           case 'reconnect': return { type: 'mcp', result: { type: 'catalog', catalog: await this.mcp.reconnect(request.serverId, request.request, request.configuration) } };
           case 'oauth.status': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthRead(request.serverId, request.configuration) } };
           case 'oauth': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthExecute(request.serverId, request.request, request.configuration) } };
+          case 'test': return { type: 'mcp', result: { type: 'tested', result: await this.mcp.test(request.serverId, request.configuration) } };
+          case 'secret.write': throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'MCP credential writes belong to the workspace owner');
         }
       }
       case 'shell':

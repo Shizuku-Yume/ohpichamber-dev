@@ -5,8 +5,10 @@ import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { JsonValueSchema, type ApprovalRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
 import { cfgBashPatterns } from '@oh-my-pi/pi-coding-agent/exec/settings';
+import type { SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
 import { cfgToolsApprovalMode } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
+import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { InteractionManager } from '../interaction/manager.ts';
 import { SessionJournal } from '../projection/journal.ts';
 import type { ProjectionInput } from '../projection/protocol.ts';
@@ -44,10 +46,11 @@ function completion(tool?: { name: string; input: JsonObject; id: string }): Res
   return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(finish)}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
 }
 
-async function fixture({ respond, invoke, machineCommands = [] }: {
+async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {} }: {
   respond: (payload: ProviderRequest, root: string) => Promise<Response> | Response;
   invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
   machineCommands?: string[];
+  onSubagent?: (payload: SubagentLifecyclePayload) => void;
 }) {
   const root = await mkdtemp(join(tmpdir(), 'native-seams-'));
   const home = process.env.HOME;
@@ -55,7 +58,8 @@ async function fixture({ respond, invoke, machineCommands = [] }: {
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
   const mcpConfigPath = join(agentDirectory, 'mcp.json');
-  await mkdir(cwd);
+  await mkdir(join(cwd, '.omp', 'agents'), { recursive: true });
+  await writeFile(join(cwd, '.omp', 'agents', 'child.md'), '---\nname: child\ndescription: Native child proof agent\nblocking: true\n---\nReturn the child proof marker.\n');
   await mkdir(agentDirectory);
   const events: ProjectionInput[] = [];
   const requests: ProviderRequest[] = [];
@@ -94,7 +98,7 @@ async function fixture({ respond, invoke, machineCommands = [] }: {
     }, async (request, signal) => {
       if (!invoke) throw new Error('Host action was not part of this scenario');
       return invoke(request, signal, cwd);
-    }, () => {});
+    }, () => {}, onSubagent);
     journal = new SessionJournal({ sessionId: rootSessionId, rootSessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, worker.seed());
     const sessionWorker = worker;
     interactions.openSession(rootSessionId, journal.runtime().epoch, generation, 'workspace', async operation => { await sessionWorker.operation(operation); }, input => { events.push(input); journal!.append([input]); });
@@ -402,3 +406,49 @@ test('native branch CAS rejects stale owner/version and redo expires after a new
     expect(harness.fatal()).toBe(false);
   } finally { await harness.close(); }
 }, 30000);
+test('actual native TaskTool owns a child session and persists its history', async () => {
+  let requests = 0;
+  const lifecycle: SubagentLifecyclePayload[] = [];
+  const harness = await fixture({
+    onSubagent: payload => lifecycle.push(payload),
+    respond: payload => {
+      requests += 1;
+      if (requests === 1) return completion({ name: 'task', id: 'native-task', input: { agent: 'child', name: 'child-proof', task: 'Return the child proof marker.' } });
+      return completion();
+    },
+  });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  });
+  try {
+    cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
+    await harness.worker.operation({ type: 'prompt', runId: 'task-run', request: prompt('Spawn one native child and wait for its result.') });
+    await terminal.promise;
+    expect(requests).toBeGreaterThanOrEqual(3);
+
+    expect(lifecycle.map(event => event.status)).toEqual(['started', 'completed']);
+    const started = lifecycle[0];
+    const completed = lifecycle[1];
+    expect(started?.id).toBe(completed?.id);
+    const history = await harness.worker.operation({ type: 'history', request: { sessionId: rootSessionId } });
+    if (history.type !== 'history') throw new Error('Canonical history response is required');
+    const taskCall = history.history.messages.flatMap(message => message.parts).find(part => part.type === 'tool_call' && part.toolName === 'task');
+    if (taskCall?.type !== 'tool_call') throw new Error('Canonical native TaskTool call is required');
+    expect(taskCall.toolCallId).toBe('native-task');
+    expect(started?.parentToolCallId).toBe(taskCall.toolCallId);
+    expect(completed?.parentToolCallId).toBe(taskCall.toolCallId);
+    expect(started?.sessionFile).toBeTruthy();
+    if (!started?.sessionFile) throw new Error('Native child session file was not published');
+    const child = await SessionManager.open(started.sessionFile, dirname(started.sessionFile), undefined, { initialCwd: harness.root, throwIfMissing: true });
+    try {
+      expect(child.getSessionId()).not.toBe(rootSessionId);
+      expect(child.getEntries().some(entry => entry.type === 'message' && entry.message.role === 'user')).toBe(true);
+      expect(child.getEntries().some(entry => entry.type === 'message' && entry.message.role === 'assistant')).toBe(true);
+    } finally { await child.close(); }
+    expect(harness.fatal()).toBe(false);
+  } finally {
+    unsubscribe();
+    await harness.close();
+  }
+}, 60000);

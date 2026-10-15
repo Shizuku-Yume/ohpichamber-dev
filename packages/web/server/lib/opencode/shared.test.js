@@ -5,7 +5,6 @@ import path from 'path';
 
 import { parseMdFile, writeMdFile, readConfigFile, readConfigLayers, writeConfig, walkSkillMdFiles } from './shared.js';
 import { updateAgent } from './agents.js';
-import { updateMcpConfig, createMcpConfig, deleteMcpConfig } from './mcp.js';
 
 const FIXTURE_DIR = path.join(os.tmpdir(), `openchamber-shared-test-${process.pid}`);
 
@@ -310,7 +309,7 @@ describe('readConfigFile / writeConfig JSONC safety (issue #2923)', () => {
     expect(fs.existsSync(`${file}.openchamber.backup`)).toBe(false);
   });
 
-  it('preserves a valid config across MCP updates', () => {
+  it('preserves a valid config across nested updates', () => {
     const file = writeFixture('opencode.jsonc', VALID_CONFIG);
     const config = readConfigFile(file);
     config.mcp.openproject.enabled = false;
@@ -321,23 +320,6 @@ describe('readConfigFile / writeConfig JSONC safety (issue #2923)', () => {
     expect(rewritten.provider['ollama-cloud'].name).toBe('Ollama Cloud');
     expect(rewritten.mcp.openproject.enabled).toBe(false);
     expect(fs.readFileSync(`${file}.openchamber.backup`, 'utf8')).toBe(VALID_CONFIG);
-  });
-
-  it('does not wipe an unparseable user config during MCP mutation attempts', () => {
-    const file = writeFixture('opencode.jsonc', PARTIAL_PARSE_CONFIG);
-    const previousOpenCodeConfig = process.env.OPENCODE_CONFIG;
-
-    try {
-      process.env.OPENCODE_CONFIG = file;
-      expect(() => updateMcpConfig('openproject', { enabled: true })).toThrow(
-        /cannot be loaded safely/,
-      );
-      expect(fs.readFileSync(file, 'utf8')).toBe(PARTIAL_PARSE_CONFIG);
-      expect(fs.existsSync(`${file}.openchamber.backup`)).toBe(false);
-    } finally {
-      if (previousOpenCodeConfig === undefined) delete process.env.OPENCODE_CONFIG;
-      else process.env.OPENCODE_CONFIG = previousOpenCodeConfig;
-    }
   });
 
   it('returns an empty object for a comment-only config file', () => {
@@ -374,12 +356,12 @@ describe('readConfigFile / writeConfig JSONC safety (issue #2923)', () => {
         }),
       ]);
 
-      updateMcpConfig('openproject', { disabled: true }, projectDir);
+      const config = readConfigFile(custom);
+      config.plugin.push('another-plugin');
+      writeConfig(config, custom);
       const rewritten = readConfigFile(custom);
-      expect(rewritten.plugin).toEqual(['opencode-see-image']);
-      // The v1 `mcp.<name>` entry is rewritten in place into `mcp.servers`.
-      expect(rewritten.mcp.openproject).toBeUndefined();
-      expect(rewritten.mcp.servers.openproject.disabled).toBe(true);
+      expect(rewritten.plugin).toEqual(['opencode-see-image', 'another-plugin']);
+      expect(rewritten.mcp).toEqual(config.mcp);
       expect(fs.readFileSync(projectFile, 'utf8')).toBe(PARTIAL_PARSE_CONFIG);
       expect(fs.existsSync(`${projectFile}.openchamber.backup`)).toBe(false);
     } finally {
@@ -495,21 +477,12 @@ describe('writeConfig preserves JSONC comments (issue #3587)', () => {
     '',
   ].join('\n');
 
-  const withCustomConfig = (file, run) => {
-    const previousOpenCodeConfig = process.env.OPENCODE_CONFIG;
-    try {
-      process.env.OPENCODE_CONFIG = file;
-      return run();
-    } finally {
-      if (previousOpenCodeConfig === undefined) delete process.env.OPENCODE_CONFIG;
-      else process.env.OPENCODE_CONFIG = previousOpenCodeConfig;
-    }
-  };
-
-  it('keeps every comment when a single MCP value changes', () => {
+  it('keeps every comment when a single nested value changes', () => {
     const file = writeFixture('opencode.jsonc', COMMENTED_CONFIG);
 
-    withCustomConfig(file, () => updateMcpConfig('openproject', { disabled: false }));
+    const config = readConfigFile(file);
+    config.mcp.servers.openproject.disabled = false;
+    writeConfig(config, file);
 
     const raw = fs.readFileSync(file, 'utf8');
     expect(raw).toContain('// schema for editor hints');
@@ -531,13 +504,12 @@ describe('writeConfig preserves JSONC comments (issue #3587)', () => {
     expect(fs.readFileSync(`${file}.openchamber.backup`, 'utf8')).toBe(COMMENTED_CONFIG);
   });
 
-  it('keeps comments when adding a new MCP server', () => {
+  it('keeps comments when adding a nested entry', () => {
     const file = writeFixture('opencode.jsonc', COMMENTED_CONFIG);
 
-    // A name no real global config carries: the user-level config of the
-    // machine running the tests is still read, and an existing entry there
-    // would make the create fail.
-    withCustomConfig(file, () => createMcpConfig('jsonc-comment-fixture', { type: 'remote', url: 'https://mcp.linear.app/sse' }));
+    const config = readConfigFile(file);
+    config.mcp.servers['jsonc-comment-fixture'] = { type: 'remote', url: 'https://mcp.linear.app/sse' };
+    writeConfig(config, file);
 
     const raw = fs.readFileSync(file, 'utf8');
     expect(raw).toContain('// schema for editor hints');
@@ -550,10 +522,12 @@ describe('writeConfig preserves JSONC comments (issue #3587)', () => {
     expect(readConfigFile(file).mcp.servers.openproject.disabled).toBe(true);
   });
 
-  it('keeps comments when deleting an MCP server and the emptied section', () => {
+  it('keeps comments when deleting a nested section', () => {
     const file = writeFixture('opencode.jsonc', COMMENTED_CONFIG);
 
-    withCustomConfig(file, () => deleteMcpConfig('openproject'));
+    const config = readConfigFile(file);
+    delete config.mcp;
+    writeConfig(config, file);
 
     const raw = fs.readFileSync(file, 'utf8');
     expect(raw).toContain('// schema for editor hints');
@@ -576,7 +550,9 @@ describe('writeConfig preserves JSONC comments (issue #3587)', () => {
       '',
     ].join('\n'));
 
-    withCustomConfig(file, () => deleteMcpConfig('openproject'));
+    const config = readConfigFile(file);
+    delete config.mcp;
+    writeConfig(config, file);
 
     expect(fs.readFileSync(file, 'utf8')).toContain('// the only entry');
     expect(readConfigFile(file)).toEqual({});
@@ -647,7 +623,9 @@ describe('writeConfig preserves JSONC comments (issue #3587)', () => {
       '',
     ].join('\r\n'));
 
-    withCustomConfig(file, () => updateMcpConfig('openproject', { disabled: false }));
+    const config = readConfigFile(file);
+    config.mcp.servers.openproject.disabled = false;
+    writeConfig(config, file);
 
     const raw = fs.readFileSync(file, 'utf8');
     expect(raw).toContain('\r\n');

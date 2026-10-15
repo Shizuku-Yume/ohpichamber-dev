@@ -215,8 +215,8 @@ export const MCPTransportSchema = z.discriminatedUnion('type', [
     args: z.array(z.string()),
     envCredentialRefs: z.record(z.string().min(1), EntityIdSchema).optional(),
   }),
-  z.strictObject({ type: z.literal('http'), url: PublicEndpointSchema, credentialRef: EntityIdSchema.optional() }),
-  z.strictObject({ type: z.literal('sse'), url: PublicEndpointSchema, credentialRef: EntityIdSchema.optional() }),
+  z.strictObject({ type: z.literal('http'), url: PublicEndpointSchema, credentialRef: EntityIdSchema.optional(), headerCredentialRefs: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), EntityIdSchema).optional() }),
+  z.strictObject({ type: z.literal('sse'), url: PublicEndpointSchema, credentialRef: EntityIdSchema.optional(), headerCredentialRefs: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), EntityIdSchema).optional() }),
 ]);
 export type MCPTransport = z.infer<typeof MCPTransportSchema>;
 
@@ -449,6 +449,33 @@ export const MCPReconnectRequestSchema = z.strictObject({
 });
 export type MCPReconnectRequest = z.infer<typeof MCPReconnectRequestSchema>;
 
+export const MCPConnectionTestRequestSchema = MCPApplyRequestSchema;
+export type MCPConnectionTestRequest = z.infer<typeof MCPConnectionTestRequestSchema>;
+export const MCPConnectionTestResultSchema = z.discriminatedUnion('status', [
+  z.strictObject({ workspaceId: EntityIdSchema, serverId: EntityIdSchema, persistedRevision: CounterSchema, status: z.literal('connected'), toolCount: z.number().int().nonnegative() }),
+  z.strictObject({ workspaceId: EntityIdSchema, serverId: EntityIdSchema, persistedRevision: CounterSchema, status: z.literal('failed'), error: CatalogOperationErrorSchema }),
+]);
+export type MCPConnectionTestResult = z.infer<typeof MCPConnectionTestResultSchema>;
+export const MCPWorkspaceReconnectRequestSchema = MCPApplyRequestSchema;
+export type MCPWorkspaceReconnectRequest = z.infer<typeof MCPWorkspaceReconnectRequestSchema>;
+export const MCPWorkspaceReconnectResultSchema = z.strictObject({
+  workspaceId: EntityIdSchema, serverId: EntityIdSchema, persistedRevision: CounterSchema,
+  status: ApplyStatusSchema, workers: z.array(MCPWorkerApplyOutcomeSchema), probe: MCPConnectionTestResultSchema.optional(),
+}).refine(validAggregate, 'Reconnect status reflects every captured worker').refine(
+  result => (result.status === 'no-active-workers') === (result.probe !== undefined)
+    && (!result.probe || (result.probe.workspaceId === result.workspaceId && result.probe.serverId === result.serverId && result.probe.persistedRevision === result.persistedRevision))
+    && result.workers.every(outcome => outcome.worker.workspaceId === result.workspaceId
+      && (outcome.outcome === 'retired' || outcome.revisions.appliedRevision === null || counterAtMost(outcome.revisions.appliedRevision, result.persistedRevision))
+      && (outcome.outcome !== 'applied' || outcome.revisions.appliedRevision === result.persistedRevision)),
+  'A no-worker reconnect reports its separate probe, never a runtime apply',
+);
+export type MCPWorkspaceReconnectResult = z.infer<typeof MCPWorkspaceReconnectResultSchema>;
+/** Secret material exists only in authenticated write input, never configuration or result. */
+export const MCPSecretWriteRequestSchema = z.strictObject({ persistedRevision: CounterSchema, value: z.string().min(1) });
+export type MCPSecretWriteRequest = z.infer<typeof MCPSecretWriteRequestSchema>;
+export const MCPSecretWriteResultSchema = z.strictObject({ workspaceId: EntityIdSchema, serverId: EntityIdSchema, persistedRevision: CounterSchema, credentialRef: EntityIdSchema });
+export type MCPSecretWriteResult = z.infer<typeof MCPSecretWriteResultSchema>;
+
 const MCPOAuthUrlSchema = z.url({ protocol: /^https?$/ }).refine(endpoint => {
   const url = new URL(endpoint);
   return url.username === '' && url.password === '' && url.hash === '';
@@ -473,7 +500,7 @@ export const MCPOAuthPublicConfigurationSchema = z.strictObject({
 export type MCPOAuthPublicConfiguration = z.infer<typeof MCPOAuthPublicConfigurationSchema>;
 
 export const MCPOAuthConfigInputSchema = MCPOAuthPublicConfigurationSchema.extend({
-  clientSecret: z.string().min(1).optional(),
+  clientSecretRef: EntityIdSchema.optional(),
 }).refine(input => (input.authorizationUrl === undefined) === (input.tokenUrl === undefined),
   'OAuth authorization and token endpoints are supplied together or discovered together');
 export type MCPOAuthConfigInput = z.infer<typeof MCPOAuthConfigInputSchema>;

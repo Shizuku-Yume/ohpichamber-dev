@@ -5,7 +5,7 @@ const codes = [
   'SESSION_NOT_FOUND', 'RUN_ACTIVE', 'RUN_NOT_FOUND', 'APPROVAL_NOT_FOUND', 'QUESTION_NOT_FOUND',
   'APPROVAL_CONFLICT', 'QUESTION_CONFLICT', 'APPROVAL_EXPIRED', 'QUESTION_EXPIRED',
   'IDEMPOTENCY_CONFLICT', 'COMMAND_IN_FLIGHT', 'RESYNC_REQUIRED', 'INVALID_CURSOR',
-  'SESSION_BRANCH_CONFLICT', 'SESSION_RELOCATION_CONFLICT',
+  'SESSION_BRANCH_CONFLICT', 'SESSION_RELOCATION_CONFLICT', 'SESSION_READ_ONLY',
   'UNSUPPORTED_CAPABILITY', 'SESSION_RESTORE_FAILED', 'PAYLOAD_TOO_LARGE', 'METADATA_CONFLICT',
   'QUEUE_CONFLICT', 'CATALOG_CONFLICT', 'APPROVAL_POLICY_WRITE_FAILED', 'METADATA_CORRUPT',
   'METADATA_READ_FAILED', 'METADATA_WRITE_FAILED', 'MCP_CONFIG_WRITE_FAILED', 'MCP_APPLY_FAILED',
@@ -19,7 +19,7 @@ const codes = [
 const statusFor = (code: typeof codes[number]): number => {
   if (['APPROVAL_CONFLICT', 'QUESTION_CONFLICT', 'METADATA_CONFLICT', 'QUEUE_CONFLICT', 'CATALOG_CONFLICT', 'COMMAND_IN_FLIGHT'].includes(code)) return 409;
   if (['WORKER_GENERATION_CONFLICT', 'MCP_OAUTH_CANCELLED'].includes(code)) return 409;
-  if (['SESSION_BRANCH_CONFLICT', 'SESSION_RELOCATION_CONFLICT'].includes(code)) return 409;
+  if (['SESSION_BRANCH_CONFLICT', 'SESSION_RELOCATION_CONFLICT', 'SESSION_READ_ONLY'].includes(code)) return 409;
   if (code === 'MCP_OAUTH_NOT_FOUND') return 404;
   if (['MCP_CREDENTIAL_UNAVAILABLE', 'MCP_OAUTH_FAILED'].includes(code)) return 422;
   if (code === 'MCP_CONFIG_READ_FAILED') return 503;
@@ -60,7 +60,7 @@ describe('error schemas', () => {
     }
   });
   test('native branch and relocation conflicts serialize as 409 while cursor recovery remains 410', () => {
-    for (const code of ['SESSION_BRANCH_CONFLICT', 'SESSION_RELOCATION_CONFLICT'] as const) {
+    for (const code of ['SESSION_BRANCH_CONFLICT', 'SESSION_RELOCATION_CONFLICT', 'SESSION_READ_ONLY'] as const) {
       const problem = { type: `urn:ohpichamber:problem:${code}`, title: 'Native session control refused',
         status: 409, detail: 'The native session owner changed', code, retryable: false };
       expect(ProblemDetailsSchema.parse(JSON.parse(JSON.stringify(problem)))).toEqual(problem);

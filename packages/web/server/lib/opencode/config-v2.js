@@ -358,8 +358,6 @@ function isLegacyCommandFrontmatter(frontmatter) {
   return Object.keys(frontmatter).some((key) => !COMMAND_NATIVE_KEYS.has(key));
 }
 
-// ============== MCP ==============
-
 function cleanStringMap(value) {
   if (!isRecord(value)) return undefined;
   const cleaned = {};
@@ -369,166 +367,10 @@ function cleanStringMap(value) {
   return Object.keys(cleaned).length ? cleaned : undefined;
 }
 
-function positiveInt(value) {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : undefined;
-}
-
-/** v1 `timeout: 30000` becomes `{catalog, execution}`; a v2 object passes through. */
-function toMcpTimeout(value) {
-  if (isRecord(value)) {
-    const timeout = pickDefined([
-      ['startup', positiveInt(value.startup)],
-      ['catalog', positiveInt(value.catalog)],
-      ['execution', positiveInt(value.execution)],
-    ]);
-    return Object.keys(timeout).length ? timeout : undefined;
-  }
-  const flat = positiveInt(value);
-  return flat === undefined ? undefined : { catalog: flat, execution: flat };
-}
-
-const MCP_PROTOCOLS = new Set(['legacy', 'auto', '2026-07-28']);
-
-/** MCP protocol negotiation, added in OpenCode 2.0.8. Unknown values are dropped. */
-function toMcpProtocol(value) {
-  return MCP_PROTOCOLS.has(value) ? value : undefined;
-}
-
-/** v1 OAuth camelCase becomes v2 snake_case. */
-function toMcpOAuth(value) {
-  if (value === false) return false;
-  if (!isRecord(value)) return undefined;
-  const oauth = pickDefined([
-    ['client_id', trimmedString(value.client_id ?? value.clientId)],
-    ['client_secret', trimmedString(value.client_secret ?? value.clientSecret)],
-    ['scope', trimmedString(value.scope)],
-    ['callback_port', positiveInt(value.callback_port ?? value.callbackPort)],
-    ['redirect_uri', trimmedString(value.redirect_uri ?? value.redirectUri)],
-    // OpenCode 2.0.8 addition. OpenChamber has no UI for it; it is carried
-    // through so a hand-written value survives an edit made here.
-    ['auth_server_metadata_url', trimmedString(value.auth_server_metadata_url)],
-  ]);
-  return Object.keys(oauth).length ? oauth : undefined;
-}
-
 function trimmedString(value) {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
-}
-
-/**
- * Canonical v2 MCP server entry. `type` is required (v2 drops enabled-only v1
- * entries entirely), `enabled` inverts into `disabled`, timeouts split.
- */
-function toMcpEntity(raw) {
-  const source = isRecord(raw) ? raw : {};
-  const type = source.type === 'remote' ? 'remote' : 'local';
-  const disabled = typeof source.disabled === 'boolean'
-    ? source.disabled
-    : (typeof source.enabled === 'boolean' ? !source.enabled : undefined);
-  const shared = pickDefined([
-    ['disabled', disabled],
-    ['codemode', typeof source.codemode === 'boolean' ? source.codemode : undefined],
-    ['timeout', toMcpTimeout(source.timeout)],
-    // OpenCode 2.0.8 addition, on both local and remote entries. No OpenChamber
-    // UI for it yet; carried through so a hand-written value is not dropped.
-    ['protocol', toMcpProtocol(source.protocol)],
-  ]);
-  if (type === 'local') {
-    const command = Array.isArray(source.command) && source.command.length > 0
-      ? source.command.map(String)
-      : undefined;
-    return pickDefined([
-      ['type', 'local'],
-      ['command', command],
-      ['cwd', trimmedString(source.cwd)],
-      ['environment', cleanStringMap(source.environment)],
-      ...Object.entries(shared),
-    ]);
-  }
-  return pickDefined([
-    ['type', 'remote'],
-    ['url', trimmedString(source.url)],
-    ['headers', cleanStringMap(source.headers)],
-    ['oauth', toMcpOAuth(source.oauth)],
-    ...Object.entries(shared),
-  ]);
-}
-
-/**
- * MCP servers live at `mcp.servers` in v2 and directly under `mcp` in v1.
- * Anything without a `type` is not a server entry (`mcp.timeout`, and the
- * enabled-only v1 entries v2 drops outright).
- */
-function isMcpServerValue(value) {
-  return isRecord(value) && (value.type === 'local' || value.type === 'remote');
-}
-
-function readMcpEntry(config, name) {
-  const mcp = isRecord(config?.mcp) ? config.mcp : null;
-  if (!mcp) return { value: undefined, key: null, legacy: false };
-  if (isRecord(mcp.servers) && mcp.servers[name] !== undefined) {
-    return { value: mcp.servers[name], key: 'mcp.servers', legacy: false };
-  }
-  if (name !== 'servers' && name !== 'timeout' && mcp[name] !== undefined) {
-    return { value: mcp[name], key: 'mcp', legacy: true };
-  }
-  return { value: undefined, key: null, legacy: false };
-}
-
-function readMcpEntries(config) {
-  const mcp = isRecord(config?.mcp) ? config.mcp : {};
-  const result = new Map();
-  for (const [name, value] of Object.entries(mcp)) {
-    if (name === 'servers' || name === 'timeout' || !isMcpServerValue(value)) continue;
-    result.set(name, { value, key: 'mcp', legacy: true });
-  }
-  if (isRecord(mcp.servers)) {
-    for (const [name, value] of Object.entries(mcp.servers)) {
-      result.set(name, { value, key: 'mcp.servers', legacy: false });
-    }
-  }
-  return result;
-}
-
-/**
- * MCP entries across config layers, lowest precedence first. Each layer is
- * normalized on its own before precedence applies: merging the raw objects
- * first would let a v2 `mcp.servers.<name>` in the user file shadow a v1
- * `mcp.<name>` override in the project file.
- */
-function readLayeredMcpEntries(configs) {
-  const result = new Map();
-  for (const config of configs) {
-    for (const [name, entry] of readMcpEntries(config)) result.set(name, entry);
-  }
-  return result;
-}
-
-function writeMcpEntry(config, name, value) {
-  if (!isRecord(config.mcp)) config.mcp = {};
-  if (!isRecord(config.mcp.servers)) config.mcp.servers = {};
-  config.mcp.servers[name] = value;
-  if (config.mcp[name] !== undefined && name !== 'servers' && name !== 'timeout') delete config.mcp[name];
-  return 'mcp.servers';
-}
-
-function deleteMcpEntry(config, name) {
-  const mcp = isRecord(config?.mcp) ? config.mcp : null;
-  if (!mcp) return false;
-  let removed = false;
-  if (isRecord(mcp.servers) && mcp.servers[name] !== undefined) {
-    delete mcp.servers[name];
-    removed = true;
-    if (Object.keys(mcp.servers).length === 0) delete mcp.servers;
-  }
-  if (name !== 'servers' && name !== 'timeout' && mcp[name] !== undefined) {
-    delete mcp[name];
-    removed = true;
-  }
-  if (Object.keys(mcp).length === 0) delete config.mcp;
-  return removed;
 }
 
 // ============== PROVIDERS ==============
@@ -818,12 +660,6 @@ export {
   toCommandEntity,
   fromCommandEntity,
   isLegacyCommandFrontmatter,
-  toMcpEntity,
-  readMcpEntry,
-  readMcpEntries,
-  readLayeredMcpEntries,
-  writeMcpEntry,
-  deleteMcpEntry,
   toModelVariants,
   toProviderPackage,
   toNpmPackage,

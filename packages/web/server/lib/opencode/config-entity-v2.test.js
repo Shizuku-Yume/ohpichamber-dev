@@ -13,7 +13,6 @@ delete process.env.OPENCODE_CONFIG;
 const { parseMdFile } = await import('./shared.js');
 const { getAgentConfig, getAgentPermissions, updateAgent, createAgent, listDisabledAgents } = await import('./agents.js');
 const { getCommandConfig, updateCommand } = await import('./commands.js');
-const { getMcpConfig, listMcpConfigs, updateMcpConfig } = await import('./mcp.js');
 
 let projectDir;
 
@@ -230,89 +229,6 @@ describe('entity modules speak OpenCode 2 shapes', () => {
 
     // `primary` is not a v2 color; the native decoder would skip the whole file.
     expect(parseMdFile(agentPath).frontmatter).toEqual({ description: 'Still tinted', color: '#aaaaaa' });
-  });
-
-  it('answers the project v1 override when the user file already holds the v2 spelling', () => {
-    const userConfigPath = path.join(process.env.XDG_CONFIG_HOME, 'opencode', 'opencode.json');
-    fs.mkdirSync(path.dirname(userConfigPath), { recursive: true });
-    fs.writeFileSync(userConfigPath, JSON.stringify({
-      mcp: { servers: { docs: { type: 'remote', url: 'https://global.example.com/mcp' } } },
-    }, null, 2), 'utf8');
-    const projectConfigPath = write('.opencode/opencode.json', JSON.stringify({
-      mcp: { docs: { type: 'remote', url: 'https://project.example.com/mcp', timeout: 5000 } },
-    }, null, 2));
-
-    try {
-      expect(getMcpConfig('docs', projectDir)).toEqual(expect.objectContaining({
-        url: 'https://project.example.com/mcp',
-        scope: 'project',
-        legacy: true,
-      }));
-      expect(listMcpConfigs(projectDir).find((entry) => entry.name === 'docs').url).toBe('https://project.example.com/mcp');
-
-      updateMcpConfig('docs', { timeout: { catalog: 9000, execution: 9000 } }, projectDir);
-
-      expect(readJson(projectConfigPath).mcp).toEqual({
-        servers: { docs: { type: 'remote', url: 'https://project.example.com/mcp', timeout: { catalog: 9000, execution: 9000 } } },
-      });
-      expect(readJson(userConfigPath).mcp.servers.docs.url).toBe('https://global.example.com/mcp');
-    } finally {
-      fs.rmSync(userConfigPath, { force: true });
-    }
-  });
-
-  it('lists servers from a global opencode.jsonc next to opencode.json and edits them in place', () => {
-    const configDir = path.join(process.env.XDG_CONFIG_HOME, 'opencode');
-    const jsonPath = path.join(configDir, 'opencode.json');
-    const jsoncPath = path.join(configDir, 'opencode.jsonc');
-    fs.mkdirSync(configDir, { recursive: true });
-    fs.writeFileSync(jsonPath, JSON.stringify({ autoupdate: true }, null, 2), 'utf8');
-    fs.writeFileSync(jsoncPath, [
-      '{',
-      '  // servers live only in the jsonc file',
-      '  "mcp": { "servers": { "docs": { "type": "remote", "url": "https://docs.example.com/mcp" } } }',
-      '}',
-    ].join('\n'), 'utf8');
-
-    try {
-      expect(listMcpConfigs(projectDir).map((entry) => entry.name)).toContain('docs');
-      expect(getMcpConfig('docs', projectDir)).toEqual(expect.objectContaining({ scope: 'user' }));
-
-      updateMcpConfig('docs', { disabled: true }, projectDir);
-
-      expect(getMcpConfig('docs', projectDir)).toEqual(expect.objectContaining({ disabled: true }));
-      expect(readJson(jsonPath)).toEqual({ autoupdate: true });
-    } finally {
-      fs.rmSync(jsonPath, { force: true });
-      fs.rmSync(jsoncPath, { force: true });
-    }
-  });
-
-  it('reads a v1 mcp entry and rewrites it under mcp.servers in the same file', () => {
-    const configPath = write('opencode.json', JSON.stringify({
-      mcp: {
-        playwright: { type: 'local', command: ['npx', '@playwright/mcp'], enabled: true, timeout: 30000 },
-      },
-    }, null, 2));
-
-    expect(getMcpConfig('playwright', projectDir)).toEqual(expect.objectContaining({
-      name: 'playwright',
-      type: 'local',
-      disabled: false,
-      timeout: { catalog: 30000, execution: 30000 },
-      legacy: true,
-    }));
-
-    updateMcpConfig('playwright', { disabled: true }, projectDir);
-
-    const written = readJson(configPath);
-    expect(written.mcp.playwright).toBeUndefined();
-    expect(written.mcp.servers.playwright).toEqual({
-      type: 'local',
-      command: ['npx', '@playwright/mcp'],
-      disabled: true,
-      timeout: { catalog: 30000, execution: 30000 },
-    });
   });
 
   it('lists agents switched off in files and config sections, and forgets them once enabled', () => {

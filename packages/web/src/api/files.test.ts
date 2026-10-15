@@ -30,6 +30,30 @@ const urls: RuntimeUrlResolver = {
 };
 
 describe('createWebFilesAPI', () => {
+  it('searches through the scoped Host filesystem contract', async () => {
+    // Import after the transport mock is registered to exercise the runtime boundary.
+    const { createWebFilesAPI } = await import('./files');
+    const api = createWebFilesAPI({ urls, getDirectory: () => '/stale-workspace' });
+    runtimeFetchMock.mockResolvedValueOnce(Response.json([
+      { name: 'file.ts', path: '/workspace/src/file.ts', relativePath: 'src/file.ts', extension: 'ts' },
+    ]));
+    await expect(api.search({ directory: '/workspace', query: 'file', maxResults: 12, includeHidden: true, respectGitignore: false }))
+      .resolves.toEqual([{ path: '/workspace/src/file.ts', preview: ['src/file.ts'] }]);
+    expect(runtimeFetchMock).toHaveBeenLastCalledWith('/api/fs/search', expect.objectContaining({
+      query: { directory: '/workspace', query: 'file', limit: '12', type: 'file', includeHidden: 'true', respectGitignore: 'false' },
+      headers: { 'x-opencode-directory': '%2Fworkspace' },
+      signal: expect.any(AbortSignal),
+    }));
+  });
+
+  it('does not turn a failed Host search into empty success', async () => {
+    // Import after transport mocking, as above.
+    const { createWebFilesAPI } = await import('./files');
+    const api = createWebFilesAPI({ urls });
+    runtimeFetchMock.mockResolvedValueOnce(Response.json({ error: 'Access to directory denied' }, { status: 403 }));
+    await expect(api.search({ directory: '/workspace', query: 'file' })).rejects.toThrow('Access to directory denied');
+  });
+
   it('preserves the directory permission failure contract', async () => {
     const { createWebFilesAPI } = await import('./files');
     const api = createWebFilesAPI({ urls, getDirectory: () => '/workspace' });

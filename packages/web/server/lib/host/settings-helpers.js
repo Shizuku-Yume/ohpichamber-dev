@@ -81,7 +81,6 @@ export const createSettingsHelpers = (dependencies) => {
   const STT_SERVER_URL_MAX_LENGTH = 2048;
   const STT_MODEL_MAX_LENGTH = 256;
   const STT_LANGUAGE_MAX_LENGTH = 64;
-  const VERSION_STRING_MAX_LENGTH = 128;
   const SHORTCUT_OVERRIDE_KEY_MAX_LENGTH = 128;
   const SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH = 128;
   const PWA_ORIENTATION_VALUES = new Set(['system', 'portrait', 'landscape']);
@@ -705,9 +704,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (candidate.enterToSendConfigured === true || candidate.enterToSendConfigured === false) {
       result.enterToSendConfigured = candidate.enterToSendConfigured;
     }
-    if (typeof candidate.showOpenCodeUpdateNotifications === 'boolean') {
-      result.showOpenCodeUpdateNotifications = candidate.showOpenCodeUpdateNotifications;
-    }
     if (typeof candidate.agentWebToolEnabled === 'boolean') {
       result.agentWebToolEnabled = candidate.agentWebToolEnabled;
     }
@@ -731,10 +727,6 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (idleStopSchema.safeParse(candidate.isolatedSpacesIdleStop).success) {
       result.isolatedSpacesIdleStop = { ...candidate.isolatedSpacesIdleStop };
-    }
-    if (typeof candidate.openCodeUpdateToastDismissedVersion === 'string') {
-      const version = candidate.openCodeUpdateToastDismissedVersion.trim();
-      result.openCodeUpdateToastDismissedVersion = version.slice(0, VERSION_STRING_MAX_LENGTH);
     }
     if (typeof candidate.showToolFileIcons === 'boolean') {
       result.showToolFileIcons = candidate.showToolFileIcons;

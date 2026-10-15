@@ -10,6 +10,7 @@ import {
   type FilesystemErrorReason,
 } from '@openchamber/ui/lib/api/files-errors';
 import { runtimeFetch } from '@openchamber/ui/lib/runtime-fetch';
+import { hostFilesystem } from '@openchamber/ui/lib/host-filesystem';
 import { shareFileFromNativeApp } from '@openchamber/ui/lib/nativeFileShare';
 
 const normalizePath = (path: string): string => path.replace(/\\/g, '/');
@@ -102,38 +103,14 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
   },
 
   async search(payload: FileSearchQuery): Promise<FileSearchResult[]> {
-    const params = new URLSearchParams();
-
-    const directory = normalizePath(payload.directory);
-    if (directory) {
-      params.set('directory', directory);
-    }
-
-    params.set('query', payload.query);
-    params.set('dirs', 'false');
-    params.set('type', 'file');
-
-    if (typeof payload.maxResults === 'number' && Number.isFinite(payload.maxResults)) {
-      params.set('limit', String(payload.maxResults));
-    }
-
-    const response = await runtimeFetch('/api/find/file', {
-      query: params,
-      headers: directoryHeaders(getDirectory),
+    const hits = await hostFilesystem.searchFiles(payload.query, {
+      directory: normalizePath(payload.directory),
+      limit: payload.maxResults,
+      type: 'file',
+      includeHidden: payload.includeHidden,
+      respectGitignore: payload.respectGitignore,
     });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error((error as { error?: string }).error || 'Failed to search files');
-    }
-
-    const result = (await response.json()) as string[];
-    const files = Array.isArray(result) ? result : [];
-
-    return files.map((relativePath) => ({
-      path: normalizePath(`${directory}/${relativePath}`),
-      preview: [normalizePath(relativePath)],
-    }));
+    return hits.map((hit) => ({ path: hit.path, preview: [hit.relativePath] }));
   },
 
   async createDirectory(path: string): Promise<{ success: boolean; path: string }> {

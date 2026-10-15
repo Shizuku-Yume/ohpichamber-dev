@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import os from 'os';
 import crypto from 'crypto';
 import http2 from 'node:http2';
+import { Readable } from 'node:stream';
 import { createUiAuth } from './lib/ui-auth/ui-auth.js';
 import { createTunnelAuth } from './lib/host/tunnel-auth.js';
 import { createManagedTunnelConfigRuntime } from './lib/tunnels/managed-config.js';
@@ -122,6 +123,7 @@ import { createMemoryProjectResolver } from './lib/agent-memory/project-resoluti
 import { isAgentMemoryFeatureAvailable } from './lib/agent-memory/feature-flag.js';
 import { createSpacesHost } from './lib/spaces/host.js';
 import { createSpaceArchive } from './lib/spaces/space-archive.js';
+import { CHAT_EXPORT_TIMEOUT_MS } from './lib/spaces/space-native-archive.js';
 import { readIdleStopSetting, startIdleStop } from './lib/spaces/idle-stop.js';
 import { SPACE_IDLE_EXIT_CODE } from './lib/spaces/layout.js';
 import { createSwitchController, registerSpaceRoutes } from './lib/spaces/routes.js';
@@ -151,7 +153,6 @@ import { createAttachmentRoutes } from './lib/host/attachment-routes.js';
 import { createLegacyAttachmentImporter } from './lib/host/legacy-attachment-importer.js';
 import { createHostPromptDeliveryRuntime } from './lib/host/prompt-delivery-runtime.js';
 import { createSelectedCredentialResolver, createSelectedCredentialHandoff, createCatalogCredentialSelections } from './lib/host/private-credential.js';
-import { createOpenCodeClient } from './lib/openchamber-sessions/opencode-client.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
 import { createPluginNotificationEmitter } from './lib/notifications/emit-route.js';
@@ -548,6 +549,7 @@ const broadcastOpenChamberUiEvent = createGlobalUiEventBroadcaster({
 const hostSessionState = createHostSessionState({ dataDir: OPENCHAMBER_DATA_DIR });
 const { sessionMetadataStore, archiveStore, sessionFoldersStore, agentScopeStore, attachmentStore } = hostSessionState;
 const scheduledChatsScope = createChatsScope(OPENCHAMBER_CHATS_DIR);
+let spaceArchive = null;
 const agentScopeRuntime = createHostAgentScopeRuntime({
   store: agentScopeStore,
   readSettings: readSettingsFromDiskStrict,
@@ -555,11 +557,14 @@ const agentScopeRuntime = createHostAgentScopeRuntime({
   validateDirectoryPath,
   getWorktrees,
   managedChatsScope: scheduledChatsScope,
+  getArchiveCatalog: () => spaceArchive?.listArchiveCatalog?.() ?? [],
   fsPromises,
 });
 const hostAgentRuntime = createHostAgentRuntime({
   dataDir: OPENCHAMBER_DATA_DIR,
   scopeRuntime: agentScopeRuntime,
+  bunPath: process.env.OHPICHAMBER_BUN,
+  entrypoint: process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT,
   validateDirectoryPath,
   getEnvironmentForDirectory: async (directory) => await environmentRuntime.forDirectory(directory) ?? {},
   invokeHostAction: (scope, request, signal) => openChamberControlService.invokeHostAction(scope, request, signal),
@@ -659,6 +664,10 @@ const openChamberSessionService = createOpenChamberSessionService({
   archiveStore,
   persistSessionMetadata: persistSessionMetadataPatch,
   broadcastGlobalUiEvent: broadcastOpenChamberUiEvent,
+  onArchiveDeleted: async (scope, ack) => {
+    await agentScopeStore.removeSessionFamily(scope.rootSessionId);
+    spaceArchive?.forgetChat(ack.sessionId);
+  },
 });
 
 const sessionRuntime = createSessionRuntime({
@@ -2022,18 +2031,38 @@ async function main(options = {}) {
   // but do not hold server listen or managed OpenCode startup on `say -v "?"`.
   const sayTTSCapability = detectSayTtsCapability(process);
 
-  // The chats of deleted spaces, imported into the host's OpenCode and kept read-only there
-  // (DESIGN.md, decision 9). It reads a folder of the data directory and runs nothing else, so it
-  // exists with the switch on or off: an archived chat must stay read-only either way.
-  const hostOpenCodeClient = () => createOpenCodeClient({
-    baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''),
-    headers: getOpenCodeAuthHeaders(),
-  });
-  const spaceArchive = createSpaceArchive({
+  // Native archive bytes and metadata are owned by the Agent Service; Host scope is selected here.
+  spaceArchive = createSpaceArchive({
     dataDir: OPENCHAMBER_DATA_DIR,
-    hostOpenCode: {
-      importChat: (chat) => hostOpenCodeClient().session.import(chat),
-      removeChat: (sessionID) => hostOpenCodeClient().session.remove({ sessionID }),
+    nativeArchive: {
+      importChat: async ({ sessionId, bundlePath, directory, spaceId, archivedAt, deadline }) => {
+        const remainingMs = Math.min(CHAT_EXPORT_TIMEOUT_MS, deadline - Date.now());
+        if (remainingMs <= 0) throw Object.assign(new Error('Native archive import deadline expired'), { code: 'chat_export_timed_out' });
+        const scope = await agentScopeRuntime.archiveScope(spaceId, directory);
+        const response = await hostAgentRuntime.service.request('/internal/archive/import', {
+          method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ sessionId, bundlePath, destinationDirectory: directory, spaceId, archivedAt, scope }),
+          signal: AbortSignal.timeout(remainingMs),
+        });
+        const body = await response.json().catch(() => null);
+        if (!response.ok) throw Object.assign(new Error(body?.detail ?? 'Native archive import failed'), { status: response.status, code: body?.code });
+        try {
+          if (body?.imported !== true || body.sessionId !== sessionId || body.session?.sessionId !== sessionId
+            || body.session.rootSessionId !== sessionId || body.session.projectId !== scope.projectId || body.session.workspaceId !== scope.workspaceId)
+            throw new Error('Native archive import acknowledgement does not match its Host-selected scope');
+          await agentScopeRuntime.registerArchiveSession(body.session, body.children ?? [], scope);
+        }
+        catch (error) {
+          await hostAgentRuntime.service.request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }).catch(() => {});
+          await agentScopeStore.removeSessionFamily(sessionId).catch(() => {});
+          throw error;
+        }
+        return body;
+      },
+      removeChat: async (sessionId) => {
+        const response = await hostAgentRuntime.service.request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Native archive rollback could not remove an imported session');
+      },
     },
   });
 
@@ -2280,6 +2309,21 @@ async function main(options = {}) {
     isRequestOriginAllowed,
   });
   uiAuthController = bootstrapResult.uiAuthController;
+  const forwardNativeArchive = async (pathname, res, accept) => {
+    try {
+      const response = await hostAgentRuntime.service.request(pathname, { headers: { accept } });
+      res.status(response.status);
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Content-Type', response.headers.get('content-type') ?? accept);
+      if (!response.ok) return res.send(await response.text());
+      if (!response.body) return res.end();
+      return Readable.fromWeb(response.body).pipe(res);
+    } catch {
+      return res.status(503).json({ code: 'SERVICE_UNAVAILABLE', detail: 'Native archive service is unavailable.' });
+    }
+  };
+  app.get('/api/openchamber/space/archive/manifest', (_req, res) => forwardNativeArchive('/internal/archive/manifest', res, 'application/json'));
+  app.get('/api/openchamber/space/archive/sessions/:id', (req, res) => forwardNativeArchive(`/internal/archive/sessions/${encodeURIComponent(req.params.id)}`, res, 'application/x-tar'));
   // After the API auth gate, before every route that reads a directory, before the OpenCode proxy.
   // The slot is mounted once and reads the host at call time, so the switch can turn the feature
   // on and off live: with no host it passes every request on and no upgrade is taken.

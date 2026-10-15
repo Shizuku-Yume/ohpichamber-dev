@@ -1,16 +1,5 @@
-// The chat archive of a deleted space (DESIGN.md, decision 9 and journey step 7), built in 5e-2.
-//
-// Before a space goes, its chats are taken out and imported into the host's OpenCode at a
-// directory of the archive's own, stamped archived, so they show on the Archive page and nowhere
-// else. An imported chat is a live session of the host's OpenCode: anything sent to it would run
-// on the host, measured. So the archive is read-only here, on the server, and not only on the
-// screen: `guard` refuses every request that would run or change an archived chat, and lets it be
-// read and deleted.
-//
-// The host keeps one small file per archive, `<data dir>/spaces/archive/<space id>.json`: the
-// space's name, its project and the ids of its chats. The guard and the Archive page read those.
-// Nothing here runs a container or a `docker` command, so the archive and its guard are there
-// whether the feature's switch is on or off: an archived chat stays read-only either way.
+// Host-owned deleted-space catalog and opaque native transfer orchestration. The Bun Agent
+// Service owns transcript packaging, import, cold projection and immutable provenance.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,7 +7,7 @@ import path from 'node:path';
 import { z } from 'zod';
 
 import { SpaceError } from './errors.js';
-import { archivedChatOf, chatIdSchema } from './space-opencode.js';
+import { EntityIdSchema as chatIdSchema } from '@openchamber/agent-contract';
 
 // The maintainer's call of 2026-09-30: at most this many chats of one space go to the archive.
 export const ARCHIVE_MAX_CHATS = 1000;
@@ -43,6 +32,7 @@ const archiveEntrySchema = z.object({
 // does `DELETE /api/session/<id>`, which is how the user deletes an archived chat.
 const CHAT_ROUTES = [
   /^\/api\/session\/([^/]+)(\/.*)?$/i,
+  /^\/api\/agent\/v1\/sessions\/([^/]+)(\/.*)?$/i,
   /^\/api\/experimental\/session\/([^/]+)\/.+$/i,
   /^\/api\/openchamber\/sessions\/([^/]+)\/.+$/i,
   /^\/api\/message-queue\/sessions\/([^/]+)(\/.*)?$/i,
@@ -50,7 +40,7 @@ const CHAT_ROUTES = [
   /^\/api\/permission-auto-accept\/sessions\/([^/]+)$/i,
 ];
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-const SESSION_DELETE = /^\/api\/session\/[^/]+$/i;
+const SESSION_DELETE = /^\/api\/(?:agent\/v1\/sessions|session)\/[^/]+$/i;
 
 const listedTitleSchema = z.string().trim().min(1);
 /** A listed chat's title, from the space, cut to what names it; null when it has none. */
@@ -59,11 +49,8 @@ const titleShown = (title) => {
   return parsed.success ? parsed.data.slice(0, TITLE_SHOWN_CHARACTERS) : null;
 };
 
-/**
- * `hostOpenCode.importChat(chat)` imports one chat into the host's OpenCode and
- * `hostOpenCode.removeChat(id)` deletes one again, for a save that is taken back.
- */
-export function createSpaceArchive({ dataDir, hostOpenCode, logger = console, now = () => Date.now() }) {
+/** nativeArchive owns service import plus Host scope/metadata registration atomically. */
+export function createSpaceArchive({ dataDir, nativeArchive, logger = console, now = () => Date.now() }) {
   const root = path.join(dataDir, 'spaces', 'archive');
   const directoryOf = (spaceId) => path.join(root, spaceId);
   const entryFileOf = (spaceId) => path.join(root, `${spaceId}.json`);
@@ -111,10 +98,19 @@ export function createSpaceArchive({ dataDir, hostOpenCode, logger = console, no
     relock();
   };
 
-  /** The archives, for the Archive page: which directory holds which space's chats. */
+  /** Path-free public archive DTO; only an opaque workspace identity crosses the Host boundary. */
   const listArchives = () => [...entries.values()].map((entry) => ({
     spaceId: entry.spaceId,
     name: entry.name,
+    workspaceId: `archive_${entry.spaceId}`,
+    archivedAt: entry.archivedAt,
+  }));
+
+  /** Private Host admission catalog; never return this object from an HTTP route. */
+  const listArchiveCatalog = () => [...entries.values()].map((entry) => ({
+    spaceId: entry.spaceId,
+    name: entry.name,
+    workspaceId: `archive_${entry.spaceId}`,
     projectDirectory: entry.projectDirectory,
     directory: directoryOf(entry.spaceId),
     archivedAt: entry.archivedAt,
@@ -139,137 +135,102 @@ export function createSpaceArchive({ dataDir, hostOpenCode, logger = console, no
         // Not a valid encoding: the route behind refuses it as well, and it names no chat here.
       }
       if (locked.has(id)) {
-        res.status(409).json({ code: 'archived_chat_read_only', message: 'This chat belongs to a deleted space and is read-only.' });
+        const detail = 'This chat belongs to a deleted space and is read-only.';
+        res.status(409).json(req.path.startsWith('/api/agent/v1/')
+          ? { type: 'urn:ohpichamber:problem:SESSION_READ_ONLY', title: 'Session is read-only', status: 409, detail, code: 'SESSION_READ_ONLY', retryable: false }
+          : { code: 'archived_chat_read_only', message: detail });
         return undefined;
       }
     }
     return next();
   };
 
-  /**
-   * Takes the chats of a space out and imports them into the host's OpenCode, parents first.
-   * `source.listChats()` answers `{ chats: [{ id, title }], complete }` and `source.exportChat(id)`
-   * one chat as OpenCode exports it. Without `allowUnsaved` it is all or nothing: a chat that
-   * cannot be taken out or imported leaves nothing new in the archive and fails with
-   * `chats_not_saved`, whose details name the chats that were too large. With it, what can be
-   * saved is saved and the rest is reported. Answers `{ saved, tooLarge, failed, listed }`.
-   *
-   * A space can be saved again, when a delete saved its chats and then could not remove it: the
-   * chats saved before stay in the archive and stay read-only, and one the host already holds
-   * there counts as saved.
-   */
+  /** Save opaque native bundles; no container teardown is authorized on an unsaved refusal. */
   const saveChats = async ({ spaceId, name, projectDirectory, source, allowUnsaved }) => {
+    spaceIdSchema.parse(spaceId);
     const deadline = now() + SAVE_TIMEOUT_MS;
-    const earlier = entries.get(spaceId)?.chats ?? [];
+    const earlierEntry = entries.get(spaceId);
+    const earlier = earlierEntry?.chats ?? [];
     const tooLarge = [];
     let failed = 0;
-    let listed;
-    try {
-      listed = await source.listChats();
-    } catch (error) {
-      logger.warn?.(`[spaces] the chats of space ${spaceId} could not be listed: ${error?.code ?? error?.message ?? error}`);
-      listed = null;
-    }
+    let listed = null;
     const refuse = () => new SpaceError('chats_not_saved', `The chats of "${name}" could not be saved.`, { name, tooLarge, failed, listed: listed !== null });
+    try { listed = await source.listChats(); }
+    catch (error) { logger.warn?.(`[spaces] native archive list failed: ${error?.code ?? error?.message ?? error}`); }
     if (listed === null) {
       if (!allowUnsaved) throw refuse();
       return { saved: 0, tooLarge, failed, listed: false };
     }
-    const wanted = listed.chats.filter((chat) => chatIdSchema.safeParse(chat.id).success);
-    failed += listed.chats.length - wanted.length + Math.max(0, wanted.length - ARCHIVE_MAX_CHATS);
-    if (!listed.complete) failed += 1;
-    // Known from the list alone: nothing is taken out for a save that cannot be whole.
-    if (!allowUnsaved && failed > 0) throw refuse();
-    const chosen = wanted.slice(0, ARCHIVE_MAX_CHATS);
-
-    // Each chat is taken out and written to disk before any goes in, so a refusal leaves the
-    // host's OpenCode untouched and memory holds one chat at a time.
+    const valid = listed.chats.filter(chat => chatIdSchema.safeParse(chat.id).success);
+    failed += listed.chats.length - valid.length + Math.max(0, valid.length - ARCHIVE_MAX_CHATS);
+    if (!listed.complete || new Set(valid.map(chat => chat.id)).size !== valid.length) failed += 1;
+    if (!allowUnsaved && failed) throw refuse();
+    const chosen = [...new Map(valid.slice(0, ARCHIVE_MAX_CHATS).map(chat => [chat.id, chat])).values()];
     const incoming = path.join(root, `.incoming-${spaceId}`);
-    fs.rmSync(incoming, { recursive: true, force: true });
-    fs.mkdirSync(incoming, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+    // A stale or concurrent save is not permission to destroy another transfer's files.
+    fs.mkdirSync(incoming, { mode: 0o700 });
+    const saved = [];
+    const added = [];
+    const directory = directoryOf(spaceId);
+    const archivedAt = earlierEntry?.archivedAt ?? now();
+    const entry = { version: 1, spaceId, name, projectDirectory, archivedAt, chats: earlier };
+    const withChats = chats => ({ ...entry, chats: [...new Set([...earlier, ...chats])] });
+    const rollback = async () => {
+      const errors = [];
+      for (const id of [...added].reverse()) {
+        try { await nativeArchive.removeChat(id); }
+        catch (error) { errors.push(error); }
+      }
+      writeEntry(earlierEntry ?? withChats([]));
+      if (errors.length) throw new AggregateError(errors, 'Native archive rollback failed; the space is retained');
+    };
     try {
       const taken = new Map();
       for (const chat of chosen) {
-        if (now() > deadline) {
-          failed += 1;
-          continue;
-        }
+        if (earlier.includes(chat.id)) { saved.push(chat.id); continue; }
+        if (now() >= deadline) { failed += 1; continue; }
         try {
-          const exported = await source.exportChat(chat.id);
-          fs.writeFileSync(path.join(incoming, `${chat.id}.json`), JSON.stringify(exported), { mode: 0o600 });
-          taken.set(chat.id, exported.info.parentID ?? null);
+          const bundlePath = path.join(incoming, `${taken.size}.tar`);
+          await source.exportChat(chat.id, bundlePath, { deadline });
+          taken.set(chat.id, { ...chat, bundlePath });
         } catch (error) {
           if (error?.code === 'chat_too_large') tooLarge.push(titleShown(chat.title) ?? chat.id);
           else failed += 1;
-          logger.warn?.(`[spaces] chat ${chat.id} of space ${spaceId} was not taken out: ${error?.code ?? error?.message ?? error}`);
+          logger.warn?.(`[spaces] native export ${chat.id} failed: ${error?.code ?? error?.message ?? error}`);
         }
       }
-      if (!allowUnsaved && (tooLarge.length > 0 || failed > 0)) throw refuse();
-
-      // Parents before children, as the import requires. A parent that is not in this archive
-      // leaves the chat a root one.
-      const order = [];
-      const placed = new Set();
-      const place = (id) => {
-        if (placed.has(id)) return;
-        placed.add(id);
-        const parent = taken.get(id);
-        if (parent && taken.has(parent)) place(parent);
-        order.push(id);
-      };
-      for (const id of taken.keys()) place(id);
-
-      const directory = directoryOf(spaceId);
-      fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-      const archivedAt = now();
-      const entry = { version: 1, spaceId, name, projectDirectory, archivedAt, chats: earlier };
-      const withChats = (chats) => ({ ...entry, chats: Array.from(new Set([...earlier, ...chats])) });
-      // Locked before the first one exists on the host, so no request slips in between.
-      writeEntry(withChats(order));
-      const added = [];
-      const saved = [];
-      const notImported = new Set();
-      for (const id of order) {
-        const parent = taken.get(id);
-        if (parent && notImported.has(parent)) {
-          notImported.add(id);
-          failed += 1;
-          continue;
-        }
+      if (!allowUnsaved && (failed || tooLarge.length)) throw refuse();
+      // Catalog admission precedes service registration; only this Host-selected root is admitted.
+      writeEntry(withChats([...taken.keys()]));
+      for (const [id, chat] of taken) {
+        if (now() >= deadline) { failed += 1; if (!allowUnsaved) throw refuse(); continue; }
         try {
-          const exported = JSON.parse(fs.readFileSync(path.join(incoming, `${id}.json`), 'utf8'));
-          await hostOpenCode.importChat(archivedChatOf(exported, { directory, archivedAt, keepParent: Boolean(parent && taken.has(parent)) }));
+          await nativeArchive.importChat({ sessionId: id, bundlePath: chat.bundlePath, directory, spaceId, archivedAt, title: titleShown(chat.title), parentSessionId: chat.parentSessionId, deadline });
+          // Record ownership immediately, before the Host catalog commit can fail.
           added.push(id);
           saved.push(id);
         } catch (error) {
-          // Saved by an earlier delete of this space: the host holds it here already.
-          if (error?.status === 409 && earlier.includes(id)) {
-            saved.push(id);
-            continue;
-          }
-          notImported.add(id);
           failed += 1;
-          logger.warn?.(`[spaces] chat ${id} of space ${spaceId} was not imported: ${error?.status ?? error?.code ?? error?.message ?? error}`);
-          if (!allowUnsaved) break;
+          logger.warn?.(`[spaces] native import ${id} failed: ${error?.code ?? error?.message ?? error}`);
+          if (!allowUnsaved) throw refuse();
         }
-      }
-      if (!allowUnsaved && notImported.size > 0) {
-        // What this save added is taken back, children first, so the space and its chats stay as
-        // they were; what an earlier save put there stays.
-        for (const id of added.reverse()) {
-          await hostOpenCode.removeChat(id).catch((error) => {
-            logger.warn?.(`[spaces] imported chat ${id} could not be taken back: ${error?.status ?? error?.code ?? error?.message ?? error}`);
-          });
-        }
-        writeEntry(withChats([]));
-        throw refuse();
       }
       writeEntry(withChats(saved));
       return { saved: saved.length, tooLarge, failed, listed: true };
-    } finally {
-      fs.rmSync(incoming, { recursive: true, force: true });
-    }
+    } catch (error) {
+      await rollback();
+      throw error;
+    } finally { fs.rmSync(incoming, { recursive: true, force: true }); }
   };
 
-  return { guard, listArchives, isArchivedChat, saveChats, directoryOf };
+  const entryForChat = id => [...entries.values()].find(entry => entry.chats.includes(id)) ?? null;
+  const ownsDirectory = directory => [...entries.keys()].some(id => directoryOf(id) === directory);
+  const forgetChat = id => {
+    const entry = entryForChat(id);
+    if (!entry) return;
+    writeEntry({ ...entry, chats: entry.chats.filter(chat => chat !== id) });
+    if (!entries.has(entry.spaceId)) fs.rmSync(directoryOf(entry.spaceId), { recursive: true, force: true });
+  };
+  return { guard, listArchives, listArchiveCatalog, isArchivedChat, saveChats, directoryOf, entryForChat, ownsDirectory, forgetChat };
 }

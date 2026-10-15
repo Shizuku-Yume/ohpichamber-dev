@@ -4,7 +4,7 @@ import path from 'path';
 import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import * as nativeFs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,10 +29,14 @@ const createRouteRegistry = () => {
 };
 
 const createMockResponse = () => {
+  const response = new EventEmitter();
   let statusCode = 200;
   let body = null;
   const headers = new Map();
   return {
+    on: response.on.bind(response),
+    off: response.off.bind(response),
+    emit: response.emit.bind(response),
     status(code) {
       statusCode = code;
       return this;
@@ -2441,5 +2445,91 @@ describe('GET /api/fs/find-by-name', () => {
     for (const bad of ['src/util.ts', '*.ts', '', '..']) {
       expect((await ask(bad)).statusCode, bad).toBe(400);
     }
+  });
+});
+describe('GET /api/fs/search', () => {
+  let repo;
+  let outside;
+  beforeEach(async () => {
+    repo = await mkdtemp(path.join(tmpdir(), 'oc-fs-search-'));
+    outside = await mkdtemp(path.join(tmpdir(), 'oc-fs-search-outside-'));
+    await mkdir(path.join(repo, 'src', 'nested'), { recursive: true });
+    await nativeFs.writeFile(path.join(repo, 'src', 'match.ts'), 'file');
+    await nativeFs.writeFile(path.join(repo, 'src', 'nested', 'match.ts'), 'nested');
+    await nativeFs.writeFile(path.join(outside, 'secret.ts'), 'outside');
+    await nativeFs.symlink(outside, path.join(repo, 'linked-outside'), 'dir');
+  });
+  afterEach(async () => {
+    await rm(repo, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  });
+
+  it('filters runtime file hits versus directories and returns only workspace-contained results', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    registerFsRoutes(app, {
+      os: { homedir: () => '/home/user' }, path, fsPromises: nativeFs, spawn,
+      crypto: { randomUUID: () => 'search-0' }, normalizeDirectoryPath: (value) => value,
+      resolveProjectDirectory: async () => ({ directory: repo }), buildAugmentedPath: () => '/usr/bin',
+      resolveGitBinaryForSpawn: () => 'git', openchamberUserConfigRoot: '/home/user/.config',
+    });
+    const route = getRoute('GET', '/api/fs/search');
+    const ask = async (query) => {
+      const res = createMockResponse();
+      await route({ query, headers: {} }, res);
+      return res;
+    };
+    const files = await ask({ directory: repo, query: 'match', type: 'file', respectGitignore: 'false' });
+    expect(files.statusCode).toBe(200);
+    expect(files.body).toEqual([
+      { name: 'match.ts', path: path.join(repo, 'src', 'match.ts'), relativePath: 'src/match.ts', extension: 'ts' },
+      { name: 'match.ts', path: path.join(repo, 'src', 'nested', 'match.ts'), relativePath: 'src/nested/match.ts', extension: 'ts' },
+    ]);
+    const directories = await ask({ directory: repo, query: 'nested', type: 'directory' });
+    expect(directories.statusCode).toBe(200);
+    expect(directories.body).toEqual([
+      { name: 'nested', path: path.join(repo, 'src', 'nested'), relativePath: 'src/nested', extension: undefined },
+    ]);
+  });
+
+  it('does not turn a missing search directory or an out-of-root path into an empty success', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    registerFsRoutes(app, {
+      os: { homedir: () => '/home/user' }, path, fsPromises: nativeFs, spawn,
+      crypto: { randomUUID: () => 'search-1' }, normalizeDirectoryPath: (value) => value,
+      resolveProjectDirectory: async () => ({ directory: repo }), buildAugmentedPath: () => '/usr/bin',
+      resolveGitBinaryForSpawn: () => 'git', openchamberUserConfigRoot: '/home/user/.config',
+    });
+    const route = getRoute('GET', '/api/fs/search');
+    const ask = async (directory) => {
+      const res = createMockResponse();
+      await route({ query: { directory, query: 'secret', type: 'file' }, headers: {} }, res);
+      return res;
+    };
+    expect((await ask(path.join(repo, 'missing'))).statusCode).not.toBe(200);
+    expect((await ask(outside)).statusCode).not.toBe(200);
+    expect((await ask(path.join(repo, 'linked-outside'))).statusCode).not.toBe(200);
+  });
+
+  it('rejects a root readdir failure instead of returning an empty successful search', async () => {
+    const fsPromises = { ...nativeFs, readdir: vi.fn(async (target, options) => {
+      if (target === repo) {
+        const error = new Error('root unavailable');
+        error.code = 'EACCES';
+        throw error;
+      }
+      return nativeFs.readdir(target, options);
+    }) };
+    const { app, getRoute } = createRouteRegistry();
+    registerFsRoutes(app, {
+      os: { homedir: () => '/home/user' }, path, fsPromises, spawn,
+      crypto: { randomUUID: () => 'search-2' }, normalizeDirectoryPath: (value) => value,
+      resolveProjectDirectory: async () => ({ directory: repo }), buildAugmentedPath: () => '/usr/bin',
+      resolveGitBinaryForSpawn: () => 'git', openchamberUserConfigRoot: '/home/user/.config',
+    });
+    const res = createMockResponse();
+    await getRoute('GET', '/api/fs/search')({ query: { directory: repo, query: '', type: 'file' }, headers: {} }, res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ reason: 'os-permission' });
+    expect(fsPromises.readdir).toHaveBeenCalledOnce();
   });
 });

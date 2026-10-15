@@ -9,6 +9,7 @@ import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSc
 import type {
   AgentCatalog, AgentMutationResult, AgentServiceReady, ApprovalRequest, CanonicalEvent,
   CompletionCancelResult, CompletionResult, HistoryPage, JsonObject, MCPCatalogRead,
+  MCPConfigurationState, MCPConnectionTestResult, MCPWorkspaceReconnectResult, MCPSecretWriteResult,
   MCPApplyResult, MCPOAuthResult, ModelCatalog, ModelMutationResult, ProblemCode,
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
   QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
@@ -17,9 +18,10 @@ import type {
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
-import { SessionRegistry, type NativeEntryResult, type SessionForkResult, type SessionList } from '../sessions/registry.ts';
+import { SessionRegistry, type NativeArchiveImported, type NativeArchiveInventory, type NativeEntryResult, type SessionForkResult, type SessionList } from '../sessions/registry.ts';
 import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { SessionReferenceError } from '../sessions/references.ts';
+import { ArchiveImportRequestSchema } from '../sessions/archive.ts';
 import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo } from './workers.ts';
 import { CatalogCoordinator, CatalogCoordinatorError } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
@@ -60,10 +62,12 @@ type ServiceResponse =
   | z.infer<typeof HostAuthorizationScopeSchema | typeof HostWorkspaceRegisteredSchema | typeof HostSessionRelocationPreparedSchema | typeof HostSessionRelocationFinalizedSchema | typeof HostSessionRelocationPendingSchema>
   | WorkerInfo | { workers: RegisteredWorkerInfo[] }
   | SessionList | RuntimeSession | HistoryPage | SessionSnapshot | SessionDeleteAck | SessionForkResult | NativeEntryResult | Subagent[]
+  | NativeArchiveInventory | NativeArchiveImported
   | ApprovalRequest | ApprovalRequest[] | QuestionRequest | QuestionRequest[] | { run: Run }
   | SteerAck | FollowUpAck
   | SessionBranchResult
   | MCPCatalogRead | MCPApplyResult | MCPOAuthResult
+  | MCPConfigurationState | MCPConnectionTestResult | MCPWorkspaceReconnectResult | MCPSecretWriteResult
   | SkillsCatalogState | SkillsApplyResult | SkillExpandResult | SkillInstallResult
   | ModelCatalog | ProviderCatalog | AgentCatalog
   | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
@@ -122,6 +126,7 @@ export class AgentService {
     this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, policyCheck: options.policyCheck, invokeHostAction: options.invokeHostAction,
       consumeApprovalGrant: (...args) => this.sessions.consumeApprovalGrant(...args),
       prepareBootstrap: async input => {
+        this.sessions.assertBootstrapWritable(input);
         if (!this.ready) return input;
         if (!this.workspaceCatalogs.matches(input)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
         const workspace = this.workspaceCatalogs.get(input.workspaceId);
@@ -150,7 +155,7 @@ export class AgentService {
       },
     });
     this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad);
-    this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers);
+    this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers, this.catalog);
     this.shell = new ShellCoordinator(this.workers, this.sessions, this.observationEpoch, rootSessionId => {
       const input = this.workers.bootstrap(rootSessionId);
       return input !== undefined && this.workspaceCatalogs.matches(input);
@@ -161,6 +166,7 @@ export class AgentService {
     return scope === undefined ? undefined : HostAuthorizationScopeSchema.parse(scope);
   }
   private async admit<T>(input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<T>): Promise<T> {
+    this.sessions.assertBootstrapWritable(input);
     const captured = this.workers.bootstrap(input.rootSessionId);
     if (captured && (captured.workspaceId !== input.workspaceId || captured.projectId !== input.projectId || captured.cwd !== input.cwd || captured.agentDirectory !== input.agentDirectory || (input.agentDirectoryId !== undefined && captured.agentDirectoryId !== input.agentDirectoryId))) throw new WorkerOperationError(403, 'UNAUTHORIZED');
     const agentDirectoryId = await this.workspaceCatalogs.registerRoot(input);
@@ -328,6 +334,33 @@ export class AgentService {
         return;
       }
       if (!this.ready || this.closing) { respondProblem(response, 503, 'SERVICE_UNAVAILABLE', 'Agent Service is not admitting work'); return; }
+      if (request.method === 'GET' && url.pathname === '/internal/archive/manifest') {
+        respondJson(response, 200, await this.sessions.archiveManifest()); return;
+      }
+      const archiveExport = /^\/internal\/archive\/sessions\/([^/]+)$/.exec(url.pathname);
+      if (request.method === 'GET' && archiveExport) {
+        const controller = new AbortController();
+        const cancel = () => { if (!response.writableEnded) controller.abort(); };
+        response.once('close', cancel);
+        try {
+          const bundle = await this.sessions.exportArchive(identity(archiveExport[1]), controller.signal);
+          response.writeHead(200, { 'Content-Type': 'application/x-tar', 'Content-Length': bundle.length, 'Cache-Control': 'no-store' });
+          response.end(bundle);
+        } finally { response.off('close', cancel); }
+        return;
+      }
+      if (request.method === 'POST' && url.pathname === '/internal/archive/import') {
+        const input = await readBody(request, ArchiveImportRequestSchema);
+        const controller = new AbortController();
+        const cancel = () => { if (!response.writableEnded) controller.abort(); };
+        response.once('close', cancel);
+        try { respondJson(response, 201, await this.sessions.importArchive(input, controller.signal)); }
+        finally { response.off('close', cancel); }
+        return;
+      }
+      // Admission must precede catalog, shell and direct worker paths, not merely public run routes.
+      const sessionMutation = /^\/(?:api\/agent\/v1|internal)\/sessions\/([^/]+)/.exec(url.pathname);
+      if (request.method !== 'GET' && request.method !== 'DELETE' && sessionMutation) this.sessions.assertWritable(identity(sessionMutation[1]));
       const authorization = /^\/internal\/authorizations\/([^/]+)$/.exec(url.pathname);
       if (authorization && request.method === 'GET') {
         const scope = this.authorizationScope(identity(authorization[1]));
@@ -446,7 +479,7 @@ export class AgentService {
         const action = sessionRoute[2] ?? sessionRoute[3];
         if (action === undefined && request.method === 'GET') { respondJson(response, 200, this.sessions.runtime(sessionId)); return; }
         if (action === undefined && request.method === 'DELETE') { respondJson(response, 200, await this.sessions.delete(sessionId)); return; }
-        if (action === 'snapshot' && request.method === 'GET') { respondJson(response, 200, this.sessions.journal(sessionId).snapshot()); return; }
+        if (action === 'snapshot' && request.method === 'GET') { respondJson(response, 200, await this.sessions.snapshot(sessionId)); return; }
         if (action === 'history' && request.method === 'GET') {
           const parsed = HistoryPageRequestSchema.safeParse({ sessionId,
             cursor: url.searchParams.get('cursor') ?? undefined,

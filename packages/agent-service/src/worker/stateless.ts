@@ -1,4 +1,4 @@
-import { CounterSchema, PositiveCounterSchema, type MCPConfigurationState } from '@openchamber/agent-contract';
+import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, type MCPConfigurationState } from '@openchamber/agent-contract';
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
 import { CatalogOperationSchema, CatalogResultSchema, type CatalogOperation, type CatalogResult } from '../catalogs/protocol.ts';
 import type { CompletionWorkerBootstrap, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
@@ -7,7 +7,8 @@ import { WorkerCompletion } from './completion.ts';
 import type { NativeModels } from './catalog-models.ts';
 import { NativeAgents } from './catalog-agents.ts';
 import { NativeCredentials } from './catalog-credentials.ts';
-import { NativeMcpError, readNativeMcpConfigurationIfPresent, writeNativeMcpConfiguration } from './mcp.ts';
+import { WorkerMcp, NativeMcpError, readNativeMcpConfigurationIfPresent, writeNativeMcpConfiguration } from './mcp.ts';
+import { NativeMcpCredentials } from './mcp-credentials.ts';
 import { nativeExtensionRoots, nativeModelsContext, openNativeRuntime, type NativeWorkerRuntime } from './native-runtime.ts';
 import type { WorkerAuthorize } from './policy.ts';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
@@ -19,6 +20,8 @@ export class StatelessWorker {
   private readonly models: NativeModels;
   private readonly agents: NativeAgents;
   private readonly credentials: NativeCredentials;
+  private readonly mcp: WorkerMcp | undefined;
+  private readonly mcpCredentials: NativeMcpCredentials;
   private readonly operations = new Set<Promise<WorkerOperationResult>>();
   private credentialScopeId: string;
   private activeCompletionId: string | undefined;
@@ -29,6 +32,19 @@ export class StatelessWorker {
     const models = runtime.models;
     this.models = models;
     this.credentials = new NativeCredentials(runtime.authStorage, models, input.workspaceId, input.agentDirectoryId);
+    this.mcpCredentials = new NativeMcpCredentials(runtime.authStorage, input.workspaceId);
+    this.mcp = input.mcpConfigPath ? new WorkerMcp({
+      cwd: input.cwd, configPath: input.mcpConfigPath, authStorage: runtime.authStorage,
+      worker: { rootSessionId: input.authorizationRootId, workspaceId: input.workspaceId, workerGeneration: input.workerGeneration },
+      resolveCredentialRef: reference => this.mcpCredentials.resolve(reference),
+      resolveCommand: async transport => transport.command,
+      authorizeServer: server => authorize({ type: 'mcp-server', server }),
+      authorizeOAuth: (server, configuration) => authorize({ type: 'mcp-oauth', server, configuration: JsonObjectSchema.parse(Object.fromEntries(Object.entries(MCPOAuthPublicConfigurationSchema.parse(configuration)).filter(([, value]) => value !== undefined))) }),
+      sanitizeTool: tool => tool,
+      onCatalog: () => {},
+      onRuntimeFailure: error => { process.stderr.write(`${JSON.stringify({ type: 'mcp.runtime.failure', error })}\n`); },
+      isCurrent: () => !this.closed,
+    }) : undefined;
     this.agents = new NativeAgents({
       cwd: input.cwd, agentDirectory: input.agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
@@ -75,8 +91,32 @@ export class StatelessWorker {
         || JSON.stringify(configuration.config) !== JSON.stringify(request.config)) {
         throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
       }
-      for (const server of configuration.config.servers) await this.authorize({ type: 'mcp-server', server });
+      for (const server of configuration.config.servers) {
+        await this.authorize({ type: 'mcp-server', server });
+        const references = server.transport.type === 'stdio' ? Object.values(server.transport.envCredentialRefs ?? {})
+          : [...Object.values(server.transport.headerCredentialRefs ?? {}), ...(server.transport.credentialRef ? [server.transport.credentialRef] : [])];
+        for (const reference of references) await this.mcpCredentials.resolve(reference);
+      }
       return { type: 'mcp', result: { type: 'persisted', configuration: await writeNativeMcpConfiguration(path, configuration) } };
+    }
+    if (operation.type === 'mcp') {
+      if (!this.mcp) throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP storage ownership is unavailable.', true);
+      const request = operation.operation;
+      const configuration = await this.readConfiguration();
+      if (!configuration || JSON.stringify(configuration) !== JSON.stringify(request.configuration)) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
+      switch (request.type) {
+        case 'test': return { type: 'mcp', result: { type: 'tested', result: await this.mcp.test(request.serverId, configuration) } };
+        case 'oauth.status': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthRead(request.serverId, configuration) } };
+        case 'oauth': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthExecute(request.serverId, request.request, configuration) } };
+        case 'secret.write': {
+          if (request.request.persistedRevision !== configuration.persistedRevision) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
+          const server = configuration.config.servers.find(candidate => candidate.serverId === request.serverId);
+          if (!server) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP server is not configured.', false);
+          await this.authorize({ type: 'mcp-server', server });
+          return { type: 'mcp', result: { type: 'secret.written', result: await this.mcpCredentials.write(request.serverId, configuration.persistedRevision, request.request.value) } };
+        }
+        default: throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'MCP operation requires a live session worker');
+      }
     }
     if (operation.type !== 'completion') throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Operation requires a live session worker');
     if (operation.operation.type === 'completion.cancel') return { type: 'completion', result: await this.completion.operation(operation.operation) };
@@ -141,6 +181,7 @@ export class StatelessWorker {
     try {
       await this.completion.close();
       await Promise.allSettled(this.operations);
+      await this.mcp?.close();
     } finally { this.runtime.authStorage.close(); }
   }
 }

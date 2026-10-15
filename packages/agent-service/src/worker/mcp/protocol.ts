@@ -2,6 +2,7 @@ import {
   MCPApplyRequestSchema, MCPConfigurationStateSchema, MCPConfigureRequestSchema,
   MCPReconnectRequestSchema, MCPCatalogReadSchema, MCPWorkerApplyOutcomeSchema,
   EntityIdSchema, MCPOAuthRequestSchema, MCPOAuthResultSchema,
+  MCPConnectionTestResultSchema, MCPSecretWriteRequestSchema, MCPSecretWriteResultSchema,
 } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
@@ -12,6 +13,8 @@ export const McpOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('reconnect'), serverId: EntityIdSchema, request: MCPReconnectRequestSchema, configuration: MCPConfigurationStateSchema }),
   z.strictObject({ type: z.literal('oauth.status'), serverId: EntityIdSchema, configuration: MCPConfigurationStateSchema }),
   z.strictObject({ type: z.literal('oauth'), serverId: EntityIdSchema, request: MCPOAuthRequestSchema, configuration: MCPConfigurationStateSchema }),
+  z.strictObject({ type: z.literal('test'), serverId: EntityIdSchema, configuration: MCPConfigurationStateSchema }),
+  z.strictObject({ type: z.literal('secret.write'), serverId: EntityIdSchema, request: MCPSecretWriteRequestSchema, configuration: MCPConfigurationStateSchema }),
 ]);
 export type McpOperation = z.infer<typeof McpOperationSchema>;
 
@@ -20,5 +23,7 @@ export const McpResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('persisted'), configuration: MCPConfigurationStateSchema }),
   z.strictObject({ type: z.literal('applied'), result: MCPWorkerApplyOutcomeSchema }),
   z.strictObject({ type: z.literal('oauth'), result: MCPOAuthResultSchema }),
+  z.strictObject({ type: z.literal('tested'), result: MCPConnectionTestResultSchema }),
+  z.strictObject({ type: z.literal('secret.written'), result: MCPSecretWriteResultSchema }),
 ]);
 export type McpResult = z.infer<typeof McpResultSchema>;

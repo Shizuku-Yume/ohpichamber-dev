@@ -1,34 +1,14 @@
-import { OpenCode } from '@opencode/client';
 import { buildAppliedResponse } from './config-mutation-response.js';
-import { OPENCODE_CONFIG_DIR } from './shared.js';
-
-/**
- * Matches how OpenCode reads its own boolean env flags: any value other than
- * unset, empty, "0" or "false" enables the flag.
- */
-const isEnvFlagEnabled = (value) => {
-  if (typeof value !== 'string') return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized.length > 0 && normalized !== '0' && normalized !== 'false';
-};
 
 export const registerSkillRoutes = (app, dependencies) => {
   const {
-    fs,
-    path,
-    os,
     resolveProjectDirectory,
     resolveOptionalProjectDirectory,
     readSettingsFromDisk,
     sanitizeSkillCatalogs,
     isUnsafeSkillRelativePath,
-    buildOpenCodeUrl,
-
-    getOpenCodeAuthHeaders,
-    getOpenCodePort,
     getSkillSources,
     discoverSkills,
-    mergeDiscoveredSkills,
     createSkill,
     updateSkill,
     deleteSkill,
@@ -114,154 +94,7 @@ export const registerSkillRoutes = (app, dependencies) => {
     return { ok: false, error: { kind: 'authRequired', message: 'Selected Git identity is unavailable' } };
   };
 
-  const findWorktreeRootForSkills = (workingDirectory) => {
-    if (!workingDirectory) return null;
-    let current = path.resolve(workingDirectory);
-    while (true) {
-      if (fs.existsSync(path.join(current, '.git'))) {
-        return current;
-      }
-      const parent = path.dirname(current);
-      if (parent === current) {
-        return null;
-      }
-      current = parent;
-    }
-  };
 
-  const getSkillProjectAncestors = (workingDirectory) => {
-    if (!workingDirectory) return [];
-    const result = [];
-    let current = path.resolve(workingDirectory);
-    const stop = findWorktreeRootForSkills(workingDirectory) || current;
-    while (true) {
-      result.push(current);
-      if (current === stop) break;
-      const parent = path.dirname(current);
-      if (parent === current) break;
-      current = parent;
-    }
-    return result;
-  };
-
-  const isPathInside = (candidatePath, parentPath) => {
-    if (!candidatePath || !parentPath) return false;
-    const normalizedCandidate = path.resolve(candidatePath);
-    const normalizedParent = path.resolve(parentPath);
-    return normalizedCandidate === normalizedParent || normalizedCandidate.startsWith(`${normalizedParent}${path.sep}`);
-  };
-
-  // `projectAncestors` is `getSkillProjectAncestors(workingDirectory)`, worked
-  // out once per list: it probes the disk up to the repository root, and a
-  // list has hundreds of skills.
-  const inferSkillScopeAndSourceFromPath = (skillPath, projectAncestors) => {
-    const resolvedPath = typeof skillPath === 'string' ? path.resolve(skillPath) : '';
-    const home = os.homedir();
-    const source = resolvedPath.includes(`${path.sep}.agents${path.sep}skills${path.sep}`)
-      ? 'agents'
-      : resolvedPath.includes(`${path.sep}.claude${path.sep}skills${path.sep}`)
-        ? 'claude'
-        : 'opencode';
-
-    const isProjectScoped = projectAncestors.some((ancestor) => {
-      const candidates = [
-        path.join(ancestor, '.opencode'),
-        path.join(ancestor, '.claude', 'skills'),
-        path.join(ancestor, '.agents', 'skills'),
-      ];
-      return candidates.some((candidate) => isPathInside(resolvedPath, candidate));
-    });
-
-    if (isProjectScoped) {
-      return { scope: SKILL_SCOPE.PROJECT, source };
-    }
-
-    const userRoots = [
-      OPENCODE_CONFIG_DIR,
-      path.join(home, '.opencode'),
-      path.join(home, '.claude', 'skills'),
-      path.join(home, '.agents', 'skills'),
-      process.env.OPENCODE_CONFIG_DIR ? path.resolve(process.env.OPENCODE_CONFIG_DIR) : null,
-    ].filter(Boolean);
-
-    if (userRoots.some((root) => isPathInside(resolvedPath, root))) {
-      return { scope: SKILL_SCOPE.USER, source };
-    }
-
-    return { scope: SKILL_SCOPE.USER, source };
-  };
-
-  // Returns null when OpenCode's list could not be read (not running, error,
-  // timeout, malformed payload) so callers can tell a failed fetch from a
-  // genuinely empty list.
-  const fetchOpenCodeDiscoveredSkills = async (workingDirectory) => {
-    if (!getOpenCodePort()) {
-      return null;
-    }
-
-    try {
-      const client = OpenCode.make({
-        baseUrl: buildOpenCodeUrl('/', '').replace(/\/$/, ''),
-        headers: {
-          ...getOpenCodeAuthHeaders(),
-          // v2 scopes a request with a header, not a `directory` option, and
-          // rejects non-ASCII header values, so the path is percent-encoded.
-          ...(workingDirectory ? { 'x-opencode-directory': encodeURIComponent(workingDirectory) } : {}),
-        },
-        fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(8_000) }),
-      });
-
-      const response = await client.skill.list();
-      const payload = response?.data;
-      if (!Array.isArray(payload)) {
-        return null;
-      }
-
-      const projectAncestors = getSkillProjectAncestors(workingDirectory);
-      return payload
-        .map((item) => {
-          const name = typeof item?.name === 'string' ? item.name.trim() : '';
-          // OpenCode v1's skill payload used `location`; v2 renamed the field
-          // to `path`. Accept both, or the whole authoritative list is dropped
-          // and the panel falls back to the (smaller) local disk scan.
-          const rawLocation = typeof item?.path === 'string' ? item.path : (typeof item?.location === 'string' ? item.location : '');
-          // v1 marked built-in skills with `<built-in>`; v2 gives them a synthetic
-          // `/builtin/<id>.md` path. Normalize so they stay read-only in the panel.
-          const location = rawLocation.startsWith('/builtin/') ? '<built-in>' : rawLocation;
-          const description = typeof item?.description === 'string' ? item.description : '';
-          const content = typeof item?.content === 'string' ? item.content : '';
-          if (!name || !location) {
-            return null;
-          }
-          if (location === '<built-in>') {
-            return {
-              name,
-              path: location,
-              scope: SKILL_SCOPE.USER,
-              source: 'opencode',
-              description,
-              content,
-            };
-          }
-          const inferred = inferSkillScopeAndSourceFromPath(location, projectAncestors);
-          const skill = {
-            name,
-            path: location,
-            scope: inferred.scope,
-            source: inferred.source,
-            description,
-          };
-          if (content) {
-            skill.content = content;
-          }
-          return skill;
-        })
-        .filter(Boolean);
-    } catch (error) {
-      console.error('Failed to list OpenCode skills:', error);
-      return null;
-    }
-  };
 
   const listGitIdentitiesForResponse = () => {
     try {
@@ -302,16 +135,12 @@ export const registerSkillRoutes = (app, dependencies) => {
       if (error) {
         return res.status(400).json({ error });
       }
-      const openCodeSkills = await fetchOpenCodeDiscoveredSkills(directory);
-      const localSkills = await discoverSkills(directory);
-      const skills = mergeDiscoveredSkills(openCodeSkills ?? [], localSkills);
+      const skills = await discoverSkills(directory);
 
       // One skill at a time: each await hands the event loop back, so other
       // requests are served while hundreds of skills are read.
       const enrichedSkills = [];
       for (const skill of skills) {
-        // The list carries no supporting files; the skill page reads them
-        // from GET /api/config/skills/:name.
         const sources = await getSkillSources(skill.name, directory, skill, { includeSupportingFiles: false });
         const skillPath = typeof skill.path === 'string' ? skill.path : null;
         enrichedSkills.push({
@@ -325,31 +154,7 @@ export const registerSkillRoutes = (app, dependencies) => {
         });
       }
 
-      // OpenCode decides which external skill roots it loads from process
-      // env, and the browser cannot read that. Report the flags alongside the
-      // scan so the client can narrow its list to what the agent can actually
-      // invoke.
-      //
-      // OpenCode's own skill-list endpoint is not usable for this: on 1.18.14
-      // it returns only global and builtin skills, omitting the project
-      // `.agents`/`.claude` skills the agent demonstrably has.
-      const body = {
-        skills: enrichedSkills,
-        externalSkills: {
-          // `OPENCODE_DISABLE_CLAUDE_CODE` is the broad switch; the specific
-          // one wins independently — OpenCode ORs them.
-          claudeDisabled: isEnvFlagEnabled(process.env.OPENCODE_DISABLE_CLAUDE_CODE)
-            || isEnvFlagEnabled(process.env.OPENCODE_DISABLE_CLAUDE_CODE_SKILLS),
-          allDisabled: isEnvFlagEnabled(process.env.OPENCODE_DISABLE_EXTERNAL_SKILLS),
-        },
-      };
-      // The list is only the disk scan when OpenCode's own list failed:
-      // built-in skills and anything OpenCode finds only through its config
-      // are missing, so the client must not treat this as complete.
-      if (openCodeSkills === null) {
-        body.openCodeSkillsUnavailable = true;
-      }
-      res.json(body);
+      res.json({ skills: enrichedSkills });
     } catch (error) {
       console.error('Failed to list skills:', error);
       res.status(500).json({ error: 'Failed to list skills' });
@@ -437,10 +242,7 @@ export const registerSkillRoutes = (app, dependencies) => {
         return res.status(404).json({ ok: false, error: { kind: 'invalidSource', message: 'Unknown source' } });
       }
 
-      const resolvedDiscovered = mergeDiscoveredSkills(
-        (await fetchOpenCodeDiscoveredSkills(directory)) ?? [],
-        await discoverSkills(directory),
-      );
+      const resolvedDiscovered = await discoverSkills(directory);
       const installedByName = new Map(resolvedDiscovered.map((s) => [s.name, s]));
 
       const parsed = parseSkillRepoSource(src.source);
@@ -640,7 +442,7 @@ export const registerSkillRoutes = (app, dependencies) => {
       if (error) {
         return res.status(400).json({ error });
       }
-      const discoveredSkill = ((await fetchOpenCodeDiscoveredSkills(directory)) ?? [])
+      const discoveredSkill = (await discoverSkills(directory))
         .find((skill) => skill.name === skillName) || null;
       const sources = await getSkillSources(skillName, directory, discoveredSkill);
 
@@ -669,7 +471,7 @@ export const registerSkillRoutes = (app, dependencies) => {
         return res.status(400).json({ error });
       }
 
-      const discoveredSkill = ((await fetchOpenCodeDiscoveredSkills(directory)) ?? [])
+      const discoveredSkill = (await discoverSkills(directory))
         .find((skill) => skill.name === skillName) || null;
       const sources = await getSkillSources(skillName, directory, discoveredSkill);
       if (!sources.md.exists || !sources.md.dir) {
@@ -729,8 +531,6 @@ export const registerSkillRoutes = (app, dependencies) => {
         console.log(`[Server] Renaming skill: ${skillName} -> ${newName}`);
         console.log('[Server] Working directory:', directory);
         await renameSkill(skillName, newName, directory);
-        // OpenCode 2 watches the skills directories: the renamed folder is
-        // picked up like any other write, no restart and no client reload.
         return res.json({
           ...buildAppliedResponse(`Skill renamed to ${newName} successfully.`),
           name: newName,
@@ -763,7 +563,7 @@ export const registerSkillRoutes = (app, dependencies) => {
         return res.status(400).json({ error });
       }
 
-      const discoveredSkill = ((await fetchOpenCodeDiscoveredSkills(directory)) ?? [])
+      const discoveredSkill = (await discoverSkills(directory))
         .find((skill) => skill.name === skillName) || null;
       const sources = await getSkillSources(skillName, directory, discoveredSkill);
       if (!sources.md.exists || !sources.md.dir) {
@@ -797,7 +597,7 @@ export const registerSkillRoutes = (app, dependencies) => {
         return res.status(400).json({ error });
       }
 
-      const discoveredSkill = ((await fetchOpenCodeDiscoveredSkills(directory)) ?? [])
+      const discoveredSkill = (await discoverSkills(directory))
         .find((skill) => skill.name === skillName) || null;
       const sources = await getSkillSources(skillName, directory, discoveredSkill);
       if (!sources.md.exists || !sources.md.dir) {

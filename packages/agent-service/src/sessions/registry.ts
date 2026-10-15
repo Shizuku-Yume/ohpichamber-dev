@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { access } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { access, readFile, rm } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { z } from 'zod';
 import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema, SessionBranchRequestSchema, SubagentSchema } from '@openchamber/agent-contract';
@@ -13,10 +13,13 @@ import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts'
 import { ProjectionError, SessionJournal } from '../projection/journal.ts';
 import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad } from '../interaction/manager.ts';
 import { WorkerOperationError, WorkerRegistry } from '../supervisor/workers.ts';
+import { assertArchiveActive, exportNativeArchive, importNativeArchive, type ArchiveImportRequest } from './archive.ts';
 import { SessionReferenceError, SessionReferences } from './references.ts';
 import type { SessionReference, SessionRelocationIntent } from './references.ts';
 import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
-type SubagentRecord = Subagent & { rootSessionId: string; workspaceId: string; projectId: string; sessionFile: string };
+type SubagentLifecycleInput = { subagentId: string; toolCallId?: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; solutionSpace?: string; sessionFile?: string };
+const SessionFileIdentitySchema = z.object({ type: z.literal('session'), id: z.string().min(1), parentSession: z.string().min(1).optional() });
+type ChildRecord = Subagent & { rootSessionId: string; workspaceId: string; projectId: string; sessionFile: string };
 type RelocationAdmission = (input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<RuntimeSession>) => Promise<RuntimeSession>;
 type SessionBootstrap = z.infer<typeof HostSessionBootstrapSchema>;
 export interface SessionList { items: RuntimeSession[]; errors: { sessionId: string; code: ProblemCode }[]; }
@@ -24,6 +27,8 @@ type PromptOperation = Extract<WorkerOperation, { type: 'prompt' }>;
 type Opened = { generation: string; sessionFile: string; journal: SessionJournal };
 export interface SessionForkResult { sessionId: string; rootSessionId: string; sessionFile: string; sourceSessionId: string; entryId: string | null; mode: 'selected' | 'full' }
 export interface NativeEntryResult { entryId: string }
+export interface NativeArchiveInventory { chats: { id: string; title?: string; parentSessionId?: string }[]; complete: true }
+export interface NativeArchiveImported { sessionId: string; session: RuntimeSession; children: Subagent[]; imported: true }
 type Entry =
   | { state: 'unloaded'; reference: SessionReference; runtime: RuntimeSession }
   | { state: 'opening'; input: SessionBootstrap; opened?: Opened }
@@ -33,7 +38,8 @@ export class SessionRegistry {
   private readonly references: SessionReferences;
   private readonly interactions: InteractionManager;
   private readonly entries = new Map<string, Entry>();
-  private readonly subagents = new Map<string, SubagentRecord>();
+  private readonly subagents = new Map<string, ChildRecord>();
+  private readonly subagentLifecycleTails = new Map<string, Promise<void>>();
   private readonly openings = new Map<string, Promise<RuntimeSession>>();
   private readonly pendingRuns = new Set<string>();
   private readonly deleting = new Set<string>();
@@ -51,6 +57,7 @@ export class SessionRegistry {
     for (const reference of this.references.list().items) {
       this.entries.set(reference.rootSessionId, { state: 'unloaded', reference, runtime: RuntimeSessionSchema.parse({
         sessionId: reference.rootSessionId, rootSessionId: reference.rootSessionId,
+        ...(reference.parentSessionId ? { parentSessionId: reference.parentSessionId } : {}),
         projectId: reference.projectId, workspaceId: reference.workspaceId, displayPath: reference.displayPath,
         createdAt: reference.createdAt, updatedAt: reference.updatedAt,
         epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null,
@@ -62,6 +69,7 @@ export class SessionRegistry {
   async open(input: SessionBootstrap, replace = false): Promise<RuntimeSession> {
     this.ensureOpen();
     const parsed = HostSessionBootstrapSchema.parse(input);
+    this.assertBootstrapWritable(parsed);
     this.assertControlAvailable(parsed.rootSessionId);
     if (this.deleting.has(parsed.rootSessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
     const existing = this.entries.get(parsed.rootSessionId);
@@ -79,10 +87,12 @@ export class SessionRegistry {
   async reopen(input: SessionBootstrap): Promise<RuntimeSession> {
     this.ensureOpen();
     const parsed = HostSessionBootstrapSchema.parse(input);
+    this.assertWritable(parsed.rootSessionId);
     if (!this.references.get(parsed.rootSessionId)) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
     return this.open(parsed);
   }
   async restart(input: z.infer<typeof WorkerBootstrapSchema>): Promise<boolean> {
+    this.assertWritable(input.rootSessionId);
     const pending = this.openings.get(input.rootSessionId);
     if (pending) await pending;
     const entry = this.entries.get(input.rootSessionId);
@@ -101,7 +111,10 @@ export class SessionRegistry {
     const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
     if (child) {
       const root = this.runtime(child.rootSessionId);
-      return RuntimeSessionSchema.parse({ ...root, sessionId: child.childSessionId, rootSessionId: child.rootSessionId, runtimeStatus: child.status === 'running' ? 'running' : 'idle', activeRunId: null });
+      const runtimeStatus = root.runtimeStatus === 'unavailable' ? 'unavailable'
+        : child.status === 'running' && root.activeRunId !== null ? root.runtimeStatus : 'idle';
+      const activeRunId = runtimeStatus === 'idle' || runtimeStatus === 'unavailable' ? null : root.activeRunId;
+      return RuntimeSessionSchema.parse({ ...root, sessionId: child.childSessionId, rootSessionId: child.rootSessionId, parentSessionId: child.parentSessionId, runtimeStatus, activeRunId });
     }
     const entry = this.get(sessionId);
     if (entry.state === 'unloaded') return structuredClone(entry.runtime);
@@ -117,30 +130,80 @@ export class SessionRegistry {
       if (scope.workspaceId !== workspaceId || entry.state === 'opening') continue;
       if (this.controls.has(id) || this.references.relocation(id)) { references.errors.push({ sessionId: id, code: 'COMMAND_IN_FLIGHT' }); continue; }
       items.push(this.runtime(id));
+      if (entry.state === 'unloaded' && entry.reference.deletedSpace) {
+        for (const child of this.subagents.values()) if (child.rootSessionId === id) items.push(this.runtime(child.childSessionId));
+      }
     }
     return { items, errors: references.errors };
   }
 
-  async onSubagent(rootSessionId: string, _generation: string, input: { subagentId: string; status: 'started' | 'completed' | 'failed' | 'aborted'; role: string; solutionSpace?: string; sessionFile?: string }): Promise<void> {
-    const entry = this.entries.get(rootSessionId);
-    if (!entry || entry.state === 'unloaded' || !input.sessionFile) return;
-    let childSessionId: string;
-    try {
-      const manager = await SessionManager.open(input.sessionFile, entry.input.sessionsDirectory, undefined, { initialCwd: entry.input.cwd, throwIfMissing: true });
-      childSessionId = manager.getSessionId();
-      await manager.close();
-    } catch { return; }
-    const status: Subagent['status'] = input.status === 'started' ? 'running' : input.status === 'aborted' ? 'failed' : input.status;
-    const record = { subagentId: input.subagentId, parentSessionId: rootSessionId, childSessionId, role: input.role, ...(input.solutionSpace ? { solutionSpace: input.solutionSpace } : {}), status, rootSessionId, workspaceId: entry.input.workspaceId, projectId: entry.input.projectId, sessionFile: input.sessionFile };
-    this.subagents.set(input.subagentId, record);
-    await this.references.putSubagent(record);
+  async onSubagent(rootSessionId: string, generation: string, input: SubagentLifecycleInput): Promise<void> {
+    if (this.deleting.has(rootSessionId) || this.controls.has(rootSessionId) || !this.isCurrentSubagentOwner(rootSessionId, generation)) return;
+    const previous = this.subagentLifecycleTails.get(rootSessionId) ?? Promise.resolve();
+    const operation = previous.then(() => this.persistSubagent(rootSessionId, generation, input));
+    const settled = operation.catch(() => {});
+    this.subagentLifecycleTails.set(rootSessionId, settled);
+    try { await operation; }
+    finally { if (this.subagentLifecycleTails.get(rootSessionId) === settled) this.subagentLifecycleTails.delete(rootSessionId); }
   }
+
+  private isCurrentSubagentOwner(rootSessionId: string, generation: string): boolean {
+    const entry = this.entries.get(rootSessionId);
+    return !this.closing && entry?.state === 'live' && entry.opened.generation === generation;
+  }
+
+  private async readSubagentIdentity(sessionFile: string): Promise<{ childSessionId: string; parentSessionFile?: string } | undefined> {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      try {
+        const content = await readFile(sessionFile, 'utf8');
+        for (const line of content.split('\n')) {
+          if (!line) continue;
+          try {
+            const parsed = SessionFileIdentitySchema.safeParse(JSON.parse(line));
+            if (parsed.success) {
+              const identity: { childSessionId: string; parentSessionFile?: string } = { childSessionId: parsed.data.id };
+              if (parsed.data.parentSession) identity.parentSessionFile = parsed.data.parentSession;
+              return identity;
+            }
+          } catch {}
+        }
+      } catch {}
+      if (attempt < 9) await new Promise<void>(resolve => setTimeout(resolve, 10));
+    }
+    return undefined;
+  }
+
+  private async persistSubagent(rootSessionId: string, generation: string, input: SubagentLifecycleInput): Promise<void> {
+    const entry = this.entries.get(rootSessionId);
+    if (!this.isCurrentSubagentOwner(rootSessionId, generation) || !entry || entry.state !== 'live' || !input.sessionFile) return;
+    const identity = await this.readSubagentIdentity(input.sessionFile);
+    if (!identity || !this.isCurrentSubagentOwner(rootSessionId, generation) || this.entries.get(rootSessionId) !== entry) return;
+    const existing = this.subagents.get(input.subagentId);
+    let parentSessionId = existing?.parentSessionId;
+    if (!parentSessionId) {
+      if (!identity.parentSessionFile) return;
+      if (identity.parentSessionFile === entry.opened.sessionFile) parentSessionId = rootSessionId;
+      else {
+        const parent = [...this.subagents.values()].find(record => record.rootSessionId === rootSessionId && record.sessionFile === identity.parentSessionFile);
+        if (!parent) return;
+        parentSessionId = parent.childSessionId;
+      }
+    }
+    const status: Subagent['status'] = input.status === 'started' ? 'running' : input.status === 'aborted' ? 'failed' : input.status;
+    const record: ChildRecord = { subagentId: input.subagentId, parentSessionId, childSessionId: identity.childSessionId, role: input.role, status, rootSessionId, workspaceId: entry.input.workspaceId, projectId: entry.input.projectId, sessionFile: input.sessionFile };
+    const toolCallId = input.toolCallId ?? existing?.toolCallId;
+    if (toolCallId) record.toolCallId = toolCallId;
+    if (input.solutionSpace) record.solutionSpace = input.solutionSpace;
+    await this.references.putSubagent(record);
+    if (this.isCurrentSubagentOwner(rootSessionId, generation) && this.entries.get(rootSessionId) === entry) this.subagents.set(input.subagentId, record);
+  }
+
 
   listSubagents(sessionId: string): Subagent[] {
     const root = this.entries.has(sessionId) ? sessionId : [...this.subagents.values()].find(record => record.childSessionId === sessionId)?.rootSessionId;
     if (!root) throw new WorkerOperationError(404, 'SESSION_NOT_FOUND');
     this.get(root);
-    return [...this.subagents.values()].filter(record => record.rootSessionId === root).map(({ rootSessionId: _root, workspaceId: _workspace, sessionFile: _file, ...publicRecord }) => SubagentSchema.parse(publicRecord));
+    return [...this.subagents.values()].filter(record => record.rootSessionId === root && record.parentSessionId === sessionId).map(({ rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...publicRecord }) => SubagentSchema.parse(publicRecord));
   }
 
   journal(sessionId: string): SessionJournal {
@@ -149,8 +212,148 @@ export class SessionRegistry {
     return entry.opened.journal;
   }
 
+  assertWritable(sessionId: string): void {
+    this.ensureOpen();
+    this.references.assertWritable(sessionId);
+  }
+
+  assertBootstrapWritable(input: WorkerBootstrap): void {
+    this.assertWritable(input.rootSessionId);
+    for (const reference of this.references.list().items) {
+      if (!reference.deletedSpace) continue;
+      for (const candidate of [input.sessionFile, input.sessionsDirectory]) {
+        if (!candidate) continue;
+        const local = relative(reference.deletedSpace.directory, candidate);
+        if (local === '' || (local !== '..' && !local.startsWith(`..${sep}`) && !isAbsolute(local))) {
+          throw new SessionReferenceError(409, 'SESSION_READ_ONLY', 'Deleted-space storage cannot be reopened under another identity');
+        }
+      }
+    }
+  }
+
+  private coldRoot(sessionId: string): { reference: SessionReference; child?: ChildRecord } {
+    const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
+    const rootId = child?.rootSessionId ?? sessionId;
+    const entry = this.entries.get(rootId);
+    if (!entry || entry.state !== 'unloaded') throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+    return { reference: entry.reference, child };
+  }
+
+  private async coldProjection(sessionId: string): Promise<{ manager: SessionManager; projection: WorkerProjection }> {
+    const { reference, child } = this.coldRoot(sessionId);
+    const file = child?.sessionFile ?? reference.sessionFile;
+    const manager = await SessionManager.open(file, reference.sessionsDirectory, undefined, { initialCwd: reference.cwd, throwIfMissing: true, suppressBreadcrumb: true });
+    try { return { manager, projection: new WorkerProjection(manager, sessionId, reference.deletedSpace?.privateRoots) }; }
+    catch (error) { await manager.close(); throw error; }
+  }
+
+  async archiveManifest(): Promise<NativeArchiveInventory> {
+    this.ensureOpen();
+    const inventory = this.references.list();
+    if (inventory.errors.length) throw new SessionReferenceError(503, 'SESSION_RESTORE_FAILED', 'Session inventory is incomplete');
+    if (inventory.items.length > 1000) throw new SessionReferenceError(413, 'PAYLOAD_TOO_LARGE', 'Space archive exceeds 1000 chats');
+    const byFile = new Map(inventory.items.map(reference => [reference.sessionFile, reference.rootSessionId]));
+    const pending = new Map<string, NativeArchiveInventory['chats'][number]>();
+    for (const reference of inventory.items) {
+      const manager = await SessionManager.open(reference.sessionFile, reference.sessionsDirectory, undefined, { initialCwd: reference.cwd, throwIfMissing: true, suppressBreadcrumb: true });
+      try {
+        const parentFile = manager.getHeader()?.parentSession;
+        const parentSessionId = reference.parentSessionId ?? (parentFile ? byFile.get(parentFile) : undefined);
+        const title = manager.getSessionName();
+        pending.set(reference.rootSessionId, { id: reference.rootSessionId, ...(title ? { title } : {}), ...(parentSessionId ? { parentSessionId } : {}) });
+      } finally { await manager.close(); }
+    }
+    const chats: NativeArchiveInventory['chats'] = [];
+    const emitted = new Set<string>();
+    while (pending.size) {
+      const before = pending.size;
+      for (const [id, chat] of pending) if (!chat.parentSessionId || emitted.has(chat.parentSessionId)) {
+        chats.push(chat); emitted.add(id); pending.delete(id);
+      }
+      if (pending.size === before) throw new SessionReferenceError(400, 'INVALID_REQUEST', 'Archive ancestry is cyclic or incomplete');
+    }
+    return { chats, complete: true };
+  }
+
+  async exportArchive(sessionId: string, signal?: AbortSignal): Promise<Buffer> {
+    const transfer = signal ? AbortSignal.any([signal, AbortSignal.timeout(300_000)]) : AbortSignal.timeout(300_000);
+    this.ensureOpen();
+    const reference = this.references.get(sessionId);
+    if (!reference) throw new WorkerOperationError(404, 'SESSION_NOT_FOUND');
+    this.assertControlAvailable(sessionId);
+    this.controls.add(sessionId);
+    try {
+      const entry = this.entries.get(sessionId);
+      if (entry?.state !== 'unloaded') entry?.opened?.journal.close();
+      this.interactions.closeSession(sessionId);
+      if (!await this.workers.stop(sessionId)) throw new SessionReferenceError(503, 'SESSION_RESTORE_FAILED', 'Native worker did not flush and stop cleanly');
+      await this.subagentLifecycleTails.get(sessionId);
+      assertArchiveActive(transfer);
+      this.setUnloaded(reference);
+      const manager = await SessionManager.open(reference.sessionFile, reference.sessionsDirectory, undefined, { initialCwd: reference.cwd, throwIfMissing: true, suppressBreadcrumb: true });
+      let parentSessionId = reference.parentSessionId;
+      try {
+        const parentFile = manager.getHeader()?.parentSession;
+        parentSessionId ??= this.references.list().items.find(value => value.sessionFile === parentFile)?.rootSessionId;
+      } finally { await manager.close(); }
+      return await exportNativeArchive({ ...reference, ...(parentSessionId ? { parentSessionId } : {}) }, this.references.listSubagents(sessionId), transfer);
+    } finally { this.controls.delete(sessionId); }
+  }
+
+  async importArchive(input: ArchiveImportRequest, signal?: AbortSignal): Promise<NativeArchiveImported> {
+    const transfer = signal ? AbortSignal.any([signal, AbortSignal.timeout(300_000)]) : AbortSignal.timeout(300_000);
+    this.ensureOpen();
+    this.assertControlAvailable(input.sessionId);
+    if (this.entries.has(input.sessionId) || this.workers.bootstrap(input.sessionId) || [...this.subagents.values()].some(child => child.childSessionId === input.sessionId)) {
+      throw new SessionReferenceError(409, 'INVALID_REQUEST', 'Archive identity already exists');
+    }
+    this.controls.add(input.sessionId);
+    try {
+      const imported = await importNativeArchive(input, transfer);
+      try { assertArchiveActive(transfer); await this.references.installArchive(imported.reference, imported.children, transfer); }
+      catch (error) { await rm(imported.reference.deletedSpace!.directory, { recursive: true, force: true }); throw error; }
+      const session = this.setUnloaded(imported.reference);
+      for (const child of imported.children) this.subagents.set(child.subagentId, child);
+      return { sessionId: input.sessionId, session, children: imported.children.map(({ rootSessionId: _root, workspaceId: _workspace, projectId: _project, sessionFile: _file, ...publicRecord }) => SubagentSchema.parse(publicRecord)), imported: true };
+    } finally { this.controls.delete(input.sessionId); }
+  }
+
+  private async coldHistory(request: HistoryPageRequest) {
+    const { projection, manager } = await this.coldProjection(request.sessionId);
+    try { return projection.history(request); } finally { await manager.close(); }
+  }
+
+  async snapshot(sessionId: string) {
+    const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
+    const entry = this.entries.get(child?.rootSessionId ?? sessionId);
+    if (entry?.state !== 'unloaded' || !entry.reference.deletedSpace) return this.journal(sessionId).snapshot();
+    const { projection, manager } = await this.coldProjection(sessionId);
+    try {
+      const journal = new SessionJournal({ sessionId, rootSessionId: entry.reference.rootSessionId,
+        parentSessionId: child?.parentSessionId, projectId: entry.reference.projectId, workspaceId: entry.reference.workspaceId, displayPath: entry.reference.displayPath }, projection.seed());
+      journal.unavailable();
+      const snapshot = journal.snapshot();
+      const session = this.runtime(sessionId);
+      return { ...snapshot, session, cursor: `${session.epoch}:${session.headSequence}` };
+    } finally { await manager.close(); }
+  }
+
+  private async coldDelete(sessionId: string) {
+    const { reference } = this.coldRoot(sessionId);
+    if (!reference.deletedSpace || sessionId !== reference.rootSessionId) throw new WorkerOperationError(409, 'SESSION_READ_ONLY');
+    const children = this.references.listSubagents(reference.rootSessionId);
+    this.deleting.add(sessionId);
+    try {
+      await rm(reference.deletedSpace.directory, { recursive: true, force: true });
+      await this.references.removeArchive(reference.rootSessionId);
+      this.entries.delete(reference.rootSessionId);
+      for (const child of children) this.subagents.delete(child.subagentId);
+      return { sessionId, deletedSessionIds: [reference.rootSessionId, ...children.map(child => child.childSessionId)] };
+    } finally { this.deleting.delete(sessionId); }
+  }
   async prompt(sessionId: string, operation: PromptOperation) {
     this.ensureOpen();
+    this.assertWritable(sessionId);
     const runtime = this.runtime(sessionId);
     if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     if (runtime.activeRunId !== null || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
@@ -162,6 +365,7 @@ export class SessionRegistry {
     } finally { this.pendingRuns.delete(sessionId); }
   }
   async fork(sessionId: string, entryId: string | null, mode: 'selected' | 'full'): Promise<SessionForkResult> {
+    this.assertWritable(sessionId);
     this.ensureOpen();
     const entry = this.get(sessionId);
     const source = entry.state === 'unloaded' ? entry.reference : entry.input;
@@ -214,6 +418,7 @@ export class SessionRegistry {
   }
   async streamingPrompt(sessionId: string, operation: Extract<WorkerOperation, { type: 'steer' | 'follow-up' }>) {
     this.ensureOpen();
+    this.assertWritable(sessionId);
     const runtime = this.runtime(sessionId);
     if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     if (runtime.activeRunId === null) throw new WorkerOperationError(404, 'RUN_NOT_FOUND');
@@ -224,6 +429,7 @@ export class SessionRegistry {
     return result.ack;
   }
   async branch(sessionId: string, input: SessionBranchRequest) {
+    this.assertWritable(sessionId);
     const request = SessionBranchRequestSchema.parse(input);
     const entry = this.get(sessionId);
     if (entry.state === 'unloaded' || !entry.opened) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
@@ -251,6 +457,7 @@ export class SessionRegistry {
   }
 
   async prepareRelocation(sessionId: string, input: HostSessionRelocationPrepare, admit: RelocationAdmission) {
+    this.assertWritable(sessionId);
     const request = HostSessionRelocationPrepareSchema.parse(input);
     const entry = this.get(sessionId);
     const source = this.references.get(sessionId);
@@ -271,6 +478,7 @@ export class SessionRegistry {
       this.interactions.closeSession(sessionId);
       if (entry.state !== 'unloaded') entry.opened?.journal.close();
       await this.workers.stop(sessionId);
+      await this.subagentLifecycleTails.get(sessionId);
       manager = await SessionManager.open(source.sessionFile, source.sessionsDirectory, undefined, { initialCwd: source.cwd, throwIfMissing: true });
       await manager.flush();
       await rememberPrivateRoots(manager, source);
@@ -285,8 +493,11 @@ export class SessionRegistry {
         ...(destination.env ? { environment: destination.env } : undefined),
       };
       await this.references.beginRelocation(intent);
+      const sourceArtifacts = manager.getArtifactsDir();
       await manager.moveTo(destination.cwd, sessionsDirectory);
       if (manager.getSessionFile() !== intent.destination.sessionFile) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+      const destinationArtifacts = manager.getArtifactsDir();
+      if (sourceArtifacts && destinationArtifacts) await this.relocateSubagentFiles(sessionId, sourceArtifacts, destinationArtifacts, destination.workspaceId, destination.projectId);
       await manager.close(); manager = undefined;
       this.setUnloaded(source);
       const runtime = await this.launchRelocation(intent, admit);
@@ -302,6 +513,7 @@ export class SessionRegistry {
   }
 
   async finalizeRelocation(sessionId: string, input: z.infer<typeof HostSessionRelocationFinalizeSchema>, admit: RelocationAdmission) {
+    this.assertWritable(sessionId);
     this.ensureOpen();
     const request = HostSessionRelocationFinalizeSchema.parse(input);
     if (this.controls.has(sessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
@@ -311,6 +523,9 @@ export class SessionRegistry {
     try {
       if (request.action === 'rollback') return { session: await this.rollbackRelocation(intent) };
       const entry = this.entries.get(sessionId);
+      if (entry?.state !== 'live' || entry.input.workspaceId !== intent.destination.workspaceId || entry.opened.journal.runtime().runtimeStatus !== 'idle') {
+        await this.relocateSubagentFiles(sessionId, intent.source.sessionFile.slice(0, -'.jsonl'.length), intent.destination.sessionFile.slice(0, -'.jsonl'.length), intent.destination.workspaceId, intent.destination.projectId);
+      }
       const runtime = entry?.state === 'live' && entry.input.workspaceId === intent.destination.workspaceId
         && entry.opened.journal.runtime().runtimeStatus === 'idle' ? entry.opened.journal.runtime() : await this.launchRelocation(intent, admit);
       await this.references.finishRelocation(sessionId, request.transactionId, { ...intent.destination, updatedAt: runtime.updatedAt });
@@ -346,9 +561,12 @@ export class SessionRegistry {
       manager = await SessionManager.open(location.sessionFile, location.sessionsDirectory, undefined, { initialCwd: location.cwd, throwIfMissing: true });
       if (manager.getHeader()?.id !== intent.sourceHeader.id) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
       const snapshot = manager.captureState();
+      const currentArtifacts = manager.getArtifactsDir();
       await manager.rollbackMove({ ...snapshot, cwd: intent.source.cwd, sessionDir: dirname(intent.source.sessionFile), sessionFile: intent.source.sessionFile,
         header: { ...snapshot.header, cwd: intent.sourceHeader.cwd, additionalDirectories: intent.sourceHeader.additionalDirectories,
           previousSessionFiles: intent.sourceHeader.previousSessionFiles } });
+      const restoredArtifacts = manager.getArtifactsDir();
+      if (currentArtifacts && restoredArtifacts) await this.relocateSubagentFiles(id, currentArtifacts, restoredArtifacts, intent.source.workspaceId, intent.source.projectId);
       actual = { ...intent.source, updatedAt: Date.now() };
       await this.references.finishRelocation(id, intent.transactionId, actual);
     } catch (error) {
@@ -360,9 +578,21 @@ export class SessionRegistry {
     return this.setUnloaded(actual);
   }
 
+  private async relocateSubagentFiles(rootSessionId: string, sourceArtifacts: string, destinationArtifacts: string, workspaceId: string, projectId: string): Promise<void> {
+    if (sourceArtifacts === destinationArtifacts && this.references.listSubagents(rootSessionId).every(record => record.workspaceId === workspaceId && record.projectId === projectId)) return;
+    const relocated = this.references.listSubagents(rootSessionId).map(record => {
+      const childPath = relative(sourceArtifacts, record.sessionFile);
+      if (childPath === '..' || childPath.startsWith(`..${sep}`) || isAbsolute(childPath)) return { ...record, workspaceId, projectId };
+      return { ...record, workspaceId, projectId, sessionFile: join(destinationArtifacts, childPath) };
+    });
+    await this.references.replaceSubagents(rootSessionId, relocated);
+    for (const record of relocated) this.subagents.set(record.subagentId, record);
+  }
+
   private setUnloaded(reference: SessionReference): RuntimeSession {
     this.entries.set(reference.rootSessionId, { state: 'unloaded', reference, runtime: RuntimeSessionSchema.parse({
       sessionId: reference.rootSessionId, rootSessionId: reference.rootSessionId, projectId: reference.projectId,
+      ...(reference.parentSessionId ? { parentSessionId: reference.parentSessionId } : {}),
       workspaceId: reference.workspaceId, displayPath: reference.displayPath, createdAt: reference.createdAt, updatedAt: reference.updatedAt,
       epoch: randomUUID(), headSequence: '0', runtimeStatus: 'unavailable', activeRunId: null,
     }) });
@@ -378,6 +608,7 @@ export class SessionRegistry {
 
   async abort(sessionId: string, runId: string) {
     this.ensureOpen();
+    this.assertWritable(sessionId);
     if (this.runtime(sessionId).activeRunId !== runId) throw new WorkerOperationError(404, 'RUN_NOT_FOUND');
     this.interactions.invalidate(sessionId);
     const result = await this.workers.request(sessionId, { type: 'abort', runId });
@@ -388,8 +619,11 @@ export class SessionRegistry {
   async history(request: HistoryPageRequest) {
     this.ensureOpen();
     const child = [...this.subagents.values()].find(record => record.childSessionId === request.sessionId);
+    const rootEntry = this.entries.get(child?.rootSessionId ?? request.sessionId);
+    if (rootEntry?.state === 'unloaded' && rootEntry.reference.deletedSpace) return this.coldHistory(request);
     if (child) {
-      const manager = await SessionManager.open(child.sessionFile, undefined, undefined, { initialCwd: dirname(child.sessionFile), throwIfMissing: true });
+      const rootEntry = this.get(child.rootSessionId);
+      const manager = await SessionManager.open(child.sessionFile, undefined, undefined, { initialCwd: rootEntry.state === 'unloaded' ? rootEntry.reference.cwd : rootEntry.input.cwd, throwIfMissing: true });
       try { return new WorkerProjection(manager, child.childSessionId).history(request); }
       finally { await manager.close(); }
     }
@@ -403,26 +637,31 @@ export class SessionRegistry {
   questions(sessionId: string) { this.get(sessionId); return this.interactions.questions(sessionId); }
 
   async resolveApproval(sessionId: string, approvalId: string, input: ApprovalReply) {
+    this.assertWritable(sessionId);
     this.get(sessionId);
     return this.interactions.resolveApproval(sessionId, approvalId, ApprovalReplySchema.parse(input));
   }
 
   async resolveQuestion(sessionId: string, questionId: string, input: QuestionReply) {
+    this.assertWritable(sessionId);
     this.get(sessionId);
     return this.interactions.resolveQuestion(sessionId, questionId, QuestionReplySchema.parse(input));
   }
 
   async delete(sessionId: string) {
     this.ensureOpen();
+    const entry = this.entries.get(sessionId);
+    if (entry?.state === 'unloaded' && entry.reference.deletedSpace) return this.coldDelete(sessionId);
+    this.assertWritable(sessionId);
     const opening = this.openings.get(sessionId);
     if (opening) await opening;
     const journal = this.journal(sessionId);
     if (journal.runtime().activeRunId !== null || this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE');
     this.deleting.add(sessionId);
     try {
+      await this.subagentLifecycleTails.get(sessionId);
       const result = await this.workers.request(sessionId, { type: 'delete' });
       if (result.type !== 'delete') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-      // The SDK deletion is authoritative even if reference cleanup later fails.
       for (const id of result.deletedSessionIds) this.entries.delete(id);
       for (const [subagentId, record] of this.subagents) if (record.rootSessionId === sessionId || result.deletedSessionIds.includes(record.childSessionId)) this.subagents.delete(subagentId);
       await this.references.removeSubagents(sessionId);
@@ -497,10 +736,12 @@ export class SessionRegistry {
       entry.opened?.journal.close();
     }
     await Promise.allSettled(this.openings.values());
+    await this.workers.close();
     await this.references.close();
   }
 
   private async openResolved(input: SessionBootstrap, replace: boolean, reference = this.references.get(input.rootSessionId), persistReference = true): Promise<RuntimeSession> {
+    this.assertBootstrapWritable(input);
     const previous = this.entries.get(input.rootSessionId);
     if (!replace && previous?.state === 'live' && previous.opened.journal.runtime().runtimeStatus !== 'unavailable') return previous.opened.journal.runtime();
     const resolved = { ...input };

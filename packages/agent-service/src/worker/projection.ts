@@ -123,7 +123,8 @@ function parts(message: VisibleMessage, messageId: string, attachments: PromptAt
   const result: Part[] = [];
   if (message.role === 'toolResult') {
     result.push({ type: 'tool_result', partId: partId(messageId, 0), toolCallId: message.toolCallId,
-      toolName: message.toolName, isError: message.isError, output: JsonValueSchema.parse(message.content),
+      toolName: message.toolName, isError: message.isError,
+      output: JsonValueSchema.parse(JSON.parse(JSON.stringify({ content: message.content, ...(message.details === undefined ? {} : { details: message.details }) }))),
       error: message.isError ? 'Tool execution failed' : undefined,
     });
   } else if (Array.isArray(message.content)) {
@@ -157,10 +158,11 @@ export class WorkerProjection {
   private readonly privateRoots: PrivateRoot[];
   private readonly textSuffixes = new Map<string, { suffix: string; context: string }>();
 
-  constructor(private readonly manager: SessionManager, private readonly sessionId: string) {
+  constructor(private readonly manager: SessionManager, private readonly sessionId: string, privateRoots: readonly PrivateRoot[] = []) {
     this.entryOffset = manager.getBranch().length;
     const roots = new Map(nativePrivateRootContext(manager).map((value) => [value.root, value]));
     for (const value of storageRoots(manager)) roots.set(value.root, value);
+    for (const value of privateRoots) roots.set(value.root, value);
     const cwd = manager.getHeader()?.cwd;
     if (cwd) roots.set(cwd, { root: cwd, label: 'workspace' });
     this.privateRoots = [...roots.values()].sort((left, right) => right.root.length - left.root.length);
