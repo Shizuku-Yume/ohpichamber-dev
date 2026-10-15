@@ -36,7 +36,6 @@ Host-owned settings, theme, project, network, tunnel, login-shell, startup/stati
 - `packages/web/server/lib/opencode/npm-registry-config.js`: resolves npm package metadata requests from inherited npm registry settings or the user's `.npmrc`, including scoped registries and matching bearer/basic HTTP authentication.
 - `packages/web/server/lib/opencode/feature-routes-runtime.js`: feature route composition runtime for dynamic import-backed config/skill/provider route registration. Source-control provider registration is delegated to `lib/source-control/routes.js`. One exact persisted-credential resolver, including optional revision pinning, is shared by transport binding, clone planning, contributor transfer, execution, and safe HTTPS binding-read presentation. The managed SSH inventory supplies the matching verified-fingerprint projection without exposing its key record or path. Server composition supplies one durable worktree-bootstrap store to both Git and OpenChamber-session routes; the runtime exposes a lazy bound-checkout hydration adapter so session-created worktrees use the same local inspection and exact parent authority rules as Git-route worktrees.
 - `packages/web/server/lib/opencode/opencode-resolution-runtime.js`: OpenCode binary resolution snapshot runtime for settings routes and diagnostics.
-- `packages/web/server/lib/opencode/upgrade-capability.js`: authoritative upgrade ownership policy for the active OpenCode runtime. Bundled, external, and unresolved runtimes fail closed; only managed non-bundled runtimes delegate upgrades to OpenCode.
 - `packages/web/server/lib/agent-tool/runtime.js`: managed OpenCode custom-tool materialization, environment injection, same-machine authentication (loopback, or the bound address for a concrete bind), and fixed CLI action dispatch.
 - `packages/web/server/lib/opencode/managed-plugin-config.js`: the `OPENCODE_CONFIG_CONTENT` merge used only on the fallback path, when the user's own environment owns `OPENCODE_CONFIG`.
 - `packages/web/server/lib/opencode/managed-config-file.js`: the managed OpenCode config layer — materializes the enabled OpenChamber plugins (agent tools, system prompt optimizer) and publishes them in a file OpenCode watches.
@@ -232,21 +231,13 @@ Hard rules, verified against v2.0.8 (the completion stamp against v2.0.16)
 - Owns lazy auth library loading for provider auth checks/removal.
 - Keeps route behavior independent from composition root; `index.js` now supplies dependencies only.
 
-## CLI upgrades
+## Retired CLI upgrade owner
 
-`cli-upgrade.js` runs the host-resolved executable and wrapper arguments with
-`upgrade`, without a shell or client-supplied arguments. OpenCode chooses the
-installer. Web, hosted mobile, Capacitor, and Desktop with a separately installed
-CLI use this server path.
-Bundled Desktop, external URL connections, and unavailable CLIs remain
-unsupported at the host boundary.
-
-An upgrade leaves the current server running. The toast's Reload action restarts
-it using the installed version. Failed installations return an error and can be
-retried; installer output is not returned or logged because it can contain registry
-credentials. Requests from multiple clients share the in-flight operation. The
-executor supplies EOF and bounds captured output; installation has no fixed time
-limit.
+Task 17 removed the OpenCode CLI upgrade surface with its last caller: the
+`/api/opencode/upgrade`, `/api/opencode/upgrade-status` and
+`/api/opencode/version` routes, `cli-upgrade.js` and `upgrade-capability.js`.
+The UI update toast that drove them is gone; Desktop ships its own runtime and
+updates with the application, so no host route installs an OpenCode CLI.
 
 ### Retired startup compatibility gate
 
