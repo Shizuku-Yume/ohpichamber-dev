@@ -24,15 +24,14 @@ export function useSessionAssistState(sessionId: string, directory?: string): Se
   const sessionRecapEnabled = useUIStore((state) => state.sessionRecapEnabled);
   const sessionSuggestionEnabled = useUIStore((state) => state.sessionSuggestionEnabled);
 
-  const isIdle = !status || status.type === 'idle';
-  // Same freshness rule as the sidebar row's recap tooltip. Comparing against the
-  // last loaded message disagreed with it: in v2 the newest record is the
-  // turn's `idle` marker (or a model/agent switch), never the assistant answer.
+  const isIdle = !status || status === 'idle';
+  // Same freshness rule as the sidebar row's recap tooltip: the canonical
+  // session update is authoritative, not the last loaded assistant answer.
   const assist = isIdle ? getCurrentSessionAssist(session) : null;
 
-  // Recap waits out the quiet window after the turn ended; re-render once when
-  // the boundary passes.
-  const idleAt = session?.time?.idle ?? 0;
+  // Recap waits out the quiet window after the session's latest update;
+  // re-render once when the boundary passes.
+  const idleAt = session?.updatedAt ?? 0;
   const [, forceTick] = React.useReducer((tick: number) => tick + 1, 0);
   const quietElapsed = assist ? Date.now() - idleAt >= RECAP_VISIBILITY_DELAY_MS : false;
 

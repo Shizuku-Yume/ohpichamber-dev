@@ -1,4 +1,5 @@
 import React from 'react';
+import type { Session } from '@openchamber/agent-contract';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
 import { isWebRuntime } from '@/lib/desktop';
@@ -28,13 +29,13 @@ const normalizeRecentTitle = (value: string | undefined, fallback: string): stri
 };
 
 const buildRecentShortcuts = (
-  sessions: Array<{ id: string; title?: string }>,
+  sessions: readonly Session[],
   currentSessionId: string | null,
 ): RecentSessionShortcut[] => {
   const ordered = currentSessionId
     ? [
-        ...sessions.filter((session) => session.id === currentSessionId),
-        ...sessions.filter((session) => session.id !== currentSessionId),
+        ...sessions.filter((session) => session.sessionId === currentSessionId),
+        ...sessions.filter((session) => session.sessionId !== currentSessionId),
       ]
     : sessions;
 
@@ -42,7 +43,7 @@ const buildRecentShortcuts = (
   const seen = new Set<string>();
 
   for (const session of ordered) {
-    const sessionId = typeof session.id === 'string' ? session.id.trim() : '';
+    const sessionId = session.sessionId.trim();
     if (!sessionId || seen.has(sessionId)) {
       continue;
     }
@@ -50,7 +51,7 @@ const buildRecentShortcuts = (
     seen.add(sessionId);
     shortcuts.push({
       sessionId,
-      title: normalizeRecentTitle(session.title, `Session ${shortcuts.length + 1}`),
+      title: normalizeRecentTitle(session.metadata?.title, `Session ${shortcuts.length + 1}`),
     });
 
     if (shortcuts.length >= MAX_RECENT_SHORTCUTS) {

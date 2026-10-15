@@ -1,5 +1,5 @@
 import type { Message, Session } from '@openchamber/agent-contract';
-import { canonicalClient } from '@/api/canonicalClient';
+import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import {
   getOriginalSessionID,
@@ -401,11 +401,25 @@ const openReviewSessionPanel = (directory: string, session: Session): void => {
   });
 };
 
+const readHostSession = async (sessionID: string): Promise<Session> => {
+  const runtimeKey = getRuntimeKey();
+  const snapshot = await canonicalClient.getSession(sessionID);
+  assertAutoReviewRuntimeStillCurrent(runtimeKey);
+  const sessions = await canonicalClient.listSessions(snapshot.session.workspaceId);
+  assertAutoReviewRuntimeStillCurrent(runtimeKey);
+  const session = sessions.items.find((entry) => entry.sessionId === sessionID);
+  if (!session || sessions.errors[sessionID] || sessions.errors[snapshot.session.workspaceId]) {
+    throw new Error('Host session projection is unavailable');
+  }
+  return session;
+};
+
 const getSessionOrNull = async (sessionID: string): Promise<Session | null> => {
   try {
-    return (await canonicalClient.getSession(sessionID)).session;
-  } catch {
-    return null;
+    return await readHostSession(sessionID);
+  } catch (error) {
+    if (error instanceof CanonicalApiError && error.problem.status === 404) return null;
+    throw error;
   }
 };
 
@@ -436,7 +450,7 @@ const createOrReuseReviewSession = async (
   expectedRuntimeKey?: string,
 ): Promise<Session> => {
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const original = (await canonicalClient.getSession(originalSessionID)).session;
+  const original = await readHostSession(originalSessionID);
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
   const existingReviewID = getReviewSessionID(original);
   if (existingReviewID) {
@@ -552,7 +566,7 @@ export const startReviewFlow = async (input: StartReviewFlowInput): Promise<void
 
 export const sendReviewFeedbackToOriginal = async (reviewSessionID: string, directory: string, reviewFeedback: string, expectedRuntimeKey?: string): Promise<string> => {
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const reviewSession = (await canonicalClient.getSession(reviewSessionID)).session;
+  const reviewSession = await readHostSession(reviewSessionID);
   const originalSessionID = getOriginalSessionID(reviewSession);
   if (!originalSessionID) throw new Error('Original session is missing');
   const prompt = await renderMagicPrompt('session.reviewFeedbackToImplementer.visible', { review_feedback: reviewFeedback });
@@ -562,15 +576,17 @@ export const sendReviewFeedbackToOriginal = async (reviewSessionID: string, dire
 
 export const sendImplementationResponseToReviewer = async (originalSessionID: string, directory: string, implementationResponse: string, autoReview = false, expectedRuntimeKey?: string): Promise<string> => {
   assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const originalSession = (await canonicalClient.getSession(originalSessionID)).session;
+  const originalSession = await readHostSession(originalSessionID);
   const reviewSessionID = getReviewSessionID(originalSession);
   if (!reviewSessionID) throw new Error('Review session is missing');
   let reviewSession: Session;
   try {
-    reviewSession = (await canonicalClient.getSession(reviewSessionID)).session;
+    reviewSession = await readHostSession(reviewSessionID);
   } catch (error) {
     assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-    await patchSessionMetadata(originalSessionID, directory, (metadata) => withoutReviewSessionLink(metadata, reviewSessionID));
+    if (error instanceof CanonicalApiError && error.problem.status === 404) {
+      await patchSessionMetadata(originalSessionID, directory, (metadata) => withoutReviewSessionLink(metadata, reviewSessionID), expectedRuntimeKey);
+    }
     throw error;
   }
   const prompt = await renderMagicPrompt('session.implementationResponseToReviewer.visible', { implementation_response: implementationResponse });

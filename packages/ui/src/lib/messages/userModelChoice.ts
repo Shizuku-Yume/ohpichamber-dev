@@ -1,10 +1,10 @@
-import type { Message, Part, Session } from '@/lib/opencode/model'
+import type { Message, Session } from '@openchamber/agent-contract'
 
 export type UserModelChoice = {
   id: string
   agent?: string
-  providerID?: string
-  modelID?: string
+  providerId?: string
+  modelId?: string
   variant?: string
 }
 
@@ -20,11 +20,9 @@ export const extractAssistantModelChoice = (message: Message): UserModelChoice |
     return null
   }
   return {
-    id: message.id,
-    agent: message.agent.trim() || undefined,
-    providerID: message.providerID.trim() || undefined,
-    modelID: message.modelID.trim() || undefined,
-    variant: message.variant?.trim() || undefined,
+    id: message.messageId,
+    providerId: message.providerId,
+    modelId: message.modelId,
   }
 }
 
@@ -34,24 +32,14 @@ export const extractAssistantModelChoice = (message: Message): UserModelChoice |
  * Messages whose parts have not been loaded yet are skipped so an incomplete
  * snapshot cannot be treated as authoritative.
  */
-export const findLatestUserModelChoice = (
-  messages: readonly Message[],
-  getParts: (messageId: string) => Part[] | undefined,
-): UserModelChoice | null => {
+export const findLatestUserModelChoice = (messages: readonly Message[]): UserModelChoice | null => {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i]
-    if (message.role !== 'assistant') {
+    if (message.role !== 'assistant' || message.parts.length === 0) {
       continue
     }
-
-    const parts = getParts(message.id)
-    if (!Array.isArray(parts) || parts.length === 0) {
-      continue
-    }
-
     return extractAssistantModelChoice(message)
   }
-
   return null
 }
 
@@ -61,15 +49,7 @@ export const findLatestUserModelChoice = (
  * carries none.
  */
 export const extractSessionRecordModelChoice = (session: Session | undefined): UserModelChoice | null => {
-  const model = session?.model
-  if (!session || !model?.providerID || !model.id) return null
-  return {
-    id: `session:${session.id}`,
-    agent: undefined,
-    providerID: model.providerID,
-    modelID: model.id,
-    variant: model.variant?.trim() || undefined,
-  }
+  return null
 }
 
 /** Field equality, so a re-derived choice keeps its previous reference. */
@@ -78,8 +58,8 @@ export const areModelChoicesEqual = (left: UserModelChoice | null, right: UserMo
   if (!left || !right) return false
   return left.id === right.id
     && left.agent === right.agent
-    && left.providerID === right.providerID
-    && left.modelID === right.modelID
+    && left.providerId === right.providerId
+    && left.modelId === right.modelId
     && left.variant === right.variant
 }
 
@@ -96,14 +76,14 @@ export const shouldPreserveManualModelOverride = ({
 }: {
   selectionSource: 'auto' | 'manual' | undefined
   savedSessionModel: { providerId: string; modelId: string } | null | undefined
-  candidate: Pick<UserModelChoice, 'providerID' | 'modelID'> | null | undefined
+  candidate: Pick<UserModelChoice, 'providerId' | 'modelId'> | null | undefined
 }): boolean => {
   if (selectionSource !== 'manual' || !savedSessionModel?.providerId || !savedSessionModel.modelId) {
     return false
   }
-  if (!candidate?.providerID || !candidate.modelID) {
+  if (!candidate?.providerId || !candidate.modelId) {
     return true
   }
-  return savedSessionModel.providerId !== candidate.providerID
-    || savedSessionModel.modelId !== candidate.modelID
+  return savedSessionModel.providerId !== candidate.providerId
+    || savedSessionModel.modelId !== candidate.modelId
 }

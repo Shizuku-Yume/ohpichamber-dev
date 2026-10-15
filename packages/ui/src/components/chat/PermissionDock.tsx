@@ -1,173 +1,49 @@
 import React from 'react';
 import { AnimatePresence } from 'motion/react';
+import type { ApprovalRequest } from '@openchamber/agent-contract';
 import { ComposerFloatingPanel } from './composer/ui/ComposerFloatingPanel';
-import { Icon } from '@/components/icon/Icon';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
-import type { PermissionRequest } from '@/types/permission';
 import { useScopedBlockingPermissions } from '@/sync/sync-context';
 import { useRequestReveal } from '@/sync/request-reveal';
-import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
-import {
-    PermissionActions,
-    PermissionRequestContent,
-} from './PermissionCard';
-import { getPermissionToolPresentation } from './permissionToolPresentation';
-import { usePermissionFromSubagent, usePermissionResponse } from './usePermissionResponse';
+import { respondToPermission } from '@/sync/session-actions';
 
-/**
- * The agent's permission requests, docked above the composer in the same
- * frame as the form dock. Every pending request for the composer's session
- * (including its subagents') is a step in the header, one dot per request
- * with the current one solid, so a batch of requests raised together reads
- * as one panel to walk through rather than a stack of cards. The dock
- * answers one request at a time; once it is answered the next one takes
- * its place. The BTW sheet keeps the inline `PermissionCard` for its child
- * session's requests.
- */
-
-interface PermissionDockProps {
-    sessionId: string | null;
-    directory?: string;
-    hidden: boolean;
-}
-
-const PermissionDockView: React.FC<PermissionDockProps> = ({ sessionId, directory, hidden }) => {
-    const permissions = useScopedBlockingPermissions(sessionId, directory);
-    return (
-        <AnimatePresence>
-            {hidden || permissions.length === 0 ? null : <PermissionDockPanel key="permissions" permissions={permissions} />}
-        </AnimatePresence>
-    );
-};
-
-const PermissionDockPanel: React.FC<{ permissions: PermissionRequest[] }> = ({ permissions }) => {
+export const CanonicalApprovalCard: React.FC<{ permission: ApprovalRequest }> = ({ permission }) => {
     const { t } = useI18n();
+    const [pending, setPending] = React.useState(false);
+    const respond = async (response: 'once' | 'always' | 'reject') => {
+        setPending(true);
+        try { await respondToPermission(permission.sessionId, permission.approvalId, response); }
+        catch { toast.error(t('chat.formCard.submitFailed'), { description: t('chat.formCard.tryAgain') }); }
+        finally { setPending(false); }
+    };
+    return <div className="space-y-3 p-3">
+        <div className="typography-meta text-muted-foreground">{permission.toolName}</div>
+        <div className="whitespace-pre-wrap">{permission.commandSummary}</div>
+        <details><summary>{t('chat.permissionCard.showDetails')}</summary><pre className="overflow-x-auto whitespace-pre-wrap">{JSON.stringify(permission.details, null, 2)}</pre></details>
+        <div className="flex gap-2">
+            <Button size="sm" disabled={pending} onClick={() => void respond('once')}>{t('chat.permissionCard.allowOnce')}</Button>
+            {permission.policyTarget ? <Button size="sm" disabled={pending} onClick={() => void respond('always')}>{t('chat.permissionCard.alwaysAllow')}</Button> : null}
+            <Button size="sm" variant="ghost" disabled={pending} onClick={() => void respond('reject')}>{t('chat.permissionCard.deny')}</Button>
+        </div>
+    </div>;
+};
+interface PermissionDockProps { sessionId: string | null; directory?: string; hidden: boolean }
+const PermissionDockView: React.FC<PermissionDockProps> = ({ sessionId, directory, hidden }) => {
+    const { t } = useI18n();
+    const permissions = useScopedBlockingPermissions(sessionId, directory);
     const [selectedId, setSelectedId] = React.useState<string | null>(null);
     const [collapsed, setCollapsed] = React.useState(false);
-    const bodyRef = React.useRef<HTMLDivElement | null>(null);
-
-    // "Open session" on a request's toast expands the dock on that request.
-    const permissionIds = React.useMemo(() => permissions.map((permission) => permission.id), [permissions]);
-    useRequestReveal(permissionIds, React.useCallback((id: string) => {
-        setSelectedId(id);
-        setCollapsed(false);
-    }, []));
-
-    // The chosen request stays current while it is pending; a request that
-    // was answered elsewhere (another client, auto-accept) falls back to the
-    // oldest one still open.
-    const currentIndex = Math.max(0, permissions.findIndex((permission) => permission.id === selectedId));
-    const current = permissions[currentIndex];
-    const availableMaxHeight = useMobileAutocompleteMaxHeight(bodyRef, !collapsed, 320);
-
-    return (
-        <PermissionDockRequest
-            key={current.id}
-            permission={current}
-            permissions={permissions}
-            currentIndex={currentIndex}
-            collapsed={collapsed}
-            onToggleCollapsed={() => setCollapsed((value) => !value)}
-            onSelect={(id) => setSelectedId(id)}
-            bodyRef={bodyRef}
-            availableMaxHeight={availableMaxHeight}
-            t={t}
-        />
-    );
+    const ids = React.useMemo(() => permissions.map((permission) => permission.approvalId), [permissions]);
+    useRequestReveal(ids, React.useCallback((id: string) => { setSelectedId(id); setCollapsed(false); }, []));
+    const current = permissions.find((permission) => permission.approvalId === selectedId) ?? permissions[0];
+    return <AnimatePresence>{hidden || !current ? null : <ComposerFloatingPanel
+        role="dialog" ariaLabel={t('chat.permissionCard.title')} compact={collapsed}
+        header={<button type="button" aria-expanded={!collapsed} onClick={() => setCollapsed((value) => !value)}>{t('chat.permissionCard.title')}</button>}
+    >{collapsed ? null : <div className="max-h-[50vh] overflow-y-auto">
+        {permissions.length > 1 ? <div role="tablist" className="flex gap-2">{permissions.map((permission, index) => <button key={permission.approvalId} type="button" role="tab" aria-selected={permission.approvalId === current.approvalId} onClick={() => setSelectedId(permission.approvalId)} aria-label={t('chat.permissionDock.stepAria', { index: String(index + 1), tool: permission.toolName })}>{index + 1}</button>)}</div> : null}
+        <CanonicalApprovalCard key={current.approvalId} permission={current} />
+    </div>}</ComposerFloatingPanel>}</AnimatePresence>;
 };
-
-const PermissionDockRequest: React.FC<{
-    permission: PermissionRequest;
-    permissions: PermissionRequest[];
-    currentIndex: number;
-    collapsed: boolean;
-    onToggleCollapsed: () => void;
-    onSelect: (id: string) => void;
-    bodyRef: React.RefObject<HTMLDivElement | null>;
-    availableMaxHeight: number | undefined;
-    t: ReturnType<typeof useI18n>['t'];
-}> = ({ permission, permissions, currentIndex, collapsed, onToggleCollapsed, onSelect, bodyRef, availableMaxHeight, t }) => {
-    const { isResponding, respond } = usePermissionResponse(permission);
-    const isFromSubagent = usePermissionFromSubagent(permission);
-    const tool = getPermissionToolPresentation(permission);
-    const title = t('chat.permissionCard.title');
-
-    return (
-        <ComposerFloatingPanel
-            role="dialog"
-            ariaLabel={title}
-            compact={collapsed}
-            header={<>
-                <button
-                    type="button"
-                    onClick={onToggleCollapsed}
-                    aria-expanded={!collapsed}
-                    aria-label={collapsed ? t('chat.permissionDock.expandAria') : t('chat.permissionDock.collapseAria')}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground transition-colors hover:text-foreground"
-                >
-                    <Icon name="question" className="size-3.5 shrink-0 text-[var(--status-warning)]" />
-                    <Icon name={collapsed ? 'arrow-up-s' : 'arrow-down-s'} className="size-4 shrink-0" />
-                    <span className="typography-ui-label min-w-0 truncate text-foreground">{title}</span>
-                    {isFromSubagent ? (
-                        <span className="typography-micro shrink-0 rounded bg-foreground/5 px-1.5 py-0.5 text-muted-foreground">
-                            {t('chat.questionCard.fromSubagent')}
-                        </span>
-                    ) : null}
-                    {permissions.length > 1 ? (
-                        <span className="typography-micro shrink-0 tabular-nums text-muted-foreground">
-                            {t('chat.formDock.progress', { current: String(currentIndex + 1), total: String(permissions.length) })}
-                        </span>
-                    ) : null}
-                </button>
-                {/* One dot per pending request, the current one solid. */}
-                {!collapsed && permissions.length > 1 ? (
-                    <div className="flex shrink-0 items-center gap-1" role="tablist">
-                        {permissions.map((entry, index) => {
-                            const label = t('chat.permissionDock.stepAria', { index: String(index + 1), tool: getPermissionToolPresentation(entry).name });
-                            return (
-                                <button
-                                    key={entry.id}
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={index === currentIndex}
-                                    aria-label={label}
-                                    title={label}
-                                    onClick={() => onSelect(entry.id)}
-                                    className="flex size-4 items-center justify-center"
-                                >
-                                    <span className={cn('block size-1.5 rounded-full transition-colors', index === currentIndex ? 'bg-primary' : 'bg-foreground/15')} />
-                                </button>
-                            );
-                        })}
-                    </div>
-                ) : null}
-                <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
-                    {tool.icon}
-                    <span className="typography-meta font-medium">{tool.name}</span>
-                </span>
-            </>}
-        >
-            {!collapsed ? (
-                <div>
-                    <div
-                        ref={bodyRef}
-                        className="max-h-[50vh] overflow-y-auto overscroll-contain px-1.5"
-                        style={availableMaxHeight === undefined ? undefined : { maxHeight: Math.max(120, availableMaxHeight - 96) }}
-                    >
-                        <PermissionRequestContent permission={permission} />
-                    </div>
-                    <PermissionActions
-                        permission={permission}
-                        isResponding={isResponding}
-                        onRespond={(response) => void respond(response)}
-                        variant="dock"
-                    />
-                </div>
-            ) : null}
-        </ComposerFloatingPanel>
-    );
-};
-
-/** Memoized: the composer re-renders on every keystroke, and nothing here depends on the draft text. */
 export const PermissionDock = React.memo(PermissionDockView);

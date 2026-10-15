@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import type { SessionGroup, SessionNode } from '../types';
 import { normalizePath } from '../utils';
 import { useUIStore } from '@/stores/useUIStore';
@@ -104,7 +104,7 @@ const useProjectSessionSelection = (args: Args): void => {
 
   const projectSessionMeta = React.useMemo(() => {
     const metaByProject = new Map<string, Map<string, { directory: string | null }>>();
-    const firstSessionByProject = new Map<string, { id: string; directory: string | null }>();
+    const firstSessionByProject = new Map<string, { sessionId: string; directory: string | null }>();
 
     const visitNodes = (
       projectId: string,
@@ -119,13 +119,13 @@ const useProjectSessionSelection = (args: Args): void => {
       nodes.forEach((node) => {
         const sessionDirectory = normalizePath(
           node.worktree?.path
-          ?? (node.session as Session & { directory?: string | null }).directory
+          ?? resolveGlobalSessionDirectory(node.session)
           ?? fallbackDirectory
           ?? projectRoot,
         );
-        projectMap.set(node.session.id, { directory: sessionDirectory });
+        projectMap.set(node.session.sessionId, { directory: sessionDirectory });
         if (!firstSessionByProject.has(projectId)) {
-          firstSessionByProject.set(projectId, { id: node.session.id, directory: sessionDirectory });
+          firstSessionByProject.set(projectId, { sessionId: node.session.sessionId, directory: sessionDirectory });
         }
         if (node.children.length > 0) {
           visitNodes(projectId, projectRoot, sessionDirectory, node.children);
@@ -198,7 +198,7 @@ const useProjectSessionSelection = (args: Args): void => {
       projectMap,
       metaByProject: projectSessionMeta.metaByProject,
       rememberedSessionId: activeSessionByProject.get(activeProjectId),
-      fallbackSessionId: projectSessionMeta.firstSessionByProject.get(activeProjectId)?.id ?? null,
+      fallbackSessionId: projectSessionMeta.firstSessionByProject.get(activeProjectId)?.sessionId ?? null,
     });
 
     // Keep the project unprocessed while ownership/maps may still catch up,

@@ -1,22 +1,9 @@
-import { isTurnOpeningNotice } from '../timelineRoles';
 import type { ChatMessageEntry } from './types';
 
-const resolveMessageRole = (message: ChatMessageEntry): string => {
-    const role = (message.info as { clientRole?: string | null; role?: string | null }).clientRole ?? message.info.role;
-    return typeof role === 'string' ? role : '';
-};
+const resolveMessageRole = (message: ChatMessageEntry): string => message.role;
 
-/** A user prompt opens a turn, and so does a background report or a compaction (see `isTurnOpeningNotice`). */
-const opensTurn = (message: ChatMessageEntry): boolean =>
-    resolveMessageRole(message) === 'user' || isTurnOpeningNotice(message.info);
-
-const resolveParentMessageId = (message: ChatMessageEntry): string | undefined => {
-    const parentId = (message.info as { parentID?: unknown }).parentID;
-    if (typeof parentId !== 'string' || parentId.trim().length === 0) {
-        return undefined;
-    }
-    return parentId;
-};
+/** Canonical user prompts open turns; system records remain timeline notices. */
+const opensTurn = (message: ChatMessageEntry): boolean => message.role === 'user';
 
 export interface TurnWindowModel {
     turnIds: string[];
@@ -30,9 +17,7 @@ export interface TurnWindowModel {
 const getMessageSignature = (message: ChatMessageEntry | undefined): string | null => {
     if (!message) return null;
     const role = resolveMessageRole(message);
-    const messageId = typeof message.info?.id === 'string' ? message.info.id : '';
-    const parentId = resolveParentMessageId(message) ?? '';
-    return `${messageId}::${role}::${parentId}`;
+    return `${message.messageId}::${role}::${message.turnId}`;
 };
 
 const cloneTurnWindowModel = (model: TurnWindowModel): TurnWindowModel => ({
@@ -94,15 +79,15 @@ export const updateTurnWindowModelIncremental = (
     }
 
     const role = resolveMessageRole(nextMessage);
-    const messageId = nextMessage.info.id;
+    const messageId = nextMessage.messageId;
     const nextModel = cloneTurnWindowModel(previousModel);
 
     if (opensTurn(nextMessage)) {
         const nextTurnIndex = nextModel.turnIds.length;
-        nextModel.turnIds.push(messageId);
+        nextModel.turnIds.push(nextMessage.turnId);
         nextModel.turnMessageStartIndexes.push(nextMessages.length - 1);
-        nextModel.turnIndexById.set(messageId, nextTurnIndex);
-        nextModel.messageToTurnId.set(messageId, messageId);
+        nextModel.turnIndexById.set(nextMessage.turnId, nextTurnIndex);
+        nextModel.messageToTurnId.set(messageId, nextMessage.turnId);
         nextModel.messageToTurnIndex.set(messageId, nextTurnIndex);
         nextModel.turnCount = nextModel.turnIds.length;
         return nextModel;
@@ -122,11 +107,7 @@ export const updateTurnWindowModelIncremental = (
         return nextModel;
     }
 
-    const parentId = resolveParentMessageId(nextMessage);
-    if (!parentId) {
-        return nextModel;
-    }
-    const targetTurnIndex = nextModel.turnIndexById.get(parentId);
+    const targetTurnIndex = nextModel.turnIndexById.get(nextMessage.turnId);
     if (typeof targetTurnIndex !== 'number' || targetTurnIndex < 0) {
         return null;
     }
@@ -147,21 +128,19 @@ export const buildTurnWindowModel = (messages: ChatMessageEntry[]): TurnWindowMo
     const turnIndexById = new Map<string, number>();
     const messageToTurnId = new Map<string, string>();
     const messageToTurnIndex = new Map<string, number>();
-    const userMessageToTurnIndex = new Map<string, number>();
 
     let currentTurnIndex = -1;
 
     messages.forEach((message, index) => {
         const role = resolveMessageRole(message);
-        const messageId = message.info.id;
+        const messageId = message.messageId;
 
         if (opensTurn(message)) {
             currentTurnIndex = turnIds.length;
-            turnIds.push(messageId);
+            turnIds.push(message.turnId);
             turnMessageStartIndexes.push(index);
-            turnIndexById.set(messageId, currentTurnIndex);
-            userMessageToTurnIndex.set(messageId, currentTurnIndex);
-            messageToTurnId.set(messageId, messageId);
+            turnIndexById.set(message.turnId, currentTurnIndex);
+            messageToTurnId.set(messageId, message.turnId);
             messageToTurnIndex.set(messageId, currentTurnIndex);
             return;
         }
@@ -177,11 +156,7 @@ export const buildTurnWindowModel = (messages: ChatMessageEntry[]): TurnWindowMo
             return;
         }
 
-        const parentId = resolveParentMessageId(message);
-        if (!parentId) {
-            return;
-        }
-        const targetTurnIndex = userMessageToTurnIndex.get(parentId);
+        const targetTurnIndex = turnIndexById.get(message.turnId);
         if (typeof targetTurnIndex !== 'number') {
             return;
         }

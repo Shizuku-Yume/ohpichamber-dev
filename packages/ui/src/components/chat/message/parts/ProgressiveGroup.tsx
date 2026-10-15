@@ -3,7 +3,6 @@ import React from 'react';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import { cn } from '@/lib/utils';
 import type { TurnActivityRecord as TurnActivityPart } from '../../lib/turns/types';
-import type { Metadata, ToolInput, ToolPart as ToolPartType } from '@/lib/opencode/model';
 import type { StreamPhase } from '../types';
 import type { ToolPopupContent } from '../types';
 import ToolPart from './ToolPart';
@@ -34,6 +33,8 @@ const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
 
 interface ProgressiveGroupProps {
     parts: TurnActivityPart[];
+    sessionId?: string;
+    directory?: string | null;
     isExpanded: boolean;
     collapsedPreviewCount?: number;
     onToggle: () => void;
@@ -72,17 +73,9 @@ const ExternalLinkFavicon: React.FC<{ href: string }> = ({ href }) => {
 };
 
 const isActivityRunning = (activity: TurnActivityPart): boolean => {
-    if (activity.kind !== 'tool') return false;
-    const part = activity.part as ToolPartType;
-    const status = (part.state?.status as string) || undefined;
-    const isFinalized = status === 'completed' || status === 'error' || status === 'aborted' || status === 'failed' || status === 'timeout' || status === 'cancelled';
-    if (isFinalized) {
-        return false;
-    }
-    if (status === 'running' || status === 'pending' || status === 'started') {
-        return true;
-    }
-    return typeof activity.endedAt !== 'number';
+    const part = activity.part;
+    return activity.kind === 'tool' && part.type === 'tool_call'
+        && (part.status === 'pending_approval' || part.status === 'approved' || part.status === 'running');
 };
 
 /**
@@ -98,18 +91,12 @@ const sortPartsByTime = (parts: TurnActivityPart[]): TurnActivityPart[] => parts
  * Extract a short filename from a tool part's input (for aggregation display).
  */
 const getToolFileName = (activity: TurnActivityPart): string | null => {
-    const part = activity.part as ToolPartType;
-    const state = part.state as { input?: Record<string, unknown>; metadata?: Record<string, unknown> } | undefined;
-    const input = state?.input;
-    const metadata = state?.metadata;
-
-    const filePath =
-        (input?.filePath as string) ||
-        (input?.file_path as string) ||
-        (input?.path as string) ||
-        (metadata?.filePath as string) ||
-        (metadata?.file_path as string) ||
-        (metadata?.path as string);
+    const part = activity.part;
+    const input = part.type === 'tool_call' ? part.input : undefined;
+    const filePath = typeof input?.filePath === 'string' ? input.filePath
+        : typeof input?.file_path === 'string' ? input.file_path
+            : typeof input?.path === 'string' ? input.path
+                : undefined;
 
     if (typeof filePath === 'string' && filePath.trim().length > 0) {
         const lastSlash = filePath.lastIndexOf('/');
@@ -118,43 +105,22 @@ const getToolFileName = (activity: TurnActivityPart): string | null => {
 
     return null;
 };
-
 const getToolFilePath = (activity: TurnActivityPart): string | null => {
-    const part = activity.part as ToolPartType;
-    const state = part.state as { input?: Record<string, unknown>; metadata?: Record<string, unknown> } | undefined;
-    const input = state?.input;
-    const metadata = state?.metadata;
-
-    const filePath =
-        (input?.filePath as string) ||
-        (input?.file_path as string) ||
-        (input?.path as string) ||
-        (metadata?.filePath as string) ||
-        (metadata?.file_path as string) ||
-        (metadata?.path as string);
-
-    return typeof filePath === 'string' && filePath.trim().length > 0 ? filePath : null;
-};
-
-const getToolSkillDirectory = (activity: TurnActivityPart): string | null => {
-    const part = activity.part as ToolPartType;
-    const state = part.state as { metadata?: Record<string, unknown> } | undefined;
-    const dir = state?.metadata?.dir;
-
-    return typeof dir === 'string' && dir.trim().length > 0 ? dir : null;
+    const part = activity.part;
+    const input = part.type === 'tool_call' ? part.input : undefined;
+    const filePath = typeof input?.filePath === 'string' ? input.filePath
+        : typeof input?.file_path === 'string' ? input.file_path
+            : typeof input?.path === 'string' ? input.path
+                : undefined;
+    return filePath && filePath.trim().length > 0 ? filePath : null;
 };
 
 const getToolReadOffset = (activity: TurnActivityPart): number | undefined => {
-    const part = activity.part as ToolPartType;
-    const state = part.state as { input?: Record<string, unknown>; metadata?: Record<string, unknown> } | undefined;
-    const input = state?.input;
-    const metadata = state?.metadata;
-
+    const part = activity.part;
+    const input = part.type === 'tool_call' ? part.input : undefined;
     const rawOffset =
         (typeof input?.offset === 'number' && Number.isFinite(input.offset) ? input.offset : undefined)
-        ?? (typeof input?.line === 'number' && Number.isFinite(input.line) ? input.line : undefined)
-        ?? (typeof metadata?.offset === 'number' && Number.isFinite(metadata.offset) ? metadata.offset : undefined)
-        ?? (typeof metadata?.line === 'number' && Number.isFinite(metadata.line) ? metadata.line : undefined);
+        ?? (typeof input?.line === 'number' && Number.isFinite(input.line) ? input.line : undefined);
 
     if (typeof rawOffset !== 'number' || rawOffset <= 0) {
         return undefined;
@@ -227,9 +193,9 @@ const resolveSkillFilePath = (skillPathOrDir: string): string => {
 const SHORT_DESCRIPTION_MAX = 50;
 
 const getToolShortDescription = (activity: TurnActivityPart): string | null => {
-    const part = activity.part as ToolPartType;
-    const state = part.state as { input?: ToolInput; metadata?: Metadata } | undefined;
-    const described = toolDescription(part.tool, state?.input, state?.metadata);
+    const part = activity.part;
+    if (part.type !== 'tool_call' && part.type !== 'tool_result') return null;
+    const described = toolDescription(part.toolName, part.type === 'tool_call' ? part.input : undefined, undefined);
 
     if (described?.kind === 'text') {
         return described.value.length > SHORT_DESCRIPTION_MAX
@@ -248,6 +214,8 @@ type AggregatedRow =
 
 interface ExpandableToolRowProps {
     activity: TurnActivityPart;
+    sessionId?: string;
+    directory?: string | null;
     isExpanded: boolean;
     isMobile: boolean;
     onToggleTool: (toolId: string) => void;
@@ -257,6 +225,8 @@ interface ExpandableToolRowProps {
 
 const ExpandableToolRow: React.FC<ExpandableToolRowProps> = ({
     activity,
+    sessionId,
+    directory,
     isExpanded,
     isMobile,
     onToggleTool,
@@ -264,12 +234,16 @@ const ExpandableToolRow: React.FC<ExpandableToolRowProps> = ({
     animateTailText,
 }) => {
     const handleToggle = React.useCallback(() => {
-        onToggleTool(activity.id);
-    }, [activity.id, onToggleTool]);
+        onToggleTool(activity.part.partId);
+    }, [activity.part.partId, onToggleTool]);
+
+    if (activity.part.type !== 'tool_call' && activity.part.type !== 'tool_result') return null;
 
     const content = (
         <ToolPart
-            part={activity.part as ToolPartType}
+            part={activity.part}
+            sessionId={sessionId}
+            directory={directory}
             isExpanded={isExpanded}
             onToggle={handleToggle}
             isMobile={isMobile}
@@ -294,10 +268,12 @@ const ExpandableToolRow: React.FC<ExpandableToolRowProps> = ({
 const MemoExpandableToolRow = React.memo(ExpandableToolRow, (prev, next) => {
     return prev.isExpanded === next.isExpanded
         && prev.isMobile === next.isMobile
+        && prev.sessionId === next.sessionId
+        && prev.directory === next.directory
         && prev.onToggleTool === next.onToggleTool
         && prev.onShowPopup === next.onShowPopup
         && prev.animateTailText === next.animateTailText
-        && prev.activity.id === next.activity.id
+        && prev.activity.part.partId === next.activity.part.partId
         && prev.activity.kind === next.activity.kind
         && prev.activity.endedAt === next.activity.endedAt
         && areRenderRelevantPartsEqual([prev.activity.part], [next.activity.part]);
@@ -368,8 +344,12 @@ const aggregateRows = (parts: TurnActivityPart[]): AggregatedRow[] => {
         }
 
         // Tool part
-        const toolPart = activity.part as ToolPartType;
-        const toolName = toolPart.tool?.toLowerCase() ?? '';
+        const toolPart = activity.part;
+        if (toolPart.type !== 'tool_call' && toolPart.type !== 'tool_result') {
+            i++;
+            continue;
+        }
+        const toolName = toolPart.toolName.toLowerCase();
 
         if (isStandaloneTool(toolName)) {
             // Standalone tools are rendered separately, skip
@@ -414,7 +394,7 @@ const areActivityListsEqual = (left: TurnActivityPart[], right: TurnActivityPart
         const leftActivity = left[index];
         const rightActivity = right[index];
 
-        if (leftActivity.id !== rightActivity.id) {
+        if (leftActivity.part.partId !== rightActivity.part.partId) {
             return false;
         }
 
@@ -439,7 +419,7 @@ const StaticToolRowInner: React.FC<{
     // Grouped rows share one normalized name; the registry wants the full
     // name OpenCode reported, which every activity in the group carries.
     const firstPart = activities[0]?.part;
-    const presentation = useGuestToolPresentation(firstPart?.type === 'tool' ? firstPart.tool : null);
+    const presentation = useGuestToolPresentation(firstPart?.type === 'tool_call' || firstPart?.type === 'tool_result' ? firstPart.toolName : null);
     const displayName = presentation?.name ?? getToolMetadata(toolName).displayName;
     const icon = getToolIcon(toolName, presentation);
     const isReadGroup = toolName.toLowerCase() === 'read';
@@ -470,7 +450,7 @@ const StaticToolRowInner: React.FC<{
             if (!name) continue;
 
             const skill = skillByName.get(name);
-            const rawPath = skill?.path || getToolSkillDirectory(activity);
+            const rawPath = skill?.path;
             const path = rawPath ? resolveSkillFilePath(rawPath) : '';
             if (!path || entries.some((entry) => entry.name === name && entry.path === path)) continue;
             entries.push({ name, path });
@@ -667,6 +647,7 @@ const InlineReasoningBlock = React.memo(({ activity, streamPhase }: {
     activity: TurnActivityPart;
     streamPhase: StreamPhase;
 }) => {
+    if (activity.part.type !== 'reasoning') return null;
     return (
         <ReasoningPart
             part={activity.part}
@@ -683,6 +664,7 @@ const InlineJustificationBlock = React.memo(({ activity, actions }: {
     activity: TurnActivityPart;
     actions?: React.ReactNode;
 }) => {
+    if (activity.part.type !== 'text') return null;
     return (
         <JustificationBlock
             part={activity.part}
@@ -694,6 +676,8 @@ const InlineJustificationBlock = React.memo(({ activity, actions }: {
 
 const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
     parts,
+    sessionId,
+    directory,
     isExpanded,
     collapsedPreviewCount = 0,
     onToggle,
@@ -756,7 +740,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
         switch (row.type) {
             case 'reasoning':
                 return wrapRow(
-                    row.activity.id,
+                    row.activity.part.partId,
                     <>
                         <InlineReasoningBlock
                             activity={row.activity}
@@ -767,7 +751,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
 
             case 'justification':
                 return wrapRow(
-                    row.activity.id,
+                    row.activity.part.partId,
                     <>
                         <InlineJustificationBlock
                             activity={row.activity}
@@ -779,36 +763,40 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
             case 'tool-expandable':
                 return (
                     <MemoExpandableToolRow
-                        key={row.activity.id}
+                        key={row.activity.part.partId}
                         activity={row.activity}
-                        isExpanded={expandedTools.has(row.activity.id)}
+                        sessionId={sessionId}
+                        directory={directory}
+                        isExpanded={expandedTools.has(row.activity.part.partId)}
                         isMobile={isMobile}
                         onToggleTool={onToggleTool}
                         onShowPopup={onShowPopup}
-                        animateTailText={Boolean(animatedToolIds?.has(row.activity.id))}
+                        animateTailText={Boolean(animatedToolIds?.has(row.activity.part.partId))}
                     />
                 );
 
             case 'tool-static-group':
                 return (
                     <MemoStaticGroupedToolRow
-                        key={`static-${row.toolName}-${row.activities[0]?.id ?? index}`}
+                        key={`static-${row.toolName}-${row.activities[0]?.part.partId ?? index}`}
                         toolName={row.toolName}
                         activities={row.activities}
-                        animateTailText={row.activities.some((activity) => animatedToolIds?.has(activity.id))}
+                        animateTailText={row.activities.some((activity) => animatedToolIds?.has(activity.part.partId))}
                     />
                 );
 
             case 'tool-fallback':
                 return (
                     <MemoExpandableToolRow
-                        key={row.activity.id}
+                        key={row.activity.part.partId}
                         activity={row.activity}
-                        isExpanded={expandedTools.has(row.activity.id)}
+                        sessionId={sessionId}
+                        directory={directory}
+                        isExpanded={expandedTools.has(row.activity.part.partId)}
                         isMobile={isMobile}
                         onToggleTool={onToggleTool}
                         onShowPopup={onShowPopup}
-                        animateTailText={Boolean(animatedToolIds?.has(row.activity.id))}
+                        animateTailText={Boolean(animatedToolIds?.has(row.activity.part.partId))}
                     />
                 );
 

@@ -1,12 +1,12 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { toast } from '@/components/ui';
 import { createSessionOwnershipIndex } from '@/components/session/sidebar/sessions/sessionOwnership';
 import { formatMessage, useI18nStore } from '@/lib/i18n';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { normalizePath } from '@/lib/pathNormalization';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useGlobalSyncStore } from '@/sync/global-sync-store';
+import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { moveSessionToDirectory } from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
@@ -24,8 +24,8 @@ type RelocationDeps = {
 };
 
 // The project a session belongs to, the way the sidebar groups it: by its
-// directory first, then by OpenCode's project metadata. The second step is the
-// one that matters here, since a removed worktree's path matches nothing.
+// display path first, then by its canonical project identity. The second step
+// matters here, since a removed worktree's path matches nothing.
 const resolveProjectRootFromStores = (session: Session): string | null => {
   const projects = useProjectsStore.getState().projects.flatMap((project) => {
     const normalizedPath = normalizePath(project.path);
@@ -36,15 +36,15 @@ const resolveProjectRootFromStores = (session: Session): string | null => {
     projects,
     useSessionUIStore.getState().availableWorktreesByProject,
     [],
-    useGlobalSyncStore.getState().projects,
+    Array.from(useSpacesStore.getState().spaces.values()),
   );
-  return ownership.bySessionId.get(session.id)?.projectRoot ?? null;
+  return ownership.bySessionId.get(session.sessionId)?.projectRoot ?? null;
 };
 
 const defaultDeps: RelocationDeps = {
   getSession: (sessionId) => useGlobalSessionsStore.getState().entityById.get(sessionId),
   getActiveSessions: () => useGlobalSessionsStore.getState().activeSessions,
-  getDirectoryAvailability: (directory) => opencodeClient.getDirectoryAvailability(directory),
+  getDirectoryAvailability: (directory) => hostFilesystem.getDirectoryAvailability(directory),
   resolveProjectRoot: resolveProjectRootFromStores,
   moveSession: moveSessionToDirectory,
 };
@@ -58,19 +58,19 @@ const collectDescendantsInDirectory = (
 ): Session[] => {
   const childrenByParent = new Map<string, Session[]>();
   for (const session of sessions) {
-    if (!session.parentID) continue;
-    const siblings = childrenByParent.get(session.parentID) ?? [];
+    if (!session.parentSessionId) continue;
+    const siblings = childrenByParent.get(session.parentSessionId) ?? [];
     siblings.push(session);
-    childrenByParent.set(session.parentID, siblings);
+    childrenByParent.set(session.parentSessionId, siblings);
   }
   const descendants: Session[] = [];
   const visit = (parentId: string) => {
     for (const child of childrenByParent.get(parentId) ?? []) {
-      visit(child.id);
-      if (normalizePath(child.directory) === directory) descendants.push(child);
+      visit(child.sessionId);
+      if (normalizePath(child.displayPath) === directory) descendants.push(child);
     }
   };
-  visit(root.id);
+  visit(root.sessionId);
   return descendants;
 };
 
@@ -88,7 +88,7 @@ export async function relocateRestoredSessionIfDirectoryMissing(
   deps: RelocationDeps = defaultDeps,
 ): Promise<RestoredSessionRelocation> {
   const session = deps.getSession(sessionId);
-  const sourceDirectory = normalizePath(session?.directory ?? null);
+  const sourceDirectory = normalizePath(session?.displayPath ?? null);
   if (!session || !sourceDirectory) return { outcome: 'kept' };
   if (await deps.getDirectoryAvailability(sourceDirectory) !== 'missing') return { outcome: 'kept' };
 

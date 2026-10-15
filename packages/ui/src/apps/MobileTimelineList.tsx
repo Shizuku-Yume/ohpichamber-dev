@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSessionTurnActivity } from '@/sync/global-session-status';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 import { Icon } from '@/components/icon/Icon';
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
@@ -21,7 +21,7 @@ import { useCollapsedSessionActivityState } from '@/components/session/sidebar/s
 import type { SessionNode } from '@/components/session/sidebar/types';
 import type { MultiRunSummary } from '@/lib/multirun/runs';
 import { useUIStore } from '@/stores/useUIStore';
-import { formatRelativeShort, getSessionTimestamp } from './mobileSessionFields';
+import { formatRelativeShort, getSessionDirectory, getSessionTimestamp } from './mobileSessionFields';
 import { MobileRunProviderLogos } from './MobileRunProviderLogos';
 import { MobileSessionGoalGlyph, MobileSessionPendingBadges } from './MobileSessionStateBadges';
 import { usePendingRequestCounts } from './usePendingRequestCounts';
@@ -134,17 +134,17 @@ const MobileTimelineRow: React.FC<{
 }> = ({ entry, active, revealed, confirmingDelete, renaming, handlers }) => {
   const { t } = useI18n();
   const { session, project, branch, inSpace } = entry;
-  const title = session.title?.trim() || t('mobile.sessions.untitled');
+  const title = session.metadata?.title?.trim() || t('mobile.sessions.untitled');
   const time = formatRelativeShort(getSessionTimestamp(session));
-  const aiRename = useSessionAiRenameAction(session.id, session.directory, revealed || renaming);
+  const aiRename = useSessionAiRenameAction(session.sessionId, getSessionDirectory(session), revealed || renaming);
 
   // Live indicators, same conventions as the grouped rows: busy/retry →
   // running-kind icon; unseen activity on a non-active row → unread icon.
-  const unseenCount = useSessionUnseenCount(session.id);
-  const turnActivity = useSessionTurnActivity(session.id);
+  const unseenCount = useSessionUnseenCount(session.sessionId);
+  const turnActivity = useSessionTurnActivity(session.sessionId);
   const isStreaming = turnActivity !== null;
   const showUnreadDot = !isStreaming && unseenCount > 0 && !active;
-  const hasActivityDuration = useHasSessionActivityDuration(session.id, isStreaming);
+  const hasActivityDuration = useHasSessionActivityDuration(session.sessionId, isStreaming);
   const showActivityDuration = (isStreaming || showUnreadDot) && hasActivityDuration;
   const onToggleWork = handlers.onToggleWork;
   const inWork = isSessionInWork(session);
@@ -153,7 +153,7 @@ const MobileTimelineRow: React.FC<{
   const pin = { pinned, onToggle: () => handlers.onTogglePin(session) };
   // Timeline rows never expand, so their subsessions' requests count here.
   const { descendantIdsOf } = handlers;
-  const familyIds = React.useMemo(() => [session.id, ...descendantIdsOf(session.id)], [descendantIdsOf, session.id]);
+  const familyIds = React.useMemo(() => [session.sessionId, ...descendantIdsOf(session.sessionId)], [descendantIdsOf, session.sessionId]);
   const pendingRequests = usePendingRequestCounts(familyIds);
   const hasPendingRequests = pendingRequests.permissionCount > 0 || pendingRequests.formCount > 0;
   const hasGoal = getSessionGoal(session) !== null;
@@ -163,7 +163,7 @@ const MobileTimelineRow: React.FC<{
       // Every timeline row is top-level, so Pin is always there.
       actionsWidth={ROW_ACTIONS_WIDTH + ROW_ACTION_SLOT_WIDTH + (work ? ROW_ACTION_SLOT_WIDTH : 0)}
       revealed={revealed}
-      onRevealedChange={(next) => handlers.onRevealedChange(session.id, next)}
+      onRevealedChange={(next) => handlers.onRevealedChange(session.sessionId, next)}
       dataActiveSession={active}
       contentClassName={cn(
         'relative flex w-full items-center bg-background transition-colors',
@@ -171,15 +171,15 @@ const MobileTimelineRow: React.FC<{
       )}
       actions={(
         <MobileSessionRowActions
-          sessionId={session.id}
+          sessionId={session.sessionId}
           title={title}
           revealed={revealed}
           confirmingDelete={confirmingDelete}
           onArchive={() => handlers.onArchive(session)}
-          onRequestDelete={() => handlers.onRequestDelete(session.id)}
+          onRequestDelete={() => handlers.onRequestDelete(session.sessionId)}
           onConfirmDelete={() => handlers.onConfirmDelete(session)}
-          onRequestRename={() => handlers.onRequestRename(session.id)}
-          onRevealedChange={(next) => handlers.onRevealedChange(session.id, next)}
+          onRequestRename={() => handlers.onRequestRename(session.sessionId)}
+          onRevealedChange={(next) => handlers.onRevealedChange(session.sessionId, next)}
           work={work}
           pin={pin}
         />
@@ -204,7 +204,7 @@ const MobileTimelineRow: React.FC<{
                 />
               ) : null}
               {showActivityDuration ? (
-                <SessionActivityDuration sessionId={session.id} running={isStreaming} className="shrink-0 typography-micro" />
+                <SessionActivityDuration sessionId={session.sessionId} running={isStreaming} className="shrink-0 typography-micro" />
               ) : time ? (
                 <span className="shrink-0 typography-micro text-muted-foreground tabular-nums">{time}</span>
               ) : null}
@@ -218,7 +218,7 @@ const MobileTimelineRow: React.FC<{
                 aiRename={aiRename}
                 // One title line tall; the save/cancel controls shrink to fit it.
                 className="h-[1lh] pr-0 typography-ui-label [&_button]:size-6 [&_button>svg]:size-3.5"
-                onSubmit={(next) => handlers.onSubmitRename(session.id, next)}
+                onSubmit={(next) => handlers.onSubmitRename(session.sessionId, next)}
                 onCancel={handlers.onCancelRename}
               />
             ) : (
@@ -258,7 +258,7 @@ const MobileTimelineRow: React.FC<{
             onClick={() => {
               // A tap while the actions are out just closes them.
               if (revealed) {
-                handlers.onRevealedChange(session.id, false);
+                handlers.onRevealedChange(session.sessionId, false);
                 return;
               }
               handlers.onSelect(session);
@@ -331,12 +331,12 @@ export const MobileTimelineList: React.FC<{
           <MobileTimelineRunRow key={`run:${entry.run.key}`} entry={entry} />
         ) : (
           <MobileTimelineRow
-            key={entry.session.id}
+            key={entry.session.sessionId}
             entry={entry}
-            active={handlers.currentSessionId === entry.session.id}
-            revealed={handlers.revealedSessionId === entry.session.id}
-            confirmingDelete={handlers.confirmingDeleteSessionId === entry.session.id}
-            renaming={handlers.renamingSessionId === entry.session.id}
+            active={handlers.currentSessionId === entry.session.sessionId}
+            revealed={handlers.revealedSessionId === entry.session.sessionId}
+            confirmingDelete={handlers.confirmingDeleteSessionId === entry.session.sessionId}
+            renaming={handlers.renamingSessionId === entry.session.sessionId}
             handlers={handlers}
           />
         )))}

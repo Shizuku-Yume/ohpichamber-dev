@@ -1,9 +1,6 @@
 import React from 'react';
-import type { Part } from '@/lib/opencode/model';
-import { useUIStore } from '@/stores/useUIStore';
+import type { Part } from '@openchamber/agent-contract';
 import { ReasoningTimelineBlock } from './ReasoningPart';
-
-type PartWithText = Part & { text?: string; content?: string; time?: { start?: number; end?: number } };
 
 const cleanJustificationText = (text: string): string => {
     if (typeof text !== 'string' || text.trim().length === 0) {
@@ -29,11 +26,8 @@ const JustificationBlock: React.FC<JustificationBlockProps> = ({
     messageId,
     actions,
 }) => {
-    const chatRenderMode = useUIStore((state) => state.chatRenderMode);
-    const partWithText = part as PartWithText;
-    const rawText = partWithText.text || partWithText.content || '';
+    const rawText = part.type === 'text' || part.type === 'reasoning' ? part.content : '';
     const textContent = React.useMemo(() => cleanJustificationText(rawText), [rawText]);
-    const time = partWithText.time;
 
     // Don't render if there's no text content
     if (!textContent || textContent.trim().length === 0) {
@@ -44,9 +38,7 @@ const JustificationBlock: React.FC<JustificationBlockProps> = ({
         <ReasoningTimelineBlock
             text={textContent}
             variant="justification"
-            blockId={part.id || `${messageId}-justification`}
-            time={time}
-            showDuration={chatRenderMode !== 'sorted'}
+            blockId={part.partId || `${messageId}-justification`}
             actions={actions}
         />
     );

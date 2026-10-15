@@ -350,6 +350,8 @@ Live activity across directories is coordinated through specialized helpers:
   - Directory bootstrap environment discovery seeds background shells via `refreshBackgroundShells` and `client.getShellSnapshot({ kind: "workspace", workspaceId })`
   - Keeps session turn activity open while a background command executes
   - `useRunningShell` takes `ShellJobIdentity`; `replaceDirectoryShells` accepts a native `ShellSnapshot` only.
+  - Mid-turn foreground-tool detach is not a native capability. Its button, `canBackground` derivation and shortcut are retired rather than advertised as disabled or mapped to a different operation.
+  - Native background jobs, including jobs started through canonical `startShell`, retain their store, Guest observation and `BackgroundShellsStrip`. Stop addresses the owning session, epoch, worker generation and job ID through canonical `stopShell`; only the matching canonical terminal event removes the strip row. The unused legacy SDK output-polling hook and shell methods are removed.
 
 - `runtime-live-memory.ts`:
   - Caches recent non-idle `SessionRuntimeStatus` seeds per runtime key and directory with a 15-second TTL (`LIVE_STATUS_TTL_MS`); idle transitions are ignored and do not seed memory.

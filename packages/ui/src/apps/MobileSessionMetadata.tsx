@@ -18,11 +18,6 @@ import { useSessionMessages } from '@/sync/sync-context';
 
 const TABLET_METADATA_POPOVER_WIDTH = 380;
 
-const getNumericLimit = (limit: unknown, key: 'context' | 'output'): number | undefined => {
-  if (!limit || typeof limit !== 'object') return undefined;
-  const value = (limit as Partial<Record<'context' | 'output', unknown>>)[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-};
 
 const formatTokens = (value: number): string => {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -32,15 +27,12 @@ const formatTokens = (value: number): string => {
 
 type ContextDisplay =
   | { state: 'measured'; percentage: number; tokens: string; colorClass: string }
-  /** Compacted since the last response that reported tokens: the fill is unknown. */
-  | { state: 'compacted'; tokens: string }
   /** Nothing to measure yet: a draft, or a session without a response. */
   | { state: 'pending' }
   | null;
 
-const UNKNOWN_VALUE = '\u2014';
 
-/** `percentage: null` draws the empty track only: the fill is unknown after a compaction. */
+/** `percentage: null` draws the empty track for a pending draft or session without usage. */
 const ContextProgressIcon: React.FC<{ percentage: number | null }> = ({ percentage }) => {
   const progressPct = clampPercent(percentage ?? 0) ?? 0;
   const tone = resolveUsageTone(percentage ?? 0);
@@ -150,8 +142,9 @@ const SessionMetadataOverlay: React.FC<{
     // Re-anchor if the chat column shifts while the popover is open (sidebar
     // toggle/resize, orientation change) — the header buttons move with it.
     const wrapper = wrapperRef.current;
-    if (typeof ResizeObserver === 'undefined' || !wrapper) return;
-    const observer = new ResizeObserver(compute);
+    const ResizeObserverConstructor = globalThis.ResizeObserver;
+    if (!ResizeObserverConstructor || !wrapper) return;
+    const observer = new ResizeObserverConstructor(compute);
     observer.observe(wrapper);
     return () => observer.disconnect();
   }, [anchorRef, isTabletLayout, open, shouldRender]);
@@ -237,16 +230,11 @@ const SessionMetadataOverlay: React.FC<{
             >
               {contextDisplay.state === 'pending' ? null : (
                 <span className="inline-flex items-baseline gap-1.5 tabular-nums">
-                  {contextDisplay.state === 'measured'
-                    ? <span className={cn('font-semibold', contextDisplay.colorClass)}>{contextDisplay.percentage.toFixed(1)}%</span>
-                    : null}
+                  <span className={cn('font-semibold', contextDisplay.colorClass)}>{contextDisplay.percentage.toFixed(1)}%</span>
                   <span className="text-muted-foreground">{contextDisplay.tokens}</span>
                 </span>
               )}
             </MetadataRow>
-          ) : null}
-          {contextDisplay?.state === 'compacted' ? (
-            <p className="px-2.5 pb-1 typography-meta text-muted-foreground">{t('contextUsage.compacted.description')}</p>
           ) : null}
           {/* The header ring is empty on a draft; this row says why, so the
               empty ring reads as "nothing yet" rather than "still loading". */}
@@ -388,9 +376,9 @@ export const MobileSessionMetadataButton = React.memo(function MobileSessionMeta
     for (let i = activeSessionMessages.length - 1; i >= 0; i -= 1) {
       const message = activeSessionMessages[i];
       if (message.role !== 'assistant') continue;
-      const providerID = message.providerID.trim();
-      const modelID = message.modelID.trim();
-      if (providerID && modelID) return { providerID, modelID };
+      const providerId = message.providerId?.trim() ?? '';
+      const modelId = message.modelId?.trim() ?? '';
+      if (providerId && modelId) return { providerID: providerId, modelID: modelId };
     }
     return null;
   }, [activeSessionMessages]);
@@ -401,7 +389,7 @@ export const MobileSessionMetadataButton = React.memo(function MobileSessionMeta
   const provider = modelRef ? providers.find((entry) => entry.id === modelRef.providerID) : undefined;
   const liveModel = provider?.models.find((model) => model.id === modelRef?.modelID);
   const metadata = modelRef ? getModelMetadata(modelRef.providerID, modelRef.modelID) : undefined;
-  const contextLimit = getNumericLimit((liveModel as { limit?: unknown } | undefined)?.limit, 'context')
+  const contextLimit = liveModel?.limit?.context
     ?? metadata?.limit?.context
     ?? 0;
   const contextFill = React.useMemo(() => findLatestContextFill(activeSessionMessages), [activeSessionMessages]);
@@ -409,9 +397,6 @@ export const MobileSessionMetadataButton = React.memo(function MobileSessionMeta
   const contextDisplay = React.useMemo<ContextDisplay>(() => {
     if (contextLimit <= 0) return null;
     if (isNewSessionDraftOpen || !contextFill) return { state: 'pending' };
-    if (contextFill.state === 'compacted') {
-      return { state: 'compacted', tokens: `${UNKNOWN_VALUE}/${formatTokens(contextLimit)}` };
-    }
 
     const percentage = Math.min((contextFill.totalTokens / contextLimit) * 100, 999);
     const colorClass = percentage >= 90
@@ -450,7 +435,7 @@ export const MobileSessionMetadataButton = React.memo(function MobileSessionMeta
         <ContextProgressIcon
           percentage={contextDisplay?.state === 'measured'
             ? contextDisplay.percentage
-            : contextDisplay?.state === 'compacted' ? null : 0}
+            : 0}
         />
       </button>
       <SessionMetadataOverlay

@@ -2,24 +2,11 @@ import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
-import {
-  startConfigUpdate,
-  finishConfigUpdate,
-  updateConfigUpdateMessage,
-} from "@/lib/configUpdate";
-import { waitForOpenCodeConnection } from "@/stores/waitForOpenCodeConnection";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
 import { runtimeFetch } from "@/lib/runtime-fetch";
 import { runBackgroundNetworkTask } from "@/lib/background-network";
 import { useProjectsStore } from "@/stores/useProjectsStore";
 
-import { opencodeClient } from '@/lib/opencode/client';
-import { filterSkillsByRuntimeFlags } from './skillVisibility';
-
-// Prefer the active project path so Settings/Skills discovery matches the
-// project selector (and Commands/Agents). Falling back only to the session
-// directory misses repository-local `.agents/skills` when the client directory
-// is unset or points elsewhere while an active project exists.
 /**
  * Directory a call operates on. Settings can browse another project without
  * moving the app, so every entry point takes one; omitting it means the project
@@ -42,10 +29,6 @@ const getRequestDirectory = (): string | null => {
       return activeProject.path.trim();
     }
 
-    const clientDir = opencodeClient.getDirectory();
-    if (clientDir?.trim()) {
-      return clientDir.trim();
-    }
   } catch (err) {
     console.warn('[SkillsStore] Error resolving config directory:', err);
   }
@@ -196,7 +179,6 @@ declare global {
 }
 
 const CONFIG_EVENT_SOURCE = "useSkillsStore";
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const SKILLS_LOAD_CACHE_TTL_MS = 5000;
 const DEFAULT_SKILLS_CACHE_KEY = '__default__';
 const skillsLastLoadedAt = new Map<string, number>();
@@ -206,21 +188,6 @@ const skillsLoadInFlight = new Map<string, Promise<boolean>>();
 // already in flight for the previous instance must not write into the new one.
 let skillsGeneration = 0;
 
-/**
- * Merge a partial list (OpenCode's own skill list failed, only the disk scan
- * came back) with what was known before. Previously known skills the disk scan
- * cannot vouch for — built-ins and anything OpenCode found through its config —
- * are kept instead of vanishing on one failed fetch. Managed-root skills
- * (`renamable`) are covered by the disk scan, so their absence is real.
- */
-const mergePartialSkills = (
-  partial: DiscoveredSkill[],
-  previous: DiscoveredSkill[],
-): DiscoveredSkill[] => {
-  const partialNames = new Set(partial.map((skill) => skill.name));
-  const carried = previous.filter((skill) => !partialNames.has(skill.name) && skill.renamable !== true);
-  return carried.length > 0 ? [...partial, ...carried] : partial;
-};
 
 const getSkillsCacheKey = (directory: string | null): string => {
   return directory?.trim() || DEFAULT_SKILLS_CACHE_KEY;
@@ -230,52 +197,6 @@ export const invalidateSkillsLoadCache = (directory: string | null = getRequestD
   skillsLastLoadedAt.delete(getSkillsCacheKey(directory));
 };
 
-const upsertSkillLocal = (
-  set: (updater: (state: SkillsStore) => Partial<SkillsStore>) => void,
-  get: () => SkillsStore,
-  name: string,
-  config: Partial<SkillConfig>,
-  directory: string | null,
-) => {
-  const cacheKey = getSkillsCacheKey(directory);
-  const isAmbient = cacheKey === getSkillsCacheKey(getRequestDirectory());
-  const current = get().skillsByDirectory[cacheKey] ?? [];
-  const existing = current.find((skill) => skill.name === name);
-  const path = config.targetPath ?? existing?.path ?? '';
-  const nextSkill: DiscoveredSkill = {
-    ...existing,
-    name,
-    path,
-    scope: config.scope ?? existing?.scope ?? 'user',
-    source: config.source ?? existing?.source ?? 'opencode',
-    description: config.description ?? existing?.description ?? '',
-    group: parseSkillGroup(path),
-  };
-  const nextSkills = current.some((skill) => skill.name === name)
-    ? current.map((skill) => (skill.name === name ? nextSkill : skill))
-    : [...current, nextSkill];
-  set((state) => {
-    const next: Partial<SkillsStore> = {
-      skillsByDirectory: { ...state.skillsByDirectory, [cacheKey]: nextSkills },
-    };
-    if (isAmbient) next.skills = nextSkills;
-    return next;
-  });
-};
-
-const removeSkillLocal = (
-  set: (state: Partial<SkillsStore>) => void,
-  get: () => SkillsStore,
-  name: string,
-) => {
-  const nextState: Partial<SkillsStore> = {
-    skills: get().skills.filter((skill) => skill.name !== name),
-  };
-  if (get().selectedSkillName === name) {
-    nextState.selectedSkillName = null;
-  }
-  set(nextState);
-};
 
 const EMPTY_SKILLS: DiscoveredSkill[] = [];
 
@@ -322,7 +243,7 @@ export const useSkillsStore = create<SkillsStore>()(
           const isAmbient = cacheKey === getSkillsCacheKey(getRequestDirectory());
           const now = Date.now();
           const loadedAt = skillsLastLoadedAt.get(cacheKey) ?? 0;
-          const hasCachedSkills = (get().skillsByDirectory[cacheKey] ?? (isAmbient ? get().skills : [])).length > 0;
+          const hasCachedSkills = skillsLastLoadedAt.has(cacheKey);
 
           if (hasCachedSkills && now - loadedAt < SKILLS_LOAD_CACHE_TTL_MS) {
             return true;
@@ -365,26 +286,7 @@ export const useSkillsStore = create<SkillsStore>()(
                   renamable: s.renamable === true,
                 }));
 
-                // OpenCode loads a narrower set than this scan finds, and the
-                // rules live in server-side env flags the browser cannot read.
-                // The route reports them; `filterSkillsByRuntimeFlags` mirrors
-                // OpenCode's discovery, including the `.agents`-wins dedup that
-                // matters when `.claude/skills` are symlinks back into it.
-                //
-                // Deliberately not OpenCode's own skill endpoint: measured
-                // against 1.18.14 it lists only global and builtin skills and
-                // omits the project skills the agent actually has.
-                const scannedSkills = filterSkillsByRuntimeFlags(
-                  configSkills,
-                  data.externalSkills ?? null,
-                );
-                // The server answers with only its disk scan when OpenCode's
-                // own list could not be read. That is not a complete list:
-                // keep what was known and retry on the next load.
-                const isPartial = data.openCodeSkillsUnavailable === true;
-                const visibleSkills = isPartial
-                  ? mergePartialSkills(scannedSkills, previousSkills)
-                  : scannedSkills;
+                const visibleSkills = configSkills;
 
                 if (generation !== skillsGeneration) return false;
                 set((state) => {
@@ -395,11 +297,7 @@ export const useSkillsStore = create<SkillsStore>()(
                   if (isAmbient) next.skills = visibleSkills;
                   return next;
                 });
-                if (isPartial) {
-                  skillsLastLoadedAt.delete(cacheKey);
-                } else {
-                  skillsLastLoadedAt.set(cacheKey, Date.now());
-                }
+                skillsLastLoadedAt.set(cacheKey, Date.now());
                 return true;
               } catch (error) {
                 lastError = error;
@@ -480,19 +378,6 @@ export const useSkillsStore = create<SkillsStore>()(
 
             invalidateSkillsLoadCache(directory);
 
-            if (payload?.requiresManualRestart) {
-              upsertSkillLocal(set, get, config.name, config, directory);
-              return true;
-            }
-
-            if (payload?.requiresReload) {
-              startConfigUpdate("Creating skill...");
-              await refreshSkillsAfterOpenCodeRestart({
-                message: payload?.message,
-                delayMs: payload?.reloadDelayMs,
-              });
-              return true;
-            }
 
             const loaded = await get().loadSkills(directory);
             if (loaded) {
@@ -534,19 +419,6 @@ export const useSkillsStore = create<SkillsStore>()(
 
             invalidateSkillsLoadCache(directory);
 
-            if (payload?.requiresManualRestart) {
-              upsertSkillLocal(set, get, name, config, directory);
-              return true;
-            }
-
-            if (payload?.requiresReload) {
-              startConfigUpdate("Updating skill...");
-              await refreshSkillsAfterOpenCodeRestart({
-                message: payload?.message,
-                delayMs: payload?.reloadDelayMs,
-              });
-              return true;
-            }
 
             const loaded = await get().loadSkills(directory);
             if (loaded) {
@@ -578,15 +450,7 @@ export const useSkillsStore = create<SkillsStore>()(
               throw new Error(message);
             }
 
-            const needsReload = payload?.requiresReload ?? false;
             invalidateSkillsLoadCache(directory);
-            if (needsReload) {
-              await refreshSkillsAfterOpenCodeRestart({
-                message: payload?.message,
-                delayMs: payload?.reloadDelayMs,
-              });
-              return true;
-            }
 
             const loaded = await get().loadSkills(directory);
             if (loaded) {
@@ -616,19 +480,6 @@ export const useSkillsStore = create<SkillsStore>()(
 
             invalidateSkillsLoadCache(directory);
 
-            if (payload?.requiresManualRestart) {
-              removeSkillLocal(set, get, name);
-              return true;
-            }
-
-            if (payload?.requiresReload) {
-              startConfigUpdate("Deleting skill...");
-              await refreshSkillsAfterOpenCodeRestart({
-                message: payload?.message,
-                delayMs: payload?.reloadDelayMs,
-              });
-              return true;
-            }
 
             const loaded = await get().loadSkills(directory);
             if (loaded) {
@@ -729,30 +580,6 @@ if (typeof window !== "undefined") {
   window.__zustand_skills_store__ = useSkillsStore;
 }
 
-export async function refreshSkillsAfterOpenCodeRestart(options?: { message?: string; delayMs?: number }) {
-  try {
-    updateConfigUpdateMessage(options?.message || "Refreshing skills…");
-  } catch {
-    // ignore
-  }
-
-  try {
-    await waitForOpenCodeConnection(options?.delayMs);
-    updateConfigUpdateMessage("Refreshing skills…");
-    const skillsStore = useSkillsStore.getState();
-    invalidateSkillsLoadCache();
-    const loaded = await skillsStore.loadSkills();
-    if (loaded) {
-      emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
-    }
-  } catch (error) {
-    updateConfigUpdateMessage("OpenCode refresh failed. Please retry.");
-    await sleep(1500);
-    throw error;
-  } finally {
-    finishConfigUpdate();
-  }
-}
 
 // Subscribe to config changes from other stores
 let unsubscribeSkillsConfigChanges: (() => void) | null = null;

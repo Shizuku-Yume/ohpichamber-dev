@@ -1,4 +1,3 @@
-import { getLastConversationRecord } from '@/lib/opencode/model';
 import type { ChatMessageEntry, TurnRecord } from './types';
 
 /** A queued user message alone does not retire the previous turn. */
@@ -14,13 +13,17 @@ export function getTurnsWithLaterAssistant(turns: readonly TurnRecord[]): Set<st
 }
 
 export function getLiveFinalMessage(messages: readonly ChatMessageEntry[]): ChatMessageEntry | undefined {
-    // Do not use projectTurnSummary's intermediate-text fallback. Compaction,
-    // synthetic prompts, skill and shell records are their own message roles
-    // in v2 and can trail the final answer, so the lookup skips them instead
-    // of reading the last record.
-    const last = getLastConversationRecord(messages);
-    return last?.info.role === 'assistant' && last.info.finish === 'stop'
-        && last.parts.some((part) => part.type === 'text' && part.text.trim().length > 0)
+    // System records do not retire a visible assistant response.
+    let last: ChatMessageEntry | undefined;
+    for (let index = messages.length - 1; index >= 0; index--) {
+        if (messages[index].role !== 'system') {
+            last = messages[index];
+            break;
+        }
+    }
+    return last?.role === 'assistant'
+        && !last.parts.some((part) => part.type === 'tool_call')
+        && last.parts.some((part) => part.type === 'text' && part.content.trim().length > 0)
         ? last : undefined;
 }
 

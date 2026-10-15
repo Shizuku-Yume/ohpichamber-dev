@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { opencodeClient, type ProjectFileSearchHit } from '@/lib/opencode/client';
+import { hostFilesystem, type ProjectFileSearchHit } from '@/lib/host-filesystem';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 
 const CACHE_TTL_MS = 30_000;
@@ -79,14 +79,14 @@ export const useFileSearchStore = create<FileSearchStoreState>()(
           return inflight;
         }
 
-        const searchPromise = opencodeClient
-          // OpenCode v2's file search takes a type filter only; hidden-file and
-          // gitignore handling are the server's, so those options stay in the
-          // cache key but are not sent.
+        // Host search owns hidden-file and gitignore filtering as well as type.
+        const searchPromise = hostFilesystem
           .searchFiles(normalizedQuery, {
             directory: normalizedDirectory,
             limit,
             type,
+            includeHidden,
+            respectGitignore,
           })
           .then((files) => {
             set((state) => {

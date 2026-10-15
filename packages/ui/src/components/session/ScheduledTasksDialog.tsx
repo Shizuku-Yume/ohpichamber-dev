@@ -201,7 +201,7 @@ const STATUS_META = {
 const TaskTargetLine: React.FC<{ sessionId: string }> = ({ sessionId }) => {
   const { t } = useI18n();
   const session = useGlobalSessionsStore((state) => state.entityById.get(sessionId));
-  return <p className="truncate typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.targetSession')}: {session?.title || sessionId}</p>;
+  return <p className="truncate typography-meta text-muted-foreground">{t('sessions.scheduledTasks.editor.targetSession')}: {session?.metadata?.title || sessionId}</p>
 };
 
 // Next to "Paused" on a repository loop that waits for the user: the icon

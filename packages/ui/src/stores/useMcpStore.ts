@@ -12,7 +12,7 @@ export interface McpServerRuntimeState {
 export const isMcpServerConnected = (entry: McpServerRuntimeState | undefined): boolean =>
   !!entry?.catalogs.some(catalog => catalog.activeServers.includes(entry.configuration.serverId));
 export const getMcpServerError = (entry: McpServerRuntimeState | undefined): string | undefined =>
-  entry?.probe?.error?.detail;
+  entry?.probe?.status === 'failed' ? entry.probe.error.detail : undefined;
 export const getMcpServerStatus = (entry: McpServerRuntimeState | undefined): 'ready' | 'unavailable' | 'disabled' | 'unapplied' => {
   if (!entry) return 'unapplied';
   if (!entry.configuration.enabled) return 'disabled';
@@ -82,10 +82,13 @@ export const useMcpStore = create<McpStore>()(devtools((set, get) => {
         const catalogs = await Promise.all(roots.map(session => canonicalClient.getMcpCatalog(session)));
         if (owner !== generation || revision !== operationRevision) return;
         const previous = get().byDirectory[key];
-        const entries = Object.fromEntries(configuration.config.servers.map(server => [server.serverId, {
-          configuration: server, catalogs: catalogs.map(result => result.workerCatalog),
-          ...(previous?.[server.serverId]?.probe?.persistedRevision === configuration.persistedRevision ? { probe: previous[server.serverId].probe } : {}),
-        }]));
+        const workerCatalogs = catalogs.map(result => result.workerCatalog);
+        const entries = Object.fromEntries(configuration.config.servers.map(server => {
+          const entry: McpServerRuntimeState = { configuration: server, catalogs: workerCatalogs };
+          const probe = previous?.[server.serverId]?.probe;
+          if (probe?.persistedRevision === configuration.persistedRevision) entry.probe = probe;
+          return [server.serverId, entry];
+        }));
         set(state => ({ byDirectory: { ...state.byDirectory, [key]: entries },
           refreshedAtKeys: { ...state.refreshedAtKeys, [key]: Date.now() }, lastErrorKeys: { ...state.lastErrorKeys, [key]: null } }));
       } catch (error) {
@@ -115,7 +118,8 @@ export const useMcpStore = create<McpStore>()(devtools((set, get) => {
       if (owner !== generation) return;
       await get().refresh({ directory, silent: true });
       if (result.status === 'partial' || result.status === 'failed' || result.probe?.status === 'failed') {
-        throw new Error(result.workers.filter(worker => worker.outcome === 'failed').map(worker => worker.error.detail).join('\n') || result.probe?.error?.detail);
+        const probeError = result.probe?.status === 'failed' ? result.probe.error.detail : undefined;
+        throw new Error(result.workers.filter(worker => worker.outcome === 'failed').map(worker => worker.error.detail).join('\n') || probeError);
       }
     },
     testConnection: async (serverId, directory) => {

@@ -1,7 +1,8 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getSyncSessionMaterializationStatus } from '@/sync/sync-refs';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 const SESSION_PREFETCH_HOVER_DELAY_MS = 180;
 const SESSION_PREFETCH_SETTLE_MS = 150;
@@ -17,7 +18,7 @@ type Args = {
   currentSessionId: string | null;
   sortedSessions: Session[];
   recentSessions?: Session[];
-  prefetchSession: (target: { directory: string; sessionID: string }) => Promise<void>;
+  prefetchSession: (target: { directory: string; sessionId: string }) => Promise<void>;
 };
 
 type PrefetchRequest = {
@@ -30,11 +31,10 @@ const getPrefetchRequestKey = (request: Pick<PrefetchRequest, 'directory' | 'ses
   `${request.directory}\n${request.sessionId}`
 );
 
-type PrefetchTarget = Pick<Session, 'id' | 'directory'>;
+type PrefetchTarget = Session;
 
 const sessionDirectory = (session: PrefetchTarget | null | undefined): string | null => {
-  const directory = session?.directory?.trim();
-  return directory || null;
+  return session ? resolveGlobalSessionDirectory(session) : null;
 };
 
 /**
@@ -93,7 +93,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
 
       const key = getPrefetchRequestKey(request);
       sessionPrefetchInFlightRef.current.add(key);
-      void prefetchSession({ directory: request.directory, sessionID: request.sessionId })
+      void prefetchSession({ directory: request.directory, sessionId: request.sessionId })
         .catch(() => undefined)
         .finally(() => {
           sessionPrefetchInFlightRef.current.delete(key);
@@ -103,7 +103,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
   }, [enabled, prefetchSession]);
 
   const scheduleSessionPrefetch = React.useCallback((session: PrefetchTarget | null | undefined, origin: 'hover' | 'neighbor' = 'neighbor') => {
-    const sessionId = session?.id;
+    const sessionId = session?.sessionId;
     const directory = sessionDirectory(session);
     if (!enabled || !sessionId || !directory || sessionId === currentSessionId) {
       return;
@@ -152,7 +152,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
   const cancelSessionPrefetch = React.useCallback((session: PrefetchTarget) => {
     const directory = sessionDirectory(session);
     if (!directory) return;
-    const key = getPrefetchRequestKey({ sessionId: session.id, directory });
+    const key = getPrefetchRequestKey({ sessionId: session.sessionId, directory });
     const timer = sessionPrefetchTimersRef.current.get(key);
     if (timer === undefined || !hoverOnlyTimerKeysRef.current.has(key)) return;
     window.clearTimeout(timer);
@@ -180,7 +180,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
       return;
     }
     const timer = window.setTimeout(() => {
-      const currentIndex = sortedSessions.findIndex((session) => session.id === currentSessionId);
+      const currentIndex = sortedSessions.findIndex((session) => session.sessionId === currentSessionId);
       if (currentIndex < 0) return;
       for (const offset of NEIGHBOR_PREFETCH_OFFSETS) scheduleSessionPrefetch(sortedSessions[currentIndex + offset]);
     }, SESSION_PREFETCH_SETTLE_MS);
@@ -192,7 +192,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
       return;
     }
     const timer = window.setTimeout(() => {
-      const currentIndex = recentSessions.findIndex((session) => session.id === currentSessionId);
+      const currentIndex = recentSessions.findIndex((session) => session.sessionId === currentSessionId);
       if (currentIndex < 0) return;
       for (const offset of NEIGHBOR_PREFETCH_OFFSETS) scheduleSessionPrefetch(recentSessions[currentIndex + offset]);
     }, SESSION_PREFETCH_SETTLE_MS);

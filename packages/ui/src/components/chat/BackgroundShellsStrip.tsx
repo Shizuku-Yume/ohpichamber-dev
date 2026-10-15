@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { formatSessionActivityDuration } from '@/components/session/sessionActivityDurationFormat';
 import { useDurationTickerNow } from '@/hooks/useDurationTicker';
 import { useI18n } from '@/lib/i18n';
-import { opencodeClient } from '@/lib/opencode/client';
+import { canonicalClient } from '@/api/canonicalClient';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import {
   sessionsInTree,
@@ -34,7 +34,7 @@ const useSessionTreeShells = (sessionId: string): TrackedShell[] => {
   const treeKey = useGlobalSessionsStore(React.useCallback((state) => (
     shellSessionIds.size === 0
       ? ''
-      : sessionsInTree(shellSessionIds, sessionId, (id) => state.entityById.get(id)?.parentID ?? undefined).join('\n')
+      : sessionsInTree(shellSessionIds, sessionId, (id) => state.entityById.get(id)?.parentSessionId ?? undefined).join('\n')
   ), [sessionId, shellSessionIds]));
   const treeIds = React.useMemo(() => new Set(treeKey ? treeKey.split('\n') : []), [treeKey]);
   return useBackgroundShellsStore(useShallow(React.useCallback((state) => (
@@ -57,23 +57,20 @@ const ShellElapsed: React.FC<{ startedAt: number }> = ({ startedAt }) => {
 const ShellRow: React.FC<{ shell: TrackedShell; rootSessionId: string; rootDirectory?: string }> = ({ shell, rootSessionId, rootDirectory }) => {
   const { t } = useI18n();
   const [stopping, setStopping] = React.useState(false);
-  const fromSubagent = shell.sessionID !== rootSessionId;
+  const fromSubagent = shell.sessionId !== rootSessionId;
 
-  // The same stop the command's row in the chat offers: the agent is told
-  // first, then the command is removed. The row leaves when OpenCode reports
-  // the command ended.
+  // Completion is authoritative only when the canonical shell event arrives.
   const stop = () => {
     if (stopping) return;
     setStopping(true);
-    const sessionDirectory = fromSubagent
-      ? useGlobalSessionsStore.getState().entityById.get(shell.sessionID)?.directory ?? shell.directory
-      : rootDirectory;
-    opencodeClient.stopBackgroundShell({
-      sessionID: shell.sessionID,
-      sessionDirectory,
-      shellID: shell.id,
-      shellDirectory: shell.directory,
-      command: shell.command,
+    const sessionId = shell.sessionId;
+    canonicalClient.stopShell(sessionId, {
+      job: {
+        sessionId,
+        jobId: shell.jobId,
+        epoch: shell.epoch,
+        workerGeneration: shell.workerGeneration,
+      },
     }).catch(() => {
       setStopping(false);
       toast.error(t('chat.toolPart.background.stopFailed'));
@@ -163,7 +160,7 @@ export const BackgroundShellsStrip: React.FC<BackgroundShellsStripProps> = React
       {expanded ? (
         <div id={listId}>
           {shells.map((shell) => (
-            <ShellRow key={shell.id} shell={shell} rootSessionId={sessionId} rootDirectory={directory} />
+            <ShellRow key={`${shell.sessionId}:${shell.jobId}:${shell.epoch}:${shell.workerGeneration}`} shell={shell} rootSessionId={sessionId} rootDirectory={directory} />
           ))}
         </div>
       ) : null}

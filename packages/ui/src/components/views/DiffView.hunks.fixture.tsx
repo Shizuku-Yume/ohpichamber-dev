@@ -95,7 +95,7 @@ export async function exerciseDiffHunkActions(snapshotCase?: 'cold' | 'cached' |
   const { createWebAPIs } = await import('../../../../web/src/api/index');
   const { MultiFileDiffEntry } = await import('@/components/views/DiffView');
   const { SyncProvider } = await import('@/sync/sync-context');
-  const { opencodeClient } = await import('@/lib/opencode/client');
+  const { canonicalClient } = await import('@/api/canonicalClient');
   const { useGitStore } = await import('@/stores/useGitStore');
   const changes = snapshotCase === 'cold-single' ? [1] : [1, 25, 50];
   let remaining = [...changes];
@@ -150,7 +150,7 @@ export async function exerciseDiffHunkActions(snapshotCase?: 'cold' | 'cached' |
   Object.defineProperty(container, 'clientHeight', { value: 2000 });
   document.body.append(container);
   const root = createRoot(container);
-  const render = () => act(async () => root.render(<I18nProvider><SyncProvider sdk={opencodeClient.getSdkClient()} directory=""><RuntimeAPIContext.Provider value={apis}>
+  const render = () => act(async () => root.render(<I18nProvider><SyncProvider client={canonicalClient} directory=""><RuntimeAPIContext.Provider value={apis}>
     <MultiFileDiffEntry directory="/repo" file={file} layout={layout} wrapLines={false} isSelected={false}
       isExpanded isMounted onSelect={() => {}} onExpandedChange={() => {}} registerSectionRef={() => {}}
       showOpenInEditorAction onOpenInEditor={(_path, diff) => { openedPatch = diff?.patch ?? null; }}
@@ -270,7 +270,7 @@ export async function exerciseTrailingContextExpansion(layout: 'inline' | 'side-
   const { createWebAPIs } = await import('../../../../web/src/api/index');
   const { MultiFileDiffEntry } = await import('@/components/views/DiffView');
   const { SyncProvider } = await import('@/sync/sync-context');
-  const { opencodeClient } = await import('@/lib/opencode/client');
+  const { canonicalClient } = await import('@/api/canonicalClient');
   const { useGitStore } = await import('@/stores/useGitStore');
   const lineCount = 150;
   let changedIndex = 49;
@@ -303,7 +303,7 @@ export async function exerciseTrailingContextExpansion(layout: 'inline' | 'side-
   Object.defineProperty(container, 'clientHeight', { value: 2000 });
   document.body.append(container);
   const root = createRoot(container);
-  const render = (key: string) => act(async () => root.render(<I18nProvider><SyncProvider sdk={opencodeClient.getSdkClient()} directory=""><RuntimeAPIContext.Provider value={apis}>
+  const render = (key: string) => act(async () => root.render(<I18nProvider><SyncProvider client={canonicalClient} directory=""><RuntimeAPIContext.Provider value={apis}>
     <MultiFileDiffEntry key={key} directory="/repo" file={file} layout={layout} wrapLines={false} isSelected={false}
       isExpanded isMounted onSelect={() => {}} onExpandedChange={() => {}} registerSectionRef={() => {}}
       hunkActionsEnabled={false} />
@@ -361,7 +361,7 @@ export async function exerciseMobileComparisonContextExpansion() {
   const { useGitStore } = await import('@/stores/useGitStore');
   const { MobileChangesPane } = await import('@/apps/MobileChangesSurface');
   const { SyncProvider } = await import('@/sync/sync-context');
-  const { opencodeClient } = await import('@/lib/opencode/client');
+  const { canonicalClient } = await import('@/api/canonicalClient');
   const lineCount = 150;
   const changedIndex = 49;
   const makePatch = (full: boolean) => {
@@ -430,7 +430,7 @@ export async function exerciseMobileComparisonContextExpansion() {
     await act(async () => { element.click(); });
   };
   try {
-    await act(async () => root.render(<I18nProvider><SyncProvider sdk={opencodeClient.getSdkClient()} directory=""><RuntimeAPIContext.Provider value={createWebAPIs()}>
+    await act(async () => root.render(<I18nProvider><SyncProvider client={canonicalClient} directory=""><RuntimeAPIContext.Provider value={createWebAPIs()}>
       <MobileChangesPane rootDirectory="/repo" visible initialDiff={null}
         repository={{ rootIsGitRepo: true, gitDirectory: '/repo', nestedRepos: null, nestedRepoSelection: null }} />
     </RuntimeAPIContext.Provider></SyncProvider></I18nProvider>));
@@ -474,7 +474,7 @@ export async function exerciseHiddenWhitespace() {
   const { createWebAPIs } = await import('../../../../web/src/api/index');
   const { MultiFileDiffEntry } = await import('@/components/views/DiffView');
   const { SyncProvider } = await import('@/sync/sync-context');
-  const { opencodeClient } = await import('@/lib/opencode/client');
+  const { canonicalClient } = await import('@/api/canonicalClient');
   const { useGitStore } = await import('@/stores/useGitStore');
   const header = `diff --git a/file.txt b/file.txt\nindex ${'a'.repeat(40)}..${'b'.repeat(40)} 100644\n--- a/file.txt\n+++ b/file.txt\n`;
   const reindented = '@@ -1,6 +1,6 @@\n-line0\n-line1\n-line2\n+  line0\n+  line1\n+  line2\n line3\n line4\n line5\n';
@@ -495,7 +495,7 @@ export async function exerciseHiddenWhitespace() {
   Object.defineProperty(container, 'clientHeight', { value: 2000 });
   document.body.append(container);
   const root = createRoot(container);
-  const render = (key: string, hideWhitespace: boolean) => act(async () => root.render(<I18nProvider><SyncProvider sdk={opencodeClient.getSdkClient()} directory=""><RuntimeAPIContext.Provider value={apis}>
+  const render = (key: string, hideWhitespace: boolean) => act(async () => root.render(<I18nProvider><SyncProvider client={canonicalClient} directory=""><RuntimeAPIContext.Provider value={apis}>
     <MultiFileDiffEntry key={key} directory="/repo" file={file} layout="inline" wrapLines={false} hideWhitespace={hideWhitespace} isSelected={false}
       isExpanded isMounted onSelect={() => {}} onExpandedChange={() => {}} registerSectionRef={() => {}} hunkActionsEnabled />
   </RuntimeAPIContext.Provider></SyncProvider></I18nProvider>));

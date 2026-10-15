@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { isFinalToolStatus, type Part } from '@/lib/opencode/model';
 import { isExecuteTool, isFileChangeTool, isShellTool } from '@/lib/opencode/tools';
 import { notifyGitStatusInvalidated } from '@/lib/gitStatusInvalidation';

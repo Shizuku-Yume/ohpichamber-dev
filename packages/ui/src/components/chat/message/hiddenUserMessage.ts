@@ -1,8 +1,6 @@
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 
-import { deriveMessageRole } from './messageRole';
-import { filterVisibleParts, normalizeParts } from './partUtils';
-import { normalizeUserDisplayParts } from './normalizeUserDisplayParts';
+import { filterVisibleParts } from './partUtils';
 
 /**
  * A user message is hidden when none of its parts survive display
@@ -15,18 +13,17 @@ import { normalizeUserDisplayParts } from './normalizeUserDisplayParts';
 const hiddenByParts = new WeakMap<Part[], boolean>();
 
 export const isHiddenUserMessage = (
-    entry: { info: Message; parts: Part[] } | null | undefined,
+    entry: Message | null | undefined,
 ): boolean => {
     if (!entry) return false;
-    if (!deriveMessageRole(entry.info).isUser) return false;
+    if (entry.role !== 'user') return false;
 
     const cached = hiddenByParts.get(entry.parts);
     if (cached !== undefined) {
         return cached;
     }
 
-    const parts = normalizeUserDisplayParts(normalizeParts(entry.parts));
-    const hidden = filterVisibleParts(parts, { includeReasoning: true }).length === 0;
+    const hidden = filterVisibleParts(entry.parts, { includeReasoning: true }).length === 0;
     hiddenByParts.set(entry.parts, hidden);
     return hidden;
 };

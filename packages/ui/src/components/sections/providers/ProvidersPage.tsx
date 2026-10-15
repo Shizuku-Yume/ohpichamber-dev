@@ -20,6 +20,7 @@ import { formatCompactNumber } from '@/lib/numberFormat';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { opencodeClient } from '@/lib/opencode/client';
+import { canonicalClient } from '@/api/canonicalClient';
 import { loadIntegrationCatalog, peekIntegrationCatalog, type IntegrationCatalog } from '@/lib/opencode/integration-catalog';
 import { fetchDisabledProviders, setProviderDisabled as setProviderDisabledRequest } from '@/lib/disabledProviders';
 import { requiresProviderAuth } from './providerAvailability';
@@ -27,6 +28,7 @@ import { listConnectableProviders } from './connectableProviders';
 import { ProviderConnectPicker } from './ProviderConnectPicker';
 import {
   providerHasCredentials,
+  hasCanonicalStoredApiKey,
   shouldAutoOpenAuthPanel,
   shouldShowApiKeyAuth,
   shouldShowModelsSection,
@@ -371,18 +373,18 @@ export const ProvidersPage: React.FC = () => {
     setIntegrationsRevision((revision) => revision + 1);
   }, []);
 
-  const markAuthWriteSucceeded = React.useCallback((providerId: string) => {
-    // Optimistically record a connection so a providers refresh that has not yet
-    // landed cannot reopen the panel / hide models with a stale
-    // "Credentials missing" summary before the integration refetch arrives.
-    setCatalog((prev) => prev && {
-      ...prev,
-      integrations: prev.integrations.map((integration) => (
-        integration.id === providerId && integration.connections.length === 0
-          ? { ...integration, connections: [{ type: 'credential', id: `pending:${providerId}`, label: providerId, method: 'key' }] }
-          : integration
-      )),
-    });
+  const markAuthWriteSucceeded = React.useCallback((providerId: string, source: 'canonical' | 'integration') => {
+    if (source === 'integration') {
+      // Only integration-owned writes can be reflected optimistically in this catalog.
+      setCatalog((prev) => prev && {
+        ...prev,
+        integrations: prev.integrations.map((integration) => (
+          integration.id === providerId && integration.connections.length === 0
+            ? { ...integration, connections: [{ type: 'credential', id: `pending:${providerId}`, label: providerId, method: 'key' }] }
+            : integration
+        )),
+      });
+    }
     setAuthPanelDismissedForId(null);
     setShowAuthPanel(false);
     setCandidateProviderId('');
@@ -449,7 +451,7 @@ export const ProvidersPage: React.FC = () => {
       setCustomAuthFailureHint(null);
       setLastCustomPersistId(null);
       // OpenCode watches its config file and rebuilds the catalog on its own.
-      markAuthWriteSucceeded(plan.providerID);
+      markAuthWriteSucceeded(plan.providerID, 'integration');
     } catch (error) {
       console.error('Failed to save custom provider:', error);
       toast.error(
@@ -466,25 +468,33 @@ export const ProvidersPage: React.FC = () => {
     setShowAuthPanel(false);
     // Optimistic mark + sources refetch so the page does not stick on a stale
     // "Credentials missing" summary while the providers refresh lands.
-    markAuthWriteSucceeded(providerId);
+    markAuthWriteSucceeded(providerId, 'integration');
   };
+  const writeCanonicalProviderKey = React.useCallback(async (providerId: string, apiKey: string) => {
+    if (!settingsDirectory) throw new Error('Workspace directory is unavailable');
+    const workspace = await canonicalClient.resolveWorkspace(settingsDirectory);
+    const catalog = await canonicalClient.getProviders(workspace.workspaceId);
+    if (!catalog.providers.some((provider) => provider.providerId === providerId)) {
+      throw new Error(`Provider ${providerId} is not present in the canonical catalog`);
+    }
+    await canonicalClient.writeProviderCredential(workspace.workspaceId, providerId, {
+      expectedRevision: catalog.revision,
+      providerId,
+      credential: { method: 'api-key', apiKey },
+    });
+    await loadProviders({ directory: settingsDirectory, source: 'settings:providers', fresh: true });
+  }, [loadProviders, settingsDirectory]);
 
-  const handleDisconnectProvider = async (providerId: string) => {
+
+  const handleDisconnectIntegrationProvider = async (providerId: string) => {
     const busyKey = `disconnect:${providerId}`;
     setAuthBusyKey(busyKey);
-
     try {
-      // v2 keeps credentials in OpenCode, one record per stored login; the
-      // provider is disconnected once every one of them is gone. Env-backed
-      // connections are not removable from here — they live in the environment.
-      const credentials = getCredentialConnections(
-        findIntegrationForProvider(integrations ?? [], providerId),
-      );
+      const credentials = getCredentialConnections(findIntegrationForProvider(integrations ?? [], providerId));
       const sdk = opencodeClient.getSdkClient();
       for (const credential of credentials) {
         await sdk.credential.remove({ credentialID: credential.id });
       }
-
       toast.success(t('settings.providers.page.toast.providerDisconnected'));
       setAuthPanelDismissedForId(null);
       refreshProviderSources();
@@ -497,12 +507,43 @@ export const ProvidersPage: React.FC = () => {
     }
   };
 
+  const handleDisconnectProvider = async (providerId: string) => {
+    const busyKey = `disconnect:${providerId}`;
+    setAuthBusyKey(busyKey);
+
+    try {
+      if (!settingsDirectory) throw new Error('Workspace directory is unavailable');
+      const workspace = await canonicalClient.resolveWorkspace(settingsDirectory);
+      const catalog = await canonicalClient.getProviders(workspace.workspaceId);
+      const provider = catalog.providers.find((entry) => entry.providerId === providerId);
+      if (!provider) {
+        throw new Error(`Provider ${providerId} is not present in the canonical catalog`);
+      }
+      if (provider.auth.status !== 'configured' || provider.auth.method !== 'api-key' || provider.auth.source !== 'stored-credential') {
+        throw new Error(`Provider ${providerId} has no stored API key to disconnect`);
+      }
+      await canonicalClient.deleteProviderCredential(workspace.workspaceId, providerId, {
+        expectedRevision: catalog.revision,
+        providerId,
+        credentialRef: provider.auth.credentialRef,
+      });
+
+      await loadProviders({ directory: settingsDirectory, source: 'settings:providers', fresh: true });
+      toast.success(t('settings.providers.page.toast.providerDisconnected'));
+      setAuthPanelDismissedForId(null);
+    } catch (error) {
+      console.error('Failed to disconnect provider:', error);
+      toast.error(t('settings.providers.page.toast.providerDisconnectFailed'));
+    } finally {
+      setAuthBusyKey(null);
+    }
+  };
+
   const handleDisconnectCustomProvider = async (providerId: string) => {
     if (!providerId) {
       return;
     }
-    await handleDisconnectProvider(providerId);
-    setEditingCustomProviderId(null);
+    await handleDisconnectIntegrationProvider(providerId);
     setEditingCustomFormInitial(null);
     setEditingCustomScope(null);
     setCustomAuthFailureHint(null);
@@ -663,7 +704,8 @@ export const ProvidersPage: React.FC = () => {
                             integrationId={candidateProviderId}
                             keyMethod={getKeyMethod(candidateIntegration)}
                             connectKey={connectIntegrationKey}
-                            onSaved={() => markAuthWriteSucceeded(candidateProviderId)}
+                            writeCanonicalKey={(apiKey) => writeCanonicalProviderKey(candidateProviderId, apiKey)}
+                            onSaved={(source) => markAuthWriteSucceeded(candidateProviderId, source)}
                           />
                         ) : null}
 
@@ -715,6 +757,7 @@ export const ProvidersPage: React.FC = () => {
   const hasCredentials = providerHasCredentials({
     connections: getProviderConnections(integrations ?? [], selectedProvider.id),
     optionsApiKey: readProviderApiKeySetting(selectedProvider),
+    canonicalAuth: selectedProvider.canonicalAuth,
   });
   const authStatusIncomplete = requiresProviderAuth(integrationsLoaded, hasCredentials, isEditableCustomProvider);
   const showModelsSection = shouldShowModelsSection({
@@ -835,6 +878,17 @@ export const ProvidersPage: React.FC = () => {
                 {t('settings.providers.disabled.disable')}
               </Button>
             ) : null}
+            {hasCanonicalStoredApiKey(selectedProvider.canonicalAuth) && !enterpriseLocked ? (
+              <Button
+                variant="outline"
+                size="xs"
+                className="!font-normal"
+                disabled={authBusyKey === `disconnect:${selectedProvider.id}`}
+                onClick={() => void handleDisconnectProvider(selectedProvider.id)}
+              >
+                {t('settings.providers.page.actions.disconnect')}
+              </Button>
+            ) : null}
             {enterpriseLocked ? null : (
             <Button
               variant="outline"
@@ -900,7 +954,8 @@ export const ProvidersPage: React.FC = () => {
                 integrationId={selectedProvider.id}
                 keyMethod={getKeyMethod(selectedIntegration)}
                 connectKey={connectIntegrationKey}
-                onSaved={() => markAuthWriteSucceeded(selectedProvider.id)}
+                writeCanonicalKey={(apiKey) => writeCanonicalProviderKey(selectedProvider.id, apiKey)}
+                onSaved={(source) => markAuthWriteSucceeded(selectedProvider.id, source)}
               />
             ) : null}
 

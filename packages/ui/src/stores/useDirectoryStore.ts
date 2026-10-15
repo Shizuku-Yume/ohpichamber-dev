@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { getNormalizedParentDirectory, normalizePath } from '@/lib/pathNormalization';
 import { getDesktopHomeDirectory } from '@/lib/desktop';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
@@ -191,7 +191,7 @@ const initializeHomeDirectory = async () => {
   };
 
   try {
-    const fsHome = await opencodeClient.getFilesystemHome();
+    const fsHome = await hostFilesystem.getFilesystemHome();
     const resolved = acceptCandidate(fsHome);
     if (resolved) {
       return resolved;
@@ -210,7 +210,7 @@ const initializeHomeDirectory = async () => {
   }
 
   try {
-    const info = await opencodeClient.getSystemInfo();
+    const info = await hostFilesystem.getSystemInfo();
     const resolved = acceptCandidate(info?.homeDirectory);
     if (resolved) {
       return resolved;
@@ -251,7 +251,7 @@ const initialCurrentDirectory = (() => {
 })();
 
 if (initialCurrentDirectory) {
-  opencodeClient.setDirectory(initialCurrentDirectory);
+  hostFilesystem.setDirectory(initialCurrentDirectory);
 }
 const initialIsHomeReady = Boolean(initialHomeDirectory && initialHomeDirectory !== '/' && initialCurrentDirectory);
 
@@ -275,7 +275,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
           console.log('[DirectoryStore] setDirectory called with path:', resolvedPath);
         }
 
-        opencodeClient.setDirectory(resolvedPath);
+        hostFilesystem.setDirectory(resolvedPath);
         invalidateFileSearchCache();
 
         set((state) => {
@@ -302,7 +302,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
           const newIndex = state.historyIndex - 1;
           const newDirectory = state.directoryHistory[newIndex];
 
-          opencodeClient.setDirectory(newDirectory);
+          hostFilesystem.setDirectory(newDirectory);
           invalidateFileSearchCache();
 
           safeStorage.setItem('lastDirectory', newDirectory);
@@ -325,7 +325,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
           const newIndex = state.historyIndex + 1;
           const newDirectory = state.directoryHistory[newIndex];
 
-          opencodeClient.setDirectory(newDirectory);
+          hostFilesystem.setDirectory(newDirectory);
           invalidateFileSearchCache();
 
           safeStorage.setItem('lastDirectory', newDirectory);
@@ -365,7 +365,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
         // A directory opened while the lookup ran is the user's newer choice.
         if (get().currentDirectory !== leaving) return;
         const directory = noProjectDirectory(homeDir, chatsRoot);
-        opencodeClient.setDirectory(directory);
+        hostFilesystem.setDirectory(directory);
         invalidateFileSearchCache();
         safeStorage.removeItem('lastDirectory');
         void updateDesktopSettings({ lastDirectory: '' });
@@ -446,7 +446,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
         if ((shouldReplaceCurrent || currentChanged) && resolvedReady) {
           const nextDirectory = shouldReplaceCurrent ? fallbackDirectory : (resolvedCurrent as string);
-          opencodeClient.setDirectory(nextDirectory);
+          hostFilesystem.setDirectory(nextDirectory);
           invalidateFileSearchCache();
           // The fallback is not the user opening a directory, so it is not
           // stored as the last directory: the server turns a stored last
@@ -464,7 +464,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
       resetForRuntimeSwitch: () => {
         // Nothing is stored or sent: the stored last directory is the previous
         // host's to keep, and the new host's settings are not this path's.
-        opencodeClient.setDirectory(undefined);
+        hostFilesystem.setDirectory(undefined);
         invalidateFileSearchCache();
         set({
           currentDirectory: '/',

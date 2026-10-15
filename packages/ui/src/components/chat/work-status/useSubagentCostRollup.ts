@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { useAllLiveSessions } from '@/sync/sync-context';
 import { buildChildrenIndex, computeSubtreeCost } from './subagentCost';
 
@@ -26,7 +26,7 @@ function countDescendants(id: string, childrenByParent: Map<string, Session[]>, 
   visited.add(id);
   const kids = childrenByParent.get(id) ?? [];
   let count = kids.length;
-  for (const kid of kids) count += countDescendants(kid.id, childrenByParent, visited);
+  for (const kid of kids) count += countDescendants(kid.sessionId, childrenByParent, visited);
   return count;
 }
 
@@ -37,17 +37,22 @@ function countDescendants(id: string, childrenByParent: Map<string, Session[]>, 
 export function computeRollup(liveSessions: Session[], sessionId: string | null): SubagentCostRollup {
   if (!sessionId) return EMPTY_ROLLUP;
 
-  const sessionsById = new Map(liveSessions.map((session) => [session.id, session]));
+  const sessionsById = new Map(liveSessions.map((session) => [session.sessionId, session]));
   if (!sessionsById.has(sessionId)) return EMPTY_ROLLUP;
 
   const childrenByParent = buildChildrenIndex(liveSessions);
   const totalCost = computeSubtreeCost(sessionId, sessionsById, childrenByParent);
+  const subagentCount = countDescendants(sessionId, childrenByParent, new Set());
+  // Canonical session discovery does not provide an authoritative spend total.
+  // Keep the descendant count without presenting missing billing as zero spend.
+  if (totalCost === null) return { ...EMPTY_ROLLUP, subagentCount };
 
   const perChildCost = new Map<string, number>();
   let subagentCost = 0;
   for (const child of childrenByParent.get(sessionId) ?? []) {
-    const childSubtree = computeSubtreeCost(child.id, sessionsById, childrenByParent);
-    perChildCost.set(child.id, childSubtree);
+    const childSubtree = computeSubtreeCost(child.sessionId, sessionsById, childrenByParent);
+    if (childSubtree === null) return { ...EMPTY_ROLLUP, subagentCount };
+    perChildCost.set(child.sessionId, childSubtree);
     subagentCost += childSubtree;
   }
 
@@ -55,7 +60,6 @@ export function computeRollup(liveSessions: Session[], sessionId: string | null)
   // always adds up to the total the panel shows even if a cycle guard trimmed
   // part of the walk.
   const ownCost = totalCost - subagentCost;
-  const subagentCount = countDescendants(sessionId, childrenByParent, new Set());
 
   return { totalCost, ownCost, subagentCost, subagentCount, perChildCost };
 }

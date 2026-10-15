@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { Session } from '@openchamber/agent-contract';
+import type { Session, Subagent } from '@openchamber/agent-contract';
+import { SessionSchema, SubagentSchema } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { isSessionDiscoveryFailed, registerWorkspaceDirectory, resetWorkspaceDirectories, resolveWorkspaceDirectory, splitGlobalSessionsByArchived, subscribeWorkspaceDirectories } from '@/stores/globalSessions';
 import { normalizePath } from '@/lib/pathNormalization';
@@ -60,6 +61,7 @@ type GlobalSessionsState = {
   applySessionMutations: (mutations: readonly GlobalSessionMutation[]) => void;
   upsertSession: (session: Session) => void;
   upsertSessions: (sessions: Session[]) => void;
+  upsertSubagents: (parent: Session, children: readonly Subagent[]) => void;
   removeSessions: (ids: Iterable<string>) => void;
   archiveSessions: (ids: Iterable<string>, archivedAt?: number) => void;
   /** Drop every session from the previous runtime instance and go back to the
@@ -90,6 +92,57 @@ let inflightLoad: Promise<LoadResult> | null = null;
 // Bumped on runtime switch: an in-flight load from the previous instance must
 // not apply its (stale) snapshot after the reset.
 let loadGeneration = 0;
+
+type ChildDiscovery = { sessions: Session[]; succeededParents: Set<string>; failedParents: Set<string> };
+
+const childSessionRecord = (parent: Session, child: Subagent): Session => {
+  const active = child.status === 'running' && parent.activeRunId !== null;
+  const runtimeStatus = parent.runtimeStatus === 'unavailable' ? 'unavailable' : active ? parent.runtimeStatus : 'idle';
+  return SessionSchema.parse({
+    sessionId: child.childSessionId, parentSessionId: parent.sessionId, rootSessionId: parent.rootSessionId,
+    projectId: parent.projectId, workspaceId: parent.workspaceId, displayPath: parent.displayPath,
+    createdAt: parent.createdAt, updatedAt: parent.updatedAt, epoch: parent.epoch, headSequence: parent.headSequence,
+    runtimeStatus, activeRunId: runtimeStatus === 'idle' || runtimeStatus === 'unavailable' ? null : parent.activeRunId,
+    metadata: { title: child.role }, metadataRevision: parent.metadataRevision === '0' ? '1' : parent.metadataRevision,
+    archiveRevision: parent.archiveRevision,
+  });
+};
+
+// Children have history, but no snapshot or Host metadata endpoint. These stable
+// host records provide sidebar identity and routing, not a child event cursor.
+const discoverChildSessions = async (roots: readonly Session[], known: ReadonlyMap<string, Session>, generation: number): Promise<ChildDiscovery> => {
+  const sessions: Session[] = [];
+  const succeededParents = new Set<string>();
+  const failedParents = new Set<string>();
+  const rootIds = new Set(roots.map((root) => root.sessionId));
+  const owners = new Map<string, string>();
+  await mapWithConcurrency(roots.filter((root) => !root.parentSessionId && root.archivedAt === undefined), DIRECTORY_SESSION_REFRESH_CONCURRENCY, async (root) => {
+    if (generation !== loadGeneration) return;
+    try {
+      const records = await withDirectorySessionRefreshSlot(() => {
+        if (generation !== loadGeneration) throw new Error('Runtime changed before child discovery');
+        return canonicalClient.listSubagents(root.sessionId);
+      });
+      if (generation !== loadGeneration) return;
+      const children: Session[] = [];
+      for (const record of records) {
+        const child = SubagentSchema.parse(record);
+        const previous = known.get(child.childSessionId);
+        const owner = owners.get(child.childSessionId);
+        if (child.parentSessionId !== root.sessionId || rootIds.has(child.childSessionId)
+          || owner !== undefined
+          || (previous && previous.parentSessionId !== root.sessionId)) continue;
+        children.push(childSessionRecord(root, child));
+        owners.set(child.childSessionId, root.sessionId);
+      }
+      sessions.push(...children);
+      succeededParents.add(root.sessionId);
+    } catch {
+      failedParents.add(root.sessionId);
+    }
+  });
+  return { sessions, succeededParents, failedParents };
+};
 
 const bindKnownWorkspaceDirectories = async (generation: number): Promise<void> => {
   const [{ useProjectsStore }, { useSessionUIStore }] = await Promise.all([
@@ -672,17 +725,22 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           // instance — drop it.
           return { activeSessions: [], archivedSessions: [] };
         }
+        const children = await discoverChildSessions(result.items, get().entityById, generation);
+        if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
         set((state) => {
-          const incomingIds = new Set(result.items.map((session) => session.sessionId));
+          const incoming = [...result.items, ...children.sessions];
+          const incomingIds = new Set(incoming.map((session) => session.sessionId));
           const retained = [...state.activeSessions, ...state.archivedSessions].filter((session) => (
-            !incomingIds.has(session.sessionId) && isSessionDiscoveryFailed(session, result.errors)
+            !incomingIds.has(session.sessionId) && (isSessionDiscoveryFailed(session, result.errors)
+              || (session.parentSessionId !== undefined && (children.failedParents.has(session.parentSessionId)
+                || isSessionDiscoveryFailed(state.entityById.get(session.parentSessionId) ?? session, result.errors))))
           ));
           const { active, archived } = splitGlobalSessionsByArchived([
-            ...result.items.map((session) => mergeSessionDirectoryMetadata(session, state.entityById.get(session.sessionId))),
+            ...incoming.map((session) => mergeSessionDirectoryMetadata(session, state.entityById.get(session.sessionId))),
             ...retained,
           ]);
           const reconciled = overlayMutationsSince(state, active, archived, baselineRevision);
-          const complete = Object.keys(result.errors).length === 0;
+          const complete = Object.keys(result.errors).length === 0 && children.failedParents.size === 0;
           return applySnapshot(state, reconciled.activeSessions, reconciled.archivedSessions, complete ? 'ready' : 'error', complete);
         });
         const committed = get();
@@ -751,6 +809,11 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       const state = get();
       return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
     }
+    const children = await discoverChildSessions(fetched.sessions, get().entityById, generation);
+    if (generation !== loadGeneration) {
+      const state = get();
+      return { activeSessions: state.activeSessions, archivedSessions: state.archivedSessions };
+    }
 
     if (fetched.errors.length > 0) {
       console.warn('[GlobalSessions] Failed to refresh sessions for some directories:', fetched.errors[0]);
@@ -761,19 +824,27 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       if (spaceId !== null) useSpacesStore.getState().noteReachable(spaceId);
     }
 
-    const { active, archived } = splitGlobalSessionsByArchived(fetched.sessions.map((session) => (
+    const { active, archived } = splitGlobalSessionsByArchived([...fetched.sessions, ...children.sessions].map((session) => (
       mergeSessionDirectoryMetadata(session, get().entityById.get(session.sessionId))
     )));
     const refreshedActiveIds = active.map((session) => session.sessionId);
 
     set((state) => {
-      let nextArchivedSessions = replaceSessionsForDirectories(state.archivedSessions, archived, fetched.directories, fetched.failures);
+      // Directory root discovery cannot prove a child disappeared. Only a
+      // successful list for that child's parent authorizes replacement.
+      const preservedChildren = state.activeSessions.filter((session) => session.parentSessionId !== undefined
+        && !children.succeededParents.has(session.parentSessionId));
+      const preservedArchivedChildren = state.archivedSessions.filter((session) => session.parentSessionId !== undefined
+        && !children.succeededParents.has(session.parentSessionId));
+      let nextArchivedSessions = replaceSessionsForDirectories(state.archivedSessions, [...archived, ...preservedArchivedChildren], fetched.directories, fetched.failures);
       if (sameSessionList(state.archivedSessions, nextArchivedSessions)) {
         nextArchivedSessions = state.archivedSessions;
       }
 
-      let nextActiveSessions = replaceSessionsForDirectories(state.activeSessions, active, fetched.directories, fetched.failures);
-      nextActiveSessions = addUnlistedLiveSessions(nextActiveSessions, nextArchivedSessions, fallbackActive);
+      let nextActiveSessions = replaceSessionsForDirectories(state.activeSessions, [...active, ...preservedChildren], fetched.directories, fetched.failures);
+      nextActiveSessions = addUnlistedLiveSessions(nextActiveSessions, nextArchivedSessions, fallbackActive?.filter((session) => (
+        !session.parentSessionId || !children.succeededParents.has(session.parentSessionId)
+      )));
       if (sameSessionList(state.activeSessions, nextActiveSessions)) {
         nextActiveSessions = state.activeSessions;
       }
@@ -826,6 +897,15 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       state,
       sessions.map((session) => ({ type: 'upsert' as const, session })),
     ));
+  },
+
+  upsertSubagents: (parent, children) => {
+    set((state) => applySessionMutations(state, children.flatMap((child) => {
+      const previous = state.entityById.get(child.childSessionId);
+      if (child.parentSessionId !== parent.sessionId || child.childSessionId === parent.rootSessionId
+        || (previous && previous.parentSessionId !== parent.sessionId)) return [];
+      return [{ type: 'upsert' as const, session: childSessionRecord(parent, child) }];
+    })));
   },
 
   removeSessions: (ids) => {

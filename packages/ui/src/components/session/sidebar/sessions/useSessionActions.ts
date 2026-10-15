@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/lib/i18n';
@@ -171,7 +171,7 @@ export const useSessionActions = (args: Args) => {
   const handleDeleteSession = React.useCallback(
     (session: Session, source?: DeleteSessionSource) => {
       const shouldHardDelete = source?.archivedBucket === true || source?.hardDelete === true;
-      const effectiveDescendantIds = collectSessionSubtreeIds(session.id, descendantIds, shouldHardDelete);
+      const effectiveDescendantIds = collectSessionSubtreeIds(session.sessionId, descendantIds, shouldHardDelete);
       if (!showDeletionDialog || source?.skipConfirm === true) {
         void executeDeleteSession(session, source, { descendantIds: effectiveDescendantIds });
         return;
@@ -196,7 +196,7 @@ export const useSessionActions = (args: Args) => {
 
   const handleRestoreSession = React.useCallback(
     async (session: Session) => {
-      const success = await unarchiveSession(session.id);
+      const success = await unarchiveSession(session.sessionId);
       if (success) {
         toast.success(t('sessions.sidebar.session.restore.success'));
       } else {

@@ -49,7 +49,7 @@ export const MobileHeader: React.FC<{
   // that is not on screen.
   const runOverviewKey = useUIStore((state) => state.runOverviewKey);
   const runTitle = useMultiRunTitle(runOverviewKey);
-  const sessionTitle = currentSession?.title?.trim();
+  const sessionTitle = currentSession?.metadata?.title?.trim();
   // Single-line title, desktop-style: session title, or the "New session"
   // placeholder on the draft screen. No project/branch metadata line.
   const primaryLabel = (runOverviewKey ? runTitle : null)

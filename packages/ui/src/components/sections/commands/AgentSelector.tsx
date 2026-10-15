@@ -1,6 +1,5 @@
 import React from 'react';
 import type { Agent } from '@openchamber/agent-contract';
-import { agentLabel } from '@/lib/agentLabel';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -9,8 +8,8 @@ import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { canonicalClient } from '@/api/canonicalClient';
-import { getConfigDirectory } from '@/stores/useAgentsStore';
 interface AgentSelectorProps {
     agentName: string;
     onChange: (agentName: string) => void;
@@ -32,10 +31,10 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     const [agents, setAgents] = React.useState<Agent[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [isUnavailable, setIsUnavailable] = React.useState(false);
-    const workspaceDirectory = directory ?? getConfigDirectory();
+    const workspaceDirectory = directory ?? useEffectiveDirectory() ?? null;
     const isReady = !isLoading && !isUnavailable;
     const selectedAgent = agents.find((agent) => agent.name === agentName);
-    const selectedAgentLabel = selectedAgent ? agentLabel(selectedAgent) : agentName;
+    const selectedAgentLabel = selectedAgent ? selectedAgent.name : agentName;
     const filteredAgents = React.useMemo(() => (
         filter ? agents.filter(filter) : agents
     ), [agents, filter]);
@@ -119,7 +118,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                                 }}
                             >
                                 <div className="flex flex-col">
-                                    <span className="typography-meta font-medium">{agentLabel(agent)}</span>
+                                    <span className="typography-meta font-medium">{agent.name}</span>
                                     {agent.description && (
                                         <span className="typography-micro text-muted-foreground">
                                             {agent.description}
@@ -206,7 +205,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                                 className="typography-meta"
                                 onSelect={() => handleAgentChange(agent.name)}
                             >
-                                <span className="font-medium">{agentLabel(agent)}</span>
+                                <span className="font-medium">{agent.name}</span>
                             </DropdownMenuItem>
                         ))}
                     </DropdownMenuContent>

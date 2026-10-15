@@ -42,18 +42,18 @@ export function getDesktopRecoveryConfig(
   switch (variant) {
     case 'local-unavailable':
       return {
-        title: 'Local OpenCode Unavailable',
-        description: 'OpenCode CLI could not be started or is not installed. Install OpenCode or connect to a remote server instead.',
+        title: 'Local Server Unavailable',
+        description: 'The local OpenChamber server could not be started. Retry or connect to a remote server instead.',
         titleKey: 'onboarding.desktopRecovery.localUnavailable.title',
         descriptionKey: 'onboarding.desktopRecovery.localUnavailable.description',
         iconKey: 'local',
         showRetry: true,
         retryLabel: 'Retry Local',
         retryLabelKey: 'onboarding.desktopRecovery.localUnavailable.retry',
-        showUseLocal: true,
+        showUseLocal: false,
         showUseRemote: true,
-        useLocalLabel: 'Set Up Local',
-        useLocalLabelKey: 'onboarding.desktopRecovery.localUnavailable.useLocal',
+        useLocalLabel: 'Use Local',
+        useLocalLabelKey: 'onboarding.desktopRecovery.common.useLocal',
         useRemoteLabel: 'Use Remote',
         useRemoteLabelKey: 'onboarding.desktopRecovery.common.useRemote',
       };

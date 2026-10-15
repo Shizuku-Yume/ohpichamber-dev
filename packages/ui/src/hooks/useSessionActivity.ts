@@ -1,7 +1,6 @@
 import React from 'react';
-import { getLastConversationMessage, isIncompleteAssistantTurn, type Message } from '@/lib/opencode/model';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionStatus, useSessionMessagesSelector, useSessionPermissions, useSessionForms } from '@/sync/sync-context';
+import { useSessionStatus, useSessionPermissions, useSessionForms } from '@/sync/sync-context';
 
 // Mirrors OpenCode SessionStatus: busy|retry|idle.
 type SessionActivityPhase = 'idle' | 'busy' | 'retry';
@@ -13,13 +12,6 @@ export interface SessionActivityResult {
   isCooldown: boolean;
 }
 
-// Only the trailing turn matters, so the subscription re-renders the caller
-// when that flag flips rather than on every streamed message update.
-// Plumbing roles are transparent here: a synthetic or switch message landing
-// after the streaming assistant must not read as the turn ending.
-const selectHasPendingAssistant = (messages: Message[]): boolean => (
-  isIncompleteAssistantTurn(getLastConversationMessage(messages))
-);
 
 const IDLE_RESULT: SessionActivityResult = {
   phase: 'idle',
@@ -38,7 +30,6 @@ const IDLE_RESULT: SessionActivityResult = {
  */
 export function useSessionActivity(sessionId: string | null | undefined, directory?: string): SessionActivityResult {
   const status = useSessionStatus(sessionId ?? '', directory);
-  const hasPendingAssistant = useSessionMessagesSelector(sessionId ?? '', directory, selectHasPendingAssistant);
   const permissions = useSessionPermissions(sessionId ?? '', directory);
   const forms = useSessionForms(sessionId ?? '', directory);
 
@@ -49,13 +40,13 @@ export function useSessionActivity(sessionId: string | null | undefined, directo
     // priority and the send button must remain a send, not a stop).
     if (permissions.length > 0 || forms.length > 0) return IDLE_RESULT;
 
-    const phase: SessionActivityPhase = (status?.type ?? 'idle') as SessionActivityPhase;
+    const phase: SessionActivityPhase = status === 'running' ? 'busy' : 'idle';
 
-    // Only trust the trailing assistant message as a transient fallback while
-    // waiting for session.status/message.updated to settle.
+    // Canonical messages do not expose completion timestamps, so activity is
+    // authoritative only when the runtime status says the session is running.
     const hasAuthoritativeStatus = status !== undefined;
-    const statusWorking = hasAuthoritativeStatus && phase !== 'idle';
-    const isWorking = statusWorking || hasPendingAssistant;
+    const statusWorking = hasAuthoritativeStatus && phase === 'busy';
+    const isWorking = statusWorking;
 
     if (hasAuthoritativeStatus && !statusWorking) return IDLE_RESULT;
 
@@ -64,10 +55,10 @@ export function useSessionActivity(sessionId: string | null | undefined, directo
     return {
       phase: statusWorking ? phase : 'busy',
       isWorking: true,
-      isBusy: phase === 'busy' || (!statusWorking && hasPendingAssistant),
+      isBusy: phase === 'busy',
       isCooldown: false,
     };
-  }, [sessionId, status, hasPendingAssistant, permissions, forms]);
+  }, [sessionId, status, permissions, forms]);
 }
 
 export function useCurrentSessionActivity(): SessionActivityResult {

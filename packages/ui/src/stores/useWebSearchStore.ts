@@ -11,6 +11,7 @@
 import { create } from 'zustand';
 import { z } from 'zod';
 import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import {
   listWebSearchProviders,
   readWebSearchAccess,
@@ -55,7 +56,7 @@ type WebSearchStore = {
   removeKey: (providerId: string) => Promise<boolean>;
 };
 
-const currentDirectory = (): string | null => opencodeClient.getDirectory()?.trim() || null;
+const currentDirectory = (): string | null => hostFilesystem.getDirectory()?.trim() || null;
 
 export const getWebSearchScopeKey = (): string => JSON.stringify([getRuntimeKey(), currentDirectory()]);
 

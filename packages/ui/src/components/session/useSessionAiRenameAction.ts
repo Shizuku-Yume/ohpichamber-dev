@@ -27,10 +27,10 @@ export function useSessionAiRenameAction(sessionID: string, directory: string | 
     setPrepared(undefined);
     void prepare(controller.signal).then(({ session, turns }) => {
       if (controller.signal.aborted) return;
-      const assistant = turns.at(-1)?.assistant;
+      const finalMessage = turns.at(-1)?.assistant;
       if (!turns.length) { setAvailability('empty'); return; }
-      if (!assistant?.providerId || !assistant.modelId) { setAvailability('error'); return; }
-      setPrepared({ sessionId: sessionID, directory, scope: { workspaceId: session.workspaceId, preferred: { providerId: assistant.providerId, modelId: assistant.modelId } } });
+      if (!finalMessage?.providerId || !finalMessage.modelId) { setAvailability('error'); return; }
+      setPrepared({ sessionId: sessionID, directory, scope: { workspaceId: session.workspaceId, preferred: { providerId: finalMessage.providerId, modelId: finalMessage.modelId } } });
       setAvailability('ready');
     }).catch(() => {
       if (!controller.signal.aborted) setAvailability('error');

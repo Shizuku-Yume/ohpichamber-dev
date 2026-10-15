@@ -4,16 +4,14 @@ export const projectTurnIndexes = (turns: TurnRecord[]): TurnProjectionResult =>
     const turnById = new Map<string, TurnRecord>();
     const messageToTurnId = new Map<string, string>();
     const messageMetaById: TurnIndexes['messageMetaById'] = new Map();
-    const groupedMessageIds = new Set<string>();
 
     turns.forEach((turn) => {
         turnById.set(turn.turnId, turn);
 
-        const firstAssistantId = turn.assistantMessages[0]?.info.id;
-        const lastAssistantId = turn.assistantMessages[turn.assistantMessages.length - 1]?.info.id;
+        const firstAssistantId = turn.assistantMessages[0]?.messageId;
+        const lastAssistantId = turn.assistantMessages[turn.assistantMessages.length - 1]?.messageId;
 
         messageToTurnId.set(turn.userMessageId, turn.turnId);
-        groupedMessageIds.add(turn.userMessageId);
         messageMetaById.set(turn.userMessageId, {
             turnId: turn.turnId,
             messageId: turn.userMessageId,
@@ -27,7 +25,6 @@ export const projectTurnIndexes = (turns: TurnRecord[]): TurnProjectionResult =>
 
         turn.assistantMessageIds.forEach((assistantMessageId) => {
             messageToTurnId.set(assistantMessageId, turn.turnId);
-            groupedMessageIds.add(assistantMessageId);
             messageMetaById.set(assistantMessageId, {
                 turnId: turn.turnId,
                 messageId: assistantMessageId,

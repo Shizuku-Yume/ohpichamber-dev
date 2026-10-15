@@ -21,8 +21,8 @@ export const usePermissionFromSubagent = (permission: PermissionRequest): boolea
   const sessions = useSessions(currentSessionDirectory ?? undefined);
   return React.useMemo(() => {
     if (!currentSessionId || permission.sessionID === currentSessionId) return false;
-    const sourceSession = sessions.find((session) => session.id === permission.sessionID);
-    return Boolean(sourceSession?.parentID && sourceSession.parentID === currentSessionId);
+    const sourceSession = sessions.find((session) => session.sessionId === permission.sessionID);
+    return sourceSession?.parentSessionId === currentSessionId;
   }, [permission.sessionID, currentSessionId, sessions]);
 };
 

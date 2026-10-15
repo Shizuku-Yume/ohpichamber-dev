@@ -6,6 +6,7 @@ import type { SessionWorktreeAttachment } from '@/stores/types/sessionTypes';
 import { useSessionDirectory } from '@/sync/sync-context';
 import { getAllSyncSessionMap } from '@/sync/sync-refs';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { getChatsRoot } from '@/lib/chatDirectories';
 import { useChatsRoot } from '@/hooks/useChatsRoot';
 
@@ -107,14 +108,13 @@ export const resolveEffectiveDirectory = (): string | undefined => {
     const sessionUI = useSessionUIStore.getState();
     const currentSessionId = sessionUI.currentSessionId;
     const directoryState = useDirectoryStore.getState();
+    const currentSession = currentSessionId ? getAllSyncSessionMap().get(currentSessionId) : undefined;
 
     return pickEffectiveDirectory({
         currentSessionId,
         newSessionDraft: sessionUI.newSessionDraft,
-        // Same source as useSessionDirectory: the session record's own directory.
-        currentSessionDirectory: currentSessionId
-            ? getAllSyncSessionMap().get(currentSessionId)?.directory
-            : undefined,
+        // Same resolver as useSessionDirectory: derive the filesystem path from canonical identity.
+        currentSessionDirectory: currentSession ? resolveGlobalSessionDirectory(currentSession) ?? undefined : undefined,
         worktreeAttachment: currentSessionId
             ? useSessionWorktreeStore.getState().getAttachment(currentSessionId)
             : undefined,

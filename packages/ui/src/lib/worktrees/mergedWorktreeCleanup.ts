@@ -1,5 +1,6 @@
 import type { GitStatus } from '@/lib/api/types';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { normalizePath } from '@/lib/pathNormalization';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { SourceControlProvider } from '@/lib/source-control/types';
@@ -68,7 +69,7 @@ const sessionsInWorktree = (sessions: readonly Session[], worktreePath: string):
   const root = normalizePath(worktreePath);
   if (!root) return [];
   return sessions.filter((session) => {
-    const directory = normalizePath(session.directory);
+    const directory = normalizePath(resolveGlobalSessionDirectory(session));
     return directory === root || Boolean(directory?.startsWith(`${root}/`));
   });
 };
@@ -109,7 +110,7 @@ export async function runMergedWorktreeCleanup(
     const handled = deps.isHandled(candidate);
     if (handled && !options.recheckKept) continue;
     const sessions = sessionsInWorktree(deps.getActiveSessions(), candidate.worktree.path);
-    const sessionIds = sessions.map((session) => session.id);
+    const sessionIds = sessions.map((session) => session.sessionId);
     // Sessions in a kept worktree mean the work went on there.
     if (handled && sessionIds.length > 0) continue;
 

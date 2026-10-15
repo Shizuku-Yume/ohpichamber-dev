@@ -33,7 +33,7 @@ export function LiveTurnActivity({ turn, hasLaterAssistant, expanded, onToggle, 
     const animateFinalCollapse = settled && !previouslySettled.current;
     React.useLayoutEffect(() => { previouslySettled.current = settled; }, [settled]);
     const finalContext = React.useMemo(() => finalMessage ? {
-        messageId: finalMessage.info.id, expanded: isExpanded, contentId: finalContentId, animateCollapse: animateFinalCollapse,
+        messageId: finalMessage.messageId, expanded: isExpanded, contentId: finalContentId, animateCollapse: animateFinalCollapse,
     } : null, [finalMessage, isExpanded, finalContentId, animateFinalCollapse]);
     // No diff parsing at token frequency. The report is only shown once the
     // turn settles; later authoritative tool metadata can refine it.

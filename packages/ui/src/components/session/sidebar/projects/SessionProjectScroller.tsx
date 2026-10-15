@@ -18,7 +18,7 @@ import { requestDirectoryAccess } from '@/lib/desktop';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
-import { refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
+import { refreshGlobalSessions, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { spaceTakesNoNewSession, useSpacesStore } from '@/lib/spaces/spaces-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { useChildStoreManager } from '@/sync/sync-context';
@@ -165,8 +165,8 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
   const requestArchiveAll = React.useCallback(async (projectLabel: string, groups: SessionGroup[]) => {
     const pinnedIds = useSessionPinnedStore.getState().ids;
     const ids = selectArchiveAllSessionIds(groups, (session) =>
-      isSessionPinned(pinnedIds, session.directory, session.id)
-      || isSessionBusyNow(session.id)
+      isSessionPinned(pinnedIds, resolveGlobalSessionDirectory(session), session.sessionId)
+      || isSessionBusyNow(session.sessionId)
       || isSessionInWork(session));
     if (ids.length === 0) {
       toast.info(t('sessions.sidebar.project.archiveAll.nothing'));
@@ -405,7 +405,7 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
     }
     if (row.kind === 'session') {
       const subtreeContainsEditing = new Set<string>();
-      if (nodeContainsSessionId(row.node, model.state.editingId)) subtreeContainsEditing.add(row.node.session.id);
+      if (nodeContainsSessionId(row.node, model.state.editingId)) subtreeContainsEditing.add(row.node.session.sessionId);
       return <div onFocusCapture={() => setFocusedRowKey(row.key)} onBlurCapture={() => setFocusedRowKey((current) => current === row.key ? null : current)}>
         <SessionTreeItem
           {...model.groupProps}
@@ -417,7 +417,7 @@ function SessionProjectScrollerComponent({ model, view, actions }: Props): React
           setOpenSidebarMenuKey={model.state.setOpenSidebarMenuKey}
           renderExtras={{
             subtreeContainsEditing,
-            menuOpenSessionId: model.state.openSidebarMenuKey === `session-menu:${row.key}` || model.state.openSidebarMenuKey === `session-context:${row.key}` ? row.node.session.id : null,
+            menuOpenSessionId: model.state.openSidebarMenuKey === `session-menu:${row.key}` || model.state.openSidebarMenuKey === `session-context:${row.key}` ? row.node.session.sessionId : null,
             nodeStructureKey: row.blockingBadgeSessionScopes
               ? `${computeNodeStructureKey(row.node)}:${JSON.stringify(row.blockingBadgeSessionScopes)}`
               : computeNodeStructureKey(row.node),

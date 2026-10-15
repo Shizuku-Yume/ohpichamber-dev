@@ -11,7 +11,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': 'Connecting',
     'settings.mcp.grid.status.blockedByPolicy': 'Blocked by policy',
     'settings.mcp.grid.scope.project': 'Project',
-    'settings.mcp.page.back': 'All servers',
+    'settings.mcp.page.back': 'Back to MCP servers',
   },
   nl: {
     'settings.mcp.grid.actionsAria': 'Acties voor {name}',
@@ -24,7 +24,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': 'Verbinden',
     'settings.mcp.grid.status.blockedByPolicy': 'Geblokkeerd door beleid',
     'settings.mcp.grid.scope.project': 'Project',
-    'settings.mcp.page.back': 'Alle servers',
+    'settings.mcp.page.back': 'Terug naar MCP-servers',
   },
   uk: {
     'settings.mcp.grid.actionsAria': 'Дії для {name}',
@@ -37,7 +37,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': 'Підключення',
     'settings.mcp.grid.status.blockedByPolicy': 'Заблоковано політикою',
     'settings.mcp.grid.scope.project': 'Проєкт',
-    'settings.mcp.page.back': 'Усі сервери',
+    'settings.mcp.page.back': 'Назад до MCP-серверів',
   },
   de: {
     'settings.mcp.grid.actionsAria': 'Aktionen für {name}',
@@ -50,7 +50,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': 'Verbindet',
     'settings.mcp.grid.status.blockedByPolicy': 'Durch Richtlinie blockiert',
     'settings.mcp.grid.scope.project': 'Projekt',
-    'settings.mcp.page.back': 'Alle Server',
+    'settings.mcp.page.back': 'Zurück zu MCP-Servern',
   },
   es: {
     'settings.mcp.grid.actionsAria': 'Acciones de {name}',
@@ -63,7 +63,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': 'Conectando',
     'settings.mcp.grid.status.blockedByPolicy': 'Bloqueado por política',
     'settings.mcp.grid.scope.project': 'Proyecto',
-    'settings.mcp.page.back': 'Todos los servidores',
+    'settings.mcp.page.back': 'Volver a servidores MCP',
   },
   fr: {
     'settings.mcp.grid.actionsAria': 'Actions pour {name}',
@@ -76,7 +76,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': 'Connexion',
     'settings.mcp.grid.status.blockedByPolicy': 'Bloqué par une règle',
     'settings.mcp.grid.scope.project': 'Projet',
-    'settings.mcp.page.back': 'Tous les serveurs',
+    'settings.mcp.page.back': 'Retour aux serveurs MCP',
   },
   ja: {
     'settings.mcp.grid.actionsAria': '{name} の操作',
@@ -89,7 +89,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': '接続中',
     'settings.mcp.grid.status.blockedByPolicy': 'ポリシーでブロック',
     'settings.mcp.grid.scope.project': 'プロジェクト',
-    'settings.mcp.page.back': 'すべてのサーバー',
+    'settings.mcp.page.back': 'MCP サーバーに戻る',
   },
   ko: {
     'settings.mcp.grid.actionsAria': '{name} 작업',
@@ -102,7 +102,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': '연결 중',
     'settings.mcp.grid.status.blockedByPolicy': '정책으로 차단됨',
     'settings.mcp.grid.scope.project': '프로젝트',
-    'settings.mcp.page.back': '모든 서버',
+    'settings.mcp.page.back': 'MCP 서버로 돌아가기',
   },
   pl: {
     'settings.mcp.grid.actionsAria': 'Działania dla {name}',
@@ -115,7 +115,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': 'Łączenie',
     'settings.mcp.grid.status.blockedByPolicy': 'Zablokowane przez zasadę',
     'settings.mcp.grid.scope.project': 'Projekt',
-    'settings.mcp.page.back': 'Wszystkie serwery',
+    'settings.mcp.page.back': 'Wróć do serwerów MCP',
   },
   'pt-BR': {
     'settings.mcp.grid.actionsAria': 'Ações para {name}',
@@ -128,7 +128,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': 'Conectando',
     'settings.mcp.grid.status.blockedByPolicy': 'Bloqueado por política',
     'settings.mcp.grid.scope.project': 'Projeto',
-    'settings.mcp.page.back': 'Todos os servidores',
+    'settings.mcp.page.back': 'Voltar aos servidores MCP',
   },
   tr: {
     'settings.mcp.grid.actionsAria': '{name} için işlemler',
@@ -141,7 +141,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': 'Bağlanıyor',
     'settings.mcp.grid.status.blockedByPolicy': 'İlkeyle engellendi',
     'settings.mcp.grid.scope.project': 'Proje',
-    'settings.mcp.page.back': 'Tüm sunucular',
+    'settings.mcp.page.back': 'MCP sunucularına dön',
   },
   'zh-CN': {
     'settings.mcp.grid.actionsAria': '{name} 的操作',
@@ -154,7 +154,7 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': '连接中',
     'settings.mcp.grid.status.blockedByPolicy': '已被策略阻止',
     'settings.mcp.grid.scope.project': '项目',
-    'settings.mcp.page.back': '所有服务器',
+    'settings.mcp.page.back': '返回 MCP 服务器',
   },
   'zh-TW': {
     'settings.mcp.grid.actionsAria': '{name} 的操作',
@@ -167,6 +167,6 @@ export const mcpGridI18n = {
     'settings.mcp.grid.status.pending': '連線中',
     'settings.mcp.grid.status.blockedByPolicy': '已被原則封鎖',
     'settings.mcp.grid.scope.project': '專案',
-    'settings.mcp.page.back': '所有伺服器',
+    'settings.mcp.page.back': '返回 MCP 伺服器',
   },
 } as const;

@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { SessionGroup } from '../types';
 
 /**
@@ -15,9 +15,9 @@ export const selectArchiveAllSessionIds = (
     if (group.isArchivedBucket) continue;
     for (const node of group.sessions) {
       const { session } = node;
-      if (session.time?.archived) continue;
+      if (session.archivedAt !== undefined) continue;
       if (isKept(session)) continue;
-      ids.add(session.id);
+      ids.add(session.sessionId);
     }
   }
   return [...ids];

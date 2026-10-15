@@ -11,7 +11,6 @@ import { GitSettings } from './GitSettings';
 import { NotificationSettings } from './NotificationSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { TunnelSettings } from './TunnelSettings';
-import { OpenCodeCliSettings } from './OpenCodeCliSettings';
 import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
 import { IsolatedSpacesSettings } from './IsolatedSpacesSettings';
 import { ISOLATED_SPACES_RELEASED } from '@/lib/spaces/release';
@@ -56,7 +55,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                 <DefaultsSettings key={runtimeEndpointEpoch} />
                 <SessionWorkSettings />
                 {showDesktopNetworkSettings && <DesktopNetworkSettings />}
-                <OpenCodeCliSettings />
                 <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />
                 <OpenChamberToolsSettings />
                 <SessionRetentionSettings />
@@ -141,7 +139,7 @@ const ShortcutsSectionContent: React.FC = () => {
 };
 
 // General section: app-level settings — startup/tray/network, access password,
-// passkeys, OpenCode CLI binary, message stream transport, privacy.
+// passkeys, message stream transport, privacy.
 const GeneralSectionContent: React.FC = () => {
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
     const showDesktopNetworkSettings = isDesktopShell() && isDesktopLocalOriginActive();
@@ -153,7 +151,6 @@ const GeneralSectionContent: React.FC = () => {
             {showDesktopNetworkSettings && <DesktopNetworkSettings />}
             {showPasskeySettings && <PasskeySettings />}
             <AppLinkSecuritySettings />
-            <OpenCodeCliSettings />
             {/* Remounts on a runtime switch: the names come from that server. */}
             <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />
             <OpenChamberToolsSettings />

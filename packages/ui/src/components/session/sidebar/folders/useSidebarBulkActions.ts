@@ -8,7 +8,7 @@ import type { SessionFolder } from '@/stores/useSessionFoldersStore';
 import { deriveSessionRowBulkSelectAll, deriveSessionRowSelectionArchived, useSessionRowOrderRegistry } from '../sessions/sessionRowOrder';
 import type { BulkDeleteSessionsConfirmState } from '../shell/ConfirmDialogs';
 
-const EMPTY_SESSIONS_BY_ID = new Map<string, { time?: { archived?: number | null } }>();
+const EMPTY_SESSIONS_BY_ID = new Map<string, { archivedAt?: number }>();
 
 type Args = {
   isInlineEditing: boolean;
@@ -43,7 +43,7 @@ export const resolveSelectionFolderScopes = (
 
 export const resolveBulkDeleteConfirmation = (
   value: NonNullable<BulkDeleteSessionsConfirmState>,
-  sessionsById: ReadonlyMap<string, { time?: { archived?: number | null } }>,
+  sessionsById: ReadonlyMap<string, { archivedAt?: number }>,
 ): { ready: true; value: NonNullable<BulkDeleteSessionsConfirmState> }
   | { ready: false; value: NonNullable<BulkDeleteSessionsConfirmState> | null } => {
   const sessionIds = value.sessionIds.filter((id) => sessionsById.has(id));

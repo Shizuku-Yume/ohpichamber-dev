@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { z } from "zod";
-import type { Session } from "@/lib/opencode/model";
+import type { Session } from '@openchamber/agent-contract';
 import {
     permissionPolicyWireSchema,
     policySnapshotFromWire,
@@ -14,7 +14,7 @@ import { getAllSyncSessionMap } from "@/sync/sync-refs";
 import { runtimeFetch } from "@/lib/runtime-fetch";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
 import { useSessionUIStore } from "@/sync/session-ui-store";
-import { opencodeClient } from "@/lib/opencode/client";
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { getRuntimeKey } from "@/lib/runtime-switch";
 
 interface PermissionStore {
@@ -51,7 +51,7 @@ const putSessionMode = (sessionId: string, mode: PermissionMode, directory?: str
 );
 
 const modeOf = (modes: PermissionModeMap, sessionById: ReadonlyMap<string, Session>, sessionId: string) =>
-    resolvePermissionMode({ modes, sessions: [], sessionById, sessionID: sessionId });
+    resolvePermissionMode({ modes, sessions: [], sessionById, sessionId });
 
 type PermissionOperation = { generation: number; runtimeKey: string; sequence: number };
 let generation = 0;
@@ -151,7 +151,7 @@ export const usePermissionStore = create<PermissionStore>()(persist((set, get) =
         set({ saving: true });
         try {
             const directory = useSessionUIStore.getState().getDirectoryForSession(sessionId)
-                ?? opencodeClient.getDirectory()
+                ?? useDirectoryStore.getState().currentDirectory
                 ?? undefined;
             const snapshot = await putSessionMode(sessionId, mode, directory);
             if (!isCurrentOperation(operation)) return;

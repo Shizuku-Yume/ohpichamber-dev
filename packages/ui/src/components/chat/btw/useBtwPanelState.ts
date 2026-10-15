@@ -1,13 +1,13 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { useSyncRuntime } from '@/sync/sync-context';
 import { findLiveSession } from '@/sync/live-aggregate';
-import { getBtwBoundaryMessageID, getBtwSessionID, wasPromotedBtwSession } from '@/lib/sessionBtwMetadata';
+import { getBtwBoundaryMessageID, getBtwSessionID } from '@/lib/sessionBtwMetadata';
 import { useBtwStore } from '@/stores/useBtwStore';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+import { subscribeWorkspaceDirectories } from '@/stores/globalSessions';
 
 export type BtwPanelState = {
-  /** The session the composer is in was promoted out of `/btw`. */
-  parentPromoted: boolean;
   /** The active fork for this parent, or null when no panel should exist. */
   btwSessionId: string | null;
   /** The fork's directory identity (may be canonicalized by the server). */
@@ -38,32 +38,33 @@ function useLiveSessionValue<T extends string | boolean | null>(
     if (!sessionID) return read(undefined);
     if (directory) {
       const sessions = childStores.getChild(directory)?.getState().session;
-      return read(sessions?.find((session) => session.id === sessionID));
+      return read(sessions?.find((session) => session.sessionId === sessionID));
     }
     const states = Array.from(childStores.children.values(), (store) => store.getState());
     return read(findLiveSession(states, sessionID));
   }, [childStores, directory, read, sessionID]);
 
   const subscribe = React.useCallback((notify: () => void) => {
-    if (directory) {
-      return childStores.ensureChild(directory, { bootstrap: false }).subscribe((state, previous) => {
+    const unsubscribeDirectory = subscribeWorkspaceDirectories(notify);
+    const unsubscribeSession = directory
+      ? childStores.ensureChild(directory, { bootstrap: false }).subscribe((state, previous) => {
         if (state.session !== previous.session) notify();
-      });
-    }
-    return childStores.subscribeAllSelected((state) => state.session, notify);
+      })
+      : childStores.subscribeAllSelected((state) => state.session, notify);
+    return () => {
+      unsubscribeDirectory();
+      unsubscribeSession();
+    };
   }, [childStores, directory]);
 
   return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 const readBtwSessionID = (session: Session | undefined): string | null => getBtwSessionID(session);
-const readPromoted = (session: Session | undefined): boolean => wasPromotedBtwSession(session);
 const readExists = (session: Session | undefined): boolean => Boolean(session);
 const readBoundaryMessageID = (session: Session | undefined): string | null => getBtwBoundaryMessageID(session);
-// SAFETY: the SDK Session type omits the server's `directory` field; this
-// widening only reads it, and a missing value falls back to the parent's.
 const readServerDirectory = (session: Session | undefined): string | null =>
-  (session as (Session & { directory?: string | null }) | undefined)?.directory ?? null;
+  session ? resolveGlobalSessionDirectory(session) : null;
 
 /**
  * Derive the `/btw` panel identity for one parent session from authoritative
@@ -79,7 +80,6 @@ export function useBtwPanelState(
   directory: string | undefined,
 ): BtwPanelState {
   const linkedBtwSessionId = useLiveSessionValue(parentSessionId, directory, readBtwSessionID);
-  const parentPromoted = useLiveSessionValue(parentSessionId, directory, readPromoted);
   const btwSessionExists = useLiveSessionValue(linkedBtwSessionId, directory, readExists);
   const btwServerDirectory = useLiveSessionValue(linkedBtwSessionId, directory, readServerDirectory);
   const btwBoundaryMessageID = useLiveSessionValue(linkedBtwSessionId, directory, readBoundaryMessageID);
@@ -95,15 +95,14 @@ export function useBtwPanelState(
   const creating = Boolean(uiState?.creating);
   const pending = Boolean(uiState?.pending);
   const btwSessionId = btwSessionExists && !destroying ? linkedBtwSessionId : null;
-  const btwDirectory = btwSessionId ? btwServerDirectory ?? directory ?? null : null;
+  const btwDirectory = btwSessionId ? btwServerDirectory : null;
   const boundaryMessageID = btwSessionId ? btwBoundaryMessageID : null;
   return React.useMemo(() => ({
-    parentPromoted,
     btwSessionId,
     btwDirectory,
     boundaryMessageID,
     collapsed,
     creating,
     pending,
-  }), [boundaryMessageID, btwDirectory, btwSessionId, collapsed, creating, parentPromoted, pending]);
+  }), [boundaryMessageID, btwDirectory, btwSessionId, collapsed, creating, pending]);
 }

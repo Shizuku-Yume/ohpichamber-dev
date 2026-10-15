@@ -3,7 +3,7 @@ import { useTrackedIssueStates, useTrackedLinearStates } from '@/stores/useTrack
 import { githubThread, gitlabThread, linearIssue } from '@/lib/trackedItems/fromLinks';
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 // Archived buckets routinely grow into the hundreds/thousands; virtualize
 // when we cross this row count so the DOM stays bounded.
@@ -155,7 +155,7 @@ const groupHasSessionOrderChange = (
   nextSessionOrderIndex: Map<string, number>,
 ): boolean => {
   const visit = (node: SessionNode): boolean => {
-    const sessionId = node.session.id;
+    const sessionId = node.session.sessionId;
     if (prevSessionOrderIndex.get(sessionId) !== nextSessionOrderIndex.get(sessionId)) return true;
     return node.children.some(visit);
   };
@@ -169,7 +169,7 @@ const groupHasExpansionMembershipChange = (
 ): boolean => {
   const bucketTag = group.isArchivedBucket ? 'archived' : 'active';
   const visit = (node: SessionNode): boolean => {
-    const key = `project:${bucketTag}:${node.session.id}`;
+    const key = `project:${bucketTag}:${node.session.sessionId}`;
     if (prevExpandedParents.has(key) !== nextExpandedParents.has(key)) return true;
     return node.children.some(visit);
   };
@@ -358,8 +358,8 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
   const [deleteFolderConfirm, setDeleteFolderConfirm] = React.useState<DeleteFolderConfirm>(null);
   const compareSessionNodes = React.useCallback((a: SessionNode, b: SessionNode) => {
-    const aIndex = sessionOrderIndex.get(a.session.id);
-    const bIndex = sessionOrderIndex.get(b.session.id);
+    const aIndex = sessionOrderIndex.get(a.session.sessionId);
+    const bIndex = sessionOrderIndex.get(b.session.sessionId);
     if (aIndex !== undefined || bIndex !== undefined) {
       if (aIndex === undefined) return 1;
       if (bIndex === undefined) return -1;
@@ -478,7 +478,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
     const map = new Map<string, SessionNode>();
     const collectNodeLookup = (nodes: SessionNode[]) => {
       nodes.forEach((node) => {
-        map.set(node.session.id, node);
+        map.set(node.session.sessionId, node);
         if (node.children.length > 0) {
           collectNodeLookup(node.children);
         }
@@ -513,7 +513,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
   const effectiveOpenMenuKey = openSidebarMenuKey;
 
   const sessionIdsInFolders = React.useMemo(() => new Set(allFoldersForGroup.flatMap((f) => f.folder.sessionIds)), [allFoldersForGroup]);
-  const ungroupedSessions = React.useMemo(() => sourceGroupNodes.filter((node) => !sessionIdsInFolders.has(node.session.id)), [sourceGroupNodes, sessionIdsInFolders]);
+  const ungroupedSessions = React.useMemo(() => sourceGroupNodes.filter((node) => !sessionIdsInFolders.has(node.session.sessionId)), [sourceGroupNodes, sessionIdsInFolders]);
   const rootFolders = React.useMemo(() => {
     const entryById = new Map(allFoldersForGroup.map((entry) => [entry.folder.id, entry]));
     return normalizeFolderRoots(allFoldersForGroup.map((entry) => entry.folder))
@@ -810,7 +810,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
             archivedBucket={group.isArchivedBucket === true}
           >
             {nodes.map((node) => <SessionTreeItem
-              key={node.session.id}
+              key={node.session.sessionId}
               node={node}
               pinnedSessionIds={pinnedSessionIds}
               expandedParents={expandedParents}
@@ -965,7 +965,7 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
   ) : null;
 
   const renderSessionNode = (node: SessionNode): React.ReactNode => <SessionTreeItem
-    key={node.session.id}
+    key={node.session.sessionId}
     node={node}
     pinnedSessionIds={pinnedSessionIds}
     expandedParents={expandedParents}

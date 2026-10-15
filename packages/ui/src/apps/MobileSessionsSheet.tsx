@@ -12,7 +12,7 @@ import {
   RiEdit2Line,
   RiFolderAddLine,
 } from '@remixicon/react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import {
   DndContext,
   type DragEndEvent,
@@ -74,7 +74,6 @@ import {
 } from '@/sync/session-ordering';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllLiveSessions } from '@/sync/sync-context';
-import { useGlobalSyncStore } from '@/sync/global-sync-store';
 import { useSessionUnseenCount } from '@/sync/notification-store';
 import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
@@ -232,7 +231,7 @@ const findExactWorktreeMatch = (project: ProjectMeta, normalizedDirectory: strin
 );
 
 const sessionMatchesQuery = (session: Session, projectLabel: string, query: string): boolean =>
-  matchesRankQuery([session.title, session.id, getSessionDirectory(session), projectLabel], query);
+  matchesRankQuery([session.metadata?.title ?? '', session.sessionId, getSessionDirectory(session), projectLabel], query);
 
 // Worktree buckets render inside a map, so the removal subscription lives here.
 const WorktreeRemovalScope: React.FC<{
@@ -356,24 +355,24 @@ const SessionRow: React.FC<{
 }) => {
   const { t } = useI18n();
   const time = formatRelativeShort(getSessionTimestamp(session));
-  const title = session.title?.trim() || t('mobile.sessions.untitled');
+  const title = session.metadata?.title?.trim() || t('mobile.sessions.untitled');
   const swipeEnabled = Boolean(onRevealedChange && onArchive);
-  const aiRename = useSessionAiRenameAction(session.id, session.directory, swipeEnabled && (revealed || renaming));
+  const aiRename = useSessionAiRenameAction(session.sessionId, getSessionDirectory(session), swipeEnabled && (revealed || renaming));
   // Live indicators, same conventions as the desktop sidebar: busy/retry →
   // spinner; unseen activity on a non-active row → attention dot.
-  const unseenCount = useSessionUnseenCount(session.id);
-  const turnActivity = useSessionTurnActivity(session.id);
+  const unseenCount = useSessionUnseenCount(session.sessionId);
+  const turnActivity = useSessionTurnActivity(session.sessionId);
   const isStreaming = turnActivity !== null;
   const showUnreadDot = !isStreaming && unseenCount > 0 && !active;
-  const hasActivityDuration = useHasSessionActivityDuration(session.id, isStreaming);
+  const hasActivityDuration = useHasSessionActivityDuration(session.sessionId, isStreaming);
   const showActivityDuration = (isStreaming || showUnreadDot) && hasActivityDuration;
   // Jev thinks this work looks finished: the same quiet check the sidebar shows.
   const showDoneHint = Boolean(work?.inWork) && !isStreaming && isDoneSuggested(session);
   // A collapsed row stands for its hidden subsessions too; an expanded one
   // leaves their requests to their own rows.
   const familyIds = React.useMemo(
-    () => (descendantIdsOf && !(hasChildren && expanded) ? [session.id, ...descendantIdsOf(session.id)] : [session.id]),
-    [descendantIdsOf, expanded, hasChildren, session.id],
+    () => (descendantIdsOf && !(hasChildren && expanded) ? [session.sessionId, ...descendantIdsOf(session.sessionId)] : [session.sessionId]),
+    [descendantIdsOf, expanded, hasChildren, session.sessionId],
   );
   const pendingRequests = usePendingRequestCounts(familyIds);
 
@@ -471,7 +470,7 @@ const SessionRow: React.FC<{
                 hands it back to the relative timestamp. */}
             {showActivityDuration ? (
               <SessionActivityDuration
-                sessionId={session.id}
+                sessionId={session.sessionId}
                 running={isStreaming}
                 className="typography-micro"
               />
@@ -518,7 +517,7 @@ const SessionRow: React.FC<{
       )}
       actions={(
         <MobileSessionRowActions
-          sessionId={session.id}
+          sessionId={session.sessionId}
           title={title}
           revealed={revealed}
           confirmingDelete={confirmingDelete}
@@ -765,7 +764,6 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     [presented],
   ));
   const projects = useProjectsStore((state) => state.projects);
-  const authoritativeProjects = useGlobalSyncStore((state) => state.projects);
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
@@ -959,17 +957,17 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
    */
   const sessions = React.useMemo(() => {
     const merged = [...globalActiveSessions];
-    const seenIds = new Set(merged.map((session) => session.id));
+    const seenIds = new Set(merged.map((session) => session.sessionId));
     for (const session of liveSessions) {
-      if (seenIds.has(session.id)) continue;
-      seenIds.add(session.id);
+      if (seenIds.has(session.sessionId)) continue;
+      seenIds.add(session.sessionId);
       merged.push(session);
     }
     // Archived sessions never show in this list (they have the Archive page,
     // opened from the footer): a live record can carry one for the active
     // directory, and it'd otherwise surface in search and then "disappear"
     // once the lists catch up.
-    return merged.filter((session) => !session.time?.archived);
+    return merged.filter((session) => session.archivedAt === undefined);
   }, [globalActiveSessions, liveSessions]);
 
   // Archive and delete take a session's subagents with it. Lineage is resolved
@@ -1010,17 +1008,17 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     if (!sessionWorkEnabled) return ids;
     for (const session of sessions) {
       if (getParentId(session) || isChatDirectoryPath(getSessionDirectory(session)) || !isSessionInWork(session)) continue;
-      ids.add(session.id);
-      for (const id of getDescendantIds(childrenBySessionId, session.id)) ids.add(id);
+      ids.add(session.sessionId);
+      for (const id of getDescendantIds(childrenBySessionId, session.sessionId)) ids.add(id);
     }
     return ids;
   }, [childrenBySessionId, sessionWorkEnabled, sessions]);
   const sectionProjectSessions = React.useMemo(
-    () => (workSessionIds.size > 0 ? projectSessions.filter((session) => !workSessionIds.has(session.id)) : projectSessions),
+    () => (workSessionIds.size > 0 ? projectSessions.filter((session) => !workSessionIds.has(session.sessionId)) : projectSessions),
     [projectSessions, workSessionIds],
   );
   const sectionChatSessions = React.useMemo(
-    () => (workSessionIds.size > 0 ? chatSessions.filter((session) => !workSessionIds.has(session.id)) : chatSessions),
+    () => (workSessionIds.size > 0 ? chatSessions.filter((session) => !workSessionIds.has(session.sessionId)) : chatSessions),
     [chatSessions, workSessionIds],
   );
   // `sessionWorkKeepInGroup` keeps a session in work under its project group too.
@@ -1038,23 +1036,22 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     projectsMeta.map((project) => ({ id: project.id, normalizedPath: project.path })),
     new Map(projectsMeta.map((project) => [project.path, project.worktrees])),
     [],
-    authoritativeProjects,
     spaceList,
-  ), [authoritativeProjects, projectSessions, projectsMeta, spaceList]);
+  ), [projectSessions, projectsMeta, spaceList]);
   // Multi-runs render as one row that opens their overview; their lanes list
   // under the project root instead of each lane's worktree, like the sidebar.
   const runIndex = React.useMemo(() => buildMultiRunIndex(projectSessions, (session) => {
-    const owner = sessionOwnership.bySessionId.get(session.id);
+    const owner = sessionOwnership.bySessionId.get(session.sessionId);
     const project = owner ? projectsMeta.find((entry) => entry.id === owner.projectId) : undefined;
     return project?.path || normalizePath(getSessionDirectory(session)) || null;
   }), [projectSessions, projectsMeta, sessionOwnership]);
   // Each run's members with their subsessions: a run row's activity dot is
   // the combined state of everything the run holds, as on the sidebar.
   const runLaneNodesByKey = React.useMemo(() => {
-    const sessionById = new Map(sessions.map((session) => [session.id, session]));
+    const sessionById = new Map(sessions.map((session) => [session.sessionId, session]));
     const toNode = (session: Session): SessionNode => ({
       session,
-      children: (childrenBySessionId.get(session.id) ?? []).map(toNode),
+      children: (childrenBySessionId.get(session.sessionId) ?? []).map(toNode),
       worktree: null,
     });
     const nodes = new Map<string, SessionNode[]>();
@@ -1078,8 +1075,8 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   // "pinned chats always show" rule needs the plain ids of the pinned ones.
   const pinnedChatIds = React.useMemo(() => new Set(
     chatsBucket.sessions
-      .filter((session) => isSessionPinned(pinnedSessionIds, getSessionDirectory(session) || null, session.id))
-      .map((session) => session.id),
+      .filter((session) => isSessionPinned(pinnedSessionIds, getSessionDirectory(session) || null, session.sessionId))
+      .map((session) => session.sessionId),
   ), [chatsBucket, pinnedSessionIds]);
   const workBucket = React.useMemo<WorktreeBucket>(() => ({
     key: WORK_SECTION_ID,
@@ -1088,7 +1085,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     worktree: null,
     space: null,
     sessions: workSessionIds.size > 0
-      ? orderSessionsByLifecycleScopes(sessions.filter((session) => workSessionIds.has(session.id)), pinnedSessionIds, sessionOrderRanks)
+      ? orderSessionsByLifecycleScopes(sessions.filter((session) => workSessionIds.has(session.sessionId)), pinnedSessionIds, sessionOrderRanks)
       : [],
   }), [pinnedSessionIds, sessionOrderRanks, sessions, workSessionIds]);
   // Recent, the grouped view's optional cross-project section: the desktop's
@@ -1110,8 +1107,8 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const recentBucket = React.useMemo<WorktreeBucket>(() => {
     const ids = new Set<string>();
     for (const root of recentRoots) {
-      ids.add(root.id);
-      for (const id of getDescendantIds(childrenBySessionId, root.id)) ids.add(id);
+      ids.add(root.sessionId);
+      for (const id of getDescendantIds(childrenBySessionId, root.sessionId)) ids.add(id);
     }
     return {
       key: RECENT_SECTION_ID,
@@ -1120,7 +1117,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       worktree: null,
       space: null,
       sessions: ids.size > 0
-        ? orderSessionsByLifecycleScopes(sectionProjectSessions.filter((session) => ids.has(session.id)), pinnedSessionIds, sessionOrderRanks)
+        ? orderSessionsByLifecycleScopes(sectionProjectSessions.filter((session) => ids.has(session.sessionId)), pinnedSessionIds, sessionOrderRanks)
         : [],
     };
   }, [childrenBySessionId, pinnedSessionIds, recentRoots, sectionProjectSessions, sessionOrderRanks]);
@@ -1205,7 +1202,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     }
 
     for (const session of projectTreeSessions) {
-      const owner = sessionOwnership.bySessionId.get(session.id);
+      const owner = sessionOwnership.bySessionId.get(session.sessionId);
       if (!owner) continue;
       const node = nodes.find((entry) => entry.project.id === owner.projectId);
       if (!node) continue;
@@ -1214,7 +1211,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       const space = owner.kind === 'space' && owner.spaceId ? spaces.get(owner.spaceId) ?? null : null;
       const bucket = space
         ? ensureBucket(node, owner.scopeDirectory, null, space)
-        : matchedWorktree && !runIndex.runKeyBySessionId.has(session.id)
+        : matchedWorktree && !runIndex.runKeyBySessionId.has(session.sessionId)
           ? ensureBucket(node, matchedWorktree.path, matchedWorktree)
           : ensureBucket(node, node.project.path, null);
       bucket.sessions.push(session);
@@ -1303,7 +1300,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
 
     // Group children by parent within this bucket, and treat sessions whose parent
     // is not in this bucket as top-level so nothing is hidden.
-    const idsInBucket = new Set(bucket.sessions.map((entry) => entry.id));
+    const idsInBucket = new Set(bucket.sessions.map((entry) => entry.sessionId));
     const childrenByParent = new Map<string, Session[]>();
     for (const candidate of bucket.sessions) {
       const parentId = getParentId(candidate);
@@ -1322,7 +1319,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     type RootEntry = { kind: 'session'; session: Session } | { kind: 'run'; run: MultiRunSummary };
     const listedRuns = new Set<string>();
     const rootEntries = roots.flatMap((entry): RootEntry[] => {
-      const runKey = runIndex.runKeyBySessionId.get(entry.id);
+      const runKey = runIndex.runKeyBySessionId.get(entry.sessionId);
       const run = runKey ? runIndex.runs.get(runKey) : undefined;
       if (!run) return [{ kind: 'session', session: entry }];
       if (listedRuns.has(run.key)) return [];
@@ -1330,7 +1327,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       return [{ kind: 'run', run }];
     });
     // Pinned roots stay on screen whatever the page is, and do not consume it.
-    const isAlwaysVisible = (entry: RootEntry): boolean => entry.kind === 'session' && Boolean(alwaysVisibleIds?.has(entry.session.id));
+    const isAlwaysVisible = (entry: RootEntry): boolean => entry.kind === 'session' && Boolean(alwaysVisibleIds?.has(entry.session.sessionId));
     const alwaysVisibleRoots = alwaysVisibleIds ? rootEntries.filter(isAlwaysVisible) : [];
     const pagedRoots = alwaysVisibleIds ? rootEntries.filter((entry) => !isAlwaysVisible(entry)) : rootEntries;
     const visibleCount = visibleCountByBucket.get(bucketKey) ?? pageSize;
@@ -1340,31 +1337,31 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     const canShowFewer = pagedRoots.length > pageSize && remaining === 0;
 
     const renderNode = (session: Session, rowIndent: number): React.ReactNode => {
-      const children = childrenByParent.get(session.id) ?? [];
+      const children = childrenByParent.get(session.sessionId) ?? [];
       const hasChildren = children.length > 0;
-      const expanded = Boolean(expandedParents[session.id]);
+      const expanded = Boolean(expandedParents[session.sessionId]);
       const isRoot = rowIndent === indent;
       return (
-        <React.Fragment key={session.id}>
+        <React.Fragment key={session.sessionId}>
           <SessionRow
             session={session}
-            active={currentSessionId === session.id}
+            active={currentSessionId === session.sessionId}
             indent={rowIndent}
             contextLabel={isRoot ? options?.rootContextLabel?.(session) : undefined}
             hasChildren={hasChildren}
             expanded={expanded}
-            onToggleChildren={hasChildren ? () => toggleParent(session.id) : undefined}
+            onToggleChildren={hasChildren ? () => toggleParent(session.sessionId) : undefined}
             onSelect={() => handleSelectSession(session)}
             statusOnRight={options?.statusOnRight}
-            revealed={revealedSessionId === session.id}
-            onRevealedChange={(nextRevealed) => handleRowRevealedChange(session.id, nextRevealed)}
-            confirmingDelete={confirmingDeleteSessionId === session.id}
+            revealed={revealedSessionId === session.sessionId}
+            onRevealedChange={(nextRevealed) => handleRowRevealedChange(session.sessionId, nextRevealed)}
+            confirmingDelete={confirmingDeleteSessionId === session.sessionId}
             onArchive={() => void handleArchive(session)}
-            onRequestDelete={() => setConfirmingDeleteSessionId(session.id)}
+            onRequestDelete={() => setConfirmingDeleteSessionId(session.sessionId)}
             onConfirmDelete={() => void handleConfirmDelete(session)}
-            renaming={renamingSessionId === session.id}
-            onRequestRename={() => handleRequestRename(session.id)}
-            onSubmitRename={(nextTitle) => void handleSubmitRename(session.id, nextTitle)}
+            renaming={renamingSessionId === session.sessionId}
+            onRequestRename={() => handleRequestRename(session.sessionId)}
+            onSubmitRename={(nextTitle) => void handleSubmitRename(session.sessionId, nextTitle)}
             onCancelRename={() => setRenamingSessionId(null)}
             work={workActionFor(session)}
             pin={pinActionFor(session)}
@@ -1409,7 +1406,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     // Switching session switches the working directory (handled by
     // setCurrentSession) — also move the active project so the rest of the app
     // and the active highlight follow the selected session, not just the draft.
-    const owner = sessionOwnership.bySessionId.get(session.id);
+    const owner = sessionOwnership.bySessionId.get(session.sessionId);
     const project = owner ? projectsMeta.find((candidate) => candidate.id === owner.projectId) ?? null : null;
     if (project) {
       setActiveProjectIdOnly(project.id);
@@ -1420,7 +1417,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
       const worktree = findExactWorktreeMatch(project, owner?.scopeDirectory ?? '');
       if (worktree) setWorktreeExpanded(`${project.id}::${normalizePath(worktree.path)}`, true);
     }
-    void setCurrentSession(session.id, directory);
+    void setCurrentSession(session.sessionId, directory);
     onOpenChange(false);
   };
 
@@ -1447,7 +1444,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     return runSessionSubtreeAction(
       action,
       session,
-      collectSessionSubtreeIds(session.id, getDescendantIds(childrenBySessionId, session.id), action === 'delete'),
+      collectSessionSubtreeIds(session.sessionId, getDescendantIds(childrenBySessionId, session.sessionId), action === 'delete'),
       { archiveSession, archiveSessions, deleteSession, deleteSessions },
       t,
     );
@@ -1457,7 +1454,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
 
   const handleToggleWork = async (session: Session, inWork: boolean) => {
     try {
-      await setSessionWorkState(session.id, getSessionDirectory(session) || null, inWork ? 'done' : 'open');
+      await setSessionWorkState(session.sessionId, getSessionDirectory(session) || null, inWork ? 'done' : 'open');
     } catch {
       toast.error(t('sessions.sidebar.session.work.updateFailed'));
     }
@@ -1466,17 +1463,17 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   /** Track / Done for a top-level row while the feature is on. */
   const workActionFor = (session: Session): MobileSessionWorkAction | undefined => {
     if (!sessionWorkEnabled || getParentId(session) || isChatDirectoryPath(getSessionDirectory(session))) return undefined;
-    const inWork = workSessionIds.has(session.id);
+    const inWork = workSessionIds.has(session.sessionId);
     return { inWork, onToggle: () => { void handleToggleWork(session, inWork); } };
   };
 
   const isPinned = (session: Session): boolean => (
-    isSessionPinned(pinnedSessionIds, getSessionDirectory(session) || null, session.id)
+    isSessionPinned(pinnedSessionIds, getSessionDirectory(session) || null, session.sessionId)
   );
 
   const handleTogglePin = (session: Session) => {
     const directory = getSessionDirectory(session);
-    if (directory) togglePinnedSession({ directory, sessionId: session.id });
+    if (directory) togglePinnedSession({ directory, sessionId: session.sessionId });
   };
 
   /** Pin / Unpin for a top-level row, the same local pin the desktop menu sets. */
@@ -1565,7 +1562,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     (session: Session): string => {
       const directory = getSessionDirectory(session);
       if (isChatDirectoryPath(directory)) return t('mobile.sessions.section.chats');
-      const owner = sessionOwnership.bySessionId.get(session.id);
+      const owner = sessionOwnership.bySessionId.get(session.sessionId);
       const project = owner ? projectsMeta.find((candidate) => candidate.id === owner.projectId) ?? null : null;
       if (!project) return getProjectLabel(directory) || directory;
       const space = owner?.kind === 'space' && owner.spaceId ? spaces.get(owner.spaceId) : undefined;
@@ -1613,7 +1610,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
         // Subsessions are implementation noise in a flat search list — only
         // top-level sessions are searchable.
         if (getParentId(session)) return false;
-        const owner = sessionOwnership.bySessionId.get(session.id);
+        const owner = sessionOwnership.bySessionId.get(session.sessionId);
         const project = owner ? projectsMeta.find((candidate) => candidate.id === owner.projectId) ?? null : null;
         return sessionMatchesQuery(session, project?.label ?? '', normalizedQuery);
       }),
@@ -1660,10 +1657,10 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
     });
     for (const session of projectSessions) {
       if (getParentId(session)) continue;
-      const location = locations.get(session.id);
+      const location = locations.get(session.sessionId);
       const project = location ? projectsMeta.find((candidate) => candidate.id === location.projectId) : null;
       if (!project || !location) continue;
-      contexts.set(session.id, { project, branch: location.branchLabel, inSpace: location.inSpace });
+      contexts.set(session.sessionId, { project, branch: location.branchLabel, inSpace: location.inSpace });
     }
     return contexts;
   }, [gitBranchesByDirectory, projectSessions, projectsMeta, sessionOwnership, spaceLabelById, timelineActive]);
@@ -1673,13 +1670,13 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   const timelineEntries = React.useMemo<TimelineEntry[]>(() => {
     if (!timelineActive) return [];
     const roots = sectionProjectSessions.filter(
-      (session) => !getParentId(session) && timelineContextById.has(session.id),
+      (session) => !getParentId(session) && timelineContextById.has(session.sessionId),
     );
     const listedRuns = new Set<string>();
     return orderSessionsByLifecycleScopes(roots, pinnedSessionIds, sessionOrderRanks).flatMap((session): TimelineEntry[] => {
-      const context = timelineContextById.get(session.id);
+      const context = timelineContextById.get(session.sessionId);
       if (!context) return [];
-      const runKey = runIndex.runKeyBySessionId.get(session.id);
+      const runKey = runIndex.runKeyBySessionId.get(session.sessionId);
       const run = runKey ? runIndex.runs.get(runKey) : undefined;
       if (!run) return [{ kind: 'session', session, project: context.project, branch: context.branch, inSpace: context.inSpace }];
       if (listedRuns.has(run.key)) return [];
@@ -1849,10 +1846,10 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                   </div>
                   <div className="overflow-hidden rounded-2xl border border-border/70 bg-[var(--surface-elevated)]">
                     {searchSessionMatches.map((session, index) => (
-                      <div key={session.id} className={cn(index > 0 && 'border-t border-border/70')}>
+                      <div key={session.sessionId} className={cn(index > 0 && 'border-t border-border/70')}>
                         <SessionRow
                           session={session}
-                          active={currentSessionId === session.id}
+                          active={currentSessionId === session.sessionId}
                           indent={12}
                           contextLabel={buildSessionContextLabel(session)}
                           onSelect={() => handleSelectSession(session)}
@@ -2079,7 +2076,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                           `${RECENT_SECTION_ID}::${RECENT_SECTION_ID}`,
                           recentBucket,
                           PROJECT_SESSION_INDENT,
-                          { rootContextLabel: (session) => recentContextLabelById.get(session.id) ?? buildSessionContextLabel(session) },
+                          { rootContextLabel: (session) => recentContextLabelById.get(session.sessionId) ?? buildSessionContextLabel(session) }
                         )}
                       </div>
                     ) : null}

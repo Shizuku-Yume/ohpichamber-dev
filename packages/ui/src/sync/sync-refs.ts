@@ -77,12 +77,12 @@ export function emitSyncConfigChanged(directory: string, config: State["config"]
 }
 
 /** Read sessions from current directory's child store */
-export function getSyncSessions(directory?: string) {
+export function getSyncSessions(directory?: string): State["session"] {
   return getDirectoryState(directory)?.session ?? []
 }
 
 /** Read sessions across all initialized child stores */
-export function getAllSyncSessions() {
+export function getAllSyncSessions(): State["session"] {
   return Array.from(getAllSyncSessionMap().values())
 }
 
@@ -128,7 +128,7 @@ export function getSyncSessionDirectory(sessionId: string): string | null {
 }
 
 /** Read messages for a session from current directory's child store */
-export function getSyncMessages(sessionId: string, directory?: string) {
+export function getSyncMessages(sessionId: string, directory?: string): State["message"][string] {
   return getDirectoryState(directory)?.message[sessionId] ?? []
 }
 

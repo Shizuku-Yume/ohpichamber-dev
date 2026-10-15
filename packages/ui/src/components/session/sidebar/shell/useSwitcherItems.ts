@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { isBtwSession } from '@/lib/sessionBtwMetadata';
@@ -41,9 +41,9 @@ const formatProjectLabel = (project: { label?: string | null; path: string } | n
 
 export const findSwitcherItemAncestorIds = (items: SwitcherItem[], sessionId: string): string[] | null => {
   const visit = (node: SessionNode, ancestors: string[]): string[] | null => {
-    if (node.session.id === sessionId) return ancestors;
+    if (node.session.sessionId === sessionId) return ancestors;
     for (const child of node.children) {
-      const result = visit(child, [...ancestors, node.session.id]);
+      const result = visit(child, [...ancestors, node.session.sessionId]);
       if (result) return result;
     }
     return null;
@@ -66,12 +66,11 @@ export const selectSwitcherParents = (
   maxParents = MAX_PARENT_SESSIONS,
   isExcluded?: (session: Session) => boolean,
 ): Session[] => {
-  const sessionsById = new Map(activeSessions.map((session) => [session.id, session]));
+  const sessionsById = new Map(activeSessions.map((session) => [session.sessionId, session]));
   const isEligibleParent = (session: Session): boolean => {
-    if (session.time?.archived) return false;
+    if (session.archivedAt !== undefined) return false;
     if (isExcluded?.(session)) return false;
-    // SAFETY: the SDK Session type omits parentID, but the server includes it on child sessions.
-    if ((session as Session & { parentID?: string | null }).parentID) return false;
+    if (session.parentSessionId) return false;
     return !scopeProjectId || getProjectId(session) === scopeProjectId;
   };
   const parents = activeSessions
@@ -79,11 +78,10 @@ export const selectSwitcherParents = (
     .sort((a, b) => compareSessionsByLifecycleOrder(a, b, pinnedSessionIds, sessionOrderRanks));
 
   const currentSession = currentSessionId ? sessionsById.get(currentSessionId) ?? null : null;
-  let currentRoot: Session | null = currentSession?.time?.archived ? null : currentSession;
+  let currentRoot: Session | null = currentSession?.archivedAt !== undefined ? null : currentSession;
   const visited = new Set<string>();
   while (currentRoot) {
-    // SAFETY: the SDK Session type omits parentID, but the server includes it on child sessions.
-    const parentId = (currentRoot as Session & { parentID?: string | null }).parentID;
+    const parentId = currentRoot.parentSessionId;
     if (!parentId) break;
     if (visited.has(parentId)) {
       currentRoot = null;
@@ -145,9 +143,9 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
 
     const childrenByParent = new Map<string, Session[]>();
     for (const session of activeSessions) {
-      const parentId = (session as Session & { parentID?: string | null }).parentID;
+      const parentId = session.parentSessionId;
       if (!parentId) continue;
-      if (session.time?.archived) continue;
+      if (session.archivedAt !== undefined) continue;
       const bucket = childrenByParent.get(parentId);
       if (bucket) {
         bucket.push(session);
@@ -172,7 +170,7 @@ export const useSwitcherItems = (enabled: boolean, options: SwitcherItemsOptions
     );
 
     const buildNode = (session: Session): SessionNode => {
-      const childSessions = childrenByParent.get(session.id) ?? [];
+      const childSessions = childrenByParent.get(session.sessionId) ?? [];
       return {
         session,
         children: childSessions.map((child) => buildNode(child)),

@@ -143,7 +143,7 @@ export const useMenuActions = (
     if (sessions.length === 0) return;
 
     const currentSessionId = useSessionUIStore.getState().currentSessionId;
-    const currentIndex = sessions.findIndex((session) => session.id === currentSessionId);
+    const currentIndex = sessions.findIndex((session) => session.sessionId === currentSessionId);
     let nextIndex = direction > 0 ? 0 : sessions.length - 1;
     if (currentIndex >= 0) {
       nextIndex = (currentIndex + direction + sessions.length) % sessions.length;
@@ -152,7 +152,7 @@ export const useMenuActions = (
     if (!nextSession) return;
 
     setSessionSwitcherOpen(false);
-    useSessionUIStore.getState().setCurrentSession(nextSession.id);
+    useSessionUIStore.getState().setCurrentSession(nextSession.sessionId);
   }, [setSessionSwitcherOpen]);
 
   const navigateProject = React.useCallback((direction: -1 | 1) => {

@@ -2,11 +2,11 @@ import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 
 export type SessionMetadataRecord = SessionMetadata;
 
-export const getSessionMetadata = (session: Session | null | undefined): SessionMetadataRecord => session?.metadata ?? {};
+export const getSessionMetadata = (session: Pick<Session, 'metadata'> | null | undefined): SessionMetadataRecord => session?.metadata ?? {};
 
-export const getReviewSessionID = (session: Session | null | undefined): string | null => session?.metadata?.openchamber?.reviewSessionID ?? null;
-export const getOriginalSessionID = (session: Session | null | undefined): string | null => session?.metadata?.openchamber?.originalSessionID ?? null;
-export const isReviewSession = (session: Session | null | undefined): boolean => session?.metadata?.openchamber?.kind === 'review' && getOriginalSessionID(session) !== null;
+export const getReviewSessionID = (session: Pick<Session, 'metadata'> | null | undefined): string | null => session?.metadata?.openchamber?.reviewSessionID ?? null;
+export const getOriginalSessionID = (session: Pick<Session, 'metadata'> | null | undefined): string | null => session?.metadata?.openchamber?.originalSessionID ?? null;
+export const isReviewSession = (session: Pick<Session, 'metadata'> | null | undefined): boolean => session?.metadata?.openchamber?.kind === 'review' && getOriginalSessionID(session) !== null;
 
 export const withReviewSessionLink = (metadata: SessionMetadata, reviewSessionID: string): SessionMetadata => ({
   ...metadata,

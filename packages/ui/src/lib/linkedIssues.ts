@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { isJsonValue, type JsonValue } from '@openchamber/sdk';
 import { getSessionMetadata, type SessionMetadataRecord } from './sessionReviewMetadata';
 
@@ -486,7 +486,7 @@ export const withLinkedIssue = (
   issue: LinkedIssue,
   linked: boolean,
 ): SessionMetadataRecord => {
-  const openchamber = isRecord(metadata.openchamber) ? metadata.openchamber : {};
+  const openchamber = metadata.openchamber ?? {};
   const current = Array.isArray(openchamber.linked_issues)
     ? openchamber.linked_issues.filter(isLinkedIssue)
     : [];
@@ -499,7 +499,12 @@ export const withLinkedIssue = (
     ...metadata,
     openchamber: {
       ...openchamber,
-      linked_issues: next,
+      linked_issues: next.map((entry) => {
+        // Repository snapshots share a UI type; metadata stores distinct kinds.
+        if (entry.kind === 'issue') return { ...entry, kind: 'issue' as const };
+        if (entry.kind === 'pull') return { ...entry, kind: 'pull' as const };
+        return entry;
+      }),
     },
   };
 };

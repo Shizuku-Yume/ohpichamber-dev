@@ -1,8 +1,7 @@
-import type { Agent } from '@/lib/opencode/model';
+import type { Agent } from '@openchamber/agent-contract';
 import type { Theme } from '@/types/theme';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { filterVisibleAgents } from '@/stores/useAgentsStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 import { createAgentColorResolver } from '@/lib/agentColors';
 
 // Message footers share one allocation with the composer. Immutable theme and
@@ -11,7 +10,7 @@ const resolvers = new WeakMap<Theme, WeakMap<Agent[], ReturnType<typeof createAg
 
 export function useAgentColors() {
   const { currentTheme } = useThemeSystem();
-  const agents = useConfigStore((state) => state.agents);
+  const agents = useAgentsStore((state) => state.agents);
   let byRoster = resolvers.get(currentTheme);
   if (!byRoster) {
     byRoster = new WeakMap();
@@ -19,7 +18,7 @@ export function useAgentColors() {
   }
   let resolver = byRoster.get(agents);
   if (!resolver) {
-    resolver = createAgentColorResolver(currentTheme, filterVisibleAgents(agents));
+    resolver = createAgentColorResolver(currentTheme, agents);
     byRoster.set(agents, resolver);
   }
   return resolver;

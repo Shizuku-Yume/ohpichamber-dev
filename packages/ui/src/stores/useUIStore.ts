@@ -20,7 +20,7 @@ import { noteBrowserTabOpenedWithAddress, requestBrowserTabLoad } from '@/lib/br
 import { isContextPanelMode, type ContextPanelMode } from '@/lib/surfaces/modes';
 import { sanitizeWorkStatusSectionOrder, type WorkStatusPanelSectionId } from '@/components/chat/work-status/sections';
 
-export type PendingDiffScope = 'working' | 'staged' | 'turn' | 'branch' | 'commit' | 'pr';
+export type PendingDiffScope = 'working' | 'staged' | 'branch' | 'commit' | 'pr';
 export type { ContextPanelMode };
 
 // The docked column and the tree-only panel share one pixel width.
@@ -254,7 +254,7 @@ const normalizeContextTabLabel = (value: string | null | undefined): string | nu
 };
 
 const normalizePendingDiffScope = (value: unknown): PendingDiffScope | null => {
-  return value === 'working' || value === 'staged' || value === 'turn' || value === 'branch' || value === 'commit' || value === 'pr' ? value : null;
+  return value === 'working' || value === 'staged' || value === 'branch' || value === 'commit' || value === 'pr' ? value : null;
 };
 
 /** A plan tab's owner must be a complete project reference or nothing; a
@@ -405,6 +405,10 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
     // anything still carrying an unknown mode here is discarded rather than
     // resurrected into a tab the panel cannot render.
     if (typeof candidate.mode !== 'string' || !isContextPanelMode(candidate.mode)) {
+      continue;
+    }
+    // A retired turn snapshot cannot be restored as a working-tree comparison.
+    if (candidate.mode === 'diff' && candidate.diffScope === 'turn') {
       continue;
     }
 
@@ -1024,7 +1028,6 @@ interface UIStore {
   /** Header session tabs (web/desktop), opt-in. Off keeps the plain session title. */
   sessionTabsEnabled: boolean;
   persistChatDraft: boolean;
-  showOpenCodeUpdateNotifications: boolean;
   agentControlToolEnabled: boolean;
   agentWebToolEnabled: boolean;
   /** Full-text message search (server index). Opt-in: off keeps every part of it idle. */
@@ -1275,7 +1278,6 @@ interface UIStore {
   setSummaryLength: (value: number) => void;
   setMaxLastMessageLength: (value: number) => void;
   setPersistChatDraft: (value: boolean) => void;
-  setShowOpenCodeUpdateNotifications: (value: boolean) => void;
   setAgentControlToolEnabled: (value: boolean) => void;
   setAgentWebToolEnabled: (value: boolean) => void;
   setMessageSearchEnabled: (value: boolean) => void;
@@ -1483,7 +1485,6 @@ export const useUIStore = create<UIStore>()(
         showTerminalQuickKeysOnDesktop: false,
         sessionTabsEnabled: false,
         persistChatDraft: true,
-        showOpenCodeUpdateNotifications: true,
         agentControlToolEnabled: true,
         agentWebToolEnabled: true,
         messageSearchEnabled: false,
@@ -2945,9 +2946,6 @@ export const useUIStore = create<UIStore>()(
         setPersistChatDraft: (value) => {
           set({ persistChatDraft: value });
         },
-        setShowOpenCodeUpdateNotifications: (value) => {
-          set({ showOpenCodeUpdateNotifications: value });
-        },
         setAgentControlToolEnabled: (value) => {
           set({ agentControlToolEnabled: value });
         },
@@ -3473,7 +3471,6 @@ export const useUIStore = create<UIStore>()(
           summaryLength: state.summaryLength,
           maxLastMessageLength: state.maxLastMessageLength,
           persistChatDraft: state.persistChatDraft,
-          showOpenCodeUpdateNotifications: state.showOpenCodeUpdateNotifications,
           agentControlToolEnabled: state.agentControlToolEnabled,
           agentWebToolEnabled: state.agentWebToolEnabled,
           messageSearchEnabled: state.messageSearchEnabled,

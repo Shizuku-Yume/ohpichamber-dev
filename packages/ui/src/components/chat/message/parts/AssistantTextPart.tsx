@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 import { MarkdownRenderer } from '../../MarkdownRenderer';
 import type { StreamPhase, ToolPopupContent } from '../types';
 import { useStreamingTextThrottle } from '../../hooks/useStreamingTextThrottle';
@@ -7,8 +7,6 @@ import { resolveAssistantDisplayText, resolveAssistantTextStreaming, shouldRende
 import { streamPerfCount, streamPerfObserve } from '@/stores/utils/streamDebug';
 import { GeneratedJsonResultCard } from './GeneratedJsonResultCard';
 import { parseGeneratedJsonResult } from './generatedJsonResult';
-
-type PartWithText = Part & { text?: string; content?: string; value?: string; time?: { start?: number; end?: number } };
 
 interface AssistantTextPartProps {
     part: Part;
@@ -28,15 +26,10 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
 }) => {
     // Use part directly from props — parent provides the latest version from the store.
     // No store subscription here to avoid re-render cascade from unrelated delta events.
-    const partWithText = part as PartWithText;
-    const rawText = typeof partWithText.text === 'string' ? partWithText.text : '';
-    const contentText = typeof partWithText.content === 'string' ? partWithText.content : '';
-    const valueText = typeof partWithText.value === 'string' ? partWithText.value : '';
-    const textContent = [rawText, contentText, valueText].reduce((best, candidate) => {
-        return candidate.length > best.length ? candidate : best;
-    }, '');
-    const time = partWithText.time;
-    const isFinalized = Boolean(time && typeof time.end !== 'undefined');
+    const textContent = part.type === 'text' || part.type === 'reasoning' ? part.content : '';
+    // Canonical text parts have no per-part timing; completion comes from
+    // the owning message's stream phase.
+    const isFinalized = streamPhase !== 'streaming' && streamPhase !== 'cooldown';
     const isStreaming = resolveAssistantTextStreaming({
         streamPhase,
         chatRenderMode,
@@ -51,7 +44,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     const throttledTextContent = useStreamingTextThrottle({
         text: textContent,
         isStreaming,
-        identityKey: `${messageId}:${part.id ?? 'text'}`,
+        identityKey: `${messageId}:${part.partId}`,
     });
 
     const displayTextContent = resolveAssistantDisplayText({
@@ -79,7 +72,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         return (
             <div
                 className={`group/assistant-text relative break-words ${chatRenderMode === 'live' ? 'my-1' : ''}`}
-                key={part.id || `${messageId}-text`}
+                key={part.partId || `${messageId}-text`}
             >
                 <GeneratedJsonResultCard result={generatedResult} />
             </div>
@@ -89,7 +82,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     return (
         <div
             className={`group/assistant-text relative break-words ${chatRenderMode === 'live' ? 'my-1' : ''}`}
-            key={part.id || `${messageId}-text`}
+            key={part.partId || `${messageId}-text`}
         >
             <MarkdownRenderer
                 content={displayTextContent}

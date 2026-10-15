@@ -262,7 +262,7 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ onClose }) => {
 
   const sessionStats = React.useMemo(() => {
     return sessions.map(session => {
-      const messages = messageRecord[session.id] ?? [];
+      const messages = messageRecord[session.sessionId] ?? [];
       let assistantMessageCount = 0;
       let userMessageCount = 0;
       for (const message of messages) {
@@ -272,10 +272,10 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ onClose }) => {
           assistantMessageCount += 1;
         }
       }
-      const memoryState = sessionMemoryState.get(session.id);
+      const memoryState = sessionMemoryState.get(session.sessionId);
       return {
-        id: session.id,
-        title: session.title || t('memoryDebugPanel.common.untitled'),
+        id: session.sessionId,
+        title: session.metadata?.title || t('memoryDebugPanel.common.untitled'),
         assistantMessageCount,
         messageCount: messages.length,
         userMessageCount,
@@ -283,7 +283,7 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ onClose }) => {
         isZombie: memoryState?.isZombie || false,
         backgroundCount: memoryState?.backgroundMessageCount || 0,
         lastAccessed: memoryState?.lastAccessedAt || 0,
-        isCurrent: session.id === currentSessionId
+        isCurrent: session.sessionId === currentSessionId
       };
     }).sort((a, b) => b.lastAccessed - a.lastAccessed);
   }, [sessions, messageRecord, sessionMemoryState, currentSessionId, t]);
@@ -454,7 +454,7 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ onClose }) => {
                   className="typography-meta"
                   onClick={() => {
                     console.log('[DebugPanel] Session store state:', {
-                      sessions: sessions.map(s => ({ id: s.id, title: s.title })),
+                      sessions: sessions.map(s => ({ id: s.sessionId, title: s.metadata?.title })),
                       currentSessionId,
                       cachedSessions: Object.keys(messageRecord),
                       messageRoleCounts,

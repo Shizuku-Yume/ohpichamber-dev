@@ -40,7 +40,7 @@ export interface SetSessionGoalInput { objective: string; tokenBudget: number | 
 export async function setSessionGoal(sessionId: string, directory: string | undefined, input: SetSessionGoalInput, existing: SessionGoalPayload | null): Promise<void> {
   const rawObjective = input.objective.trim();
   const objective = await fitObjective(rawObjective, directory, sessionId);
-  const tokenBudget = Number.isFinite(input.tokenBudget) && input.tokenBudget > 0 ? Math.floor(input.tokenBudget) : null;
+  const tokenBudget = input.tokenBudget !== null && Number.isFinite(input.tokenBudget) && input.tokenBudget > 0 ? Math.floor(input.tokenBudget) : null;
   const objectiveFile = await writeGoalObjectiveFile(sessionId, objective);
   const now = Date.now();
   await writeGoal(sessionId, directory, (currentGoal) => {

@@ -1,9 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import type { Message, Part, Session } from '@/lib/opencode/model';
-import { getLastConversationRecord, isIncompleteAssistantTurn } from '@/lib/opencode/model';
-import { keepCommandSubagentReports } from '@/lib/opencode/subagent-run';
-import { isOpencodeNotFound, opencodeClient } from '@/lib/opencode/client';
+import type { Message as CanonicalMessage, Part } from '@openchamber/agent-contract';
 
 import { ChatInput } from './ChatInput';
 import { CHAT_INPUT_EDITOR_SELECTOR } from './composer/editor/dom';
@@ -88,8 +85,8 @@ import {
     useScopedBlockingPermissions,
     useScopedBlockingForms,
     useParentSession,
+    useSessionDirectory,
     useSession,
-    useSessions,
 } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
 import { usePlanDetection } from '@/hooks/usePlanDetection';
@@ -99,7 +96,6 @@ import { ChatSearchBar } from './search/ChatSearchBar';
 import { WorkStatusPanel } from './work-status/WorkStatusPanel';
 import { useWorkStatusVisibility } from './work-status/useWorkStatusVisibility';
 import { useRightSlotStore } from '@/components/layout/rightSlot';
-import { normalizeUserDisplayParts } from './message/normalizeUserDisplayParts';
 import { resolveChatPromptReadOnly } from './chatPromptReadOnly';
 import { PermissionDock } from './PermissionDock';
 import { FormDock } from './FormDock';
@@ -108,10 +104,9 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { createFirstVisibleSessionPerformanceTracker } from '@/sync/session-load-performance';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 
-const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = [];
-const IDLE_SESSION_STATUS = { type: 'idle' as const };
+const EMPTY_MESSAGES: CanonicalMessage[] = [];
+const IDLE_SESSION_STATUS = 'idle' as const;
 const CHAT_FORCE_SCROLL_BOTTOM_EVENT = 'openchamber:chat-force-scroll-bottom';
-const DEFAULT_RETRY_MESSAGE = 'Quota limit reached. Retrying automatically.';
 const DRAFT_EXIT_DURATION_MS = 120;
 const COMPOSER_MOVE_DURATION_MS = 180;
 const CHAT_SCROLL_STYLE = {
@@ -136,7 +131,6 @@ const CHAT_NAVIGATION_IGNORED_TARGET_SELECTOR = [
     '[role="textbox"]',
     '[data-radix-popper-content-wrapper]',
 ].join(',');
-type SessionMessageRecord = { info: Message; parts: Part[] };
 
 const isHTMLElement = (target: EventTarget | null): target is HTMLElement => {
     return target instanceof HTMLElement;
@@ -207,7 +201,7 @@ type ChatViewportProps = {
     onIsAtEndChange: (isAtEnd: boolean) => void;
     onListMetricsChange: (metrics: { readonly footerSize: number }) => void;
     onTimelineDataChange: () => void;
-    renderedMessages: SessionMessageRecord[];
+    renderedMessages: CanonicalMessage[];
     isLoadingOlder: boolean;
     sessionIsWorking: boolean;
     streamingMessageId: string | null;
@@ -274,29 +268,18 @@ const ChatViewport = React.memo(({
 }: ChatViewportProps) => {
     const { t } = useI18n();
     const promptPreviewsByTurnIdRef = React.useRef<Map<string, Part[]>>(new Map());
-    // Cache normalized parts per source array so unchanged messages keep the
-    // same reference and the memo below can bail out to the previous map.
-    const normalizedPromptPartsCache = React.useRef(new WeakMap<Part[], Part[]>());
     const promptPreviewsByTurnId = React.useMemo(() => {
         const next = new Map<string, Part[]>();
         for (let index = 0; index < renderedMessages.length; index += 1) {
             const message = renderedMessages[index];
-            if (message.info.role !== 'user') {
+            if (message.role !== 'user') {
                 continue;
             }
-            // v2 keeps injected context out of the user message: loop
-            // continuations and plan-mode injections arrive as their own
-            // `synthetic`-role messages, so every remaining user message is a
-            // turn the user actually sent and stays navigable.
-            let displayParts = normalizedPromptPartsCache.current.get(message.parts);
-            if (!displayParts) {
-                displayParts = normalizeUserDisplayParts(message.parts);
-                normalizedPromptPartsCache.current.set(message.parts, displayParts);
-            }
+            const displayParts = message.parts;
             if (displayParts.length === 0) {
                 continue;
             }
-            next.set(message.info.id, displayParts);
+            next.set(message.turnId, displayParts);
         }
         const prev = promptPreviewsByTurnIdRef.current;
         if (prev.size === next.size) {
@@ -825,7 +808,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     // selected session changes. Protect what is actually rendered until commit.
     React.useLayoutEffect(() => {
         if (!currentSessionKey || !currentSessionId || !effectiveSessionDirectory) return;
-        return messageLoader.retainSessionHistory({ directory: effectiveSessionDirectory, sessionID: currentSessionId }, 'rendered');
+        return messageLoader.retainSessionHistory({ directory: effectiveSessionDirectory, sessionId: currentSessionId }, 'rendered');
     }, [currentSessionKey, currentSessionId, effectiveSessionDirectory, messageLoader]);
     // One gate per opened session; the scroll hook holds it until the
     // viewport is pinned to the end so the first visible frame is already
@@ -928,7 +911,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     const sessionForms = useScopedBlockingForms(currentSessionId, effectiveSessionDirectory);
 
     const hasUnreconciledFormTool = React.useMemo(
-        () => !sessionForms.some((form) => form.sessionID === currentSessionId)
+        () => !sessionForms.some((form) => form.sessionId === currentSessionId)
             && hasActiveFormToolInCurrentTurn(sessionMessages),
         [currentSessionId, sessionMessages, sessionForms],
     );
@@ -952,56 +935,16 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
             return false;
         }
 
-        const statusType = sessionStatusForCurrent.type ?? 'idle';
-        if (statusType === 'busy' || statusType === 'retry') {
+        if (sessionStatusForCurrent === 'running') {
             return true;
         }
 
-        // The last record can be a synthetic/skill/shell/switch message; the
-        // turn is still running only per the last conversation message.
-        return isIncompleteAssistantTurn(getLastConversationRecord(sessionMessages)?.info);
-    }, [currentSessionId, sessionMessages, sessionPermissions.length, sessionForms.length, sessionStatusForCurrent.type]);
-    const activeRetryStatus = React.useMemo(() => {
-        if (!currentSessionId || sessionStatusForCurrent.type !== 'retry') {
-            return null;
-        }
-
-        const rawMessage = typeof (sessionStatusForCurrent as { message?: string }).message === 'string'
-            ? (((sessionStatusForCurrent as { message?: string }).message) ?? '').trim()
-            : '';
-
-        return {
-            sessionId: currentSessionId,
-            message: rawMessage || DEFAULT_RETRY_MESSAGE,
-            confirmedAt: (sessionStatusForCurrent as { confirmedAt?: number }).confirmedAt,
-        };
-    }, [currentSessionId, sessionStatusForCurrent]);
-    const [retryFallbackTimestamp, setRetryFallbackTimestamp] = React.useState<number>(0);
-    const retryFallbackSessionRef = React.useRef<string | null>(null);
-
-    React.useEffect(() => {
-        if (!activeRetryStatus || typeof activeRetryStatus.confirmedAt === 'number') {
-            retryFallbackSessionRef.current = null;
-            setRetryFallbackTimestamp(0);
-            return;
-        }
-
-        if (retryFallbackSessionRef.current !== activeRetryStatus.sessionId) {
-            retryFallbackSessionRef.current = activeRetryStatus.sessionId;
-            setRetryFallbackTimestamp(Date.now());
-        }
-    }, [activeRetryStatus]);
-
-    const retryOverlay = React.useMemo(() => {
-        if (!activeRetryStatus) {
-            return null;
-        }
-
-        return {
-            ...activeRetryStatus,
-            fallbackTimestamp: retryFallbackTimestamp,
-        };
-    }, [activeRetryStatus, retryFallbackTimestamp]);
+        // Runtime status is authoritative; canonical messages do not carry
+        // per-message completion or retry timestamps.
+        return false;
+    }, [currentSessionId, sessionPermissions.length, sessionForms.length, sessionStatusForCurrent]);
+    // Canonical runtime status has no retry state or retry-message payload.
+    const retryOverlay = null;
 
     // History metadata — use sync's hasMore/isLoading
     const historyMeta = React.useMemo(() => {
@@ -1088,6 +1031,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 
     const currentSession = useSession(currentSessionId, effectiveSessionDirectory);
     const parentSession = useParentSession(currentSessionId, effectiveSessionDirectory);
+    const parentDirectory = useSessionDirectory(parentSession?.sessionId, effectiveSessionDirectory);
 
     // A pinned column hides "Return to parent" on the session it was opened
     // on: going up from there would show the session the main chat already
@@ -1098,9 +1042,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     const openColumnSession = columnActions.openSession;
     const handleReturnToParentSession = React.useCallback(() => {
         if (!parentSession) return;
-        const parentDirectory = (parentSession as Session & { directory?: string | null }).directory ?? null;
-        openColumnSession(parentSession.id, parentDirectory);
-    }, [openColumnSession, parentSession]);
+        openColumnSession(parentSession.sessionId, parentDirectory ?? null);
+    }, [openColumnSession, parentDirectory, parentSession]);
 
     const returnToParentButton = parentSession && !hideReturnToParent ? (
         <Button
@@ -1110,8 +1053,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
             onClick={handleReturnToParentSession}
             className="absolute left-3 top-3 z-20 !font-normal bg-[var(--surface-background)]/95"
             aria-label={t('chat.container.returnToParent.aria')}
-            title={parentSession.title?.trim()
-                ? t('chat.container.returnToParent.titleNamed', { title: parentSession.title })
+            title={parentSession.metadata?.title?.trim()
+                ? t('chat.container.returnToParent.titleNamed', { title: parentSession.metadata.title })
                 : t('chat.container.returnToParent.title')}
         >
             <Icon name="arrow-left" className="h-4 w-4" />
@@ -1124,7 +1067,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     React.useEffect(() => {
         ensureSpaceArchives();
     }, []);
-    const spaceArchive = useSpaceArchiveOf(effectiveSessionDirectory);
+    const spaceArchive = useSpaceArchiveOf(currentSession?.workspaceId);
     const promptReadOnly = spaceArchive !== null || resolveChatPromptReadOnly(
         currentSession,
         allowPromptingSubagentSessions,
@@ -1196,17 +1139,11 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     const handleLinkedMessageMissing = React.useCallback(() => {
         toast.info(t('chat.messageLink.notFound'));
     }, [t]);
-    // One request settles whether a linked message exists before the timeline
-    // pages through the whole history toward it. Only a 404 means missing.
+    // Canonical history has no single-message lookup. Loaded identity proves
+    // existence; otherwise the canonical history loader resolves navigation.
     const checkLinkedMessage = React.useCallback(async (messageId: string): Promise<LinkedMessageState> => {
-        if (!currentSessionId) return 'unknown';
-        try {
-            await opencodeClient.getSessionMessage(currentSessionId, messageId, effectiveSessionDirectory);
-            return 'exists';
-        } catch (error) {
-            return isOpencodeNotFound(error) ? 'missing' : 'unknown';
-        }
-    }, [currentSessionId, effectiveSessionDirectory]);
+        return sessionMessages.some((message) => message.messageId === messageId) ? 'exists' : 'unknown';
+    }, [sessionMessages]);
     const {
         scrollRef,
         scrollNode,
@@ -1279,17 +1216,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         setChatSearch((current) => ({ ...current, open: false }));
     }, []);
 
-    // A subagent report opens a turn of its own at the end of the chat only for
-    // a `subagent: true` command; a call's report finishes that call's row
-    // (see `ToolPart`), and a run started before the loaded history stays in
-    // the session's subagent list, so the chat never shifts for either.
-    const directorySessions = useSessions(effectiveSessionDirectory);
-    const viewportMessages = React.useMemo(() => {
-        const childStartedAt = (childSessionID: string): number | undefined => (
-            directorySessions.find((session) => session.id === childSessionID)?.time.created
-        );
-        return keepCommandSubagentReports(sessionMessages, childStartedAt);
-    }, [directorySessions, sessionMessages]);
+    // Canonical messages already contain the transcript; OpenCode command
+    // subagent report roles do not exist on this boundary.
+    const viewportMessages = sessionMessages;
 
     const timelineController = useChatTimelineController({
         sessionId: currentSessionId,
@@ -1814,7 +1743,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 			// view follows it (no scroll-to-bottom pill, no reader gesture), the
 			// transcript fades out above the composer (index.css). Once the
 			// reader leaves the end, the rows slide under its glass again.
-			data-live-tail={sessionStatusForCurrent.type === 'busy' && isFollowingProgrammatically ? 'true' : undefined}
+			data-live-tail={sessionStatusForCurrent === 'running' && isFollowingProgrammatically ? 'true' : undefined}
 			className="relative flex min-w-0 flex-1 flex-col h-full bg-background"
 		>
 			{returnToParentButton}
@@ -1933,7 +1862,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                             text={spaceArchive
                                 ? t('spaces.archive.readOnlyBanner', { name: spaceArchive.name })
                                 : t('chat.container.readOnlySubagentPromptBanner')}
-                            onStop={!spaceArchive && currentSessionId && sessionStatusForCurrent.type !== 'idle'
+                            onStop={!spaceArchive && currentSessionId && sessionStatusForCurrent !== 'idle'
                                 ? () => void abortCurrentOperation(currentSessionId)
                                 : undefined}
                             stopLabel={t('chat.chatInput.actions.stopGeneratingAria')}

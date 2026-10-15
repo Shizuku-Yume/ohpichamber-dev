@@ -20,7 +20,6 @@ import type {
   ConfigEntry,
   FormInfo,
   JsonValue,
-  McpServer,
   ModelInfo,
   ModelRef,
   PermissionRequest as PermissionRequestWire,
@@ -57,7 +56,6 @@ export type Command = CommandInfo
 export type Skill = SkillInfo
 export type Provider = ProviderInfo
 export type Model = ModelInfo
-export type McpServerStatus = McpServer
 /** Version-control facts about a directory the UI shows (current and default branch). */
 export type Vcs = { branch?: string; defaultBranch?: string }
 

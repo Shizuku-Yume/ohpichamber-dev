@@ -25,7 +25,7 @@ export const SessionDoneHintRow: React.FC<SessionDoneHintRowProps> = React.memo(
   const status = useSessionStatus(sessionId ?? '', directory);
   const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
   const [pending, setPending] = React.useState(false);
-  const isIdle = !status || status.type === 'idle';
+  const isIdle = !status || status === 'idle';
 
   if (!sessionId || !sessionWorkEnabled || !isIdle || !isDoneSuggested(session)) return null;
 

@@ -66,8 +66,8 @@ export const useArchivedAutoFolders = (args: Args): void => {
           folderByName.set(key, folder);
         }
 
-        if (!folder.sessionIds.includes(session.id)) {
-          addSessionToFolder(scopeKey, folder.id, session.id);
+        if (!folder.sessionIds.includes(session.sessionId)) {
+          addSessionToFolder(scopeKey, folder.id, session.sessionId);
         }
       });
     });

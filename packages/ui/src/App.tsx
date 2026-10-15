@@ -45,7 +45,7 @@ import { parseRoute } from '@/lib/router';
 import { beginLastSessionRestore, type LastSessionRestoreResult } from '@/sync/last-session-restore';
 import { markSessionViewed } from '@/sync/notification-store';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
@@ -68,7 +68,6 @@ import { applyMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 import { SyncAppEffects } from '@/apps/AppEffects';
 import { isSameRuntimeEndpoint, resetAppForRuntimeEndpointChange } from '@/apps/runtimeEndpointReset';
 import { useAppFontEffects } from '@/apps/useAppFontEffects';
-import { OpenCodeUpdateToast } from '@/components/update/OpenCodeUpdateToast';
 import { ProjectConfigErrorToast } from '@/components/projects/ProjectConfigErrorToast';
 import { markStartupTrace, startupTraceEnabled } from '@/lib/startupTrace';
 import { fetchStartupDiagnostics, getInitRecoveryDescriptionKey, type StartupDiagnostics } from '@/lib/startupDiagnostics';
@@ -504,7 +503,7 @@ function App({ apis }: AppProps) {
     if (!isConnected) {
       return;
     }
-    opencodeClient.setDirectory(currentDirectory);
+    hostFilesystem.setDirectory(currentDirectory);
 
     // Session loading is handled by the sync system's bootstrap — no manual loadSessions needed.
   }, [currentDirectory, isSwitchingDirectory, isConnected]);
@@ -820,10 +819,7 @@ function App({ apis }: AppProps) {
               <OnboardingScreen
                 mode="first-launch"
                 localAvailable={bootView.localAvailable !== false}
-                onCliAvailable={handleDesktopBootDismiss}
-                onChooseRemote={() => {
-                  // Switch to remote tab - handled internally by OnboardingScreen
-                }}
+                onChooseLocal={handleDesktopBootDismiss}
               />
             </React.Suspense>
           </div>
@@ -847,7 +843,6 @@ function App({ apis }: AppProps) {
               recoveryHostLabel={undefined}
               recoveryHostId={hostId}
               localAvailable={bootView.localAvailable !== false}
-              onCliAvailable={handleDesktopBootDismiss}
             />
           </React.Suspense>
         </div>
@@ -880,7 +875,6 @@ function App({ apis }: AppProps) {
               <TooltipProvider delayDuration={300} skipDelayDuration={150}>
                 <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
                   <SyncAppEffects backgroundWorkEnabled />
-                  <OpenCodeUpdateToast />
                   <ProjectConfigErrorToast />
                   <MainLayout />
                   {isDesktopRuntime ? <AppStartupOverlay ready={bootOutcomeKnown && bootViewIsMain} /> : null}

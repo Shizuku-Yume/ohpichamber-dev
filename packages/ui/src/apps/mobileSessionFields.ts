@@ -1,27 +1,19 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 import { normalizePath } from './mobilePaths';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 /** Field readers shared by the mobile sessions sheet and its timeline list.
     Kept out of the sheet so the timeline list can read the same session
     fields without importing the sheet (which imports the list). */
 
-export const getParentId = (session: Session): string | null =>
-  (session as Session & { parentID?: string | null }).parentID ?? null;
+export const getParentId = (session: Session): string | null => session.parentSessionId ?? null;
 
-export const getSessionDirectory = (session: Session): string => {
-  const sessionWithDirectory = session as Session & {
-    directory?: string | null;
-    project?: { worktree?: string | null } | null;
-  };
-  return normalizePath(sessionWithDirectory.directory ?? sessionWithDirectory.project?.worktree ?? null);
-};
+export const getSessionDirectory = (session: Session): string => normalizePath(resolveGlobalSessionDirectory(session));
 
-export const getSessionTimestamp = (session: Session): number => {
-  const raw = session.time?.updated ?? session.time?.created;
-  const value = typeof raw === 'number' ? raw : Number(raw);
-  return Number.isFinite(value) && value > 0 ? value : 0;
-};
+export const getSessionTimestamp = (session: Session): number => (
+  Number.isFinite(session.updatedAt) && session.updatedAt > 0 ? session.updatedAt : session.createdAt
+);
 
 export const formatRelativeShort = (timestamp: number): string => {
   if (timestamp <= 0) return '';

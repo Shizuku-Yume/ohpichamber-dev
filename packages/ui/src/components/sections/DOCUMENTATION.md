@@ -5,6 +5,13 @@ every page is built from; see [PATTERNS.md](PATTERNS.md#quick-primitive-selectio
 primitive selection and [layout](references/layout.md), [controls](references/controls.md)
 or [search](references/search.md) for the affected branch.
 
+## About and local connection setup
+
+About displays the application and native app versions supplied by the connected Host or native shell. No OMP SDK build version is exposed, and the agent protocol version is not a build version. OpenCode installation, binary-path, restart and upgrade controls are retired. Application updates, native app updates and remote OpenChamber Host selection remain independent and available.
+
+The desktop first-launch chooser records the user's local or remote Host choice without probing for an agent executable. Local startup failures use the existing Retry Local and remote connection recovery, not an engine installer. Environment variable editing remains Host-owned and no longer offers an OpenCode restart banner.
+
+
 ## Autosave on the OpenCode configuration pages
 
 `agents/`, `commands/`, `skills/`, `mcp/`, `plugins/` and `behavior/` edit files

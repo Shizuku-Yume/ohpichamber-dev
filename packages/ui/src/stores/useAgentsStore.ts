@@ -3,7 +3,7 @@ import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import type { Agent, AgentCatalog, AgentMutationResult as NativeAgentMutationResult } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
-import { opencodeClient } from "@/lib/opencode/client";
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { emitConfigChange, scopeMatches, subscribeToConfigChanges, type ConfigChangeScope } from "@/lib/configSync";
 import {
   startConfigUpdate,
@@ -26,7 +26,7 @@ import { getRuntimeKey } from "@/lib/runtime-switch";
 // useDirectoryStore -> useAgentsStore (for refreshAfterOpenCodeRestart)
 // useAgentsStore -> useDirectoryStore (for currentDirectory)
 const getCurrentDirectory = (): string | null => {
-  const opencodeDirectory = opencodeClient.getDirectory();
+  const opencodeDirectory = hostFilesystem.getDirectory();
   if (typeof opencodeDirectory === 'string' && opencodeDirectory.trim().length > 0) {
     return opencodeDirectory;
   }
@@ -68,7 +68,7 @@ export const getConfigDirectory = (): string | null => {
     }
 
     // 2. Fallback: current OpenCode directory (session / runtime)
-    const clientDir = opencodeClient.getDirectory();
+    const clientDir = hostFilesystem.getDirectory();
     if (clientDir?.trim()) {
       return clientDir.trim();
     }
@@ -138,15 +138,13 @@ declare global {
 }
 const EMPTY_AGENTS: Agent[] = [];
 const CONFIG_EVENT_SOURCE = 'useAgentsStore';
-const sleep = (ms: number) => {
-  const { promise, resolve } = Promise.withResolvers<void>();
+const sleep = (ms: number): Promise<void> => new Promise<void>((resolve) => {
   setTimeout(resolve, ms);
-  return promise;
-};
+});
 export const selectAgentsForDirectory = (state: Pick<AgentsStore, 'agentsByDirectory'>, directory?: string | null): Agent[] =>
   state.agentsByDirectory[getAgentsCacheKey(resolveDirectory(directory))] ?? EMPTY_AGENTS;
 
-export const useAgentsStore = create<AgentsStore>()(devtools(persist((set, get) => {
+export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<AgentsStore>()(devtools(persist((set, get) => {
   const fail = (key: string, error: unknown): AgentMutationResult => {
     const message = error instanceof Error ? error.message : String(error);
     set((state) => ({ errorsByDirectory: { ...state.errorsByDirectory, [key]: message } }));

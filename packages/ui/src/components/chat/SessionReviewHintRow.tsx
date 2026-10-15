@@ -26,7 +26,7 @@ export const SessionReviewHintRow: React.FC<SessionReviewHintRowProps> = React.m
   const reviewOfferEnabled = useUIStore((state) => state.sessionReviewOfferEnabled);
   const openContextSurface = useUIStore((state) => state.openContextSurface);
   const requestWalkthroughTarget = useWalkthroughStore((state) => state.requestTarget);
-  const isIdle = !status || status.type === 'idle';
+  const isIdle = !status || status === 'idle';
 
   if (!sessionId || !directory || !reviewOfferEnabled || !isIdle || !isReviewSuggested(session)) return null;
 

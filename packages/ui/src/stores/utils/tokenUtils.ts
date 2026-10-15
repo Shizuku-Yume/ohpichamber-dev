@@ -1,4 +1,5 @@
-import type { AssistantMessage, Message, Part } from "@/lib/opencode/model";
+import type { Message as CanonicalMessage } from '@openchamber/agent-contract';
+import type { Message, Part } from "@/lib/opencode/model";
 import type { SessionContextUsage } from "../types/sessionTypes";
 
 type TokenBreakdown = {
@@ -52,50 +53,18 @@ export const contextTokensFromBreakdown = (breakdown: TokenBreakdown | null | un
     return sumTokenBreakdown(breakdown);
 };
 
-export type ContextFillMessage = {
-    id?: string;
-    role?: string;
-    tokens?: TokenBreakdown;
-    /**
-     * Compaction records carry OpenCode's lifecycle for the summarizing turn
-     * here. Widened to `string` so a whole `Message` (a shell record reports its
-     * own statuses) still satisfies this reader.
-     */
-    status?: string;
-    error?: AssistantMessage['error'];
-};
+export type ContextFillMessage = Pick<CanonicalMessage, 'messageId' | 'role' | 'usage'>;
 
-type LatestContextFill =
-    | { state: 'measured'; index: number; totalTokens: number }
-    /** Compacted since the last measured response; the current size is unknown. */
-    | { state: 'compacted'; index: number };
+type LatestContextFill = { state: 'measured'; index: number; totalTokens: number };
 
-/**
- * What the context window holds now, read from the newest message that can say.
- *
- * A compaction's own assistant record describes the summarizing request, not
- * the window left behind: its input is the pre-compaction history, and its
- * output leaves out the system prompt, the tools and the recent tail OpenCode
- * keeps. No number is right until the next response reports tokens, so a
- * finished compaction yields `compacted` instead of falling back to an older,
- * pre-compaction response. A compaction still running or one that failed has
- * not changed the window, so it is skipped and the previous reading stands.
- * OpenCode v2 records a compaction as its own `compaction` message carrying
- * that lifecycle in `status`, so "finished" is `status === 'completed'` with
- * no error rather than the v1 `summary && finish && !error` heuristic.
- */
+/** Canonical messages report measured usage; no compaction lifecycle is exposed. */
 export const findLatestContextFill = (messages: readonly ContextFillMessage[]): LatestContextFill | null => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
         const message = messages[index];
 
-        if (message?.role === 'compaction') {
-            if (message.status === 'completed' && !message.error) return { state: 'compacted', index };
-            continue;
-        }
-
         if (message?.role !== 'assistant') continue;
 
-        const totalTokens = contextTokensFromBreakdown(message.tokens);
+        const totalTokens = message.usage?.totalTokens ?? 0;
         if (totalTokens > 0) return { state: 'measured', index, totalTokens };
     }
 
@@ -117,14 +86,11 @@ export const buildSessionContextUsage = (
         contextLimit: contextLimit > 0 ? contextLimit : 0,
         outputLimit: outputLimit > 0 ? outputLimit : undefined,
         thresholdLimit: contextLimit > 0 ? contextLimit : DEFAULT_THRESHOLD_LIMIT,
-        lastMessageId: messages[fill.index]?.id,
+        lastMessageId: messages[fill.index]?.messageId,
     };
 
-    if (fill.state === 'compacted') {
-        return { state: 'compacted', ...limits };
-    }
 
-    const output = messages[fill.index]?.tokens?.output ?? 0;
+    const output = messages[fill.index]?.usage?.output ?? 0;
     return {
         state: 'measured',
         ...limits,

@@ -674,29 +674,11 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => ctx.isDesktopLocalOrigin,
   },
   {
-    id: 'sessions.opencode-binary',
-    page: 'general',
-    titleKey: 'settings.openchamber.opencodeCli.field.binaryPath',
-    keywords: ['opencode', 'cli', 'binary', 'path'],
-  },
-  {
-    id: 'sessions.opencode-restart',
-    page: 'general',
-    titleKey: 'settings.openchamber.opencodeCli.actions.restart',
-    keywords: ['opencode', 'restart', 'reload', 'plugin'],
-  },
-  {
     id: 'general.environment-variables',
     page: 'general',
     titleKey: 'settings.environment.user.title',
     descriptionKey: 'settings.environment.user.info',
     keywords: ['environment', 'env', 'variables', 'api key', 'token', 'secret', 'opencode', 'terminal', 'git'],
-  },
-  {
-    id: 'sessions.opencode-update-notifications',
-    page: 'general',
-    titleKey: 'settings.openchamber.opencodeCli.field.showUpdateNotifications',
-    keywords: ['opencode', 'cli', 'updates'],
   },
   {
     id: 'sessions.agent-control-tool',

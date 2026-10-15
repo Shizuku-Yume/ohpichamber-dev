@@ -1,6 +1,7 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { SessionNode } from '../types';
 import type { SidebarSessionLocation } from './sessionLocation';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 type RecentSessionLocation = SidebarSessionLocation;
 
@@ -22,9 +23,9 @@ type RecentActivitySection = {
 const matchesSidebarSessionQuery = (session: Session, query: string): boolean => {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return true;
-  if (normalizedQuery.startsWith('ses_')) return session.id.toLowerCase() === normalizedQuery;
-  const title = typeof session.title === 'string' ? session.title.toLowerCase() : '';
-  return title.includes(query);
+  if (normalizedQuery.startsWith('ses_')) return session.sessionId.toLowerCase() === normalizedQuery;
+  const title = session.metadata?.title?.toLowerCase() ?? '';
+  return title.includes(normalizedQuery);
 };
 
 /**
@@ -46,32 +47,20 @@ export const countSessionTreeQueryMatches = (node: SessionNode, query: string): 
 
 const RECENT_SESSION_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 
-const isSubtaskSession = (session: Session): boolean => {
-  return Boolean((session as Session & { parentID?: string | null }).parentID);
-};
+const isSubtaskSession = (session: Session): boolean => Boolean(session.parentSessionId);
 
-const isArchivedSession = (session: Session): boolean => {
-  return Boolean(session.time?.archived);
-};
+const isArchivedSession = (session: Session): boolean => session.archivedAt !== undefined;
 
-const getSessionUpdatedAt = (session: Session): number => {
-  const updated = session.time?.updated;
-  const created = session.time?.created;
-  if (typeof updated === 'number' && Number.isFinite(updated)) {
-    return updated;
-  }
-  if (typeof created === 'number' && Number.isFinite(created)) {
-    return created;
-  }
-  return 0;
-};
+const getSessionUpdatedAt = (session: Session): number => (
+  Number.isFinite(session.updatedAt) && session.updatedAt > 0 ? session.updatedAt : session.createdAt
+);
 
 // Recent contains non-archived root sessions that are active now or were
 // updated within the retention window. The caller applies shared lifecycle
 // ordering after this membership filter; batching ("Show more") handles long
 // windows in the UI.
 export const deriveRecentSessions = (
-  sessions: Session[],
+  sessions: readonly Session[],
   activeSessionIds: ReadonlySet<string>,
   now = Date.now(),
 ): Session[] => {
@@ -80,7 +69,7 @@ export const deriveRecentSessions = (
     if (isArchivedSession(session) || isSubtaskSession(session)) {
       return false;
     }
-    return activeSessionIds.has(session.id) || getSessionUpdatedAt(session) >= minUpdatedAt;
+    return activeSessionIds.has(session.sessionId) || getSessionUpdatedAt(session) >= minUpdatedAt;
   });
 };
 
@@ -88,7 +77,7 @@ const attachRecentWorktrees = (
   node: SessionNode,
   getSessionLocation: (sessionId: string) => RecentSessionLocation | null,
 ): SessionNode => {
-  const worktree = getSessionLocation(node.session.id)?.worktree ?? null;
+  const worktree = getSessionLocation(node.session.sessionId)?.worktree ?? null;
   const children = node.children.map((child) => attachRecentWorktrees(child, getSessionLocation));
   if (worktree === node.worktree && children.every((child, index) => child === node.children[index])) {
     return node;
@@ -110,12 +99,12 @@ export const deriveRecentActivitySections = ({
   key: 'active-now',
   items: sessions.flatMap((session) => {
     if (!matchesSidebarSessionQuery(session, query)) return [];
-    const location = getSessionLocation(session.id);
+    const location = getSessionLocation(session.sessionId);
     const node = getSessionNode?.(session) ?? { session, children: [], worktree: null };
     return [{
       node: attachRecentWorktrees(node, getSessionLocation),
       projectId: location?.projectId ?? null,
-      groupDirectory: location?.groupDirectory ?? session.directory ?? null,
+      groupDirectory: location?.groupDirectory ?? resolveGlobalSessionDirectory(session),
       secondaryMeta: location ? {
         projectLabel: location.projectLabel,
         branchLabel: location.branchLabel,
@@ -148,11 +137,11 @@ export const deriveTimelineActivityItems = ({
   query: string;
 }): SidebarActivityItem[] => sessions.flatMap((session) => {
   if (!matchesSidebarSessionQuery(session, query)) return [];
-  const location = getSessionLocation(session.id);
+  const location = getSessionLocation(session.sessionId);
   return [{
     node: getSessionNode(session),
     projectId: location?.projectId ?? null,
-    groupDirectory: location?.groupDirectory ?? session.directory ?? null,
+    groupDirectory: location?.groupDirectory ?? resolveGlobalSessionDirectory(session),
     secondaryMeta: {
       projectLabel: location?.projectLabel ?? null,
       branchLabel: location?.branchLabel ?? null,

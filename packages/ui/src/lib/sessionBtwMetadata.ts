@@ -6,7 +6,6 @@ const getOpenChamberMetadata = (metadata: SessionMetadata): BtwMetadata => metad
 const nonEmpty = (value: string | undefined): string | null => value && value.trim().length > 0 ? value : null;
 
 export const getBtwSessionID = (session: Session | null | undefined): string | null => nonEmpty(session?.metadata?.openchamber?.btwSessionID);
-export const wasPromotedBtwSession = (session: Session | null | undefined): boolean => session?.metadata?.openchamber?.btwPromoted === true;
 export const isBtwSession = (session: Session | null | undefined): boolean => session?.metadata?.openchamber?.kind === 'btw' && getBtwOriginalSessionID(session) !== null;
 export const getBtwOriginalSessionID = (session: Session | null | undefined): string | null => {
   const openchamber = session?.metadata?.openchamber;
@@ -30,7 +29,8 @@ export const withBtwSessionMarker = (metadata: SessionMetadata, originalSessionI
 export const withoutBtwSessionMarker = (metadata: SessionMetadata): SessionMetadata => {
   if (metadata.openchamber?.kind !== 'btw') return metadata;
   const { kind: _kind, originalSessionID: _originalSessionID, btwBoundaryMessageID: _boundary, ...rest } = metadata.openchamber;
-  return { ...metadata, openchamber: { ...rest, btwPromoted: true } };
+  const { openchamber: _openchamber, ...without } = metadata;
+  return Object.keys(rest).length > 0 ? { ...metadata, openchamber: rest } : without;
 };
 
 export const withoutBtwSessionLink = (metadata: SessionMetadata, btwSessionID: string): SessionMetadata => {

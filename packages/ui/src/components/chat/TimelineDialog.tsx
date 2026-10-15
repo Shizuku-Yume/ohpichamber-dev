@@ -14,9 +14,11 @@ import { useChatSessionSelection } from './chatColumnSession';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
-import { getFullText, getMessagePreview } from './lib/messagePreview';
+import type { Part } from '@openchamber/agent-contract';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
+
+const getFullText = (parts: Part[]): string => parts.filter((part) => part.type === 'text').map((part) => part.content).join('\n');
 
 interface TimelineDialogProps {
     open: boolean;
@@ -122,7 +124,7 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
     // Timeline actions are only valid for user messages.
     const userMessages = React.useMemo(() => {
         return messages
-            .filter((message) => message.info.role === 'user')
+            .filter((message) => message.role === 'user')
             .map((message) => ({ message }));
     }, [messages]);
 
@@ -255,7 +257,7 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
             const safeIndex = ((selectedIndex % total) + total) % total;
             const selected = filteredMessages[safeIndex];
             if (selected) {
-                void navigateToMessage(selected.message.info.id);
+                void navigateToMessage(selected.message.messageId);
             }
         }
     }, [filteredMessages, navigateToMessage, selectedIndex]);
@@ -348,12 +350,12 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                         </div>
                     ) : (
                         filteredMessages.map(({ message }, index) => {
-                            const preview = getMessagePreview(message.parts, undefined, t);
-                            const timestamp = message.info.time.created;
+                            const preview = getFullText(message.parts) || message.parts.filter((part) => part.type === 'attachment').map((part) => part.name).join(', ');
+                            const timestamp = message.createdAt;
                             const dateGroup = formatDateGroup(timestamp);
                             const previous = filteredMessages[index - 1];
                             const previousDateGroup = previous
-                                ? formatDateGroup(previous.message.info.time.created)
+                                ? formatDateGroup(previous.message.createdAt)
                                 : null;
                             const showDateGroup = dateGroup !== previousDateGroup;
                             const messageTime = formatMessageTime(timestamp);
@@ -364,7 +366,7 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                                 : null;
 
                             return (
-                                <React.Fragment key={message.info.id}>
+                                <React.Fragment key={message.messageId}>
                                     {showDateGroup && (
                                         <div className="sticky top-0 z-10 flex items-center gap-3 bg-surface-elevated/95 py-2 backdrop-blur-sm">
                                             <div className="h-px flex-1 bg-border/60" />
@@ -378,12 +380,12 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                                         ref={(element) => {
                                             itemRefs.current[index] = element;
                                         }}
-                                        data-timeline-message-id={message.info.id}
+                                        data-timeline-message-id={message.messageId}
                                         className={cn(
                                             "group flex items-center gap-3 py-1.5 hover:bg-interactive-hover/30 rounded transition-colors cursor-pointer",
                                             isSelected && "bg-interactive-selection text-interactive-selection-foreground"
                                         )}
-                                        onClick={() => void navigateToMessage(message.info.id)}
+                                        onClick={() => void navigateToMessage(message.messageId)}
                                         onMouseEnter={() => setSelectedIndex(index)}
                                     >
                                         <span className={cn(
@@ -409,7 +411,7 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                                                             className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                                                             onClick={async (e) => {
                                                                 e.stopPropagation();
-                                                                await revertToMessage(currentSessionId, message.info.id);
+                                                                await revertToMessage(currentSessionId, message.messageId);
                                                                 onOpenChange(false);
                                                             }}
                                                         >
@@ -426,11 +428,11 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                                                             className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                handleFork(message.info.id);
+                                                                handleFork(message.messageId);
                                                             }}
-                                                            disabled={forkingMessageId === message.info.id}
+                                                            disabled={forkingMessageId === message.messageId}
                                                         >
-                                                            {forkingMessageId === message.info.id ? (
+                                                            {forkingMessageId === message.messageId ? (
                                                                 <Icon name="loader-4" className="h-4 w-4 animate-spin" />
                                                             ) : (
                                                                 <Icon name="git-branch" className="h-4 w-4" />

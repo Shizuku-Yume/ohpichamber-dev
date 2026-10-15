@@ -21,15 +21,11 @@ Use this doc when you ask an agent to change tool/header/description behavior.
   - If you want to change how `read/grep/perplexity/webfetch/...` look in compact/grouped mode, edit here.
 
 - `ToolPart.tsx`
-  - Renders expandable tool rows (bash/edit/write/question/task + fallback).
-  - Controls expandable header title/description/diff stats/timer and expanded output body.
-  - If you want to change expandable tool layout, edit here.
-
-- `taskToolModel.ts`
-  - Owns Task metadata parsing and child-session summary projection.
-  - `part.state.metadata.sessionId` is the only live identity contract between a Task and its child session.
-  - A running Task may briefly have no `sessionId`; render it as waiting until the authoritative part update arrives. Never match parallel children by order, title, timestamp, or status.
-  - Part-level metadata and output parsing exist only for older persisted records and never override state metadata.
+  - Renders expandable tool rows and controls header, diff stats, timer, and output.
+  - `TaskToolSessions` queries `canonicalClient.listSubagents(sessionId)` for canonical `task` calls, joining exact `parentSessionId` and `toolCallId` without legacy output parsing.
+  - Desktop opens a read-only context tab; pinned columns reuse `openSession`; mobile selects the child in place.
+  - Failed child queries preserve known rows and expose retry.
+  - `TurnActivity` and `ProgressiveGroup` thread addressed session/directory through `MemoExpandableToolRow`, whose comparator includes both.
 
 - `toolPresentation.tsx`
   - Shared icon mapping for tool names (`getToolIcon`).

@@ -14,7 +14,7 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
 import { DirectoryExplorerDialog } from './DirectoryExplorerDialog';
 import { cn, formatPathForDisplay } from '@/lib/utils';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { canDeleteWorktreeWithoutConfirm, getWorktreeStatus } from '@/lib/worktrees/worktreeStatus';
 import { getWorktreeDisplayName, removeProjectWorktree } from '@/lib/worktrees/worktreeManager';
@@ -146,7 +146,7 @@ export const SessionDialogs: React.FC = () => {
 
         if (payload.sessions.length === 1) {
             const target = payload.sessions[0];
-            const success = await deleteSession(target.id);
+            const success = await deleteSession(target.sessionId);
             if (success) {
                 toast.success(t('sessions.sidebar.session.delete.success'));
             } else {
@@ -155,7 +155,7 @@ export const SessionDialogs: React.FC = () => {
             return;
         }
 
-        const ids = payload.sessions.map((session) => session.id);
+        const ids = payload.sessions.map((session) => session.sessionId);
         const { deletedIds, failedIds } = await deleteSessions(ids);
 
         if (deletedIds.length > 0) {
@@ -200,7 +200,7 @@ export const SessionDialogs: React.FC = () => {
 
         const summaries = deleteDialog.sessions
             .map((session) => {
-                const metadata = getWorktreeMetadata(session.id);
+                const metadata = getWorktreeMetadata(session.sessionId);
                 return metadata ? { session, metadata } : null;
             })
             .filter((entry): entry is { session: Session; metadata: WorktreeMetadata } => Boolean(entry));
@@ -440,7 +440,7 @@ export const SessionDialogs: React.FC = () => {
                 openDeleteDialog({ sessions, mode: 'worktree', worktree });
                 return;
             }
-            await removeSelectedWorktreeInBackground(worktree, sessions.map((session) => session.id), true);
+            await removeSelectedWorktreeInBackground(worktree, sessions.map((session) => session.sessionId), true);
         } finally {
             quickDeletePathsRef.current.delete(pathKey);
         }
@@ -478,7 +478,7 @@ export const SessionDialogs: React.FC = () => {
                 }
                 void removeSelectedWorktreeInBackground(
                     selectedWorktree,
-                    deleteDialog.sessions.map((session) => session.id),
+                    deleteDialog.sessions.map((session) => session.sessionId),
                     deleteDialogShouldDeleteLocalBranch,
                 );
                 closeDeleteDialog();
@@ -487,7 +487,7 @@ export const SessionDialogs: React.FC = () => {
 
             if (deleteDialog.sessions.length === 1) {
                 const target = deleteDialog.sessions[0];
-                const success = await deleteSession(target.id);
+                const success = await deleteSession(target.sessionId);
                 if (!success) {
                     toast.error(t('sessions.sidebar.session.delete.error'));
                     setIsProcessingDelete(false);
@@ -500,7 +500,7 @@ export const SessionDialogs: React.FC = () => {
                     },
                 });
             } else {
-                const ids = deleteDialog.sessions.map((session) => session.id);
+                const ids = deleteDialog.sessions.map((session) => session.sessionId);
                 const { deletedIds, failedIds } = await deleteSessions(ids);
 
                 if (deletedIds.length > 0) {
@@ -602,7 +602,7 @@ export const SessionDialogs: React.FC = () => {
                     <ul className={cn(isWorktreeDelete ? 'mt-2 space-y-1' : 'space-y-0.5')}>
                         {deleteDialog.sessions.slice(0, 5).map((session) => (
                             <li
-                                key={session.id}
+                                key={session.sessionId}
                                 className={cn(
                                     isWorktreeDelete
                                         ? 'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground'
@@ -613,7 +613,7 @@ export const SessionDialogs: React.FC = () => {
                                     •
                                 </span>
                                 <span dir="auto" className="truncate">
-                                    {session.title || t('sessions.sidebar.session.untitled')}
+                                    {session.metadata?.title || t('sessions.sidebar.session.untitled')}
                                 </span>
                             </li>
                         ))}

@@ -32,7 +32,7 @@ useSessionUIStore.subscribe((state, previousState) => {
  */
 export const navigateSessionHistory = (delta: -1 | 1): boolean => {
   const sessionsById = new Map(
-    useGlobalSessionsStore.getState().activeSessions.map((session) => [session.id, session] as const),
+    useGlobalSessionsStore.getState().activeSessions.map((session) => [session.sessionId, session] as const),
   );
   let nextCursor = cursor + delta;
   while (nextCursor >= 0 && nextCursor < visitedSessionIds.length) {
@@ -41,7 +41,7 @@ export const navigateSessionHistory = (delta: -1 | 1): boolean => {
       cursor = nextCursor;
       navigating = true;
       try {
-        useSessionUIStore.getState().setCurrentSession(session.id, resolveGlobalSessionDirectory(session));
+        useSessionUIStore.getState().setCurrentSession(session.sessionId, resolveGlobalSessionDirectory(session));
       } finally {
         navigating = false;
       }

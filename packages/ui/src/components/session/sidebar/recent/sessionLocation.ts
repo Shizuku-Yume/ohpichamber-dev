@@ -1,9 +1,10 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { DirectoryOwner } from '../sessions/sessionOwnership';
 import { formatDirectoryName } from '@/lib/utils';
 import { formatProjectLabel, normalizePath } from '../utils';
 import { buildWorktreeByPathIndex, findPrefixWorktreeEntry, resolveBranchLiveFirst } from '../worktreeIndex';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 type SidebarSessionLocationProject = {
   id: string;
@@ -72,15 +73,15 @@ export const resolveSidebarSessionLocations = ({
   // resolve pass; the longest-prefix walk below reuses it for subdirectories.
   const worktreeByPath = buildWorktreeByPathIndex(availableWorktreesByProject, projects);
   for (const session of sessions) {
-    const directory = normalizePath(session.directory ?? null);
+    const directory = normalizePath(resolveGlobalSessionDirectory(session));
     if (!directory) continue;
-    const indexedOwner = ownerBySessionId.get(session.id) ?? null;
+    const indexedOwner = ownerBySessionId.get(session.sessionId) ?? null;
     const indexedOwnerId = indexedOwner?.projectId ?? null;
     let owner: SidebarSessionLocationProject | null = indexedOwnerId
       ? projects.find((project) => project.id === indexedOwnerId) ?? null
       : null;
     if (owner && indexedOwner?.kind === 'space') {
-      locations.set(session.id, {
+      locations.set(session.sessionId, {
         projectId: owner.id,
         groupDirectory: indexedOwner.scopeDirectory,
         projectLabel: formatProjectLabel(owner.label?.trim() || formatDirectoryName(owner.normalizedPath, homeDirectory) || owner.normalizedPath),
@@ -120,7 +121,7 @@ export const resolveSidebarSessionLocations = ({
     const hidden = !branch
       || branch === 'HEAD'
       || (hideBranchMatchingProjectLabel && branch === projectLabel);
-    locations.set(session.id, {
+    locations.set(session.sessionId, {
       projectId: owner.id,
       groupDirectory: directory,
       projectLabel,

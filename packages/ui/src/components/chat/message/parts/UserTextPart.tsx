@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { Icon } from '@/components/icon/Icon';
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 import type { AgentMentionInfo } from '../types';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { useUIStore } from '@/stores/useUIStore';
@@ -20,10 +20,6 @@ import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { withAttachmentChips, type InlineTextNode } from './attachmentCitationChips';
 import { prepareUserMarkdownContent, SKILL_TOKEN_PATTERN } from './userTextPartContent';
 import { extractTerminalContexts } from '@/lib/messages/terminalContext';
-import { readContextPart } from '@/lib/messages/contextParts';
-import UserContextPart from './UserContextPart';
-
-type PartWithText = Part & { text?: string; content?: string; value?: string };
 
 type UserTextPartProps = {
     part: Part;
@@ -61,13 +57,9 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
     onTruncationChange,
     attachmentFilenames,
 }) => {
-    // Structured context (inline comments, terminal selections, annotations,
-    // PR context) renders as a dedicated block instead of raw prompt text.
-    const contextPayload = React.useMemo(() => readContextPart(part), [part]);
-
-    const partWithText = part as PartWithText;
-    const rawText = partWithText.text;
-    const serializedText = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
+    // Canonical parts retain context prompt text, but do not carry legacy
+    // structured context metadata.
+    const serializedText = part.type === 'text' ? part.content : '';
     const terminalContextState = React.useMemo(() => extractTerminalContexts(serializedText), [serializedText]);
     const textContent = terminalContextState.visibleText;
 
@@ -291,23 +283,12 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
         ));
     }, [attachmentFilenames, plainTextNodes]);
 
-    if (contextPayload) {
-        return (
-            <UserContextPart
-                payload={contextPayload}
-                attachmentFilenames={attachmentFilenames}
-                collapsed={isCollapsed}
-                onExpand={onExpandMessage}
-            />
-        );
-    }
-
-    if ((!textContent || textContent.trim().length === 0) && terminalContextState.contexts.length === 0) {
+    if (part.type !== 'text' || ((!textContent || textContent.trim().length === 0) && terminalContextState.contexts.length === 0)) {
         return null;
     }
 
     return (
-        <div className="relative" key={part.id || `${messageId}-user-text`}>
+        <div className="relative" key={part.partId || `${messageId}-user-text`}>
             <div
                 className={cn(
                     "break-words font-sans typography-markdown-body",

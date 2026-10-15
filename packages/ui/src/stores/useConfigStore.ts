@@ -4,10 +4,14 @@ import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/auto
 import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
-import { findCatalogModel, type Provider, type Model, type Agent, type Config } from "@/lib/opencode/model";
+import { findCatalogModel, type Provider, type Model, type Agent, type Config } from '@/lib/opencode/model';
+import type { ModelCatalog, ProviderAuthState, ProviderCatalog } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
 import type { DesktopSettings } from "@/lib/desktop";
 import type { CatalogKind } from "@/lib/opencode/events";
 import { opencodeClient, type OpencodeHealthProbe } from "@/lib/opencode/client";
+import { hostFilesystem } from '@/lib/host-filesystem';
+
 import { isSameProjectConfigError, readProjectConfigError, type ProjectConfigError } from "@/lib/opencode/configError";
 import { scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
 import type { ModelMetadata } from "@/types";
@@ -32,6 +36,13 @@ import { normalizePath } from "@/lib/pathNormalization";
 import { getSyncConfig, subscribeToSyncConfigChanges } from "@/sync/sync-refs";
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from "@/lib/runtime-switch";
 import { readCachedCatalog, shouldHoldFirstLoadAgainstCache, writeCachedCatalogWhenSettled, type CachedCatalog } from "./configCatalogCache";
+
+const isConfigModelValue = (value: unknown): value is Config["model"] => {
+    if (typeof value === "string") return true;
+    if (!isRecord(value)) return false;
+    return typeof value.providerID === "string" && typeof value.model === "string"
+        && (value.variant === undefined || typeof value.variant === "string");
+};
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json";
 const MODELS_DEV_PROXY_URL = "/api/openchamber/models-metadata";
@@ -191,8 +202,58 @@ type ProviderModel = Model;
  * path in this store works provider-first, so the loader regroups the catalog's
  * models under their provider and the rest of the store keeps that shape.
  */
-type ProviderWithModelList = Provider & { models: Model[] };
+type ProviderWithModelList = Provider & { models: Model[]; canonicalAuth?: ProviderAuthState };
 
+/** Convert canonical catalogs to the provider-first shape retained by picker consumers. */
+const adaptCanonicalModel = (model: ModelCatalog['models'][number]): Model => ({
+    id: `${model.provider}/${model.modelId}`,
+    modelID: model.modelId,
+    providerID: model.provider,
+    name: model.name,
+    capabilities: {
+        tools: model.toolsSupported ?? false,
+        input: model.modalities,
+        output: model.modalities,
+    },
+    variants: model.variants.map((variant) => ({ id: variant.variant })),
+    time: { released: 0 },
+    cost: [{
+        input: model.pricing?.inputPerMillionTokens ?? 0,
+        output: model.pricing?.outputPerMillionTokens ?? 0,
+        cache: {
+            read: model.pricing?.cacheReadPerMillionTokens ?? 0,
+            write: model.pricing?.cacheWritePerMillionTokens ?? 0,
+        },
+    }],
+    status: model.status ?? 'active',
+    enabled: model.enabled ?? true,
+    limit: { context: model.contextWindow, output: model.maxOutputTokens },
+});
+
+const adaptCanonicalCatalog = (
+    providerCatalog: ProviderCatalog,
+    modelCatalog: ModelCatalog,
+): ProviderWithModelList[] => {
+    const modelsByProvider = new Map<string, Model[]>();
+    for (const model of modelCatalog.models) {
+        if (model.enabled === false) continue;
+        const bucket = modelsByProvider.get(model.provider);
+        const adapted = adaptCanonicalModel(model);
+        if (bucket) bucket.push(adapted);
+        else modelsByProvider.set(model.provider, [adapted]);
+    }
+    return providerCatalog.providers
+        .filter((provider) => modelsByProvider.has(provider.providerId))
+        .map((provider) => ({
+            id: provider.providerId,
+            name: provider.name,
+            activation: 'enabled' as const,
+            package: provider.providerId,
+            canonicalAuth: provider.auth,
+            models: modelsByProvider.get(provider.providerId) ?? [],
+        }));
+
+};
 type GitModelSelection = { providerId: string; modelId: string };
 type ProviderModelSelection = { providerId: string; modelId: string; variant?: string } | null;
 
@@ -839,7 +900,7 @@ const resolveInitialDirectoryKey = (): string => {
         return DIRECTORY_KEY_GLOBAL;
     }
 
-    const directory = opencodeClient.getDirectory() ?? useDirectoryStore.getState().currentDirectory;
+    const directory = hostFilesystem.getDirectory() ?? useDirectoryStore.getState().currentDirectory;
     return toConfigDirectoryKey(directory);
 };
 
@@ -1575,6 +1636,13 @@ declare global {
     }
 }
 
+type ConfigStoreWithPersist = UseBoundStore<StoreApi<ConfigStore>> & {
+    persist: {
+        hasHydrated: () => boolean;
+        onFinishHydration: (callback: (state: ConfigStore) => void) => () => void;
+    };
+};
+
 /** The startup step that failed, with the underlying error text when one exists. */
 export type InitFailure = {
     step: 'serverUnreachable' | 'openCodeUnavailable' | 'loadAgents' | 'unexpected';
@@ -1700,7 +1768,7 @@ const isSameDefaults = (previous: { [key: string]: string }, next: { [key: strin
 /** The last read of which voice keys the server holds, per runtime (see refreshVoiceApiKeys). */
 let voiceApiKeysLoad: { runtimeKey: string; promise: Promise<void> } | null = null;
 
-export const useConfigStore = create<ConfigStore>()(
+export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
     devtools(
         persist(
             (set, get) => ({
@@ -2152,7 +2220,7 @@ export const useConfigStore = create<ConfigStore>()(
                         markStartupTrace('loadProviders:skippedUnknownDirectory', { requestedDirectory, source: options?.source ?? 'unknown' });
                         return;
                     }
-                    const effectiveDirectory = configDirectory ?? opencodeClient.getDirectory() ?? null;
+                    const effectiveDirectory = configDirectory ?? hostFilesystem.getDirectory() ?? null;
                     const directoryKey = toDirectoryKey(configDirectory);
                     const inFlightKey = getConfigLoadKey(runtimeContext, directoryKey);
                     const source = options?.source ?? 'unknown';
@@ -2191,37 +2259,29 @@ export const useConfigStore = create<ConfigStore>()(
                                     }
                                 },
                             );
-                            const apiResult = await measureStartupTrace(
-                                'loadProviders:api',
-                                () => opencodeClient.getProvidersForConfig(fromDirectoryKey(directoryKey), { fresh: options?.fresh }),
+                            const workspace = await measureStartupTrace(
+                                'loadProviders:workspace',
+                                () => canonicalClient.resolveWorkspace(configDirectory),
                                 { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
                             );
+                            const [providerCatalog, modelCatalog] = await Promise.all([
+                                measureStartupTrace(
+                                    'loadProviders:providers',
+                                    () => canonicalClient.getProviders(workspace.workspaceId),
+                                    { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
+                                ),
+                                measureStartupTrace(
+                                    'loadProviders:models',
+                                    () => canonicalClient.getModels(workspace.workspaceId),
+                                    { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
+                                ),
+                            ]);
                             if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-                            const providers = Array.isArray(apiResult?.providers) ? apiResult.providers : [];
-                            const catalogModels = Array.isArray(apiResult?.models) ? apiResult.models : [];
-                            // v2 has no `default` map any more: the server resolves one
-                            // model for the directory. Keep the store's provider-keyed
-                            // shape so the rest of the store is unchanged.
-                            const defaults: { [key: string]: string } = apiResult?.default
-                                ? { [apiResult.default.providerID]: apiResult.default.id }
-                                : {};
-
-                            const modelsByProvider = new Map<string, ProviderModel[]>();
-                            for (const model of catalogModels) {
-                                if (!model.enabled) continue;
-                                const bucket = modelsByProvider.get(model.providerID);
-                                if (bucket) bucket.push(model);
-                                else modelsByProvider.set(model.providerID, [model]);
-                            }
-                            // A provider the user switched off, or one with no usable
-                            // model, is not offerable — v2 replaced the `connected` list
-                            // with these two facts.
-                            const processedProviders: ProviderWithModelList[] = providers
-                                .filter((provider) => provider.activation !== "disabled" && modelsByProvider.has(provider.id))
-                                .map((provider) => ({
-                                    ...provider,
-                                    models: modelsByProvider.get(provider.id) ?? [],
-                                }));
+                            const processedProviders = adaptCanonicalCatalog(providerCatalog, modelCatalog);
+                            // Canonical catalogs intentionally do not publish a resolved default.
+                            // Keep the prior map for cache/selection compatibility; model selection
+                            // still resolves from explicit settings, the current pick, or fallback.
+                            const defaults = previousDefaults;
 
                             if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
                             if (holdFirstLoadAgainstCache(_providersShownFromCache, inFlightKey, countCatalogModels(processedProviders))) {
@@ -2754,7 +2814,7 @@ export const useConfigStore = create<ConfigStore>()(
                         markStartupTrace('loadAgents:skippedUnknownDirectory', { requestedDirectory, source: options?.source ?? 'unknown' });
                         return false;
                     }
-                    const effectiveDirectory = configDirectory ?? opencodeClient.getDirectory() ?? null;
+                    const effectiveDirectory = configDirectory ?? hostFilesystem.getDirectory() ?? null;
                     const directoryKey = toDirectoryKey(configDirectory);
                     const inFlightKey = getConfigLoadKey(runtimeContext, directoryKey);
                     const source = options?.source ?? 'unknown';
@@ -2837,7 +2897,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 ? normalizeOptionalString(latestSyncedOpencodeConfig.default_agent)
                                 : undefined;
                             const latestSyncedOpencodeDefaultModel = hasLatestSyncedOpencodeConfig
-                                ? configModelIdentifier(latestSyncedOpencodeConfig.model)
+                                ? configModelIdentifier(isConfigModelValue(latestSyncedOpencodeConfig.model) ? latestSyncedOpencodeConfig.model : undefined)
                                 : undefined;
 
                             const providers = get().activeDirectoryKey === directoryKey
@@ -3591,7 +3651,7 @@ export const useConfigStore = create<ConfigStore>()(
                     }
 
                     const opencodeDefaultAgent = normalizeOptionalString(syncedConfig.default_agent);
-                    const opencodeDefaultModel = configModelIdentifier(syncedConfig.model);
+                    const opencodeDefaultModel = configModelIdentifier(isConfigModelValue(syncedConfig.model) ? syncedConfig.model : undefined);
                     const projectDefaults = getProjectDefaultsForConfigDirectory(configDirectory);
 
                     set((state) => {
@@ -4143,7 +4203,7 @@ export const useConfigStore = create<ConfigStore>()(
                             // app starts on a worktree directory, load config under the owning
                             // initial directory's key so its draft finds a ready snapshot
                             // instead of triggering a second provider/agent load.
-                            const initialDirectory = opencodeClient.getDirectory()
+                            const initialDirectory = hostFilesystem.getDirectory()
                                 ?? useDirectoryStore.getState().currentDirectory
                                 ?? fromDirectoryKey(get().activeDirectoryKey);
                             const resolvedProject = resolveProjectForSessionDirectory(
@@ -4165,7 +4225,7 @@ export const useConfigStore = create<ConfigStore>()(
                                     initialDirectory,
                                     configDirectory,
                                 });
-                                opencodeClient.setDirectory(configDirectory);
+                                hostFilesystem.setDirectory(configDirectory);
                                 useDirectoryStore.getState().setDirectory(configDirectory, { showOverlay: false });
                             }
                             const configDirectoryKey = toDirectoryKey(configDirectory);
@@ -4190,7 +4250,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 const configError = get().projectConfigErrors[configDirectoryKey];
                                 if (configError) {
                                     markStartupTrace('initializeApp:projectConfigInvalid', { configDirectoryKey, name: configError.name });
-                                } else if (await opencodeClient.getDirectoryAvailability(configDirectory) === 'missing') {
+                                } else if (await hostFilesystem.getDirectoryAvailability(configDirectory) === 'missing') {
                                     if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
                                     markStartupTrace('initializeApp:projectDirectoryMissing', { configDirectoryKey });
                                 } else {

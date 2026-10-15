@@ -1,4 +1,3 @@
-import type { Session } from '@/lib/opencode/model';
 import React from 'react';
 import type { SessionNode } from '../types';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
@@ -25,12 +24,11 @@ const getSessionNodeActivityState = (
   unreadSessionIds: Set<string>,
   includeUnreadSubtasks: boolean,
 ): CollapsedActivityState => {
-  if (activeSessionIds.has(node.session.id)) return 'active';
+  if (activeSessionIds.has(node.session.sessionId)) return 'active';
 
   let state: CollapsedActivityState = null;
-  // SAFETY: SessionNode sessions are SDK Session records; parentID is the optional hierarchy field.
-  const isSubtask = Boolean((node.session as Session & { parentID?: string | null }).parentID);
-  if (unreadSessionIds.has(node.session.id) && (includeUnreadSubtasks || !isSubtask)) state = 'unread';
+  const isSubtask = Boolean(node.session.parentSessionId);
+  if (unreadSessionIds.has(node.session.sessionId) && (includeUnreadSubtasks || !isSubtask)) state = 'unread';
 
   for (const child of node.children) {
     state = mergeCollapsedActivityStates(
@@ -72,8 +70,8 @@ const collectActivityIds = (nodes: readonly SessionNode[], includeUnreadSubtasks
   const active = new Set<string>();
   const unread = new Set<string>();
   const visit = (node: SessionNode, isSubtask: boolean): void => {
-    active.add(node.session.id);
-    if (!isSubtask || includeUnreadSubtasks) unread.add(node.session.id);
+    active.add(node.session.sessionId);
+    if (!isSubtask || includeUnreadSubtasks) unread.add(node.session.sessionId);
     node.children.forEach((child) => visit(child, true));
   };
   nodes.forEach((node) => visit(node, false));
@@ -94,8 +92,8 @@ export const useCollapsedSessionActivityState = ({
   const active = useGlobalSessionStatusStore(React.useCallback((state): CollapsedActivityState => {
     if (!enabled) return null;
     for (const sessionId of ids.active) {
-      const status = state.statusById.get(sessionId)?.status.type;
-      if (status === 'busy' || status === 'retry') return 'active';
+      const status = state.statusById.get(sessionId)?.status;
+      if (status === 'running') return 'active';
     }
     return null;
   }, [enabled, ids.active]));

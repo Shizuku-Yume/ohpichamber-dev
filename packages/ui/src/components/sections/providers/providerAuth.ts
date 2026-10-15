@@ -9,6 +9,7 @@
  * connections rather than by a local file.
  */
 
+import type { ProviderAuthState } from '@openchamber/agent-contract';
 import type {
   ConnectionInfo,
   IntegrationExternalMethod,
@@ -108,18 +109,26 @@ interface ProviderCredentialInput {
    * integration connection but is still logged in.
    */
   optionsApiKey?: string | null;
+  /** Canonical provider credential status; never includes the secret value. */
+  canonicalAuth?: ProviderAuthState;
 }
+const getCanonicalProviderCardStatus = (auth: ProviderAuthState | undefined): ProviderCardStatus | null => {
+  if (auth?.status !== 'configured') return null;
+  return auth.source === 'managed-environment' || auth.source === 'external-environment'
+    ? { kind: 'environment' }
+    : { kind: 'connected' };
+};
 
+export const hasCanonicalStoredApiKey = (auth: ProviderAuthState | undefined): boolean =>
+  auth?.status === 'configured' && auth.method === 'api-key' && auth.source === 'stored-credential';
 /**
- * Prefer authoritative credential signals: the server either reports a
- * connection for the integration or it does not. An inline `options.apiKey` is
- * the one case the server cannot see as a connection.
+ * Canonical auth is the provider-level signal. Integration connections and
+ * inline config keys remain signals for retained authentication flows.
  */
 export const providerHasCredentials = (input: ProviderCredentialInput): boolean => {
-  if ((input.connections?.length ?? 0) > 0) {
-    return true;
-  }
-  return typeof input.optionsApiKey === 'string' && input.optionsApiKey.trim().length > 0;
+  if ((input.connections?.length ?? 0) > 0) return true;
+  if (typeof input.optionsApiKey === 'string' && input.optionsApiKey.trim().length > 0) return true;
+  return input.canonicalAuth?.status === 'configured';
 };
 
 /**
@@ -139,20 +148,23 @@ export type ProviderCardStatus =
   | { kind: 'signInNeeded' };
 
 /**
- * The one-glance status a provider card shows. A provider with no integration
- * (a custom one from opencode.json) has nothing OpenCode can sign in to, so it
- * gets no status rather than a false "not signed in".
+ * Canonical auth remains visible while integrations load and for providers
+ * without a legacy integration. When canonical auth is missing, integration
+ * connections determine account status; an unknown integration is not failure.
  */
 export const getProviderCardStatus = (input: {
   integrations: readonly IntegrationInfo[] | null;
   providerId: string;
   optionsApiKey?: string | null;
+  canonicalAuth?: ProviderAuthState;
 }): ProviderCardStatus | null => {
-  if (input.integrations === null) return null;
+  if (input.integrations === null) return getCanonicalProviderCardStatus(input.canonicalAuth);
   const connections = getProviderConnections(input.integrations, input.providerId);
   if ((connections ?? []).some(connectionNeedsAuth)) return { kind: 'reauthNeeded' };
   const credentialCount = (connections ?? []).filter((connection) => connection.type === 'credential').length;
   if (credentialCount > 1) return { kind: 'accounts', count: credentialCount };
+  const canonicalStatus = getCanonicalProviderCardStatus(input.canonicalAuth);
+  if (canonicalStatus) return canonicalStatus;
   if (credentialCount === 1 || (input.optionsApiKey?.trim().length ?? 0) > 0) return { kind: 'connected' };
   if ((connections ?? []).some((connection) => connection.type === 'env')) return { kind: 'environment' };
   return connections === undefined ? null : { kind: 'signInNeeded' };

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { canonicalClient } from '@/api/canonicalClient';
 import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { ensureChatsRootDirectory, CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
@@ -55,11 +55,15 @@ const route = (overrides = {}) => routeMessage({
   sessionId: 'session-a', directory: '/repo', content: 'hello',
   providerID: 'provider-a', modelID: 'model-a', ...overrides,
 });
+const seedCanonicalSession = () => {
+  manager.ensureChild('/repo', { bootstrap: false });
+  manager.children.get('/repo').setState({ session: [hostSession('session-a')] });
+};
 
 
 beforeEach(async () => {
   switchRuntimeEndpoint({ apiBaseUrl: 'https://ui-native.test', runtimeKey: `ui-native-${++runtimeNumber}` });
-  stub(opencodeClient, 'getFilesystemHomeInfo', async () => ({
+  stub(hostFilesystem, 'getFilesystemHomeInfo', async () => ({
     home: '/Users/tester',
     chatsRoot: '/Users/tester/.config/openchamber/chats',
     canonicalChatsRoot: '/Users/tester/.config/openchamber/chats',
@@ -91,7 +95,7 @@ beforeEach(async () => {
   resolvedDirectories = [];
   runCalls = [];
   globalThis.fetch = async () => Response.json({ text: '', signature: '' });
-  stub(opencodeClient, 'getDirectoryAvailability', async () => 'available');
+  stub(hostFilesystem, 'getDirectoryAvailability', async () => 'available');
   stub(canonicalClient, 'resolveWorkspace', async (directory) => {
     resolvedDirectories.push(directory);
     return { workspaceId: `workspace-${resolvedDirectories.length}`, projectId: 'project-a', name: 'Workspace' };
@@ -100,6 +104,15 @@ beforeEach(async () => {
     runCalls.push({ sessionId, request, commandId });
     return runAck(sessionId);
   });
+  stub(canonicalClient, 'getSkillsCatalog', async scope => ({
+    runtimeStatus: 'ready', persistedSources: { workspace: '1', agent: '1' }, appliedSources: { workspace: '1', agent: '1' },
+    catalogRevision: '1', worker: { rootSessionId: scope.rootSessionId, workspaceId: scope.workspaceId, workerGeneration: 'worker-a' },
+    agentDirectoryId: 'agent-dir', skills: [{ skillId: 'skill-review', name: 'review', description: '', scope: 'workspace' }],
+  }));
+  stub(canonicalClient, 'expandSkill', async (scope, input) => ({
+    worker: { rootSessionId: scope.rootSessionId, workspaceId: scope.workspaceId, workerGeneration: input.workerGeneration },
+    skillId: input.skillId, catalogRevision: input.catalogRevision, message: `Expanded ${input.skillId} ${input.arguments}`.trim(),
+  }));
 });
 
 afterEach(() => {
@@ -137,7 +150,7 @@ describe('authoritative worktree routing', () => {
     const session = hostSession('missing', 'workspace-missing');
     registerWorkspaceDirectory(session.workspaceId, '/repo/.worktrees/gone');
     useGlobalSessionsStore.getState().upsertSession(session);
-    const probe = stub(opencodeClient, 'getDirectoryAvailability', async () => 'missing');
+    const probe = stub(hostFilesystem, 'getDirectoryAvailability', async () => 'missing');
     useSessionUIStore.getState().setCurrentSession(session.sessionId);
     expect(useSessionUIStore.getState().currentSessionDirectory).toBe('/repo/.worktrees/gone');
     expect(probe).not.toHaveBeenCalled();
@@ -233,7 +246,7 @@ describe('runtime worktree topology', () => {
 describe('working directory across a runtime switch', () => {
   const workOn = (directory) => {
     useDirectoryStore.setState({ currentDirectory: directory, homeDirectory: '/Users/me', isHomeReady: true });
-    opencodeClient.setDirectory(directory);
+    hostFilesystem.setDirectory(directory);
   };
   const switchRuntime = (from, to) => {
     useSessionUIStore.getState().prepareForRuntimeSwitch(from);
@@ -246,7 +259,7 @@ describe('working directory across a runtime switch', () => {
     switchRuntime('host:switch-a', 'host:switch-b');
 
     expect(useDirectoryStore.getState()).toMatchObject(UNKNOWN);
-    expect(opencodeClient.getDirectory()).toBeUndefined();
+    expect(hostFilesystem.getDirectory()).toBeUndefined();
 
     // Leaving the second host before it named its home records nothing for it,
     // and the first host gets its own directory back.
@@ -268,7 +281,7 @@ describe('working directory across a runtime switch', () => {
 
     switchRuntime('host:switch-f', 'host:switch-h');
     expect(useDirectoryStore.getState()).toMatchObject(UNKNOWN);
-    expect(opencodeClient.getDirectory()).toBeUndefined();
+    expect(hostFilesystem.getDirectory()).toBeUndefined();
 
     switchRuntime('host:switch-h', 'host:switch-f');
     expect(useDirectoryStore.getState().currentDirectory).toBe('/home/f/project');
@@ -491,12 +504,12 @@ describe('openNewSessionDraft project binding', () => {
   });
 
   test('keeps a Chat draft that replaces a project draft while stale-directory recovery is pending', async () => {
-    const originalGetDirectoryAvailability = opencodeClient.getDirectoryAvailability;
+    const originalGetDirectoryAvailability = hostFilesystem.getDirectoryAvailability;
     const originalActivateDirectory = useConfigStore.getState().activateDirectory;
     const availabilityCalls = [];
     const availabilityResolvers = [];
     useConfigStore.setState({ activateDirectory: async () => {} });
-    opencodeClient.getDirectoryAvailability = (directory) => {
+    hostFilesystem.getDirectoryAvailability = (directory) => {
       availabilityCalls.push(directory);
       return new Promise((resolve) => {
         availabilityResolvers.push(resolve);
@@ -536,7 +549,7 @@ describe('openNewSessionDraft project binding', () => {
       });
       expect(getDeferredSafeStorage().getItem(DRAFT_TARGET_KEY)).toBe(persistedTargetBeforeResolution);
     } finally {
-      opencodeClient.getDirectoryAvailability = originalGetDirectoryAvailability;
+      hostFilesystem.getDirectoryAvailability = originalGetDirectoryAvailability;
       useConfigStore.setState({ activateDirectory: originalActivateDirectory });
     }
   });
@@ -557,7 +570,7 @@ describe('openNewSessionDraft project binding', () => {
   });
 
   test('repairs a stale persisted project directory through recovery', async () => {
-    const originalGetDirectoryAvailability = opencodeClient.getDirectoryAvailability;
+    const originalGetDirectoryAvailability = hostFilesystem.getDirectoryAvailability;
     const originalActivateDirectory = useConfigStore.getState().activateDirectory;
     getDeferredSafeStorage().setItem(
       DRAFT_TARGET_KEY,
@@ -565,7 +578,7 @@ describe('openNewSessionDraft project binding', () => {
     );
     useDirectoryStore.setState({ currentDirectory: '' });
     useConfigStore.setState({ activateDirectory: async () => {} });
-    opencodeClient.getDirectoryAvailability = async () => 'missing';
+    hostFilesystem.getDirectoryAvailability = async () => 'missing';
 
     try {
       useSessionUIStore.getState().openNewSessionDraft();
@@ -583,7 +596,7 @@ describe('openNewSessionDraft project binding', () => {
         directoryOverride: projectA.path,
       });
     } finally {
-      opencodeClient.getDirectoryAvailability = originalGetDirectoryAvailability;
+      hostFilesystem.getDirectoryAvailability = originalGetDirectoryAvailability;
       useConfigStore.setState({ activateDirectory: originalActivateDirectory });
     }
   });
@@ -721,11 +734,11 @@ describe('createSession draft lifecycle', () => {
 
   beforeEach(() => {
     originalCreateSession = canonicalClient.createSession;
-    originalGetDirectoryAvailability = opencodeClient.getDirectoryAvailability;
+    originalGetDirectoryAvailability = hostFilesystem.getDirectoryAvailability;
     originalProjects = useProjectsStore.getState().projects;
     originalActiveProjectId = useProjectsStore.getState().activeProjectId;
     originalDirectoryState = useDirectoryStore.getState();
-    originalClientDirectory = opencodeClient.getDirectory();
+    originalClientDirectory = hostFilesystem.getDirectory();
     originalLastDirectory = getDeferredSafeStorage().getItem('lastDirectory');
     useSessionUIStore.setState({
       currentSessionId: null,
@@ -736,10 +749,10 @@ describe('createSession draft lifecycle', () => {
 
   afterEach(() => {
     canonicalClient.createSession = originalCreateSession;
-    opencodeClient.getDirectoryAvailability = originalGetDirectoryAvailability;
+    hostFilesystem.getDirectoryAvailability = originalGetDirectoryAvailability;
     useProjectsStore.setState({ projects: originalProjects, activeProjectId: originalActiveProjectId });
     useDirectoryStore.setState(originalDirectoryState, true);
-    opencodeClient.setDirectory(originalClientDirectory ?? undefined);
+    hostFilesystem.setDirectory(originalClientDirectory ?? undefined);
     if (originalLastDirectory === null) {
       getDeferredSafeStorage().removeItem('lastDirectory');
     } else {
@@ -765,7 +778,7 @@ describe('createSession draft lifecycle', () => {
       activeProjectId: 'project-main',
     });
     useDirectoryStore.getState().setDirectory('/private/deleted-worktree', { showOverlay: false });
-    opencodeClient.getDirectoryAvailability = async () => 'missing';
+    hostFilesystem.getDirectoryAvailability = async () => 'missing';
 
     useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: '/private/deleted-worktree' });
     await Bun.sleep(0);
@@ -786,7 +799,7 @@ describe('createSession draft lifecycle', () => {
     });
     useDirectoryStore.getState().setDirectory('/private/deleted-worktree', { showOverlay: false });
     useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: '/private/deleted-worktree' });
-    opencodeClient.getDirectoryAvailability = async () => 'missing';
+    hostFilesystem.getDirectoryAvailability = async () => 'missing';
     canonicalClient.createSession = async (request) => {
       createSessionCalls.push(resolvedDirectories.at(-1));
       return { session: hostSession('session-fallback', request.workspaceId) };
@@ -807,7 +820,7 @@ describe('createSession draft lifecycle', () => {
     });
     useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: '/private/deleted-worktree', preserveDirectoryOverride: true });
     expect(useSessionUIStore.getState().newSessionDraft.preserveDirectoryOverride).toBe(true);
-    opencodeClient.getDirectoryAvailability = async () => 'missing';
+    hostFilesystem.getDirectoryAvailability = async () => 'missing';
     canonicalClient.createSession = async (request) => {
       createSessionCalls.push(resolvedDirectories.at(-1));
       return { session: hostSession('session-pinned', request.workspaceId) };
@@ -827,7 +840,7 @@ describe('createSession draft lifecycle', () => {
     useDirectoryStore.getState().setDirectory('/private/deleted-worktree', { showOverlay: false });
     useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: '/private/deleted-worktree' });
     expect(useSessionUIStore.getState().newSessionDraft.preserveDirectoryOverride).not.toBe(true);
-    opencodeClient.getDirectoryAvailability = async () => 'missing';
+    hostFilesystem.getDirectoryAvailability = async () => 'missing';
     canonicalClient.createSession = async (request) => {
       createSessionCalls.push(resolvedDirectories.at(-1));
       return { session: hostSession('session-chat-input', request.workspaceId) };
@@ -846,7 +859,7 @@ describe('createSession draft lifecycle', () => {
     });
     useDirectoryStore.getState().setDirectory('/private/unavailable-worktree', { showOverlay: false });
     useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: '/private/unavailable-worktree' });
-    opencodeClient.getDirectoryAvailability = async () => 'unknown';
+    hostFilesystem.getDirectoryAvailability = async () => 'unknown';
     canonicalClient.createSession = async (request) => {
       createSessionCalls.push(resolvedDirectories.at(-1));
       return { session: hostSession('session-unavailable', request.workspaceId) };
@@ -866,7 +879,7 @@ describe('createSession draft lifecycle', () => {
       activeProjectId: 'project-main',
     });
     useDirectoryStore.getState().setDirectory('/private/deleted-worktree', { showOverlay: false });
-    opencodeClient.getDirectoryAvailability = () => new Promise((resolve) => {
+    hostFilesystem.getDirectoryAvailability = () => new Promise((resolve) => {
       availabilityResolvers.push(resolve);
     });
     canonicalClient.createSession = async (request) => {
@@ -896,7 +909,7 @@ describe('createSession draft lifecycle', () => {
     });
     useDirectoryStore.getState().setDirectory('/private/deleted-worktree', { showOverlay: false });
     useSessionUIStore.getState().openNewSessionDraft();
-    opencodeClient.getDirectoryAvailability = async () => 'missing';
+    hostFilesystem.getDirectoryAvailability = async () => 'missing';
     canonicalClient.createSession = async () => {
       throw new Error('offline');
     };
@@ -965,14 +978,33 @@ describe('native prompt routing', () => {
     expect(runCalls[0].request.input.text).toBe('Review auth');
     expect(runCalls[0].request.input.context).toEqual([]);
   });
-  test('keeps a cached skill invocation and arguments with its native instruction', async () => {
+  test('expands a cached skill through the canonical catalog with arguments', async () => {
+    seedCanonicalSession();
     useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ name: 'review', path: '/skills/review', scope: 'project', source: 'agents' }] } });
-    expect(await route({ content: '/review auth', skills: { names: ['deploy'], instructionFor: names => `Use ${names.join(',')}` } })).toBe('prompt');
+    expect(await route({ content: '/review auth', skills: { names: [] } })).toBe('prompt');
     expect(runCalls[0].request.input).toMatchObject({
-      text: '/review auth', context: [{ kind: 'instruction', text: 'Use deploy' }, { kind: 'instruction', text: 'Use review' }],
+      text: '/review auth', context: [{ kind: 'instruction', text: 'Expanded skill-review auth' }],
     });
   });
+  test('deduplicates inline canonical skill names', async () => {
+    seedCanonicalSession();
+    const expansion = stub(canonicalClient, 'expandSkill', async (scope, input) => ({
+      worker: { rootSessionId: scope.rootSessionId, workspaceId: scope.workspaceId, workerGeneration: input.workerGeneration },
+      skillId: input.skillId, catalogRevision: input.catalogRevision, message: 'Expanded once',
+    }));
+    await route({ content: '$review', skills: { names: ['review', 'review'] } });
+    expect(expansion).toHaveBeenCalledTimes(1);
+    expect(runCalls[0].request.input.context).toEqual([{ kind: 'instruction', text: 'Expanded once' }]);
+  });
+  test('does not dispatch when canonical skill expansion fails', async () => {
+    seedCanonicalSession();
+    const failure = new Error('catalog conflict');
+    stub(canonicalClient, 'getSkillsCatalog', async () => { throw failure; });
+    await expect(route({ content: '$review', skills: { names: ['review'] } })).rejects.toBe(failure);
+    expect(runCalls).toEqual([]);
+  });
   test('keeps attachments, knowledge, quoted context and synthetic instructions on command prompts', async () => {
+    seedCanonicalSession();
     useCommandsStore.setState({ commandsByDirectory: { '/repo': [{ name: 'inspect', template: 'Inspect $ARGUMENTS' }] } });
     const primary = { attachmentId: 'image-a', uri: 'attachment://image-a', name: 'image.png', mediaType: 'image/png', size: 12 };
     const quoted = { attachmentId: 'quote-a', uri: 'attachment://quote-a', name: 'source.txt', mediaType: 'text/plain', size: 5 };
@@ -983,12 +1015,12 @@ describe('native prompt routing', () => {
         { text: 'Selected code', metadata, files: [quoted] },
         { text: 'Be concise', synthetic: true }, { text: '   ' },
       ],
-      skills: { names: ['review'], instructionFor: () => 'Use review' },
+      skills: { names: ['review'] },
     });
     expect(runCalls[0].request.input).toEqual({
       text: 'Inspect auth', attachments: [primary, quoted], context: [
         { kind: 'instruction', text: 'Pinned knowledge' }, { kind: 'context', text: 'Selected code', metadata },
-        { kind: 'synthetic', text: 'Be concise' }, { kind: 'instruction', text: 'Use review' },
+        { kind: 'synthetic', text: 'Be concise' }, { kind: 'instruction', text: 'Expanded skill-review' },
       ],
     });
   });
@@ -1177,58 +1209,30 @@ describe('goal objective native metadata', () => {
   });
 });
 
-// Catalog discovery remains Task 15's boundary; all admitted execution below is native.
-describe('slash discovery admission preservation', () => {
-  let lookup;
-  let loadSkills;
-  beforeEach(() => {
-    lookup = stub(opencodeClient, 'listCommands', async () => []);
-    loadSkills = stub(useSkillsStore.getState(), 'loadSkills', async () => true);
-  });
-  test('expands a command only known to live discovery', async () => {
-    lookup.mockResolvedValue([{ name: 'deploy', template: 'Deploy $ARGUMENTS' }]);
+describe('canonical slash skill routing', () => {
+  test('routes a cached command without OpenCode discovery', async () => {
+    useCommandsStore.setState({ commandsByDirectory: { '/repo': [{ name: 'deploy', template: 'Deploy $ARGUMENTS' }] } });
     expect(await route({ content: '/deploy staging' })).toBe('command');
-    expect(lookup).toHaveBeenCalledWith('/repo');
     expect(runCalls[0].request.input.text).toBe('Deploy staging');
   });
-  test('attaches a skill found after directory discovery completes', async () => {
-    loadSkills.mockImplementation(async directory => {
-      useSkillsStore.setState({ skillsByDirectory: { [directory]: [{ name: 'review', path: '/skills/review', scope: 'project', source: 'agents' }] } });
-      return true;
-    });
-    expect(await route({ content: '/review auth', skills: { names: [], instructionFor: names => `Use ${names.join(',')}` } })).toBe('prompt');
-    expect(runCalls[0].request.input.context).toEqual([{ kind: 'instruction', text: 'Use review' }]);
+  test('routes a cached skill through canonical expansion', async () => {
+    seedCanonicalSession();
+    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ name: 'review', path: '/skills/review', scope: 'project', source: 'agents' }] } });
+    expect(await route({ content: '/review auth', skills: { names: [] } })).toBe('prompt');
+    expect(runCalls[0].request.input.context).toEqual([{ kind: 'instruction', text: 'Expanded skill-review auth' }]);
   });
-  test('live command discovery wins over an equally named discovered skill', async () => {
-    lookup.mockResolvedValue([{ name: 'review', template: 'Review $ARGUMENTS' }]);
-    loadSkills.mockImplementation(async directory => {
-      useSkillsStore.setState({ skillsByDirectory: { [directory]: [{ name: 'review', path: '/skills/review', scope: 'project', source: 'agents' }] } });
-      return true;
-    });
-    expect(await route({ content: '/review auth' })).toBe('command');
-    expect(runCalls[0].request.input.text).toBe('Review auth');
-    expect(runCalls[0].request.input.context).toEqual([]);
-  });
-  test('does not borrow a cached command or skill from another directory', async () => {
-    useCommandsStore.setState({ commandsByDirectory: { '/other': [{ name: 'review', template: 'Wrong $ARGUMENTS' }] } });
-    useSkillsStore.setState({ skillsByDirectory: { '/other': [{ name: 'review', path: '/skills/review', scope: 'project', source: 'agents' }] } });
-    expect(await route({ content: '/review auth' })).toBe('prompt');
-    expect(runCalls[0].request.input).toMatchObject({ text: '/review auth', context: [] });
-    expect(lookup).toHaveBeenCalledWith('/repo');
-  });
-  test('preserves unknown slash text and context after a successful empty discovery', async () => {
+  test('preserves unknown slash text and attached context', async () => {
     await route({ content: '/unknown auth', additionalParts: [{ text: 'Quoted selection', synthetic: true }] });
-    expect(runCalls[0].request.input).toMatchObject({ text: '/unknown auth', context: [{ kind: 'synthetic', text: 'Quoted selection' }] });
+    expect(runCalls[0].request.input).toMatchObject({
+      text: '/unknown auth', context: [{ kind: 'synthetic', text: 'Quoted selection' }],
+    });
   });
-  test('a failed catalog read never admits raw slash text as an empty-success fallback', async () => {
-    const failure = new Error('catalog unavailable');
-    lookup.mockRejectedValue(failure);
-    await expect(route({ content: '/deploy staging' })).rejects.toBe(failure);
-    expect(runCalls).toEqual([]);
-  });
-  test('a failed skill discovery never silently sends an unresolved invocation', async () => {
-    loadSkills.mockResolvedValue(false);
-    await expect(route({ content: '/unknown auth' })).rejects.toBeInstanceOf(Error);
+  test('does not dispatch when canonical skill expansion fails', async () => {
+    seedCanonicalSession();
+    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ name: 'review', path: '/skills/review', scope: 'project', source: 'agents' }] } });
+    const failure = new Error('skill catalog unavailable');
+    stub(canonicalClient, 'getSkillsCatalog', async () => { throw failure; });
+    await expect(route({ content: '/review auth' })).rejects.toBe(failure);
     expect(runCalls).toEqual([]);
   });
 });

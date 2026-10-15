@@ -19,17 +19,14 @@ const getObjectVersion = (value: object): number => {
   return next;
 };
 
-// One version pair per message: its info record and its parts array. Store
-// reducers never mutate either in place: a part update replaces the message's
-// parts array, and a message update replaces its info. So the pair changes
-// whenever anything the projection reads changes, and individual parts need
-// no signature of their own.
+// Canonical messages and their embedded parts are immutable store values.
+// Replacing either invalidates the projection without scanning every part.
 const buildMessagesVersionSignature = (messages: ChatMessageEntry[]): string => {
   let signature = '';
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index];
     if (index > 0) signature += ';';
-    signature += `${getObjectVersion(message.info)}:${getObjectVersion(message.parts)}`;
+    signature += `${getObjectVersion(message)}:${getObjectVersion(message.parts)}`;
   }
   return signature;
 };

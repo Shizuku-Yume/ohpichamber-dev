@@ -95,7 +95,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
   };
   const refs = draft.transport.type === 'stdio' ? draft.transport.envCredentialRefs : draft.transport.headerCredentialRefs;
   return <SettingsPageLayout title={draft.label || t('settings.mcp.page.header.newServer')}>
-    <SettingsBackButton label={t('settings.common.actions.back')} onClick={() => { useMcpConfigStore.getState().setSelectedMcp(null); useMcpConfigStore.getState().setMcpDraft(null); }} />
+    <SettingsBackButton label={t('settings.mcp.page.back')} onClick={() => { useMcpConfigStore.getState().setSelectedMcp(null); useMcpConfigStore.getState().setMcpDraft(null); }} />
     {(error || storeError || statusError) && <p role="alert" className="text-status-error">{error || storeError || statusError}</p>}
     {applyResult && <div role="status">
       <p>{applyResult.status}</p>

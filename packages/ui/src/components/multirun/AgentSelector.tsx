@@ -41,7 +41,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
   const { t } = useI18n();
   const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
   const loadAgents = useConfigStore((state) => state.loadAgents);
-  const defaultAgentId = useConfigStore((state) => state.agentId);
+  const defaultAgentId = useConfigStore((state) => state.currentAgentName);
   const selectableAgents = getVisibleAgents();
 
   // Load agents on mount
@@ -56,7 +56,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     }
 
     const trimmedValue = value.trim();
-    if (trimmedValue.length > 0 && selectableAgents.some((agent) => agent.agentId === trimmedValue)) {
+    if (trimmedValue.length > 0 && selectableAgents.some((agent) => agent.id === trimmedValue)) {
       return;
     }
 
@@ -65,12 +65,12 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
         ? defaultAgentId.trim()
         : null;
 
-    if (candidateDefault && selectableAgents.some((agent) => agent.agentId === candidateDefault)) {
+    if (candidateDefault && selectableAgents.some((agent) => agent.id === candidateDefault)) {
       onChange(candidateDefault);
       return;
     }
 
-    const firstAgent = selectableAgents[0]?.agentId;
+    const firstAgent = selectableAgents[0]?.id;
     if (firstAgent) {
       onChange(firstAgent);
     }
@@ -96,8 +96,8 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
           <SelectGroup>
             {selectableAgents.map((agent) => (
               <SelectItem
-                key={agent.agentId}
-                value={agent.agentId}
+                key={agent.id}
+                value={agent.id}
                 className="w-auto whitespace-nowrap"
               >
                 {agent.name}

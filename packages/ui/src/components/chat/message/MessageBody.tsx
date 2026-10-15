@@ -1,5 +1,6 @@
 import React from 'react';
-import type { Part } from '@/lib/opencode/model';
+import { useMobileAppActions } from '@/apps/mobileAppContext';
+import type { Part, Session, ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 import { isQuestionTool } from '@/lib/opencode/tools';
 
 import UserTextPart from './parts/UserTextPart';
@@ -7,7 +8,7 @@ import ToolPart from './parts/ToolPart';
 import AssistantTextPart from './parts/AssistantTextPart';
 import ReasoningPart from './parts/ReasoningPart';
 import { MessageFilesDisplay } from '../FileAttachment';
-import type { ToolPart as ToolPartType } from '@/lib/opencode/model';
+type ToolPartType = ToolCallPart | ToolResultPart;
 import type { StreamPhase, ToolPopupContent, AgentMentionInfo } from './types';
 import type { TurnActivityGroup, TurnChangedFile, TurnGroupingContext } from '../lib/turns/types';
 import { cn } from '@/lib/utils';
@@ -26,11 +27,10 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useChatSessionSelection } from '../chatColumnSession';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import type { Session } from '@/lib/opencode/model';
 import { getMultiRunIdentity } from '@/lib/multirun/identity';
 import { openParallelComposer } from '@/lib/multirun/openParallelComposer';
 import { AskOtherModelsDialog } from '@/components/multirun/AskOtherModelsDialog';
-import { flattenAssistantTextParts, suggestPlanTitleFromText } from '@/lib/messages/messageText';
+import { suggestPlanTitleFromText } from '@/lib/messages/messageText';
 import { MULTIRUN_EXECUTION_FORK_PROMPT_META_TEXT } from '@/lib/messages/executionMeta';
 import { useMessageTTS } from '@/hooks/useMessageTTS';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
@@ -53,6 +53,7 @@ import { LiveFinalActivityContext } from '../components/liveActivityContext';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { toAbsoluteFilePath } from '@/lib/path-utils';
 import { useI18n } from '@/lib/i18n';
 import { extractLoopbackUrls } from '@/lib/url';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
@@ -116,7 +117,7 @@ const TurnChangedFilePillButton = React.memo(({
             type="button"
             className={CHANGED_FILE_CHIP_BUTTON_CLASS_NAME}
             aria-label={t('chat.changedFiles.actions.openFileTitle', { path: file.file })}
-            title={file.file}
+            title={t('chat.changedFiles.actions.openFileTitle', { path: file.file })}
             onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -140,28 +141,21 @@ const StaticTurnChangedFilePills = React.memo(({ files }: { files: TurnChangedFi
 
 const InteractiveTurnChangedFilePills = React.memo(({ files }: { files: TurnChangedFile[] }) => {
     const effectiveDirectory = useEffectiveDirectory();
-    const isMobile = useUIStore((state) => state.isMobile);
-    const navigateToDiff = useUIStore((state) => state.navigateToDiff);
-    const openContextDiff = useUIStore((state) => state.openContextDiff);
+    const mobileActions = useMobileAppActions();
+    const openContextFile = useUIStore((state) => state.openContextFile);
 
-    const openLastTurnDiff = React.useCallback((file: string) => {
-        if (!isMobile && effectiveDirectory) {
-            openContextDiff(effectiveDirectory, file, false, 'turn');
-            return;
-        }
+    const openFilePreview = React.useCallback((file: string) => {
+        if (!effectiveDirectory) return;
+        openContextFile(effectiveDirectory, toAbsoluteFilePath(effectiveDirectory, file));
+        mobileActions?.openFiles();
+    }, [effectiveDirectory, mobileActions, openContextFile]);
 
-        navigateToDiff(file, false, 'turn');
-    }, [effectiveDirectory, isMobile, navigateToDiff, openContextDiff]);
+    if (!effectiveDirectory) return <StaticTurnChangedFilePills files={files} />;
 
     return (
         <>
-            {files.map((file) => file.inTurnDiff === false ? (
-                // The turn diff has no entry to open for this path.
-                <span key={file.file} className="inline-flex h-8 max-w-full items-center" title={file.file}>
-                    <TurnChangedFileChipContent file={file} />
-                </span>
-            ) : (
-                <TurnChangedFilePillButton key={file.file} file={file} onOpen={openLastTurnDiff} />
+            {files.map((file) => (
+                <TurnChangedFilePillButton key={file.file} file={file} onOpen={openFilePreview} />
             ))}
         </>
     );
@@ -439,7 +433,7 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
     }, [parts]);
 
     const attachmentFilenames = React.useMemo(() => parts.flatMap((part) => (
-        part.type === 'file' && part.filename ? [part.filename] : []
+        part.type === 'attachment' && part.name ? [part.name] : []
     )), [parts]);
 
     const mentionToken = agentMention?.token;
@@ -1194,7 +1188,7 @@ const AssistantMessageBody = React.memo(({
     }, [parts]);
 
     const toolParts = React.useMemo(() => {
-        return visibleParts.filter((part): part is ToolPartType => part.type === 'tool');
+        return visibleParts.filter((part): part is ToolPartType => part.type === 'tool_call' || part.type === 'tool_result');
     }, [visibleParts]);
 
     const toolRevealStateRef = React.useRef<{
@@ -1222,7 +1216,7 @@ const AssistantMessageBody = React.memo(({
         const ids = new Set<string>();
 
         for (const toolPart of toolParts) {
-            ids.add(toolPart.id);
+            ids.add(toolPart.partId);
         }
 
         const activitySegments = turnGroupingContext?.activityGroupSegments;
@@ -1235,7 +1229,7 @@ const AssistantMessageBody = React.memo(({
                     if (activity.kind !== 'tool') {
                         continue;
                     }
-                    const toolId = (activity.part as { id?: unknown }).id;
+                    const toolId = activity.part.partId;
                     if (typeof toolId === 'string' && toolId.length > 0) {
                         ids.add(toolId);
                     }
@@ -1281,7 +1275,10 @@ const AssistantMessageBody = React.memo(({
             ? assistantTextParts.map(extractTextContent).filter((text) => text.trim().length > 0)
             : NO_FINALIZED_MARKDOWN
     ), [assistantTextParts, isMessageCompleted]);
-    const assistantPlanText = React.useMemo(() => flattenAssistantTextParts(assistantTextParts), [assistantTextParts]);
+    const assistantPlanText = React.useMemo(() => assistantTextParts
+        .map((part: Part) => extractTextContent(part).trim())
+        .filter((text: string) => text.length > 0)
+        .join('\n\n'), [assistantTextParts]);
 
     const openContextPreview = useUIStore((state) => state.openContextPreview);
     const isMiniChatSurface = chatSurfaceMode === 'mini-chat';
@@ -1294,7 +1291,7 @@ const AssistantMessageBody = React.memo(({
         }
 
         for (const part of assistantTextParts) {
-            const text = (part as { text?: unknown }).text;
+            const text = part.content;
             if (typeof text !== 'string' || text.length === 0) {
                 continue;
             }
@@ -1305,8 +1302,7 @@ const AssistantMessageBody = React.memo(({
             return url.includes('0.0.0.0') ? url.replace('0.0.0.0', '127.0.0.1') : url;
         }
         for (const part of toolParts) {
-            const state = (part as unknown as { state?: unknown }).state as Record<string, unknown> | undefined;
-            const output = state && typeof state.output === 'string' ? state.output : null;
+            const output = part.type === 'tool_result' && typeof part.output === 'string' ? part.output : null;
             if (!output) {
                 continue;
             }
@@ -1388,27 +1384,11 @@ const AssistantMessageBody = React.memo(({
     const currentProjectRef = canUseProjectPlanActions ? sessionProjectRef : null;
 
     const isActiveTool = React.useCallback((toolPart: ToolPartType): boolean => {
-        const state = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
-        const status = state?.status;
-        return status === 'pending' || status === 'running' || status === 'started';
+        return toolPart.type === 'tool_call' && (toolPart.status === 'pending_approval' || toolPart.status === 'approved' || toolPart.status === 'running');
     }, []);
 
     const isToolFinalized = React.useCallback((toolPart: ToolPartType) => {
-        const state = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
-        const status = state?.status;
-        if (status === 'pending' || status === 'running' || status === 'started') {
-            return false;
-        }
-        const time = state?.time as Record<string, unknown> | undefined ?? {};
-        const endTime = typeof time?.end === 'number' ? time.end : undefined;
-        const startTime = typeof time?.start === 'number' ? time.start : undefined;
-        if (typeof endTime !== 'number') {
-            return false;
-        }
-        if (typeof startTime === 'number' && endTime < startTime) {
-            return false;
-        }
-        return true;
+        return toolPart.type === 'tool_result' || toolPart.status === 'completed' || toolPart.status === 'failed' || toolPart.status === 'denied' || toolPart.status === 'cancelled';
     }, []);
 
     const shouldShowTool = React.useCallback((toolPart: ToolPartType): boolean => {
@@ -1432,6 +1412,7 @@ const AssistantMessageBody = React.memo(({
 
     const handleConfirmFork = React.useCallback(
         async (execution: ForkSessionExecution) => {
+            if (!execution.providerID.trim() || !execution.modelID.trim()) return;
             setIsForkSubmitting(true);
             try {
                 if (!sessionId) {
@@ -1445,7 +1426,15 @@ const AssistantMessageBody = React.memo(({
                     sessionId,
                     directory: sourceDirectory,
                     text: assistantPlanText,
-                }, execution);
+                }, {
+                    providerId: execution.providerID,
+                    modelId: execution.modelID,
+                    variant: execution.variant,
+                    agent: execution.agent,
+                    instructions: execution.instructions,
+                    createWorktree: execution.createWorktree,
+                    runAsGoal: execution.runAsGoal,
+                });
                 setIsForkDialogOpen(false);
             } catch (error) {
                 console.error('Failed to start a session from an assistant message:', error);
@@ -1486,7 +1475,7 @@ const AssistantMessageBody = React.memo(({
     const [askOtherModelsSession, setAskOtherModelsSession] = React.useState<Session | null>(null);
     const handleAskOtherModels = React.useCallback(() => {
         if (!sessionId) return;
-        const session = useGlobalSessionsStore.getState().activeSessions.find((entry) => entry.id === sessionId);
+        const session = useGlobalSessionsStore.getState().activeSessions.find((entry) => entry.sessionId === sessionId);
         if (!session) return;
         // A lane is already part of a run: its overview is where more models join.
         const identity = getMultiRunIdentity(session);
@@ -1666,7 +1655,7 @@ const AssistantMessageBody = React.memo(({
         const byId = new Map<string, (typeof activityPartsForTurn)[number]>();
         activityPartsForTurn.forEach((activity) => {
             byRef.set(activity.part, activity);
-            const partId = (activity.part as { id?: unknown }).id;
+            const partId = activity.part.partId;
             if (typeof partId === 'string' && partId.length > 0) {
                 byId.set(partId, activity);
             }
@@ -1678,7 +1667,7 @@ const AssistantMessageBody = React.memo(({
                 if (direct) {
                     return direct;
                 }
-                const partId = (part as { id?: unknown }).id;
+                const partId = part.partId;
                 if (typeof partId === 'string' && partId.length > 0) {
                     return byId.get(partId);
                 }
@@ -1704,7 +1693,7 @@ const AssistantMessageBody = React.memo(({
     // question indefinitely (OPE-199). Render such messages' text inline,
     // matching OpenCode's display.
     const hasQuestionTool = React.useMemo(() => {
-        return toolParts.some((toolPart) => isQuestionTool(toolPart.tool));
+        return toolParts.some((toolPart) => isQuestionTool(toolPart.toolName));
     }, [toolParts]);
 
     const shouldDeferSortedInlineText = isSortedRenderMode && !hasStopFinish && !hasQuestionTool;
@@ -1807,7 +1796,7 @@ const AssistantMessageBody = React.memo(({
             if (activity.messageId === messageId) {
                 return false;
             }
-            if (activity.part.type === 'tool') {
+            if (activity.part.type === 'tool_call' || activity.part.type === 'tool_result') {
                 return shouldShowTool(activity.part);
             }
             return (activity.kind !== 'reasoning' || showReasoningTraces) && !isEmptyTextPart(activity.part);
@@ -1827,6 +1816,8 @@ const AssistantMessageBody = React.memo(({
                 <div key={`progressive-group-${segment.id}`} className="mb-3">
                     <TurnActivity
                         parts={visibleSegmentParts}
+                        sessionId={sessionId}
+                        directory={effectiveDirectory}
                         isExpanded={turnGroupingContext?.isGroupExpanded === true}
                         collapsedPreviewCount={collapsedPreviewCount}
                         onToggle={toggleActivityGroup}
@@ -1849,9 +1840,9 @@ const AssistantMessageBody = React.memo(({
         // after that tool's row so e.g. an Agent Task sits chronologically
         // between the activity before it and the activity after it.
         const localToolPartIds = new Set<string>();
-        visibleParts.forEach((part, partIndex) => {
-            if (part.type === 'tool') {
-                localToolPartIds.add(part.id ?? `${messageId}-part-${partIndex}-${part.type}`);
+        visibleParts.forEach((part) => {
+            if (part.type === 'tool_call' || part.type === 'tool_result') {
+                localToolPartIds.add(part.partId);
             }
         });
         const segmentsAfterLocalTool = new Map<string, TurnActivityGroup[]>();
@@ -1974,10 +1965,10 @@ const AssistantMessageBody = React.memo(({
                 continue;
             }
 
-            if (part.type === 'tool') {
-                const toolPart = part as ToolPartType;
-                const toolName = toolPart.tool?.toLowerCase() ?? '';
-                const toolPartId = toolPart.id ?? `${messageId}-part-${i}-${part.type}`;
+            if (part.type === 'tool_call' || part.type === 'tool_result') {
+                const toolPart = part;
+                const toolName = toolPart.toolName.toLowerCase();
+                const toolPartId = toolPart.partId;
 
                 if (isSortedRenderMode && !isActivityOwnerMessage) {
                     flushSegmentsAfterTool(toolPartId);
@@ -2001,16 +1992,18 @@ const AssistantMessageBody = React.memo(({
                 // Expandable tools: bash, edit, write, task, question — individual rows
                 if (isExpandableTool(toolName)) {
                     rendered.push(
-                        <FadeInOnReveal key={`tool-${toolPart.id}`}>
-                            <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.id)} wipe>
+                        <FadeInOnReveal key={`tool-${toolPart.partId}`}>
+                            <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.partId)} wipe>
                                 <ToolPart
                                     part={toolPart}
-                                    isExpanded={expandedTools.has(toolPart.id)}
+                                    sessionId={sessionId}
+                                    directory={effectiveDirectory}
+                                    isExpanded={expandedTools.has(toolPart.partId)}
                                     onToggle={onToggleTool}
                                     isMobile={isMobile}
                                     alwaysShowActions={alwaysShowMessageActions}
                                     onShowPopup={onShowPopup}
-                                    animateTailText={animatedToolIdsLookup.has(toolPart.id)}
+                                    animateTailText={animatedToolIdsLookup.has(toolPart.partId)}
                                 />
                             </ToolRevealOnMount>
                         </FadeInOnReveal>
@@ -2022,13 +2015,13 @@ const AssistantMessageBody = React.memo(({
 
                 // Static tools: one row per tool call (no grouping)
                 rendered.push(
-                    <FadeInOnReveal key={`static-tools-${toolPart.id}`}>
-                        <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.id)} wipe>
+                    <FadeInOnReveal key={`static-tools-${toolPart.partId}`}>
+                        <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.partId)} wipe>
                             <StaticToolRow
                                 toolName={toolName}
                                 activities={[
                                     {
-                                        id: toolPart.id,
+                                        id: toolPart.partId,
                                         turnId: '',
                                         messageId,
                                         partIndex: 0,
@@ -2036,7 +2029,7 @@ const AssistantMessageBody = React.memo(({
                                         kind: 'tool' as const,
                                     },
                                 ]}
-                                animateTailText={animatedToolIdsLookup.has(toolPart.id)}
+                                animateTailText={animatedToolIdsLookup.has(toolPart.partId)}
                             />
                         </ToolRevealOnMount>
                     </FadeInOnReveal>

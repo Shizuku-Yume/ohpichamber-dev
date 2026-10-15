@@ -20,14 +20,14 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 import { formatSessionWorktreeBadge } from '@/sync/session-worktree-contract';
 import { useGlobalSessionStatus, useSessionMessagesResolved, useSessionMessagesSelector } from '@/sync/sync-context';
-import type { Message } from '@/lib/opencode/model';
+import type { Message } from '@openchamber/agent-contract';
 import { useDirectoryStore as useAppDirectoryStore } from '@/stores/useDirectoryStore';
 import { isChatDirectoryForHome } from '@/lib/chatDirectories';
 import { useSessionMessageRecordsForExport } from '@/sync/use-sync';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { useGitBranchLabel } from '@/stores/useGitStore';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { archiveUndoToastOptions, collectSessionSubtreeIds } from '@/components/session/sidebar/sessions/sessionSubtreeActions';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
 import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
@@ -297,16 +297,15 @@ export const Header: React.FC = () => {
   const currentGlobalSession = useGlobalSessionsStore(useShallow(React.useCallback(
     (state): HeaderSessionSnapshot | null => {
       if (!currentSessionId) return null;
-       const session = [...state.activeSessions, ...state.archivedSessions]
-         .find((candidate) => candidate.id === currentSessionId);
+      const session = [...state.activeSessions, ...state.archivedSessions]
+        .find((candidate) => candidate.sessionId === currentSessionId);
       if (!session) return null;
-      const record = session as typeof session & { directory?: string | null; slug?: string | null };
       return {
-        title: session.title ?? null,
-        directory: record.directory ?? null,
-        created: session.time?.created ?? null,
-        slug: record.slug ?? null,
-        parentId: session.parentID ?? null,
+        title: session.metadata?.title ?? null,
+        directory: resolveGlobalSessionDirectory(session),
+        created: session.createdAt,
+        slug: null,
+        parentId: session.parentSessionId ?? null,
       };
     },
     [currentSessionId],
@@ -841,7 +840,7 @@ export const Header: React.FC = () => {
       toast.error(t('sessions.sidebar.session.export.nothingToExport'));
       return;
     }
-    const records = await loadSessionRecords({ sessionID: currentSessionId, directory: openDirectory }).catch(() => null);
+    const records = await loadSessionRecords({ sessionId: currentSessionId, directory: openDirectory }).catch(() => null);
     if (!records) {
       toast.error(t('sessions.sidebar.session.export.failedLoadHistory'));
       return;
@@ -870,7 +869,7 @@ export const Header: React.FC = () => {
       loadRecords: async () => {
         if (!openDirectory) return null;
         try {
-          return await loadSessionRecords({ sessionID: currentSessionId, directory: openDirectory });
+          return await loadSessionRecords({ sessionId: currentSessionId, directory: openDirectory });
         } catch {
           return null;
         }
@@ -884,11 +883,11 @@ export const Header: React.FC = () => {
     </Item>
   )), [guestSessionActionEntries, runCurrentSessionGuestAction]);
 
-  const isCurrentSessionActive = currentSessionStatus?.type === 'busy' || currentSessionStatus?.type === 'retry';
+  const isCurrentSessionActive = currentSessionStatus === 'running' || currentSessionStatus === 'awaiting_approval' || currentSessionStatus === 'awaiting_input';
   const moveCurrentSessionToWorktree = React.useCallback(() => {
     if (!currentSessionId || !sessionDirectory || isCurrentSessionActive || isCurrentSessionMovingToWorktree) return;
     const sessions = useGlobalSessionsStore.getState().activeSessions;
-    const root = sessions.find((session) => session.id === currentSessionId);
+    const root = sessions.find((session) => session.sessionId === currentSessionId);
     if (!root) return;
 
     const descendants: typeof sessions = [];
@@ -896,9 +895,9 @@ export const Header: React.FC = () => {
     for (let index = 0; index < pendingParentIds.length; index += 1) {
       const parentId = pendingParentIds[index];
       for (const session of sessions) {
-        if (session.parentID !== parentId) continue;
+        if (session.parentSessionId !== parentId) continue;
         descendants.push(session);
-        pendingParentIds.push(session.id);
+        pendingParentIds.push(session.sessionId);
       }
     }
 
@@ -919,15 +918,15 @@ export const Header: React.FC = () => {
   const moveCurrentChatToProject = React.useCallback((projectDirectory: string) => {
     if (!currentSessionId || !sessionDirectory || isCurrentSessionActive || isCurrentSessionMovingToWorktree) return;
     const sessions = useGlobalSessionsStore.getState().activeSessions;
-    const root = sessions.find((session) => session.id === currentSessionId);
+    const root = sessions.find((session) => session.sessionId === currentSessionId);
     if (!root) return;
     const descendants: typeof sessions = [];
     const pendingParentIds = [currentSessionId];
     for (let index = 0; index < pendingParentIds.length; index += 1) {
       for (const session of sessions) {
-        if (session.parentID !== pendingParentIds[index]) continue;
+        if (session.parentSessionId !== pendingParentIds[index]) continue;
         descendants.push(session);
-        pendingParentIds.push(session.id);
+        pendingParentIds.push(session.sessionId);
       }
     }
     requestSessionTreeMove({
@@ -1315,7 +1314,7 @@ export const Header: React.FC = () => {
     },
     archive_current_session: () => {
       if (!currentSessionId || isMobile) return false;
-      if (useGlobalSessionsStore.getState().entityById.get(currentSessionId)?.time.archived) return false;
+      if (useGlobalSessionsStore.getState().entityById.get(currentSessionId)?.archivedAt !== undefined) return false;
       if (useUIStore.getState().showDeletionDialog) {
         setPendingHeaderRetentionAction({ action: 'archive', sessionId: currentSessionId });
         return;
@@ -1374,13 +1373,13 @@ export const Header: React.FC = () => {
     return (
       <>
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.rename')}>
-          <Item onClick={() => { if (!isActive) select(); pendingHeaderRenameRef.current = session.id; }}>
+          <Item onClick={() => { if (!isActive) select(); pendingHeaderRenameRef.current = session.sessionId; }}>
             <Icon name="pencil-ai" className="mr-1 size-4" />{t('sessions.sidebar.session.menu.rename')}
           </Item>
         </SessionMenuItemHint>
-        <SessionAiRenameMenuItem sessionID={session.id} directory={session.directory} open={open} Item={Item} />
+        <SessionAiRenameMenuItem sessionID={session.sessionId} directory={resolveGlobalSessionDirectory(session) ?? undefined} open={open} Item={Item} />
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.copyId')}>
-          <Item onClick={() => copySessionIdFor(session.id)}>
+          <Item onClick={() => copySessionIdFor(session.sessionId)}>
             <Icon name="file-copy" className="mr-1 size-4" />{t('sessions.sidebar.session.menu.copyId')}
           </Item>
         </SessionMenuItemHint>
@@ -1435,12 +1434,12 @@ export const Header: React.FC = () => {
         </SessionMenuItemHint>
         <Separator />
         <HeaderSessionArchiveMenuItem
-          sessionId={session.id}
+          sessionId={session.sessionId}
           Item={Item}
-          onArchive={() => setPendingHeaderRetentionAction({ action: 'archive', sessionId: session.id })}
+          onArchive={() => setPendingHeaderRetentionAction({ action: 'archive', sessionId: session.sessionId })}
         />
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.delete')}>
-          <Item className="text-destructive focus:text-destructive" onClick={() => setPendingHeaderRetentionAction({ action: 'delete', sessionId: session.id })}>
+          <Item className="text-destructive focus:text-destructive" onClick={() => setPendingHeaderRetentionAction({ action: 'delete', sessionId: session.sessionId })}>
             <Icon name="delete-bin" className="mr-1 size-4" />{t('sessions.sidebar.bulkActions.delete')}
           </Item>
         </SessionMenuItemHint>

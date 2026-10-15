@@ -16,6 +16,20 @@ consume another tab's pending navigation request.
 `WalkthroughView` gates discovery and source loading while retaining generated
 results and any explicitly started generation job.
 
+## Native turn history and file previews
+
+Web, Electron, hosted mobile and Capacitor do not offer a Last turn diff scope.
+The native execution contract supplies no turn-level file preimage or snapshot
+from which to reconstruct that comparison. The application does not capture
+replacement filesystem snapshots or substitute a working-tree diff for a turn
+diff. Native undo changes the transcript branch only; it does not restore files.
+
+Completed-turn changed-file chips open the existing file viewer for the current
+file contents, with the mobile Files surface opened where applicable. They do
+not promise historical content or a turn comparison. Existing tool file-change
+cards remain unchanged. Working, staged, branch, commit and published pull
+request comparisons continue to use their existing Git-backed sources.
+
 ## Large text files
 
 The 200,000-character threshold selects an initial code preview, not read-only

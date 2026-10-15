@@ -1,4 +1,4 @@
-import type { SessionMessageRecord } from '@/lib/exportSession';
+import type { Message } from '@openchamber/agent-contract';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 
 import { buildGuestSessionItem, guestActionWantsMessages, type GuestActionEntry } from './actions.ts';
@@ -21,7 +21,7 @@ type SessionActionTarget = {
 export const runGuestSessionAction = async (input: {
   entry: GuestActionEntry;
   session: SessionActionTarget;
-  loadRecords: () => Promise<readonly SessionMessageRecord[] | null>;
+  loadRecords: () => Promise<readonly Message[] | null>;
   onLoadFailed: () => void;
   t: Parameters<typeof runGuestAction>[2];
 }): Promise<void> => {
@@ -35,7 +35,7 @@ export const runGuestSessionAction = async (input: {
   }
   let runtimeChanged = false;
   const unsubscribe = subscribeRuntimeEndpointChanged(() => { runtimeChanged = true; });
-  let records: readonly SessionMessageRecord[] | null;
+  let records: readonly Message[] | null;
   try {
     records = await input.loadRecords();
   } finally {

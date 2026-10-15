@@ -54,22 +54,22 @@ const orderHistoryEntries = ({
 
     const turnEntryByUserMessageId = new Map<string, TimelineEntry>();
     for (const entry of turnEntries) {
-        turnEntryByUserMessageId.set(entryFirstMessage(entry).info.id, entry);
+        turnEntryByUserMessageId.set(entryFirstMessage(entry).messageId, entry);
     }
 
     const ordered: TimelineEntry[] = [];
     messages.forEach((message, index) => {
-        const turnEntry = turnEntryByUserMessageId.get(message.info.id);
+        const turnEntry = turnEntryByUserMessageId.get(message.messageId);
         if (turnEntry) {
             ordered.push(turnEntry);
             return;
         }
-        if (!ungroupedMessageIds.has(message.info.id)) return;
+        if (!ungroupedMessageIds.has(message.messageId)) return;
         // Without a live turn the trailing entry renders the last message.
         if (!hasStreamingTurn && index === messages.length - 1) return;
         ordered.push({
             kind: 'ungrouped',
-            key: `msg:${message.info.id}`,
+            key: `msg:${message.messageId}`,
             message,
             previousMessage: index > 0 ? messages[index - 1] : undefined,
             nextMessage: index < messages.length - 1 ? messages[index + 1] : undefined,

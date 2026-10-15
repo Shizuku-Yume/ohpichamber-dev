@@ -1,9 +1,7 @@
 import React from 'react';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message } from '@openchamber/agent-contract';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
-
-type SessionMessageRecord = { info: Message; parts: Part[] };
 
 /**
  * Watches session messages for plan creation and marks sessions as plan-available.
@@ -14,7 +12,7 @@ type SessionMessageRecord = { info: Message; parts: Part[] };
  * 
  * The Header component subscribes to sessionPlanAvailable map to show/hide the Plan tab.
  */
-export const usePlanDetection = (sessionId: string, messageRecords: SessionMessageRecord[]) => {
+export const usePlanDetection = (sessionId: string, messageRecords: Message[]) => {
   const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
   const markSessionPlanAvailable = useSessionUIStore((state) => state.markSessionPlanAvailable);
   const isSessionPlanAvailable = useSessionUIStore((state) => state.isSessionPlanAvailable);
@@ -31,12 +29,11 @@ export const usePlanDetection = (sessionId: string, messageRecords: SessionMessa
     // plan detection does not add a second active-session message subscription.
     for (const message of messageRecords) {
       // Only check assistant messages for plan references
-      if (message.info.role !== 'assistant') continue;
+      if (message.role !== 'assistant') continue;
 
       for (const part of message.parts) {
-        const record = part as { type?: string; text?: string };
-        if (record.type !== 'text') continue;
-        const text = record.text || '';
+        if (part.type !== 'text') continue;
+        const text = part.content;
 
         // Check for plan file reference in synthetic messages
         if (text.includes('The plan at ') || text.includes('User has requested to enter plan mode')) {

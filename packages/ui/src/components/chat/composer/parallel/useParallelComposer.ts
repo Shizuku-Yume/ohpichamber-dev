@@ -1,5 +1,5 @@
-import React from 'react';
 import { canonicalClient } from '@/api/canonicalClient';
+import React from 'react';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { isAutoModel } from '@/lib/routing/autoModel';
@@ -11,8 +11,8 @@ import { useUIStore } from '@/stores/useUIStore';
 import type { CreateMultiRunParams } from '@/types/multirun';
 
 export type ParallelModel = {
-  providerID: string;
-  modelID: string;
+  providerId: string;
+  modelId: string;
   variant?: string;
   displayName?: string;
   count: number;
@@ -24,7 +24,7 @@ export type ParallelVariant = {
   models: ParallelModel[];
 };
 
-export type ParallelFuseJudge = { providerID: string; modelID: string; variant?: string; displayName?: string };
+export type ParallelFuseJudge = { providerId: string; modelId: string; variant?: string; displayName?: string };
 
 export type ParallelComposerState = {
   variants: ParallelVariant[];
@@ -71,11 +71,11 @@ export function useParallelComposer(input: {
 
   const enter = React.useCallback((text = '') => {
     const config = useConfigStore.getState();
-    const providerID = config.currentProviderId;
-    const modelID = config.currentModelId;
-    const displayName = config.providers.find((provider) => provider.id === providerID)?.models.find((model) => model.id === modelID)?.name;
-    const seed: ParallelModel[] = providerID && modelID && !isAutoModel(providerID, modelID)
-      ? [{ providerID, modelID, displayName: displayName || undefined, variant: config.currentVariant || undefined, count: 1 }]
+    const providerId = config.currentProviderId;
+    const modelId = config.currentModelId;
+    const displayName = config.providers.find((provider) => provider.id === providerId)?.models.find((model) => model.id === modelId)?.name;
+    const seed: ParallelModel[] = providerId && modelId && !isAutoModel(providerId, modelId)
+      ? [{ providerId, modelId, displayName: displayName || undefined, variant: config.currentVariant || undefined, count: 1 }]
       : [];
     if (text) setMessage(text);
     setState({ variants: [{ id: 'A', text: '', models: seed }], active: 0, isolate: false, baseBranch: '', setupCommands: null, fuse: null });
@@ -108,10 +108,10 @@ export function useParallelComposer(input: {
   }, [update]);
 
   const addModel = React.useCallback((model: ParallelComposerModelInput) => {
-    if (isAutoModel(model.providerID, model.modelID)) return;
+    if (isAutoModel(model.providerId, model.modelId)) return;
     updateActiveModels((models) => {
       // The same model with another thinking effort is a separate lane.
-      const existing = models.findIndex((entry) => entry.providerID === model.providerID && entry.modelID === model.modelID && entry.variant === model.variant);
+      const existing = models.findIndex((entry) => entry.providerId === model.providerId && entry.modelId === model.modelId && entry.variant === model.variant);
       if (existing >= 0) return models.map((entry, index) => (index === existing ? { ...entry, count: entry.count + 1 } : entry));
       return [...models, { ...model, count: 1 }];
     });
@@ -121,7 +121,7 @@ export function useParallelComposer(input: {
     updateActiveModels((models) => {
       const target = models[index];
       if (!target) return models;
-      const twin = models.findIndex((entry, i) => i !== index && entry.providerID === target.providerID && entry.modelID === target.modelID && entry.variant === variant);
+      const twin = models.findIndex((entry, i) => i !== index && entry.providerId === target.providerId && entry.modelId === target.modelId && entry.variant === variant);
       if (twin < 0) return models.map((entry, i) => (i === index ? { ...entry, variant } : entry));
       // Choosing an effort another chip already has folds the two chips together.
       return models.flatMap((entry, i) => (i === index ? [] : i === twin ? [{ ...entry, count: entry.count + target.count }] : [entry]));
@@ -183,7 +183,7 @@ export function useParallelComposer(input: {
     const projects = useProjectsStore.getState();
     const projectId = draftProjectId ?? projects.activeProjectId;
     const project = projectId ? projects.projects.find((entry) => entry.id === projectId) : undefined;
-    if (!project) {
+    if (!projectId || !project) {
       toast.error(t('multirun.launcher.project.empty'));
       return;
     }
@@ -194,6 +194,13 @@ export function useParallelComposer(input: {
     const attachmentWorkspaceId = attachments.length > 0
       ? (await canonicalClient.resolveWorkspace(project.path)).workspaceId
       : undefined;
+    const uploadedAttachments = attachmentWorkspaceId
+      ? await Promise.all(attachments.map((file) => canonicalClient.uploadAttachment(
+        attachmentWorkspaceId,
+        { name: file.filename, mediaType: file.mimeType, size: file.size },
+        file.dataUrl,
+      )))
+      : [];
     const config = useConfigStore.getState();
     const params: CreateMultiRunParams = {
       name: title,
@@ -201,8 +208,8 @@ export function useParallelComposer(input: {
       groups: variants.map((variant) => ({
         prompt: variant.text.trim(),
         models: variant.models.flatMap((model) => Array.from({ length: model.count }, () => ({
-          providerID: model.providerID,
-          modelID: model.modelID,
+          providerId: model.providerId,
+          modelId: model.modelId,
           variant: model.variant,
           displayName: model.displayName,
         }))),
@@ -210,13 +217,11 @@ export function useParallelComposer(input: {
       agent: config.currentAgentName || undefined,
       isolateRuns: current.isolate,
       worktreeBaseBranch: current.isolate ? current.baseBranch || undefined : undefined,
-      files: attachments.length > 0
-        ? attachments.map((file) => ({ mime: file.mimeType, filename: file.filename, url: file.dataUrl }))
-        : undefined,
+      files: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
       attachmentWorkspaceId,
       setupCommands: current.isolate ? current.setupCommands?.filter((command) => command.trim()) : undefined,
       autoFusion: current.fuse
-        ? { providerID: current.fuse.providerID, modelID: current.fuse.modelID, variant: current.fuse.variant, agent: config.currentAgentName || undefined }
+        ? { providerId: current.fuse.providerId, modelId: current.fuse.modelId, variant: current.fuse.variant, agentId: config.currentAgentName || undefined }
         : undefined,
     };
 

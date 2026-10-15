@@ -8,7 +8,7 @@ import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import type { ProjectFileSearchHit } from '@/lib/opencode/client';
+import type { ProjectFileSearchHit } from '@/lib/host-filesystem';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from "@/components/icon/Icon";
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';

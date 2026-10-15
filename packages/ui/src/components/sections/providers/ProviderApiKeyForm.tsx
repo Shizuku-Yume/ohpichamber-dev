@@ -28,11 +28,12 @@ interface ProviderApiKeyFormProps {
    * provider OpenCode has no integration for, which takes a bare key.
    */
   keyMethod: IntegrationKeyMethod | undefined;
-  /** Stores the credential; injected so the form does not own the SDK call. */
+  /** Stores integration-specific credentials; injected so the form does not own the SDK call. */
   connectKey: (request: IntegrationKeyRequest) => Promise<void>;
-  onSaved: () => void;
+  /** Stores a bare API key through the canonical provider contract. */
+  writeCanonicalKey?: (apiKey: string) => Promise<void>;
+  onSaved: (source: 'canonical' | 'integration') => void;
 }
-
 /**
  * The API key form for one integration. Mount with `key={integrationId}` so a
  * different provider starts from an empty form.
@@ -41,6 +42,7 @@ export const ProviderApiKeyForm: React.FC<ProviderApiKeyFormProps> = ({
   integrationId,
   keyMethod,
   connectKey,
+  writeCanonicalKey,
   onSaved,
 }) => {
   const { t } = useI18n();
@@ -69,15 +71,21 @@ export const ProviderApiKeyForm: React.FC<ProviderApiKeyFormProps> = ({
     }
     setFieldError(null);
 
-    const request: IntegrationKeyRequest = { integrationID: integrationId, key };
     const answer = collectFieldAnswer(fields, fieldValues);
-    if (Object.keys(answer).length > 0) request.answer = answer;
     setSaving(true);
     try {
-      await connectKey(request);
+      const canonicalWriter = fields.length === 0 ? writeCanonicalKey : undefined;
+      const source = canonicalWriter ? 'canonical' : 'integration';
+      if (canonicalWriter) {
+        await canonicalWriter(key);
+      } else {
+        const request: IntegrationKeyRequest = { integrationID: integrationId, key };
+        if (Object.keys(answer).length > 0) request.answer = answer;
+        await connectKey(request);
+      }
       toast.success(t('settings.providers.page.toast.apiKeySaved'));
       setApiKey('');
-      onSaved();
+      onSaved(source);
     } catch (error) {
       console.error('Failed to save API key:', error);
       toast.error(t('settings.providers.page.toast.apiKeySaveFailed'));

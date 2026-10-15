@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSessionTurnActivity } from '@/sync/global-session-status';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
 import { formatSessionCompactDateLabel } from '@/components/session/sidebar/utils';
@@ -20,7 +20,7 @@ const RECENT_SESSIONS_LIMIT = 10;
 const TABLET_POPOVER_WIDTH = 380;
 
 const getSessionTitle = (session: Session, fallback: string): string =>
-  session.title?.trim() || fallback;
+  session.metadata?.title?.trim() || fallback;
 
 /** One switcher row: live status (busy spinner / attention dot), title,
     "project · branch", compact time. Mirrors the desktop SessionSwitcherDropdown
@@ -32,13 +32,13 @@ const SwitcherRow: React.FC<{
   onSelect: () => void;
 }> = ({ session, meta, active, onSelect }) => {
   const { t } = useI18n();
-  const unseenCount = useSessionUnseenCount(session.id);
-  const turnActivity = useSessionTurnActivity(session.id);
+  const unseenCount = useSessionUnseenCount(session.sessionId);
+  const turnActivity = useSessionTurnActivity(session.sessionId);
   const isStreaming = turnActivity !== null;
   const showUnreadDot = !isStreaming && unseenCount > 0 && !active;
-  const hasActivityDuration = useHasSessionActivityDuration(session.id, isStreaming);
+  const hasActivityDuration = useHasSessionActivityDuration(session.sessionId, isStreaming);
   const showActivityDuration = (isStreaming || showUnreadDot) && hasActivityDuration;
-  const timeLabel = formatSessionCompactDateLabel(session.time?.updated ?? session.time?.created ?? 0);
+  const timeLabel = formatSessionCompactDateLabel(session.updatedAt || session.createdAt);
 
   return (
     <button
@@ -68,7 +68,7 @@ const SwitcherRow: React.FC<{
           back to the relative timestamp. */}
       {showActivityDuration ? (
         <SessionActivityDuration
-          sessionId={session.id}
+          sessionId={session.sessionId}
           running={isStreaming}
           className="typography-micro"
         />
@@ -175,7 +175,7 @@ export const MobileSessionSwitcher: React.FC<{
   }, [anchorRef, onClose, open]);
 
   const handleSelect = React.useCallback((session: Session) => {
-    void setCurrentSession(session.id, resolveGlobalSessionDirectory(session));
+    void setCurrentSession(session.sessionId, resolveGlobalSessionDirectory(session));
     onClose();
   }, [onClose, setCurrentSession]);
 
@@ -217,10 +217,10 @@ export const MobileSessionSwitcher: React.FC<{
                 .join(' · ');
               return (
                 <SwitcherRow
-                  key={session.id}
+                  key={session.sessionId}
                   session={session}
                   meta={meta}
-                  active={session.id === currentSessionId}
+                  active={session.sessionId === currentSessionId}
                   onSelect={() => {
                     if (item.projectId) setActiveProjectIdOnly(item.projectId);
                     handleSelect(session);

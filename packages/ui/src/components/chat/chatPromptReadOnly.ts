@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { isReviewSession } from '@/lib/sessionReviewMetadata';
 
 export const resolveChatPromptReadOnly = (
@@ -7,13 +7,13 @@ export const resolveChatPromptReadOnly = (
     readOnly: boolean,
 ): boolean => {
     // Review sessions are independent conversations even if an older server or
-    // cached record still carries parentID. Their explicit metadata is the
+    // cached record still carries parentSessionId. Their explicit metadata is the
     // authority; only the surface itself may make them read-only.
     if (isReviewSession(session)) {
         return readOnly;
     }
 
-    if (session?.parentID) {
+    if (session?.parentSessionId) {
         return !allowPromptingSubagentSessions;
     }
 

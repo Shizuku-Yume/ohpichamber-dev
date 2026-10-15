@@ -3,9 +3,11 @@ import { getSyncSessions } from '@/sync/sync-refs';
 import { useUIStore } from '@/stores/useUIStore';
 import { getRuntimeUrlResolver } from './runtime-url';
 import { opencodeClient } from './opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { runtimeFetch } from './runtime-fetch';
 import { getRecentSendFailures } from '@/sync/send-failure-log';
 import { getRecentSessionErrors } from '@/sync/session-error-log';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 declare const __APP_VERSION__: string | undefined;
 
@@ -54,8 +56,8 @@ const getCurrentDirectory = (): string => {
   const currentSessionId = state.currentSessionId;
   if (!currentSessionId) return '';
   const sessions = getSyncSessions();
-  const session = sessions.find((s) => s.id === currentSessionId);
-  return typeof session?.directory === 'string' ? session.directory : '';
+  const session = sessions.find((s) => s.sessionId === currentSessionId);
+  return session ? resolveGlobalSessionDirectory(session) ?? '' : '';
 };
 
 const safeFetch = async (input: string, timeoutMs = 6000): Promise<ProbeResult> => {
@@ -251,9 +253,9 @@ export const buildOpenCodeStatusReport = async (): Promise<string> => {
     return url.toString();
   };
 
-  // OpenCode 2.x serves no home directory of its own, so the log path below is
-  // anchored on the home the client derives from the directories it knows.
-  const opencodeHome = await opencodeClient
+  // Log paths use the Host home, with stored-directory guesses owned by the
+  // Host filesystem adapter when the home endpoint is unavailable.
+  const hostHome = await hostFilesystem
     .getSystemInfo()
     .then((info) => (info.homeDirectory && info.homeDirectory !== '/' ? info.homeDirectory : ''))
     .catch(() => '');
@@ -351,7 +353,7 @@ export const buildOpenCodeStatusReport = async (): Promise<string> => {
   const isDesktop = origin.startsWith('openchamber-ui://');
   lines.push('');
   lines.push('Log files:');
-  lines.push(`- OpenCode: ${opencodeHome ? joinPath(opencodeHome, '.local/share/opencode/log', isWindows) : '<home>/.local/share/opencode/log'} (or $XDG_DATA_HOME/opencode/log when set)`);
+  lines.push(`- OpenCode: ${hostHome ? joinPath(hostHome, '.local/share/opencode/log', isWindows) : '<home>/.local/share/opencode/log'} (or $XDG_DATA_HOME/opencode/log when set)`);
   if (isDesktop) {
     const isMacDesktop = /Mac OS X|Macintosh/.test(platform);
     lines.push(`- OpenChamber desktop: ${isWindows

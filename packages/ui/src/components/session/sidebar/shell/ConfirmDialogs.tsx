@@ -1,7 +1,7 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Icon } from "@/components/icon/Icon";
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { useI18n } from '@/lib/i18n';
 
 export type DeleteSessionConfirmState = {
@@ -37,28 +37,28 @@ export function SessionDeleteConfirmDialog(props: {
               ? value.archivedBucket
                 ? value.descendantCount === 1
                   ? t('sessions.sidebar.dialogs.deleteSession.withOneSubtask', {
-                    sessionTitle: value.session.title || untitledSession,
+                    sessionTitle: value.session.metadata?.title || untitledSession,
                     count: value.descendantCount,
                   })
                   : t('sessions.sidebar.dialogs.deleteSession.withManySubtasks', {
-                    sessionTitle: value.session.title || untitledSession,
+                    sessionTitle: value.session.metadata?.title || untitledSession,
                     count: value.descendantCount,
                   })
                 : value.descendantCount === 1
                   ? t('sessions.sidebar.dialogs.archiveSession.withOneSubtask', {
-                    sessionTitle: value.session.title || untitledSession,
+                    sessionTitle: value.session.metadata?.title || untitledSession,
                     count: value.descendantCount,
                   })
                   : t('sessions.sidebar.dialogs.archiveSession.withManySubtasks', {
-                  sessionTitle: value.session.title || untitledSession,
-                  count: value.descendantCount,
-                })
+                    sessionTitle: value.session.metadata?.title || untitledSession,
+                    count: value.descendantCount,
+                  })
               : value?.archivedBucket
                 ? t('sessions.sidebar.dialogs.deleteSession.single', {
-                  sessionTitle: value?.session.title || untitledSession,
+                  sessionTitle: value?.session.metadata?.title || untitledSession,
                 })
                 : t('sessions.sidebar.dialogs.archiveSession.single', {
-                  sessionTitle: value?.session.title || untitledSession,
+                  sessionTitle: value?.session.metadata?.title || untitledSession,
                 })}
           </DialogDescription>
         </DialogHeader>

@@ -125,16 +125,17 @@ export const useProjectTodoSend = (options: {
           directoryHint = created.path;
         } else {
           const session = await createSession(undefined, projectRef.path, undefined, {
-            model: { providerID: execution.providerID, id: execution.modelID, variant: execution.variant || undefined },
+            model: { providerId: execution.providerID, modelId: execution.modelID },
             agent: execution.agent.trim() || undefined,
+            variant: execution.variant || undefined,
           });
-          if (!session?.id) {
+          if (!session?.sessionId) {
             toast.error(t('rightSidebar.contextNotesTodo.toast.createSessionFailed'));
             return;
           }
-          sessionId = session.id;
-          directoryHint = session.directory ?? projectRef.path;
-          initializeNewOpenChamberSession(session.id, useConfigStore.getState().agents ?? []);
+          sessionId = session.sessionId;
+          directoryHint = projectRef.path;
+          initializeNewOpenChamberSession(session.sessionId, useConfigStore.getState().agents ?? []);
         }
 
         if (!sessionId) {

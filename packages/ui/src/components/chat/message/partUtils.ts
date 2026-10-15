@@ -1,4 +1,4 @@
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 
 const isValidPart = (part: unknown): part is Part => {
     return Boolean(part && typeof part === 'object' && typeof (part as { type?: unknown }).type === 'string');
@@ -9,14 +9,14 @@ export const normalizeParts = (parts: Part[]): Part[] => {
 };
 
 export const extractTextContent = (part: Part): string => {
-    return part.type === 'text' || part.type === 'reasoning' ? part.text : '';
+    return part.type === 'text' || part.type === 'reasoning' ? part.content : '';
 };
 
 export const isEmptyTextPart = (part: Part): boolean => {
     if (part.type !== 'text') {
         return false;
     }
-    return part.text.trim().length === 0;
+    return part.content.trim().length === 0;
 };
 
 interface VisibleFilterOptions {
@@ -26,8 +26,8 @@ interface VisibleFilterOptions {
 /**
  * The parts a message actually shows.
  *
- * OpenCode v2 no longer marks parts synthetic and no longer sends patch
- * parts, so the only choice left here is whether reasoning is on screen.
+ * Canonical parts have no synthetic display variants; the only choice here
+ * is whether reasoning is on screen.
  */
 export const filterVisibleParts = (parts: Part[], options: VisibleFilterOptions = {}): Part[] => {
     const { includeReasoning = true } = options;

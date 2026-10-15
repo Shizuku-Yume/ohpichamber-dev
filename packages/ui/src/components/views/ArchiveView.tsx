@@ -17,13 +17,15 @@ import { useShallow } from 'zustand/react/shallow';
 import { SessionSearchInput } from '@/components/session/SessionSearchInput';
 import { refreshSpaceArchives, useSpaceArchivesStore } from '@/lib/spaces/space-archives';
 
-type DirectoryBucket = {
+type WorkspaceBucket = {
+  workspaceId: string;
   directory: string;
   label: string;
   sessions: Session[];
   // The chats of a deleted isolated space: named after the space, with no way to restore them.
   fromDeletedSpace: boolean;
 };
+
 
 // Bound the mounted DOM: archives grow into the hundreds; batch rendering
 // keeps the list responsive without a virtualizer.
@@ -48,52 +50,48 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   const archivedSessions = useGlobalSessionsStore(useShallow((state) => state.archivedSessions));
   const sessionsStatus = useGlobalSessionsStore((state) => state.status);
   const [query, setQuery] = React.useState(initialQuery);
-  const [selectedDirectory, setSelectedDirectory] = React.useState<string | null>(null);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = React.useState<string | null>(null);
+  const spaceArchives = useSpaceArchivesStore((state) => state.byWorkspaceId);
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
-  const spaceArchives = useSpaceArchivesStore((state) => state.byDirectory);
 
-  // The chats of deleted spaces are read-only and named after their space; read which they are
-  // each time the page opens, since a space may have been deleted from another window.
+  // The chats of deleted spaces are read-only and named after their space; refresh when the page opens.
   React.useEffect(() => {
     void refreshSpaceArchives().catch(() => {});
   }, []);
 
-  const labelOf = React.useCallback((directory: string): string => {
-    const archive = spaceArchives?.get(directory);
+  const labelOf = React.useCallback((workspaceId: string, directory: string): string => {
+    const archive = spaceArchives?.get(workspaceId);
     if (archive) return archive.name;
     return directory ? (formatDirectoryName(directory, homeDirectory) || directory) : t('sessions.archivePage.otherProjects');
   }, [homeDirectory, spaceArchives, t]);
 
   const normalizedQuery = query.trim().toLowerCase();
+  const sortedSessions = React.useMemo(() => archivedSessions
+    .filter((session) => !session.parentSessionId)
+    .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0)), [archivedSessions]);
 
-  const sortedSessions = React.useMemo(() => {
-    // Subsessions are restored with their parent and never listed on their own.
-    return archivedSessions
-      .filter((session) => !session.parentSessionId)
-      .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
-  }, [archivedSessions]);
-
-  const buckets = React.useMemo<DirectoryBucket[]>(() => {
-    const byDirectory = new Map<string, DirectoryBucket>();
+  const buckets = React.useMemo<WorkspaceBucket[]>(() => {
+    const byWorkspaceId = new Map<string, WorkspaceBucket>();
     for (const session of sortedSessions) {
+      const workspaceId = session.workspaceId;
       const directory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
-      const existing = byDirectory.get(directory);
+      const existing = byWorkspaceId.get(workspaceId);
       if (existing) {
         existing.sessions.push(session);
         continue;
       }
-      byDirectory.set(directory, {
+      byWorkspaceId.set(workspaceId, {
+        workspaceId,
         directory,
-        label: labelOf(directory),
+        label: labelOf(workspaceId, directory),
         sessions: [session],
-        fromDeletedSpace: spaceArchives?.has(directory) ?? false,
+        fromDeletedSpace: spaceArchives?.has(workspaceId) ?? false,
       });
     }
-    return [...byDirectory.values()].sort((a, b) => b.sessions.length - a.sessions.length);
+    return [...byWorkspaceId.values()].sort((a, b) => b.sessions.length - a.sessions.length);
   }, [labelOf, sortedSessions, spaceArchives]);
 
-  // Search spans every archived session; the directory filter applies only
-  // while not searching.
+  // Search spans every archived session; the workspace filter applies only while not searching.
   const filteredSessions = React.useMemo(() => {
     if (normalizedQuery) {
       if (normalizedQuery.startsWith('ses_')) {
@@ -101,16 +99,16 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
       }
       return rankByQuery(sortedSessions, normalizedQuery, (session) => [session.metadata?.title ?? '']);
     }
-    if (selectedDirectory === null) return sortedSessions;
-    return buckets.find((bucket) => bucket.directory === selectedDirectory)?.sessions ?? [];
-  }, [buckets, normalizedQuery, selectedDirectory, sortedSessions]);
+    if (selectedWorkspaceId === null) return sortedSessions;
+    return buckets.find((bucket) => bucket.workspaceId === selectedWorkspaceId)?.sessions ?? [];
+  }, [buckets, normalizedQuery, selectedWorkspaceId, sortedSessions]);
 
   const visibleSessions = filteredSessions.slice(0, visibleCount);
   const remainingCount = filteredSessions.length - visibleSessions.length;
   const totalCount = sortedSessions.length;
 
-  const selectDirectory = React.useCallback((directory: string | null) => {
-    setSelectedDirectory(directory);
+  const selectWorkspace = React.useCallback((workspaceId: string | null) => {
+    setSelectedWorkspaceId(workspaceId);
     setVisibleCount(PAGE_SIZE);
   }, []);
 
@@ -122,11 +120,8 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
 
   const restoreSession = React.useCallback((session: Session) => {
     void unarchiveSession(session.sessionId).then((success) => {
-      if (success) {
-        toast.success(t('sessions.sidebar.session.restore.success'));
-      } else {
-        toast.error(t('sessions.sidebar.session.restore.error'));
-      }
+      if (success) toast.success(t('sessions.sidebar.session.restore.success'));
+      else toast.error(t('sessions.sidebar.session.restore.error'));
     });
   }, [t, unarchiveSession]);
 
@@ -146,34 +141,25 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   const countLabel = filteredSessions.length === 1
     ? t('sessions.archivePage.countSingle', { count: filteredSessions.length })
     : t('sessions.archivePage.countPlural', { count: filteredSessions.length });
-
-  // An empty list is only "no archived sessions" once the session list has
-  // actually loaded; before that, or after a failed load, say so instead.
   const emptyLabel = () => {
     if (totalCount === 0 && sessionsStatus === 'error') return t('sessions.sidebar.group.empty.loadFailed');
     if (totalCount === 0 && sessionsStatus !== 'ready') return t('sessions.sidebar.group.empty.loadingSessions');
     return normalizedQuery ? t('sessions.archivePage.empty.noMatches') : t('sessions.archivePage.empty.noArchived');
   };
-
   const emptyState = (
     <div className="py-10 text-center text-muted-foreground">
       <p className="typography-ui-label font-semibold">{emptyLabel()}</p>
     </div>
   );
-
   const showMoreButton = remainingCount > 0 ? (
-    <button
-      type="button"
-      onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+    <button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
       className={cn(
         'flex items-center justify-start rounded-md text-left text-muted-foreground/70 leading-tight hover:text-foreground hover:underline',
         layout === 'mobile' ? 'min-h-10 px-3 typography-micro' : 'mt-1 px-2 py-1 text-xs',
-      )}
-    >
+      )}>
       {t('sessions.sidebar.group.showMore')}
     </button>
   ) : null;
-
   if (layout === 'mobile') {
     // One column: no directory panel, so every row names its project. Touch
     // has no hover, so Restore is always visible. Deleting stays on desktop,
@@ -191,10 +177,11 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
           style={{ paddingBottom: 'calc(0.5rem + var(--oc-safe-area-bottom, 0px))' }}
         >
           {visibleSessions.length === 0 ? emptyState : visibleSessions.map((session) => {
+            const workspaceId = session.workspaceId;
             const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
             const title = session.metadata?.title || t('sessions.sidebar.session.untitled');
             // A deleted space's chat has nowhere to be restored to.
-            const restorable = !(spaceArchives?.has(sessionDirectory) ?? false);
+            const restorable = !(spaceArchives?.has(workspaceId) ?? false);
             return (
               <div key={session.sessionId} className="flex items-center pr-1.5">
                 <button
@@ -204,27 +191,18 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
                   onClick={() => openSession(session)}
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span dir="auto" className="block truncate text-left typography-ui-label text-foreground">
-                      {title}
-                    </span>
+                    <span dir="auto" className="block truncate text-left typography-ui-label text-foreground">{title}</span>
                     <span className="flex items-center gap-2.5 typography-micro text-muted-foreground">
-                      <span className="block min-w-0 flex-1 truncate">{labelOf(sessionDirectory)}</span>
-                      <span className="shrink-0 tabular-nums">
-                        {formatSessionDateLabel(session.archivedAt ?? session.updatedAt ?? session.createdAt)}
-                      </span>
+                      <span className="block min-w-0 flex-1 truncate">{labelOf(workspaceId, sessionDirectory)}</span>
+                      <span className="shrink-0 tabular-nums">{formatSessionDateLabel(session.archivedAt ?? session.updatedAt ?? session.createdAt)}</span>
                     </span>
                   </span>
                 </button>
                 {restorable ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="lg"
-                    className="w-10 shrink-0 px-0 text-muted-foreground"
+                  <Button type="button" variant="ghost" size="lg" className="w-10 shrink-0 px-0 text-muted-foreground"
                     onClick={() => restoreSession(session)}
                     aria-label={t('sessions.archivePage.restoreSessionAria', { title })}
-                    style={{ touchAction: 'manipulation' }}
-                  >
+                    style={{ touchAction: 'manipulation' }}>
                     <Icon name="inbox-unarchive" className="size-5" />
                   </Button>
                 ) : null}
@@ -292,15 +270,15 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
               '__all__',
               t('sessions.archivePage.allDirectories'),
               totalCount,
-              selectedDirectory === null,
-              () => selectDirectory(null),
+              selectedWorkspaceId === null,
+              () => selectWorkspace(null),
             )}
             {buckets.map((bucket) => renderDirectoryItem(
-              bucket.directory || '__none__',
+              bucket.workspaceId,
               bucket.label,
               bucket.sessions.length,
-              selectedDirectory === bucket.directory,
-              () => selectDirectory(bucket.directory),
+              selectedWorkspaceId === bucket.workspaceId,
+              () => selectWorkspace(bucket.workspaceId),
               bucket.directory || undefined,
               bucket.sessions,
               bucket.fromDeletedSpace,
@@ -323,11 +301,12 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-3">
             <div className="mx-auto w-full max-w-3xl space-y-0.5">
               {visibleSessions.length === 0 ? emptyState : visibleSessions.map((session) => {
+                const workspaceId = session.workspaceId;
                 const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
-                const directoryLabel = sessionDirectory ? labelOf(sessionDirectory) : null;
+                const directoryLabel = labelOf(workspaceId, sessionDirectory);
                 const title = session.metadata?.title || t('sessions.sidebar.session.untitled');
                 // A deleted space's chat has nowhere to be restored to.
-                const restorable = !(spaceArchives?.has(sessionDirectory) ?? false);
+                const restorable = !(spaceArchives?.has(workspaceId) ?? false);
                 return (
                   <div
                     key={session.sessionId}

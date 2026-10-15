@@ -146,7 +146,7 @@ const resolveDefaultAgentName = (): string | undefined => {
   );
 };
 
-const resolveDefaultModelSelection = (): { providerID: string; modelID: string } | null => {
+const resolveDefaultModelSelection = (): { providerId: string; modelId: string } | null => {
   const parsed = parseModelIdentifier(useConfigStore.getState().settingsDefaultModel);
   if (!parsed) {
     return null;
@@ -154,17 +154,17 @@ const resolveDefaultModelSelection = (): { providerID: string; modelID: string }
   if (!useConfigStore.getState().getModelMetadata(parsed.providerId, parsed.modelId)) {
     return null;
   }
-  return { providerID: parsed.providerId, modelID: parsed.modelId };
+  return { providerId: parsed.providerId, modelId: parsed.modelId };
 };
 
-const resolveDefaultVariant = (providerID: string, modelID: string): string | undefined => {
+const resolveDefaultVariant = (providerId: string, modelId: string): string | undefined => {
   const configState = useConfigStore.getState();
   const settingsDefaultVariant = configState.settingsDefaultVariant;
-  const currentVariant = configState.currentProviderId === providerID && configState.currentModelId === modelID
+  const currentVariant = configState.currentProviderId === providerId && configState.currentModelId === modelId
     ? configState.currentVariant
     : undefined;
-  const provider = configState.providers.find((entry) => entry.id === providerID);
-  const model = provider?.models.find((entry) => entry.id === modelID);
+  const provider = configState.providers.find((entry) => entry.id === providerId);
+  const model = provider?.models.find((entry) => entry.id === modelId);
   const variantNames = modelVariantNames(model);
   if (variantNames.length === 0) {
     return settingsDefaultVariant || currentVariant || undefined;
@@ -182,13 +182,13 @@ const captureGuestSendSelection = () => {
   const configState = useConfigStore.getState();
   const lastUsedProvider = useSelectionStore.getState().lastUsedProvider;
   const defaultModel = resolveDefaultModelSelection();
-  const providerID = defaultModel?.providerID || configState.currentProviderId || lastUsedProvider?.providerID;
-  const modelID = defaultModel?.modelID || configState.currentModelId || lastUsedProvider?.modelID;
+  const providerId = defaultModel?.providerId || configState.currentProviderId || lastUsedProvider?.providerID;
+  const modelId = defaultModel?.modelId || configState.currentModelId || lastUsedProvider?.modelID;
   const agentName = resolveDefaultAgentName() || configState.currentAgentName || undefined;
-  if (!providerID || !modelID) {
+  if (!providerId || !modelId) {
     return null;
   }
-  return { providerID, modelID, agentName, variant: resolveDefaultVariant(providerID, modelID) };
+  return { providerId, modelId, agentName, variant: resolveDefaultVariant(providerId, modelId) };
 };
 
 const sendGuestFirstMessage = async (
@@ -201,8 +201,8 @@ const sendGuestFirstMessage = async (
   try {
     await useSessionUIStore.getState().sendMessage(
       text,
-      selection.providerID,
-      selection.modelID,
+      selection.providerId,
+      selection.modelId,
       selection.agentName,
       undefined,
       undefined,
@@ -414,21 +414,22 @@ export const startGuestSession = async (args: {
       undefined,
       sendSelection
         ? {
-            model: { providerID: sendSelection.providerID, id: sendSelection.modelID, variant: sendSelection.variant },
+            model: { providerId: sendSelection.providerId, modelId: sendSelection.modelId },
             agent: sendSelection.agentName,
+            variant: sendSelection.variant,
           }
         : undefined,
       navigation,
     );
     assertCurrent();
     if (!session) return null;
-    createdDirectory = session.directory ?? directory;
+    createdDirectory = session.displayPath || directory;
     if (metadata) {
       const latest = project ? guestProjectWorktrees(project.path).find((entry) => entry.path === metadata?.path) : undefined;
       metadata = { ...metadata, worktreeStatus: latest?.worktreeStatus ?? metadata.worktreeStatus };
-      useSessionUIStore.getState().setWorktreeMetadata(session.id, metadata);
+      useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, metadata);
     }
-    return { id: session.id, directory: createdDirectory };
+    return { id: session.sessionId, directory: createdDirectory };
   };
   try {
     const result = await runStartGuestSession(plan, {

@@ -1,7 +1,6 @@
 import React from 'react';
 
 import { AboutSettings } from '@/components/sections/openchamber/AboutSettings';
-import { OpenCodeUpdateToast } from '@/components/update/OpenCodeUpdateToast';
 import { MobileAppUpdateToast } from '@/components/update/MobileAppUpdateToast';
 import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
 import { Button } from '@/components/ui/button';
@@ -30,7 +29,7 @@ import { useUpdatePolling } from '@/hooks/useUpdatePolling';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import type { ProjectRef } from '@/lib/projectContextApi';
 import { readTabletLayout, useOrientation, useTabletLayout } from '@/lib/device';
@@ -1131,7 +1130,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
 
   React.useEffect(() => {
     if (!isConnected) return;
-    opencodeClient.setDirectory(currentDirectory);
+    hostFilesystem.setDirectory(currentDirectory);
   }, [currentDirectory, isConnected]);
 
   // Gated on isConnected (and re-run on reconnect/instance switch): probing the
@@ -1396,7 +1395,6 @@ function MobileAppContent({ apis }: MobileAppProps) {
                   shell (and sync) still mounts and warms up underneath. */}
               <AppStartupOverlay ready={!isNativeMobileApp || !lastSessionRestorePending} animated />
               <SyncAppEffects backgroundWorkEnabled={isInitialized} />
-              <OpenCodeUpdateToast />
               <MobileAppUpdateToast />
               <MobileShell onActiveConnectionDeleted={() => {
                 suppressAutoConnectUntilManualConnect();

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { opencodeClient } from "@/lib/opencode/client";
+import { hostFilesystem } from '@/lib/host-filesystem';
 import {
   startConfigUpdate,
   finishConfigUpdate,
@@ -181,7 +182,7 @@ const getRequestDirectory = (): string | null => {
     }
 
     // 2. Fallback: current OpenCode directory (session / runtime)
-    const clientDir = opencodeClient.getDirectory();
+    const clientDir = hostFilesystem.getDirectory();
     if (clientDir?.trim()) {
       return clientDir.trim();
     }

@@ -13,11 +13,10 @@ import type {
   SkillsCatalogSourceResponse,
 } from '@/lib/api/types';
 
-import { invalidateSkillsLoadCache, refreshSkillsAfterOpenCodeRestart, useSkillsStore } from '@/stores/useSkillsStore';
-import { opencodeClient } from '@/lib/opencode/client';
+import { invalidateSkillsLoadCache, useSkillsStore } from '@/stores/useSkillsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { startConfigUpdate } from '@/lib/configUpdate';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { emitConfigChange } from '@/lib/configSync';
 
 const SKILLS_CATALOG_LOAD_CACHE_TTL_MS = 5000;
 const DEFAULT_SKILLS_CATALOG_CACHE_KEY = '__default__';
@@ -39,10 +38,6 @@ const getRequestDirectory = (): string | null => {
       return activeProject.path.trim();
     }
 
-    const clientDir = opencodeClient.getDirectory();
-    if (clientDir?.trim()) {
-      return clientDir.trim();
-    }
   } catch (err) {
     console.warn('[SkillsCatalogStore] Error resolving config directory:', err);
   }
@@ -336,20 +331,9 @@ export const useSkillsCatalogStore = create<SkillsCatalogState>()(
 
           invalidateSkillsLoadCache(currentDirectory);
 
-          if (payload.requiresManualRestart) {
-            void get().loadCatalog({ refresh: true });
-            return payload;
-          }
-
-          if (payload.requiresReload) {
-            startConfigUpdate('Installing skills…');
-            await refreshSkillsAfterOpenCodeRestart({
-              message: payload.message,
-              delayMs: payload.reloadDelayMs,
-            });
-          } else {
-            void useSkillsStore.getState().loadSkills();
-          }
+          await useSkillsStore.getState().loadSkills(currentDirectory);
+          emitConfigChange('skills', { source: 'useSkillsCatalogStore' });
+          await get().loadCatalog({ refresh: true });
 
           return payload;
         } catch (error) {

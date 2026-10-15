@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Session } from "@/lib/opencode/model";
+import type { Session } from '@openchamber/agent-contract';
 
 /**
  * How a session answers tool permissions. The server owns the policy
@@ -54,28 +54,28 @@ export const policySnapshotFromWire = (wire: PermissionPolicyWire): PermissionPo
   revision: wire.revision,
 });
 
-const buildSessionMap = (sessions: Session[]): Map<string, Session> => {
+const buildSessionMap = (sessions: readonly Session[]): Map<string, Session> => {
   const map = new Map<string, Session>();
   for (const session of sessions) {
-    map.set(session.id, session);
+    map.set(session.sessionId, session);
   }
   return map;
 };
 
 const resolveLineage = (
-  sessionID: string,
-  sessions: Session[],
+  sessionId: string,
+  sessions: readonly Session[],
   sessionById?: ReadonlyMap<string, Session>,
 ): string[] => {
   const map = sessionById ?? buildSessionMap(sessions);
   const result: string[] = [];
   const seen = new Set<string>();
-  let current: string | undefined = sessionID;
+  let current: string | undefined = sessionId;
 
   while (current && !seen.has(current)) {
     seen.add(current);
     result.push(current);
-    current = map.get(current)?.parentID;
+    current = map.get(current)?.parentSessionId;
   }
 
   return result;
@@ -84,14 +84,14 @@ const resolveLineage = (
 /** The nearest explicit mode up the session's lineage, `ask` when there is none. */
 export const resolvePermissionMode = (input: {
   modes: PermissionModeMap;
-  sessions: Session[];
+  sessions: readonly Session[];
   sessionById?: ReadonlyMap<string, Session>;
-  sessionID: string;
+  sessionId: string;
 }): PermissionMode => {
-  const { modes, sessions, sessionById, sessionID } = input;
+  const { modes, sessions, sessionById, sessionId } = input;
   if (Object.keys(modes).length === 0) return "ask";
 
-  for (const id of resolveLineage(sessionID, sessions, sessionById)) {
+  for (const id of resolveLineage(sessionId, sessions, sessionById)) {
     const mode = modes[id];
     if (mode) return mode;
   }

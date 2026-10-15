@@ -5,12 +5,12 @@ import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { Icon } from "@/components/icon/Icon";
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useDeviceInfo } from '@/lib/device';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import {
@@ -103,7 +103,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
     };
   }, [projectPath]);
 
-  const sessionsKey = React.useMemo(() => sessions.map(s => s.id).join(','), [sessions]);
+  const sessionsKey = React.useMemo(() => sessions.map((session) => session.sessionId).join(','), [sessions]);
   const { availableWorktrees, isLoadingWorktrees } = useProjectWorktrees(
     projectRef, isGitRepoLocal, sessionsKey, listProjectWorktrees,
   );
@@ -307,12 +307,12 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
     const normalizedWorktreePath = normalize(worktree.path);
 
     const directSessions = sessions.filter((session) => {
-      const metadata = getWorktreeMetadata(session.id);
+      const metadata = getWorktreeMetadata(session.sessionId);
       if (metadata?.path && normalize(metadata.path) === normalizedWorktreePath) {
         return true;
       }
 
-      const sessionDir = (session as { directory?: string }).directory;
+      const sessionDir = resolveGlobalSessionDirectory(session);
       if (sessionDir) {
         const normalizedSessionDir = normalize(sessionDir);
         if (normalizedSessionDir === normalizedWorktreePath) {
@@ -323,7 +323,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
       return false;
     });
 
-    const directSessionIds = new Set(directSessions.map((s) => s.id));
+    const directSessionIds = new Set(directSessions.map((s) => s.sessionId));
 
     const allKnownSessions = [
       ...useGlobalSessionsStore.getState().activeSessions,
@@ -332,13 +332,13 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
 
     const findSubsessions = (parentIds: Set<string>): Session[] => {
       const subsessions = allKnownSessions.filter((session) => {
-        const parentID = (session as Session & { parentID?: string | null }).parentID;
-        return parentID && parentIds.has(parentID);
+        const parentId = session.parentSessionId;
+        return parentId !== undefined && parentIds.has(parentId);
       });
       if (subsessions.length === 0) {
         return [];
       }
-      const subsessionIds = new Set(subsessions.map((s) => s.id));
+      const subsessionIds = new Set(subsessions.map((s) => s.sessionId));
       return [...subsessions, ...findSubsessions(subsessionIds)];
     };
 
@@ -346,10 +346,10 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
 
     const seenIds = new Set<string>();
     const allSessions = [...directSessions, ...allSubsessions].filter((session) => {
-      if (seenIds.has(session.id)) {
+      if (seenIds.has(session.sessionId)) {
         return false;
       }
-      seenIds.add(session.id);
+      seenIds.add(session.sessionId);
       return true;
     });
 

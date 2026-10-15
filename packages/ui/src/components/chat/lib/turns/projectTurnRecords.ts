@@ -1,5 +1,5 @@
 import { isHiddenUserMessage } from '../../message/hiddenUserMessage';
-import { isTurnOpeningNotice } from '../timelineRoles';
+import { getLiveFinalMessage } from './liveActivity';
 import { projectTurnActivity } from './projectTurnActivity';
 import { projectTurnIndexes } from './projectTurnIndexes';
 import { projectTurnChangedFiles, projectTurnDiffStats, projectTurnSummary } from './projectTurnSummary';
@@ -11,25 +11,14 @@ import type {
     TurnStreamState,
 } from './types';
 
-const resolveMessageRole = (message: ChatMessageEntry): string => {
-    const role = (message.info as { clientRole?: string | null; role?: string | null }).clientRole ?? message.info.role;
-    return typeof role === 'string' ? role : '';
-};
+const resolveMessageRole = (message: ChatMessageEntry): string => message.role;
 
-const getMessageCreatedAt = (message: ChatMessageEntry): number | undefined => {
-    const created = (message.info as { time?: { created?: unknown } }).time?.created;
-    return typeof created === 'number' ? created : undefined;
-};
-
-const getMessageCompletedAt = (message: ChatMessageEntry): number | undefined => {
-    const completed = (message.info as { time?: { completed?: unknown } }).time?.completed;
-    return typeof completed === 'number' ? completed : undefined;
-};
+const getMessageCreatedAt = (message: ChatMessageEntry): number => message.createdAt;
 
 const createTurnMessageRecord = (message: ChatMessageEntry, order: number): TurnMessageRecord => {
     const role = resolveMessageRole(message);
     return {
-        messageId: message.info.id,
+        messageId: message.messageId,
         role,
         message,
         order,
@@ -38,28 +27,20 @@ const createTurnMessageRecord = (message: ChatMessageEntry, order: number): Turn
 
 const buildTurnStreamState = (userMessage: ChatMessageEntry, assistantMessages: ChatMessageEntry[]): TurnStreamState => {
     const startedAt = getMessageCreatedAt(userMessage);
-    let completedAt: number | undefined;
     let isStreaming = false;
 
     assistantMessages.forEach((message) => {
-        const completed = getMessageCompletedAt(message);
-        if (typeof completed === 'number') {
-            completedAt = Math.max(completedAt ?? 0, completed);
-        } else {
-            isStreaming = true;
-        }
+        // Message DTOs do not contain completion timestamps. Pending calls are
+        // observable activity; turn lifecycle belongs to the runtime status.
+        isStreaming ||= message.parts.some((part) => part.type === 'tool_call'
+            && (part.status === 'running' || part.status === 'approved' || part.status === 'pending_approval'));
     });
 
-    const durationMs = typeof startedAt === 'number' && typeof completedAt === 'number' && completedAt >= startedAt
-        ? completedAt - startedAt
-        : undefined;
 
     return {
         isStreaming,
-        isRetrying: assistantMessages.length > 1,
+        isRetrying: assistantMessages.some((message) => Boolean(message.retryError)),
         startedAt,
-        completedAt,
-        durationMs,
     };
 };
 
@@ -132,8 +113,7 @@ const hydrateTurnRecord = (
         if (changes) return changes;
         // Changed files and their line counts are only shown under a finished
         // answer, so tool patches are not parsed while the turn still streams.
-        const finalMessage = assistantMessages[assistantMessages.length - 1];
-        const hasFinalAnswer = finalMessage?.info.role === 'assistant' && finalMessage.info.finish === 'stop';
+        const hasFinalAnswer = Boolean(getLiveFinalMessage(assistantMessages));
         const changedFiles = hasFinalAnswer ? projectTurnChangedFiles(assistantMessages) : undefined;
         changes = {
             diffStats: projectTurnDiffStats(changedFiles),
@@ -218,30 +198,29 @@ export const projectTurnRecords = (
     };
 
     const turns: TurnRecord[] = [];
+    const turnByCanonicalId = new Map<string, TurnRecord>();
     const groupedMessageIds = new Set<string>();
 
     const mergeHiddenUserTurns = effectiveOptions.mergeHiddenUserTurns;
 
-    // v2 assistant messages carry no parent id: a reply belongs to the last
-    // user message before it, so one ordered pass does the grouping. An
-    // assistant message with no user message ahead of it stays ungrouped. A
-    // background subagent run opens a turn too: the parent reacts to its result.
-    let currentTurn: TurnRecord | undefined;
+    // Ordered messages retain their canonical turn identity. Hidden user
+    // prompts can still be merged into the preceding visible turn.
 
     messages.forEach((message, index) => {
         const role = resolveMessageRole(message);
         if (role === 'assistant') {
+            const currentTurn = turnByCanonicalId.get(message.turnId);
             if (!currentTurn) return;
             currentTurn.assistantMessages.push(message);
-            currentTurn.assistantMessageIds.push(message.info.id);
+            currentTurn.assistantMessageIds.push(message.messageId);
             currentTurn.messages.push(createTurnMessageRecord(message, index));
             if (!currentTurn.headerMessageId) {
-                currentTurn.headerMessageId = message.info.id;
+                currentTurn.headerMessageId = message.messageId;
             }
-            groupedMessageIds.add(message.info.id);
+            groupedMessageIds.add(message.messageId);
             return;
         }
-        if (role !== 'user' && !isTurnOpeningNotice(message.info)) {
+        if (role !== 'user') {
             return;
         }
 
@@ -251,16 +230,16 @@ export const projectTurnRecords = (
             && previousTurn
             && isHiddenUserMessage(message)
         ) {
-            currentTurn = previousTurn;
+            turnByCanonicalId.set(message.turnId, previousTurn);
             previousTurn.messages.push(createTurnMessageRecord(message, index));
-            groupedMessageIds.add(message.info.id);
+            groupedMessageIds.add(message.messageId);
             return;
         }
 
-        const turnId = message.info.id;
+        const turnId = message.turnId;
         const turn: TurnRecord = {
             turnId,
-            userMessageId: message.info.id,
+            userMessageId: message.messageId,
             userMessage: message,
             headerMessageId: undefined,
             messages: [createTurnMessageRecord(message, index)],
@@ -280,19 +259,16 @@ export const projectTurnRecords = (
             },
         };
         turns.push(turn);
-        currentTurn = turn;
-        groupedMessageIds.add(message.info.id);
+        turnByCanonicalId.set(message.turnId, turn);
+        groupedMessageIds.add(message.messageId);
     });
 
     const stableTurns = hydrateStableTurnRecords(turns, effectiveOptions);
     const projection = projectTurnIndexes(stableTurns);
     const ungroupedMessageIds = new Set<string>();
     messages.forEach((message) => {
-        if (resolveMessageRole(message) === 'assistant') {
-            return;
-        }
-        if (!groupedMessageIds.has(message.info.id)) {
-            ungroupedMessageIds.add(message.info.id);
+        if (!groupedMessageIds.has(message.messageId)) {
+            ungroupedMessageIds.add(message.messageId);
         }
     });
 

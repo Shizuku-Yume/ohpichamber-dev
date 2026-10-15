@@ -32,7 +32,15 @@ export async function summarizeSelectionForNotes(text: string, sessionId?: strin
     // that conversation. The composer picker only serves as a fallback.
     const directory = sessionId ? getSyncSessionDirectory(sessionId) : undefined;
     if (sessionId && !directory) return trimmed;
-    const sessionModel = sessionId ? getSyncMessages(sessionId, directory ?? undefined).findLast(message => message.role === 'assistant' && message.providerId && message.modelId) : undefined;
+    const messages = sessionId ? getSyncMessages(sessionId, directory ?? undefined) : [];
+    let sessionModel: (typeof messages)[number] | undefined;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === 'assistant' && message.providerId && message.modelId) {
+        sessionModel = message;
+        break;
+      }
+    }
     const { currentProviderId, currentModelId } = useConfigStore.getState();
     const providerId = sessionModel?.providerId || currentProviderId || '';
     const modelId = sessionModel?.modelId || currentModelId || '';

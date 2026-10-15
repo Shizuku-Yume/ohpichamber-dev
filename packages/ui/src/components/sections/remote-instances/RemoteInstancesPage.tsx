@@ -184,7 +184,7 @@ const instanceStateLabelKey = (state: InstanceState): I18nKey => {
 
 // Known backend failures that the user can act on from here. Everything else
 // falls back to the raw detail plus the logs button.
-type ErrorRemedy = 'uiPassword' | 'localPort' | 'noRuntime' | 'noOpencode' | 'externalPort' | null;
+type ErrorRemedy = 'uiPassword' | 'localPort' | 'noRuntime' | 'externalPort' | null;
 
 const errorRemedy = (detail?: string): ErrorRemedy => {
   const text = (detail || '').toLowerCase();
@@ -192,7 +192,6 @@ const errorRemedy = (detail?: string): ErrorRemedy => {
   if (text.includes('ui authentication') || text.includes('ui password')) return 'uiPassword';
   if (text.includes('already in use') || text.includes('eaddrinuse')) return 'localPort';
   if (text.includes('neither bun nor npm')) return 'noRuntime';
-  if (text.includes('opencode cli is not installed')) return 'noOpencode';
   if (text.includes('requires a ui password')) return 'uiPassword';
   if (text.includes('preferred remote openchamber port')) return 'externalPort';
   return null;
@@ -201,12 +200,10 @@ const errorRemedy = (detail?: string): ErrorRemedy => {
 // Remedies the user resolves on the remote machine: explain, do not offer a button.
 const REMEDY_HINT_KEYS = {
   noRuntime: 'settings.remoteInstances.page.error.hint.noRuntime',
-  noOpencode: 'settings.remoteInstances.page.error.hint.noOpencode',
 } satisfies Record<string, I18nKey>;
 
 const remedyHintKey = (remedy: ErrorRemedy): I18nKey | null => {
   if (remedy === 'noRuntime') return REMEDY_HINT_KEYS.noRuntime;
-  if (remedy === 'noOpencode') return REMEDY_HINT_KEYS.noOpencode;
   return null;
 };
 

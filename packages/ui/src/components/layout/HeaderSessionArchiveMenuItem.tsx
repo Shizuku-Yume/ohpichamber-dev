@@ -13,8 +13,8 @@ export function HeaderSessionArchiveMenuItem({ sessionId, onArchive, Item }: {
   Item: SessionTabMenuComponents['Item'];
 }) {
   const { t } = useI18n();
-  const archived = useGlobalSessionsStore((state) => Boolean(state.entityById.get(sessionId)?.time.archived));
-  const isSubsession = useGlobalSessionsStore((state) => Boolean(state.entityById.get(sessionId)?.parentID));
+  const archived = useGlobalSessionsStore((state) => state.entityById.get(sessionId)?.archivedAt !== undefined);
+  const isSubsession = useGlobalSessionsStore((state) => Boolean(state.entityById.get(sessionId)?.parentSessionId));
   const unarchiveSession = useSessionUIStore((state) => state.unarchiveSession);
 
   const restore = async () => {

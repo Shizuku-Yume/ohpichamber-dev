@@ -1,7 +1,7 @@
 import React from 'react';
 import morphdom from 'morphdom';
 import { renderMermaidASCII, renderMermaidSVG } from 'beautiful-mermaid';
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { isAppLinkUrl, openExternalUrl } from '@/lib/url';
@@ -1403,31 +1403,29 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
   const imageMode: MarkdownImageMode = variant === 'assistant' ? 'label' : 'local';
   const settledPart = part
     && (part.type === 'text' || part.type === 'reasoning')
-    && part.time?.end !== undefined
+    && part.content === content
     ? part
     : null;
   const runtimeKey = getRuntimeKey();
   // Memoized on scalar identities, not the part object: sync-store reducers
   // recreate part objects on unrelated updates, and an object-identity dep
   // re-ran the async render pipeline for identical content.
-  const settledSessionID = settledPart?.sessionID;
-  const settledMessageID = settledPart?.messageID;
-  const settledPartID = settledPart?.id;
+  const settledPartID = settledPart?.partId;
   const domCacheKey = React.useMemo<DetachedMarkdownDomKey | null>(() => {
-    // Streaming, unfinished, oversized, and identity-less Markdown continues
+    // Streaming, incomplete, oversized, and identity-less Markdown continues
     // through the normal rendering pipeline and never retains detached DOM.
-    if (isStreaming || !settledSessionID || !settledMessageID || !settledPartID || content.length === 0 || content.length > MARKDOWN_DOM_CACHE_MAX_SOURCE_CHARS) return null;
+    if (isStreaming || !messageId || !settledPartID || content.length === 0 || content.length > MARKDOWN_DOM_CACHE_MAX_SOURCE_CHARS) return null;
     // content.length is a cheap fingerprint: an edited or reverted part that
     // re-materializes under the same id must not restore the old DOM.
     return {
-      scope: `${runtimeKey}\0${settledSessionID}`,
-      id: `${settledMessageID}\0${settledPartID}\0${imageMode}\0${content.length}`,
+      scope: runtimeKey,
+      id: `${messageId}\0${settledPartID}\0${imageMode}\0${content.length}`,
       locale,
       directory: effectiveDirectory,
     };
-  }, [content.length, effectiveDirectory, imageMode, isStreaming, locale, runtimeKey, settledSessionID, settledMessageID, settledPartID]);
+  }, [content.length, effectiveDirectory, imageMode, isStreaming, locale, messageId, runtimeKey, settledPartID]);
   // Identity for the fade-in wrapper: a new part/message restarts the animation.
-  const fadeKey = `markdown-${part?.id ? `part-${part.id}` : `message-${messageId}`}`;
+  const fadeKey = `markdown-${part ? `part-${part.partId}` : `message-${messageId}`}`;
 
   useMorphdomMarkdown({
     containerRef,
@@ -1459,6 +1457,8 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
 };
 
 export const MarkdownRenderer = React.memo(MarkdownRendererImpl, (prev, next) => {
+  const prevPartContent = prev.part && 'content' in prev.part ? prev.part.content : undefined;
+  const nextPartContent = next.part && 'content' in next.part ? next.part.content : undefined;
   return prev.content === next.content
     && prev.isStreaming === next.isStreaming
     && prev.disableStreamAnimation === next.disableStreamAnimation
@@ -1469,7 +1469,9 @@ export const MarkdownRenderer = React.memo(MarkdownRendererImpl, (prev, next) =>
     && prev.messageId === next.messageId
     && prev.onShowPopup === next.onShowPopup
     && prev.enableFileReferences === next.enableFileReferences
-    && prev.part?.id === next.part?.id;
+    && prev.part?.partId === next.part?.partId
+    && prev.part?.type === next.part?.type
+    && prevPartContent === nextPartContent;
 });
 
 const SimpleMarkdownRendererImpl: React.FC<{

@@ -8,7 +8,8 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { normalizePath } from '@/lib/pathNormalization';
-import type { Model, Session } from '@openchamber/agent-contract';
+import type { Session } from '@openchamber/agent-contract';
+import { findCatalogModel, type Model } from '@/lib/opencode/model';
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -38,8 +39,8 @@ type BarMode =
   | { kind: 'keep'; sessionId: string }
   | { kind: 'fuse'; excluded: ReadonlySet<string> };
 
-const modelLabelFor = (member: MultiRunMember, models: readonly Model[]): string => {
-  const name = models.find((entry) => entry.provider === member.identity.providerID && entry.modelId === member.identity.modelID)?.name || member.identity.modelID;
+const modelLabelFor = (member: MultiRunMember, providers: readonly { id: string; models: readonly Model[] }[]): string => {
+  const name = findCatalogModel(providers.find((provider) => provider.id === member.identity.providerID)?.models, member.identity.modelID)?.name || member.identity.modelID;
   return member.identity.index && member.identity.index > 1 ? `${name} #${member.identity.index}` : name;
 };
 
@@ -117,10 +118,10 @@ function PromptCaption({ prompt, expanded, onToggle }: { prompt: string; expande
 function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
   const { t } = useI18n();
   const { run, sessionById } = useMultiRun(runKey);
-  const models = useConfigStore((state) => state.models);
-  const currentProviderId = useConfigStore((state) => state.providerId);
-  const currentModelId = useConfigStore((state) => state.modelId);
-  const currentAgentName = useConfigStore((state) => state.agentId);
+  const providers = useConfigStore((state) => state.providers);
+  const currentProviderId = useConfigStore((state) => state.currentProviderId);
+  const currentModelId = useConfigStore((state) => state.currentModelId);
+  const currentAgentName = useConfigStore((state) => state.currentAgentName);
   const projects = useProjectsStore((state) => state.projects);
   const activeSessionIds = useGlobalSessionStatusStore((state) => state.activeSessionIds);
   const blockingBySession = useGlobalBlockingRequestsStore((state) => state.bySession);
@@ -151,9 +152,9 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
   React.useEffect(() => {
     if (judge.length > 0) return;
     const auto = run?.autoFusion;
-    const providerID = auto?.providerID ?? currentProviderId;
-    const modelID = auto?.modelID ?? currentModelId;
-    if (providerID && modelID) setJudge([{ providerId: providerID, modelId: modelID, variant: auto?.variant, instanceId: generateInstanceId() }]);
+    const providerId = auto?.providerID ?? currentProviderId;
+    const modelId = auto?.modelID ?? currentModelId;
+    if (providerId && modelId) setJudge([{ providerId, modelId, variant: auto?.variant, instanceId: generateInstanceId() }]);
   }, [currentModelId, currentProviderId, judge.length, run?.autoFusion]);
 
   if (!run) {
@@ -178,7 +179,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
   const memberById = new Map([...run.lanes, ...run.fusions].map((member) => [member.sessionId, member]));
   const nameOf = (sessionId: string): string => {
     const member = memberById.get(sessionId);
-    return member ? modelLabelFor(member, models) : '';
+    return member ? modelLabelFor(member, providers) : '';
   };
   const autoFusionHere = run.autoFusion?.launcherId === RUN_LAUNCHER_ID && run.fusions.length === 0;
   const statusOf = (sessionId: string): LaneStatus | null => {
@@ -336,7 +337,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
         key={member.sessionId}
         session={session}
         providerID={member.identity.providerID}
-        modelLabel={modelLabelFor(member, models)}
+        modelLabel={modelLabelFor(member, providers)}
         variantLabel={!isFusion && run.variants.length > 1 ? multiRunVariantLabel(member.identity.runGroup) : null}
         isFusion={isFusion}
         busy={activeSessionIds.has(member.sessionId)}
@@ -372,8 +373,8 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
           </span>
           <ModelEffortMenu
             appearance="trigger"
-            providerID={pending.providerId}
-            modelID={pending.modelId}
+            providerId={pending.providerId}
+            modelId={pending.modelId}
             variant={pending.variant}
             onChange={(variant) => setPendingModel({ runGroup, model: { ...pending, variant } })}
           />
@@ -580,8 +581,8 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
               {judge[0] ? (
                 <ModelEffortMenu
                   appearance="trigger"
-                  providerID={judge[0].providerId}
-                  modelID={judge[0].modelId}
+                  providerId={judge[0].providerId}
+                  modelId={judge[0].modelId}
                   variant={judge[0].variant}
                   onChange={(variant) => setJudge((current) => current.map((entry) => ({ ...entry, variant })))}
                 />

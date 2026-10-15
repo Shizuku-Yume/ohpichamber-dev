@@ -4,10 +4,8 @@ import { Icon } from "@/components/icon/Icon";
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
-import { useBackgroundSessionWork } from '@/hooks/useBackgroundSessionWork';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getProviderModelDisplayName } from '@/lib/modelDisplay';
-import { BackgroundWorkButton } from './BackgroundWorkButton';
 import { registerFloatingPanelClearanceReader } from '@/components/chat/composer/state/composerInsetReaders';
 
 /** The scroll action: the arrow, plus the status label while the session works. */
@@ -33,16 +31,14 @@ const ScrollAction: React.FC<{ onClick: () => void; children?: React.ReactNode }
 };
 
 /**
- * Compact one-line mirror of the status row for the pill: same label and
- * background action, none of the status row's animation machinery (which does
- * not survive being squeezed into a 32px chip). The action is a sibling of the
- * scroll button, never inside it.
+ * Compact one-line mirror of the status row for the pill: same label, none of
+ * the status row's animation machinery (which does not survive being squeezed
+ * into a 32px chip).
  */
 const WorkingPillBody: React.FC<{ onClick: () => void }> = ({ onClick }) => {
     const { t } = useI18n();
     const { activeModel, working } = useAssistantStatus();
     const providers = useConfigStore((state) => state.providers);
-    const backgroundWork = useBackgroundSessionWork();
 
     const modelName = React.useMemo(() => {
         if (!activeModel) return null;
@@ -57,14 +53,11 @@ const WorkingPillBody: React.FC<{ onClick: () => void }> = ({ onClick }) => {
         : status.charAt(0).toUpperCase() + status.slice(1);
 
     return (
-        <>
-            <ScrollAction onClick={onClick}>
-                <span className={cn('-ml-px min-w-0 truncate text-sm text-muted-foreground', working.canBackground ? 'pr-1' : 'pr-3')}>
-                    {label}
-                </span>
-            </ScrollAction>
-            {working.canBackground ? <BackgroundWorkButton onClick={backgroundWork} className="mr-0.5 h-7 w-7" /> : null}
-        </>
+        <ScrollAction onClick={onClick}>
+            <span className="-ml-px min-w-0 truncate text-sm text-muted-foreground pr-3">
+                {label}
+            </span>
+        </ScrollAction>
     );
 };
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { normalizePath } from '@/lib/pathNormalization';
 import type { ProjectEntry } from '@/lib/api/types';
 import type { DesktopSettings } from '@/lib/desktop';
@@ -535,7 +535,7 @@ export const useProjectsStore = create<ProjectsStore>()(
       if (nextActiveId) {
         const nextActive = nextProjects.find((project) => project.id === nextActiveId);
         if (nextActive) {
-          opencodeClient.setDirectory(nextActive.path);
+          hostFilesystem.setDirectory(nextActive.path);
           useDirectoryStore.getState().setDirectory(nextActive.path, { showOverlay: false });
         }
       } else {
@@ -561,7 +561,7 @@ export const useProjectsStore = create<ProjectsStore>()(
       set({ projects: nextProjects, activeProjectId: id });
       persistProjects(nextProjects, id, get().manualProjectOrder);
 
-      opencodeClient.setDirectory(target.path);
+      hostFilesystem.setDirectory(target.path);
       useDirectoryStore.getState().setDirectory(target.path, { showOverlay: false });
     },
 
@@ -823,7 +823,7 @@ export const useProjectsStore = create<ProjectsStore>()(
       if (activeChanged && nextActive) {
         const activeProject = incomingProjects.find((project) => project.id === nextActive);
         if (activeProject) {
-          opencodeClient.setDirectory(activeProject.path);
+          hostFilesystem.setDirectory(activeProject.path);
           useDirectoryStore.getState().setDirectory(activeProject.path, { showOverlay: false });
         }
       }

@@ -265,8 +265,8 @@ export const SourceBoardActions: React.FC<{
                                 <Icon name="chat-4" className="size-4 shrink-0" />
                                 <span className="flex min-w-0 flex-col">
                                     <span>{t('sourceBoard.actions.currentSession')}</span>
-                                    {currentSession?.title ? (
-                                        <span className="truncate typography-micro text-muted-foreground">{currentSession.title}</span>
+                                    {currentSession?.metadata?.title ? (
+                                        <span className="truncate typography-micro text-muted-foreground">{currentSession.metadata.title}</span>
                                     ) : null}
                                 </span>
                             </DropdownMenuItem>

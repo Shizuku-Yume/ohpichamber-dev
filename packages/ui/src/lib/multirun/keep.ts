@@ -52,8 +52,9 @@ export async function resolveRunMemberLocation(session: Session, run: MultiRunSu
     return { project: projectRefFor(knownProject), worktree: knownProject === directory ? null : known };
   }
   const member = [...run.lanes, ...run.fusions].find((entry) => entry.sessionId === session.sessionId);
-  const legacyScope = member?.identity.group.kind === 'legacy'
-    ? normalizePath(useProjectsStore.getState().projects.find((project) => project.id === member.identity.group.scope)?.path) : null;
+  const group = member?.identity.group;
+  const legacyScope = group?.kind === 'legacy'
+    ? normalizePath(useProjectsStore.getState().projects.find((project) => project.id === group.scope)?.path) : null;
   const projects = useProjectsStore.getState().projects
     .map((project) => normalizePath(project.path))
     .filter((path): path is string => Boolean(path));

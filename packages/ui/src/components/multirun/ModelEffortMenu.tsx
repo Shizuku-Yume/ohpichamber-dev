@@ -4,6 +4,7 @@ import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { listModelVariantIds } from '@/lib/modelVariants';
+import { findCatalogModel } from '@/lib/opencode/model';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 
@@ -12,9 +13,9 @@ import { useConfigStore } from '@/stores/useConfigStore';
  * models without variants. `inline` sits inside a model chip, `trigger` stands
  * next to a model picker button.
  */
-export function ModelEffortMenu({ providerID, modelID, variant, onChange, appearance = 'inline', disabled = false }: {
-  providerID: string;
-  modelID: string;
+export function ModelEffortMenu({ providerId, modelId, variant, onChange, appearance = 'inline', disabled = false }: {
+  providerId: string;
+  modelId: string;
   variant: string | undefined;
   onChange: (variant: string | undefined) => void;
   appearance?: 'inline' | 'trigger';
@@ -22,9 +23,9 @@ export function ModelEffortMenu({ providerID, modelID, variant, onChange, appear
 }): React.ReactNode {
   const { t } = useI18n();
   const variants = useConfigStore(React.useCallback((state) => {
-    const model = state.getProviderModel(providerID, modelID);
+    const model = findCatalogModel(state.providers.find((provider) => provider.id === providerId)?.models, modelId);
     return listModelVariantIds(model?.variants).join('\n');
-  }, [modelID, providerID]));
+  }, [modelId, providerId]));
   if (!variants) return null;
   const label = variant ?? t('multirun.modelMultiSelect.variant.default');
   return (

@@ -54,9 +54,9 @@ function LaunchSettingsDialog({
   const firstModel = state.variants[state.active]?.models[0];
   // The judge shown while fusion is off is the one "Automatic" would pick.
   const judge = state.fuse ?? (firstModel
-    ? { providerID: firstModel.providerID, modelID: firstModel.modelID, variant: firstModel.variant, displayName: firstModel.displayName }
+    ? { providerId: firstModel.providerId, modelId: firstModel.modelId, variant: firstModel.variant, displayName: firstModel.displayName }
     : null);
-  const judgeSelection: ModelSelectionWithId[] = judge ? [{ ...judge, instanceId: `${judge.providerID}:${judge.modelID}` }] : [];
+  const judgeSelection: ModelSelectionWithId[] = judge ? [{ ...judge, instanceId: `${judge.providerId}:${judge.modelId}` }] : [];
   const close = () => {
     if (state.isolate) parallel.setSetupCommands(setupDraft.split('\n').map((line) => line.trim()).filter(Boolean));
     onOpenChange(false);
@@ -131,20 +131,20 @@ function LaunchSettingsDialog({
               <div className={cn('flex flex-wrap items-center gap-1.5', !state.fuse && 'pointer-events-none opacity-50')} aria-disabled={!state.fuse}>
                 <ModelMultiSelect
                   selectedModels={judgeSelection}
-                  onAdd={(model) => parallel.setFuse({ providerID: model.providerID, modelID: model.modelID, displayName: model.displayName })}
-                  onUpdate={(_, model) => parallel.setFuse({ providerID: model.providerID, modelID: model.modelID, displayName: model.displayName })}
+                  onAdd={(model) => parallel.setFuse({ providerId: model.providerId, modelId: model.modelId, displayName: model.displayName })}
+                  onUpdate={(_, model) => parallel.setFuse({ providerId: model.providerId, modelId: model.modelId, displayName: model.displayName })}
                   onRemove={() => parallel.setFuse(null)}
                   maxModels={1}
                   showChips={false}
                   dropdownSide="bottom"
-                  addButtonLabel={judge ? judge.displayName || judge.modelID : t('multirun.fusion.model.placeholder')}
-                  triggerIcon={judge ? <ProviderLogo providerId={judge.providerID} className="mr-1 size-3.5" /> : undefined}
+                  addButtonLabel={judge ? judge.displayName || judge.modelId : t('multirun.fusion.model.placeholder')}
+                  triggerIcon={judge ? <ProviderLogo providerId={judge.providerId} className="mr-1 size-3.5" /> : undefined}
                 />
                 {judge ? (
                   <ModelEffortMenu
                     appearance="trigger"
-                    providerID={judge.providerID}
-                    modelID={judge.modelID}
+                    providerId={judge.providerId}
+                    modelId={judge.modelId}
                     variant={judge.variant}
                     disabled={!state.fuse}
                     onChange={(variant) => { if (state.fuse) parallel.setFuse({ ...state.fuse, variant }); }}
@@ -220,7 +220,7 @@ export function ParallelComposerStrip({
   const active = state.variants[state.active];
   const summary = [
     state.isolate ? t('chat.parallel.isolation.worktrees') : t('chat.parallel.isolation.shared'),
-    state.fuse ? t('chat.parallel.fuse.judge', { model: state.fuse.displayName || state.fuse.modelID }) : t('chat.parallel.fuse.off'),
+    state.fuse ? t('chat.parallel.fuse.judge', { model: state.fuse.displayName || state.fuse.modelId }) : t('chat.parallel.fuse.off'),
   ].join(' · ');
 
   return (
@@ -270,14 +270,14 @@ export function ParallelComposerStrip({
       <div className="flex flex-wrap items-center gap-1.5">
         {active.models.map((model, index) => (
           <span
-            key={`${model.providerID}:${model.modelID}:${model.variant ?? ''}`}
+            key={`${model.providerId}:${model.modelId}:${model.variant ?? ''}`}
             className="group/chip inline-flex h-6 items-center gap-1 rounded-md border border-border bg-[var(--surface-elevated)] pl-1.5 pr-0.5 typography-micro text-foreground"
           >
-            <ProviderLogo providerId={model.providerID} className="size-3.5" />
-            <span className="max-w-[10rem] truncate">{model.displayName || model.modelID}</span>
+            <ProviderLogo providerId={model.providerId} className="size-3.5" />
+            <span className="max-w-[10rem] truncate">{model.displayName || model.modelId}</span>
             <ModelEffortMenu
-              providerID={model.providerID}
-              modelID={model.modelID}
+              providerId={model.providerId}
+              modelId={model.modelId}
               variant={model.variant}
               onChange={(variant) => parallel.setModelVariant(index, variant)}
             />
@@ -286,7 +286,7 @@ export function ParallelComposerStrip({
               type="button"
               onClick={() => parallel.incrementModel(index)}
               className="inline-flex size-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-              aria-label={t('chat.parallel.models.increment', { model: model.displayName || model.modelID })}
+              aria-label={t('chat.parallel.models.increment', { model: model.displayName || model.modelId })}
             >
               <Icon name="add" className="size-3" />
             </button>
@@ -294,7 +294,7 @@ export function ParallelComposerStrip({
               type="button"
               onClick={() => parallel.decrementModel(index)}
               className="inline-flex size-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-              aria-label={t('chat.parallel.models.decrement', { model: model.displayName || model.modelID })}
+              aria-label={t('chat.parallel.models.decrement', { model: model.displayName || model.modelId })}
             >
               <Icon name="close" className="size-3" />
             </button>
@@ -302,7 +302,7 @@ export function ParallelComposerStrip({
         ))}
         <ModelMultiSelect
           selectedModels={[]}
-          onAdd={(model) => parallel.addModel({ providerID: model.providerID, modelID: model.modelID, variant: model.variant, displayName: model.displayName })}
+          onAdd={(model) => parallel.addModel({ providerId: model.providerId, modelId: model.modelId, variant: model.variant, displayName: model.displayName })}
           onRemove={() => undefined}
           maxModels={1}
           showChips={false}

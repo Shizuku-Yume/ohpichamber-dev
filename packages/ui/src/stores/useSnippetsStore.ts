@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { Snippet } from '@/types/snippet';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -81,7 +81,7 @@ const getRequestDirectory = (): string | null => {
   try {
     const currentDirectory = useDirectoryStore.getState().currentDirectory;
     if (currentDirectory?.trim()) return currentDirectory.trim();
-    const clientDir = opencodeClient.getDirectory();
+    const clientDir = hostFilesystem.getDirectory();
     if (clientDir?.trim()) return clientDir.trim();
     const activeProject = useProjectsStore.getState().getActiveProject?.();
     if (activeProject?.path?.trim()) return activeProject.path.trim();

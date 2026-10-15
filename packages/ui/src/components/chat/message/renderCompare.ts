@@ -1,4 +1,4 @@
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import type { TurnActivityGroup, TurnActivityRecord, TurnChangedFile, TurnDiffStats, TurnGroupingContext } from '../lib/turns/types';
 
 type MessageRecord = {
@@ -6,42 +6,7 @@ type MessageRecord = {
   parts: Part[];
 };
 
-const readPartId = (part: Part | undefined): string | null => {
-  if (!part) return null;
-  const candidate = (part as { id?: unknown }).id;
-  return typeof candidate === 'string' && candidate.length > 0 ? candidate : null;
-};
-
-const readToolStatus = (part: Part | undefined): string | null => {
-  const status = (part as { state?: { status?: unknown } } | undefined)?.state?.status;
-  return typeof status === 'string' ? status : null;
-};
-
-const readToolStateRef = (part: Part | undefined): unknown => {
-  return (part as { state?: unknown } | undefined)?.state;
-};
-
-const readPartMetadataRef = (part: Part | undefined): unknown => {
-  return (part as { metadata?: unknown } | undefined)?.metadata;
-};
-
-const readPartTime = (part: Part | undefined) => {
-  const time = (part as { time?: { start?: unknown; end?: unknown } } | undefined)?.time;
-  return {
-    start: typeof time?.start === 'number' ? time.start : null,
-    end: typeof time?.end === 'number' ? time.end : null,
-  };
-};
-
-const readPartText = (part: Part | undefined): string => {
-  const candidate = part as { text?: unknown; content?: unknown; value?: unknown } | undefined;
-  if (!candidate) return '';
-  const text = typeof candidate.text === 'string' ? candidate.text : '';
-  const content = typeof candidate.content === 'string' ? candidate.content : '';
-  const value = typeof candidate.value === 'string' ? candidate.value : '';
-  return [text, content, value].reduce((best, next) => (next.length > best.length ? next : best), '');
-};
-
+// Canonical parts intentionally have no legacy state/metadata/time fields; render comparison uses only contract fields.
 export const areRenderRelevantPartsEqual = (left: Part[], right: Part[]): boolean => {
   if (left === right) return true;
   if (left.length !== right.length) return false;
@@ -49,70 +14,20 @@ export const areRenderRelevantPartsEqual = (left: Part[], right: Part[]): boolea
   for (let index = 0; index < left.length; index += 1) {
     const leftPart = left[index];
     const rightPart = right[index];
+    if (leftPart.type !== rightPart.type || leftPart.partId !== rightPart.partId) return false;
 
-    if (leftPart.type !== rightPart.type) {
-      return false;
-    }
-
-    const leftId = readPartId(leftPart);
-    const rightId = readPartId(rightPart);
-    if (leftId !== rightId) {
-      return false;
-    }
-
-    if (leftPart.type === 'tool') {
-      if (readToolStateRef(leftPart) !== readToolStateRef(rightPart)) {
-        return false;
-      }
-      if (readPartMetadataRef(leftPart) !== readPartMetadataRef(rightPart)) {
-        return false;
-      }
-      if (readToolStatus(leftPart) !== readToolStatus(rightPart)) {
-        return false;
-      }
-      const leftTime = readPartTime(leftPart);
-      const rightTime = readPartTime(rightPart);
-      if (leftTime.start !== rightTime.start || leftTime.end !== rightTime.end) {
-        return false;
-      }
-      const leftTool = (leftPart as { tool?: unknown }).tool;
-      const rightTool = (rightPart as { tool?: unknown }).tool;
-      if (leftTool !== rightTool) {
-        return false;
-      }
-      // Compare tool output so streaming updates (e.g., todo list progress)
-      // trigger re-renders when the output payload changes.
-      const leftOutput = (leftPart as { output?: unknown }).output;
-      const rightOutput = (rightPart as { output?: unknown }).output;
-      if (leftOutput !== rightOutput) {
-        return false;
-      }
+    if (leftPart.type === 'tool_call' && rightPart.type === 'tool_call') {
+      if (leftPart.toolCallId !== rightPart.toolCallId || leftPart.toolName !== rightPart.toolName || leftPart.status !== rightPart.status || leftPart.input !== rightPart.input) return false;
       continue;
     }
-
-    const leftTime = readPartTime(leftPart);
-    const rightTime = readPartTime(rightPart);
-    if (leftTime.start !== rightTime.start || leftTime.end !== rightTime.end) {
-      return false;
+    if (leftPart.type === 'tool_result' && rightPart.type === 'tool_result') {
+      if (leftPart.toolCallId !== rightPart.toolCallId || leftPart.toolName !== rightPart.toolName || leftPart.output !== rightPart.output || leftPart.error !== rightPart.error || leftPart.isError !== rightPart.isError) return false;
+      continue;
     }
-
-    if (leftPart.type === 'text' || leftPart.type === 'reasoning') {
-      if (readPartText(leftPart) !== readPartText(rightPart)) {
-        return false;
-      }
-      // Shell-mode user messages carry their live command state in an
-      // injected `shellAction` payload on a synthetic text part; without
-      // comparing it, a running→completed transition never re-renders.
-      const leftShell = (leftPart as { shellAction?: { command?: unknown; output?: unknown; status?: unknown } }).shellAction;
-      const rightShell = (rightPart as { shellAction?: { command?: unknown; output?: unknown; status?: unknown } }).shellAction;
-      if (leftShell || rightShell) {
-        if (leftShell?.command !== rightShell?.command
-          || leftShell?.output !== rightShell?.output
-          || leftShell?.status !== rightShell?.status) {
-          return false;
-        }
-      }
-    }
+    if (leftPart.type === 'text' && rightPart.type === 'text' && leftPart.content !== rightPart.content) return false;
+    if (leftPart.type === 'reasoning' && rightPart.type === 'reasoning' && (leftPart.content !== rightPart.content || leftPart.signature !== rightPart.signature)) return false;
+    if (leftPart.type === 'attachment' && rightPart.type === 'attachment' && (leftPart.attachmentId !== rightPart.attachmentId || leftPart.name !== rightPart.name || leftPart.mediaType !== rightPart.mediaType || leftPart.size !== rightPart.size || leftPart.uri !== rightPart.uri)) return false;
+    if (leftPart.type === 'step_summary' && rightPart.type === 'step_summary' && (leftPart.title !== rightPart.title || leftPart.durationMs !== rightPart.durationMs)) return false;
   }
 
   return true;
@@ -120,23 +35,22 @@ export const areRenderRelevantPartsEqual = (left: Part[], right: Part[]): boolea
 
 const areRenderRelevantMessageInfoEqual = (left: Message, right: Message): boolean => {
   if (left === right) return true;
-
-  return left.id === right.id
+  return left.messageId === right.messageId
+    && left.sessionId === right.sessionId
     && left.role === right.role
-    && left.sessionID === right.sessionID
-    && (left as { finish?: unknown }).finish === (right as { finish?: unknown }).finish
-    && (left as { status?: unknown }).status === (right as { status?: unknown }).status
-    // A running compaction streams its summary into the message itself.
-    && (left.role !== 'compaction' || right.role !== 'compaction' || left.summary === right.summary)
-    && (left as { mode?: unknown }).mode === (right as { mode?: unknown }).mode
-    && (left as { agent?: unknown }).agent === (right as { agent?: unknown }).agent
-    && (left as { providerID?: unknown }).providerID === (right as { providerID?: unknown }).providerID
-    && (left as { modelID?: unknown }).modelID === (right as { modelID?: unknown }).modelID
-    && (left as { variant?: unknown }).variant === (right as { variant?: unknown }).variant
-    && (left as { clientRole?: unknown }).clientRole === (right as { clientRole?: unknown }).clientRole
-    && (left as { userMessageMarker?: unknown }).userMessageMarker === (right as { userMessageMarker?: unknown }).userMessageMarker
-    && ((left as { time?: { created?: unknown; completed?: unknown } }).time?.created ?? null) === ((right as { time?: { created?: unknown; completed?: unknown } }).time?.created ?? null)
-    && ((left as { time?: { created?: unknown; completed?: unknown } }).time?.completed ?? null) === ((right as { time?: { created?: unknown; completed?: unknown } }).time?.completed ?? null);
+    && left.createdAt === right.createdAt
+    && left.providerId === right.providerId
+    && left.modelId === right.modelId
+    && left.usage?.input === right.usage?.input
+    && left.usage?.output === right.usage?.output
+    && left.usage?.cacheRead === right.usage?.cacheRead
+    && left.usage?.cacheWrite === right.usage?.cacheWrite
+    && left.usage?.totalTokens === right.usage?.totalTokens
+    && left.usage?.cost.input === right.usage?.cost.input
+    && left.usage?.cost.output === right.usage?.cost.output
+    && left.usage?.cost.cacheRead === right.usage?.cost.cacheRead
+    && left.usage?.cost.cacheWrite === right.usage?.cost.cacheWrite
+    && left.usage?.cost.total === right.usage?.cost.total;
 };
 
 export const areRenderRelevantMessagesEqual = (left: MessageRecord, right: MessageRecord): boolean => {
@@ -144,11 +58,10 @@ export const areRenderRelevantMessagesEqual = (left: MessageRecord, right: Messa
 };
 
 export const areOptionalRenderRelevantMessagesEqual = (left?: MessageRecord, right?: MessageRecord): boolean => {
-  if (!left || !right) {
-    return left === right;
-  }
+  if (!left || !right) return left === right;
   return areRenderRelevantMessagesEqual(left, right);
 };
+
 
 const areTurnDiffStatsEqual = (left?: TurnDiffStats, right?: TurnDiffStats): boolean => {
   if (!left || !right) {
@@ -171,7 +84,6 @@ const areTurnChangedFilesEqual = (left?: TurnChangedFile[], right?: TurnChangedF
       leftFile.file !== rightFile.file
       || leftFile.additions !== rightFile.additions
       || leftFile.deletions !== rightFile.deletions
-      || leftFile.inTurnDiff !== rightFile.inTurnDiff
     ) {
       return false;
     }

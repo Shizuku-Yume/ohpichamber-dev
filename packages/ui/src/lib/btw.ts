@@ -24,7 +24,7 @@ export type StartBtwInput = {
   permissionMode?: PermissionMode;
   attachments?: AttachedFile[];
   additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean; metadata?: ContextPartMetadata }>;
-  skills?: { names: string[] };
+  skills?: { names: readonly string[] };
 };
 
 export const BTW_BOUNDARY_INSTRUCTION = [
@@ -36,15 +36,9 @@ export const BTW_BOUNDARY_INSTRUCTION = [
   'Do not modify files, source, git state, permissions, configuration, or any other workspace state unless the user explicitly asks for that mutation inside this btw session. If they do, keep it minimal, local to the request, and avoid disrupting the main thread.',
 ].join('\n');
 
-const BTW_PROMOTION_NOTICE =
-  'This session started as a btw side conversation and has since been promoted to a normal session. '
-  + 'The btw constraints in the history above no longer apply: this is now the main thread, and the '
-  + 'usual tool, sub-agent and workspace permissions are in force.';
-
-export const buildBtwSyntheticTexts = (state: { isBtwActive: boolean; isPromotedBtwSession: boolean }): string[] => {
-  if (state.isBtwActive) return [BTW_BOUNDARY_INSTRUCTION];
-  return state.isPromotedBtwSession ? [BTW_PROMOTION_NOTICE] : [];
-};
+export const buildBtwSyntheticTexts = (state: { isBtwActive: boolean }): string[] => (
+  state.isBtwActive ? [BTW_BOUNDARY_INSTRUCTION] : []
+);
 
 const findLastCompletedAssistantMessageID = (turns: readonly Turn[]): string | null => {
   for (let index = turns.length - 1; index >= 0; index -= 1) {

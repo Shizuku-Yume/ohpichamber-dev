@@ -4,7 +4,8 @@ import { createDeferredSafeJSONStorage } from './utils/safeStorage';
 import { startConfigUpdate } from '@/lib/configUpdate';
 import { refreshAfterOpenCodeRestart } from '@/stores/useAgentsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { OpencodeApiError, opencodeClient } from '@/lib/opencode/client';
+import { OpencodeApiError } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import {
   checkPluginUpdates,
   listPluginRuntime,
@@ -145,7 +146,7 @@ export const getPluginsConfigDirectory = (): string | null => {
       return activeProject.path.trim();
     }
 
-    const clientDir = opencodeClient.getDirectory();
+    const clientDir = hostFilesystem.getDirectory();
     if (clientDir?.trim()) {
       return clientDir.trim();
     }

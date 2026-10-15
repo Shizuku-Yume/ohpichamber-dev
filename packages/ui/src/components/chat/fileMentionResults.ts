@@ -1,5 +1,5 @@
 import { scoreByFuzzyQuery } from '@/lib/search/fuzzySearch';
-import type { ProjectFileSearchHit } from '@/lib/opencode/client';
+import type { ProjectFileSearchHit } from '@/lib/host-filesystem';
 
 export type FileMentionHit = ProjectFileSearchHit & { kind: 'file' | 'directory' };
 

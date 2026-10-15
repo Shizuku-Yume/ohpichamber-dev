@@ -1,3 +1,4 @@
+import type { Session } from '@openchamber/agent-contract';
 import type { ProjectSortOrder } from '@/stores/useSessionDisplayStore';
 
 /** The fields any project list needs to be sortable. Both the desktop sidebar
@@ -58,13 +59,13 @@ export const rankByLatestActivity = <T>(
   items: readonly T[],
   order: ProjectSortOrder,
   projectIdOf: (item: T) => string,
-  sessionsByProject: ReadonlyMap<string, ReadonlyArray<{ time: { updated: number } }>>,
+  sessionsByProject: ReadonlyMap<string, ReadonlyArray<Pick<Session, 'updatedAt'>>>,
 ): readonly T[] => {
   if (order !== 'recent') return items;
   const latest = (item: T): number => {
     let newest = 0;
     for (const session of sessionsByProject.get(projectIdOf(item)) ?? []) {
-      if (session.time.updated > newest) newest = session.time.updated;
+      if (session.updatedAt > newest) newest = session.updatedAt;
     }
     return newest;
   };

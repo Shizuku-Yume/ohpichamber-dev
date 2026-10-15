@@ -47,7 +47,7 @@ import { runtimeFetch } from '@/lib/runtime-fetch';
 import { useDeviceInfo } from '@/lib/device';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { useI18n } from '@/lib/i18n';
 import {
   isFilesystemError,
@@ -175,7 +175,7 @@ const resolveFreshFilesystemHome = async (): Promise<string | null> => {
     // Fall back to the client helper below.
   }
 
-  return opencodeClient.getFilesystemHome().catch(() => null);
+  return hostFilesystem.getFilesystemHome().catch(() => null);
 };
 
 export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = ({
@@ -308,7 +308,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     setIsLoading(true);
     setIsBrowseDirectoryMissing(false);
     setBrowseErrorReason(null);
-    opencodeClient.listLocalDirectory(browseDirectoryAbsolutePath)
+    hostFilesystem.listLocalDirectory(browseDirectoryAbsolutePath)
       .then((result) => {
         if (cancelled) return;
         setIsBrowseDirectoryMissing(false);
@@ -645,7 +645,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         handleClose();
         return;
       } else if (shouldCreateSelection) {
-        await opencodeClient.createDirectory(target, { asProject: true });
+        await hostFilesystem.createDirectory(target, { asProject: true });
       }
       if (capturedRuntime !== getRuntimeKey()) return;
       const project = await addProject(selectedTarget);

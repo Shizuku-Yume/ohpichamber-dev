@@ -9,6 +9,7 @@ import { clearDirectorySessionPrefetch, clearRuntimeSessionPrefetch, clearSessio
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
 import { normalizePath } from "@/lib/pathNormalization"
 import { registerWorkspaceDirectory } from "@/stores/globalSessions"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { startSessionLoadPerformanceEvent } from "./session-load-performance"
 import { dropSessionCaches } from "./session-cache"
 import { SessionCacheRetention } from "./session-cache-retention"
@@ -46,6 +47,7 @@ type LoaderEntry = {
   queuedRefresh: Promise<void> | null
   optimistic: Map<string, OptimisticItem>
   evicted: boolean
+  historyBranch?: Branch
 }
 type ChildStore = StoreApi<DirectoryStore>
 type Branch = SessionSnapshot["branch"]
@@ -235,6 +237,22 @@ export class SessionMessageLoader {
     if (!normalized || this.disposed) return Promise.resolve()
     const entry = this.getEntry(normalized)
     if (entry.inflight && entry.snapshot.loadingKind === "older") return entry.inflight
+    const childStore = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
+    if (this.knownChild(normalized, childStore)) {
+      if (entry.inflight || !entry.snapshot.resolved) {
+        const configurationGeneration = this.configurationGeneration
+        const generation = entry.snapshot.generation
+        const pending = entry.inflight ?? this.ensure(normalized)
+        return pending.then(() => {
+          if (this.disposed || configurationGeneration !== this.configurationGeneration
+            || generation !== entry.snapshot.generation || entry.snapshot.status !== "ready"
+            || !(this.configuration.isCurrent?.() ?? true)) return
+          return this.loadOlder(normalized)
+        })
+      }
+      if (entry.snapshot.complete) return Promise.resolve()
+      return this.startChildHistoryLoad(normalized, entry, childStore, "older")
+    }
     if (entry.inflight || !this.childStores.getChild(normalized.directory)?.getState().snapshot[normalized.sessionId]) {
       const generation = entry.snapshot.generation
       const configurationGeneration = this.configurationGeneration
@@ -469,7 +487,48 @@ export class SessionMessageLoader {
     return promise
   }
 
+  private knownChild(target: SessionMessageTarget, store: ChildStore) {
+    const session = useGlobalSessionsStore.getState().entityById.get(target.sessionId)
+      ?? store.getState().session.find(session => session.sessionId === target.sessionId)
+    return session?.parentSessionId ? session : undefined
+  }
+
+  private startChildHistoryLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: SessionMessageLoadKind): Promise<void> {
+    const client = this.configuration.client
+    const child = this.knownChild(target, store)
+    if (!child) return Promise.resolve()
+    const cursor = kind === "older" ? entry.snapshot.cursor : undefined
+    return this.startLoad(target, entry, store, kind, async isCurrent => {
+      const requestedRevision = store.getState().sessionRevision ?? 0
+      const page = await client.getHistory(target.sessionId, { cursor, limit: HISTORY_PAGE_SIZE })
+      if (!isCurrent()) return
+      if (page.sessionId !== target.sessionId || page.messages.some(message => message.sessionId !== target.sessionId)
+        || page.turns.some(turn => turn.sessionId !== target.sessionId)) throw new Error("Child history identified another session")
+      if (kind === "older" && entry.historyBranch && (page.branch.branchId !== entry.historyBranch.branchId
+        || page.branch.branchVersion !== entry.historyBranch.branchVersion)) throw new Error("Session history branch changed")
+      if (page.nextCursor !== null && (page.nextCursor === cursor || page.messages.length === 0)) throw new Error("Session history pagination made no progress")
+      const current = store.getState()
+      const deletedRevision = current.sessionDeletedRevision?.[target.sessionId]
+      if (deletedRevision !== undefined && deletedRevision >= requestedRevision) {
+        this.patchEntry(entry, { status: "idle", loadingKind: null, resolved: false })
+        return
+      }
+      const incoming = sortMessagesChronologically(page.messages)
+      const messages = kind === "older" ? mergeMessages(current.message[target.sessionId] ?? [], incoming) : incoming
+      const next = installHostSession(current, this.knownChild(target, store) ?? child)
+      store.setState({ ...next, message: { ...next.message, [target.sessionId]: messages },
+        partOwner: { ...next.partOwner, [target.sessionId]: partOwners(messages) } })
+      entry.historyBranch = page.branch
+      entry.evicted = false
+      this.patchEntry(entry, { status: "ready", loadingKind: null, error: null, resolved: true,
+        cursor: page.nextCursor ?? undefined, complete: page.nextCursor === null, limit: messages.length, updatedAt: Date.now() })
+      this.persistCoverage(target, entry.snapshot)
+      // No synthetic snapshot or journal cursor: Task32 exposes child history only.
+    })
+  }
+
   private startSnapshotLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: "initial" | "refresh" | "prefetch", suppliedSnapshot?: SessionSnapshot): Promise<void> {
+    if (this.knownChild(target, store)) return this.startChildHistoryLoad(target, entry, store, kind)
     const client = this.configuration.client
     const onSnapshot = this.configuration.onSnapshot
     return this.startLoad(target, entry, store, kind, async isCurrent => {

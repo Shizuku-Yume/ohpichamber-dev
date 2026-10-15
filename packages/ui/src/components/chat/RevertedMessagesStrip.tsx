@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
@@ -20,14 +20,14 @@ import {
 const getRevertedPreview = (parts: Part[], fallback: string): string => {
     const text = parts
         .filter((part) => part.type === 'text')
-        .map((part) => (part.type === 'text' ? part.text : ''))
+        .map((part) => (part.type === 'text' ? part.content : ''))
         .join('\n')
         .replace(/\s+/g, ' ')
         .trim();
 
     if (text) return text;
-    const filePart = parts.find((part) => part.type === 'file');
-    return filePart?.filename ? `[${filePart.filename}]` : fallback;
+    const filePart = parts.find((part) => part.type === 'attachment');
+    return filePart?.name ? `[${filePart.name}]` : fallback;
 };
 
 const ROW_CLASS = 'flex h-10 min-w-0 items-center gap-2 pl-3 pr-1.5';
@@ -62,10 +62,8 @@ export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React
     );
     const noTextContent = t('chat.revertPopover.noTextContent');
     const items = React.useMemo(() => revertedState.records.map((record) => ({
-        id: record.message.id,
-        text: record.message.role === 'synthetic'
-            ? (record.message.description?.trim() || noTextContent)
-            : getRevertedPreview(record.parts, noTextContent),
+        id: record.message.messageId,
+        text: getRevertedPreview(record.parts, noTextContent),
     })), [noTextContent, revertedState]);
 
     if (!sessionId || !revertedState.revertMessageID || items.length === 0) return null;

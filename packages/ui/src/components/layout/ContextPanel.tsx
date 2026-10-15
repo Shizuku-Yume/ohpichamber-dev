@@ -1,4 +1,5 @@
 import React from 'react';
+import type { Session } from '@openchamber/agent-contract';
 
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { DiffViewIcon } from '@/components/icons/DiffIcon';
@@ -19,7 +20,7 @@ const GitView = lazyWithChunkRecovery(() => import('@/components/views/GitView')
 // The Linear rail icon stays hidden until a workspace is connected, so most
 // users never render this panel; keep it out of the main bundle.
 const PlanView = lazyWithChunkRecovery(() => import('@/components/views/PlanView').then((m) => ({ default: m.PlanView })));
-import { areTitleMapsEqual, buildSessionTitleMap, EMPTY_SESSION_TITLE_MAP } from './contextPanelSessionTitles';
+import { EMPTY_SESSION_TITLE_MAP } from './contextPanelSessionTitles';
 import { ProjectContextPanel } from './RightSidebarTabs';
 import { SidebarFilesTree } from './SidebarFilesTree';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
@@ -212,9 +213,9 @@ const getTabLabel = (
   t: TranslateFn
 ): string => {
   if (tab.mode === 'chat') {
-    const sessionID = getSessionIDFromDedupeKey(tab.dedupeKey);
-    if (sessionID) {
-      const sessionTitle = sessionTitleById.get(sessionID)?.trim();
+    const sessionId = getSessionIDFromDedupeKey(tab.dedupeKey);
+    if (sessionId) {
+      const sessionTitle = sessionTitleById.get(sessionId)?.trim();
       if (sessionTitle) {
         return sessionTitle;
       }
@@ -455,19 +456,45 @@ const getSessionIDFromDedupeKey = (dedupeKey: string | undefined): string | null
     return null;
   }
 
-  const sessionID = dedupeKey.slice('session:'.length).trim();
-  return sessionID || null;
+  const sessionId = dedupeKey.slice('session:'.length).trim();
+  return sessionId || null;
 };
 
 // Titles come from every live directory because a chat tab may show a
 // session from another project; an inactive tab whose directory is not
 // loaded keeps its sessionTitleFallback.
-const useSessionTitleMap = (sessionIDs: readonly string[]): ReadonlyMap<string, string> => {
+const areCanonicalTitleMapsEqual = (a: ReadonlyMap<string, string>, b: ReadonlyMap<string, string>): boolean => {
+  if (a.size !== b.size) return false;
+  for (const [key, value] of a) if (b.get(key) !== value) return false;
+  return true;
+};
+
+const buildCanonicalSessionTitleMap = (states: Iterable<{ session: readonly Session[] }>, sessionIds: readonly string[]): ReadonlyMap<string, string> => {
+  if (sessionIds.length === 0) return EMPTY_SESSION_TITLE_MAP;
+  const wanted = new Set(sessionIds);
+  const updatedAtById = new Map<string, number>();
+  const next = new Map<string, string>();
+  for (const state of states) {
+    for (const session of state.session) {
+      if (!wanted.has(session.sessionId)) continue;
+      const title = session.metadata?.title?.trim();
+      if (!title) continue;
+      const updatedAt = session.updatedAt;
+      const seenAt = updatedAtById.get(session.sessionId);
+      if (seenAt !== undefined && seenAt > updatedAt) continue;
+      updatedAtById.set(session.sessionId, updatedAt);
+      next.set(session.sessionId, title);
+    }
+  }
+  return next.size === 0 ? EMPTY_SESSION_TITLE_MAP : next;
+};
+
+const useSessionTitleMap = (sessionIds: readonly string[]): ReadonlyMap<string, string> => {
   const childStores = useChildStoreManager();
   const snapshotRef = React.useRef<ReadonlyMap<string, string>>(EMPTY_SESSION_TITLE_MAP);
-  const sessionIDsRef = React.useRef<readonly string[]>(sessionIDs);
+  const sessionIdsRef = React.useRef<readonly string[]>(sessionIds);
 
-  sessionIDsRef.current = sessionIDs;
+  sessionIdsRef.current = sessionIds;
 
   return React.useSyncExternalStore(
     React.useCallback(
@@ -476,10 +503,8 @@ const useSessionTitleMap = (sessionIDs: readonly string[]): ReadonlyMap<string, 
     ),
     React.useCallback(() => {
       const liveStates = Array.from(childStores.children.values(), (store) => store.getState());
-      const next = buildSessionTitleMap(liveStates, sessionIDsRef.current);
-      if (areTitleMapsEqual(snapshotRef.current, next)) {
-        return snapshotRef.current;
-      }
+      const next = buildCanonicalSessionTitleMap(liveStates, sessionIdsRef.current);
+      if (areCanonicalTitleMapsEqual(snapshotRef.current, next)) return snapshotRef.current;
       snapshotRef.current = next;
       return next;
     }, [childStores]),
@@ -614,8 +639,8 @@ export const ContextPanel: React.FC = () => {
     const ids: string[] = [];
     for (const tab of tabs) {
       if (tab.mode !== 'chat') continue;
-      const sessionID = getSessionIDFromDedupeKey(tab.dedupeKey);
-      if (sessionID && !ids.includes(sessionID)) ids.push(sessionID);
+      const sessionId = getSessionIDFromDedupeKey(tab.dedupeKey);
+      if (sessionId && !ids.includes(sessionId)) ids.push(sessionId);
     }
     return ids;
   }, [tabs]);
@@ -862,9 +887,9 @@ export const ContextPanel: React.FC = () => {
     () => tabs.filter((tab) => tab.mode === 'chat'),
     [tabs],
   );
-  const activeChatTabID = isOpen && activeTab?.mode === 'chat' ? activeTab.id : null;
-  const activeChatSessionID = isOpen && activeTab?.mode === 'chat' ? getSessionIDFromDedupeKey(activeTab.dedupeKey) : null;
-  const activeChatTab = activeChatTabID ? chatTabs.find((tab) => tab.id === activeChatTabID) ?? null : null;
+  const activeChatTabId = isOpen && activeTab?.mode === 'chat' ? activeTab.id : null;
+  const activeChatSessionId = isOpen && activeTab?.mode === 'chat' ? getSessionIDFromDedupeKey(activeTab.dedupeKey) : null;
+  const activeChatTab = activeChatTabId ? chatTabs.find((tab) => tab.id === activeChatTabId) ?? null : null;
   // A chat opened from another project (or Chat) carries its own directory;
   // tabs opened without one (subtasks, reviews) belong to this panel's.
   const activeChatDirectory = React.useMemo(() => {
@@ -872,23 +897,23 @@ export const ContextPanel: React.FC = () => {
     return own || directoryKey || null;
   }, [activeChatTab?.targetDirectory, directoryKey]);
   const activeChatPinnedSession = React.useMemo(
-    () => (activeChatSessionID ? { sessionId: activeChatSessionID, directory: activeChatDirectory } : null),
-    [activeChatSessionID, activeChatDirectory],
+    () => (activeChatSessionId ? { sessionId: activeChatSessionId, directory: activeChatDirectory } : null),
+    [activeChatSessionId, activeChatDirectory],
   );
 
   React.useEffect(() => {
-    if (!isOpen || !activeChatDirectory || !activeChatSessionID || typeof window === 'undefined') {
+    if (!isOpen || !activeChatDirectory || !activeChatSessionId || typeof window === 'undefined') {
       return;
     }
 
     const markActiveChatViewed = () => {
       if (document.visibilityState === 'hidden' || !document.hasFocus()) {
-        setExternallyViewedSession(activeChatDirectory, activeChatSessionID, false);
+        setExternallyViewedSession(activeChatDirectory, activeChatSessionId, false);
         return;
       }
 
-      markSessionViewed(activeChatSessionID);
-      setExternallyViewedSession(activeChatDirectory, activeChatSessionID, true);
+      markSessionViewed(activeChatSessionId);
+      setExternallyViewedSession(activeChatDirectory, activeChatSessionId, true);
     };
 
     markActiveChatViewed();
@@ -902,9 +927,9 @@ export const ContextPanel: React.FC = () => {
       window.removeEventListener('focus', markActiveChatViewed);
       window.removeEventListener('blur', markActiveChatViewed);
       document.removeEventListener('visibilitychange', markActiveChatViewed);
-      setExternallyViewedSession(activeChatDirectory, activeChatSessionID, false);
+      setExternallyViewedSession(activeChatDirectory, activeChatSessionId, false);
     };
-  }, [activeChatDirectory, activeChatSessionID, isOpen]);
+  }, [activeChatDirectory, activeChatSessionId, isOpen]);
 
 
   const handleDiffScopeChange = React.useCallback((nextScope: PendingDiffScope) => {
@@ -1345,13 +1370,13 @@ export const ContextPanel: React.FC = () => {
             <EditorTreeColumn visible={contextEditorTreeVisible} active={isOpen && isFileTabActive} fill={!showsEditor} />
           </div>
         ) : null}
-        {activeChatTab && activeChatSessionID && activeChatPinnedSession ? (
+        {activeChatTab && activeChatSessionId && activeChatPinnedSession ? (
           // The chat renders in this app, pinned to its session: it shares
           // the app's connection, stores and theme, and opens like a session
           // switch instead of booting a second app.
           <section
             key={activeChatTab.id}
-            aria-label={t('contextPanel.iframe.sessionChatTitle', { sessionID: activeChatSessionID })}
+            aria-label={t('contextPanel.iframe.sessionChatTitle', { sessionID: activeChatSessionId })}
             className="absolute inset-0 bg-background"
           >
             <ChatView

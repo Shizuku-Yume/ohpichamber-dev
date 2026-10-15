@@ -4,7 +4,8 @@ import { useChatColumnActions } from './chatColumnSession';
 import { MobileModelButton } from './MobileModelButton';
 import type { EditPermissionMode } from '@/stores/types/sessionTypes';
 import type { ModelMetadata } from '@/types';
-import type { Agent, Message, PermissionRuleset, Session } from '@/lib/opencode/model';
+import type { Agent, PermissionRuleset } from '@/lib/opencode/model';
+import type { Message, Session } from '@openchamber/agent-contract';
 import type { PermissionEffect } from '@opencode/client';
 import {
     DropdownMenu,
@@ -38,7 +39,6 @@ import { useConfigStore, isStaleAutoSelection, selectKnownAgent, selectKnownCata
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionMessagesSelector, useSessionRenderable, useSessionSelector } from '@/sync/sync-context';
-import type { State } from '@/sync/types';
 import { useSync } from '@/sync/use-sync';
 import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
@@ -65,13 +65,10 @@ type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
 
 type MobileVariantTarget = { providerId: string; modelId: string };
 
-const buildModelRefKey = (providerID: string, modelID: string) => `${providerID}:${modelID}`;
+const buildModelRefKey = (providerId: string, modelId: string) => `${providerId}:${modelId}`;
 
-const selectSessionRecordAgent = (session: Session | undefined): string | undefined => session?.agent?.trim() || undefined;
-const selectLatestReplyModelChoice = (messages: Message[], state: State) => findLatestUserModelChoice(
-    messages,
-    (messageId) => state.part[messageId],
-);
+const selectSessionRecordAgent = (_session: Session | undefined): string | undefined => undefined;
+const selectLatestReplyModelChoice = (messages: Message[]) => findLatestUserModelChoice(messages);
 const MAX_INLINE_MOBILE_VARIANT_OPTIONS = 6;
 
 const AgentDescriptionTooltip: React.FC<{
@@ -780,8 +777,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         currentSessionDirectory ?? undefined,
         selectLatestReplyModelChoice,
         areModelChoicesEqual,
-        // The choice is read from the reply's parts, which can load after it.
-        true,
     );
     const latestLoadedUserChoice = React.useMemo(() => {
         if (selection) return null;
@@ -1011,7 +1006,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         // The session record needs no loaded transcript; a message-derived
         // choice does, so a partial snapshot is never treated as authoritative.
         const snapshotReady = hasRenderableCurrentSessionSnapshot || Boolean(sessionRecordChoice);
-        if (!contextHydrated || providers.length === 0 || !snapshotReady || !latestLoadedUserChoice?.providerID || !latestLoadedUserChoice.modelID) {
+        if (!contextHydrated || providers.length === 0 || !snapshotReady || !latestLoadedUserChoice?.providerId || !latestLoadedUserChoice.modelId) {
             return;
         }
 
@@ -1019,8 +1014,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             currentSessionId,
             latestLoadedUserChoice.id,
             latestLoadedUserChoice.agent ?? sessionRecordAgent ?? '',
-            latestLoadedUserChoice.providerID,
-            latestLoadedUserChoice.modelID,
+            latestLoadedUserChoice.providerId,
+            latestLoadedUserChoice.modelId,
             latestLoadedUserChoice.variant ?? '',
         ].join('|');
 
@@ -1039,7 +1034,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         // with Auto the router itself switches the session's model each turn,
         // and the picker keeps showing Auto.
         const recordModelKey = sessionRecordChoice && latestLoadedUserChoice === sessionRecordChoice
-            ? `${sessionRecordChoice.providerID}/${sessionRecordChoice.modelID}#${sessionRecordChoice.variant ?? ''}`
+            ? `${sessionRecordChoice.providerId}/${sessionRecordChoice.modelId}#${sessionRecordChoice.variant ?? ''}`
             : null;
         const recordModelSwitched = recordModelKey !== null
             && useSelectionStore.getState().isSessionModelSwitched(currentSessionId, recordModelKey);
@@ -1089,7 +1084,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         }
 
         const historicalVariant = latestLoadedUserChoice.variant
-            && getModelVariantOptions(latestLoadedUserChoice.providerID, latestLoadedUserChoice.modelID).includes(latestLoadedUserChoice.variant)
+            && getModelVariantOptions(latestLoadedUserChoice.providerId, latestLoadedUserChoice.modelId).includes(latestLoadedUserChoice.variant)
             ? latestLoadedUserChoice.variant
             : undefined;
         // A saved choice may be newer than the last sent message, including an
@@ -1098,8 +1093,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             ? getAgentModelVariantForSession(
                 currentSessionId,
                 restoreAgentName,
-                latestLoadedUserChoice.providerID,
-                latestLoadedUserChoice.modelID,
+                latestLoadedUserChoice.providerId,
+                latestLoadedUserChoice.modelId,
             )
             : undefined;
         // A newer switch brings its own effort; a record without one says
@@ -1107,8 +1102,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         let restoredVariant: string | null | undefined = savedVariant !== undefined ? savedVariant : historicalVariant;
         if (recordModelSwitched && historicalVariant) restoredVariant = historicalVariant;
         const applyResult = applyModelSelectionWithVariant(
-            latestLoadedUserChoice.providerID,
-            latestLoadedUserChoice.modelID,
+            latestLoadedUserChoice.providerId,
+            latestLoadedUserChoice.modelId,
             restoredVariant,
             restoreAgentName,
         );
@@ -1122,7 +1117,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         if (latestLoadedUserChoice.agent) {
             saveSessionAgentSelection(currentSessionId, latestLoadedUserChoice.agent);
         }
-        saveSessionModelSelection(currentSessionId, latestLoadedUserChoice.providerID, latestLoadedUserChoice.modelID);
+        saveSessionModelSelection(currentSessionId, latestLoadedUserChoice.providerId, latestLoadedUserChoice.modelId);
         markRecordModelFollowed();
         latestLoadedUserChoiceRestoreRef.current = restoreKey;
         restoredSessionSelectionRef.current = currentSessionId;

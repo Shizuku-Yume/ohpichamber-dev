@@ -1,5 +1,6 @@
 import React from 'react';
 import type { IntegrationInfo } from '@opencode/client';
+import type { ProviderAuthState } from '@openchamber/agent-contract';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -141,7 +142,7 @@ const ClassificationCard: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
   );
 };
 
-type GridProvider = Provider & { models: Model[] };
+type GridProvider = Provider & { models: Model[]; canonicalAuth?: ProviderAuthState };
 
 interface ProviderGridProps {
   providers: readonly GridProvider[];
@@ -257,6 +258,7 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({ providers, integrati
             integrations,
             providerId: provider.id,
             optionsApiKey: readProviderApiKeySetting(provider),
+            canonicalAuth: provider.canonicalAuth,
           });
           return (
             <SettingsCard

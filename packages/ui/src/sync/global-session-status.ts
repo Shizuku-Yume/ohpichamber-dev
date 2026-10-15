@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { CanonicalEvent, RuntimeSession, Session, SessionRuntimeStatus } from '@openchamber/agent-contract';
 import {
   applySessionOrderingMutations,
@@ -23,7 +23,7 @@ type GlobalSessionStatusState = {
 const EMPTY_ACTIVE_SESSION_IDS: ReadonlySet<string> = new Set();
 const initialState: GlobalSessionStatusState = { observedById: new Map(), statusById: new Map(), activeSessionIds: EMPTY_ACTIVE_SESSION_IDS };
 const activeRunIdBySession = new Map<string, string>();
-export const useGlobalSessionStatusStore = create<GlobalSessionStatusState>(() => initialState);
+export const useGlobalSessionStatusStore: UseBoundStore<StoreApi<GlobalSessionStatusState>> = create<GlobalSessionStatusState>(() => initialState);
 useGlobalSessionStatusStore.subscribe(() => countSyncPerformance('globalStatusPublications'));
 
 const isLiveStatus = (status: SessionRuntimeStatus): boolean => status === 'running' || status === 'awaiting_approval' || status === 'awaiting_input';
@@ -148,7 +148,7 @@ export const applyGlobalSessionStatusEvents = (rawDirectory: string, payloads: r
   const ordering: SessionOrderingMutation[] = [];
   const timing: SessionActivityTimingMutation[] = [];
   const activeBefore = activeFromStatuses(statuses);
-  const settle = (sessionId: string, outcome: 'completed' | 'failed' | null = null, status: SessionRuntimeStatus = 'idle', at?: number, runId?: string): void => {
+  const settle = (sessionId: string, outcome: 'completed' | 'failed' | 'cancelled' | null = null, status: SessionRuntimeStatus = 'idle', at?: number, runId?: string): void => {
     recordObserved(observed, sessionId, directory, outcome);
     if (status === 'idle') statuses.delete(sessionId);
     else statuses.set(sessionId, { status, directory });

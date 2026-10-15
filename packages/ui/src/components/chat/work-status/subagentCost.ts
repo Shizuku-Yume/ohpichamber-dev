@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 // Spend is read against a budget, so it keeps its real precision instead of
 // collapsing to two decimals. Trailing zeros are dropped so exact values stay
@@ -10,47 +10,32 @@ const trimZeros = (value: string): string =>
 export const formatCost = (cost: number): string => `$${trimZeros(cost.toFixed(4))}`;
 
 /**
- * Groups a flat live-session list by parentID. One pass, O(n). Sessions
- * without a parentID (roots) are simply absent as keys — callers look up a
- * specific id's children via `.get(id) ?? []`.
+ * Groups a flat live-session list by parentSessionId. One pass, O(n). Sessions
+ * without a parentSessionId (roots) are simply absent as keys — callers look up
+ * a specific id's children via `.get(id) ?? []`.
  */
-export function buildChildrenIndex(sessions: Session[]): Map<string, Session[]> {
+export function buildChildrenIndex(sessions: readonly Session[]): Map<string, Session[]> {
   const index = new Map<string, Session[]>();
   for (const session of sessions) {
-    const parentID = session.parentID;
-    if (!parentID) continue;
-    const existing = index.get(parentID);
+    const parentSessionId = session.parentSessionId;
+    if (!parentSessionId) continue;
+    const existing = index.get(parentSessionId);
     if (existing) {
       existing.push(session);
     } else {
-      index.set(parentID, [session]);
+      index.set(parentSessionId, [session]);
     }
   }
   return index;
 }
 
-function sessionCost(session: Session | undefined): number {
-  return session?.cost ?? 0;
-}
-
-/**
- * Own cost plus every descendant's cost, recursively. Cycle-guarded with a
- * visited set: parentID should form a tree, but this does not trust that
- * invariant blindly (mirrors opencode-session-cost's src/cost.ts).
- */
+/** Canonical sessions do not carry provider billing fields, so spend is unavailable. */
 export function computeSubtreeCost(
-  id: string,
-  sessionsById: Map<string, Session>,
-  childrenByParent: Map<string, Session[]>,
-  visited: Set<string> = new Set(),
-): number {
-  if (visited.has(id)) return 0;
-  visited.add(id);
-
-  let total = sessionCost(sessionsById.get(id));
-  const children = childrenByParent.get(id) ?? [];
-  for (const child of children) {
-    total += computeSubtreeCost(child.id, sessionsById, childrenByParent, visited);
-  }
-  return total;
+  _id: string,
+  _sessionsById: Map<string, Session>,
+  _childrenByParent: Map<string, Session[]>,
+  _visited: Set<string> = new Set(),
+): number | null {
+  return null;
 }
+

@@ -353,8 +353,8 @@ export const readSpaceSetup = (spaceId: string, signal?: AbortSignal): Promise<S
 export const removeSpace = (spaceId: string, { deleteUnsavedChats = false }: { deleteUnsavedChats?: boolean } = {}): Promise<SpaceRemoval> =>
   request(`${SPACES_ROUTE}/${spaceId}${deleteUnsavedChats ? '?unsavedChats=delete' : ''}`, removalSchema, { method: 'DELETE' });
 
-// A deleted space whose chats are on the Archive page: the directory that holds them names it.
-const archiveSchema = z.object({ spaceId: spaceIdSchema, name: z.string(), directory: z.string() });
+// A deleted space's chats are grouped by the stable workspace identity. Host filesystem paths stay private.
+const archiveSchema = z.object({ spaceId: spaceIdSchema, name: z.string(), workspaceId: z.string() });
 
 export type SpaceArchive = z.infer<typeof archiveSchema>;
 

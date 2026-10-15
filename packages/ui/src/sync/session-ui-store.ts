@@ -14,15 +14,16 @@
 
 export type CanonicalSkillMentions = {
   names: readonly string[]
-  instructionFor: (names: readonly string[]) => string | null
 }
 import type { ContextPartMetadata } from "@/lib/messages/contextParts"
 import { create } from "zustand"
+import type { StoreApi, UseBoundStore } from "zustand"
 import type { PromptAttachment, PromptContext, PromptRequest, Session, SessionMetadata } from "@openchamber/agent-contract"
 import type { AttachedFile, SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
 import type { WorktreeMetadata } from "@/types/worktree"
+import { runtimeFetch } from "@/lib/runtime-fetch"
+import type { PermissionMode } from "@/stores/utils/permissionAutoAccept"
 import { canonicalClient } from "@/api/canonicalClient"
-import { buildSkillMentionInstruction } from "@/lib/skillMentionInstruction"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useSessionDisplayStore } from "@/stores/useSessionDisplayStore"
@@ -149,6 +150,51 @@ export function resolveSendSelection(
   }
 }
 
+type CanonicalSkillScope = {
+  sessionId: string
+  rootSessionId: string
+  workspaceId: string
+  projectId: string
+}
+
+const resolveCanonicalSkillScope = (sessionId: string): CanonicalSkillScope => {
+  const session = getAllSyncSessions().find((candidate) => candidate.sessionId === sessionId)
+  if (!session) throw new Error("Cannot expand a skill without an authoritative session record")
+  return {
+    sessionId: session.sessionId,
+    rootSessionId: session.rootSessionId,
+    workspaceId: session.workspaceId,
+    projectId: session.projectId,
+  }
+}
+
+export const expandCanonicalSkills = async (
+  sessionId: string,
+  names: readonly string[],
+  argumentsText = "",
+): Promise<string | null> => {
+  const uniqueNames = [...new Set(names)]
+  if (uniqueNames.length === 0) return null
+  const scope = resolveCanonicalSkillScope(sessionId)
+  const catalog = await canonicalClient.getSkillsCatalog(scope)
+  const byName: Record<string, (typeof catalog.skills)[number]> = Object.fromEntries(
+    catalog.skills.map((skill) => [skill.name, skill]),
+  )
+  const expansions: string[] = []
+  for (const name of uniqueNames) {
+    const skill = byName[name]
+    if (!skill) throw new Error(`Skill "${name}" is unavailable in the active catalog`)
+    const result = await canonicalClient.expandSkill(scope, {
+      skillId: skill.skillId,
+      catalogRevision: catalog.catalogRevision,
+      workerGeneration: catalog.worker.workerGeneration,
+      arguments: argumentsText,
+    })
+    if (result.message.trim()) expansions.push(result.message)
+  }
+  return expansions.length > 0 ? expansions.join("\n\n") : null
+}
+
 const assertSendRuntime = (runtimeKey: string): void => {
   if (runtimeKey !== getRuntimeKey()) {
     throw new Error("Message was not sent because the runtime changed.")
@@ -196,7 +242,7 @@ export async function routeMessage(params: {
         ? { kind: 'context', text: part.text, metadata: part.metadata }
         : { kind: 'instruction', text: part.text })
   const skillText = params.skills?.names.length
-    ? params.skills.instructionFor(params.skills.names)
+    ? await expandCanonicalSkills(params.sessionId, params.skills.names)
     : null
   const context: PromptContext[] = [
     ...(knowledgeText ? [{ kind: 'instruction' as const, text: knowledgeText }] : []),
@@ -245,10 +291,10 @@ export async function routeMessage(params: {
       return 'command'
     }
     if (matchedSkill) {
-      request.input.context = [
-        ...request.input.context,
-        { kind: 'instruction', text: (params.skills?.instructionFor ?? buildSkillMentionInstruction)([matchedSkill.name]) },
-      ]
+      const [, ...tail] = params.content.split(" ")
+      const names = [matchedSkill.name]
+      const expanded = await expandCanonicalSkills(params.sessionId, names, tail.join(" "))
+      if (expanded) request.input.context = [...request.input.context, { kind: 'instruction', text: expanded }]
     }
   }
 
@@ -1141,7 +1187,7 @@ const flattenWorktreeMap = (map: Map<string, WorktreeMetadata[]>): WorktreeMetad
 
 const PERSISTED_WORKTREE_MAP = readPersistedWorktreeTopology(runtimeMemoryKey())
 
-export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
+export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create<SessionUIState>()((set, get) => ({
   currentSessionId: null,
   currentSessionDirectory: null,
   materializedDraftSessionId: null,
@@ -1895,7 +1941,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       if (knowledge?.text) {
         void reportSessionKnowledgeDelivered(directory, sessionId, knowledge.signature)
       }
-    }).catch((error) => {
+    })().catch((error) => {
       if (goalArm.armed && !goalApplied && getRuntimeKey() === capturedRuntimeKey) {
         useSessionGoalArmStore.getState().setArmed(true, goalArm.objectiveOverride)
       }

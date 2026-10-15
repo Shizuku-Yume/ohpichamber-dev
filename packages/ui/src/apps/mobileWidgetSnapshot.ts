@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 import type { ProjectEntry } from '@/lib/api/types';
 import { useUIStore } from '@/stores/useUIStore';
@@ -39,8 +39,7 @@ interface MobileWidgetSnapshot {
 
 const RECENT_LIMIT = 6;
 
-const parentIdOf = (session: Session): string | null =>
-  (session as Session & { parentID?: string | null }).parentID ?? null;
+const parentIdOf = (session: Session): string | null => session.parentSessionId ?? null;
 
 const basename = (path: string): string => {
   const trimmed = path.replace(/\/+$/, '');
@@ -83,7 +82,7 @@ const buildMobileWidgetSnapshot = (): MobileWidgetSnapshot => {
 
   for (const session of sessions) {
     const isSubtask = parentIdOf(session) !== null;
-    const unseenCount = unseenBySession[session.id] ?? 0;
+    const unseenCount = unseenBySession[session.sessionId] ?? 0;
     const needsAttention = unseenCount > 0 && (!isSubtask || notifyOnSubtasks);
     if (needsAttention) {
       attentionCount += 1;
@@ -100,7 +99,7 @@ const buildMobileWidgetSnapshot = (): MobileWidgetSnapshot => {
   topLevel.sort((a, b) => compareSessionsByLifecycleOrder(a.session, b.session, pinnedSessionIds, sessionOrderRanks));
   const recentSessions = topLevel
     .slice(0, RECENT_LIMIT)
-    .map(({ session, unread, project }) => ({ id: session.id, title: session.title ?? '', unread, project }));
+    .map(({ session, unread, project }) => ({ id: session.sessionId, title: session.metadata?.title ?? '', unread, project }));
 
   return { runtimeKey: getRuntimeKey(), attentionCount, recentSessions };
 };

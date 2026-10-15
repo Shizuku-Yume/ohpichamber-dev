@@ -14,12 +14,9 @@ interface SessionSuggestionChipProps {
   onApply: (text: string) => void;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-
 // A suggested follow-up rendered as the composer's own top row (inside the
 // box, and inside the mobile pill). Tapping it fills the composer (no
-// auto-send); the X patches the suggestion out of the session metadata so
+// auto-send); the X clears the suggestion in the session metadata so
 // it stays dismissed everywhere.
 export const SessionSuggestionChip: React.FC<SessionSuggestionChipProps> = React.memo(({ sessionId, directory, hidden, onApply }) => {
   const { suggestion } = useSessionAssistState(sessionId ?? '', directory);
@@ -32,11 +29,10 @@ export const SessionSuggestionChip: React.FC<SessionSuggestionChipProps> = React
     setDismissing(true);
     try {
       await patchSessionMetadata(sessionId, undefined, (metadata) => {
-        const namespace = isRecord(metadata.openchamber) ? metadata.openchamber : {};
-        const assist = isRecord(namespace.assist) ? namespace.assist : {};
-        const nextAssist = { ...assist };
-        delete nextAssist.suggestion;
-        return { ...metadata, openchamber: { ...namespace, assist: nextAssist } };
+        const namespace = metadata.openchamber;
+        const assist = namespace?.assist;
+        if (!assist) return metadata;
+        return { ...metadata, openchamber: { ...namespace, assist: { ...assist, suggestion: '' } } };
       });
     } catch (error) {
       console.warn('Failed to dismiss suggestion:', error);

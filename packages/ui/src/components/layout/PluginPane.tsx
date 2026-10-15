@@ -38,8 +38,6 @@ import {
   buildSessionLifecycleMessage,
   buildSessionMessage,
   buildSettingsMessage,
-  guestSessionLifecyclePhase,
-  guestSessionModelId,
   toGuestSessionSnapshot,
 } from '@/lib/guests/host-bridge';
 import { useGuestBadgeStore } from '@/lib/guests/badge-store';
@@ -84,7 +82,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useInputStore } from '@/sync/input-store';
 import { useBackgroundShellsStore } from '@/sync/background-shells';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { opencodeClient } from '@/lib/opencode/client';
+import { canonicalClient } from '@/api/canonicalClient';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSession, useSessionStatus } from '@/sync/sync-context';
 import { GuestPopover } from './GuestPopover';
@@ -217,17 +215,17 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   React.useEffect(() => {
     if (surface === 'panel' && !headless) clearBadge(guestId);
   }, [clearBadge, guestId, headless, surface]);
-  const sessionBusy = sessionStatus?.type === 'busy' || sessionStatus?.type === 'retry';
-  const lifecyclePhase = guestSessionLifecyclePhase(sessionStatus);
+  const sessionBusy = sessionStatus === 'running' || sessionStatus === 'awaiting_approval' || sessionStatus === 'awaiting_input';
+  const lifecyclePhase = sessionStatus === undefined ? null
+    : sessionBusy ? 'started'
+      : sessionStatus === 'idle' ? 'completed' : 'failure';
   const sessionSnapshot = React.useMemo(
     () => toGuestSessionSnapshot(
       currentSessionId
         ? {
-          id: session?.id ?? currentSessionId,
-          title: session?.title ?? backgroundAction?.item.sessionTitle,
+          id: session?.sessionId ?? currentSessionId,
+          title: session?.metadata?.title ?? backgroundAction?.item.sessionTitle,
           busy: sessionBusy,
-          model: guestSessionModelId(session?.model),
-          agent: session?.agent,
         }
         : null,
     ),
@@ -626,15 +624,15 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
         },
         shellStop: async ({ shellId }) => {
           requireShells();
-          const shell = useBackgroundShellsStore.getState().byId.get(shellId);
+          const shell = [...useBackgroundShellsStore.getState().byId.values()].find((entry) => entry.jobId === shellId);
           if (!shell) throw new HostRequestError('NOT_FOUND', 'That shell is not running.');
-          const session = useGlobalSessionsStore.getState().entityById.get(shell.sessionID);
-          await opencodeClient.stopBackgroundShell({
-            sessionID: shell.sessionID,
-            sessionDirectory: session?.directory ?? shell.directory,
-            shellID: shell.id,
-            shellDirectory: shell.directory,
-            command: shell.command,
+          await canonicalClient.stopShell(shell.sessionId, {
+            job: {
+              sessionId: shell.sessionId,
+              jobId: shell.jobId,
+              epoch: shell.epoch,
+              workerGeneration: shell.workerGeneration,
+            },
           });
           return { stopped: true as const };
         },

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session, SessionRuntimeStatus } from '@openchamber/agent-contract';
 import { canUseElectronDesktopIPC, invokeDesktop, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { desktopHostsGet, getDesktopHostApiUrl, locationMatchesHost, redactSensitiveUrl } from '@/lib/desktopHosts';
@@ -106,13 +106,13 @@ const isTrayPlatform = (): boolean => {
 const isTrayEnabled = (): boolean =>
   typeof window !== 'undefined' && window.__OPENCHAMBER_ELECTRON__?.trayEnabled !== false;
 
-const permissionLabel = (request: BlockingPermissionRequest): string => {
-  const head = request.action.trim() || 'Permission';
-  const resource = request.resources.find((item) => item.trim());
-  return resource ? `${head}: ${resource}` : head;
-};
+const permissionLabel = (request: BlockingPermissionRequest): string =>
+  request.commandSummary.trim() || request.toolName.trim() || request.actionType;
 
-const formLabel = (request: BlockingFormRequest): string => request.title.trim() || 'Question';
+const formLabel = (request: BlockingFormRequest): string => request.prompt.trim() || 'Question';
+
+const trayStatus = (status: SessionRuntimeStatus | undefined): TraySessionStatus =>
+  status === 'running' || status === 'awaiting_approval' || status === 'awaiting_input' ? 'busy' : 'idle';
 
 const compareSessionOrder = (left: Session, right: Session): number => (
   compareSessionsByLifecycleOrder(
@@ -129,27 +129,20 @@ const basenameOf = (p: string): string => {
   return idx >= 0 ? norm.slice(idx + 1) : norm;
 };
 
-// Resolve the "project · branch" metadata line for a session from its directory,
-// covering both project-root sessions and worktree sessions (which map back to
-// their parent project). Branch prefers the live VCS value; falls back to the
-// worktree's recorded branch when the directory isn't currently synced.
+// Resolve the project metadata line using Host directory and cached Git facts.
 const resolveSessionSubtitle = (
   directory: string,
-  session: Session,
   projects: ProjectEntry[],
   worktreesByProject: Map<string, WorktreeMetadata[]>,
-  branchByDirectory: Map<string, string>,
 ): string => {
   if (!directory) return '';
   const project = resolveProjectForSessionDirectory(projects, worktreesByProject, directory);
-  const globalProjectName = (session as { project?: { name?: string } | null }).project?.name;
-  const projectName = project?.label?.trim() || globalProjectName?.trim() || basenameOf(directory);
+  const projectName = project?.label?.trim() || basenameOf(directory);
   const normDir = normalizeProjectPath(directory);
 
-  // Branch resolution, most-authoritative first: live VCS from the sync store,
-  // then the git store's cached status (covers project-root sessions whose
-  // directory isn't actively synced), then recorded worktree metadata.
-  let branch = (normDir && branchByDirectory.get(normDir)) || '';
+  // Cached Git status and recorded worktree metadata remain independent of
+  // canonical session DTOs; the runtime does not expose legacy VCS state.
+  let branch = '';
   if (!branch) {
     for (const [dir, gitState] of useGitStore.getState().directories) {
       if (normalizeProjectPath(dir) === normDir) { branch = gitState.status?.current ?? ''; break; }
@@ -220,14 +213,12 @@ const resolveInstanceName = async (): Promise<string> => {
 // into flat lookups so we can attach it to the global session list by id.
 type LiveData = {
   statusById: Map<string, TraySessionStatus>;
-  branchByDirectory: Map<string, string>;
   approvals: TrayApproval[];
   titleById: Map<string, string>;
 };
 
 const collectLiveData = (): LiveData => {
   const statusById = new Map<string, TraySessionStatus>();
-  const branchByDirectory = new Map<string, string>();
   const approvals: TrayApproval[] = [];
   const titleById = new Map<string, string>();
 
@@ -235,18 +226,15 @@ const collectLiveData = (): LiveData => {
   try {
     stores = getSyncChildStores();
   } catch {
-    return { statusById, branchByDirectory, approvals, titleById };
+    return { statusById, approvals, titleById };
   }
 
   for (const [directory, store] of stores.children.entries()) {
     const state = store.getState();
-    // Normalize the key so it matches the session directory regardless of
-    // trailing slashes / separators.
-    if (state.vcs?.branch) branchByDirectory.set(normalizeProjectPath(directory) ?? directory, state.vcs.branch);
 
     for (const session of state.session) {
-      if (!session?.id) continue;
-      titleById.set(session.id, session.title);
+      if (!session?.sessionId) continue;
+      titleById.set(session.sessionId, session.metadata?.title ?? '');
     }
 
     // Status comes from the status map itself, NOT from the session list — a
@@ -255,29 +243,28 @@ const collectLiveData = (): LiveData => {
     // several stores. Never let one store's missing/idle entry clobber another
     // store's busy/retry.
     for (const [sessionId, status] of Object.entries(state.session_status ?? {})) {
-      const type = status?.type;
-      const mapped: TraySessionStatus = type === 'busy' ? 'busy' : type === 'retry' ? 'retry' : 'idle';
+      const mapped = trayStatus(status);
       const existing = statusById.get(sessionId);
       if (!existing || existing === 'idle') statusById.set(sessionId, mapped);
     }
 
     for (const [sessionId, requests] of Object.entries(state.permission ?? {})) {
       for (const request of requests ?? []) {
-        if (!request?.id) continue;
-        const sid = request.sessionID || sessionId;
-        approvals.push({ kind: 'permission', id: request.id, sessionId: sid, sessionTitle: '', label: permissionLabel(request), directory });
+        const id = request.approvalId;
+        const sid = request.sessionId || sessionId;
+        approvals.push({ kind: 'permission', id, sessionId: sid, sessionTitle: '', label: permissionLabel(request), directory });
       }
     }
     for (const [sessionId, requests] of Object.entries(state.form ?? {})) {
       for (const request of requests ?? []) {
-        if (!request?.id) continue;
-        const sid = request.sessionID || sessionId;
-        approvals.push({ kind: 'form', id: request.id, sessionId: sid, sessionTitle: '', label: formLabel(request), directory });
+        const id = request.questionId;
+        const sid = request.sessionId || sessionId;
+        approvals.push({ kind: 'form', id, sessionId: sid, sessionTitle: '', label: formLabel(request), directory });
       }
     }
   }
 
-  return { statusById, branchByDirectory, approvals, titleById };
+  return { statusById, approvals, titleById };
 };
 
 // Status for sessions outside the synced child stores arrives two ways, both
@@ -299,11 +286,11 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
   const allSessions = useGlobalSessionsStore.getState().activeSessions;
   const childrenByParent = new Map<string, string[]>();
   for (const session of allSessions) {
-    if (!session?.id) continue;
-    if (session.parentID) {
-      const siblings = childrenByParent.get(session.parentID) ?? [];
-      siblings.push(session.id);
-      childrenByParent.set(session.parentID, siblings);
+    if (!session?.sessionId) continue;
+    if (session.parentSessionId) {
+      const siblings = childrenByParent.get(session.parentSessionId) ?? [];
+      siblings.push(session.sessionId);
+      childrenByParent.set(session.parentSessionId, siblings);
     }
   }
 
@@ -326,10 +313,10 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
   let dockBadgeCount = 0;
   if (ui.dockBadgeEnabled) {
     for (const session of allSessions) {
-      if (!session?.id || session.parentID) continue;
-      let familyUnseen = notif.unseenCount[session.id] ?? 0;
+      if (!session?.sessionId || session.parentSessionId) continue;
+      let familyUnseen = notif.unseenCount[session.sessionId] ?? 0;
       if (familyUnseen === 0 && ui.notifyOnSubtasks) {
-        familyUnseen = collectDescendants(session.id)
+        familyUnseen = collectDescendants(session.sessionId)
           .reduce((sum, id) => sum + (notif.unseenCount[id] ?? 0), 0);
       }
       if (familyUnseen > 0) dockBadgeCount += 1;
@@ -342,7 +329,11 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
   const live = collectLiveData();
   const titleById = new Map<string, string>(live.titleById);
   for (const session of allSessions) {
-    if (session?.id && session.title) titleById.set(session.id, session.title);
+    if (session?.sessionId && session.metadata?.title) titleById.set(session.sessionId, session.metadata.title);
+    const status = trayStatus(session.runtimeStatus);
+    if (!live.statusById.has(session.sessionId) || live.statusById.get(session.sessionId) === 'idle') {
+      live.statusById.set(session.sessionId, status);
+    }
   }
 
   // A session is active if EITHER source says so: the synced child stores
@@ -353,7 +344,7 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
   const resolveStatus = (id: string): TraySessionStatus => {
     const fromStores = live.statusById.get(id);
     if (fromStores && fromStores !== 'idle') return fromStores;
-    return globalStatusById.get(id)?.status.type ?? fromStores ?? 'idle';
+    return trayStatus(globalStatusById.get(id)?.status) === 'busy' ? 'busy' : fromStores ?? 'idle';
   };
 
   const rollupStatus = (family: string[]): TraySessionStatus => {
@@ -367,22 +358,23 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
   const worktreesByProject = useSessionUIStore.getState().availableWorktreesByProject;
 
   const sessions: TraySession[] = allSessions
-    .filter((s) => s?.id && !s.parentID) // root rows; sub-session work rolls up
+    .filter((s) => s?.sessionId && !s.parentSessionId) // root rows; sub-session work rolls up
     .slice()
     .sort(compareSessionOrder)
     .slice(0, MAX_SESSIONS)
     .map((session) => {
-      const family = [session.id, ...collectDescendants(session.id)];
+      const family = [session.sessionId, ...collectDescendants(session.sessionId)];
       const directory = resolveGlobalSessionDirectory(session) ?? '';
       return {
-        id: session.id,
-        title: session.title || 'Untitled session',
+        id: session.sessionId,
+        title: session.metadata?.title || 'Untitled session',
         status: rollupStatus(family),
-        branch: directory ? (live.branchByDirectory.get(directory) ?? '') : '',
+        // Canonical directory state has no legacy VCS branch projection.
+        branch: '',
         unseen: family.reduce((sum, id) => sum + (notif.unseenCount[id] ?? 0), 0),
         hasError: family.some((id) => notif.unseenHasError[id] ?? false),
         directory,
-        subtitle: resolveSessionSubtitle(directory, session, projects, worktreesByProject, live.branchByDirectory),
+        subtitle: resolveSessionSubtitle(directory, projects, worktreesByProject),
       };
     });
 
@@ -393,14 +385,16 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
   for (const [sessionId, pending] of useGlobalBlockingRequestsStore.getState().bySession) {
     const sessionTitle = titleById.get(sessionId) || '';
     for (const request of pending.permissions) {
-      if (seen.has(request.id)) continue;
-      seen.add(request.id);
-      approvals.push({ kind: 'permission', id: request.id, sessionId, sessionTitle, label: permissionLabel(request), directory: pending.directory });
+      const id = request.approvalId;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      approvals.push({ kind: 'permission', id, sessionId: request.sessionId, sessionTitle, label: permissionLabel(request), directory: pending.directory });
     }
     for (const request of pending.forms) {
-      if (seen.has(request.id)) continue;
-      seen.add(request.id);
-      approvals.push({ kind: 'form', id: request.id, sessionId, sessionTitle, label: formLabel(request), directory: pending.directory });
+      const id = request.questionId;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      approvals.push({ kind: 'form', id, sessionId: request.sessionId, sessionTitle, label: formLabel(request), directory: pending.directory });
     }
   }
 

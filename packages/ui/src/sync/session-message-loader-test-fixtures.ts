@@ -19,11 +19,11 @@ export function nativeSnapshot(sessionId = "session-a", messages: Message[] = [n
   }
 }
 
-export function nativeHostSession(snapshot = nativeSnapshot()): Session {
+export function nativeHostSession(snapshot: SessionSnapshot = nativeSnapshot()): Session {
   return { ...snapshot.session, metadata: { title: "Saved title" }, metadataRevision: "5", archiveRevision: "8", archivedAt: 3 }
 }
 
-export function nativeHistory(messages: Message[], nextCursor: string | null = null, snapshot = nativeSnapshot(messages[0]?.sessionId)): HistoryPage {
+export function nativeHistory(messages: Message[], nextCursor: string | null = null, snapshot: SessionSnapshot = nativeSnapshot(messages[0]?.sessionId)): HistoryPage {
   return { sessionId: snapshot.session.sessionId, branch: snapshot.branch, messages, turns: messages.map(nativeTurn), nextCursor }
 }
 

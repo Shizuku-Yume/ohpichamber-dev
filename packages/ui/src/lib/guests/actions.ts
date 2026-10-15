@@ -9,11 +9,9 @@ import {
   type GuestSessionItemMessage,
 } from '@openchamber/sdk';
 
+import type { Message } from '@openchamber/agent-contract';
 import type { IconName } from '@/components/icon/icons';
-import { formatMessageRecordText, type SessionMessageRecord } from '@/lib/exportSession';
-import { readContextPart } from '@/lib/messages/contextParts';
-import { formatContextMessage } from '@/lib/messages/messageMarkdown';
-import { hasParts } from '@/lib/opencode/model';
+import { formatMessageRecordText } from '@/lib/exportSession';
 
 import { isGuestActive } from './capabilities.ts';
 import { guestPackageIconSrc, resolveGuestIconName } from './icon.ts';
@@ -68,26 +66,14 @@ export const guestActionWantsMessages = (action: GuestActionContribution): boole
   action.payload?.includes('messages') ?? false
 );
 
-/**
- * Only the agent's own replies read as `assistant`. A synthetic message is
- * context the user attached to the next prompt, so it stays on the user side.
- */
-const recordRole = (record: SessionMessageRecord): GuestItemRole => (
-  record.info.role === 'assistant' ? 'assistant' : 'user'
+/** Only assistant replies are sent as assistant items; system messages are omitted. */
+const recordRole = (record: Message): GuestItemRole => (
+  record.role === 'assistant' ? 'assistant' : 'user'
 );
 
-/**
- * A message's text the way the Markdown export writes it. OpenCode v2
- * interleaves plumbing roles — `system`, `skill`, `shell`, `compaction`, the
- * `*-switched` notices — with the conversation; they carry no parts and no
- * text, so they never become an item. A synthetic message counts only when it
- * is attached context; prompt plumbing a server plugin injected does not.
- */
-const recordText = (record: SessionMessageRecord): string => {
-  if (record.info.role === 'synthetic') {
-    return readContextPart(record.info) ? formatContextMessage(record.info).trim() : '';
-  }
-  if (!hasParts(record.info)) return '';
+/** A message's text the way the Markdown export writes it. */
+const recordText = (record: Message): string => {
+  if (record.role === 'system') return '';
   return formatMessageRecordText(record);
 };
 
@@ -100,26 +86,26 @@ type SessionRef = {
 export const buildGuestMessageItem = (
   action: string,
   session: SessionRef,
-  record: SessionMessageRecord,
+  record: Message,
 ): GuestMessageItem => ({
   kind: 'message',
   action,
   sessionId: session.sessionId,
   sessionTitle: session.sessionTitle?.trim() || session.sessionId,
   directory: session.directory ?? null,
-  messageId: record.info.id,
+  messageId: record.messageId,
   role: recordRole(record),
   text: recordText(record).slice(0, GUEST_ITEM_MESSAGE_TEXT_MAX),
 });
 
-const toSessionItemMessage = (record: SessionMessageRecord): GuestSessionItemMessage | null => {
+const toSessionItemMessage = (record: Message): GuestSessionItemMessage | null => {
   const text = recordText(record);
   if (!text) return null;
   return {
-    id: record.info.id,
+    id: record.messageId,
     role: recordRole(record),
     text: text.slice(0, GUEST_ITEM_MESSAGE_TEXT_MAX),
-    createdAt: record.info.time?.created ?? 0,
+    createdAt: record.createdAt,
   };
 };
 
@@ -133,7 +119,7 @@ const toSessionItemMessage = (record: SessionMessageRecord): GuestSessionItemMes
 export const buildGuestSessionItem = (
   action: string,
   session: SessionRef,
-  records?: readonly SessionMessageRecord[],
+  records?: readonly Message[],
 ): GuestSessionItem => {
   const item: GuestSessionItem = {
     kind: 'session',

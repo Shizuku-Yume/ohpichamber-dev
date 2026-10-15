@@ -8,14 +8,12 @@
  * tagged error bodies without an HTTP status), and projection of wire shapes
  * into the OpenChamber domain model (`./model`, `./projection`).
  *
- * OpenChamber-owned server routes (`/api/fs/*`, `/api/opencode/*`) also live
- * here when they are part of the same directory/session workflows.
+ * Host filesystem operations and ambient directory context belong to
+ * `../host-filesystem`; this wrapper only reads that context for legacy calls.
  */
 
 import { ClientError, OpenCode, type OpenCodeClient } from "@opencode/client"
 import type {
-  FileDiffInfo,
-  SessionDiffInput,
   FormAnswer,
   FormInfo,
   LocationGetOutput,
@@ -23,17 +21,14 @@ import type {
   SessionRevert,
 } from "@opencode/client"
 import { z } from "zod"
-import type { FilesAPI } from "../api/types"
-import { getDesktopHomeDirectory } from "../desktop"
 import { isAmbiguousTransportFailure, isDefiniteTransportFailure, markAmbiguousTransportFailure, markDefiniteTransportFailure } from "@/lib/relay/transport-error"
-import { FilesystemError, parseFilesystemErrorReason } from "@/lib/api/files-errors"
 import type { ContextPartMetadata } from "@/lib/messages/contextParts"
 import { getRuntimeUrlResolver } from "@/lib/runtime-url"
 import { runtimeFetch } from "@/lib/runtime-fetch"
+import { hostFilesystem } from "../host-filesystem"
 import { isSpaceDirectory } from "@/lib/spaces/space-route"
 import { spaceMarkSchema, type SpaceMark } from "@/lib/spaces/spaces-store"
 import { getRuntimeKey } from "@/lib/runtime-switch"
-import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
 import { markStartupTrace } from "@/lib/startupTrace"
 import { assertProviderCircuitClosed, recordProviderError, recordProviderSuccess } from "./provider-tracker"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -44,7 +39,6 @@ import {
   type Agent,
   type Command,
   type Config,
-  type McpServerStatus,
   type Message,
   type Metadata,
   type Model,
@@ -60,7 +54,6 @@ import {
   type Vcs,
 } from "./model"
 import { ascendingId } from "./ids"
-import { runningShellFromWire, shellCancellationNote, type RunningShell } from "./background-shell"
 import { subagentCancellationNote } from "./subagent-run"
 import { toJsonRecord } from "./json"
 import {
@@ -83,8 +76,6 @@ const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || "/api"
 const CONFIG_CACHE_TTL_MS = 10_000
 const OPENCODE_HEALTH_TIMEOUT_MS = 4_000
 const DEFAULT_SESSION_PAGE_LIMIT = 100
-/** How much of a running command's output the live view starts with. */
-const SHELL_OUTPUT_TAIL_BYTES = 64 * 1024
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -109,7 +100,6 @@ const STATUS_BY_TAG = new Map<string, number>([
   ["CommandNotFoundError", 404],
   ["SkillNotFoundError", 404],
   ["ProviderNotFoundError", 404],
-  ["McpServerNotFoundError", 404],
   ["ProjectNotFoundError", 404],
   ["FileNotFoundError", 404],
   ["PtyNotFoundError", 404],
@@ -403,20 +393,6 @@ export const createRuntimeOpencodeClient = (config: RuntimeOpencodeClientConfig)
 // Local types
 // ---------------------------------------------------------------------------
 
-type FilesystemEntry = {
-  name: string
-  path: string
-  isDirectory: boolean
-  isFile: boolean
-  isSymbolicLink?: boolean
-}
-
-export type ProjectFileSearchHit = {
-  name: string
-  path: string
-  relativePath: string
-  extension?: string
-}
 
 type FileInputLite = {
   id?: string
@@ -426,11 +402,6 @@ type FileInputLite = {
   url: string
 }
 
-type DirectorySwitchResult = {
-  success: boolean
-  restarted: boolean
-  path: string
-}
 
 export type MessagePage = {
   items: Array<{ info: Message; parts: Part[] }>
@@ -477,7 +448,6 @@ type FetchPermissionResult =
   | { state: "resolved" }
   | { state: "unknown" }
 
-type DirectoryAvailability = "available" | "missing" | "unknown"
 /**
  * Pending requests live in the location that raised them, so a list is asked
  * per directory. There is no global list on v2: a request without a directory
@@ -487,28 +457,6 @@ type DirectoryAvailability = "available" | "missing" | "unknown"
 type PendingRequestListOptions = {
   directories?: Array<string | null | undefined>
 }
-const directoryProbeErrorSchema = z.object({ reason: z.string().optional(), isDirectory: z.boolean().optional() })
-
-const normalizeFsPath = (path: string): string => path.replace(/\\/g, "/")
-const FS_LIST_CACHE_TTL_MS = 400
-
-const getDesktopFilesApi = (): FilesAPI | null => {
-  const apis = getRegisteredRuntimeAPIs()
-  if (apis && apis.runtime?.isDesktop && apis.files) {
-    return apis.files
-  }
-  return null
-}
-
-// /api/fs/home parsing boundary. Older servers answer without chatsRoot;
-// only a valid home response may use the legacy chats-root fallback.
-const fsAbsolutePathSchema = z.string().trim().regex(/^(?:\/|[A-Za-z]:[\\/]|\\\\)/)
-const fsHomeResponseSchema = z.object({
-  home: fsAbsolutePathSchema,
-  chatsRoot: fsAbsolutePathSchema.optional(),
-  canonicalChatsRoot: fsAbsolutePathSchema.optional(),
-  canonicalLegacyChatsRoot: fsAbsolutePathSchema.optional(),
-})
 
 /** One context item admitted as a synthetic message; `id` is client-minted when given. */
 export type SyntheticContextInput = {
@@ -542,15 +490,11 @@ class OpencodeService {
   private client: OpenCodeClient
   private baseUrl: string
   private scopedClients: Map<string, OpenCodeClient> = new Map()
-  private currentDirectory: string | undefined = undefined
-  private directoryContextQueue: Promise<void> = Promise.resolve()
-  private listDirectoryInFlight: Map<string, Promise<FilesystemEntry[]>> = new Map()
   private providerCatalogInFlight: Map<string, Promise<ProviderCatalog>> = new Map()
   private listAgentsInFlight: Map<string, Promise<Agent[]>> = new Map()
   private configInFlight: Map<string, Promise<Config>> = new Map()
   private configCache: Map<string, { config: Config; expiresAt: number }> = new Map()
   private configCacheGeneration = 0
-  private listDirectoryCache: Map<string, { entries: FilesystemEntry[]; expiresAt: number }> = new Map()
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
     const runtimeBase = resolveRuntimeBaseUrl()
@@ -583,11 +527,9 @@ class OpencodeService {
     this.baseUrl = nextBaseUrl
     this.client = createRuntimeOpencodeClient({ baseUrl: this.baseUrl })
     this.scopedClients.clear()
-    this.listDirectoryInFlight.clear()
     this.providerCatalogInFlight.clear()
     this.clearAgentListRequests()
     this.clearConfigCache()
-    this.listDirectoryCache.clear()
   }
 
   /** Raw client without a directory scope (global routes, event stream). */
@@ -615,99 +557,14 @@ class OpencodeService {
   }
 
   private resolveDirectory(directory?: string | null): string | undefined {
-    return this.normalizeCandidatePath(directory) ?? this.currentDirectory
+    return this.normalizeCandidatePath(directory) ?? hostFilesystem.getDirectory()
   }
 
   private normalizeCandidatePath(path?: string | null): string | null {
     return normalizePath(path)
   }
 
-  private deriveHomeDirectory(path: string): { homeDirectory: string; username?: string } {
-    const windowsMatch = path.match(/^([A-Za-z]:)(?:\/|$)/)
-    if (windowsMatch) {
-      const drive = windowsMatch[1]
-      const remainder = path.slice(drive.length + (path.charAt(drive.length) === "/" ? 1 : 0))
-      const segments = remainder.split("/").filter(Boolean)
 
-      if (segments.length >= 2) {
-        const homeDirectory = `${drive}/${segments[0]}/${segments[1]}`
-        return { homeDirectory, username: segments[1] }
-      }
-
-      if (segments.length === 1) {
-        const homeDirectory = `${drive}/${segments[0]}`
-        return { homeDirectory, username: segments[0] }
-      }
-
-      return { homeDirectory: `${drive}/`, username: undefined }
-    }
-
-    const absolute = path.startsWith("/")
-    const segments = path.split("/").filter(Boolean)
-
-    if (segments.length >= 2 && (segments[0] === "Users" || segments[0] === "home")) {
-      const homeDirectory = `${absolute ? "/" : ""}${segments[0]}/${segments[1]}`
-      return { homeDirectory, username: segments[1] }
-    }
-
-    if (absolute) {
-      if (segments.length === 0) {
-        return { homeDirectory: "/", username: undefined }
-      }
-      const homeDirectory = `/${segments.join("/")}`
-      return { homeDirectory, username: segments[segments.length - 1] }
-    }
-
-    if (segments.length > 0) {
-      const homeDirectory = `/${segments.join("/")}`
-      return { homeDirectory, username: segments[segments.length - 1] }
-    }
-
-    return { homeDirectory: "/", username: undefined }
-  }
-
-  // Set the current working directory for all API calls
-  setDirectory(directory: string | undefined) {
-    const normalized = this.normalizeCandidatePath(directory) ?? directory
-    if (this.currentDirectory !== normalized) {
-      markStartupTrace("opencodeClient:setDirectory", {
-        previous: this.currentDirectory ?? null,
-        next: normalized ?? null,
-      })
-    }
-    this.currentDirectory = normalized
-  }
-
-  getDirectory(): string | undefined {
-    return this.currentDirectory
-  }
-
-  async withDirectory<T>(directory: string | undefined | null, fn: () => Promise<T>): Promise<T> {
-    const runWithContext = async (): Promise<T> => {
-      if (directory === undefined || directory === null) {
-        return fn()
-      }
-
-      const previousDirectory = this.currentDirectory
-      const scopedDirectory = this.normalizeCandidatePath(directory) ?? directory
-      this.currentDirectory = scopedDirectory
-      try {
-        return await fn()
-      } finally {
-        if (this.currentDirectory === scopedDirectory) {
-          this.currentDirectory = previousDirectory
-        }
-      }
-    }
-
-    const queuedRun = this.directoryContextQueue.then(runWithContext, runWithContext)
-    this.directoryContextQueue = queuedRun.then(
-      () => undefined,
-      () => undefined,
-    )
-
-    return queuedRun
-  }
 
   // -------------------------------------------------------------------------
   // Location / system
@@ -763,88 +620,7 @@ class OpencodeService {
     return call("vcs.init", () => this.clientFor(directory).vcs.init())
   }
 
-  // Get system information including home directory
-  async getSystemInfo(): Promise<{ homeDirectory: string; username?: string }> {
-    const candidates = new Set<string>()
-    const addCandidate = (value?: string | null) => {
-      const normalized = this.normalizeCandidatePath(value)
-      if (normalized) {
-        candidates.add(normalized)
-      }
-    }
 
-    try {
-      const location = await this.getLocation()
-      addCandidate(location.directory)
-      addCandidate(location.project.directory)
-    } catch (error) {
-      console.debug("Failed to load location info:", error)
-    }
-
-    if (!candidates.size) {
-      try {
-        const sessions = await this.listSessions()
-        sessions.forEach((session) => addCandidate(session.directory))
-      } catch (error) {
-        console.debug("Failed to inspect sessions for system info:", error)
-      }
-    }
-
-    addCandidate(this.currentDirectory)
-
-    if (typeof window !== "undefined") {
-      try {
-        addCandidate(window.localStorage.getItem("lastDirectory"))
-        addCandidate(window.localStorage.getItem("homeDirectory"))
-      } catch {
-        // Access to storage failed (e.g. privacy mode)
-      }
-    }
-
-    if (!candidates.size && typeof process !== "undefined" && typeof process.cwd === "function") {
-      addCandidate(process.cwd())
-    }
-
-    if (!candidates.size) {
-      return { homeDirectory: "/", username: undefined }
-    }
-
-    const [primary] = Array.from(candidates)
-    return this.deriveHomeDirectory(primary)
-  }
-
-  /**
-   * Best-effort probe whether a directory is accessible to OpenCode.
-   * This is intentionally NOT the same as local filesystem access in the UI runtime.
-   */
-  async probeDirectory(directory: string): Promise<boolean> {
-    return (await this.getDirectoryAvailability(directory)) === "available"
-  }
-
-  /**
-   * Distinguishes a confirmed-missing directory from an unavailable probe.
-   * Offline, permission, and other transport failures stay `unknown` so callers
-   * do not treat a temporary outage as proof the path was deleted.
-   *
-   * The probe is OpenChamber's own `/api/fs/directory-stat`, which asks the
-   * server to stat the path without listing its contents. A runtime without
-   * that route (VS Code) answers `unknown`.
-   */
-  async getDirectoryAvailability(directory: string): Promise<DirectoryAvailability> {
-    const normalized = this.normalizeCandidatePath(directory)
-    if (!normalized) {
-      return "unknown"
-    }
-    try {
-      const response = await runtimeFetch("/api/fs/directory-stat", { query: { path: normalized } })
-      const body = directoryProbeErrorSchema.safeParse(await response.json().catch(() => null)).data
-      if (response.ok && body?.isDirectory === true) return "available"
-      const reason = parseFilesystemErrorReason(body?.reason)
-      return reason === "not-found" || reason === "not-directory" ? "missing" : "unknown"
-    } catch {
-      return "unknown"
-    }
-  }
 
   // -------------------------------------------------------------------------
   // Sessions
@@ -1298,15 +1074,6 @@ class OpencodeService {
     return result.interrupted
   }
 
-  /**
-   * Moves the work the turn is blocked on (a running shell command, a
-   * subagent it waits for) to the background. The work keeps running, the
-   * agent is told to move on, and the result is handed back when it settles.
-   * A no-op when nothing blocks.
-   */
-  async backgroundSessionWork(id: string, directory?: string | null): Promise<void> {
-    await call("session.background", () => this.clientFor(directory).session.background({ sessionID: id }))
-  }
 
   /** Runs a shell command inside the session transcript. Returns the shell message id. */
   async shellSession(params: {
@@ -1443,22 +1210,6 @@ class OpencodeService {
     return result.text
   }
 
-  /**
-   * Per-file diffs of what a turn changed, computed by OpenCode from the
-   * turn's snapshots: `from` names the user message whose turn to diff
-   * (default: the newest), `to` extends the range through a later turn.
-   * Covers edits the tool calls alone cannot describe (a `write`, a subagent).
-   */
-  async getSessionTurnDiff(
-    sessionId: string,
-    options?: { from?: string; to?: string; context?: number; directory?: string | null },
-  ): Promise<FileDiffInfo[]> {
-    const { from, to, context } = options ?? {}
-    // The client's input type marks every field read-only, so it is built in one go.
-    const input: SessionDiffInput = { sessionID: sessionId, from, to, context }
-    const result = await call("session.diff", () => this.clientFor(options?.directory).session.diff(input))
-    return [...result]
-  }
 
   /** One stateless generation with the server's default model unless `model` is given. */
   async generateText(prompt: string, options?: { model?: ModelRef; directory?: string | null }): Promise<string> {
@@ -1549,69 +1300,6 @@ class OpencodeService {
     return dedupeById(lists)
   }
 
-  // -------------------------------------------------------------------------
-  // Shell commands the agent started (background commands)
-  // -------------------------------------------------------------------------
-
-  /**
-   * Commands still running in the directory on behalf of a session, keyed by
-   * the directory OpenCode resolved it to (symlinks resolved), which is the
-   * directory its shell events carry. Throws on fetch failure.
-   */
-  async listRunningShells(directory: string): Promise<{ directory: string; shells: RunningShell[] }> {
-    const response = await call("shell.list", () => this.clientFor(directory).shell.list())
-    return {
-      directory: response.location.directory ?? directory,
-      shells: response.data.flatMap((info) => runningShellFromWire(info) ?? []),
-    }
-  }
-
-  /**
-   * The newest part of a command's captured output, and the cursor to read
-   * on from. Without a cursor the read starts `tailBytes` before the end.
-   */
-  async readShellOutput(
-    shellID: string,
-    directory: string,
-    cursor?: number,
-    tailBytes = SHELL_OUTPUT_TAIL_BYTES,
-  ): Promise<{ output: string; cursor: number; skipped: boolean }> {
-    const client = this.clientFor(directory)
-    let start = cursor
-    if (start === undefined) {
-      const end = await call("shell.output", () => client.shell.output({ id: shellID, cursor: Number.MAX_SAFE_INTEGER }).then((r) => r.data))
-      start = Math.max(0, end.size - tailBytes)
-    }
-    const page = await call("shell.output", () => client.shell.output({ id: shellID, cursor: start, limit: tailBytes }).then((r) => r.data))
-    return { output: page.output, cursor: page.cursor, skipped: cursor === undefined && start > 0 }
-  }
-
-  /**
-   * Stops a background command the agent started. The agent is told first,
-   * in a note that does not wake it, that the error OpenCode is about to
-   * report is the user's stop (see `shellCancellationNote`); the command is
-   * killed only once the note is in. Throws when either step fails, and
-   * nothing is killed when the note could not be delivered.
-   */
-  async stopBackgroundShell(params: {
-    sessionID: string
-    sessionDirectory?: string | null
-    shellID: string
-    shellDirectory: string
-    command: string
-  }): Promise<void> {
-    const note = shellCancellationNote({ shellID: params.shellID, command: params.command })
-    await call("session.synthetic", () =>
-      this.clientFor(params.sessionDirectory).session.synthetic({
-        sessionID: params.sessionID,
-        text: note.text,
-        description: note.description,
-        metadata: note.metadata,
-        resume: false,
-      }),
-    )
-    await call("shell.remove", () => this.clientFor(params.shellDirectory).shell.remove({ id: params.shellID }))
-  }
 
   /**
    * Stops a subagent the agent started, in the foreground or the background.
@@ -1716,7 +1404,7 @@ class OpencodeService {
   }
 
   async getProviders(): Promise<ProviderCatalog> {
-    return this.getProvidersForConfig(this.currentDirectory)
+    return this.getProvidersForConfig(hostFilesystem.getDirectory())
   }
 
   /**
@@ -1839,18 +1527,6 @@ class OpencodeService {
     return { attached, unresolved }
   }
 
-  async listMcpServers(directory?: string | null): Promise<McpServerStatus[]> {
-    return call("mcp.list", () => this.clientFor(directory).mcp.list().then((r) => r.data))
-  }
-
-  async connectMcpServer(server: string, directory?: string | null): Promise<void> {
-    await call("mcp.connect", () => this.clientFor(directory).mcp.connect({ server }))
-  }
-
-  async disconnectMcpServer(server: string, directory?: string | null): Promise<void> {
-    await call("mcp.disconnect", () => this.clientFor(directory).mcp.disconnect({ server }))
-  }
-
   // Lightweight readiness check. Full diagnostics still live at /health.
   async checkHealth(): Promise<boolean> {
     return (await this.probeHealth()) === "healthy"
@@ -1897,301 +1573,6 @@ class OpencodeService {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // File System Operations (OpenChamber routes)
-  // -------------------------------------------------------------------------
-
-  async createDirectory(
-    dirPath: string,
-    options?: { allowOutsideWorkspace?: boolean; asProject?: boolean },
-  ): Promise<{ success: boolean; path: string }> {
-    const desktopFiles = getDesktopFilesApi()
-    if (desktopFiles?.createDirectory) {
-      try {
-        return await desktopFiles.createDirectory(dirPath)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        throw new Error(message || "Failed to create directory")
-      }
-    }
-
-    if (options?.asProject) {
-      const response = await runtimeFetch('/api/openchamber/directory', {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ path: dirPath, create: true }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: "Failed to create project directory" }))
-        throw new Error(error.error || "Failed to create project directory")
-      }
-
-      const result = await response.json()
-      return { success: true, path: result.path }
-    }
-
-    const payload = {
-      path: dirPath,
-      ...(options?.allowOutsideWorkspace ? { allowOutsideWorkspace: true } : {}),
-    }
-
-    const response = await runtimeFetch(`${this.baseUrl}/fs/mkdir`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    })
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Failed to create directory" }))
-      throw new Error(error.error || "Failed to create directory")
-    }
-
-    const result = await response.json()
-    return result
-  }
-
-  async cloneRepository(input: { remoteUrl: string; destinationPath: string; gitIdentityId?: string | null }): Promise<{ success: boolean; path: string; output?: string }> {
-    const response = await runtimeFetch(`${this.baseUrl}/fs/clone`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(input),
-    })
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Failed to clone repository" }))
-      throw new Error(error.error || "Failed to clone repository")
-    }
-
-    return await response.json()
-  }
-
-  async listLocalDirectory(directoryPath: string | null | undefined, options?: { respectGitignore?: boolean }): Promise<FilesystemEntry[]> {
-    const normalizedDirectoryPath = typeof directoryPath === "string" ? normalizeFsPath(directoryPath.trim()) : ""
-    const cacheKey = `${normalizedDirectoryPath}|${options?.respectGitignore ? "1" : "0"}`
-    const now = Date.now()
-    const cached = this.listDirectoryCache.get(cacheKey)
-    if (cached && cached.expiresAt > now) {
-      return cached.entries
-    }
-
-    const inFlight = this.listDirectoryInFlight.get(cacheKey)
-    if (inFlight) {
-      return inFlight
-    }
-
-    const task = (async () => {
-      const desktopFiles = getDesktopFilesApi()
-      try {
-        if (desktopFiles) {
-          const result = await desktopFiles.listDirectory(directoryPath || "", options)
-          if (!result || !Array.isArray(result.entries)) {
-            throw new FilesystemError("Directory listing returned an invalid response", {
-              reason: "invalid-response",
-            })
-          }
-          const entries = result.entries.map<FilesystemEntry>((entry) => ({
-            name: entry.name,
-            path: normalizeFsPath(entry.path),
-            isDirectory: !!entry.isDirectory,
-            isFile: !entry.isDirectory,
-            isSymbolicLink: false,
-          }))
-          this.listDirectoryCache.set(cacheKey, {
-            entries,
-            expiresAt: Date.now() + FS_LIST_CACHE_TTL_MS,
-          })
-          return entries
-        }
-
-        const params = new URLSearchParams()
-        if (directoryPath && directoryPath.trim().length > 0) {
-          params.set("path", directoryPath)
-        }
-        if (options?.respectGitignore) {
-          params.set("respectGitignore", "true")
-        }
-        const query = params.toString()
-        const response = await runtimeFetch(`${this.baseUrl}/fs/list${query ? `?${query}` : ""}`)
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({}))
-          const message = typeof error.error === "string" ? error.error : "Failed to list directory"
-          throw new FilesystemError(message, {
-            reason: parseFilesystemErrorReason((error as { reason?: unknown }).reason),
-            status: response.status,
-          })
-        }
-
-        const result = await response.json()
-        if (!result || !Array.isArray(result.entries)) {
-          throw new FilesystemError("Directory listing returned an invalid response", {
-            reason: "invalid-response",
-          })
-        }
-
-        const entries = result.entries as FilesystemEntry[]
-        this.listDirectoryCache.set(cacheKey, {
-          entries,
-          expiresAt: Date.now() + FS_LIST_CACHE_TTL_MS,
-        })
-        return entries
-      } catch (error) {
-        console.error("Failed to list directory contents:", error)
-        throw error
-      }
-    })()
-
-    const trackedTask = task.finally(() => {
-      if (this.listDirectoryInFlight.get(cacheKey) === trackedTask) {
-        this.listDirectoryInFlight.delete(cacheKey)
-      }
-    })
-    this.listDirectoryInFlight.set(cacheKey, trackedTask)
-    return trackedTask
-  }
-
-  /** Fuzzy file search inside a directory through OpenCode's file index. */
-  async searchFiles(
-    query: string,
-    options?: {
-      directory?: string | null
-      limit?: number
-      type?: "file" | "directory"
-    },
-  ): Promise<ProjectFileSearchHit[]> {
-    const directory = this.resolveDirectory(options?.directory)
-    const normalizedDirectory = directory ? normalizeFsPath(directory) : null
-
-    try {
-      const response = await call("file.find", () =>
-        this.clientFor(directory).file.find({
-          query,
-          limit: options?.limit !== undefined && Number.isFinite(options.limit) ? options.limit : undefined,
-          type: options?.type,
-        }),
-      )
-
-      return response.data.map<ProjectFileSearchHit>((item) => {
-        const normalizedRelativePath = normalizeFsPath(item.path)
-        const name = normalizedRelativePath.split("/").filter(Boolean).pop() || normalizedRelativePath
-        const normalizedPath = normalizedDirectory
-          ? normalizeFsPath(`${normalizedDirectory}/${normalizedRelativePath}`)
-          : normalizeFsPath(normalizedRelativePath)
-
-        return {
-          name,
-          path: normalizedPath,
-          relativePath: normalizedRelativePath,
-          extension: name.includes(".") ? name.split(".").pop()?.toLowerCase() : undefined,
-        }
-      })
-    } catch (error) {
-      console.error("Failed to search files:", error)
-      throw error
-    }
-  }
-
-  async getFilesystemHome(): Promise<string | null> {
-    // The injected desktop home describes the LOCAL machine. It is only a
-    // valid answer while the active runtime is the local one — after an
-    // in-place switch to a remote host the home must come from that host's
-    // /api/fs/home, not from the local Electron global.
-    const runtimeKey = getRuntimeKey()
-    if (!runtimeKey || runtimeKey === "local") {
-      const desktopHome = await getDesktopHomeDirectory()
-      if (desktopHome) {
-        return desktopHome
-      }
-    }
-
-    try {
-      const response = await runtimeFetch(`${this.baseUrl}/fs/home`, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        const message =
-          typeof error.error === "string" && error.error.length > 0 ? error.error : "Failed to resolve home directory"
-        throw new Error(message)
-      }
-
-      const payload = await response.json()
-      if (payload && typeof payload.home === "string" && payload.home.length > 0) {
-        return payload.home
-      }
-      return null
-    } catch (error) {
-      console.warn("Failed to resolve filesystem home directory:", error)
-      return null
-    }
-  }
-
-  // Both roots must describe the same server response, including on desktop.
-  // Failure is distinct from an older server omitting chatsRoot.
-  async getFilesystemHomeInfo(): Promise<z.infer<typeof fsHomeResponseSchema>> {
-    const response = await runtimeFetch(`${this.baseUrl}/fs/home`, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-    })
-    if (!response.ok) {
-      throw new Error(`Failed to resolve the chats root (${response.status})`)
-    }
-    return fsHomeResponseSchema.parse(await response.json())
-  }
-
-  async setOpenCodeWorkingDirectory(directoryPath: string | null | undefined): Promise<DirectorySwitchResult | null> {
-    if (!directoryPath || typeof directoryPath !== "string" || !directoryPath.trim()) {
-      console.warn("[OpencodeClient] setOpenCodeWorkingDirectory: invalid path", directoryPath)
-      return null
-    }
-
-    const url = '/api/openchamber/directory'
-
-    try {
-      const response = await runtimeFetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ path: directoryPath }),
-      })
-
-      const payload = await response.json().catch(() => null)
-
-      if (!response.ok) {
-        const error = payload ?? {}
-        const message =
-          typeof error.error === "string" && error.error.length > 0 ? error.error : "Failed to update OpenCode working directory"
-        throw new Error(message)
-      }
-
-      if (payload && typeof payload === "object") {
-        return payload as DirectorySwitchResult
-      }
-
-      return {
-        success: true,
-        restarted: false,
-        path: directoryPath,
-      }
-    } catch (error) {
-      console.warn("Failed to update OpenCode working directory:", error)
-      throw error
-    }
-  }
 }
 
 // Exported singleton instance

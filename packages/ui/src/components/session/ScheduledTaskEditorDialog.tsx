@@ -20,16 +20,16 @@ import { SnippetAutocomplete, type SnippetAutocompleteHandle } from '@/component
 import { Icon } from "@/components/icon/Icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import type { ScheduledTask } from '@/lib/scheduledTasksApi';
 import { useI18n } from '@/lib/i18n';
 import { isValidCronExpression, getNextRuns, CRON_EXAMPLES } from '@/lib/cron';
 import { canonicalizeTimezone } from '@/lib/timezones';
 import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
-import { useGlobalSessionsStore, refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore, refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
 import { useAllLiveSessions } from '@/sync/sync-context';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useProjectsStore } from '@/stores/useProjectsStore';
 import { CHAT_DRAFT_PROJECT_ID, isChatDirectoryPath } from '@/lib/chatDirectories';
 import { SettingsStackedField } from '@/components/sections/shared/SettingsSection';
 
@@ -757,13 +757,14 @@ export function ScheduledTaskEditorDialog(props: {
   const projects = useProjectsStore((state) => state.projects);
   const worktrees = useSessionUIStore((state) => state.availableWorktreesByProject);
   const sessions = React.useMemo(() => {
-    const merged = new Map(globalSessions.map((session) => [session.id, session]));
-    for (const session of liveSessions) merged.set(session.id, session);
+    const merged = new Map(globalSessions.map((session) => [session.sessionId, session]));
+    for (const session of liveSessions) merged.set(session.sessionId, session);
     const project = projects.find((entry) => entry.id === props.projectId);
-    const roots = [project?.path, ...(worktrees.get(props.projectId) ?? []).map((tree) => tree.path)].filter((root) => root !== undefined);
-    return [...merged.values()].filter((session) => !session.time?.archived && (
-      props.projectId === CHAT_DRAFT_PROJECT_ID ? isChatDirectoryPath(session.directory)
-        : roots.some((root) => session.directory === root || session.directory.startsWith(`${root}/`))
+    const roots = [project?.path, ...(worktrees.get(props.projectId) ?? []).map((tree) => tree.path)]
+      .filter((root): root is string => root !== undefined);
+    return [...merged.values()].filter((session) => session.archivedAt === undefined && (
+      props.projectId === CHAT_DRAFT_PROJECT_ID ? isChatDirectoryPath(resolveGlobalSessionDirectory(session) ?? '')
+        : roots.some((root) => resolveGlobalSessionDirectory(session) === root || resolveGlobalSessionDirectory(session)?.startsWith(`${root}/`))
     ));
   }, [globalSessions, liveSessions, projects, worktrees, props.projectId]);
   React.useEffect(() => {
@@ -1262,10 +1263,10 @@ export function ScheduledTaskEditorDialog(props: {
         <SettingsStackedField label={t('sessions.scheduledTasks.editor.targetSession')} info={t('sessions.scheduledTasks.editor.targetHint')}>
           <Select value={draft.targetSessionId} onValueChange={(targetSessionId) => setDraft((prev) => ({ ...prev, targetSessionId }))}>
             <SelectTrigger size="settings"><SelectValue placeholder={t('sessions.scheduledTasks.editor.targetSession')}>
-              {sessions.find((session) => session.id === draft.targetSessionId)?.title || draft.targetSessionId || undefined}
+              {sessions.find((session) => session.sessionId === draft.targetSessionId)?.metadata?.title || draft.targetSessionId || undefined}
             </SelectValue></SelectTrigger>
             <SelectContent>
-              {sessions.map((session) => <SelectItem key={session.id} value={session.id}>{session.title || session.id}</SelectItem>)}
+              {sessions.map((session) => <SelectItem key={session.sessionId} value={session.sessionId}>{session.metadata?.title || session.sessionId}</SelectItem>)}
             </SelectContent>
           </Select>
         </SettingsStackedField>

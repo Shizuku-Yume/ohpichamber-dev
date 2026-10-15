@@ -68,7 +68,7 @@ export const SessionGoalRow: React.FC<SessionGoalRowProps> = React.memo(({ sessi
       <span className="min-w-0 flex-1 truncate text-sm text-foreground">
         {objectiveContent || t('chat.goal.dialog.titleManage')}
       </span>
-      {goal.status === 'active' && (!sessionStatus || sessionStatus.type === 'idle') ? (
+      {goal.status === 'active' && (!sessionStatus || sessionStatus === 'idle') ? (
         // The agent stopped but the goal is still active: the server is
         // sitting out the quiet window and running the audit — show that
         // instead of a static "Active" that looks stuck.

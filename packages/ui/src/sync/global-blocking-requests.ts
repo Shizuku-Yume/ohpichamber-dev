@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { ApprovalRequest, CanonicalEvent, QuestionRequest, SessionSnapshot } from '@openchamber/agent-contract';
 import { compareCounters } from './event-reducer';
 
@@ -8,7 +8,7 @@ type PendingBlockingRequests = { directory: string; permissions: readonly Blocki
 type GlobalBlockingRequestsState = { bySession: ReadonlyMap<string, PendingBlockingRequests> };
 const EMPTY_PERMISSIONS: readonly ApprovalRequest[] = [];
 const EMPTY_FORMS: readonly QuestionRequest[] = [];
-export const useGlobalBlockingRequestsStore = create<GlobalBlockingRequestsState>(() => ({ bySession: new Map() }));
+export const useGlobalBlockingRequestsStore: UseBoundStore<StoreApi<GlobalBlockingRequestsState>> = create<GlobalBlockingRequestsState>(() => ({ bySession: new Map() }));
 const snapshots = new Map<string, { epoch: string; sequence: string }>();
 const requests = new Map<string, Map<string, ApprovalRequest | QuestionRequest>>();
 export const resetGlobalBlockingRequests = (): void => { snapshots.clear(); requests.clear(); useGlobalBlockingRequestsStore.setState({ bySession: new Map() }); };
@@ -59,9 +59,13 @@ class Reducer {
   }
   settle(kind: 'permissions' | 'forms', sessionId: string, id: string): void {
     const existing = this.current(sessionId); if (!existing) return;
-    const next = kind === 'permissions' ? withoutRequest(existing.permissions, id) : withoutRequest(existing.forms, id);
-    if (!next) return;
-    this.write(sessionId, kind === 'permissions' ? { ...existing, permissions: next } : { ...existing, forms: next });
+    if (kind === 'permissions') {
+      const permissions = withoutRequest(existing.permissions, id);
+      if (permissions) this.write(sessionId, { ...existing, permissions });
+    } else {
+      const forms = withoutRequest(existing.forms, id);
+      if (forms) this.write(sessionId, { ...existing, forms });
+    }
   }
   remove(sessionId: string): void { if (this.current(sessionId)) this.write(sessionId, { ...this.current(sessionId)!, permissions: EMPTY_PERMISSIONS, forms: EMPTY_FORMS }); }
   publish(): void { if (this.draft) useGlobalBlockingRequestsStore.setState({ bySession: this.draft }); }
@@ -109,9 +113,10 @@ export const replaceGlobalBlockingRequestSnapshot = (directory: string, snapshot
   snapshots.set(sessionId, { epoch, sequence: headSequence });
   requests.delete(sessionId);
   const reducer = new Reducer(useGlobalBlockingRequestsStore.getState());
-  const approvals = snapshot.approvals.filter((request) => request.sessionId === sessionId && request.epoch === epoch && request.status === 'pending');
-  const questions = snapshot.questions.filter((request) => request.sessionId === sessionId && request.epoch === epoch && request.status === 'pending');
-  for (const request of [...approvals, ...questions]) reducer.observe(request);
+  const approvals = snapshot.approvals.filter((request): request is ApprovalRequest => request.sessionId === sessionId && request.epoch === epoch && request.status === 'pending');
+  const questions = snapshot.questions.filter((request): request is QuestionRequest => request.sessionId === sessionId && request.epoch === epoch && request.status === 'pending');
+  for (const request of approvals) reducer.observe(request);
+  for (const request of questions) reducer.observe(request);
   reducer.write(sessionId, { directory, permissions: approvals, forms: questions });
   reducer.publish();
 };

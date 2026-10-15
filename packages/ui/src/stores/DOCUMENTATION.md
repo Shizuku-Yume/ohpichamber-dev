@@ -19,6 +19,32 @@ Do not put high-frequency local component state here just because it is convenie
 
 There are multiple store categories in this directory.
 
+### Host filesystem and directory context
+
+`lib/host-filesystem.ts` owns Host home/chat-root discovery, directory availability,
+listing, creation, filesystem search, and the ambient directory context. It uses
+`runtimeFetch` for Host routes and the registered desktop FilesAPI for local
+listing/creation where the existing desktop runtime supplies it. It never loads
+an agent SDK. `useDirectoryStore` owns navigation/history and persisted home
+bootstrap; consumers outside React read/write the shared Host context rather
+than an engine client's directory. Remaining legacy agent calls may read this
+context but do not expose filesystem or directory-context methods.
+
+Web/PWA and Electron use the active authenticated Host. Hosted mobile and
+Capacitor use the same runtime URL/auth transport against their selected Host;
+no client-side filesystem privileges are added. Injected desktop home applies
+only to the local runtime. Cloud/chat-root defaults and home readiness remain
+with `useDirectoryStore` and `lib/chatDirectories.ts`.
+
+An unavailable home is not an authoritative empty chat root. Directory probes
+return `missing` only for confirmed missing/non-directory paths; permission,
+offline and malformed responses remain `unknown`. The existing 400 ms directory
+listing cache and in-flight sharing belong to the Host owner and reset alongside
+runtime/transport reconnection. Old completions cannot populate replacement
+cache maps. Search uses the scoped Host `/api/fs/search` contract, preserves
+file/directory selection and ignore flags, and bounds response/body delivery
+with the existing 30-second read deadline plus caller cancellation.
+
 ### Catalog refresh
 
 `catalogRefresh.ts` re-reads the lists Settings and the composer show — agents,
@@ -268,6 +294,8 @@ A queued message is captured whole, so whoever delivers it sends exactly what th
 `sendingIds` mirrors the server's in-flight item and is not persisted. `clearQueue()` retains in-flight entries while clearing pending items; completion or recovery reconciles them against the server. Runtime switches retire the previous server projection, and reconnect hydration restores the authoritative queue.
 
 `useGlobalSessionsStore.ts` owns cold/global active and archived coverage using native `Session` DTOs from `@openchamber/agent-contract`. Arrays, the `sessionId` entity map, native `parentSessionId` hierarchy, and directory indexes commit together. Direct mutations update only affected hierarchy/directory buckets; metadata-only changes preserve structural references. This cache complements directory sync stores; live status and message ownership remain in sync.
+
+Canonical session discovery lists roots only. Global loads and directory refreshes discover active roots' children through bounded `listSubagents(rootSessionId)` reads. Child rows inherit workspace routing and stable root timestamps/counters, use the subagent role as their title, and map running activity to a stable non-null run marker. This projection is not a child snapshot or journal cursor. Failed child reads preserve known children; directory refresh may remove an omitted child only after a successful list for its parent. Runtime generations reject late child responses. Opening a known child uses history only, without snapshot, metadata, queue, or journal requests.
 
 Session ordering belongs to `sync/session-ordering.ts`, not the global array order. Surfaces use its shared comparator with native `createdAt`/`updatedAt` fallbacks.
 

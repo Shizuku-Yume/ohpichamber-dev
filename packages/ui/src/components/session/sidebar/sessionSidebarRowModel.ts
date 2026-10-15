@@ -1,7 +1,8 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { SessionFolder, SessionFoldersMap } from '@/stores/useSessionFoldersStore';
 import { compareSessionsByLifecycleOrder, EMPTY_SESSION_ORDER_RANKS } from '@/sync/session-ordering';
 import { isSessionPinned } from '@/stores/useSessionPinnedStore';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import type { GroupSearchData, SessionGroup, SessionNode } from './types';
 import type { ProjectSection } from './projects/sessionProjectRender';
 import { buildGroupRenderDescriptors } from './projects/sessionProjectRender';
@@ -157,7 +158,7 @@ const collapseRunEntries = (nodes: readonly SessionNode[], runIndex: MultiRunInd
   const entries: SidebarEntry[] = [];
   const byRun = new Map<string, RunEntry>();
   for (const node of nodes) {
-    const runKey = runIndex.runKeyBySessionId.get(node.session.id);
+    const runKey = runIndex.runKeyBySessionId.get(node.session.sessionId);
     const run = runKey ? runIndex.runs.get(runKey) : undefined;
     if (!run) {
       entries.push(node);
@@ -174,7 +175,7 @@ const collapseRunEntries = (nodes: readonly SessionNode[], runIndex: MultiRunInd
   }
   for (const entry of byRun.values()) {
     const order = new Map(entry.run.memberIds.map((id, index) => [id, index]));
-    entry.lanes.sort((left, right) => (order.get(left.session.id) ?? 0) - (order.get(right.session.id) ?? 0));
+    entry.lanes.sort((left, right) => (order.get(left.session.sessionId) ?? 0) - (order.get(right.session.sessionId) ?? 0));
   }
   return entries;
 };
@@ -189,7 +190,7 @@ export const countSessionSearchMatches = (nodes: readonly SessionNode[], normali
   const idQuery = normalizedQuery.trim().toLowerCase();
   const isIdQuery = idQuery.startsWith('ses_');
   const count = (list: readonly SessionNode[]): number => list.reduce((total, node) => (
-    total + (!isIdQuery || node.session.id.toLowerCase() === idQuery ? 1 : 0) + count(node.children)
+    total + (!isIdQuery || node.session.sessionId.toLowerCase() === idQuery ? 1 : 0) + count(node.children)
   ), 0);
   return count(nodes);
 };
@@ -209,8 +210,8 @@ const compareNodes = (
   pinnedSessionIds: Set<string>,
   sessionOrderIndex: ReadonlyMap<string, number>,
 ): number => {
-  const leftIndex = sessionOrderIndex.get(left.session.id);
-  const rightIndex = sessionOrderIndex.get(right.session.id);
+  const leftIndex = sessionOrderIndex.get(left.session.sessionId);
+  const rightIndex = sessionOrderIndex.get(right.session.sessionId);
   if (leftIndex !== undefined || rightIndex !== undefined) {
     if (leftIndex === undefined) return 1;
     if (rightIndex === undefined) return -1;
@@ -244,10 +245,10 @@ const indexNodes = (roots: readonly SessionNode[]): IndexedSessionNodes => {
     const entry = stack.pop();
     if (!entry) continue;
     if (!entry.visited) {
-      byId.set(entry.node.session.id, entry.node);
-      sessionsById.set(entry.node.session.id, entry.node.session);
+      byId.set(entry.node.session.sessionId, entry.node);
+      sessionsById.set(entry.node.session.sessionId, entry.node.session);
       const start = preorderIds.length;
-      preorderIds.push(entry.node.session.id);
+      preorderIds.push(entry.node.session.sessionId);
       subtreeRangeByNode.set(entry.node, [start, start + 1]);
       stack.push({ node: entry.node, visited: true });
       for (let index = entry.node.children.length - 1; index >= 0; index -= 1) {
@@ -299,7 +300,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
   while (authorityStack.length > 0) {
     const node = authorityStack.pop();
     if (!node) continue;
-    sessionById.set(node.session.id, node.session);
+    sessionById.set(node.session.sessionId, node.session);
     authorityStack.push(...node.children);
   }
 
@@ -337,13 +338,13 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     const expansionKey = runExpansionKey(options.renderContext, entry.run.key);
     // Timeline rows never expand; the overview lists the lanes.
     const expanded = options.renderContext !== 'timeline' && (search || args.expandedParents.has(expansionKey));
-    const firstLaneId = entry.lanes[0]?.session.id;
+    const firstLaneId = entry.lanes[0]?.session.sessionId;
     const meta = firstLaneId && options.getSecondaryMeta ? options.getSecondaryMeta(firstLaneId) : options.secondaryMeta;
     // Activity lanes come without their subagent rows, so the sessions whose
     // requests block a lane (the lane and its hidden subagents) ride along for
     // the run row's badge.
     const blockingSessionIds = Object.freeze([...new Set(entry.lanes.flatMap((lane) => (
-      options.getBlockingBadgeSessionScopes?.(lane.session.id) ?? []
+      options.getBlockingBadgeSessionScopes?.(lane.session.sessionId) ?? []
     ).flatMap((scope) => scope.sessionIDs)))]);
     push({
       kind: 'run',
@@ -375,16 +376,16 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     while (stack.length > 0) {
       const current = stack.pop();
       if (!current) continue;
-      const rowKey = keyFor(`${options.containerKey}:session:${current.node.session.id}`);
-      const directory = current.node.session.directory ?? current.directory;
-      sessionById.set(current.node.session.id, current.node.session);
+      const rowKey = keyFor(`${options.containerKey}:session:${current.node.session.sessionId}`);
+      const directory = resolveGlobalSessionDirectory(current.node.session) ?? current.directory;
+      sessionById.set(current.node.session.sessionId, current.node.session);
       push({
         kind: 'session',
         key: rowKey,
         estimateSize: options.renderContext === 'timeline' ? TIMELINE_SESSION_ESTIMATE : SESSION_ESTIMATE,
         node: current.node,
         blockingBadgeSessionScopes: current.depth === baseDepth
-          ? options.getBlockingBadgeSessionScopes?.(current.node.session.id) ?? options.blockingBadgeSessionScopes
+          ? options.getBlockingBadgeSessionScopes?.(current.node.session.sessionId) ?? options.blockingBadgeSessionScopes
           : undefined,
         depth: current.depth,
         projectId: options.projectId,
@@ -394,7 +395,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
         archived: options.archived,
         renderContext: options.renderContext,
         secondaryMeta: options.getSecondaryMeta
-          ? options.getSecondaryMeta(current.node.session.id)
+          ? options.getSecondaryMeta(current.node.session.sessionId)
           : options.secondaryMeta ?? null,
       });
       const subtreeRange = options.indexedNodes?.subtreeRangeByNode.get(current.node);
@@ -405,13 +406,13 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
         ] as const)
         : undefined;
       selectionEntries.push(Object.freeze({
-        id: current.node.session.id,
+        id: current.node.session.sessionId,
         rowKey,
         scopeKey: options.selectionScopeKey,
         archived: options.archived,
         descendantRange,
       }));
-      if (!search && !args.expandedParents.has(expandedKey(options.renderContext, options.archived, current.node.session.id))) continue;
+      if (!search && !args.expandedParents.has(expandedKey(options.renderContext, options.archived, current.node.session.sessionId))) continue;
       for (let index = current.node.children.length - 1; index >= 0; index -= 1) {
         const child = current.node.children[index];
         if (child) stack.push({ node: child, depth: current.depth + 1, directory });
@@ -424,7 +425,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
   const groupSearchMatches = (group: SessionGroup): number => {
     const searchData = args.groupSearchDataByGroup.get(group);
     if (searchData?.hasMatch !== true) return 0;
-    const movedToWork = inWork.size > 0 ? searchData.filteredNodes.filter((node) => inWork.has(node.session.id)) : [];
+    const movedToWork = inWork.size > 0 ? searchData.filteredNodes.filter((node) => inWork.has(node.session.sessionId)) : [];
     const sessionMatches = Math.max(0, searchData.matchedSessionCount - countSessionSearchMatches(movedToWork, args.normalizedQuery));
     return sessionMatches + searchData.folderNameMatchCount + (searchData.groupMatches ? 1 : 0);
   };
@@ -447,7 +448,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     // block, which counts the same trees.
     const excludeWork = !(args.keepWorkInGroup === true && !search);
     const sourceNodes = (search ? searchData?.filteredNodes ?? [] : group.sessions)
-      .filter((node) => !excludeWork || !inWork.has(node.session.id))
+      .filter((node) => !excludeWork || !inWork.has(node.session.sessionId))
       .sort((left, right) => compareNodes(left, right, pinned, args.sessionOrderIndex));
     const indexed = indexNodes(sourceNodes);
     const selectionPoolOffset = selectionDescendantIds.length;
@@ -490,7 +491,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
       .map((folder) => entryByIdentity.get(getSessionFolderIdentityKey(folder.scopeKey ?? '', folder.id)))
       .filter((entry): entry is FolderProjection => Boolean(entry));
     const sessionsInFolders = new Set(visibleFolders.flatMap((entry) => entry.folder.sessionIds));
-    const ungrouped = sourceNodes.filter((node) => !sessionsInFolders.has(node.session.id));
+    const ungrouped = sourceNodes.filter((node) => !sessionsInFolders.has(node.session.sessionId));
 
     const folderSessionsByIdentity = new Map<string, readonly Session[]>();
     const folderStack = roots.map((folder) => ({ folder, visited: false }));
@@ -528,7 +529,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
       // A collapsed parent hides child folders too. Reuse their indexed session
       // coverage, retaining tree roots so unread-subtask rules remain intact.
       const activityNodes = folderCollapsed && !group.isArchivedBucket
-        ? selectFolderRootNodes([...new Set(deleteSessions.map((session) => session.id))], indexed.byId)
+        ? selectFolderRootNodes([...new Set(deleteSessions.map((session) => session.sessionId))], indexed.byId)
         : [];
       const authority = ownerKey ? args.folderAuthorityByOwner.get(ownerKey) : undefined;
       const dropEnabled = Boolean(ownerKey)
@@ -558,7 +559,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     // Pinned sessions are the user's own always-on shortlist: they stay
     // visible whatever the reveal limit is, and they do not spend it.
     const isPinnedNode = (entry: SidebarEntry): boolean => !isRunEntry(entry) && limits?.pinnedAlwaysVisible === true
-      && isSessionPinned(pinned, entry.session.directory ?? group.directory, entry.session.id);
+      && isSessionPinned(pinned, resolveGlobalSessionDirectory(entry.session) ?? group.directory, entry.session.sessionId);
     // A run spends one slot of the reveal limit, whatever its lane count.
     const ungroupedEntries = collapseRunEntries(ungrouped, runIndex, group.isArchivedBucket === true);
     const limitedNodes = ungroupedEntries.filter((entry) => !isPinnedNode(entry));
@@ -628,10 +629,10 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
     selectionDescendantIds.push(...indexed.preorderIds);
     const ownerKey = getSessionFolderOwnerKey(first.projectId, first.groupDirectory);
     const metaById = new Map(entry.items.map((item) => [
-      item.node.session.id,
-      item.getSecondaryMeta ? item.getSecondaryMeta(item.node.session.id) : item.secondaryMeta,
+      item.node.session.sessionId,
+      item.getSecondaryMeta ? item.getSecondaryMeta(item.node.session.sessionId) : item.secondaryMeta,
     ]));
-    const badgeScopesById = new Map(entry.items.map((item) => [item.node.session.id, item.blockingBadgeSessionScopes]));
+    const badgeScopesById = new Map(entry.items.map((item) => [item.node.session.sessionId, item.blockingBadgeSessionScopes]));
     appendRun({ run: entry.run, lanes }, {
       nodes: lanes, containerKey, projectId: first.projectId, groupDirectory: first.groupDirectory,
       ownerKey, selectionScopeKey: scoped ? ownerKey : null, archived: false, renderContext,
@@ -691,7 +692,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
   }
 
   if (timelineMode) {
-    const timelineItems = (args.timelineItems ?? []).filter((item) => !inWork.has(item.node.session.id));
+    const timelineItems = (args.timelineItems ?? []).filter((item) => !inWork.has(item.node.session.sessionId));
     if (timelineItems.length > 0) {
       const collapsed = appendActivityHeader('timeline');
       if (!collapsed) appendActivityItems(timelineItems, 'activity:timeline', 'timeline', false);
@@ -700,7 +701,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
 
   if (!timelineMode && args.showRecentSection) {
     for (const recentSection of args.recentSections) {
-      const section = { ...recentSection, items: recentSection.items.filter((item) => !inWork.has(item.node.session.id)) };
+      const section = { ...recentSection, items: recentSection.items.filter((item) => !inWork.has(item.node.session.sessionId)) };
       if (section.items.length === 0) continue;
       const collapsed = appendActivityHeader('active-now');
       if (collapsed) continue;

@@ -1,4 +1,4 @@
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
 import { toast } from '@/components/ui';
 import { checkIsGitRepository, getGitStatus } from '@/lib/gitApi';
@@ -115,7 +115,7 @@ const resolveSourceBranch = async (directory: string, projectDirectory: string):
 // and move a running session.
 const assertSessionsIdle = (sessions: Session[]): void => {
   for (const session of sessions) {
-    const activity = getSessionLiveActivity(session.id);
+    const activity = getSessionLiveActivity(session.sessionId);
     if (activity === 'unknown') throw new Error('Session status is unavailable');
     if (activity === 'active') throw new Error('Session is not idle');
   }
@@ -152,16 +152,16 @@ const rollbackMovedSessions = async (
 ): Promise<RollbackFailure[]> => {
   const failures: RollbackFailure[] = [];
   for (const session of [...sessions].reverse()) {
-    if (isSessionBusyNow(session.id)) {
-      failures.push({ sessionId: session.id, error: new Error('Session is not idle') });
+    if (isSessionBusyNow(session.sessionId)) {
+      failures.push({ sessionId: session.sessionId, error: new Error('Session is not idle') });
       continue;
     }
     try {
       await moveSessionToDirectory(session, worktreeDirectory, sourceDirectory);
-      useSessionUIStore.getState().setWorktreeMetadata(session.id, previousMetadata.get(session.id) ?? null);
+      useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, previousMetadata.get(session.sessionId) ?? null);
     } catch (error) {
       failures.push({
-        sessionId: session.id,
+        sessionId: session.sessionId,
         error: error instanceof Error ? error : new Error(String(error)),
       });
     }
@@ -206,17 +206,17 @@ const moveSessionTreeTransaction = async (
     onMoveFailure?: (error: Error) => Promise<never>;
   }>,
 ): Promise<string> => {
-  if (useSessionMoveState.getState().pendingSessionIds.has(input.root.id)) {
+  if (useSessionMoveState.getState().pendingSessionIds.has(input.root.sessionId)) {
     throw new Error('Session move already in progress');
   }
-  setSessionMovePending(input.root.id, true);
+  setSessionMovePending(input.root.sessionId, true);
 
   try {
     const sessions = [...input.descendants, input.root];
     const previousMetadata = new Map(
       sessions.map((session) => [
-        session.id,
-        useSessionUIStore.getState().getWorktreeMetadata(session.id),
+        session.sessionId,
+        useSessionUIStore.getState().getWorktreeMetadata(session.sessionId),
       ]),
     );
     assertSessionsIdle(sessions);
@@ -241,8 +241,8 @@ const moveSessionTreeTransaction = async (
           throw error;
         }
         moved.push(session);
-        if (session.id === input.root.id) continue;
-        useSessionUIStore.getState().setWorktreeMetadata(session.id, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null);
+        if (session.sessionId === input.root.sessionId) continue;
+        useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null);
       }
     } catch (error) {
       const moveError = error instanceof Error ? error : new Error(String(error));
@@ -273,12 +273,12 @@ const moveSessionTreeTransaction = async (
       }
       throw moveError;
     }
-    useSessionUIStore.getState().setWorktreeMetadata(input.root.id, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null);
+    useSessionUIStore.getState().setWorktreeMetadata(input.root.sessionId, destination.metadata ? getLatestWorktreeMetadata(destination.metadata) : null);
 
     await refreshMovedDirectories(input.sourceDirectory, destination.directory);
     return destination.directory;
   } finally {
-    setSessionMovePending(input.root.id, false);
+    setSessionMovePending(input.root.sessionId, false);
   }
 };
 
@@ -378,6 +378,6 @@ const executeSessionTreeMove = (intent: SessionTreeMoveIntent): void => {
 };
 
 export const requestSessionTreeMove = (intent: SessionTreeMoveIntent): void => {
-  if (useSessionMoveState.getState().pendingSessionIds.has(intent.root.id)) return;
+  if (useSessionMoveState.getState().pendingSessionIds.has(intent.root.sessionId)) return;
   executeSessionTreeMove(intent);
 };

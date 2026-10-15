@@ -33,7 +33,7 @@ export async function openSessionFromRoute(sessionId: string): Promise<void> {
   if (latest.currentSessionId !== id) return;
 
   const session = [...snapshot.activeSessions, ...snapshot.archivedSessions]
-    .find((entry) => entry.id === id);
+    .find((entry) => entry.sessionId === id);
   if (!session) return;
 
   const directory = resolveGlobalSessionDirectory(session);

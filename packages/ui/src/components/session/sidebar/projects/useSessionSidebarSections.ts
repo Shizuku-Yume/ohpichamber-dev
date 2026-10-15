@@ -1,6 +1,6 @@
 import { matchesRankQuery } from '@/lib/search/fuzzySearch';
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { SessionGroup, SessionNode, GroupSearchData } from '../types';
 import { dedupeSessionsById, normalizePath } from '../utils';
 import type { WorktreeMetadata } from '@/types/worktree';
@@ -27,8 +27,8 @@ type ProjectSection = {
 
 type ProjectSectionCacheEntry = {
   project: ProjectItem;
-  activeSessions: Session[];
-  archivedSessions: Session[];
+  activeSessions: readonly Session[];
+  archivedSessions: readonly Session[];
   availableWorktrees: WorktreeMetadata[];
   rootBranch: string | null;
   /** Current branch of every worktree directory the section renders. */
@@ -53,12 +53,12 @@ const worktreeBranchesKeyFor = (
 // Ranks only order worktree groups, so a project without worktrees has none
 // to compare.
 const worktreeRanksKeyFor = (
-  sessions: Session[],
+  sessions: readonly Session[],
   worktrees: WorktreeMetadata[],
   sessionOrderRanks: ReadonlyMap<string, number>,
 ): string => worktrees.length === 0
   ? ''
-  : sessions.map((session) => sessionOrderRanks.get(session.id) ?? '').join(',');
+  : sessions.map((session) => sessionOrderRanks.get(session.sessionId) ?? '').join(',');
 
 const EMPTY_WORKTREES: WorktreeMetadata[] = [];
 
@@ -69,8 +69,8 @@ const EMPTY_GROUP_SEARCH_DATA = new WeakMap<SessionGroup, GroupSearchData>();
 
 type Args = {
   normalizedProjects: ProjectItem[];
-  getSessionsForProject: (projectId: string) => Session[];
-  getArchivedSessionsForProject: (projectId: string) => Session[];
+  getSessionsForProject: (projectId: string) => readonly Session[];
+  getArchivedSessionsForProject: (projectId: string) => readonly Session[];
   availableWorktreesByProject: Map<string, WorktreeMetadata[]>;
   projectRepoStatus: Map<string, boolean | null>;
   projectRootBranches: Map<string, string | null>;
@@ -79,7 +79,7 @@ type Args = {
   sessionOrderRanks: ReadonlyMap<string, number>;
   lastRepoStatus: boolean;
   buildGroupedSessions: (
-    sessions: Session[],
+    sessions: readonly Session[],
     projectRoot: string,
     availableWorktrees: WorktreeMetadata[],
     rootBranch: string | null,
@@ -125,7 +125,7 @@ export const useSessionSidebarSections = (args: Args) => {
     const nextCache = new Map<string, ProjectSectionCacheEntry>();
     let reusedSections = 0;
     let rebuiltSections = 0;
-    const sameSessions = (left: Session[], right: Session[]): boolean => (
+    const sameSessions = (left: readonly Session[], right: readonly Session[]): boolean => (
       left.length === right.length && left.every((session, index) => session === right[index])
     );
 

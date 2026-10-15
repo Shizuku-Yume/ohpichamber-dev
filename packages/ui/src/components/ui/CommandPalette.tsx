@@ -36,11 +36,10 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { getContextFileOpenFailureMessage, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
 import { toast } from '@/components/ui';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo, shortcutRegistry } from '@/lib/shortcuts';
 import { showOpenCodeStatus } from '@/lib/openCodeStatus';
-import { restartOpenCodeWithFeedback } from '@/lib/restartOpenCode';
 import { canUseElectronDesktopIPC, invokeDesktop, isDesktopShell, isWebRuntime } from '@/lib/desktop';
 import { SETTINGS_PAGE_METADATA, type SettingsRuntimeContext } from '@/lib/settings/metadata';
 
@@ -428,16 +427,6 @@ export const CommandPalette: React.FC = () => {
         }),
       },
     );
-      list.push({
-        id: 'restart-opencode',
-        secondary: true,
-        title: t('commandPalette.item.restartOpenCode'),
-        icon: <Icon name="restart" className="mr-2 h-4 w-4" />,
-        searchText: t('commandPalette.item.restartOpenCode'),
-        onSelect: run(() => {
-          void restartOpenCodeWithFeedback(t);
-        }),
-      });
     list.push({
       id: 'toggle-memory-debug',
       secondary: true,
@@ -524,7 +513,7 @@ export const CommandPalette: React.FC = () => {
   const orderedActiveSessions = React.useMemo(() => {
     // btw forks stay hidden until promoted to a full session; subagent
     // sessions are reached through their parent, not listed on their own.
-    const visibleSessions = activeSessions.filter((session) => !isBtwSession(session) && !session.parentID);
+    const visibleSessions = activeSessions.filter((session) => !isBtwSession(session) && !session.parentSessionId);
     return orderSessionsByLifecycleScopes(visibleSessions, pinnedSessionIds, sessionOrderRanks);
   }, [activeSessions, pinnedSessionIds, sessionOrderRanks]);
 
@@ -664,7 +653,7 @@ export const CommandPalette: React.FC = () => {
 
   const scoredSessions = React.useMemo(() => {
     if (!hasQuery) return orderedActiveSessions.slice(0, 5).map((item) => ({ item, score: 0 }));
-    return scoreByFuzzyQuery(orderedActiveSessions, liveTrimmed, (s) => s.title || '', {
+    return scoreByFuzzyQuery(orderedActiveSessions, liveTrimmed, (s) => s.metadata?.title || '', {
       limit: 7,
       threshold: 0.2,
     });
@@ -760,7 +749,7 @@ export const CommandPalette: React.FC = () => {
   const handleOpenSession = React.useCallback(
     (session: Session) => {
       close();
-      setCurrentSession(session.id, resolveGlobalSessionDirectory(session));
+      setCurrentSession(session.sessionId, resolveGlobalSessionDirectory(session));
     },
     [close, setCurrentSession],
   );
@@ -947,14 +936,14 @@ export const CommandPalette: React.FC = () => {
                 return (
                   <CommandGroup key="sessions" heading={t('commandPalette.group.sessions')}>
                     {visibleSessions.map((session) => {
-                      const title = session.title || t('commandPalette.session.untitled');
+                      const title = session.metadata?.title || t('commandPalette.session.untitled');
                       const dir = resolveGlobalSessionDirectory(session);
-                      const branch = branchForSession(session.id, dir);
+                      const branch = branchForSession(session.sessionId, dir);
                       const projectLabel = projectLabelForDirectory(dir);
                       return (
                         <CommandItem
-                          key={session.id}
-                          value={`session:${session.id}`}
+                          key={session.sessionId}
+                          value={`session:${session.sessionId}`}
                           onSelect={() => handleOpenSession(session)}
                         >
                           <Icon name="chat-ai-3" className="mr-2 h-4 w-4" />

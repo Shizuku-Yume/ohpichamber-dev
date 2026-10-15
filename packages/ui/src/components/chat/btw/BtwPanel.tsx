@@ -1,12 +1,12 @@
 import React from 'react';
 import { AnimatePresence } from 'motion/react';
 import { ComposerFloatingPanel } from '../composer/ui/ComposerFloatingPanel';
-import type { Message, Part } from '@/lib/opencode/model';
-import { getLastConversationRecord, isIncompleteAssistantTurn } from '@/lib/opencode/model';
+import type { Message } from '@openchamber/agent-contract';
 import { useI18n } from '@/lib/i18n';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui';
+import type { StreamPhase } from '../message/types';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { useBtwStore } from '@/stores/useBtwStore';
@@ -20,16 +20,16 @@ import {
 } from '@/sync/sync-context';
 import { useStreamingStore } from '@/sync/streaming';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
-import { destroyBtwSession, filterBtwTailMessages, promoteBtwSession, type BtwSessionRef } from '@/lib/btw';
+import { destroyBtwSession, promoteBtwSession, type BtwSessionRef } from '@/lib/btw';
 import type { BtwPanelState } from './useBtwPanelState';
 import { ChatSurfaceProvider } from '../ChatSurfaceContext';
 import { useMobileAutocompleteMaxHeight } from '../useMobileAutocompleteMaxHeight';
 import ChatMessage from '../ChatMessage';
-import { PermissionCard } from '../PermissionCard';
+import { CanonicalApprovalCard } from '../PermissionDock';
 import { FormCard } from '../FormCard';
 import { SessionErrorNotice } from '../SessionErrorNotice';
 
-const IDLE_SESSION_STATUS = { type: 'idle' as const };
+const IDLE_SESSION_STATUS = 'idle' as const;
 
 /**
  * The `/btw` peek panel.
@@ -64,7 +64,7 @@ const BtwPanelView: React.FC<{ parentSessionId: string; panel: BtwPanelState; on
                     btwSessionId: panel.btwSessionId,
                     directory: panel.btwDirectory,
                 }}
-                boundaryMessageID={panel.boundaryMessageID}
+                boundaryMessageId={panel.boundaryMessageID}
                 collapsed={panel.collapsed}
             />
         );
@@ -113,10 +113,10 @@ const useBtwDestroy = (sessionRef: BtwSessionRef | null): (() => void) => {
 };
 
 type BtwSessionData = {
-    messageRecords: Array<{ info: Message; parts: Part[] }>;
+    messageRecords: Message[];
     sessionIsWorking: boolean;
     streamingMessageId: string | null;
-    activeStreamingPhase: 'streaming' | 'cooldown' | 'completed' | null;
+    activeStreamingPhase: StreamPhase | null;
     sessionPermissions: ReturnType<typeof useScopedBlockingPermissions>;
     sessionForms: ReturnType<typeof useScopedBlockingForms>;
     isEmpty: boolean;
@@ -129,7 +129,7 @@ type BtwSessionData = {
 const useBtwSessionData = (
     sessionId: string,
     directory: string,
-    boundaryMessageID: string | null,
+    boundaryMessageId: string | null,
 ): BtwSessionData => {
     const sync = useSync();
     const renderable = useSessionRenderable(sessionId, directory);
@@ -154,22 +154,20 @@ const useBtwSessionData = (
     const sessionForms = useScopedBlockingForms(sessionId, directory);
 
     const tailRecords = React.useMemo(
-        () => filterBtwTailMessages(messageRecords, boundaryMessageID),
-        [boundaryMessageID, messageRecords],
+        () => {
+            if (!boundaryMessageId) return messageRecords;
+            const boundaryIndex = messageRecords.findIndex((message) => message.messageId === boundaryMessageId);
+            return boundaryIndex < 0 ? messageRecords : messageRecords.slice(boundaryIndex + 1);
+        },
+        [boundaryMessageId, messageRecords],
     );
 
     const sessionIsWorking = React.useMemo(() => {
         if (sessionPermissions.length > 0 || sessionForms.length > 0) {
             return false;
         }
-        const statusType = status.type ?? 'idle';
-        if (statusType === 'busy' || statusType === 'retry') {
-            return true;
-        }
-        // Plumbing roles trail the assistant message, so the working state
-        // follows the last conversation message, not the last record.
-        return isIncompleteAssistantTurn(getLastConversationRecord(tailRecords)?.info);
-    }, [sessionPermissions.length, sessionForms.length, status.type, tailRecords]);
+        return status === 'running';
+    }, [sessionPermissions.length, sessionForms.length, status]);
 
     return {
         messageRecords: tailRecords,
@@ -279,9 +277,9 @@ const BtwFrame: React.FC<{
 
 const BtwSheet: React.FC<{
     sessionRef: BtwSessionRef;
-    boundaryMessageID: string | null;
+    boundaryMessageId: string | null;
     collapsed: boolean;
-}> = ({ sessionRef, boundaryMessageID, collapsed }) => {
+}> = ({ sessionRef, boundaryMessageId, collapsed }) => {
     const { t } = useI18n();
     const handleDestroy = useBtwDestroy(sessionRef);
     const setCollapsed = React.useCallback((next: boolean) => {
@@ -339,7 +337,7 @@ const BtwSheet: React.FC<{
                 <BtwExpandedSheet
                     key="expanded"
                     sessionRef={sessionRef}
-                    boundaryMessageID={boundaryMessageID}
+                    boundaryMessageId={boundaryMessageId}
                     actions={actions}
                     onTitleClick={handleToggleCollapsed}
                     titleClickLabel={toggleLabel}
@@ -361,7 +359,7 @@ const BtwCollapsedStrip: React.FC<{
     expandLabel: string;
 }> = ({ sessionRef, actions, onExpand, expandLabel }) => {
     const status = useSessionStatus(sessionRef.btwSessionId, sessionRef.directory) ?? IDLE_SESSION_STATUS;
-    const isBusy = status.type === 'busy' || status.type === 'retry';
+    const isBusy = status === 'running';
     return (
         <BtwFrame
             actions={actions}
@@ -375,12 +373,12 @@ const BtwCollapsedStrip: React.FC<{
 
 const BtwExpandedSheet: React.FC<{
     sessionRef: BtwSessionRef;
-    boundaryMessageID: string | null;
+    boundaryMessageId: string | null;
     actions: React.ReactNode;
     onTitleClick: () => void;
     titleClickLabel: string;
-}> = ({ sessionRef, boundaryMessageID, actions, onTitleClick, titleClickLabel }) => {
-    const data = useBtwSessionData(sessionRef.btwSessionId, sessionRef.directory, boundaryMessageID);
+}> = ({ sessionRef, boundaryMessageId, actions, onTitleClick, titleClickLabel }) => {
+    const data = useBtwSessionData(sessionRef.btwSessionId, sessionRef.directory, boundaryMessageId);
     const bodyRef = React.useRef<HTMLDivElement | null>(null);
     const contentRef = React.useRef<HTMLDivElement | null>(null);
     const handleBodyScroll = useAutoScroll(bodyRef, contentRef, !data.isEmpty);
@@ -444,23 +442,23 @@ const BtwMessages: React.FC<{
             <div ref={contentRef}>
                 {data.messageRecords.map((record, index) => (
                     <ChatMessage
-                        key={record.info.id}
+                        key={record.messageId}
                         message={record}
                         previousMessage={data.messageRecords[index - 1]}
                         nextMessage={data.messageRecords[index + 1]}
                         isInActiveTurn={index === data.messageRecords.length - 1}
                         activeStreamingPhase={
-                            record.info.id === data.streamingMessageId ? data.activeStreamingPhase : null
+                            record.messageId === data.streamingMessageId ? data.activeStreamingPhase : null
                         }
                     />
                 ))}
                 {data.sessionForms.length > 0 || data.sessionPermissions.length > 0 ? (
                     <div>
                         {data.sessionForms.map((form) => (
-                            <FormCard key={form.id} form={form} />
+                            <FormCard key={form.questionId} form={form} />
                         ))}
                         {data.sessionPermissions.map((permission) => (
-                            <PermissionCard key={permission.id} permission={permission} />
+                            <CanonicalApprovalCard key={permission.approvalId} permission={permission} />
                         ))}
                     </div>
                 ) : null}

@@ -1,3 +1,4 @@
+import type { ToolCallPart } from '@openchamber/agent-contract';
 import { z } from 'zod';
 import { getRelativeFilePath, normalizeFilePath, toAbsoluteFilePath } from '@/lib/path-utils';
 import {
@@ -36,7 +37,6 @@ const metadataSchema = z.object({
     filediff: fileSchema.optional().catch(undefined),
     patch: patchSchema.optional().catch(undefined),
     diff: patchSchema.optional().catch(undefined),
-    sessionID: optionalText,
     sessionId: optionalText,
     exit: z.number().optional().catch(undefined),
 });
@@ -117,6 +117,12 @@ export function summarizeLiveActivity(messages: readonly ChatMessageEntry[]): Li
     const changedFiles = new Map<string, FileChangeRecord>();
     const subagents = new Set<string>();
     const seenCalls = new Set<string>();
+    const callsById = new Map<string, ToolCallPart>();
+    for (const message of messages) {
+        for (const part of message.parts) {
+            if (part.type === 'tool_call') callsById.set(part.toolCallId, part);
+        }
+    }
     for (const message of messages) {
         // v2 assistant messages carry no working directory, and tool inputs
         // arrive already resolved, so paths are used as the tool reported them.
@@ -136,27 +142,26 @@ export function summarizeLiveActivity(messages: readonly ChatMessageEntry[]): Li
         // Windows drive and UNC paths compare case-insensitively.
         const keyOf = (canonical: string) => /^([A-Za-z]:\/|\/\/)/.test(canonical) ? canonical.toLowerCase() : canonical;
         for (const part of message.parts) {
-            if (part.type !== 'tool') continue;
-            const callKey = `${message.info.id}:${part.callID || part.id}`;
+            if (part.type !== 'tool_result') continue;
+            const callKey = part.toolCallId;
             if (seenCalls.has(callKey)) continue;
             seenCalls.add(callKey);
-            const state = part.state;
-            if (state.status !== 'completed' && state.status !== 'error') continue;
-            const tool = part.tool;
-            const metadata = metadataSchema.safeParse(state.metadata).data;
-            if (isShellTool(tool) && (state.status === 'completed' || metadata?.exit !== undefined)) {
+            const call = callsById.get(callKey);
+            const tool = part.toolName;
+            const metadata = metadataSchema.safeParse(part.output).data;
+            if (isShellTool(tool) && (!part.isError || metadata?.exit !== undefined)) {
                 summary.commands++;
             }
-            if (state.status !== 'completed') continue;
+            if (part.isError) continue;
             summary.explored ||= isExplorationTool(tool);
             summary.researched ||= isWebTool(tool);
             if (isSubagentTool(tool)) {
-                const childSession = metadata?.sessionID ?? metadata?.sessionId;
+                const childSession = metadata?.sessionId;
                 if (childSession) subagents.add(childSession);
             }
             if (!isFileChangeTool(tool)) continue;
 
-            const input = inputSchema.safeParse(state.input).data;
+            const input = inputSchema.safeParse(call?.input).data;
             if (metadata?.files?.some((file) => file === null)) summary.hasCompleteDiff = false;
             const entries = metadata?.files?.filter((file) => file !== null);
             const files = entries?.length ? entries : [metadata?.filediff ?? {}];

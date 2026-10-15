@@ -1,6 +1,6 @@
 import React from 'react';
 import { animate, type AnimationPlaybackControls } from 'motion';
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 import { cn } from '@/lib/utils';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from '@/components/icon/Icon';
@@ -19,8 +19,6 @@ import { useReasoningReveal } from '@/components/chat/search/reasoningReveal';
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
 const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
-
-type PartWithText = Part & { text?: string; content?: string; time?: { start?: number; end?: number } };
 
 type ReasoningVariant = 'thinking' | 'justification';
 
@@ -519,30 +517,24 @@ const ReasoningPart = React.memo(({
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
     const expandWhileStreaming = useUIStore((state) => state.expandReasoningWhileStreaming);
     const revealRequest = useReasoningReveal(messageId);
-    const partWithText = part as PartWithText;
-    const rawText = partWithText.text || partWithText.content || '';
+    const rawText = part.type === 'reasoning' ? part.content : '';
     const textContent = React.useMemo(() => cleanReasoningText(rawText), [rawText]);
-    const time = partWithText.time;
-    // Live activity derives from the live stream phase, never from the absence
-    // of persisted timing data: cached parts may lack `time.end` even though
-    // the message finished long ago (issue #2020). A part that has ended is
-    // never streaming, even while the rest of the message still streams.
+    // Canonical reasoning parts have no persisted timing data.
     const isLiveStreamPhase = streamPhase === 'streaming' || streamPhase === 'cooldown';
-    const isStreaming = chatRenderMode === 'live' && isLiveStreamPhase && typeof time?.end !== 'number';
+    const isStreaming = part.type === 'reasoning' && chatRenderMode === 'live' && isLiveStreamPhase;
     const throttledTextRaw = useStreamingTextThrottle({
         text: textContent,
         isStreaming,
-        identityKey: `${messageId}:${part.id ?? 'reasoning'}`,
+        identityKey: `${messageId}:${part.partId}`,
     });
     // Same block-level reveal as assistant text: a shown reasoning paragraph
     // never mutates in place.
     const throttledText = isStreaming ? commitStreamedText(throttledTextRaw) : throttledTextRaw;
 
-    // Show reasoning even if time.end isn't set yet (during streaming).
     // While genuinely streaming, keep the block mounted even before the
     // block-level reveal commits a first line, so the busy header appears
     // immediately instead of waiting on committed text.
-    if (!isStreaming && (!throttledText || throttledText.trim().length === 0)) {
+    if (part.type !== 'reasoning' || (!isStreaming && (!throttledText || throttledText.trim().length === 0))) {
         return null;
     }
 
@@ -550,8 +542,7 @@ const ReasoningPart = React.memo(({
         <ReasoningTimelineBlock
             text={throttledText}
             variant="thinking"
-            blockId={part.id || `${messageId}-reasoning`}
-            time={time}
+            blockId={part.partId || `${messageId}-reasoning`}
             isStreaming={isStreaming}
             expandWhileStreaming={expandWhileStreaming}
             revealRequest={revealRequest}

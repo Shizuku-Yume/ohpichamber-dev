@@ -2,7 +2,7 @@ import React from 'react';
 
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { getSessionGoal } from '@/lib/sessionGoalMetadata';
 import { sessionGoalStatusColor, sessionGoalStatusLabelKey } from '@/lib/sessionGoalPresentation';
 import type { PendingRequestCounts } from './usePendingRequestCounts';

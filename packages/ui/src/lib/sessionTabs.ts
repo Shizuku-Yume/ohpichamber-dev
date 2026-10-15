@@ -17,12 +17,12 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 export const activateSessionTabByIndex = (index: number): boolean => {
   const { tabIds } = useSessionTabsStore.getState();
   const sessionsById = new Map(
-    useGlobalSessionsStore.getState().activeSessions.map((session) => [session.id, session] as const),
+    useGlobalSessionsStore.getState().activeSessions.map((session) => [session.sessionId, session] as const),
   );
   const renderable = tabIds.filter((id) => sessionsById.has(id));
   const session = renderable[index] ? sessionsById.get(renderable[index]) : null;
   if (!session) return false;
-  useSessionUIStore.getState().setCurrentSession(session.id, resolveGlobalSessionDirectory(session));
+  useSessionUIStore.getState().setCurrentSession(session.sessionId, resolveGlobalSessionDirectory(session));
   return true;
 };
 
@@ -35,7 +35,7 @@ export const activateAdjacentSessionTab = (delta: -1 | 1): boolean => {
   const { tabIds } = useSessionTabsStore.getState();
   const { currentSessionId, setCurrentSession } = useSessionUIStore.getState();
   const sessionsById = new Map(
-    useGlobalSessionsStore.getState().activeSessions.map((session) => [session.id, session] as const),
+    useGlobalSessionsStore.getState().activeSessions.map((session) => [session.sessionId, session] as const),
   );
   const renderable = tabIds.filter((id) => sessionsById.has(id));
   if (!currentSessionId || renderable.length < 2) return false;
@@ -44,7 +44,7 @@ export const activateAdjacentSessionTab = (delta: -1 | 1): boolean => {
   const nextId = renderable[(index + delta + renderable.length) % renderable.length];
   const next = sessionsById.get(nextId);
   if (!next) return false;
-  setCurrentSession(next.id, resolveGlobalSessionDirectory(next));
+  setCurrentSession(next.sessionId, resolveGlobalSessionDirectory(next));
   return true;
 };
 
@@ -55,14 +55,14 @@ export const closeSessionTabAndActivateNeighbour = (sessionId: string): void => 
   const { currentSessionId, setCurrentSession, openNewSessionDraft } = useSessionUIStore.getState();
   if (sessionId === currentSessionId) {
     const sessionsById = new Map(
-      useGlobalSessionsStore.getState().activeSessions.map((session) => [session.id, session] as const),
+      useGlobalSessionsStore.getState().activeSessions.map((session) => [session.sessionId, session] as const),
     );
     const renderable = tabIds.filter((id) => sessionsById.has(id));
     const index = renderable.indexOf(sessionId);
     const neighbourId = renderable[index + 1] ?? renderable[index - 1] ?? null;
     const neighbour = neighbourId ? sessionsById.get(neighbourId) : null;
     if (neighbour) {
-      setCurrentSession(neighbour.id, resolveGlobalSessionDirectory(neighbour));
+      setCurrentSession(neighbour.sessionId, resolveGlobalSessionDirectory(neighbour));
     } else {
       openNewSessionDraft();
     }

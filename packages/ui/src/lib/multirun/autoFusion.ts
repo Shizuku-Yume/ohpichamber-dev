@@ -4,6 +4,7 @@ import { toast } from '@/components/ui';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useI18n } from '@/lib/i18n';
+import { findCatalogModel } from '@/lib/opencode/model';
 import { NoFusionOutputsError, startRunFusion, type FusionJudge } from './fusion';
 import type { MultiRunSummary } from './runs';
 import { useMultiRunSessions } from './useMultiRuns';
@@ -11,11 +12,11 @@ import { RUN_LAUNCHER_ID } from './launcher';
 
 /** Resolves the judge's display name and context window from the provider catalog. */
 export const resolveFusionJudge = (selection: FusionJudge): FusionJudge => {
-  const model = useConfigStore.getState().getProviderModel(selection.providerId, selection.modelId);
+  const model = findCatalogModel(useConfigStore.getState().providers.find((provider) => provider.id === selection.providerId)?.models, selection.modelId);
   return {
     ...selection,
     modelName: model?.name || selection.modelId,
-    contextLimit: model?.contextWindow || undefined,
+    contextLimit: model?.limit.context || undefined,
   };
 };
 

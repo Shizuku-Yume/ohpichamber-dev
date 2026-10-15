@@ -1,42 +1,18 @@
-import type { Part } from '@/lib/opencode/model';
-
-type TextLikePart = Part & { text?: string; content?: string };
-type UserTextPart = Part & { text?: string; content?: string; shellAction?: { output?: unknown; command?: unknown } };
+import type { Part } from '@openchamber/agent-contract';
 
 export const flattenAssistantTextParts = (parts: Part[]): string => {
     const textParts = parts
-        .filter((part): part is TextLikePart => part?.type === 'text')
-        .map((part) => (part.text || part.content || '').trim())
+        .filter((part): part is Extract<Part, { type: 'text' }> => part.type === 'text')
+        .map((part) => part.content.trim())
         .filter((text) => text.length > 0);
 
     return textParts.join('\n\n');
 };
 
 export const flattenUserTextParts = (parts: Part[]): string => {
-    const textParts = parts.filter((part): part is UserTextPart => part?.type === 'text');
-
-    const shellOutputs = textParts
-        .map((part) => {
-            const output = part.shellAction?.output;
-            return typeof output === 'string' ? output.trim() : '';
-        })
-        .filter((output) => output.length > 0);
-    if (shellOutputs.length > 0) {
-        return shellOutputs.join('\n\n');
-    }
-
-    const shellCommands = textParts
-        .map((part) => {
-            const command = part.shellAction?.command;
-            return typeof command === 'string' ? command.trim() : '';
-        })
-        .filter((command) => command.length > 0);
-    if (shellCommands.length > 0) {
-        return shellCommands.join('\n');
-    }
-
-    const plainTexts = textParts
-        .map((part) => (part.text || part.content || '').trim())
+    const plainTexts = parts
+        .filter((part): part is Extract<Part, { type: 'text' }> => part.type === 'text')
+        .map((part) => part.content.trim())
         .filter((text) => text.length > 0);
     return plainTexts.join('\n\n');
 };

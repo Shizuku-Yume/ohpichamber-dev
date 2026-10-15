@@ -6,10 +6,9 @@ import React from 'react';
 import { create } from 'zustand';
 import { z } from 'zod';
 
-import { listSpaces, type SpaceEntry, type SpaceFailure, type SpaceGrant } from './spaces-api';
+import { listSpaces, type SpaceEntry, type SpaceFailure, type SpaceGrant, type SpaceCreationStep } from './spaces-api';
 import { spaceIdOfDirectory } from './space-route';
 import { normalizePath } from '@/lib/pathNormalization';
-import type { SpaceProgress } from '@/sync/event-pipeline';
 
 /**
  * How the last answer of a space stood when the host merged the list: `complete`, `partial`
@@ -37,6 +36,10 @@ export const spaceMarkSchema = z.object({
 });
 
 export type SpaceAccessFailure = { provider: string; code: string; message: string };
+
+type SpaceProgress =
+  | { spaceId: string; step: SpaceCreationStep; failure: null }
+  | { spaceId: string; step: 'failed'; failure: SpaceFailure };
 
 /** The model access a creation in this window gives once the space is ready, while and after it does. */
 type SpaceCreationAccess = { kind: 'giving' } | { kind: 'failed'; failures: readonly SpaceAccessFailure[] };

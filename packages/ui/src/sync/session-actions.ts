@@ -49,6 +49,13 @@ import type { State } from "./types"
 
 async function readCanonicalSession(sessionId: string, runtimeKey: string): Promise<CanonicalSession> {
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+  const knownChild = getGlobalSessionSnapshot(sessionId) ?? findLiveSession(sessionId)
+  if (knownChild?.parentSessionId) {
+    const history = await canonicalClient.getHistory(sessionId)
+    if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+    if (history.sessionId !== sessionId) throw new Error("Session history identified another session")
+    return knownChild
+  }
   const snapshot = await canonicalClient.getSession(sessionId)
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   const metadata = await canonicalClient.getSessionMetadata(sessionId)
@@ -1851,8 +1858,10 @@ async function inheritForkMetadata(sourceSessionId: string, forkedSession: Canon
     if (isStaleRuntime(expectedRuntimeKey)) return
     if (!written) await patchSessionMetadata(forkedSession.sessionId, directory, (metadata) => {
       const native = SessionMetadataSchema.parse(metadata)
-      if (native.openchamber?.goal?.id !== goal.id) return metadata
-      return { ...native, openchamber: { ...native.openchamber, goal: { ...native.openchamber.goal, objective, objectiveFile: false } } }
+      const openchamber = native.openchamber
+      const nativeGoal = openchamber?.goal
+      if (!openchamber || !nativeGoal || nativeGoal.id !== goal.id) return metadata
+      return { ...native, openchamber: { ...openchamber, goal: { ...nativeGoal, objective, objectiveFile: false } } }
     }, expectedRuntimeKey)
   } catch (error) {
     if (!isStaleRuntime(expectedRuntimeKey)) console.warn("[session-actions] fork metadata inheritance failed", error)

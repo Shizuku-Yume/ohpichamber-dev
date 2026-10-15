@@ -8,7 +8,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { createMessageQueueTarget, getMessageQueueKey, useMessageQueueStore, type QueuedContextPart, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
-import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useSessionUIStore, type CanonicalSkillMentions } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { prepareLocalAttachments, useDraftAttachedFiles, useInputStore, type SyntheticContextPart } from '@/sync/input-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -104,11 +104,12 @@ import { useGuestsStore } from '@/lib/guests/store';
 import { isGuestActive } from '@/lib/guests/capabilities';
 import { routeGuestSlashCommand } from './composer/submit/guestCommands';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
-import type { CanonicalSkillMentions as SkillMentions } from '@/sync/session-ui-store';
-import { buildSkillMentionInstruction } from '@/lib/skillMentionInstruction';
+import { expandCanonicalSkills } from '@/sync/session-ui-store';
 import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
 import { selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { useGitStore } from '@/stores/useGitStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { usePermissionStore } from '@/stores/permissionStore';
 import { cyclePermissionMode } from './permissionAutoAccept';
@@ -502,10 +503,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const immediateBtwSubmitRef = React.useRef<{ identity: ChatDraftIdentity; text: string } | null>(null);
     const draftCaretModeRef = React.useRef({ btw: isBtwActive, atEnd: isBtwActive });
     const inputMode = isBtwActive ? 'normal' : storedInputMode;
-    // A session promoted out of `/btw` keeps the boundary instructions in its
-    // transcript — there is no way to delete a message part — so it has to say
-    // they no longer apply.
-    const isPromotedBtwSession = btwPanel.parentPromoted;
     const activeRuntimeKey = getRuntimeKey();
     const isNewChatDraft = useSessionUIStore((s) => (
         !columnPinned && !currentSessionId && Boolean(s.newSessionDraft?.open) && s.newSessionDraft.target === 'chat'
@@ -1382,8 +1379,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const availableSkillNames = new Set(
             selectSkillsForDirectory(useSkillsStore.getState(), currentDirectory).map((skill) => skill.name),
         );
-        const skillInstruction = buildSkillMentionInstruction(collectInlineSkillMentions(sanitizedText, availableSkillNames));
-        // The server delivers `text` as is, so its
+        const queuedSkillNames = collectInlineSkillMentions(sanitizedText, availableSkillNames);
+        const skillInstruction = queueSessionId
+            ? await expandCanonicalSkills(queueSessionId, queuedSkillNames)
+            : null;
         // snippets expand now; `content` keeps them for editing.
         const textToQueue = await useSnippetsStore.getState().expandText(sanitizedText).catch((error) => {
             console.warn('[queue] Failed to expand snippets, queueing original text:', error);
@@ -1809,7 +1808,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         variant: capturedSendConfig?.variant ?? currentVariant ?? undefined,
                     }, {
                         fork: sessionActions.forkFromLastCompletedTurn,
-                        directoryFor: (session) => useSessionUIStore.getState().getDirectoryForSession(session.id) || session.directory || null,
+                        directoryFor: (session) => useSessionUIStore.getState().getDirectoryForSession(session.sessionId) || currentDirectory || null,
                         send: (text, selection, target) => useSessionUIStore.getState().sendMessage(
                             text,
                             selection.providerID,
@@ -1853,7 +1852,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             draftSnapshot?: NonNullable<typeof capturedDraftSnapshot>;
             historySubmissions?: InputHistorySubmission[];
             delivery?: 'steer';
-            skills?: SkillMentions;
+            skills?: CanonicalSkillMentions;
         } | undefined;
         if (isBtwActive && btwSessionId && btwDirectory) {
             sendMessageOptions = {
@@ -1952,7 +1951,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             composerAttachments: attachedFiles,
             inlineComments: expandedDrafts,
             syntheticTexts: [
-                ...buildBtwSyntheticTexts({ isBtwActive, isPromotedBtwSession }),
+                ...buildBtwSyntheticTexts({ isBtwActive }),
                 ...(syntheticParts?.map((part) => part.text) ?? []),
             ],
             references: isBtwActive ? [] : linkedReferences.map(toContextReference),
@@ -1980,7 +1979,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         if (skillNames.length > 0) {
             sendMessageOptions = {
                 ...sendMessageOptions,
-                skills: { names: skillNames, instructionFor: buildSkillMentionInstruction },
+                skills: { names: skillNames },
             };
         }
 
@@ -2115,10 +2114,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     expectedRuntimeKey: submitRuntimeKey,
                     question: primaryText,
                     directory: targetDirectory,
-                    providerID: providerIdToSend,
-                    modelID: modelIdToSend,
-                    agent: agentNameToSend,
-                    variant: variantToSend,
+                    providerId: providerIdToSend,
+                    modelId: modelIdToSend,
+                    agentId: agentNameToSend,
                     attachments: sendableAttachments,
                     additionalParts,
                     skills: sendMessageOptions?.skills,
@@ -2129,11 +2127,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     useBtwStore.getState().clearPanelState(currentSessionId);
                     return;
                 }
-                const forkDirectory = fork.directory ?? targetDirectory;
-                migrateDraft(chatDraftIdentity, createChatDraftIdentity(activeRuntimeKey, forkDirectory, fork.id));
+                const forkDirectory = targetDirectory;
+                migrateDraft(chatDraftIdentity, createChatDraftIdentity(activeRuntimeKey, forkDirectory, fork.sessionId));
                 if (inlineDraftTarget) {
                     const drafts = useInlineCommentDraftStore.getState();
-                    drafts.restoreDrafts({ directory: forkDirectory, sessionKey: fork.id }, drafts.consumeDrafts(inlineDraftTarget));
+                    drafts.restoreDrafts({ directory: forkDirectory, sessionKey: fork.sessionId }, drafts.consumeDrafts(inlineDraftTarget));
                 }
                 useBtwStore.getState().setPanelState(currentSessionId, { pending: false, creating: false, pendingSend: undefined });
                 scrollToBottom?.();

@@ -8,7 +8,7 @@
  * into the fork's composer, where the user now is.
  */
 
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { ChatDraftIdentity } from '@/lib/chatDraftPersistence';
 
 export interface ForkSendSelection {
@@ -42,11 +42,11 @@ export async function runForkCommand(
 
     const directory = deps.directoryFor(forked);
     try {
-        await deps.send(text, selection, { sessionId: forked.id, directory: directory ?? undefined });
+        await deps.send(text, selection, { sessionId: forked.sessionId, directory: directory ?? undefined });
         return 'sent';
     } catch (error) {
         console.error('Failed to send the /fork message:', error);
-        const target = deps.draftIdentity(directory, forked.id);
+        const target = deps.draftIdentity(directory, forked.sessionId);
         if (target) deps.restoreText(target, text);
         return 'send-failed';
     }

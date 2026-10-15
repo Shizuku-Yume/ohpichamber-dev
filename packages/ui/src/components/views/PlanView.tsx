@@ -24,6 +24,7 @@ import { getResolvedShikiTheme } from '@/lib/shiki/appThemeRegistry';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -159,13 +160,12 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
 
   const session = React.useMemo(() => {
     if (!currentSessionId) return null;
-    return sessions.find((s) => s.id === currentSessionId) ?? null;
+    return sessions.find((s) => s.sessionId === currentSessionId) ?? null;
   }, [currentSessionId, sessions]);
 
   const sessionDirectory = React.useMemo(() => {
-    const raw = typeof session?.directory === 'string' ? session.directory : '';
-    return normalize(raw || '');
-  }, [session?.directory]);
+    return normalize(session ? resolveGlobalSessionDirectory(session) ?? '' : '');
+  }, [session]);
   const projectDirectory = React.useMemo(
     () => normalize(effectiveDirectory || sessionDirectory),
     [effectiveDirectory, sessionDirectory],
@@ -718,15 +718,16 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
           directoryHint = created.path;
         } else {
           const sessionResult = await createSession(undefined, sendTargetProject.path, undefined, {
-            model: { providerID: execution.providerID, id: execution.modelID, variant: execution.variant || undefined },
+            model: { providerId: execution.providerID, modelId: execution.modelID },
             agent: execution.agent.trim() || undefined,
+            variant: execution.variant || undefined,
           });
-          if (!sessionResult?.id) {
+          if (!sessionResult?.sessionId) {
             return;
           }
-          sessionId = sessionResult.id;
-          directoryHint = sessionResult.directory ?? sendTargetProject.path;
-          initializeNewOpenChamberSession(sessionResult.id, useConfigStore.getState().agents ?? []);
+          sessionId = sessionResult.sessionId;
+          directoryHint = resolveGlobalSessionDirectory(sessionResult) ?? sendTargetProject.path;
+          initializeNewOpenChamberSession(sessionResult.sessionId, useConfigStore.getState().agents ?? []);
         }
 
         if (!sessionId) {

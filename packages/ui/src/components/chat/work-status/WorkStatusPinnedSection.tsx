@@ -3,9 +3,8 @@ import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import { useDirectorySync, useSession } from '@/sync/sync-context';
-import { opencodeClient } from '@/lib/opencode/client';
-import type { Part } from '@/lib/opencode/model';
+import { useDirectorySync, useSession, useSyncRuntime } from '@/sync/sync-context';
+import type { Part } from '@openchamber/agent-contract';
 import { readMessageFocusInFlight, requestMessageFocus, subscribeMessageFocusStatus } from '@/lib/router/messageFocus';
 import { getContextObligatoryMessages } from '@/lib/contextObligatoryMessages';
 import { setContextObligatoryMessage } from '@/sync/session-actions';
@@ -26,7 +25,7 @@ type Props = {
 const firstText = (parts: readonly Part[] | undefined): string | null => {
   const text = (parts ?? []).find(
     (part): part is Extract<Part, { type: 'text' }> => part.type === 'text',
-  )?.text;
+  )?.content;
   if (!text) return null;
   const plain = text
     .replace(/^\s*(`{3,}|~{3,})[^\n]*$/gm, '')
@@ -47,22 +46,25 @@ const firstText = (parts: readonly Part[] | undefined): string | null => {
 export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory }) => {
   const { t } = useI18n();
   const session = useSession(sessionId ?? '', directory ?? undefined);
+  const { client, runtimeKey } = useSyncRuntime();
   const entries = React.useMemo(() => getContextObligatoryMessages(session), [session]);
   // Select only the pinned texts. Selecting the whole part map would re-render
   // on every streamed part and, through this render's closures, keep every
   // evicted transcript's parts alive for as long as the section is mounted.
-  const loadedTexts = useDirectorySync(useShallow((state: State) => entries.map((entry) => firstText(state.part[entry.id]))));
+  const loadedTexts = useDirectorySync(useShallow((state: State) => entries.map((entry) =>
+    firstText((sessionId ? state.message[sessionId] : undefined)?.find((message) => message.messageId === entry.id)?.parts),
+  )), directory ?? undefined);
   const [busyId, setBusyId] = React.useState<string | null>(null);
 
   // Pins are most useful on a long session, which is exactly when the pinned
   // message sits before the loaded part of the transcript. Such a pin reads
-  // its one message from OpenCode instead: no session is materialised for it,
-  // and a pin that is loaded costs nothing. A failed read leaves the
+  // its message from canonical history instead: no session is materialised
+  // for it, and a pin that is loaded costs nothing. A failed read leaves the
   // placeholder and is not retried until the section mounts again.
   const [fetched, setFetched] = React.useState<{ key: string; texts: ReadonlyMap<string, string | null> }>(
     () => ({ key: '', texts: new Map() }),
   );
-  const fetchKey = `${sessionId ?? ''}\u0000${directory ?? ''}`;
+  const fetchKey = JSON.stringify([runtimeKey, sessionId, directory]);
   const fetchedTexts = fetched.key === fetchKey ? fetched.texts : null;
   const unresolvedIds = entries
     .filter((entry, index) => loadedTexts[index] === null && !fetchedTexts?.has(entry.id))
@@ -72,21 +74,35 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
     if (!sessionId || !unresolvedKey) return;
     let cancelled = false;
     const ids = unresolvedKey.split(' ');
-    void Promise.all(ids.map((id) => opencodeClient.getSessionMessage(sessionId, id, directory)
-      .then((message) => firstText(message.parts))
-      .catch(() => null)))
+    const readPinnedTexts = async (): Promise<Map<string, string | null>> => {
+      const texts = new Map<string, string | null>();
+      const wanted = new Set(ids);
+      let cursor: string | undefined;
+      do {
+        const page = await client.getHistory(sessionId, { cursor });
+        if (cancelled) return texts;
+        for (const message of page.messages) {
+          if (!wanted.delete(message.messageId)) continue;
+          texts.set(message.messageId, firstText(message.parts));
+        }
+        cursor = page.nextCursor ?? undefined;
+      } while (wanted.size > 0 && cursor);
+      for (const id of wanted) texts.set(id, null);
+      return texts;
+    };
+    void readPinnedTexts().catch(() => new Map(ids.map((id) => [id, null])))
       .then((texts) => {
         if (cancelled) return;
         setFetched((current) => {
           const next = new Map(current.key === fetchKey ? current.texts : []);
-          ids.forEach((id, index) => next.set(id, texts[index]));
+          for (const [id, text] of texts) next.set(id, text);
           return { key: fetchKey, texts: next };
         });
       });
     return () => {
       cancelled = true;
     };
-  }, [directory, fetchKey, sessionId, unresolvedKey]);
+  }, [client, fetchKey, sessionId, unresolvedKey]);
 
   const pinned = React.useMemo(
     () => entries.map((entry, index) => ({ id: entry.id, text: loadedTexts[index] ?? fetchedTexts?.get(entry.id) ?? null })),

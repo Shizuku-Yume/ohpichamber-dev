@@ -30,14 +30,7 @@ type WorkStatusContextUsage =
 /** The store's own fallback when a model exposes no context limit. */
 export const DEFAULT_CONTEXT_LIMIT = 200_000;
 
-/**
- * Usage from the newest assistant message that reported a non-zero token count,
- * or `compacted` when a finished compaction is newer than any such message
- * (see `findLatestContextFill`). The latest turn describes the current fill —
- * not a sum across turns. Within a turn, the server-reported `total` is the
- * final round-trip's window; summing the breakdown fields instead overstates
- * multi-step turns, whose input/cache fields accumulate across round-trips.
- */
+/** Usage from the newest canonical assistant message with reported usage. */
 export const computeContextUsage = (
   messages: readonly ContextFillMessage[],
   contextLimit: number,
@@ -46,7 +39,6 @@ export const computeContextUsage = (
   if (!fill) return null;
 
   const limit = contextLimit > 0 ? contextLimit : DEFAULT_CONTEXT_LIMIT;
-  if (fill.state === 'compacted') return { state: 'compacted', limit };
 
   return { state: 'measured', totalTokens: fill.totalTokens, limit, percent: (fill.totalTokens / limit) * 100 };
 };

@@ -1,5 +1,5 @@
 import type { ExternalToast } from 'sonner';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { toast } from '@/components/ui';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { takeSessionActionFailure } from '@/sync/session-action-failures';
@@ -43,7 +43,7 @@ export const collectSessionSubtreeIds = (
   const global = useGlobalSessionsStore.getState();
   const childrenByParentId = new Map<string, Session[]>();
   for (const session of [...global.activeSessions, ...global.archivedSessions]) {
-    const parentId = session.parentID;
+    const parentId = session.parentSessionId;
     if (!parentId) continue;
     const siblings = childrenByParentId.get(parentId) ?? [];
     siblings.push(session);
@@ -51,7 +51,7 @@ export const collectSessionSubtreeIds = (
   }
   const ids = new Set(knownDescendantIds);
   for (const id of getDescendantIds(childrenByParentId, rootId)) {
-    if (!includeArchived && global.entityById.get(id)?.time?.archived) continue;
+    if (!includeArchived && global.entityById.get(id)?.archivedAt !== undefined) continue;
     ids.add(id);
   }
   ids.delete(rootId);
@@ -109,7 +109,7 @@ export const archiveUndoToastOptions = (
 /**
  * Archive or hard-delete a session together with its descendants.
  *
- * The server does not cascade `time.archived`, so a parent archived on its own
+ * The server does not cascade archive state, so a parent archived on its own
  * leaves its subagents active as orphan roots. Desktop sidebar rows, Recent,
  * managed Chats, and the mobile sessions sheet resolve the subtree first and
  * run it through here, so the calls made and the outcome the user sees stay
@@ -124,23 +124,23 @@ export const runSessionSubtreeAction = async (
   t: Translate,
 ): Promise<SessionSubtreeOutcome> => {
   const hardDelete = action === 'delete';
-  const reopenId = useSessionUIStore.getState().currentSessionId === session.id ? session.id : null;
+  const reopenId = useSessionUIStore.getState().currentSessionId === session.sessionId ? session.sessionId : null;
   if (descendantIds.length === 0) {
     const success = hardDelete
-      ? await store.deleteSession(session.id)
-      : await store.archiveSession(session.id);
+      ? await store.deleteSession(session.sessionId)
+      : await store.archiveSession(session.sessionId);
     if (success) {
       if (hardDelete) toast.success(t('sessions.sidebar.session.delete.success'));
-      else toast.success(t('sessions.sidebar.session.archive.success'), archiveUndoToastOptions([session.id], reopenId, t));
-      return { succeededIds: [session.id], failedIds: [] };
+      else toast.success(t('sessions.sidebar.session.archive.success'), archiveUndoToastOptions([session.sessionId], reopenId, t));
+      return { succeededIds: [session.sessionId], failedIds: [] };
     }
     toast.error(hardDelete
       ? t('sessions.sidebar.session.delete.error')
-      : t('sessions.sidebar.session.archive.error'), failureDescription([session.id], t));
-    return { succeededIds: [], failedIds: [session.id] };
+      : t('sessions.sidebar.session.archive.error'), failureDescription([session.sessionId], t));
+    return { succeededIds: [], failedIds: [session.sessionId] };
   }
 
-  const ids = [session.id, ...descendantIds];
+  const ids = [session.sessionId, ...descendantIds];
   if (hardDelete) {
     // Delete root + all descendants individually. If the server
     // cascade-deletes some children before we get to them, 404 is

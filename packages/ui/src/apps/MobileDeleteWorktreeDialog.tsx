@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 import { Button } from '@/components/ui/button';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
@@ -14,7 +14,7 @@ import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/work
 import { BoundGitNetworkOperationError, GitOperationResultError } from '@/lib/boundGitNetworkOperation';
 import { PendingGitOperationError } from '@/lib/source-control/git-operation-recovery';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useAllLiveSessions } from '@/sync/sync-context';
 import type { WorktreeMetadata } from '@/types/worktree';
@@ -30,10 +30,7 @@ type MobileDeleteWorktreeDialogProps = {
 
 const normalizePath = (value: string | null | undefined): string => normalizePathImpl(value) ?? '';
 
-const getSessionDirectory = (session: Session): string => {
-  const record = session as Session & { directory?: string | null; project?: { worktree?: string | null } | null };
-  return normalizePath(record.directory ?? record.project?.worktree ?? null);
-};
+const getSessionDirectory = (session: Session): string => normalizePath(resolveGlobalSessionDirectory(session));
 
 /**
  * Mobile worktree-deletion confirmation. It mirrors the desktop flow: remove
@@ -68,7 +65,7 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
     if (!worktreePath) return [] as Session[];
     const merged = new Map<string, Session>();
     for (const session of [...globalActiveSessions, ...liveSessions]) {
-      if (getSessionDirectory(session) === worktreePath) merged.set(session.id, session);
+      if (getSessionDirectory(session) === worktreePath) merged.set(session.sessionId, session);
     }
     return Array.from(merged.values());
   }, [globalActiveSessions, liveSessions, worktreePath]);
@@ -169,7 +166,7 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
 
   const handleConfirm = () => {
     if (!worktree || isProcessing) return;
-    removeWorktreeInBackground(worktree, linkedSessions.map((session) => session.id));
+    removeWorktreeInBackground(worktree, linkedSessions.map((session) => session.sessionId));
     onClose();
   };
 

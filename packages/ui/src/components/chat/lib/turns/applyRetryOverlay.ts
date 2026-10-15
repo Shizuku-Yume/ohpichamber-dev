@@ -1,13 +1,6 @@
-import type { Message } from '@/lib/opencode/model';
-
 import type { ChatMessageEntry } from './types';
 
-const resolveMessageRole = (message: ChatMessageEntry): string | null => {
-    const info = message.info as { clientRole?: string | null; role?: string | null };
-    return (typeof info.clientRole === 'string' ? info.clientRole : null)
-        ?? (typeof info.role === 'string' ? info.role : null)
-        ?? null;
-};
+const resolveMessageRole = (message: ChatMessageEntry): string => message.role;
 
 interface RetryOverlayInput {
     sessionId: string | null;
@@ -24,7 +17,7 @@ export const applyRetryOverlay = (
         return messages;
     }
 
-    const retryError = {
+    const retryError: NonNullable<ChatMessageEntry['retryError']> = {
         name: 'SessionRetry',
         message: input.message,
         data: { message: input.message },
@@ -52,8 +45,7 @@ export const applyRetryOverlay = (
 
     if (targetAssistantIndex >= 0) {
         const existing = messages[targetAssistantIndex];
-        const existingInfo = existing.info as { error?: unknown };
-        if (existingInfo.error) {
+        if (existing.retryError) {
             return messages;
         }
 
@@ -63,10 +55,7 @@ export const applyRetryOverlay = (
             }
             return {
                 ...message,
-                info: {
-                    ...(message.info as Record<string, unknown>),
-                    error: retryError,
-                } as unknown as Message,
+                retryError,
             };
         });
     }
@@ -74,14 +63,12 @@ export const applyRetryOverlay = (
     const eventTime = typeof input.confirmedAt === 'number' ? input.confirmedAt : input.fallbackTimestamp;
     const syntheticId = `synthetic_retry_notice_${input.sessionId}`;
     const synthetic: ChatMessageEntry = {
-        info: {
-            id: syntheticId,
-            sessionID: input.sessionId,
-            role: 'assistant',
-            time: { created: eventTime, completed: eventTime },
-            finish: 'stop',
-            error: retryError,
-        } as unknown as Message,
+        messageId: syntheticId,
+        sessionId: input.sessionId,
+        turnId: messages[lastUserIndex].turnId,
+        role: 'assistant',
+        createdAt: eventTime,
+        retryError,
         parts: [],
     };
 

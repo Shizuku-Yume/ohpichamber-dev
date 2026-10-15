@@ -6,7 +6,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { normalizePath } from '@/lib/pathNormalization';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { buildSessionMessageRecordsSnapshot, useSyncRuntime } from './sync-context';
-import { loadSessionTitleTurns } from './session-title-context';
+import { loadSessionTitleTurns, type NativeTitleTurn } from './session-title-context';
 import { generateAndSaveSessionTitle, runSessionTitleGeneration, useSessionTitleGenerationPending } from './session-title-generation';
 import { updateSessionTitle } from './session-actions';
 
@@ -37,10 +37,15 @@ async function readNativeTitleSession(
 
 export function useIsSessionAiRenamePending(sessionID: string, directory: string | null | undefined): boolean {
   const { runtimeKey } = useSyncRuntime();
-  return useSessionTitleGenerationPending({ runtimeKey, sessionID, directory: directory ?? '' });
+  return useSessionTitleGenerationPending({ runtimeKey, sessionId: sessionID, directory: directory ?? '' });
 }
 
-export function useSessionAiRename(sessionID: string, directory: string | null | undefined) {
+export type SessionAiRenameController = {
+  prepare: (signal: AbortSignal) => Promise<{ session: Session; metadata: SessionMetadataState; turns: NativeTitleTurn[] }>;
+  rename: () => Promise<void>;
+};
+
+export function useSessionAiRename(sessionID: string, directory: string | null | undefined): SessionAiRenameController {
   const { runtimeKey, childStores, messageLoader } = useSyncRuntime();
 
   const prepare = useCallback(async (signal: AbortSignal) => {
@@ -75,7 +80,7 @@ export function useSessionAiRename(sessionID: string, directory: string | null |
   const rename = useCallback(async () => {
     const normalizedDirectory = normalizePath(directory);
     if (!normalizedDirectory) return;
-    await runSessionTitleGeneration({ runtimeKey, directory: normalizedDirectory, sessionID }, async (signal) => {
+    await runSessionTitleGeneration({ runtimeKey, directory: normalizedDirectory, sessionId: sessionID }, async (signal) => {
       let workspaceId: string | undefined;
       await generateAndSaveSessionTitle({
         signal,

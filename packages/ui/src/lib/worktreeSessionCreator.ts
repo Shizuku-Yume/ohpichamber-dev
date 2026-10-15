@@ -377,9 +377,9 @@ export async function createWorktreeSessionForNewBranch(
         throw new Error('Could not create a session for the worktree.');
       }
 
-      initializeSessionForWorktree(session.id, createdMetadata);
+      initializeSessionForWorktree(session.sessionId, createdMetadata);
 
-      return { id: session.id, branch: metadata.branch || base, path: metadata.path };
+      return { id: session.sessionId, branch: metadata.branch || base, path: metadata.path };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to create worktree session';
       toast.error('Failed to create worktree', { description: message });

@@ -14,6 +14,7 @@
 import type { IntegrationInfo } from "@opencode/client"
 import { getRuntimeKey } from "../runtime-switch"
 import { normalizeOpencodeError, opencodeClient } from "./client"
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { listWebSearchProviders } from "./websearch"
 
 export interface IntegrationCatalog {
@@ -56,7 +57,7 @@ async function readIntegrations(directory: string | null): Promise<IntegrationIn
 export async function loadIntegrationCatalog(): Promise<IntegrationCatalog> {
   const runtimeKey = getRuntimeKey()
   const read = ++latestRead
-  const directory = opencodeClient.getDirectory() || null
+  const directory = hostFilesystem.getDirectory() || null
   const [integrations, webSearchProviders] = await Promise.all([
     readIntegrations(directory),
     listWebSearchProviders(directory).catch(() => null),

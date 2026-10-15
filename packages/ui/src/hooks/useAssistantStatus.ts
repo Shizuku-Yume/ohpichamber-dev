@@ -1,11 +1,10 @@
 import React from 'react';
 import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
-import type { Message, ModelRef, Part, ReasoningPart, TextPart, ToolPart } from '@/lib/opencode/model';
-import { executeToolCalls, isExecuteTool, isShellTool, isSubagentTool } from '@/lib/opencode/tools';
+import type { Message, Part, ToolCallPart } from '@openchamber/agent-contract';
 
 import type { MessageStreamPhase } from '@/stores/types/sessionTypes';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useDirectorySync, useSession, useSessionMessages, useSessionPermissions, useSessionForms, useSessionStatus } from '@/sync/sync-context';
+import { useDirectorySync, useSessionMessages, useSessionPermissions, useSessionForms } from '@/sync/sync-context';
 import { useSessionActivity } from './useSessionActivity';
 
 type AssistantActivity = 'idle' | 'streaming' | 'tooling' | 'cooldown' | 'permission';
@@ -30,11 +29,6 @@ interface WorkingSummary {
     lastCompletionId: string | null;
     isComplete: boolean;
     retryInfo: { attempt?: number; next?: number } | null;
-    /**
-     * The turn waits on work OpenCode can move to the background: a running
-     * shell command or a subagent it delegated to (`session.background`).
-     */
-    canBackground: boolean;
 }
 
 interface FormingSummary {
@@ -58,6 +52,11 @@ interface ActiveAssistantContext {
     model: ActiveAssistantModel | null;
 }
 
+interface ModelRef {
+    providerId: string;
+    modelId: string;
+}
+
 const DEFAULT_WORKING: WorkingSummary = {
     activity: 'idle',
     hasWorkingContext: false,
@@ -78,7 +77,6 @@ const DEFAULT_WORKING: WorkingSummary = {
     lastCompletionId: null,
     isComplete: false,
     retryInfo: null,
-    canBackground: false,
 };
 
 const EMPTY_PARTS: Part[] = [];
@@ -142,7 +140,6 @@ type ParsedStatusResult = {
     activeToolName: string | undefined;
     statusText: string;
     isGenericStatus: boolean;
-    canBackground: boolean;
 };
 
 const getToolStatusPhrase = (toolName: string, count = 1): string => {
@@ -155,20 +152,10 @@ const getToolStatusPhrase = (toolName: string, count = 1): string => {
 };
 
 /**
- * A running `execute` (Code Mode) script names the tool it is calling as soon
- * as its metadata lists one, so the pill tracks the script's real work instead
- * of sitting on a generic phrase for its whole run. Parallel commands are the
- * exception: one call's name cannot speak for several, so they count instead.
+ * Parallel commands are counted together; canonical tool calls do not carry
+ * nested execute metadata, so the status remains at the declared tool name.
  */
-const getRunningToolPhrase = (part: ToolPart, toolName: string, count: number): string => {
-    if (!isExecuteTool(toolName) || count > 1) {
-        return getToolStatusPhrase(toolName, count);
-    }
-    const state = part.state;
-    const calls = executeToolCalls(state && 'metadata' in state ? state.metadata : undefined);
-    const last = calls[calls.length - 1];
-    return last ? `calling ${last.tool}` : getToolStatusPhrase(toolName);
-};
+const getRunningToolPhrase = (toolName: string, count: number): string => getToolStatusPhrase(toolName, count);
 
 const hashString = (value: string): number => {
     let hash = 0;
@@ -182,17 +169,6 @@ const getStableWorkingPhrase = (key: string): string => {
     return WORKING_PHRASES[hashString(key) % WORKING_PHRASES.length] ?? 'working';
 };
 
-/**
- * The turn waits on a job OpenCode can move to the background: a shell command
- * or a subagent call that already runs. A pending call has not started yet (or
- * waits for a permission), and a background call settles at once, so neither
- * counts.
- */
-export const hasBackgroundableWork = (parts: readonly Part[]): boolean => parts.some((part) => (
-    part.type === 'tool'
-    && part.state?.status === 'running'
-    && (isShellTool(part.tool) || isSubagentTool(part.tool))
-));
 
 export const createParsedStatus = (parts: Part[], genericKey: string): ParsedStatusResult => {
     const runningToolCounts = countRunningToolCalls(parts);
@@ -206,33 +182,24 @@ export const createParsedStatus = (parts: Part[], genericKey: string): ParsedSta
 
         switch (part.type) {
             case 'reasoning': {
-                const time = part.time ?? getPartTimeInfo(part);
-                const stillRunning = !time || typeof time.end === 'undefined';
-                if (stillRunning && !activePartType) {
-                    activePartType = 'reasoning';
-                }
+                // Canonical reasoning parts carry no completion marker. Do not
+                // infer that an otherwise settled part is still streaming.
                 break;
             }
-            case 'tool': {
-                const toolStatus = part.state?.status;
-                if ((toolStatus === 'running' || toolStatus === 'pending') && !activePartType) {
-                    const toolName = getToolDisplayName(part);
+            case 'tool_call': {
+                const toolStatus = part.status;
+                if ((toolStatus === 'running' || toolStatus === 'pending_approval' || toolStatus === 'approved') && !activePartType) {
+                    const toolName = part.toolName;
                     const bucket = TOOL_BUCKETS.get(toolName);
                     activePartType = bucket === 'edit' ? 'editing' : 'tool';
                     activeToolName = toolName;
-                    activeToolPhrase = getRunningToolPhrase(part, toolName, runningToolCounts.get(bucket ?? toolName) ?? 1);
+                    activeToolPhrase = getRunningToolPhrase(toolName, runningToolCounts.get(bucket ?? toolName) ?? 1);
                 }
                 break;
             }
             case 'text': {
-                const rawContent = getLegacyTextContent(part) ?? '';
-                if (typeof rawContent === 'string' && rawContent.trim().length > 0) {
-                    const time = getPartTimeInfo(part);
-                    const streamingPart = !time || typeof time.end === 'undefined';
-                    if (streamingPart && !activePartType) {
-                        activePartType = 'text';
-                    }
-                }
+                // Canonical text parts carry no completion marker. Keep the
+                // neutral status rather than inventing streaming state.
                 break;
             }
             default:
@@ -244,12 +211,10 @@ export const createParsedStatus = (parts: Part[], genericKey: string): ParsedSta
     const statusText = (() => {
         if (activePartType === 'editing') return activeToolPhrase ?? 'editing a file';
         if (activePartType === 'tool' && activeToolName) return activeToolPhrase ?? getToolStatusPhrase(activeToolName);
-        if (activePartType === 'reasoning') return 'thinking';
-        if (activePartType === 'text') return 'composing';
         return getStableWorkingPhrase(genericKey);
     })();
 
-    return { activePartType, activeToolName, statusText, isGenericStatus, canBackground: hasBackgroundableWork(parts) };
+    return { activePartType, activeToolName, statusText, isGenericStatus };
 };
 
 const encodeParsedStatus = (status: ParsedStatusResult): string => {
@@ -258,12 +223,11 @@ const encodeParsedStatus = (status: ParsedStatusResult): string => {
         status.activeToolName ?? '',
         status.statusText,
         status.isGenericStatus ? '1' : '0',
-        status.canBackground ? '1' : '0',
     ].join(STATUS_SIGNATURE_SEPARATOR);
 };
 
 const decodeParsedStatus = (signature: string): ParsedStatusResult => {
-    const [activePartType, activeToolName, statusText = 'working', isGenericStatus, canBackground] = signature.split(STATUS_SIGNATURE_SEPARATOR);
+    const [activePartType, activeToolName, statusText = 'working', isGenericStatus] = signature.split(STATUS_SIGNATURE_SEPARATOR);
     return {
         activePartType: activePartType === 'text' || activePartType === 'tool' || activePartType === 'reasoning' || activePartType === 'editing'
             ? activePartType
@@ -271,46 +235,10 @@ const decodeParsedStatus = (signature: string): ParsedStatusResult => {
         activeToolName: activeToolName || undefined,
         statusText,
         isGenericStatus: isGenericStatus === '1',
-        canBackground: canBackground === '1',
     };
 };
 
-const isReasoningPart = (part: Part): part is ReasoningPart => part.type === 'reasoning';
-
-const isTextPart = (part: Part): part is TextPart => part.type === 'text';
-
-const getLegacyTextContent = (part: Part): string | undefined => {
-    if (isTextPart(part)) {
-        return part.text;
-    }
-    const candidate = part as Partial<{ text?: unknown; content?: unknown; value?: unknown }>;
-    if (typeof candidate.text === 'string') {
-        return candidate.text;
-    }
-    if (typeof candidate.content === 'string') {
-        return candidate.content;
-    }
-    if (typeof candidate.value === 'string') {
-        return candidate.value;
-    }
-    return undefined;
-};
-
-const getPartTimeInfo = (part: Part): { end?: number } | undefined => {
-    if (isTextPart(part) || isReasoningPart(part)) {
-        return part.time;
-    }
-    const candidate = part as Partial<{ time?: { end?: number } }>;
-    return candidate.time;
-};
-
-const getToolDisplayName = (part: ToolPart): string => {
-    if (part.tool) {
-        return part.tool;
-    }
-    const candidate = part as ToolPart & Partial<{ name?: unknown }>;
-    return typeof candidate.name === 'string' ? candidate.name : 'tool';
-};
+const getToolDisplayName = (part: ToolCallPart): string => part.toolName;
 
 /**
  * Parallel calls are common (three reads, two shell commands), and the last
@@ -320,9 +248,9 @@ const getToolDisplayName = (part: ToolPart): string => {
 const countRunningToolCalls = (parts: readonly Part[]): Map<string, number> => {
     const counts = new Map<string, number>();
     for (const part of parts) {
-        if (part.type !== 'tool') continue;
-        const status = part.state?.status;
-        if (status !== 'running' && status !== 'pending') continue;
+        if (part.type !== 'tool_call') continue;
+        const status = part.status;
+        if (status !== 'running' && status !== 'pending_approval' && status !== 'approved') continue;
         const toolName = getToolDisplayName(part);
         const bucket = TOOL_BUCKETS.get(toolName) ?? toolName;
         counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
@@ -339,36 +267,23 @@ const hasNewerPrompt = (messages: Message[], index: number): boolean => {
 };
 
 /**
- * `sessionModel` is the session record's own model: in OpenCode v2 a send
- * switches the session before the prompt goes out, so it names what the next
- * turn runs on before any assistant record exists.
+ * Canonical messages do not expose completion timestamps. A newer prompt may
+ * follow either an active or finished assistant turn, so model attribution is
+ * intentionally neutral until another assistant message arrives.
  */
-export const getActiveAssistantContext = (messages: Message[], sessionModel?: ModelRef | null): ActiveAssistantContext => {
-    const sessionProviderId = sessionModel?.providerID.trim() ?? '';
-    const sessionModelId = sessionModel?.id.trim() ?? '';
-    const nextTurnModel = sessionProviderId && sessionModelId ? { providerId: sessionProviderId, modelId: sessionModelId } : null;
-    // OpenCode v2 records the provider and model on the assistant message
-    // itself, so the active model no longer has to be looked up on the user
-    // message that triggered the turn (which no longer links back to it).
+export const getActiveAssistantContext = (messages: Message[], _sessionModel?: ModelRef | null): ActiveAssistantContext => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
         const message = messages[index];
         if (message?.role !== 'assistant') continue;
 
-        // A prompt newer than this answer starts a turn this answer's model
-        // says nothing about: a v2 user message carries no model, and the
-        // composer may have switched models since. The session record already
-        // holds the switched model (the send switches before it prompts), so it
-        // is the one shown; without it nothing is shown rather than the previous
-        // turn's. A turn still running keeps its model: the newer prompt is only
-        // queued behind it.
-        if (message.time.completed !== undefined && hasNewerPrompt(messages, index)) {
-            return { assistantId: message.id, model: nextTurnModel };
+        if (hasNewerPrompt(messages, index)) {
+            return { assistantId: message.messageId, model: null };
         }
 
-        const providerId = message.providerID.trim();
-        const modelId = message.modelID.trim();
+        const providerId = message.providerId?.trim() ?? '';
+        const modelId = message.modelId?.trim() ?? '';
         return {
-            assistantId: message.id,
+            assistantId: message.messageId,
             model: providerId && modelId ? { providerId, modelId } : null,
         };
     }
@@ -387,17 +302,18 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         currentSessionDirectory ?? undefined,
     );
 
-    const sessionModel = useSession(currentSessionId ?? undefined, currentSessionDirectory ?? undefined)?.model ?? null;
     const activeAssistant = React.useMemo(
-        () => getActiveAssistantContext(rawSessionMessages, sessionModel),
-        [rawSessionMessages, sessionModel],
+        () => getActiveAssistantContext(rawSessionMessages),
+        [rawSessionMessages],
     );
     const lastAssistantId = activeAssistant.assistantId;
 
     const lastAssistantStatusSignature = useDirectorySync(
         React.useCallback((state) => {
             const genericKey = `${currentSessionId ?? ''}:${lastAssistantId ?? ''}`;
-            const parts = lastAssistantId ? (state.part[lastAssistantId] ?? EMPTY_PARTS) : EMPTY_PARTS;
+            const parts = lastAssistantId
+                ? state.message[currentSessionId ?? '']?.find((message) => message.messageId === lastAssistantId)?.parts ?? EMPTY_PARTS
+                : EMPTY_PARTS;
             return encodeParsedStatus(createParsedStatus(parts, genericKey));
         }, [currentSessionId, lastAssistantId]),
         currentSessionDirectory ?? undefined,
@@ -417,23 +333,6 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
 
     const { phase: activityPhase, isWorking: isPhaseWorking } = useSessionActivity(currentSessionId, currentSessionDirectory ?? undefined);
 
-    const currentSessionStatus = useSessionStatus(currentSessionId ?? '', currentSessionDirectory ?? undefined);
-
-    const sessionRetryAttempt = currentSessionStatus?.type === 'retry'
-        ? (currentSessionStatus as { type: 'retry'; attempt?: number }).attempt
-        : undefined;
-
-    const sessionRetryNext = currentSessionStatus?.type === 'retry'
-        ? (currentSessionStatus as { type: 'retry'; next?: number }).next
-        : undefined;
-
-    // OpenCode 2.x reports a scheduled retry on the assistant message it will
-    // retry, not as a session status; the next attempt's step start clears it.
-    const assistantRetry = React.useMemo(() => {
-        if (!lastAssistantId) return null;
-        const message = rawSessionMessages.find((candidate) => candidate.id === lastAssistantId);
-        return message?.role === 'assistant' ? message.retry ?? null : null;
-    }, [rawSessionMessages, lastAssistantId]);
 
     const parsedStatus = React.useMemo<ParsedStatusResult>(() => {
         return decodeParsedStatus(lastAssistantStatusSignature);
@@ -465,7 +364,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         const isWorking = isPhaseWorking;
         const isStreaming = activityPhase === 'busy';
         const isCooldown = false;
-        const isRetry = activityPhase === 'retry' || (isWorking && assistantRetry !== null);
+        // Canonical runtime status does not expose retry timing or attempts.
 
         let activity: AssistantActivity = 'idle';
         if (isWorking) {
@@ -476,12 +375,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             }
         }
 
-        const retryInfo = isRetry
-            ? {
-                attempt: sessionRetryAttempt ?? assistantRetry?.attempt,
-                next: sessionRetryNext ?? assistantRetry?.at,
-            }
-            : null;
+        const retryInfo = null;
 
         return {
             activity,
@@ -503,9 +397,8 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             lastCompletionId: null,
             isComplete: false,
             retryInfo,
-            canBackground: isWorking && parsedStatus.canBackground,
         };
-    }, [activityPhase, isPhaseWorking, parsedStatus, abortState, sessionRetryAttempt, sessionRetryNext, assistantRetry]);
+    }, [activityPhase, isPhaseWorking, parsedStatus, abortState]);
 
     const forming = React.useMemo<FormingSummary>(() => {
         const isActive = isPhaseWorking && parsedStatus.activePartType === 'text';
@@ -535,7 +428,6 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
                 activePartType: undefined,
                 activeToolName: undefined,
                 retryInfo: null,
-                canBackground: false,
             };
         }
 
@@ -545,7 +437,6 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             isWaitingForPermission: true,
             canAbort: false,
             retryInfo: null,
-            canBackground: false,
         };
     }, [baseWorking, sessionPermissionRequests, sessionFormRequests]);
 

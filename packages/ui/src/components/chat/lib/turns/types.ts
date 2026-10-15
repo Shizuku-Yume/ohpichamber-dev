@@ -1,9 +1,9 @@
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 
-export interface ChatMessageEntry {
-    info: Message;
-    parts: Part[];
-}
+/** Canonical message plus a display-only session retry notice. */
+export type ChatMessageEntry = Message & {
+    retryError?: { name: 'SessionRetry'; message: string; data: { message: string } };
+};
 
 type TurnActivityKind = 'tool' | 'reasoning' | 'justification';
 
@@ -35,11 +35,9 @@ export interface TurnDiffStats {
 
 export interface TurnChangedFile {
     file: string;
-    /** Absent when neither the turn diff nor the tool call reports line counts. */
+    /** Absent when the tool result does not report line counts. */
     additions?: number;
     deletions?: number;
-    /** False when the turn diff view has no entry for this path, so a pill cannot open it. */
-    inTurnDiff?: boolean;
 }
 
 export interface TurnActivityGroup {

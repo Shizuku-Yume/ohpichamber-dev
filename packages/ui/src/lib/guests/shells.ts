@@ -40,13 +40,17 @@ const scopeSessionIds = (scope: GuestShellsScope): ReadonlySet<string> | null =>
   return new Set(sessionsInTree(known, scope.sessionId, (id) => sessions.get(id)?.parentSessionId ?? undefined));
 };
 
-const guestShell = (shell: TrackedShell): GuestRunningShell => ({
+const guestShell = (shell: Pick<TrackedShell, 'jobId' | 'sessionId' | 'command' | 'startedAt' | 'background'>): GuestRunningShell => ({
   id: shell.jobId, sessionID: shell.sessionId, command: shell.command, startedAt: shell.startedAt, background: shell.background,
 });
 
-const guestEndedShell = (shell: EndedShell): GuestEndedShell => (shell.termination.exitCode === null
-  ? { ...guestShell(shell), status: shell.termination.reason, endedAt: shell.endedAt }
-  : { ...guestShell(shell), status: shell.termination.reason, exit: shell.termination.exitCode, endedAt: shell.endedAt });
+const guestEndedShell = (shell: EndedShell): GuestEndedShell => {
+  const reason = shell.termination.reason;
+  const status: GuestEndedShell['status'] = reason === 'exit' ? 'exited' : reason === 'signal' ? 'killed' : reason === 'worker-lost' ? 'unknown' : reason;
+  const ended: GuestEndedShell = { ...guestShell(shell), status, endedAt: shell.endedAt };
+  if (shell.termination.exitCode !== null) ended.exit = shell.termination.exitCode;
+  return ended;
+};
 
 /**
  * The running shells a scope covers, oldest first, and the ones that ended,
@@ -81,7 +85,7 @@ export const readGuestShellOutput = async (shellId: string, cursor?: number, tai
   if (!shell || ('termination' in shell && shell.termination.reason === 'stopped')) throw new HostRequestError('NOT_FOUND', 'OpenChamber has not seen that shell.');
   try {
     const result = await canonicalClient.getShellOutput(shell.sessionId, { jobId: shell.jobId, epoch: shell.epoch, workerGeneration: shell.workerGeneration }, String(cursor ?? 0), tailBytes ?? 65536);
-    return { shellId, cursor: Number(result.cursor), output: result.output, ended: result.ended };
+    return { cursor: Number(result.cursor), output: result.output, skipped: false };
   } catch (error) {
     if (error instanceof CanonicalApiError && error.problem.status === 404) throw new HostRequestError('NOT_FOUND', 'The host no longer keeps that shell output.');
     throw error;

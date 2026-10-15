@@ -1,4 +1,4 @@
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 
 import { getNormalizedMessageForDisplay } from '../messageDisplayNormalization';
 import { projectTurnRecords } from './projectTurnRecords';
@@ -37,7 +37,7 @@ const withLiveParts = (
     message: ChatMessageEntry,
     livePartsByMessageId: Readonly<Record<string, Part[]>>,
 ): ChatMessageEntry => {
-    const liveParts = livePartsByMessageId[message.info.id];
+    const liveParts = livePartsByMessageId[message.messageId];
     // An empty live array is ambiguous — the store may simply not have loaded
     // this message's parts — and must never erase parts the record does have.
     if (!liveParts || liveParts.length === 0 || message.parts === liveParts) {
@@ -84,7 +84,7 @@ export const buildLiveStreamingEntry = <TEntry extends StreamingTailEntry>(
     // Re-project from the turn's full ordered message records (not just
     // userMessage + assistants) so hidden user messages merged into this turn
     // keep parenting their assistant replies.
-    const liveMessageById = new Map(assistantMessages.map((message) => [message.info.id, message]));
+    const liveMessageById = new Map(assistantMessages.map((message) => [message.messageId, message]));
     const sourceMessages = entry.turn.messages.length > 0
         ? entry.turn.messages
             .slice()
@@ -100,7 +100,7 @@ export const buildLiveStreamingEntry = <TEntry extends StreamingTailEntry>(
     const turn = projection.turns[0] ?? {
         ...entry.turn,
         assistantMessages,
-        assistantMessageIds: assistantMessages.map((message) => message.info.id),
+        assistantMessageIds: assistantMessages.map((message) => message.messageId),
     };
 
     return {

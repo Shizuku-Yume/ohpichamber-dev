@@ -94,7 +94,7 @@ import { useHtmlPreviewUrl } from './files/useHtmlPreviewUrl';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { buildCodeMirrorCommentWidgets, FilePreviewCommentMenu, normalizeLineRange, useInlineCommentController } from '@/components/comments';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -1385,7 +1385,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
         const respectGitignore = !showGitignored;
         const entries = files.listDirectory
           ? (await files.listDirectory(normalizedDir, { respectGitignore })).entries
-          : await opencodeClient.listLocalDirectory(normalizedDir, { respectGitignore });
+          : await hostFilesystem.listLocalDirectory(normalizedDir, { respectGitignore });
         if (!isCurrentRequest()) return;
         const mapped = mapDirectoryEntries(normalizedDir, entries);
         loadedDirsRef.current = new Set(loadedDirsRef.current);
