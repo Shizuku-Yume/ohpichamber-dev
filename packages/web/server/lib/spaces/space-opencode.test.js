@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+
 import { describe, expect, it } from 'vitest';
 
 import { SPACE_LOGIN_CREDENTIAL_ID, WINDOW_PLACEHOLDER_KEY, buildLoginRow, buildProviderConfig, createSpaceOpenCode, loginGrantOf } from './space-opencode.js';
