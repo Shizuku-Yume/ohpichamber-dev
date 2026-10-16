@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
+import type { ReferencePickerItem } from '@/components/references/referencePickerItems';
+import type { GitHubIssueReference } from '@/lib/api/types';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -24,27 +26,24 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
-type Reference = { provider?: string; kind: 'issue' | 'pull'; number: number; title: string; sourceRepo: { owner: string; repo: string }; state: 'open' };
-const reference: Reference = {
-  provider: 'github',
-  kind: 'issue',
-  number: 42,
-  title: 'Fix the board launch',
-  sourceRepo: { owner: 'acme', repo: 'app' },
-  state: 'open',
+const reference: GitHubIssueReference = {
+  kind: 'issue', number: 42, title: 'Fix the board launch', url: 'https://example.test/issues/42',
+  body: '', bodyTruncated: false, createdAt: null, updatedAt: null, author: null, labels: [], commentCount: 0,
+  sourceRepo: { source: 'github', owner: 'acme', repo: 'app' }, state: 'open',
 };
-const item = { source: 'github', reference };
+const item: ReferencePickerItem = { source: 'github', reference };
 const project = { id: 'project-1', path: '/workspace/app' };
 const resolveCalls: unknown[] = [];
 const pushedReferences: unknown[] = [];
-const openedDrafts: unknown[] = [];
+type DraftOptions = { selectedProjectId?: string | null; directoryOverride?: string | null; preserveDirectoryOverride?: boolean };
+const openedDrafts: DraftOptions[] = [];
 const closedSurfaces: number[] = [];
 
 const sessionState = {
   currentSessionId: 'session-7',
   newSessionDraft: { open: false },
   getDirectoryForSession: () => '/workspace/app',
-  openNewSessionDraft: (options: unknown) => openedDrafts.push(options),
+  openNewSessionDraft: (options?: DraftOptions) => { if (options) openedDrafts.push(options); },
 };
 const useSessionUIStore = Object.assign(
   <T,>(selector: (state: typeof sessionState) => T): T => selector(sessionState),
@@ -106,7 +105,7 @@ describe('SourceBoardActions launch behavior', () => {
     await act(async () => {
       root.render(
         <SourceBoardActions
-          item={item as never}
+          item={item}
           project={project}
           context={null}
           onStartWorktree={onStartWorktree}
