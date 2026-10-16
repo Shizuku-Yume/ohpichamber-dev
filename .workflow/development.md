@@ -189,6 +189,8 @@ Task15 Guest caller closure then landed as `ad7deaf8b`, with canonical message f
 
 W7–W10 therefore remain unverified rather than passed. Required next work is to implement Agent Service-owned deleted-space read-only archive admission and transfer, retire remaining legacy execution/lifecycle consumers, complete packaged Electron certification, and run connected Web/Electron W7–W10 acceptance. Credential handoff outcomes are already verified in the composed M2 receipt; no startup credential importer remains in the current Host path. Do not archive Task 18 or claim M3 complete from focused tests alone. Task 32's native registry suite passed 8 tests and 67 assertions (37.44s), covering serialized lifecycle/cold reopen, nested-parent storage/history, deletion draining, relocation repair/finalize, and schema-valid runtime transitions; its owning record preserves the earlier Linux x64 built-service loopback receipt without rerun and distinguishes it from connected Web/Electron UI acceptance. Task 18's integrated W1–W10 gate remains open.
 
+The current W1-W10 matrix keeps W1-W6 on their existing M0/M1/M2 receipts. W7 lacks connected Web/Electron session-flow and canonical-rendering observation; W8 lacks connected snapshot/cursor recovery and stale-runtime proof; W9 has focused canonical settings/Guest/Board/child-navigation checks but lacks connected Board/Guest/sidebar observation and still has residual utility callers; W10 remains open on the UI test project, legacy UI callers and Host owners, packaged Electron UI/runtime behavior, and connected W7-W10 acceptance. No maintainer waiver was recorded; Task 18 remains active.
+
 
 ## Reusable findings
 
