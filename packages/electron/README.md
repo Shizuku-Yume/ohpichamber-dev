@@ -287,7 +287,7 @@ The macOS menu bar item is enabled by default and can be disabled in General set
 
 Packaged Desktop builds carry their own Bun runtime and agent service. `prepare:agent-runtime` stages them into `resources/agent-runtime` with a `manifest.json` naming the platform, architecture, staged Bun version and every file digest; `agent-runtime.mjs` resolves the Bun binary and the agent-service entrypoint from there for the Host. The payload has to stay outside the ASAR archive because Bun reads physical files. `verify:agent-runtime` re-checks the manifest, the digests and the platform/architecture match before packaging.
 
-Desktop no longer discovers, downloads or requires an OpenCode binary. The Host starts the staged Bun agent service and reaches it through the authenticated `/api/agent/v1` namespace.
+The verified Desktop startup path no longer discovers, downloads or requires an OpenCode binary. The Host starts the staged Bun agent service and reaches it through the authenticated `/api/agent/v1` namespace; remaining legacy consumers and full packaged OpenCode-free certification are tracked in Task 17 and Task 18.
 
 ## Common Env Vars
 
