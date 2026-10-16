@@ -1,6 +1,7 @@
 import { afterEach, expect, mock, spyOn, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
-import { createRuntimeOpencodeClient, opencodeClient } from '@/lib/opencode/client';
+import type { Session } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
@@ -13,35 +14,47 @@ import * as projectConfig from '@/lib/openchamberConfig';
 import * as sharedTrust from '@/lib/sharedTrustConfirmation';
 
 const created: Session = {
-  id: 'background-session', directory: '/project-b', title: 'Task', projectID: 'b', cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
+  sessionId: 'background-session', projectId: 'b', workspaceId: 'workspace-b', displayPath: '.', rootSessionId: 'background-session',
+  createdAt: 1, updatedAt: 1, epoch: '0', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: { title: 'Task' }, metadataRevision: '1', archiveRevision: '0',
 };
-afterEach(() => mock.restore());
+const originalRuntime = getRuntimeKey();
+const originalBase = getRuntimeApiBaseUrl();
+afterEach(() => {
+  mock.restore();
+  switchRuntimeEndpoint({ apiBaseUrl: originalBase, runtimeKey: originalRuntime });
+});
 const setup = () => {
-  const create = spyOn(opencodeClient, 'createSession').mockImplementation(async (_input, directory) => ({ ...created, directory: directory ?? created.directory }));
+  const resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async (directory) => ({
+    workspaceId: directory === '/project-b' || directory === '/existing' ? 'workspace-b' : 'workspace-a',
+    projectId: directory === '/project-b' || directory === '/existing' ? 'b' : 'a', name: directory === '/project-b' || directory === '/existing' ? 'Project B' : 'Project A',
+  }));
+  const create = spyOn(canonicalClient, 'createSession').mockImplementation(async (input) => ({
+    session: { ...created, projectId: input.projectId, workspaceId: input.workspaceId, displayPath: '.' },
+  }));
   spyOn(sessionActions, 'setLinkedIssue').mockResolvedValue(created);
   useProjectsStore.setState({ hasServerSnapshot: true, projects: [{ id: 'a', path: '/project-a', addedAt: 1 }, { id: 'b', path: '/project-b', addedAt: 1 }], activeProjectId: 'a' });
   useSessionUIStore.setState({ currentSessionId: 'existing-chat', currentSessionDirectory: '/project-a' });
   useUIStore.getState().setOpenGuestPage('board');
-  return create;
+  return { create, resolveWorkspace };
 };
 
 test('a guest session in another project registers without changing the open page or chat', async () => {
-  const create = setup();
+  const { create, resolveWorkspace } = setup();
   const result = await startGuestSession({ directory: '/project-a', t: (key) => key, assertAuthorized: () => {},
     request: { providerId: 'board', id: 'TASK-1', title: 'Task', url: 'https://example.com/task', projectId: 'b' } });
-  expect(create.mock.calls[0]?.[1]).toBe('/project-b');
-  expect(result).toMatchObject({ sessionId: created.id, directory: '/project-b', sent: 'skipped', linked: true });
+  expect(resolveWorkspace).toHaveBeenCalledWith('/project-b');
+  expect(create.mock.calls[0]?.[0].workspaceId).toBe('workspace-b');
+  expect(result).toMatchObject({ sessionId: created.sessionId, directory: '.', sent: 'skipped', linked: true });
   expect(useSessionUIStore.getState().currentSessionId).toBe('existing-chat');
   expect(useSessionUIStore.getState().currentSessionDirectory).toBe('/project-a');
   expect(useProjectsStore.getState().activeProjectId).toBe('a');
   expect(useUIStore.getState().openGuestPageId).toBe('board');
-  expect(useGlobalSessionsStore.getState().entityById.get(created.id)?.directory).toBe('/project-b');
+  expect(useGlobalSessionsStore.getState().entityById.get(created.sessionId)).toMatchObject({ projectId: 'b', displayPath: '.' });
 });
 
 test('named worktrees forward the base ref through existing creation and keep bootstrap failures explicit', async () => {
-  const create = setup();
+  const { create } = setup();
   const createTree = spyOn(worktreeCreate, 'createWorktreeWithDefaults').mockResolvedValue({
     path: '/isolated-fix', projectDirectory: '/project-b', branch: 'fix-login', label: 'fix-login', name: 'fix-login', worktreeStatus: 'pending',
   });
@@ -58,7 +71,7 @@ test('named worktrees forward the base ref through existing creation and keep bo
 });
 
 test('existing worktrees create sessions in their directory without creating or scanning worktrees', async () => {
-  const create = setup();
+  const { create } = setup();
   useSessionUIStore.setState({ availableWorktreesByProject: new Map([['/project-b', [{
     path: '/existing', projectDirectory: '/project-b', branch: 'existing', label: 'existing', worktreeStatus: 'ready',
   }]]]) });
@@ -66,22 +79,22 @@ test('existing worktrees create sessions in their directory without creating or 
   spyOn(projectConfig, 'getWorktreeSetupWaitEnabled').mockResolvedValue(false);
   const result = await startGuestSession({ directory: '/project-a', t: (key) => key, assertAuthorized: () => {},
     request: { providerId: 'board', id: 'TASK-3', title: 'Task', url: 'https://example.com/task', projectId: 'b', worktree: { kind: 'existing', directory: '/existing' } } });
-  expect(create.mock.calls[0]?.[1]).toBe('/existing');
+  expect(create.mock.calls[0]?.[0].workspaceId).toBe('workspace-b');
   expect(tree.mock.calls.length).toBe(0);
-  expect(result).toMatchObject({ sessionId: created.id, directory: '/existing', worktree: { branch: 'existing' } });
+  expect(result).toMatchObject({ sessionId: created.sessionId, directory: '.', worktree: { directory: '/existing', branch: 'existing' } });
   expect(useSessionUIStore.getState().currentSessionId).toBe('existing-chat');
 });
 
-test('a replaced SDK client cannot publish a late creation even when the runtime key is unchanged', async () => {
-  const create = setup();
-  let client = createRuntimeOpencodeClient({ baseUrl: 'http://localhost:1' });
-  spyOn(opencodeClient, 'getSdkClient').mockImplementation(() => client);
-  create.mockImplementation(async () => {
-    client = createRuntimeOpencodeClient({ baseUrl: 'http://localhost:2' });
-    return { ...created, id: 'late-session' };
-  });
-  const result = await sessionActions.createSession('Late', '/project-b', undefined, undefined, undefined, 'preserve');
-  expect(result).toBeNull();
+test('a late canonical create response cannot publish after the runtime changes', async () => {
+  const { create } = setup();
+  const { promise: response, resolve } = Promise.withResolvers<{ session: Session }>();
+  const { promise: started, resolve: markStarted } = Promise.withResolvers<void>();
+  create.mockImplementation(() => { markStarted(); return response; });
+  const pending = sessionActions.createSession('Late', '/project-b', undefined, undefined, undefined, 'preserve');
+  await started;
+  switchRuntimeEndpoint({ apiBaseUrl: 'https://guest-next.test', runtimeKey: 'guest-next' });
+  resolve({ session: { ...created, sessionId: 'late-session' } });
+  expect(await pending).toBeNull();
   expect(useGlobalSessionsStore.getState().entityById.has('late-session')).toBe(false);
   expect(useSessionUIStore.getState().currentSessionId).toBe('existing-chat');
 });

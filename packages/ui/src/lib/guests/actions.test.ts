@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { GUEST_ITEM_MESSAGE_TEXT_MAX, GUEST_ITEM_SESSION_MAX } from '@openchamber/sdk';
-import type { Message, Part, SyntheticMessage } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 
 import {
   buildGuestMessageItem,
@@ -13,39 +13,29 @@ import type { InstalledGuest } from './types.ts';
 import { enabledGuestSurfaces } from './surfaces.ts';
 import { parseGuestCatalogJson } from './parse.ts';
 
-const assistant = (id: string, created: number): Message => ({
-  id, role: 'assistant', sessionID: 'ses-1', time: { created },
-  agent: 'build', providerID: 'anthropic', modelID: 'sonnet',
-});
+const textPart = (partId: string, content: string): Part => ({ partId, type: 'text', content });
 
-const record = (id: string, role: 'user' | 'assistant', text: string, created = 1) => ({
-  info: role === 'user'
-    ? { id, role, sessionID: 'ses-1', time: { created } }
-    : assistant(id, created),
-  parts: [{ id: `${id}-p`, sessionID: 'ses-1', messageID: id, type: 'text' as const, text } satisfies Part],
-});
-
-const NO_PARTS: readonly Part[] = [];
-
-/** A plumbing role v2 interleaves with the conversation; it carries no parts. */
-const plumbing = (id: string, created: number) => ({
-  info: { id, role: 'system' as const, sessionID: 'ses-1', time: { created }, text: 'instructions changed' },
-  parts: [...NO_PARTS],
-});
-
-/** Context the user attached — v2 delivers it as its own synthetic message. */
-const attachedContext = (id: string, created: number) => {
-  const info: SyntheticMessage = {
-    id, role: 'synthetic', sessionID: 'ses-1', time: { created },
-    text: 'Quoted from a.ts',
-    metadata: {
-      openchamberContext: {
-        kind: 'file-quote', fileLabel: 'a.ts', quote: 'const a = 1;', text: 'look at this',
-      },
-    },
+const record = (messageId: string, role: 'user' | 'assistant', text: string, createdAt = 1): Message => {
+  const message: Message = {
+    messageId, sessionId: 'ses-1', turnId: `turn-${messageId}`, role, createdAt,
+    parts: [textPart(`${messageId}-p`, text)],
   };
-  return { info, parts: [...NO_PARTS] };
+  if (role === 'assistant') {
+    message.providerId = 'anthropic';
+    message.modelId = 'sonnet';
+  }
+  return message;
 };
+
+/** A plumbing role v2 interleaves with the conversation; it carries no text. */
+const plumbing = (messageId: string, createdAt: number): Message => ({
+  messageId, sessionId: 'ses-1', turnId: `turn-${messageId}`, role: 'system', createdAt, parts: [],
+});
+/** Canonical conversation records carry attached context as ordinary user text. */
+const attachedContext = (messageId: string, createdAt: number): Message => record(
+  messageId, 'user', 'Quoted from a.ts\nconst a = 1;\nlook at this', createdAt,
+);
+
 
 const session = { sessionId: 'ses-1', sessionTitle: '  Hello  ', directory: '/repo' };
 
@@ -127,7 +117,7 @@ describe('buildGuestSessionItem', () => {
     expect(item.truncated).toBeUndefined();
   });
 
-  test('keeps attached context on the user side and drops plumbing roles', () => {
+  test('keeps attached context in the canonical user message and drops plumbing roles', () => {
     const item = buildGuestSessionItem('summarize', session, [
       attachedContext('c1', 5),
       plumbing('s1', 6),

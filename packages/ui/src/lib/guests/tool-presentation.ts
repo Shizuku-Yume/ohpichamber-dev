@@ -1,6 +1,5 @@
 import React from 'react';
 import { GUEST_TOOL_TEMPLATE_VALUE_MAX, type GuestToolContribution, type JsonValue } from '@openchamber/sdk';
-import type { ToolInput } from '@/lib/opencode/model';
 
 import { isGuestActive } from './capabilities.ts';
 import { useGuestsStore } from './store.ts';
@@ -170,13 +169,9 @@ const templateOutputValue = (output: string | undefined): TemplateValue => {
     return output;
   }
 };
+/** Tool input and metadata are JSON objects and need no assertion. */
+type ToolStateData = { [key: string]: JsonValue };
 
-/**
- * Tool input and metadata as the domain model types them. `ToolInput` and
- * `Metadata` are both `Record<string, JsonValue>`, so a tool part's input and
- * metadata already are template values and need no assertion.
- */
-type ToolStateData = ToolInput;
 
 type GuestToolHeader = {
   title: string | null;
