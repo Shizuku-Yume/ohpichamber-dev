@@ -75,9 +75,21 @@ export function stageDependencyClosure(source, destination, { platform = process
     return output;
   };
   copy(source, path.join(destination, 'service'));
+  const platformNatives = packages.find(item => item.name === `@oh-my-pi/pi-natives-${platform}-${architecture}`);
+  const nativeLoader = packages.find(item => item.name === '@oh-my-pi/pi-natives');
+  if (platformNatives && nativeLoader) {
+    const nativeDirectory = path.join(destination, nativeLoader.path, 'native');
+    fs.mkdirSync(nativeDirectory, { recursive: true });
+    const platformDirectory = path.join(destination, platformNatives.path);
+    for (const entry of fs.readdirSync(platformDirectory, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.node')) continue;
+      const link = path.join(nativeDirectory, entry.name);
+      fs.symlinkSync(path.relative(path.dirname(link), path.join(platformDirectory, entry.name)), link, 'file');
+    }
+  }
   return packages;
-}
 
+}
 export function prepareAgentRuntime({ bunPath = process.execPath, output = path.join(electronRoot, 'resources', 'agent-runtime') } = {}) {
   const target = resolveTargetArchitecture({ builderArgs: process.argv.slice(2) });
   if (target.node !== process.arch) throw new Error('Agent runtime staging requires a native target host');

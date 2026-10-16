@@ -36,6 +36,21 @@ test('relocated closure resolves conflicting versions, cycles, peers and native 
   assert.equal(fs.readFileSync(path.join(relocated, a.path, 'addon.node'), 'utf8'), 'native-bytes');
 });
 
+test('links platform N-API assets beside the loader package in the relocated closure', t => {
+  const { root, pkg, source, output } = fixture(t);
+  pkg(source, { name: 'service', version: '1', dependencies: { '@oh-my-pi/pi-natives': '1' } });
+  pkg(path.join(source, 'node_modules/@oh-my-pi/pi-natives'), {
+    name: '@oh-my-pi/pi-natives', version: '1', optionalDependencies: { '@oh-my-pi/pi-natives-linux-x64': '1' },
+  });
+  const platformPackage = path.join(source, 'node_modules/@oh-my-pi/pi-natives-linux-x64');
+  pkg(platformPackage, { name: '@oh-my-pi/pi-natives-linux-x64', version: '1' });
+  fs.writeFileSync(path.join(platformPackage, 'pi_natives.linux-x64-modern.node'), 'native-bytes');
+  stageDependencyClosure(source, output, { platform: 'linux', architecture: 'x64' });
+  const link = path.join(output, 'packages/1/native/pi_natives.linux-x64-modern.node');
+  assert.equal(fs.readlinkSync(link), '../../2/pi_natives.linux-x64-modern.node');
+  assert.equal(fs.readFileSync(link, 'utf8'), 'native-bytes');
+});
+
 test('fails on missing required runtime dependencies rather than emitting a partial success', t => {
   const { pkg, source, output } = fixture(t);
   pkg(source, { name: 'service', version: '1', dependencies: { absent: '1' } });

@@ -44,12 +44,14 @@ async function main() {
   const payload = path.join(resources, 'agent-runtime');
   const result = verifyAgentPayload(payload);
   const runtime = resolveAgentRuntime(resources);
-  // Import the actual installed SDK/native closure under the shipped Bun, not
-  // Electron's ABI. This cannot certify provider credentials or a model turn.
-  const imports = spawnSync(runtime.bunPath, ['--no-env-file', '-e', 'await import("@oh-my-pi/pi-coding-agent"); await import("@oh-my-pi/pi-natives"); await import("onnxruntime-node"); await import("fastembed");'], {
-    cwd: path.join(payload, 'service'), encoding: 'utf8', timeout: 60000, windowsHide: true,
-  });
-  if (imports.status !== 0) throw new Error(`Packaged SDK/native imports failed: ${imports.error ?? imports.stderr}`);
+  // Native ONNX packages can ship different SONAME versions. Probe each declared
+  // package in a fresh Bun process so one import cannot mask another's loader.
+  for (const specifier of ['@oh-my-pi/pi-coding-agent', '@oh-my-pi/pi-natives', 'onnxruntime-node', 'fastembed']) {
+    const imports = spawnSync(runtime.bunPath, ['--no-env-file', '-e', `await import(${JSON.stringify(specifier)});`], {
+      cwd: path.join(payload, 'service'), encoding: 'utf8', timeout: 60000, windowsHide: true,
+    });
+    if (imports.status !== 0) throw new Error(`Packaged SDK/native import failed for ${specifier}: ${imports.error ?? imports.stderr}`);
+  }
   const { createAgentServiceSupervisor } = await import('../../web/server/lib/host/agent-service-supervisor.js');
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-packaged-agent-'));
   const supervisor = createAgentServiceSupervisor({ ...runtime, dataDir: directory, env: { OHPICHAMBER_BUN: runtime.bunPath } });
