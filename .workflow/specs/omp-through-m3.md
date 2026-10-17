@@ -79,6 +79,22 @@ Task 17 remains the owner of residual production UI caller migration, Host lifec
 - **Task 35** converges the UI test project after Tasks 33/34 and Task 17, fixing only directly evidenced residual contract drift.
 - **Task 36** runs the single connected Web/Electron W7-W10 packet, including packaged Electron behavior and durable receipts; Task 18 assembles the final gate from that packet and the unchanged W1-W6 evidence.
 
+### Remaining effort and exit order (2026-10-17)
+
+The remaining work is four bounded implementation packets plus one final gate. The estimates below are execution effort, not a calendar promise; a connected runtime failure adds only the owning repair packet evidenced by that run.
+
+| Packet | Current evidence | Remaining deliverable | Effort |
+|---|---|---|---|
+| E1 — UI fixture convergence | The strict UI test-project check exits 0; the 21-file packet passes 264 tests / 984 assertions. The same files still produce 19 anti-slop diagnostics. | Remove only the 19 directly authored lint findings or record an evidence-backed existing-contract exception; archive Tasks 33–35 with the clean check and focused result. | 1 focused coordinator session |
+| E2 — retained caller closure | The source inventory identifies 31 non-test `@/lib/opencode/model` type consumers, 15 `@/lib/opencode/client` call sites, and 67 total legacy helper reach-ins. | Move each remaining production consumer to an existing canonical owner, or create a separate task only when the current contract lacks a real owner. No aliases or fallback paths. | 2–4 bounded owner slices, parallel where files do not overlap |
+| E3 — Host lifecycle retirement | The Host composition root still registers the legacy execution owner set; routes remain only while verified callers use them. | Remove the managed-OpenCode lifecycle/proxy/config/auth owners after E2, preserving Host services and live `/api/agent/v1` readiness/auth boundaries. | 1 integration slice |
+| E4 — connected acceptance | Packaged runtime staging/readiness and Web readiness are proven; no connected Web/Electron UI receipt exists. | One connected Web plus packaged Electron packet covering W7–W10, with a durable sanitized receipt. Reuse W1–W6 and unchanged focused evidence. | 1 runtime session, plus only repairs exposed by that run |
+| E5 — final gate | Task 18 remains open; broad checks are intentionally deferred until the integration boundary is stable. | Run the workspace checks once, inspect dead-code output, update development/task/spec evidence, and close only evidenced W1–W10 items. | 1 final verification pass |
+
+**Order:** E1 → E2 → E3 → E4 → E5. E2 owner slices may run concurrently in separate worktrees; E3 depends on their landed callers. E4 is not started with a known stale caller or a non-clean UI test project. E5 is never substituted by a report of missing runtime evidence.
+
+**Stop conditions:** Do not repeat historical M0/M1/M2 probes. Do not run workspace-wide checks after every fixture edit. Do not add defensive retries, compatibility adapters, or new abstractions unless a current connected failure identifies the missing owner. M3 remains open until E4 supplies current W7–W10 evidence and E5 verifies the assembled state.
+
 No task adds an OpenCode adapter, broad defensive fallback, repeated historical smoke, or a new contract without an observed missing owner.
 
 The maintainer has authorized all future local Git operations for this repository and the necessary OMP SDK dependencies. GitHub commands and pushing remain outside this request. Pre-existing worktree changes remain separate until their ownership/landing is settled.

@@ -27,3 +27,8 @@
 - [ ] W8 recovery proves no duplicate parts and stale prior-runtime data cannot mutate the selected runtime.
 - [ ] W9 checks cover sidebar/catalog, Board, Guest, and retained utility paths without unrelated host-service changes.
 - [ ] W10 records old-client reachability and lifecycle-owner findings from the assembled source.
+## 2026-10-16 connected acceptance investigation
+
+Investigation status: **blocked; no connected Web or packaged Electron success is claimed.** The repository documents the intended entrypoints (`bun run electron:dev:bundled` for bundled Electron development and `bun run electron:build` / `bun run --cwd packages/electron package` for packaging), but this investigation could not execute an actual connected scenario or retain launch output. The available shell execution route rejected the launch/check invocation before execution with `Service mode does not accept async or timeout`; therefore no Web/Electron process, authentication, session, or artifact receipt was observed. The durable blocker record is `.workflow/omp-migration/m3/task36-connected-acceptance-blocked.json` (receipt field: `none`).
+
+Known source blockers remain those named by the task: Tasks 15, 17, 33, 34, and 35. Task 15 still records connected Board/Guest/sidebar observation and residual callers open; Task 17 records packaged Electron certification without OpenCode open; Task 18 records connected W7-W10 open and no connected-run receipt. No failure was masked with a fallback.
