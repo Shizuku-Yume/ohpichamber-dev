@@ -149,14 +149,15 @@ describe('copyMarkdownToClipboard', () => {
     });
 
     const parts = [
-      { id: 'p0', sessionID: 's', messageID: 'm', type: 'text', text: '第一段' },
-      { id: 'p1', sessionID: 's', messageID: 'm', type: 'text', text: '第二段' },
-      { id: 'p2', sessionID: 's', messageID: 'm', type: 'text', text: '```js\nconsole.log(1)\n\n\nconsole.log(2)\n```' },
-      { id: 'p3', sessionID: 's', messageID: 'm', type: 'text', text: '第三段' },
+      { partId: 'p0', type: 'text', content: '第一段' },
+      { partId: 'p1', type: 'text', content: '第二段' },
+      { partId: 'p2', type: 'text', content: '```js\nconsole.log(1)\n\n\nconsole.log(2)\n```' },
+      { partId: 'p3', type: 'text', content: '第三段' },
     ];
 
-    // Same path as ChatMessage.tsx handleCopyMessage:
+    // SAFETY: This fixture intentionally mirrors the `parts` shape accepted by ChatMessage.tsx.
     const text = flattenAssistantTextParts(parts as Parameters<typeof flattenAssistantTextParts>[0]);
+    // SAFETY: marked.parse returns a string for this synchronous, non-pedantic invocation.
     const html = marked.parse(text, { gfm: true, breaks: false }) as string;
     const result = await copyMarkdownToClipboard(text, html);
 

@@ -45,7 +45,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
       await act(async () => root.render(<SyncProvider client={createNativeClient()} directory="/workspace/guess"><Probe /></SyncProvider>))
       if (!manager) throw new Error("Directory manager was not mounted")
       const store = manager.ensureChild(directory, { bootstrap: false })
-      const messages: Message[] = Array.from({ length: 10 }, (_, index) => ({ messageId: `${sessionId}-${index}`, sessionId, turnId: "turn-1", role: "user", createdAt: index, parts: [] }))
+      const messages: Message[] = Array.from({ length: 10 }, (_, index) => ({ messageId: `${sessionId}-${index}`, sessionId, turnId: "turn-1", role: "user", createdAt: index, parts: [{ type: "text", partId: `part-${index}`, content: `message-${index}` }] }))
       store.setState({ session: [session(sessionId, "workspace-actual")], sessionTotal: 1, message: { [sessionId]: messages } })
       await act(async () => { useSessionUIStore.getState().setCurrentSession(sessionId, "/workspace/guess"); useSessionUIStore.getState().setSessionDirectory(sessionId, directory); await Promise.resolve() })
       expect(useSessionUIStore.getState().currentSessionDirectory).toBe(directory)
@@ -157,15 +157,13 @@ describe("SyncProvider native scope and selection boundaries", () => {
     let discoveries = 0
     client.listSessions = async () => { discoveries += 1; return { items: [listed, sibling], errors: {} } }
     let poll: (() => void) | undefined
-    const originalInterval = globalThis.setInterval
-    const interval = spyOn(globalThis, "setInterval").mockImplementation((handler, timeout, ...args) => {
-      if (timeout === 15_000 && typeof handler === "function") poll = () => handler(...args)
-      return originalInterval(handler, timeout, ...args)
-    })
+    const interval = spyOn(globalThis, "setInterval")
     let manager: ChildStoreManager | undefined
     const Probe = () => { manager = useChildStoreManager(); return null }
     try {
       await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
+      const pollCall = interval.mock.calls.find((call) => call[1] === 15_000)
+      if (pollCall) poll = pollCall[0]
       if (!manager || !poll) throw new Error("Discovery poll was not mounted")
       const store = manager.ensureChild(directory, { bootstrap: false })
       manager.pin(directory)
