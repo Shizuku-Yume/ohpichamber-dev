@@ -211,8 +211,8 @@ describe("native session deletion", () => {
     expect(await deleteSession(root.sessionId)).toBe(true)
     expect(remove).toHaveBeenCalledWith(root.sessionId)
     expect(store.getState().session).toEqual([retained])
-    expect(store.getState().sessionDeletedRevision[root.sessionId]).toBeGreaterThan(0)
-    expect(store.getState().sessionDeletedRevision[child.sessionId]).toBeGreaterThan(0)
+    expect(store.getState().sessionDeletedRevision?.[root.sessionId] ?? 0).toBeGreaterThan(0)
+    expect(store.getState().sessionDeletedRevision?.[child.sessionId] ?? 0).toBeGreaterThan(0)
     expect(useGlobalSessionsStore.getState().entityById.has(child.sessionId)).toBe(false)
     expect(isSessionPinned(useSessionPinnedStore.getState().ids, directory, root.sessionId)).toBe(false)
     expect(isSessionPinned(useSessionPinnedStore.getState().ids, directory, child.sessionId)).toBe(false)
@@ -313,7 +313,7 @@ describe("Host archive transitions over native records", () => {
     expect(await archiveSession("session-a")).toBe(true)
     expect(store.getState().session).toEqual([])
     expect(store.getState().session_status["session-a"]).toBeUndefined()
-    expect(store.getState().sessionStatusInvalidated["session-a"]).toBe(true)
+    expect(store.getState().sessionStatusInvalidated?.['session-a']).toBe(true)
     expect(getSessionLiveActivity("session-a")).toBe("unknown")
     expect(store.getState().snapshot["session-a"]).toBeUndefined()
     expect(store.getState().message["session-a"]).toBeUndefined()
@@ -446,7 +446,7 @@ describe("Host archive transitions over native records", () => {
     response.resolve(restoreResponse(["session-a"]))
     expect(await pending).toBe(false)
     expect(store.getState().session).toEqual([])
-    expect(store.getState().sessionStatusInvalidated["session-a"]).toBe(true)
+    expect(store.getState().sessionStatusInvalidated?.['session-a']).toBe(true)
   })
 
   test("a runtime switch during status recovery keeps the already-confirmed restore", async () => {
@@ -487,7 +487,12 @@ describe("native delivery and execution controls", () => {
     store.setState({ message: { "session-a": [message] } })
     const error = new TypeError("Failed to fetch")
     const create = spyOn(canonicalClient, "createRun").mockRejectedValue(error)
-    await expect(sendMessage({ sessionId: "session-a", request })).rejects.toBe(error)
+    try {
+      await sendMessage({ sessionId: 'session-a', request })
+      throw new Error('Expected sendMessage to reject')
+    } catch (caught) {
+      expect(caught).toBe(error)
+    }
     expect(create).toHaveBeenCalledTimes(1)
     expect(store.getState().message["session-a"]).toEqual([message])
   })

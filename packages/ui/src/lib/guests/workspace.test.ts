@@ -101,7 +101,7 @@ describe('extension workspace projection', () => {
     const child = manager.ensureChild('/b-tree', { bootstrap: false });
     await Promise.resolve();
     const baseline = snapshots.length;
-    for (let i = 0; i < 100; i++) child.setState({ part: {} });
+    for (let i = 0; i < 100; i++) child.setState({ sessionStatusReady: child.getState().sessionStatusReady });
     await Promise.resolve();
     expect(snapshots.length).toBe(baseline);
     useSessionUIStore.setState({ worktreeDiscoveryByProject: new Map([['/b', 'error']]) });

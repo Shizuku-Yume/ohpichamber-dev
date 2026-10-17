@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { AssistantMessage, Part, ToolPart, UserMessage } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 import { projectTurnRecords } from './projectTurnRecords';
 import type { ChatMessageEntry } from './types';
 
@@ -17,43 +17,20 @@ const countPartReads = (part: Part, counter: { reads: number }): Part => {
     return counted;
 };
 
-const userEntry = (id: string, created: number): ChatMessageEntry => {
-    const info: UserMessage = { id, sessionID: 's', role: 'user', time: { created } };
-    return { info, parts: [{ id: `${id}_text`, sessionID: 's', messageID: id, type: 'text', text: 'Fix it' }] };
-};
+const userEntry = (messageId: string, createdAt: number): ChatMessageEntry => ({
+    messageId, sessionId: 's', turnId: messageId, role: 'user', createdAt, parts: [{ type: 'text', partId: `${messageId}_text`, content: 'Fix it' }],
+});
 
-const assistantEntry = (id: string, created: number, counter: { reads: number }): ChatMessageEntry => {
-    const info: AssistantMessage = {
-        id,
-        sessionID: 's',
-        role: 'assistant',
-        time: { created, completed: created + 1 },
-        agent: 'build',
-        providerID: 'p',
-        modelID: 'm',
-        finish: 'stop',
+const assistantEntry = (messageId: string, createdAt: number, counter: { reads: number }): ChatMessageEntry => {
+    const message: Message = {
+        messageId, sessionId: 's', turnId: `u${messageId.slice(1)}`, role: 'assistant', createdAt,
+        parts: [
+            { type: 'reasoning', partId: `${messageId}_reasoning`, content: 'thinking' },
+            { type: 'tool_call', partId: `${messageId}_tool`, toolCallId: `${messageId}_call`, toolName: 'edit', input: { filePath: `/repo/${messageId}.ts` }, status: 'completed' },
+            { type: 'text', partId: `${messageId}_text`, content: 'Done.' },
+        ],
     };
-    const tool: ToolPart = {
-        id: `${id}_tool`,
-        sessionID: 's',
-        messageID: id,
-        type: 'tool',
-        callID: `${id}_call`,
-        tool: 'edit',
-        state: {
-            status: 'completed',
-            input: { filePath: `/repo/${id}.ts` },
-            output: 'ok',
-            metadata: {},
-            time: { start: created, end: created + 1 },
-        },
-    };
-    const parts: Part[] = [
-        { id: `${id}_reasoning`, sessionID: 's', messageID: id, type: 'reasoning', text: 'thinking', time: { start: created, end: created } },
-        tool,
-        { id: `${id}_text`, sessionID: 's', messageID: id, type: 'text', text: 'Done.' },
-    ];
-    return { info, parts: parts.map((part) => countPartReads(part, counter)) };
+    return { ...message, parts: message.parts.map((part) => countPartReads(part, counter)) };
 };
 
 const buildSession = (turnCount: number, counter: { reads: number }): ChatMessageEntry[] => (
@@ -68,12 +45,11 @@ describe('projectTurnRecords lazy derived fields', () => {
         const counter = { reads: 0 };
         const messages = buildSession(100, counter);
 
-        const projection = projectTurnRecords(messages, { showTurnChangedFiles: true, mergeHiddenUserTurns: true });
+        const projection = projectTurnRecords(messages, { showTextJustificationActivity: false, showTurnChangedFiles: true, mergeHiddenUserTurns: true });
 
         expect(projection.turns).toHaveLength(100);
-        // Hydrating summary, activity and changed files for every turn up
-        // front read each assistant part several times (recorded: 2700 reads
-        // for 300 parts). Only rendered turns pay for them now.
+        // Only rendered turns pay the cost of deriving summary, activity, and
+        // changed-file information.
         expect(counter.reads).toBe(0);
 
         const rendered = projection.turns.slice(-3);
@@ -96,7 +72,7 @@ describe('projectTurnRecords lazy derived fields', () => {
 
     test('derives the same fields lazily as an eager read would', () => {
         const counter = { reads: 0 };
-        const [turn] = projectTurnRecords(buildSession(1, counter), { showTurnChangedFiles: true }).turns;
+        const [turn] = projectTurnRecords(buildSession(1, counter), { showTextJustificationActivity: false, showTurnChangedFiles: true }).turns;
 
         expect(turn?.summaryText).toBe('Done.');
         expect(turn?.hasTools).toBe(true);
@@ -108,7 +84,7 @@ describe('projectTurnRecords lazy derived fields', () => {
 
     test('hides changed files but keeps diff stats when the setting is off', () => {
         const counter = { reads: 0 };
-        const [turn] = projectTurnRecords(buildSession(1, counter), { showTurnChangedFiles: false }).turns;
+        const [turn] = projectTurnRecords(buildSession(1, counter), { showTextJustificationActivity: false, showTurnChangedFiles: false }).turns;
 
         expect(turn?.changedFiles).toBeUndefined();
         expect(turn?.diffStats?.files).toBe(1);
@@ -116,7 +92,7 @@ describe('projectTurnRecords lazy derived fields', () => {
 
     test('a spread copy carries the derived values', () => {
         const counter = { reads: 0 };
-        const [turn] = projectTurnRecords(buildSession(1, counter), { showTurnChangedFiles: true }).turns;
+        const [turn] = projectTurnRecords(buildSession(1, counter), { showTextJustificationActivity: false, showTurnChangedFiles: true }).turns;
         if (!turn) throw new Error('expected a turn');
 
         const copy = { ...turn, assistantMessages: [] };

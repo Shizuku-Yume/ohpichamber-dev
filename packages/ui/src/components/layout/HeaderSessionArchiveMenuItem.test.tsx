@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { SessionTabMenuComponents } from './SessionTabsStrip';
 
 const browser = new Window({ url: 'http://localhost' });
@@ -24,7 +24,7 @@ const Item: SessionTabMenuComponents['Item'] = (props) => <button {...props} />;
 const session = (sessionId: string, archivedAt?: number): Session => ({
   sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.',
   createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-  metadata: archivedAt === undefined ? null : { archivedAt }, metadataRevision: '0', archiveRevision: '0',
+  archivedAt, metadata: archivedAt === undefined ? null : { title: `session ${sessionId}` }, metadataRevision: archivedAt === undefined ? '0' : '1', archiveRevision: archivedAt === undefined ? '0' : '1',
 });
 let root: Root;
 let archiveRequests: number;
@@ -127,7 +127,7 @@ test('waits for confirmation and leaves a failed restore available for retry', a
   expect(archiveRequests).toBe(0);
   expect(errorMessages).toEqual(['Failed to restore session']);
   expect(successMessages).toEqual([]);
-  expect(useGlobalSessionsStore.getState().entityById.get('target')?.metadata?.archivedAt).toBe(2);
+  expect(useGlobalSessionsStore.getState().entityById.get('target')?.archivedAt).toBe(2);
   expect(button.textContent).toBe('Restore');
 });
 

@@ -1,25 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message } from '@openchamber/agent-contract';
 import { projectTurnRecords } from './projectTurnRecords';
 import type { ChatMessageEntry } from './types';
 
-function createMessageEntry({
-    id,
-    role,
-    createdAt,
-}: {
-    id: string;
-    role: 'user' | 'assistant' | 'system';
-    createdAt: number;
-}): ChatMessageEntry {
-    return {
-        info: {
-            id,
-            role,
-            time: { created: createdAt },
-        } as Message,
-        parts: [] as Part[],
-    };
+function createMessageEntry({ id, role, createdAt, turnId = id }: { id: string; role: 'user' | 'assistant' | 'system'; createdAt: number; turnId?: string }): ChatMessageEntry {
+    return { messageId: id, sessionId: 'session', turnId, role, createdAt, parts: [] };
 }
 
 describe('projectTurnRecords', () => {
@@ -80,18 +65,8 @@ describe('projectTurnRecords', () => {
     test('opens a turn at a subagent run report so the parent reply renders under it', () => {
         const user = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
         const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
-        const report: ChatMessageEntry = {
-            info: {
-                id: 's1',
-                sessionID: 'ses_1',
-                role: 'synthetic',
-                time: { created: 3 },
-                text: '<subagent sessionID="ses_child" state="completed" description="review">\nok\n</subagent>',
-                metadata: { source: 'subagent', childID: 'ses_child', state: 'completed' },
-            },
-            parts: [],
-        };
-        const reaction = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4 });
+        const report = createMessageEntry({ id: 's1', role: 'user', createdAt: 3 });
+        const reaction = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4, turnId: 's1' });
 
         const projection = projectTurnRecords([user, assistant, report, reaction]);
 
@@ -105,11 +80,8 @@ describe('projectTurnRecords', () => {
         // not rejoin the prompt's turn and push the compaction above the prompt.
         const user = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
         const before = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
-        const compaction: ChatMessageEntry = {
-            info: { id: 'c1', sessionID: 'ses_1', role: 'compaction', time: { created: 3 }, status: 'completed', reason: 'auto', summary: 'Objective' },
-            parts: [],
-        };
-        const after = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4 });
+        const compaction = createMessageEntry({ id: 'c1', role: 'user', createdAt: 3 });
+        const after = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4, turnId: 'c1' });
 
         const projection = projectTurnRecords([user, before, compaction, after]);
 
@@ -134,9 +106,9 @@ describe('projectTurnRecords', () => {
         const user2 = createMessageEntry({ id: 'u2', role: 'user', createdAt: 3 });
         const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4 });
         const initial = projectTurnRecords([user1, assistant1, user2, assistant2]);
-        const updatedAssistant2 = {
+        const updatedAssistant2: ChatMessageEntry = {
             ...assistant2,
-            parts: [{ type: 'text', text: 'stream update' } as Part],
+            parts: [{ type: 'text', partId: 'p1', content: 'stream update' }],
         };
 
         const next = projectTurnRecords([user1, assistant1, user2, updatedAssistant2], {
@@ -151,9 +123,9 @@ describe('projectTurnRecords', () => {
         const user = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
         const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
         const initial = projectTurnRecords([user, assistant]);
-        const updatedAssistant = {
+        const updatedAssistant: ChatMessageEntry = {
             ...assistant,
-            parts: [{ id: 'tool_1', type: 'tool', tool: 'bash', state: { status: 'completed' } } as Part],
+            parts: [{ type: 'tool_call', partId: 'tool_1', toolCallId: 'call_1', toolName: 'bash', input: {}, status: 'completed' }],
         };
 
         const next = projectTurnRecords([user, updatedAssistant], {
@@ -183,7 +155,7 @@ describe('projectTurnRecords', () => {
 
     test('merges turns started by hidden user messages when merging is enabled', () => {
         const user1 = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
-        user1.parts = [{ id: 'p1', type: 'text', text: 'visible prompt' } as Part];
+        user1.parts = [{ type: 'text', partId: 'p1', content: 'visible prompt' }];
         const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
         const hiddenUser = createMessageEntry({ id: 'u2', role: 'user', createdAt: 3 });
         const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4 });
@@ -225,7 +197,7 @@ describe('projectTurnRecords', () => {
 
     test('chains merges across consecutive hidden user messages', () => {
         const user1 = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
-        user1.parts = [{ id: 'p1', type: 'text', text: 'visible prompt' } as Part];
+        user1.parts = [{ type: 'text', partId: 'p1', content: 'visible prompt' }];
         const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
         const hidden1 = createMessageEntry({ id: 'u2', role: 'user', createdAt: 3 });
         const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4 });
@@ -242,19 +214,13 @@ describe('projectTurnRecords', () => {
 
     test('keeps text inline (not justification) when a message is blocked on a pending question', () => {
         const user = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
-        user.parts = [{ id: 'p1', type: 'text', text: 'prompt' } as Part];
+        user.parts = [{ type: 'text', partId: 'p1', content: 'prompt' }];
         const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
         // The turn is blocked waiting for the user's answer: no finish and a
         // pending question tool part, with context text before the question.
         assistant.parts = [
-            { id: 'ap1', type: 'text', text: 'context before the question' } as Part,
-            {
-                id: 'ap2',
-                type: 'tool',
-                callID: 'c1',
-                tool: 'question',
-                state: { status: 'pending' },
-            } as Part,
+            { type: 'text', partId: 'ap1', content: 'context before the question' },
+            { type: 'tool_call', partId: 'ap2', toolCallId: 'c1', toolName: 'question', input: {}, status: 'pending_approval' },
         ];
 
         const projection = projectTurnRecords([user, assistant], {

@@ -177,7 +177,7 @@ describe('canonical multi-run store', () => {
     const metadata = { ...live.metadata, notes: 'mutation' };
     registerMultiRunSession(stale, '/repo', { sessionId: live.sessionId, metadata, revision: '3' });
     expect(child.getState().session[0]).toMatchObject({ headSequence: '10', runtimeStatus: 'running', activeRunId: 'active', metadata, metadataRevision: '3' });
-    expect(child.getState().sessionEventRevision[live.sessionId]).toBeGreaterThan(40);
+    expect(child.getState().sessionEventRevision?.[live.sessionId] ?? 0).toBeGreaterThan(40);
     expect(api.published.at(-1)).toMatchObject({ headSequence: '10', runtimeStatus: 'running', metadataRevision: '3' });
     registerMultiRunSession(stale, '/repo', { sessionId: live.sessionId, metadata: null, revision: '1' });
     expect(child.getState().session[0]).toMatchObject({ headSequence: '10', runtimeStatus: 'running', metadata, metadataRevision: '3' });

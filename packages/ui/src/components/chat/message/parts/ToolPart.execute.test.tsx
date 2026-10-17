@@ -4,8 +4,7 @@ import { plugin } from 'bun';
 import { pathToFileURL } from 'node:url';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
-import type { ToolPart as ToolPartData } from '@/lib/opencode/model';
+import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 import { SyncProvider } from '@/sync/sync-context';
 import { I18nProvider } from '@/lib/i18n';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
@@ -46,24 +45,22 @@ const themeContext: ThemeContextValue = {
   setDarkThemePreference: unexpectedThemeChange,
 };
 
-const part: ToolPartData = {
-  id: 'prt_execute', sessionID: 'ses_exec', messageID: 'msg_exec',
-  type: 'tool', tool: 'execute', callID: 'call_exec',
-  state: {
-    status: 'completed',
-    input: { code: 'const issues = await linear.list_issues({ teamId: "OPE" });\nreturn issues;' },
-    output: '{"count":3}',
-    metadata: {
-      truncated: true,
-      outputPath: '/tmp/oc-script-output.json',
-      toolCalls: [
-        { tool: 'linear.list_issues', status: 'completed', input: { teamId: 'OPE' } },
-        { tool: 'linear.list_issues', status: 'error', input: { teamId: 'OPE' } },
-        { tool: 'linear.get_workspace', status: 'completed' },
-      ],
-    },
-    time: { start: 1, end: 2 },
-  },
+const part: ToolCallPart = {
+  type: 'tool_call',
+  partId: 'prt_execute',
+  toolCallId: 'call_exec',
+  toolName: 'execute',
+  input: { code: 'const issues = await linear.list_issues({ teamId: "OPE" });\nreturn issues;' },
+  status: 'completed',
+};
+
+const result: ToolResultPart = {
+  type: 'tool_result',
+  partId: 'prt_execute_result',
+  toolCallId: part.toolCallId,
+  toolName: part.toolName,
+  output: '{"count":3}',
+  isError: false,
 };
 
 test('a Code Mode call shows its script, the tools it called, and the truncation note', async () => {
@@ -96,16 +93,12 @@ test('a Code Mode call shows its script, the tools it called, and the truncation
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  const sdk = OpenCode.make({
-    baseUrl: 'http://localhost',
-    fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
-  });
 
   try {
     useGuestsStore.setState({ status: 'ready', guests: [], runtimeKey: 'test' });
     await act(async () => {
       root.render(
-        <SyncProvider sdk={sdk} directory="">
+        <SyncProvider directory="">
           <I18nProvider>
             <ThemeSystemContext.Provider value={themeContext}>
               <ToolPart part={part} isExpanded isMobile={false} onToggle={() => {}} />

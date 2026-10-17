@@ -3,8 +3,6 @@ import { Window } from 'happy-dom';
 import { describe, expect, test } from 'bun:test';
 import { createRoot } from 'react-dom/client';
 
-import { OpenCode } from '@opencode/client';
-import { SyncProvider } from '@/sync/sync-context';
 import { ThemeSystemProvider } from '@/contexts/ThemeSystemContext';
 import { I18nProvider } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -29,7 +27,6 @@ const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: b
     let queued = 0;
     try {
         await act(async () => root.render(
-        <SyncProvider directory="/fixture" sdk={OpenCode.make({ baseUrl: "http://opencode.test", fetch: async () => new Response("[]", { headers: { "content-type": "application/json" } }) })}>
         <ThemeSystemProvider>
         <I18nProvider>
             <MobilePillComposer
@@ -53,7 +50,7 @@ const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: b
             />
         </I18nProvider>
         </ThemeSystemProvider>
-        </SyncProvider>));
+        ));
         if (options.hasContent && options.canAbort) {
             // While a turn runs the draft can only be queued, never sent past it.
             const queue = container.querySelector<HTMLButtonElement>('[aria-label="Queue message"]');

@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message } from '@openchamber/agent-contract';
 
 mock.module('sonner', () => ({
   toast: { dismiss: () => undefined, error: () => undefined, info: () => undefined, success: () => undefined },
@@ -23,22 +23,13 @@ mock.module('sonner', () => ({
 mock.module('@/components/ui', () => ({
   toast: { info: () => undefined, error: () => undefined, success: () => undefined },
 }));
-let mockIdCounter = 0;
 mock.module('@/lib/host-filesystem', () => ({
   hostFilesystem: {
     getDirectory: () => '/repo',
     setDirectory: () => undefined,
   },
 }));
-mock.module('@/lib/opencode/client', () => ({
-  OpencodeApiError: Error,
-  normalizeOpencodeError: (operation: string, error: unknown) => new Error(`${operation}: ${String(error)}`),
-  ascendingId: (prefix: string) => `${prefix}_${(mockIdCounter += 1).toString(16).padStart(12, '0')}`,
-  opencodeClient: {
-    getSdkClient: () => ({}),
-    getScopedSdkClient: () => ({}),
-  },
-}));
+mock.module('@/lib/api/canonicalClient', () => ({ canonicalClient: {}, CanonicalApiError: Error }));
 mock.module('@/stores/permissionStore', () => ({
   usePermissionStore: { getState: () => ({ getSessionMode: () => 'ask', hydrate: async () => undefined }) },
 }));
@@ -111,34 +102,24 @@ const installMinimalDom = () => {
   };
 };
 
-const createMessage = (id: string, role: 'user' | 'assistant', created: number): Message => ({
-  id,
-  sessionID: SESSION_ID,
+const createMessage = (messageId: string, role: 'user' | 'assistant', createdAt: number): Message => ({
+  messageId,
+  sessionId: SESSION_ID,
+  turnId: role === 'user' ? messageId : `u_${createdAt - 1}`,
   role,
-  ...(role === 'assistant' ? { parentID: `u_${created}` } : {}),
-  time: { created },
-} as Message);
+  createdAt,
+  parts: [{ type: 'text', partId: `prt_${messageId}`, content: role === 'user' ? `prompt ${createdAt}` : `output ${createdAt}` }],
+});
 
-const createPart = (id: string, messageID: string, text: string): Part => ({
-  id,
-  messageID,
-  sessionID: SESSION_ID,
-  type: 'text',
-  text,
-} as Part);
-
-/** 14-message subagent transcript, matching the issue reproduction fixture. */
 const buildMaterializedSubagentSession = () => {
   const messages: Message[] = [];
-  const part: Record<string, Part[]> = {};
   for (let index = 0; index < 14; index += 1) {
     const created = index + 1;
     const role: 'user' | 'assistant' = created % 2 === 1 ? 'user' : 'assistant';
     const id = role === 'user' ? `u_${created}` : `a_${created}`;
     messages.push(createMessage(id, role, created));
-    part[id] = [createPart(`prt_${id}`, id, role === 'user' ? `prompt ${created}` : `output ${created}`)];
   }
-  return { messages, part };
+  return { messages };
 };
 
 // SAFETY: sync-context.tsx publishes exactly these two keys on globalThis
@@ -168,20 +149,16 @@ describe('issue #2903 busy subagent status-line-only', () => {
     const root: Root = createRoot(dom.container);
     const childStores = new ChildStoreManager();
     const store = childStores.ensureChild(DIRECTORY, { bootstrap: false });
-    const { messages, part } = buildMaterializedSubagentSession();
+    const { messages } = buildMaterializedSubagentSession();
     store.setState({
       status: 'complete',
       session: [{
-        id: SESSION_ID,
-        projectID: 'project',
-        title: 'Audit Searchbar implementation',
-        time: { created: 1, updated: 1 },
-        directory: DIRECTORY,
-        cost: 0,
-        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        sessionId: SESSION_ID, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: SESSION_ID,
+        createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+        metadata: { title: 'Audit Searchbar implementation' }, metadataRevision: '1', archiveRevision: '0',
       }],
       message: { [SESSION_ID]: messages },
-      part,
+      partOwner: {},
     } as Partial<State>);
 
     expect(getSessionMaterializationStatus(store.getState(), SESSION_ID)).toEqual({
@@ -190,14 +167,14 @@ describe('issue #2903 busy subagent status-line-only', () => {
       missingPartMessageIDs: [],
     });
 
-    const system = { childStores, messageLoader: {}, sdk: {}, runtimeKey: 'test', directory: DIRECTORY };
+    const system = { childStores, messageLoader: {}, client: {}, runtimeKey: 'test', directory: DIRECTORY };
     // Mirrors SyncProvider's own nesting: system context outer, runtime inner.
     // Directory-scoped hooks read the runtime context, so the harness must
     // provide it with a currentDirectory source for the store lookups.
     const runtime = {
       childStores,
       messageLoader: {},
-      sdk: {},
+      client: {},
       runtimeKey: 'test',
       currentDirectory: { get: () => DIRECTORY, subscribe: () => () => undefined },
     };

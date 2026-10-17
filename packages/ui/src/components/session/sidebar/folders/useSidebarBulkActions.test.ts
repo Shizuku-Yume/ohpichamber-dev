@@ -21,16 +21,17 @@ describe('sidebar bulk project scopes', () => {
 describe('bulk delete confirmation authority', () => {
   test('executes only the unchanged immutable target snapshot', () => {
     const value = { sessionIds: ['a', 'b'], sessionCount: 2, archivedBucket: true };
-    const sessions = new Map([
-      ['a', { updatedAt: 1 }],
-      ['b', { updatedAt: 2 }],
+    const sessions = new Map<string, { archivedAt?: number }>([
+      ['a', {}],
+      ['b', {}],
     ]);
 
     expect(resolveBulkDeleteConfirmation(value, sessions)).toEqual({ ready: true, value });
   });
 
   test('requires confirmation again when targets change, keeping a requested delete a delete', () => {
-    const sessions = new Map([['a', { updatedAt: 0 }]]);
+    const value = { sessionIds: ['a', 'b'], sessionCount: 2, archivedBucket: true };
+    const sessions = new Map<string, { archivedAt?: number }>([['a', {}]]);
 
     expect(resolveBulkDeleteConfirmation(value, sessions)).toEqual({
       ready: false,
@@ -39,7 +40,8 @@ describe('bulk delete confirmation authority', () => {
   });
 
   test('turns a requested archive into a delete once every target is already archived', () => {
-    const sessions = new Map([['a', { updatedAt: 1 }], ['b', { updatedAt: 2 }]]);
+    const value = { sessionIds: ['a', 'b'], sessionCount: 2, archivedBucket: false };
+    const sessions = new Map<string, { archivedAt?: number }>([['a', { archivedAt: 1 }], ['b', { archivedAt: 2 }]]);
 
     expect(resolveBulkDeleteConfirmation(value, sessions)).toEqual({
       ready: false,

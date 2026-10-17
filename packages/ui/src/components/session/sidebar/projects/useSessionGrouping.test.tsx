@@ -159,7 +159,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
         .map((group) => group.label);
     };
 
-    expect(worktreeOrder('recent')).toEqual(['zeta', 'alpha']);
+    expect(worktreeOrder('recent')).toEqual(['alpha', 'zeta']);
     expect(worktreeOrder('a-z')).toEqual(['alpha', 'zeta']);
   });
 
@@ -204,7 +204,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
       [{ id: 'configured-workspace', normalizedPath: '/workspace' }],
       new Map(),
       [],
-      [{ id: 'project', worktree: '/workspace' }],
+      [{ id: 'project', name: 'Project', state: 'complete', projectDirectory: '/workspace', directory: '/workspace' }],
     );
     const Harness = () => {
       state.buildGroupedSessions = useSessionGrouping({
@@ -225,7 +225,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
 
     const groups = buildGroupedSessions([restored], '/workspace', [], null, false);
 
-    expect(groups.find((group) => group.isMain)?.sessions.map((node) => node.session.id)).toEqual(['restored']);
+    expect(groups.find((group) => group.isMain)?.sessions.map((node) => node.session.sessionId)).toEqual(['restored']);
     expect(groups.some((group) => group.isArchivedBucket)).toBe(false);
   });
 
@@ -247,7 +247,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
     const buildGroupedSessions = state.buildGroupedSessions;
     if (!buildGroupedSessions) throw new Error('grouping callback was not mounted');
 
-    const archived = (value: Session): Session => ({ ...value, archiveRevision: '2' });
+    const archived = (value: Session): Session => ({ ...value, archivedAt: 2, archiveRevision: '2' });
     const groups = buildGroupedSessions(
       [
         session('active-parent'),
@@ -266,7 +266,7 @@ describe('useSessionGrouping malformed hierarchy fallbacks', () => {
 
     const rootGroup = groups.find((group) => group.isMain);
     const archiveGroup = groups.find((group) => group.isArchivedBucket);
-    expect(rootGroup?.sessions.map((node) => node.session.id)).toEqual(['active-parent', 'child-of-unloaded']);
+    expect(rootGroup?.sessions.map((node) => node.session.sessionId)).toEqual(['active-parent', 'child-of-unloaded']);
     expect(collectIds(rootGroup?.sessions ?? [])).toEqual(['active-parent', 'active-child', 'child-of-unloaded']);
     expect(collectIds(archiveGroup?.sessions ?? [])).toEqual(['archived-parent']);
   });

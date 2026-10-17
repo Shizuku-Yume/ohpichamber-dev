@@ -1,31 +1,16 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message, Part } from '@openchamber/agent-contract';
 
 import { buildLiveStreamingEntry, type StreamingTailEntry } from './streamingTailEntry';
 import type { ChatMessageEntry, TurnRecord } from './types';
 
-const message = (id: string, role: 'user' | 'assistant', parentID?: string, parts: Part[] = []): ChatMessageEntry => ({
-    info: {
-        id,
-        role,
-        sessionID: 'ses_1',
-        ...(parentID ? { parentID } : {}),
-        time: { created: 1 },
-    } as Message,
-    parts,
+const message = (id: string, role: 'user' | 'assistant', turnId?: string, parts: Part[] = []): ChatMessageEntry => ({
+    messageId: id, sessionId: 'ses_1', turnId: turnId ?? id, role, createdAt: 1, parts,
 });
 
-const textPart = (id: string, text: string): Part => ({
-    id,
-    type: 'text',
-    text,
-} as Part);
+const textPart = (id: string, text: string): Part => ({ type: 'text', partId: id, content: text });
 
-const reasoningPart = (id: string, text: string): Part => ({
-    id,
-    type: 'reasoning',
-    text,
-} as Part);
+const reasoningPart = (id: string, text: string): Part => ({ type: 'reasoning', partId: id, content: text });
 
 const turnEntry = (assistant: ChatMessageEntry): StreamingTailEntry => {
     const user = message('user_1', 'user');
@@ -37,9 +22,9 @@ const turnEntry = (assistant: ChatMessageEntry): StreamingTailEntry => {
             turnId: 'user_1',
             userMessageId: 'user_1',
             userMessage: user,
-            headerMessageId: assistant.info.id,
+            headerMessageId: assistant.messageId,
             messages: [],
-            assistantMessageIds: [assistant.info.id],
+            assistantMessageIds: [assistant.messageId],
             assistantMessages: [assistant],
             activityParts: [],
             activitySegments: [],
@@ -108,10 +93,7 @@ describe('buildLiveStreamingEntry', () => {
         const stale = message('assistant_1', 'assistant', 'user_1', [textPart('part_1', 'old')]);
         const entry = turnEntry(stale);
         const visible = textPart('part_visible', 'visible');
-        // v2 has no synthetic parts; a malformed record is what normalization
-        // drops. SAFETY: the double assertion is the point — this fixture
-        // stands for a part the server sent without a `type`.
-        const malformed = { id: 'part_broken' } as unknown as Part;
+        const malformed: Part = { type: 'step_summary', partId: 'part_broken', title: 'Broken' };
 
         const next = buildLiveStreamingEntry(entry, {
             livePartsByMessageId: { assistant_1: [malformed, visible] },

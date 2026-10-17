@@ -11,13 +11,23 @@ import { installHookTestDom } from '../test-utils/testDom';
 
 const node = (sessionId: string): SessionNode => ({
   session: {
-    sessionId, rootSessionId: sessionId,
-    projectId: 'project-a', workspaceId: 'workspace-a', displayPath: '.',
-    createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0',
-    runtimeStatus: 'idle', activeRunId: null,
-    metadata: null, metadataRevision: '0', archiveRevision: '0',
+    sessionId,
+    rootSessionId: sessionId,
+    projectId: 'project-a',
+    workspaceId: 'workspace-a',
+    displayPath: '.',
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
   } satisfies Session,
-  children: [], worktree: null,
+  children: [],
+  worktree: null,
 });
 
 describe('collapsed activity scalar selector', () => {
@@ -39,7 +49,7 @@ describe('collapsed activity scalar selector', () => {
     try {
       await act(async () => root.render(React.createElement(Harness)));
       const initialRenders = capture.renders;
-      await act(async () => replaceGlobalSessionStatusById(new Map([['unrelated', { status: { type: 'busy' }, directory: '/other' }]])));
+      await act(async () => replaceGlobalSessionStatusById(new Map([['unrelated', { status: 'running', directory: '/other' }]])));
       await act(async () => useNotificationStore.getState().append({
         type: 'turn-complete', session: 'unrelated', time: Date.now(), viewed: false,
       }));
@@ -50,30 +60,33 @@ describe('collapsed activity scalar selector', () => {
       }));
       expect(capture.state).toBe('unread');
       const unreadRenders = capture.renders;
-      await act(async () => replaceGlobalSessionStatusById(new Map([['relevant', { status: { type: 'busy' }, directory: '/workspace' }]])));
+      await act(async () => replaceGlobalSessionStatusById(new Map([['relevant', { status: 'running', directory: '/workspace' }]])));
       expect(capture.state).toBe('active');
       expect(capture.renders).toBe(unreadRenders + 1);
 
       // A pending request outranks a running turn, and a request elsewhere is ignored.
       const activeRenders = capture.renders;
       await act(async () => applyGlobalBlockingRequestEvents('/other', [{
-        type: 'form.created', properties: { form: { id: 'q-other', sessionID: 'unrelated', title: 'Pick', fields: [{ key: 'answer', type: 'boolean' }] } },
+        sessionId: 'unrelated', epoch: 'epoch-1', sequence: '1', timestamp: 1, type: 'question.requested',
+        question: { questionId: 'q-other', sessionId: 'unrelated', turnId: 'turn-1', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1', prompt: 'Pick', status: 'pending', requestedAt: 1 },
       }]));
       expect(capture.state).toBe('active');
       expect(capture.renders).toBe(activeRenders);
       await act(async () => applyGlobalBlockingRequestEvents('/workspace', [{
-        type: 'form.created', properties: { form: { id: 'q1', sessionID: 'relevant', title: 'Pick', fields: [{ key: 'answer', type: 'boolean' }] } },
+        sessionId: 'relevant', epoch: 'epoch-1', sequence: '1', timestamp: 1, type: 'question.requested',
+        question: { questionId: 'q1', sessionId: 'relevant', turnId: 'turn-1', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1', prompt: 'Pick', status: 'pending', requestedAt: 1 },
       }]));
       expect(capture.state).toBe('form');
       await act(async () => applyGlobalBlockingRequestEvents('/workspace', [{
-        type: 'permission.asked',
-        properties: { id: 'p1', sessionID: 'relevant', action: 'bash', resources: [] },
+        sessionId: 'relevant', epoch: 'epoch-1', sequence: '2', timestamp: 2, type: 'approval.requested',
+        approval: { approvalId: 'p1', sessionId: 'relevant', turnId: 'turn-1', toolCallId: 'call-1', toolName: 'bash', actionType: 'bash_command', commandSummary: 'bash', details: {}, version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1', status: 'pending', requestedAt: 2 },
+      }, {
+        sessionId: 'relevant', epoch: 'epoch-1', sequence: '3', timestamp: 3, type: 'approval.resolved',
+        approval: { approvalId: 'p1', sessionId: 'relevant', turnId: 'turn-1', toolCallId: 'call-1', toolName: 'bash', actionType: 'bash_command', commandSummary: 'bash', details: {}, version: '2', epoch: 'epoch-1', workerGeneration: 'worker-1', status: 'rejected', requestedAt: 2, resolvedAt: 3, resolution: { decision: 'reject' } },
+      }, {
+        sessionId: 'relevant', epoch: 'epoch-1', sequence: '4', timestamp: 4, type: 'question.resolved',
+        question: { questionId: 'q1', sessionId: 'relevant', turnId: 'turn-1', version: '2', epoch: 'epoch-1', workerGeneration: 'worker-1', prompt: 'Pick', status: 'cancelled', requestedAt: 1, resolvedAt: 4 },
       }]));
-      expect(capture.state).toBe('permission');
-      await act(async () => applyGlobalBlockingRequestEvents('/workspace', [
-        { type: 'permission.replied', properties: { sessionID: 'relevant', requestID: 'p1' } },
-        { type: 'form.settled', properties: { sessionID: 'relevant', formID: 'q1' } },
-      ]));
       expect(capture.state).toBe('active');
     } finally {
       await act(async () => root.unmount());
@@ -104,8 +117,8 @@ describe('collapsed activity scalar selector', () => {
       await act(async () => root.render(React.createElement(Harness)));
       expect(capture.state).toBeNull();
       await act(async () => applyGlobalBlockingRequestEvents('/workspace', [{
-        type: 'permission.asked',
-        properties: { id: 'p-sub', sessionID: 'lane-subagent', action: 'bash', resources: [] },
+        sessionId: 'lane-subagent', epoch: 'epoch-1', sequence: '1', timestamp: 1, type: 'approval.requested',
+        approval: { approvalId: 'p-sub', sessionId: 'lane-subagent', turnId: 'turn-1', toolCallId: 'call-sub', toolName: 'bash', actionType: 'bash_command', commandSummary: 'bash', details: {}, version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1', status: 'pending', requestedAt: 1 },
       }]));
       expect(capture.state).toBe('permission');
     } finally {

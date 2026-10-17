@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { Session, SessionMetadata } from '@openchamber/agent-contract';
 import {
   getBtwBoundaryMessageID, getBtwOriginalSessionID, getBtwSessionID, isBtwSession, withBtwSessionLink,
-  withBtwSessionMarker, withoutBtwSessionLink, wasPromotedBtwSession, withoutBtwSessionMarker,
+  withBtwSessionMarker, withoutBtwSessionLink, withoutBtwSessionMarker,
 } from './sessionBtwMetadata';
 
 const sessionWith = (metadata: SessionMetadata): Session => ({
@@ -60,20 +60,12 @@ describe('fork marker', () => {
     expect(getBtwBoundaryMessageID(review)).toBeNull();
   });
 
-  test('withoutBtwSessionMarker strips the marker, keeps other keys, and records the promotion', () => {
+  test('withoutBtwSessionMarker strips only the marker fields and keeps other keys', () => {
     const marked: SessionMetadata = { openchamber: { kind: 'btw', originalSessionID: 'parent-1', btwBoundaryMessageID: 'msg-9', btwSessionID: 'nested' } };
-    expect(withoutBtwSessionMarker(marked)).toEqual({ openchamber: { btwSessionID: 'nested', btwPromoted: true } });
-    expect(withoutBtwSessionMarker({ openchamber: { kind: 'btw', originalSessionID: 'parent-1' } })).toEqual({ openchamber: { btwPromoted: true } });
+    expect(withoutBtwSessionMarker(marked)).toEqual({ openchamber: { btwSessionID: 'nested' } });
+    expect(withoutBtwSessionMarker({ openchamber: { kind: 'btw', originalSessionID: 'parent-1' } })).toEqual({});
     const plain: SessionMetadata = { openchamber: { kind: 'review' } };
     expect(withoutBtwSessionMarker(plain)).toBe(plain);
   });
 
-  test('wasPromotedBtwSession only reports a session that went through promotion', () => {
-    expect(wasPromotedBtwSession(sessionWith({ openchamber: { btwPromoted: true } }))).toBe(true);
-    // Still a live btw fork: the boundary applies, the notice must not.
-    expect(wasPromotedBtwSession(sessionWith({ openchamber: { kind: 'btw', originalSessionID: 'p-1' } }))).toBe(false);
-    expect(wasPromotedBtwSession(sessionWith({ openchamber: {} }))).toBe(false);
-    expect(wasPromotedBtwSession(sessionWith({}))).toBe(false);
-    expect(wasPromotedBtwSession(null)).toBe(false);
-  });
 });

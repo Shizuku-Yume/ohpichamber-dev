@@ -1,9 +1,19 @@
 import { describe, expect, test } from "bun:test"
 
+import type { Message as CanonicalMessage } from "@openchamber/agent-contract"
 import type { SyntheticMessage } from "./model"
 import { readDispatchedSessionResult } from "./dispatched-session"
 import { readSubagentRun } from "./subagent-run"
 import { isBackgroundReportEntry, isSkippedTimelineMessage } from "@/components/chat/lib/timelineRoles"
+
+const canonicalMessage: CanonicalMessage = {
+  messageId: "msg",
+  sessionId: "ses_parent",
+  turnId: "turn",
+  role: "assistant",
+  createdAt: 30,
+  parts: [{ type: "text", partId: "part", content: "Toolbar fixed." }],
+}
 
 // The shape `web/server/lib/dispatch-results` admits into the dispatching session.
 const result = (overrides: Partial<SyntheticMessage> = {}): SyntheticMessage => ({
@@ -32,7 +42,7 @@ describe("readDispatchedSessionResult", () => {
     expect(readDispatchedSessionResult(result({ metadata: undefined }))).toBeUndefined()
     expect(readDispatchedSessionResult(result({ metadata: { source: "subagent", childID: "ses_child", state: "completed" } }))).toBeUndefined()
     expect(readDispatchedSessionResult(result({ metadata: { source: "openchamber-session", sessionID: "ses_child", state: "running" } }))).toBeUndefined()
-    expect(readSubagentRun(result())).toBeUndefined()
+    expect(readSubagentRun(canonicalMessage)).toBeUndefined()
   })
 
   test("keeps text without the envelope as it is", () => {
@@ -41,13 +51,13 @@ describe("readDispatchedSessionResult", () => {
 })
 
 describe("timeline roles", () => {
-  test("a dispatched session's result is shown and opens a turn", () => {
-    expect(isBackgroundReportEntry(result())).toBe(true)
-    expect(isSkippedTimelineMessage(result())).toBe(false)
+  test("canonical messages do not use synthetic background roles", () => {
+    expect(isBackgroundReportEntry(canonicalMessage)).toBe(false)
+    expect(isSkippedTimelineMessage(canonicalMessage)).toBe(false)
   })
 
-  test("other synthetic messages stay hidden", () => {
-    expect(isBackgroundReportEntry(result({ metadata: undefined }))).toBe(false)
-    expect(isSkippedTimelineMessage(result({ metadata: undefined }))).toBe(true)
+  test("system messages stay hidden", () => {
+    expect(isBackgroundReportEntry({ ...canonicalMessage, role: "system" })).toBe(false)
+    expect(isSkippedTimelineMessage({ ...canonicalMessage, role: "system" })).toBe(true)
   })
 })

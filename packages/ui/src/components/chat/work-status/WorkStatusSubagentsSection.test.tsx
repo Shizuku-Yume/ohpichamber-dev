@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
 import type { ApprovalRequest, QuestionRequest, Session } from '@openchamber/agent-contract';
 import { useUIStore } from '@/stores/useUIStore';
 import { I18nProvider } from '@/lib/i18n';
@@ -49,11 +48,10 @@ describe('subagent status rows', () => {
   let root: Root;
   let container: HTMLElement;
   let restoreGlobals: () => void;
-  const sdk = OpenCode.make({ baseUrl: 'http://subagents.test', fetch: () => new Promise<Response>(() => undefined) });
   const render = async () => {
     await act(async () => root.render(
-      <SyncProvider sdk={sdk} directory={directory}>
-        <I18nProvider><WorkStatusSubagentsSection sessionId={parent.id} directory={directory} /></I18nProvider>
+      <SyncProvider directory={directory}>
+        <I18nProvider><WorkStatusSubagentsSection sessionId={parent.sessionId} directory={directory} /></I18nProvider>
       </SyncProvider>,
     ));
   };

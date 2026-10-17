@@ -99,9 +99,9 @@ describe('sidebar search over standalone groups', () => {
     const archived = { ...chatSession('ses_archived', 'Archived'), displayPath: CHATS_ROOT, archiveRevision: '2' };
     const group = chatsGroup([]);
     const sections = renderSections(group, targetId, [active, archived]);
-    expect(sections.flatSectionsForRender[0].groups[0].sessions.map((node) => node.session.id)).toEqual([targetId]);
+    expect(sections.flatSectionsForRender[0].groups[0].sessions.map((node) => node.session.sessionId)).toEqual([targetId]);
     expect(sections.searchMatchCount).toBe(1);
-    const archivedSearch = renderSections(group, archived.id, [active, archived]);
+    const archivedSearch = renderSections(group, archived.sessionId, [active, archived]);
     expect(archivedSearch.flatSectionsForRender).toEqual([]);
     expect(archivedSearch.searchMatchCount).toBe(0);
   });
@@ -115,7 +115,7 @@ describe('sidebar search over standalone groups', () => {
     for (const query of [targetId, `  ${targetId.toUpperCase()}\n`]) {
       const sections = renderSections(group, query);
       const data = sections.groupSearchDataByGroup.get(group);
-      expect(data?.filteredNodes.map((node) => node.session.id)).toEqual([targetId]);
+      expect(data?.filteredNodes.map((node) => node.session.sessionId)).toEqual([targetId]);
       expect(data?.groupMatches).toBe(false);
       expect(data?.folderNameMatchCount).toBe(0);
       expect(sections.searchMatchCount).toBe(1);
@@ -134,8 +134,8 @@ describe('sidebar search over standalone groups', () => {
     ];
     const sections = renderSections(group, targetId);
     const nodes = sections.groupSearchDataByGroup.get(group)?.filteredNodes;
-    expect(nodes?.map((node) => node.session.id)).toEqual(['ses_parent']);
-    expect(nodes?.[0].children.map((node) => node.session.id)).toEqual([targetId]);
+    expect(nodes?.map((node) => node.session.sessionId)).toEqual(['ses_parent']);
+    expect(nodes?.[0].children.map((node) => node.session.sessionId)).toEqual([targetId]);
     expect(sections.searchMatchCount).toBe(1);
     const parentSections = renderSections(group, 'ses_parent');
     expect(parentSections.groupSearchDataByGroup.get(group)?.filteredNodes[0]).toBe(parent);
@@ -145,7 +145,7 @@ describe('sidebar search over standalone groups', () => {
 
   test('does not return archived sessions for an ID query', () => {
     const archived = chatSession(targetId, 'Archived');
-    archived.time.archived = 2;
+    archived.archivedAt = 2;
     const group = chatsGroup([archived]);
     expect(renderSections(group, targetId).searchMatchCount).toBe(0);
   });
@@ -160,7 +160,7 @@ describe('sidebar search over standalone groups', () => {
     const data = sections.groupSearchDataByGroup.get(group);
 
     expect(data).toBeDefined();
-    expect(data?.filteredNodes.map((node) => node.session.id)).toEqual(['ses_a']);
+    expect(data?.filteredNodes.map((node) => node.session.sessionId)).toEqual(['ses_a']);
     expect(data?.hasMatch).toBe(true);
   });
 

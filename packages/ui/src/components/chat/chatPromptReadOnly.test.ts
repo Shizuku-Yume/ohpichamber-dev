@@ -1,18 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 import { resolveChatPromptReadOnly } from './chatPromptReadOnly';
 import { withReviewSessionMarker } from '@/lib/sessionReviewMetadata';
 
-const session = (parentID?: string): Session => ({
-    id: 'session',
-    title: 'Session',
-    projectID: 'project',
-    directory: '/repo',
-    parentID,
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    time: { created: 1, updated: 1 },
+const session = (parentSessionId?: string): Session => ({
+    sessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.',
+    parentSessionId, rootSessionId: parentSessionId ?? 'session', createdAt: 1, updatedAt: 1,
+    epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 
 describe('resolveChatPromptReadOnly', () => {
@@ -30,10 +26,10 @@ describe('resolveChatPromptReadOnly', () => {
     });
 
     test('treats a marked code review as an independent session even with a stale parent ID', () => {
-        const reviewSession = {
+        const reviewSession: Session = {
             ...session('original'),
             metadata: withReviewSessionMarker({}, 'original'),
-        } as Session;
+        };
 
         expect(resolveChatPromptReadOnly(reviewSession, false, false)).toBe(false);
         expect(resolveChatPromptReadOnly(reviewSession, true, true)).toBe(true);

@@ -27,3 +27,4 @@
 - Focused checks: session actions/export/message text — 80 passed, 0 failed; `ToolPart.subagent-row.test.tsx` — 5 passed, 0 failed, 20 assertions (390 ms). The latter covers exact parent/tool-call joins, batched children, failure retention, and grouped rows' addressed session/directory.
 - `ToolPart` reads `canonicalClient.listSubagents(sessionId)` and matches exact `parentSessionId` and `toolCallId`, without output parsing. Desktop opens a read-only context tab; pinned columns reuse `openSession`; mobile selects the child in place. `TurnActivity` and `ProgressiveGroup` thread session/directory through the memoized row.
 - Task 32 owns child registry/history/cursor authority. Connected Web/Electron acceptance remains open under Task 18; component tests do not close the task.
+**Finished:** 2026-10-16

@@ -1640,6 +1640,7 @@ type ConfigStoreWithPersist = UseBoundStore<StoreApi<ConfigStore>> & {
     persist: {
         hasHydrated: () => boolean;
         onFinishHydration: (callback: (state: ConfigStore) => void) => () => void;
+        rehydrate: () => Promise<void>;
     };
 };
 

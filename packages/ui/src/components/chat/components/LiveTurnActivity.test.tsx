@@ -6,8 +6,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
-import type { Part, AssistantMessage } from '@/lib/opencode/model';
+import { CanonicalClient } from '@/api/canonicalClient';
+import type { Part } from '@openchamber/agent-contract';
 import { I18nProvider, useI18nStore } from '@/lib/i18n';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import type { RuntimeAPIs } from '@/lib/api/types';
@@ -48,32 +48,32 @@ const runtimeApis: RuntimeAPIs = {
     get permissions() { return unavailable(); },
     get notifications() { return unavailable(); },
 };
-const sdk = OpenCode.make({ baseUrl: 'http://localhost', fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }) });
+const client = new CanonicalClient();
 // The answer's action bar also has an aria-expanded button, the branch menu
 // trigger, so the changed-file toggle is the one that opens no popup.
 const changedFilesToggle = () => document.querySelector<HTMLButtonElement>('[data-fixture-message="final"] button[aria-expanded]:not([aria-haspopup])');
 let MessageBody: typeof import('../message/MessageBody').default;
 
-function assistant(id: string, parts: Part[], finish?: AssistantMessage['finish']): ChatMessageEntry {
-    const info: AssistantMessage = {
-        id, sessionID: 'session', role: 'assistant', time: { created: 2, completed: finish ? 3 : undefined },
-        modelID: 'model', providerID: 'provider', agent: 'build',
-        cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, finish,
-    };
-    return { info, parts };
+function assistant(messageId: string, parts: Part[]): ChatMessageEntry {
+    return { messageId, sessionId: 'session', turnId: 'turn', role: 'assistant', createdAt: 2, parts };
 }
-function text(id: string, content: string): Part {
-    return { type: 'text', id, text: content, sessionID: 'session', messageID: 'message' };
+function text(partId: string, content: string): Part {
+    return { type: 'text', partId, content };
 }
-const readPart: Part = {
-    type: 'tool', tool: 'read', id: 'read', callID: 'read', sessionID: 'session', messageID: 'progress',
-    state: { status: 'completed', input: { filePath: '/project/source.ts' }, output: 'code', metadata: {}, time: { start: 1, end: 2 } },
-};
+const readParts: Part[] = [
+    { type: 'tool_call', partId: 'read-call-part', toolCallId: 'read-call', toolName: 'read', input: { filePath: '/project/source.ts' }, status: 'completed' },
+    { type: 'tool_result', partId: 'read-result', toolCallId: 'read-call', toolName: 'read', output: 'code', isError: false },
+];
+const editParts: Part[] = [
+    { type: 'tool_call', partId: 'edit-call-part', toolCallId: 'edit-call', toolName: 'edit', input: { filePath: 'src/source.ts' }, status: 'completed' },
+    { type: 'tool_result', partId: 'edit-result', toolCallId: 'edit-call', toolName: 'edit', output: { file: 'src/source.ts', patch: '@@ -1,1 +1,2 @@\n-old\n+new\n+added' }, isError: false },
+];
+
 function turn(messages: ChatMessageEntry[]): TurnRecord {
     return projectTurnRecords([{
-        info: { id: 'user', sessionID: 'session', role: 'user', time: { created: 1 } },
+        messageId: 'user', sessionId: 'session', turnId: 'turn', role: 'user', createdAt: 1,
         parts: [text('request', 'Request')],
-    }, ...messages]).turns[0];
+    }, ...messages], { showTurnChangedFiles: true }).turns[0];
 }
 
 function Harness({ record, retired = false, changedFiles, isLatestTurn = true, mobileActions = null }: {
@@ -85,12 +85,10 @@ function Harness({ record, retired = false, changedFiles, isLatestTurn = true, m
 }) {
     const [expanded, setExpanded] = React.useState(false);
     const renderMessage = (message: ChatMessageEntry) => (
-        <div key={message.info.id} data-fixture-message={message.info.id}>
+        <div key={message.messageId} data-fixture-message={message.messageId}>
             <MessageBody
-                messageId={message.info.id} parts={message.parts} isUser={false}
-                isMessageCompleted={message.info.role === 'assistant' && Boolean(message.info.finish)}
-                messageFinish={message.info.role === 'assistant' ? message.info.finish : undefined}
-                isMobile={mobileActions !== null} copiedCode={null} onCopyCode={() => undefined} expandedTools={new Set()}
+                messageId={message.messageId} parts={message.parts} isUser={false}
+                isMessageCompleted={isLatestTurn || retired} isMobile={mobileActions !== null} copiedCode={null} onCopyCode={() => undefined} expandedTools={new Set()}
                 onToggleTool={() => undefined} onShowPopup={() => undefined} streamPhase="completed" allowAnimation={false}
                 hasTextContent={message.parts.some((part) => part.type === 'text')} showReasoningTraces
                 turnGroupingContext={{
@@ -102,7 +100,7 @@ function Harness({ record, retired = false, changedFiles, isLatestTurn = true, m
         </div>
     );
     const content = <RuntimeAPIContext.Provider value={runtimeApis}>
-        <SyncProvider sdk={sdk} directory="/project">
+        <SyncProvider client={client} directory="/project">
             <I18nProvider>
                 <LiveTurnActivity turn={record} hasLaterAssistant={retired} expanded={expanded}
                     onToggle={() => setExpanded((value) => !value)} renderMessage={renderMessage} />
@@ -162,12 +160,12 @@ describe('live Activity with the real message body', () => {
     });
 
     test('keeps active prose and tools visible; stop folds history but leaves the answer', async () => {
-        const progress = assistant('progress', [text('progress-text', 'Checking the source'), readPart], 'tool-calls');
+        const progress = assistant('progress', [text('progress-text', 'Checking the source'), ...readParts]);
         await act(async () => root.render(<Harness record={turn([progress])} />));
         expect(container.textContent).toContain('Checking the source');
         expect(container.querySelector('[aria-controls]')).toBeNull();
         expect(container.textContent).not.toContain('Activity');
-        const final = assistant('final', [text('final-text', 'The final answer')], 'stop');
+        const final = assistant('final', [text('final-text', 'The final answer')]);
         await act(async () => root.render(<Harness record={turn([progress, final])} />));
         expect(container.textContent).toContain('The final answer');
         expect(container.textContent).not.toContain('Checking the source');
@@ -183,8 +181,8 @@ describe('live Activity with the real message body', () => {
     });
 
     test('keeps thinking in the final message inside Activity, not outside with the answer', async () => {
-        const thinking: Part = { type: 'reasoning', id: 'thinking', messageID: 'final', sessionID: 'session', text: 'Private reasoning content', time: { start: 1, end: 2 } };
-        const final = assistant('final', [thinking, text('final-text', 'Public answer')], 'stop');
+        const thinking: Part = { type: 'reasoning', partId: 'thinking', content: 'Private reasoning content' };
+        const final = assistant('final', [thinking, text('final-text', 'Public answer')]);
         await act(async () => root.render(<Harness record={turn([final])} />));
         expect(container.textContent).toContain('Public answer');
         expect(container.textContent).not.toContain('Private reasoning content');
@@ -194,7 +192,7 @@ describe('live Activity with the real message body', () => {
     });
 
     test('an interrupted turn folds all prose without fabricating a final answer', async () => {
-        const record = turn([assistant('progress', [text('progress-text', 'Still working'), readPart], 'tool-calls')]);
+        const record = turn([assistant('progress', [text('progress-text', 'Still working'), ...readParts])]);
         await act(async () => root.render(<Harness record={record} />));
         expect(container.textContent).toContain('Still working');
         expect(container.textContent).not.toContain('Activity');
@@ -206,14 +204,10 @@ describe('live Activity with the real message body', () => {
     });
 
     test('keeps file statistics visible when expanded and uses an ASCII minus', async () => {
-        const edit: Part = {
-            type: 'tool', tool: 'edit', id: 'edit', callID: 'edit', sessionID: 'session', messageID: 'progress',
-            state: { status: 'completed', input: { filePath: '/project/source.ts' }, output: '',
-                metadata: { diff: '@@ -1,1 +1,2 @@\n-old\n+new\n+added' }, time: { start: 1, end: 2 } },
-        };
+        const edit = editParts;
         await act(async () => root.render(<Harness record={turn([
-            assistant('progress', [edit], 'tool-calls'),
-            assistant('final', [text('answer', 'Done')], 'stop'),
+            assistant('progress', edit),
+            assistant('final', [text('answer', 'Done')]),
         ])} />));
         const header = container.querySelector<HTMLButtonElement>('button[aria-controls]');
         expect(header?.textContent).toContain('Changed 1 file');
@@ -224,7 +218,7 @@ describe('live Activity with the real message body', () => {
     });
 
     test('shows at most four changed files and folds the rest into one chip, including at the threshold', async () => {
-        const record = turn([assistant('final', [text('answer', 'Done')], 'stop')]);
+        const record = turn([assistant('final', [text('answer', 'Done')])]);
         for (const count of [0, 1, 3, 4, 5, 100]) {
             const files = Array.from({ length: count }, (_, index) => ({ file: `src/file-${index}.ts`, additions: 1, deletions: 0 }));
             await act(async () => root.render(<Harness record={record} changedFiles={files} />));
@@ -242,7 +236,7 @@ describe('live Activity with the real message body', () => {
     });
 
     test('reveals the rest in source order, keeps them through updates and locale changes, then hides them with focus intact', async () => {
-        const record = turn([assistant('final', [text('answer', 'Done')], 'stop')]);
+        const record = turn([assistant('final', [text('answer', 'Done')])]);
         const files = Array.from({ length: 100 }, (_, index) => ({ file: `src/file-${index}.ts`, additions: 1, deletions: 0 }));
         await act(async () => root.render(<Harness record={record} changedFiles={files} />));
         const toggle = changedFilesToggle();
@@ -271,7 +265,7 @@ describe('live Activity with the real message body', () => {
     });
 
     test('changed files open current file contents without substituting a working-tree diff', async () => {
-        const record = turn([assistant('final', [text('answer', 'Done')], 'stop')]);
+        const record = turn([assistant('final', [text('answer', 'Done')])]);
         await act(async () => root.render(<Harness record={record} changedFiles={[
             { file: 'src/a.ts' },
             { file: 'src/b.ts', additions: 1, deletions: 2 },
@@ -291,7 +285,7 @@ describe('live Activity with the real message body', () => {
     });
 
     test('mobile changed files open the existing Files surface without opening Changes', async () => {
-        const record = turn([assistant('final', [text('answer', 'Done')], 'stop')]);
+        const record = turn([assistant('final', [text('answer', 'Done')])]);
         let filesOpened = 0;
         let changesOpened = 0;
         const mobileActions: MobileAppActions = {
@@ -312,10 +306,10 @@ describe('live Activity with the real message body', () => {
 
     test('keeps historical files informational and withholds the list before stop', async () => {
         const files = Array.from({ length: 5 }, (_, index) => ({ file: `src/file-${index}.ts`, additions: 1, deletions: 0 }));
-        const final = assistant('final', [text('answer', 'Done')], 'tool-calls');
+        const final = assistant('final', [text('answer', 'Done')]);
         await act(async () => root.render(<Harness record={turn([final])} changedFiles={files} isLatestTurn={false} />));
         expect(container.textContent).not.toContain('file-0.ts');
-        await act(async () => root.render(<Harness record={turn([assistant('final', final.parts, 'stop')])} changedFiles={files} isLatestTurn={false} />));
+        await act(async () => root.render(<Harness record={turn([final])} changedFiles={files} isLatestTurn={false} retired />));
         expect(container.textContent).toContain('file-0.ts');
         await act(async () => changedFilesToggle()?.click());
         expect(container.textContent).toContain('file-4.ts');

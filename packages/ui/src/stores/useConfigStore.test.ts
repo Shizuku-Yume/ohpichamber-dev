@@ -366,7 +366,7 @@ describe('useConfigStore provider persistence', () => {
     probeHealthImpl = null;
     probeHealthOptions = [];
     loadSettingsImpl = null;
-    setSyncRefs({} as never, { children: new Map(), getState: () => undefined } as never, DIRECTORY);
+    setSyncRefs({ children: new Map(), getState: () => undefined } as never, DIRECTORY);
     useSelectionStore.setState({
       sessionModelSelections: new Map(),
       sessionAgentSelections: new Map(),
@@ -2681,7 +2681,6 @@ describe('useConfigStore provider persistence', () => {
     ]);
     // SAFETY: the mock implements only the child-store surface getSyncConfig reads.
     setSyncRefs(
-      {} as never,
       {
         children: new Map(),
         getState: (directory: string) => ({ config: syncConfigs.get(directory) ?? {} }),
@@ -2801,7 +2800,6 @@ describe('useConfigStore provider persistence', () => {
       [DIRECTORY, { default_agent: 'review', model: 'openai/gpt-5.5' }],
     ]);
     setSyncRefs(
-      {} as never,
       {
         children: new Map(),
         getState: (directory: string) => ({ config: syncConfigs.get(directory) ?? {} }),

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import {
   decideMergedWorktreeCleanup,
   hasUnmergedCommits,
@@ -11,15 +12,15 @@ import {
 const WORKTREE = '/worktrees/feature';
 const SHA = 'abc123';
 
-const session = (id: string, directory = WORKTREE): Session => ({
-  id,
-  projectID: 'app',
-  title: id,
-  directory,
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
-});
+const session = (id: string, directory = WORKTREE): Session => {
+  const workspaceId = `workspace:${directory}`;
+  registerWorkspaceDirectory(workspaceId, directory);
+  return {
+    sessionId: id, projectId: 'app', workspaceId, displayPath: directory, rootSessionId: id,
+    createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    metadata: null, metadataRevision: '0', archiveRevision: '0',
+  };
+};
 
 const candidate: MergedWorktreeCandidate = {
   worktree: { path: WORKTREE, projectDirectory: '/projects/app', branch: 'feature', label: 'feature', worktreeStatus: 'ready' },
@@ -44,23 +45,23 @@ const setup = (options: {
   const reports: MergedWorktreeOutcome[] = [];
   const calls = { archived, removed: 0, reports };
   const deps = {
-    listCandidates: () => [candidate],
-    isHandled: (entry: MergedWorktreeCandidate) => handled.has(entry.worktree.path),
-    markHandled: (entry: MergedWorktreeCandidate) => { handled.add(entry.worktree.path); },
-    getActiveSessions: () => options.sessions ?? [session('a'), session('elsewhere', '/projects/app')],
-    isSessionIdle: (id: string) => !(options.busy ?? []).includes(id),
-    isSessionOpen: (id: string) => (options.open ?? []).includes(id),
-    isWorktreeOpen: () => options.worktreeOpen ?? false,
-    readWorktreeState: async () => {
+    listCandidates: (): MergedWorktreeCandidate[] => [candidate],
+    isHandled: (entry: MergedWorktreeCandidate): boolean => handled.has(entry.worktree.path),
+    markHandled: (entry: MergedWorktreeCandidate): void => { handled.add(entry.worktree.path); },
+    getActiveSessions: (): readonly Session[] => options.sessions ?? [session('a'), session('elsewhere', '/projects/app')],
+    isSessionIdle: (id: string): boolean => !(options.busy ?? []).includes(id),
+    isSessionOpen: (id: string): boolean => (options.open ?? []).includes(id),
+    isWorktreeOpen: (_path: string): boolean => options.worktreeOpen ?? false,
+    readWorktreeState: async (_entry: MergedWorktreeCandidate): Promise<{ isDirty: boolean | null; hasUnmergedCommits: boolean | null }> => {
       if (options.gitFails) throw new Error('git unavailable');
       return { isDirty: options.isDirty ?? false, hasUnmergedCommits: options.hasUnmergedCommits === undefined ? false : options.hasUnmergedCommits };
     },
-    archiveSessions: async (ids: string[]) => {
+    archiveSessions: async (ids: string[]): Promise<{ failedIds: string[] }> => {
       calls.archived.push(ids);
       return { failedIds: options.archiveFails ? ids : [] };
     },
-    removeWorktree: async () => { calls.removed += 1; },
-    report: (outcome: MergedWorktreeOutcome) => { calls.reports.push(outcome); },
+    removeWorktree: async (_entry: MergedWorktreeCandidate): Promise<void> => { calls.removed += 1; },
+    report: (outcome: MergedWorktreeOutcome): void => { calls.reports.push(outcome); },
   };
   return { deps, calls, handled };
 };

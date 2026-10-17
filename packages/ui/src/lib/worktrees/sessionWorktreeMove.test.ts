@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { Session, SessionStatus } from '@/lib/opencode/model';
+import type { Session, SessionRuntimeStatus } from '@openchamber/agent-contract';
 import type { State } from '@/sync/types';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
@@ -158,10 +158,6 @@ mock.module('@/lib/worktrees/worktreeStatus', () => ({
 }));
 
 mock.module('@/stores/useGlobalSessionsStore', () => ({
-  resolveGlobalSessionDirectory: (session: Session & {
-    directory?: string | null;
-    project?: { worktree?: string | null } | null;
-  }) => session.directory ?? session.project?.worktree ?? null,
   refreshGlobalSessionsForDirectories: (directories: string[]) => {
     refreshCalls.push(directories);
     return refreshImplementation(directories);
@@ -175,7 +171,7 @@ mock.module('@/stores/useGlobalSessionsStore', () => ({
 const getSessionLiveActivity = (sessionId: string): 'unknown' | 'idle' | 'active' => {
   for (const state of directoryStates.values()) {
     const status = state.session_status[sessionId];
-    if (status && status.type !== 'idle') return 'active';
+    if (status && status !== 'idle') return 'active';
   }
   for (const state of directoryStates.values()) {
     if (Object.hasOwn(state.session_status, sessionId)) return 'idle';
@@ -185,7 +181,7 @@ const getSessionLiveActivity = (sessionId: string): 'unknown' | 'idle' | 'active
 
 mock.module('@/sync/session-actions', () => ({
   moveSessionToDirectory: (session: Session, sourceDirectory: string, destinationDirectory: string) => {
-    moveCalls.push({ sessionId: session.id, sourceDirectory, destinationDirectory });
+    moveCalls.push({ sessionId: session.sessionId, sourceDirectory, destinationDirectory });
     return moveSessionImplementation(session, sourceDirectory, destinationDirectory);
   },
   getSessionLiveActivity,
@@ -217,17 +213,21 @@ const {
   requestSessionTreeMove,
 } = await import('./sessionWorktreeMove');
 
-const makeSession = (id: string, directory = '/source'): Session => ({
-  id,
-  projectID: 'project-1',
-  directory,
-  title: id,
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: {
-    created: 0,
-    updated: 0,
-  },
+const makeSession = (sessionId: string, _directory = '/source'): Session => ({
+  sessionId,
+  projectId: 'project-1',
+  workspaceId: 'workspace-1',
+  displayPath: '.',
+  rootSessionId: sessionId,
+  createdAt: 0,
+  updatedAt: 0,
+  epoch: 'epoch-1',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  metadata: null,
+  metadataRevision: '0',
+  archiveRevision: '0',
 });
 
 const makeWorktreeMetadata = (overrides: Partial<WorktreeMetadata> = {}): WorktreeMetadata => ({
@@ -254,23 +254,8 @@ const makeQuickIntent = (): SessionTreeMoveIntent => ({
   messages: makeMoveMessages(),
 });
 
-const makeSessionStatus = (type: SessionStatus['type']): SessionStatus => {
-  switch (type) {
-    case 'busy':
-      return { type: 'busy' };
-    case 'idle':
-      return { type: 'idle' };
-    case 'retry':
-      return { type: 'retry', attempt: 1, message: 'retry', next: 0 };
-  }
-};
-
-const setStatuses = (directory: string, statuses: Record<string, State['session_status'][string]['type']>): void => {
-  directoryStates.set(directory, {
-    session_status: Object.fromEntries(
-      Object.entries(statuses).map(([sessionId, type]) => [sessionId, makeSessionStatus(type)]),
-    ),
-  });
+const setStatuses = (directory: string, statuses: Record<string, SessionRuntimeStatus>): void => {
+  directoryStates.set(directory, { session_status: statuses });
 };
 
 const waitFor = async (predicate: () => boolean): Promise<void> => {
@@ -366,8 +351,8 @@ describe('moveSessionTreeToExistingWorktree', () => {
     const previousChildMetadata = makeWorktreeMetadata({ path: '/old-child', label: 'Old child' });
     const destination = makeWorktreeMetadata();
     setStatuses('/source', { root: 'idle', child: 'idle' });
-    storedMetadata.set(root.id, previousRootMetadata);
-    storedMetadata.set(child.id, previousChildMetadata);
+    storedMetadata.set(root.sessionId, previousRootMetadata);
+    storedMetadata.set(child.sessionId, previousChildMetadata);
 
     const result = await moveSessionTreeToExistingWorktree({
       root,
@@ -417,7 +402,7 @@ describe('moveSessionTreeToExistingWorktree', () => {
   });
 
   test('rejects when the root session is busy before setup', async () => {
-    setStatuses('/source', { root: 'busy' });
+    setStatuses('/source', { root: 'running' });
 
     await expect(moveSessionTreeToExistingWorktree({
       root: makeSession('root'),
@@ -432,7 +417,7 @@ describe('moveSessionTreeToExistingWorktree', () => {
   test('rejects when any descendant is busy before setup', async () => {
     const root = makeSession('root');
     const child = makeSession('child');
-    setStatuses('/source', { root: 'idle', child: 'retry' });
+    setStatuses('/source', { root: 'idle', child: 'awaiting_input' });
 
     await expect(moveSessionTreeToExistingWorktree({
       root,
@@ -449,7 +434,7 @@ describe('moveSessionTreeToExistingWorktree', () => {
     const rootMove = deferred();
     setStatuses('/source', { root: 'idle' });
     moveSessionImplementation = async (session, sourceDirectory) => {
-      if (session.id === 'root' && sourceDirectory === '/source') {
+      if (session.sessionId === 'root' && sourceDirectory === '/source') {
         return rootMove.promise;
       }
     };
@@ -482,11 +467,11 @@ describe('moveSessionTreeToExistingWorktree', () => {
     const previousChildAMetadata = makeWorktreeMetadata({ path: '/old-child-a', label: 'Old child A' });
     const previousChildBMetadata = makeWorktreeMetadata({ path: '/old-child-b', label: 'Old child B' });
     setStatuses('/source', { root: 'idle', 'child-a': 'idle', 'child-b': 'idle' });
-    storedMetadata.set(root.id, previousRootMetadata);
-    storedMetadata.set(childA.id, previousChildAMetadata);
-    storedMetadata.set(childB.id, previousChildBMetadata);
+    storedMetadata.set(root.sessionId, previousRootMetadata);
+    storedMetadata.set(childA.sessionId, previousChildAMetadata);
+    storedMetadata.set(childB.sessionId, previousChildBMetadata);
     moveSessionImplementation = async (session, sourceDirectory) => {
-      if (session.id === 'child-b' && sourceDirectory === '/source') {
+      if (session.sessionId === 'child-b' && sourceDirectory === '/source') {
         throw new Error('child-b failed');
       }
     };
@@ -507,9 +492,9 @@ describe('moveSessionTreeToExistingWorktree', () => {
       { sessionId: 'child-a', metadata: latestMetadataResult },
       { sessionId: 'child-a', metadata: previousChildAMetadata },
     ]);
-    expect(storedMetadata.get(root.id)).toBe(previousRootMetadata);
-    expect(storedMetadata.get(childA.id)).toBe(previousChildAMetadata);
-    expect(storedMetadata.get(childB.id)).toBe(previousChildBMetadata);
+    expect(storedMetadata.get(root.sessionId)).toBe(previousRootMetadata);
+    expect(storedMetadata.get(childA.sessionId)).toBe(previousChildAMetadata);
+    expect(storedMetadata.get(childB.sessionId)).toBe(previousChildBMetadata);
     expect(removeWorktreeCalls).toEqual([]);
     expect(refreshCalls).toEqual([]);
   });
@@ -524,11 +509,11 @@ describe('moveSessionTreeToExistingWorktree', () => {
     const previousChildBMetadata = makeWorktreeMetadata({ path: '/old-child-b', label: 'Old child B' });
     setStatuses('/source', { root: 'idle', 'child-a': 'idle', 'child-b': 'idle' });
     setStatuses('/destination', {});
-    storedMetadata.set(root.id, previousRootMetadata);
-    storedMetadata.set(childA.id, previousChildAMetadata);
-    storedMetadata.set(childB.id, previousChildBMetadata);
+    storedMetadata.set(root.sessionId, previousRootMetadata);
+    storedMetadata.set(childA.sessionId, previousChildAMetadata);
+    storedMetadata.set(childB.sessionId, previousChildBMetadata);
     moveSessionImplementation = async (session, sourceDirectory) => {
-      if (session.id === 'child-a' && sourceDirectory === '/source') {
+      if (session.sessionId === 'child-a' && sourceDirectory === '/source') {
         return childAMove.promise;
       }
     };
@@ -541,7 +526,7 @@ describe('moveSessionTreeToExistingWorktree', () => {
     });
 
     await waitFor(() => moveCalls.length === 1);
-    setStatuses('/source', { root: 'idle', 'child-a': 'idle', 'child-b': 'busy' });
+    setStatuses('/source', { root: 'idle', 'child-a': 'idle', 'child-b': 'running' });
     setStatuses('/destination', { 'child-a': 'idle' });
     childAMove.resolve();
 
@@ -555,9 +540,9 @@ describe('moveSessionTreeToExistingWorktree', () => {
       { sessionId: 'child-a', metadata: latestMetadataResult },
       { sessionId: 'child-a', metadata: previousChildAMetadata },
     ]);
-    expect(storedMetadata.get(root.id)).toBe(previousRootMetadata);
-    expect(storedMetadata.get(childA.id)).toBe(previousChildAMetadata);
-    expect(storedMetadata.get(childB.id)).toBe(previousChildBMetadata);
+    expect(storedMetadata.get(root.sessionId)).toBe(previousRootMetadata);
+    expect(storedMetadata.get(childA.sessionId)).toBe(previousChildAMetadata);
+    expect(storedMetadata.get(childB.sessionId)).toBe(previousChildBMetadata);
     expect(removeWorktreeCalls).toEqual([]);
     expect(refreshCalls).toEqual([]);
   });
@@ -568,10 +553,10 @@ describe('moveSessionTreeToExistingWorktree', () => {
     const childB = makeSession('child-b');
     setStatuses('/source', { root: 'idle', 'child-a': 'idle', 'child-b': 'idle' });
     moveSessionImplementation = async (session, sourceDirectory) => {
-      if (session.id === 'child-b' && sourceDirectory === '/source') {
+      if (session.sessionId === 'child-b' && sourceDirectory === '/source') {
         throw new Error('child-b failed');
       }
-      if (session.id === 'child-a' && sourceDirectory === '/destination') {
+      if (session.sessionId === 'child-a' && sourceDirectory === '/destination') {
         throw new Error('rollback failed');
       }
     };
@@ -595,18 +580,18 @@ describe('moveSessionTreeToExistingWorktree', () => {
     expect(removeWorktreeCalls).toEqual([]);
   });
 
-  const expectBusyOrRetryRollbackBlock = async (status: Extract<SessionStatus['type'], 'busy' | 'retry'>): Promise<void> => {
+  const expectBusyOrRetryRollbackBlock = async (status: Extract<SessionRuntimeStatus, 'running' | 'awaiting_input'>): Promise<void> => {
     const root = makeSession('root');
     const childA = makeSession('child-a');
     const childB = makeSession('child-b');
     setStatuses('/source', { root: 'idle', 'child-a': 'idle', 'child-b': 'idle' });
     setStatuses('/destination', {});
     moveSessionImplementation = async (session, sourceDirectory) => {
-      if (sourceDirectory === '/source' && session.id === 'child-a') {
+      if (sourceDirectory === '/source' && session.sessionId === 'child-a') {
         setStatuses('/destination', { 'child-a': status });
         return;
       }
-      if (sourceDirectory === '/source' && session.id === 'child-b') {
+      if (sourceDirectory === '/source' && session.sessionId === 'child-b') {
         throw new Error('child-b failed');
       }
     };
@@ -625,12 +610,12 @@ describe('moveSessionTreeToExistingWorktree', () => {
     expect(removeWorktreeCalls).toEqual([]);
   };
 
-  test('does not attempt rollback for a moved child that becomes busy in the destination', async () => {
-    await expectBusyOrRetryRollbackBlock('busy');
+  test('does not attempt rollback for a moved child that becomes running in the destination', async () => {
+    await expectBusyOrRetryRollbackBlock('running');
   });
 
-  test('does not attempt rollback for a moved child that becomes retry in the destination', async () => {
-    await expectBusyOrRetryRollbackBlock('retry');
+  test('does not attempt rollback for a moved child that becomes awaiting input in the destination', async () => {
+    await expectBusyOrRetryRollbackBlock('awaiting_input');
   });
 
   test('keeps the move successful when the post-move refresh fails', async () => {
@@ -672,7 +657,7 @@ describe('moveSessionTreeToExistingWorktree', () => {
   test('removes a newly created worktree when a session becomes busy before the first move', async () => {
     setStatuses('/source', { root: 'idle' });
     waitForWorktreeGitReadyImplementation = async () => {
-      setStatuses('/source', { root: 'busy' });
+      setStatuses('/source', { root: 'running' });
     };
 
     requestSessionTreeMove(makeQuickIntent());
@@ -738,7 +723,7 @@ describe('moveSessionTreeToExistingWorktree', () => {
     setStatuses('/source', { root: 'idle', child: 'idle' });
     setStatuses('/destination', { root: 'idle' });
     moveSessionImplementation = async (session, sourceDirectory) => {
-      if (session.id === 'child' && sourceDirectory === '/source') {
+      if (session.sessionId === 'child' && sourceDirectory === '/source') {
         throw new Error('child failed');
       }
     };
@@ -793,7 +778,7 @@ describe('moveSessionTreeToExistingWorktree', () => {
   test('keeps a newly created worktree when a descendant fails ambiguously before the root moved', async () => {
     setStatuses('/source', { root: 'idle', child: 'idle' });
     moveSessionImplementation = async (session) => {
-      if (session.id === 'child') throw new Error('Request timed out');
+      if (session.sessionId === 'child') throw new Error('Request timed out');
     };
 
     requestSessionTreeMove({
@@ -816,7 +801,7 @@ describe('moveSessionTreeToExistingWorktree', () => {
   test('keeps a newly created worktree when the root move times out after a descendant moved', async () => {
     setStatuses('/source', { root: 'idle', child: 'idle' });
     moveSessionImplementation = async (session, sourceDirectory) => {
-      if (session.id === 'root' && sourceDirectory === '/source') throw new Error('Request timed out');
+      if (session.sessionId === 'root' && sourceDirectory === '/source') throw new Error('Request timed out');
     };
 
     requestSessionTreeMove({
@@ -841,7 +826,7 @@ describe('moveSessionTreeToExistingWorktree', () => {
 
   test('refuses to move a session whose live status is reported by another directory', async () => {
     setStatuses('/source', { root: 'idle' });
-    setStatuses('/other-directory', { root: 'busy' });
+    setStatuses('/other-directory', { root: 'running' });
 
     await expect(moveSessionTreeToExistingWorktree({
       root: makeSession('root'),

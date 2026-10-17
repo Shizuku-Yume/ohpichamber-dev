@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
-import type { Part, Session, UserMessage } from '@/lib/opencode/model';
+import { CanonicalClient } from '@/api/canonicalClient';
+import type { Message, Part, Session } from '@openchamber/agent-contract';
 import { I18nProvider } from '@/lib/i18n';
 import { SyncProvider } from '@/sync/sync-context';
 import { getSyncChildStores } from '@/sync/sync-refs';
@@ -29,18 +29,20 @@ const directory = '/repo';
 const sessionId = 'session-1';
 const column = { sessionId, directory };
 const session: Session = {
-  id: sessionId, projectID: 'project', directory, title: 'test', cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 0, updated: 1 },
+  sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: sessionId,
+  createdAt: 0, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: null, metadataRevision: '0', archiveRevision: '0',
 };
-const user = (id: string, created: number): UserMessage => ({ id, sessionID: sessionId, role: 'user', time: { created } });
+const user = (messageId: string, createdAt: number, parts: Part[] = []): Message => ({
+  messageId, sessionId, turnId: `turn-${messageId}`, role: 'user', createdAt, parts,
+});
 
 // Counts every read of a part's text: the timeline reads it to build each
 // row's preview, so the count is the work the dialog does on a store update.
 let textReads = 0;
-const countedText = (id: string, messageID: string, value: string): Part => {
-  const part: Part = { id, sessionID: sessionId, messageID, type: 'text', text: value };
-  Object.defineProperty(part, 'text', {
+const countedText = (partId: string, value: string): Part => {
+  const part: Part = { partId, type: 'text', content: value };
+  Object.defineProperty(part, 'content', {
     enumerable: true,
     get: () => {
       textReads += 1;
@@ -73,7 +75,7 @@ describe('TimelineDialog', () => {
   let root: Root;
   let dom: ReturnType<typeof installDom>;
   // Bootstrap stays pending, so each test owns the directory store's contents.
-  const sdk = OpenCode.make({ baseUrl: 'http://timeline.test', fetch: () => new Promise<Response>(() => undefined) });
+  const client = new CanonicalClient();
   const store = () => {
     const result = getSyncChildStores().getChild(directory);
     if (!result) throw new Error('Expected mounted directory store');
@@ -82,12 +84,11 @@ describe('TimelineDialog', () => {
   const stage = (turns: string[]) => act(async () => {
     store().setState({
       session: [session],
-      message: { [sessionId]: turns.map((_, index) => user(`u${index}`, 1_700_000_000_000 + index)) },
-      part: Object.fromEntries(turns.map((value, index) => [`u${index}`, [countedText(`p${index}`, `u${index}`, value)]])),
+      message: { [sessionId]: turns.map((value, index) => user(`u${index}`, 1_700_000_000_000 + index, [countedText(`p${index}`, value)])) },
     });
   });
   const render = (open: boolean) => act(async () => root.render(
-    <SyncProvider sdk={sdk} directory={directory}>
+    <SyncProvider client={client} directory={directory}>
       <I18nProvider>
         <ChatColumnSessionContext.Provider value={column}>
           <TimelineDialog open={open} onOpenChange={() => undefined} />

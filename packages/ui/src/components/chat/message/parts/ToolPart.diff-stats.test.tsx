@@ -4,8 +4,7 @@ import { plugin } from 'bun';
 import { pathToFileURL } from 'node:url';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
-import type { Metadata, ToolPart as ToolPartData } from '@/lib/opencode/model';
+import type { ToolCallPart as ToolPartData } from '@openchamber/agent-contract';
 import { SyncProvider } from '@/sync/sync-context';
 import { I18nProvider } from '@/lib/i18n';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
@@ -76,21 +75,16 @@ test('edit and patch headers render v2 file diff counts as results arrive', asyn
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  const sdk = OpenCode.make({
-    baseUrl: 'http://localhost',
-    fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
-  });
 
   try {
     useGuestsStore.setState({ status: 'ready', guests: [], runtimeKey: 'test' });
-    const render = async (tool: string, metadata: Metadata, input = {}) => {
+    const render = async (tool: string, metadata: { files?: Array<{ file: string; additions?: number; deletions?: number; status?: string }>; diff?: string }, input: Record<string, unknown> = {}) => {
       const part: ToolPartData = {
-        id: 'change', sessionID: 'session', messageID: 'message', type: 'tool',
-        tool, callID: 'change',
-        state: { status: 'completed', input, metadata, output: '', time: { start: 1, end: 2 } },
+        type: 'tool_call', partId: 'change', toolCallId: 'change', toolName: tool,
+        input: { ...input, _metadata: metadata }, status: 'completed',
       };
       await act(async () => root.render(
-        <SyncProvider sdk={sdk} directory="">
+        <SyncProvider directory="">
           <I18nProvider>
             <ThemeSystemContext.Provider value={themeContext}>
               <ToolPart part={part} isExpanded={false} isMobile={false} onToggle={() => {}} />
@@ -99,7 +93,6 @@ test('edit and patch headers render v2 file diff counts as results arrive', asyn
         </SyncProvider>,
       ));
     };
-
     for (const tool of ['patch', 'edit']) {
       await render(tool, {});
       expect(container.textContent).not.toContain('+7');

@@ -45,7 +45,7 @@ const resolvedDirectories: string[] = []
 beforeEach(() => {
   switchRuntimeEndpoint({ apiBaseUrl: "https://issue-1637.test", runtimeKey: "issue-1637" })
   resetWorkspaceDirectories()
-  useGlobalSessionsStore.setState({ activeSessions: [], archivedSessions: [], activeById: new Map(), archivedById: new Map(), entityById: new Map(), hasLoaded: true })
+  useGlobalSessionsStore.setState({ activeSessions: [], archivedSessions: [], entityById: new Map(), hasLoaded: true })
   manager = new ChildStoreManager()
   currentDirectory = null
   selected.length = 0

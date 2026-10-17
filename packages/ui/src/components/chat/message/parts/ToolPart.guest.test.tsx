@@ -4,8 +4,7 @@ import { plugin } from 'bun';
 import { pathToFileURL } from 'node:url';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
-import type { ToolPart as ToolPartData } from '@/lib/opencode/model';
+import type { ToolCallPart as ToolPartData, ToolResultPart } from '@openchamber/agent-contract';
 import { SyncProvider } from '@/sync/sync-context';
 import { I18nProvider } from '@/lib/i18n';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
@@ -65,18 +64,24 @@ const tasksGuest: InstalledGuest = {
 };
 
 const part: ToolPartData = {
-  id: 'prt_tasks_list', sessionID: 'ses_tasks', messageID: 'msg_tasks',
-  type: 'tool', tool: 'mcp.tasks.list', callID: 'call_tasks_list',
-  state: {
-    status: 'completed',
-    input: { project: 'DEMO' },
-    output: JSON.stringify({ total: 2, items: [
-      { id: 'DEMO-1', title: 'Write docs', assignee: { name: 'Ada' } },
-      { id: 'DEMO-2', title: 'Ship it' },
-    ] }),
-    metadata: {},
-    time: { start: 1, end: 2 },
-  },
+  type: 'tool_call',
+  partId: 'prt_tasks_list',
+  toolCallId: 'call_tasks_list',
+  toolName: 'mcp.tasks.list',
+  status: 'completed',
+  input: { project: 'DEMO' },
+};
+
+const result: ToolResultPart = {
+  type: 'tool_result',
+  partId: 'result_tasks_list',
+  toolCallId: 'call_tasks_list',
+  toolName: 'mcp.tasks.list',
+  output: JSON.stringify({ total: 2, items: [
+    { id: 'DEMO-1', title: 'Write docs', assignee: { name: 'Ada' } },
+    { id: 'DEMO-2', title: 'Ship it' },
+  ] }),
+  isError: false,
 };
 
 test('a declared tool rule sets the header, icon, and table body of a matching tool part', async () => {
@@ -109,14 +114,10 @@ test('a declared tool rule sets the header, icon, and table body of a matching t
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  const sdk = OpenCode.make({
-    baseUrl: 'http://localhost',
-    fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
-  });
   const render = async () => {
     await act(async () => {
       root.render(
-        <SyncProvider sdk={sdk} directory="">
+        <SyncProvider directory="">
           <I18nProvider>
             <ThemeSystemContext.Provider value={themeContext}>
               <ToolPart part={part} isExpanded isMobile={false} onToggle={() => {}} />

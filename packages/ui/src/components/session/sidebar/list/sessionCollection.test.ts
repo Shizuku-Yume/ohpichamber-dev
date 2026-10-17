@@ -1,7 +1,8 @@
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
 import { hostFilesystem } from '@/lib/host-filesystem';
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { deriveRecentSessions } from '../recent/activitySections';
@@ -50,10 +51,17 @@ const installMinimalDom = () => {
   };
 };
 
-const session = (sessionId: string, displayPath: string | null): Session => ({
-  sessionId, projectId: 'project', workspaceId: 'workspace', displayPath, rootSessionId: sessionId,
-  createdAt: 1, updatedAt: 1, epoch: 1, headSequence: 0, runtimeStatus: 'idle', activeRunId: null, title: sessionId,
-});
+const session = (sessionId: string, displayPath: string | null): Session => {
+  const workspaceId = `workspace:${displayPath ?? sessionId}`;
+  if (displayPath) registerWorkspaceDirectory(workspaceId, displayPath);
+  return {
+    sessionId, projectId: 'project', workspaceId, displayPath: displayPath ?? '.', rootSessionId: sessionId,
+    createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
+  };
+};
+
+resetWorkspaceDirectories();
 
 describe('projectSidebarActiveSessions', () => {
   test('keeps global precedence and order, then appends missing live sessions', () => {
@@ -64,7 +72,7 @@ describe('projectSidebarActiveSessions', () => {
       globalActiveSessions: global,
       liveSessions: live,
     });
-    expect(projected.map((entry) => entry.id)).toEqual(['global-b', 'global-a', 'live-c']);
+    expect(projected.map((entry) => entry.sessionId)).toEqual(['global-b', 'global-a', 'live-c']);
     expect(projected[1]).toBe(global[1]);
   });
 
@@ -74,7 +82,7 @@ describe('projectSidebarActiveSessions', () => {
     expect(projectSidebarActiveSessions({
       globalActiveSessions: sessions,
       liveSessions: [],
-    }).map((entry) => entry.id)).toEqual(['unknown', 'empty']);
+    }).map((entry) => entry.sessionId)).toEqual(['unknown', 'empty']);
   });
 
   test('retains active global records from deleted worktrees', () => {
@@ -83,7 +91,7 @@ describe('projectSidebarActiveSessions', () => {
     expect(projectSidebarActiveSessions({
       globalActiveSessions: [restored],
       liveSessions: [],
-    }).map((entry) => entry.id)).toEqual(['restored']);
+    }).map((entry) => entry.sessionId)).toEqual(['restored']);
   });
 
 });
@@ -115,7 +123,7 @@ describe('projectSidebarCollection', () => {
     });
 
     expect(after).not.toBe(before);
-    expect(after.map((entry) => entry.id)).toEqual(['a', 'b']);
+    expect(after.map((entry) => entry.sessionId)).toEqual(['a', 'b']);
   });
 
   test('keeps project membership independent from Recent active membership', () => {
@@ -130,7 +138,7 @@ describe('projectSidebarCollection', () => {
 
     expect(projectAfter).toEqual(projectBefore);
     expect(recentBefore).toEqual([]);
-    expect(recentAfter.map((entry) => entry.id)).toEqual(['old-root']);
+    expect(recentAfter.map((entry) => entry.sessionId)).toEqual(['old-root']);
   });
 
   test('keeps managed Chats in a dedicated projection and out of project and Recent ownership', () => {
@@ -141,10 +149,10 @@ describe('projectSidebarCollection', () => {
       liveSessions: [],
     });
 
-    expect(projects.map((entry) => entry.id)).toEqual(['project']);
-    expect(partitionSidebarSessions([managed, project]).chatSessions.map((entry) => entry.id)).toEqual(['managed']);
+    expect(projects.map((entry) => entry.sessionId)).toEqual(['project']);
+    expect(partitionSidebarSessions([managed, project]).chatSessions.map((entry) => entry.sessionId)).toEqual(['managed']);
     expect(deriveRecentSessions(projects, new Set(['managed', 'project']), 200_000_000)
-      .map((entry) => entry.id)).toEqual(['project']);
+      .map((entry) => entry.sessionId)).toEqual(['project']);
   });
 
   test('keeps a canonical managed chat visible when the server root uses different home casing', () => {
@@ -154,29 +162,29 @@ describe('projectSidebarCollection', () => {
       globalActiveSessions: [managed, project], liveSessions: [],
       pinnedSessionIds: new Set(), sessionOrderRanks: new Map(),
     });
-    expect(projection.chatSessions.map(entry => entry.id)).toEqual(['canonical-chat']);
-    expect(projection.projectSessions.map(entry => entry.id)).toEqual(['project']);
-    expect(projection.orderedSessions.map(entry => entry.id)).toContain('canonical-chat');
+    expect(projection.chatSessions.map(entry => entry.sessionId)).toEqual(['canonical-chat']);
+    expect(projection.projectSessions.map(entry => entry.sessionId)).toEqual(['project']);
+    expect(projection.orderedSessions.map(entry => entry.sessionId)).toContain('canonical-chat');
   });
 
   test('excludes a /btw fork before project ownership and restores it when the marker is removed', () => {
     const fork = {
       ...session('fork', '/home/.config/openchamber/chats/2026-08-24/session-fork'),
-      metadata: { openchamber: { kind: 'btw', originalSessionID: 'parent' } },
+      metadata: { openchamber: { kind: 'btw' as const, originalSessionID: 'parent' } },
     };
     const project = session('project', '/workspace/a');
     const input = {
       liveSessions: [],
     };
 
-    expect(projectSidebarCollection({ ...input, globalActiveSessions: [fork, project] }).map((entry) => entry.id)).toEqual(['project']);
+    expect(projectSidebarCollection({ ...input, globalActiveSessions: [fork, project] }).map((entry) => entry.sessionId)).toEqual(['project']);
     expect(partitionSidebarSessions([fork]).chatSessions).toEqual([]);
 
     const promoted = {
       ...fork,
       metadata: { openchamber: {} },
     };
-    expect(partitionSidebarSessions([promoted]).chatSessions.map((entry) => entry.id)).toEqual(['fork']);
+    expect(partitionSidebarSessions([promoted]).chatSessions.map((entry) => entry.sessionId)).toEqual(['fork']);
   });
 
   test('keeps a ranked managed root and its active child in the Chats hierarchy', () => {
@@ -194,10 +202,10 @@ describe('projectSidebarCollection', () => {
       sessionOrderRanks: new Map([['managed-root', 10]]),
     });
 
-    expect(projection.projectSessions.map((entry) => entry.id)).toEqual(['project-root']);
-    expect(projection.chatSessions.map((entry) => entry.id)).toEqual(['managed-root', 'managed-child']);
-    expect(projection.orderedSessions.map((entry) => entry.id)).toEqual(['managed-root', 'managed-child', 'project-root']);
-    expect(projection.childrenMap.get('managed-root')?.map((entry) => entry.id)).toEqual(['managed-child']);
+    expect(projection.projectSessions.map((entry) => entry.sessionId)).toEqual(['project-root']);
+    expect(projection.chatSessions.map((entry) => entry.sessionId)).toEqual(['managed-root', 'managed-child']);
+    expect(projection.orderedSessions.map((entry) => entry.sessionId)).toEqual(['managed-root', 'managed-child', 'project-root']);
+    expect(projection.childrenMap.get('managed-root')?.map((entry) => entry.sessionId)).toEqual(['managed-child']);
   });
 
 });
@@ -225,7 +233,7 @@ describe('useRecentSessionCollection', () => {
         sessionOrderRanks: new Map(),
         sessions: [oldSession],
       });
-      renderedIds = recent.map((entry) => entry.id);
+      renderedIds = recent.map((entry) => entry.sessionId);
       return null;
     };
 
@@ -236,8 +244,8 @@ describe('useRecentSessionCollection', () => {
 
       await act(async () => {
         applyGlobalSessionStatusEvent('/workspace/a', {
-          type: 'session.status',
-          properties: { sessionID: 'old-root', status: { type: 'busy' } },
+          type: 'session.status', sessionId: 'old-root', epoch: 'epoch_1', sequence: '1', timestamp: 1,
+          runtimeStatus: 'running', activeRunId: 'run_1',
         });
       });
       expect(renderedIds).toEqual(['old-root']);
@@ -246,8 +254,8 @@ describe('useRecentSessionCollection', () => {
 
       await act(async () => {
         applyGlobalSessionStatusEvent('/other-workspace', {
-          type: 'session.status',
-          properties: { sessionID: 'old-root', status: { type: 'retry', attempt: 2, message: 'waiting', next: 0 } },
+          type: 'session.status', sessionId: 'old-root', epoch: 'epoch_1', sequence: '2', timestamp: 2,
+          runtimeStatus: 'awaiting_input', activeRunId: 'run_1',
         });
       });
       expect(renderCount).toBe(activeRenderCount);
@@ -303,8 +311,8 @@ describe('buildActiveSessionNode', () => {
 
     const node = buildActiveSessionNode(childrenMap, session('root', '/workspace'));
 
-    expect(node.children.map((entry) => entry.session.id)).toEqual(['child']);
-    expect(node.children[0]?.children.map((entry) => entry.session.id)).toEqual(['grandchild']);
+    expect(node.children.map((entry) => entry.session.sessionId)).toEqual(['child']);
+    expect(node.children[0]?.children.map((entry) => entry.session.sessionId)).toEqual(['grandchild']);
     expect(node.worktree).toBeNull();
   });
 
@@ -320,7 +328,7 @@ describe('buildActiveSessionNode', () => {
 
     const node = buildActiveSessionNode(childrenMap, session('root', '/workspace'));
 
-    expect(node.children.map((entry) => entry.session.id)).toEqual(['active-child']);
+    expect(node.children.map((entry) => entry.session.sessionId)).toEqual(['active-child']);
     expect(node.children[0]?.children).toEqual([]);
   });
 
@@ -334,7 +342,7 @@ describe('buildActiveSessionNode', () => {
 
     const node = buildActiveSessionNode(childrenMap, root);
 
-    expect(node.children.map((entry) => entry.session.id)).toEqual(['a']);
+    expect(node.children.map((entry) => entry.session.sessionId)).toEqual(['a']);
     expect(node.children[0]?.children).toEqual([]);
   });
 });

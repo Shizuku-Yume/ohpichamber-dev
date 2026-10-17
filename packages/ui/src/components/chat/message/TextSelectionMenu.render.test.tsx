@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { I18nProvider } from '@/lib/i18n';
 import { SyncProvider } from '@/sync/sync-context';
 import { getSyncChildStores } from '@/sync/sync-refs';
@@ -28,11 +27,11 @@ const directory = '/repo';
 const sessionId = 'session-1';
 const column = { sessionId, directory };
 const session = (updated: number, sessionDirectory = directory): Session => ({
-  id: sessionId, projectID: 'project', directory: sessionDirectory, title: 'test', cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 0, updated },
+  sessionId: sessionDirectory === directory ? sessionId : `${sessionId}-${sessionDirectory.slice(1)}`, projectId: 'project', workspaceId: 'workspace', displayPath: 'repo', rootSessionId: sessionId,
+  createdAt: 0, updatedAt: updated, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
-const otherSession = (updated: number): Session => ({ ...session(updated), id: 'session-2' });
+const otherSession = (updated: number): Session => ({ ...session(updated), sessionId: 'session-2' });
 
 const DOM_GLOBAL_NAMES = ['window', 'document', 'navigator', 'Node', 'Element', 'HTMLElement', 'localStorage', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame', 'IS_REACT_ACT_ENVIRONMENT'] as const;
 const installDom = () => {
@@ -57,8 +56,6 @@ describe('TextSelectionMenu render subscriptions', () => {
   let root: Root;
   let dom: ReturnType<typeof installDom>;
   let renders = 0;
-  // Bootstrap stays pending, so each test owns the directory store's contents.
-  const sdk = OpenCode.make({ baseUrl: 'http://selection.test', fetch: () => new Promise<Response>(() => undefined) });
   const containerRef = { current: null };
   const store = () => {
     const result = getSyncChildStores().getChild(directory);
@@ -69,7 +66,7 @@ describe('TextSelectionMenu render subscriptions', () => {
     store().setState({ session: sessions });
   });
   const render = () => act(async () => root.render(
-    <SyncProvider sdk={sdk} directory={directory}>
+    <SyncProvider directory={directory}>
       <I18nProvider>
         <ChatColumnSessionContext.Provider value={column}>
           <React.Profiler id="menu" onRender={() => { renders += 1; }}>

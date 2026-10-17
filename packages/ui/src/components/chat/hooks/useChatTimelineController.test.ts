@@ -91,10 +91,9 @@ const installMinimalDom = () => {
 };
 
 describe('loadHistoryUntilMessage', () => {
-    const userMessage = (id: string, created: number): ChatMessageEntry => {
-        const info: Message = { id, sessionID: 'session', role: 'user', time: { created } };
-        return { info, parts: [] };
-    };
+    const userMessage = (messageId: string, createdAt: number): ChatMessageEntry => ({
+        messageId, sessionId: 'session', turnId: `turn_${messageId}`, role: 'user', createdAt, parts: [],
+    });
 
     // Real scheduling instead of act: the loader waits for the render that
     // publishes each page, which act would hold back until its scope ends.
@@ -174,12 +173,9 @@ describe('useChatTimelineController identity lifecycle', () => {
         const dom = installMinimalDom();
         const root = createRoot(dom.container);
         const pending = deferred();
-        const user: Message = { id: 'user', sessionID: 'session', role: 'user', time: { created: 100 } };
-        const older: Message = {
-            id: 'older-step', sessionID: 'session', role: 'assistant',
-            time: { created: 99, completed: 100 }, providerID: 'test', modelID: 'test', agent: 'build',
-        };
-        let messages: ChatMessageEntry[] = [{ info: user, parts: [] }];
+        const user: ChatMessageEntry = { messageId: 'user', sessionId: 'session', turnId: 'turn-user', role: 'user', createdAt: 100, parts: [] };
+        const older: ChatMessageEntry = { messageId: 'older-step', sessionId: 'session', turnId: 'turn-older', role: 'assistant', createdAt: 99, parts: [] };
+        let messages: ChatMessageEntry[] = [user];
         let calls = 0;
         let controller!: UseChatTimelineControllerResult;
         const scrollRef = { current: null };
@@ -204,7 +200,7 @@ describe('useChatTimelineController identity lifecycle', () => {
             });
             expect(calls).toBe(1);
             await act(async () => { pending.resolve(); await Promise.resolve(); });
-            messages = [{ info: older, parts: [] }, ...messages];
+            messages = [older, ...messages];
             act(() => root.render(React.createElement(Harness)));
             await act(async () => { await Promise.all([first, duplicate]); });
             expect(calls).toBe(1);
@@ -222,18 +218,9 @@ describe('useChatTimelineController identity lifecycle', () => {
         const pendingB = deferred();
         const calls: string[] = [];
         const sessionId = 'shared-session';
-        const message = {
-            info: { id: 'msg_1', sessionID: sessionId, role: 'user', time: { created: 1 } } satisfies Message,
-            parts: [],
-        };
-        const olderMessage = {
-            info: { id: 'msg_0', sessionID: sessionId, role: 'user', time: { created: 0 } } satisfies Message,
-            parts: [],
-        };
-        const assistantMessage = {
-            info: { id: 'msg_2', sessionID: sessionId, role: 'assistant', time: { created: 2 } } satisfies Message,
-            parts: [],
-        };
+        const message: ChatMessageEntry = { messageId: 'msg_1', sessionId, turnId: 'turn-1', role: 'user', createdAt: 1, parts: [] };
+        const olderMessage: ChatMessageEntry = { messageId: 'msg_0', sessionId, turnId: 'turn-0', role: 'user', createdAt: 0, parts: [] };
+        const assistantMessage: ChatMessageEntry = { messageId: 'msg_2', sessionId, turnId: 'turn-2', role: 'assistant', createdAt: 2, parts: [] };
         const scrollMetrics = {
             scrollTop: 100,
             scrollHeight: 1000,

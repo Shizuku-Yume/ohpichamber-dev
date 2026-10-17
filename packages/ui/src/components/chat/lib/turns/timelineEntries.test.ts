@@ -1,37 +1,32 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { AssistantMessage, SyntheticMessage, UserMessage } from '@/lib/opencode/model';
+import type { Message } from '@openchamber/agent-contract';
 import { projectTurnRecords } from './projectTurnRecords';
 import { buildHistoryEntries, type TimelineEntry } from './timelineEntries';
 import type { ChatMessageEntry, TurnProjectionResult, TurnRecord } from './types';
 
-const user = (id: string): ChatMessageEntry => {
-    const info: UserMessage = { id, sessionID: 's', role: 'user', time: { created: 1 } };
-    return { info, parts: [{ id: `${id}_text`, sessionID: 's', messageID: id, type: 'text', text: id }] };
-};
+const user = (id: string): ChatMessageEntry => ({
+    messageId: id, sessionId: 's', turnId: id, role: 'user', createdAt: 1,
+    parts: [{ type: 'text', partId: `${id}_text`, content: id }],
+});
 
-const assistant = (id: string): ChatMessageEntry => {
-    const info: AssistantMessage = { id, sessionID: 's', role: 'assistant', time: { created: 1 }, agent: 'build', providerID: 'p', modelID: 'm' };
-    return { info, parts: [] };
-};
+const assistant = (id: string, turnId = id): ChatMessageEntry => ({
+    messageId: id, sessionId: 's', turnId, role: 'assistant', createdAt: 1, parts: [],
+});
 
-const notice = (id: string): ChatMessageEntry => {
-    const info: SyntheticMessage = { id, sessionID: 's', role: 'synthetic', time: { created: 1 }, text: 'note' };
-    return { info, parts: [] };
-};
+const notice = (id: string): ChatMessageEntry => ({
+    messageId: id, sessionId: 's', turnId: id, role: 'system', createdAt: 1, parts: [],
+});
 
 const turnsOf = (count: number): ChatMessageEntry[] => Array.from({ length: count }, (_, index) => [
     user(`u${index}`),
     assistant(`a${index}`),
 ]).flat();
 
-// Mirrors useTurnRecords: each projection reuses the previous one's
-// unchanged turn records.
 let previousProjection: TurnProjectionResult | null = null;
 
 const build = (messages: ChatMessageEntry[], previous: TimelineEntry[], tail?: ChatMessageEntry) => {
     const projection = projectTurnRecords(messages, { previousProjection });
     previousProjection = projection;
-    // The last turn is the live tail; history is everything before it.
     const staticTurns: TurnRecord[] = projection.turns.slice(0, -1);
     return buildHistoryEntries({
         staticTurns,
@@ -61,7 +56,6 @@ describe('buildHistoryEntries', () => {
         expect(entries.map((entry) => entry.key)).toEqual(['turn:u0', 'turn:u1']);
         const [first, second] = entries;
         expect(first?.kind === 'turn' && first.nextEntryFirstMessage).toBe(messages[2]);
-        // The last history turn points at the live tail's first message.
         expect(second?.kind === 'turn' && second.nextEntryFirstMessage).toBe(messages[4]);
     });
 
@@ -81,9 +75,6 @@ describe('buildHistoryEntries', () => {
 
         expect(before).toHaveLength(49);
         expect(after).toHaveLength(50);
-        // The old memos allocated a fresh object for every row on each
-        // rebuild, so all 49 mounted rows re-rendered; now only the row of
-        // the turn that left the live tail is new.
         expect(reusedCount(before, after)).toBe(49);
     });
 
@@ -91,7 +82,10 @@ describe('buildHistoryEntries', () => {
         const messages = turnsOf(5);
         const before = build(messages, []);
         const changed = [...messages];
-        changed[3] = { ...assistant('a1'), parts: [{ id: 'p', sessionID: 's', messageID: 'a1', type: 'text', text: 'edited' }] };
+        changed[3] = {
+            ...assistant('a1'),
+            parts: [{ partId: 'p', type: 'text', content: 'edited' }],
+        };
 
         const after = build(changed, before);
         const beforeRow = before.find((entry) => entry.key === 'turn:u1');

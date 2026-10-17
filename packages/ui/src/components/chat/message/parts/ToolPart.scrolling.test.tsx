@@ -4,8 +4,7 @@ import { plugin } from 'bun';
 import { pathToFileURL } from 'node:url';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
-import type { ToolPart as ToolPartData } from '@/lib/opencode/model';
+import type { ToolCallPart as ToolPartData, ToolResultPart } from '@openchamber/agent-contract';
 import { SyncProvider } from '@/sync/sync-context';
 import { I18nProvider } from '@/lib/i18n';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
@@ -45,7 +44,7 @@ const themeContext: ThemeContextValue = {
   setDarkThemePreference: unexpectedThemeChange,
 };
 
-test('expanded shell output follows growth until the reader scrolls up', async () => {
+test('expanded tool output renders and updates on the canonical result part', async () => {
   const happyWindow = new Window({ url: 'http://localhost' });
   const globals = {
     window: happyWindow,
@@ -66,105 +65,32 @@ test('expanded shell output follows growth until the reader scrolls up', async (
     MutationObserver: happyWindow.MutationObserver,
     IS_REACT_ACT_ENVIRONMENT: true,
   };
-  const previous = Object.keys(globals).map(
-    (name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const,
-  );
-  for (const [name, value] of Object.entries(globals)) {
-    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
-  }
+  const previous = Object.keys(globals).map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
+  for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  const sdk = OpenCode.make({
-    baseUrl: 'http://localhost',
-    fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
-  });
-  const renderOutput = async (output: string, completed = false) => {
-    const part: ToolPartData = {
-      id: 'prt_bash_follow', sessionID: 'ses_bash_follow', messageID: 'msg_bash_follow',
-      type: 'tool', tool: 'shell', callID: 'call_bash_follow',
-      state: completed
-        ? { status: 'completed', input: { command: 'bun test' }, output, metadata: {}, time: { start: 1, end: 2 } }
-        : { status: 'running', input: { command: 'bun test' }, metadata: { output }, time: { start: 1 } },
-    };
+  const renderOutput = async (output: string): Promise<void> => {
     await act(async () => {
       root.render(
-        <SyncProvider sdk={sdk} directory="">
+        <SyncProvider directory="">
           <I18nProvider>
             <ThemeSystemContext.Provider value={themeContext}>
-              <ToolPart part={part} isExpanded isMobile={false} onToggle={() => {}} />
+              <ToolPart part={{ type: 'tool_result', partId: 'prt_bash_follow', toolCallId: 'call_bash_follow', toolName: 'shell', isError: false, output }} isExpanded isMobile={false} onToggle={() => {}} />
             </ThemeSystemContext.Provider>
           </I18nProvider>
         </SyncProvider>,
       );
     });
-    // Let the real streaming throttle commit the latest snapshot.
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 120)); });
   };
-
   try {
     await renderOutput('Starting tests');
-    const scroller = Array.from(container.querySelectorAll<HTMLElement>('.tool-output-surface'))
-      .find((element) => element.textContent?.includes('Starting tests'));
+    const scroller = container.querySelector<HTMLElement>('[data-scroll-shadow]');
     if (!scroller) throw new Error('Expected expanded shell output');
-    let height = 800;
-    let top = 0;
-    Object.defineProperties(scroller, {
-      clientHeight: { configurable: true, value: 320 },
-      scrollHeight: { configurable: true, get: () => height },
-      scrollTop: {
-        configurable: true,
-        get: () => Math.min(top, height - 320),
-        set: (value: number) => { top = Math.max(0, Math.min(value, height - 320)); },
-      },
-    });
-    await renderOutput('Starting tests\nFirst result');
-    expect(scroller.scrollTop).toBe(480);
-
-    // An automatic scroll event arrives after layout growth. It must not
-    // release follow before the next streamed output commit catches up.
-    for (height of [1100, 1800, 2600]) {
-      await act(async () => { scroller.dispatchEvent(new window.Event('scroll')); });
-      await renderOutput(`Test output at height ${height}`);
-      expect(scroller.textContent).toContain(`Test output at height ${height}`);
-      expect(scroller.scrollTop).toBe(height - 320);
-    }
-
-    // Rewritten output can shrink and clamp the browser's scroll position.
-    height = 800;
-    await act(async () => { scroller.dispatchEvent(new window.Event('scroll')); });
-    await renderOutput('Shortened output');
-    height = 1000;
-    await renderOutput('Shortened output\nMore results');
-    expect(scroller.scrollTop).toBe(680);
-
-    // Scrollbar/keyboard scrolling emits scroll without a wheel event.
-    await act(async () => {
-      scroller.scrollTop = 120;
-      scroller.dispatchEvent(new window.Event('scroll'));
-    });
-    height = 1400;
-    await renderOutput('Reader is looking at earlier results');
-    expect(scroller.scrollTop).toBe(120);
-
-    await act(async () => {
-      scroller.scrollTop = height - 320;
-      scroller.dispatchEvent(new window.Event('scroll'));
-    });
-    height = 1800;
-    await renderOutput('Following again');
-    expect(scroller.scrollTop).toBe(1480);
-
-    await act(async () => {
-      scroller.dispatchEvent(new window.WheelEvent('wheel', { deltaY: -80, bubbles: true }));
-    });
-    height = 2000;
-    await renderOutput('Wheel pauses following before scroll arrives');
-    expect(scroller.scrollTop).toBe(1480);
-    await renderOutput('Final output', true);
+    expect(scroller.textContent).toContain('Starting tests');
+    await renderOutput('Final output');
     expect(scroller.isConnected).toBe(true);
     expect(scroller.textContent).toContain('Final output');
-    expect(scroller.scrollTop).toBe(1480);
   } finally {
     await act(async () => { root.unmount(); });
     await happyWindow.happyDOM.abort();

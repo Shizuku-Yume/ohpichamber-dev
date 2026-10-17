@@ -2,9 +2,9 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { TextPart } from '@/lib/opencode/model';
+import type { TextPart } from '@openchamber/agent-contract';
+import type { MarkdownRendererProps } from './MarkdownRendererImpl';
 import { getUrlScheme, isAppLinkUrl } from '@/lib/url';
-
 const classifyAppLinkUrl = isAppLinkUrl;
 const readUrlScheme = getUrlScheme;
 let fileLinkTestDirectory: string | null = null;
@@ -74,14 +74,7 @@ let tableProbeWidths: Map<string, number> | null = null;
 type ResizeNotifier = (entries: Array<{ target: Element; contentRect: { width: number; height: number } }>) => void;
 let notifyResize: ResizeNotifier | null = null;
 let notifyTableResize: ResizeNotifier | null = null;
-let MarkdownRenderer: React.ComponentType<{
-  content: string;
-  messageId: string;
-  part?: TextPart;
-  isAnimated?: boolean;
-  isStreaming?: boolean;
-  enableFileReferences?: boolean;
-}>;
+let MarkdownRenderer: React.ComponentType<MarkdownRendererProps>;
 let clearDetachedMarkdownDomCache: () => void;
 // The worker is mocked; a test that needs highlighting swaps this in.
 let highlightCodeForTest: (code: string, lang: string) => Promise<string | null> = async () => null;
@@ -778,14 +771,7 @@ describe('MarkdownRenderer DOM mount performance contract', () => {
   test('reuses settled Markdown DOM without parsing or decorating it again', async () => {
     clearDetachedMarkdownDomCache();
     const content = '# Cached viewport\n\nA settled paragraph.';
-    const part: TextPart = {
-      id: 'part-cache',
-      sessionID: 'session-cache',
-      messageID: 'message-cache',
-      type: 'text',
-      text: content,
-      time: { start: 0, end: 1 },
-    };
+    const part: TextPart = { type: 'text', partId: 'part-cache', content };
     const host = document.createElement('div');
     document.body.replaceChildren(host);
     const render = (root: Root) => root.render(
@@ -836,14 +822,7 @@ describe('MarkdownRenderer DOM mount performance contract', () => {
       <MarkdownRenderer
         content={content}
         messageId="message-cache"
-        part={{
-          id: partId,
-          sessionID: 'session-cache',
-          messageID: 'message-cache',
-          type: 'text',
-          text: content,
-          time: { start: 0, end: 1 },
-        }}
+        part={{ type: 'text', partId, content }}
         isAnimated={false}
         isStreaming={isStreaming}
         enableFileReferences={false}
@@ -864,13 +843,7 @@ describe('MarkdownRenderer DOM mount performance contract', () => {
         <MarkdownRenderer
           content="unfinalized content"
           messageId="message-unfinalized"
-          part={{
-            id: 'part-unfinalized',
-            sessionID: 'session-cache',
-            messageID: 'message-unfinalized',
-            type: 'text',
-            text: 'unfinalized content',
-          }}
+          part={{ type: 'text', partId: 'part-unfinalized', content: 'unfinalized content' }}
           isAnimated={false}
           enableFileReferences={false}
         />,
@@ -902,14 +875,7 @@ describe('MarkdownRenderer DOM mount performance contract', () => {
         <MarkdownRenderer
           content={content}
           messageId="message-selected"
-          part={{
-            id: 'part-selected',
-            sessionID: 'session-selected',
-            messageID: 'message-selected',
-            type: 'text',
-            text: content,
-            time: { start: 0, end: 1 },
-          }}
+          part={{ type: 'text', partId: 'part-selected', content }}
           isAnimated={false}
           enableFileReferences={false}
         />,

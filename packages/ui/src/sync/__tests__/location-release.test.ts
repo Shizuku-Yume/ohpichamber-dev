@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { createLocationRelease, directoryUse, isWorktreeDirectory, type DirectoryUse } from "../location-release"
 import { applyGlobalSessionStatusEvent, replaceGlobalSessionStatusById } from "../global-session-status"
 import { replaceDirectoryShells, resetBackgroundShells } from "../background-shells"
-import type { ShellJob } from "@openchamber/agent-contract"
+import type { ShellJob, ShellSnapshot } from '@openchamber/agent-contract'
 import type { WorktreeMetadata } from "@/types/worktree"
 import type { State } from "../types"
 
@@ -38,7 +38,7 @@ function harness(options: { busy?: Set<string>; unknown?: Set<string>; failRelea
 }
 
 const idle: NativeDirectoryState = { session_status: {}, permission: {}, form: {} }
-const shell = (jobId: string): ShellJob => ({
+const shell = (jobId: string): Extract<ShellJob, { status: 'running' }> => ({
   jobId, sessionId: "session-1", epoch: "epoch-1", workerGeneration: "worker-1", workspaceId: "workspace-1", projectId: "project-1",
   command: "bun dev", background: true, startedAt: 1, outputCursor: "0", status: "running",
 })
@@ -80,7 +80,7 @@ describe("directoryUse", () => {
   })
   test("unavailable native authority cannot release a location", () => {
     expect(directoryUse(CHAT, { ...idle, session_status: { session: "unavailable" } })).toBe("unknown")
-    applyGlobalSessionStatusEvent(CHAT, { sessionId: "session-global", epoch: "epoch-1", sequence: "1", timestamp: 1, type: "session.status", runtimeStatus: "unavailable" })
+    applyGlobalSessionStatusEvent(CHAT, { sessionId: 'session-global', epoch: 'epoch-1', sequence: '1', timestamp: 1, type: 'session.status', runtimeStatus: 'unavailable', activeRunId: null })
     expect(directoryUse(CHAT, idle)).toBe("unknown")
     expect(directoryUse(OTHER_CHAT, idle)).toBe("free")
   })
@@ -96,7 +96,7 @@ describe("directoryUse", () => {
     expect(directoryUse(OTHER_CHAT, idle)).toBe("free")
   })
   test("a native background shell holds its workspace", () => {
-    const snapshot = { scope: { kind: "workspace", workspaceId: "workspace-1" }, epoch: "epoch-1", revision: "1", running: [shell("shell-1")], ended: [], recovery: { priorEpochs: "invalidated" } } as const
+    const snapshot: ShellSnapshot = { scope: { kind: 'workspace', workspaceId: 'workspace-1' }, epoch: 'epoch-1', revision: '1', running: [shell('shell-1')], ended: [], recovery: { priorEpochs: 'invalidated' } }
     replaceDirectoryShells(CHAT, snapshot, 0)
     expect(directoryUse(CHAT, idle)).toBe("busy"); expect(directoryUse(OTHER_CHAT, idle)).toBe("free")
   })

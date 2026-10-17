@@ -231,7 +231,6 @@ interface MessageBodyProps {
     parts: Part[];
     isUser: boolean;
     isMessageCompleted: boolean;
-    messageFinish?: string;
     messageCompletedAt?: number;
     messageCreatedAt?: number;
 
@@ -1135,7 +1134,6 @@ const AssistantMessageBody = React.memo(({
     messageId,
     parts,
     isMessageCompleted,
-    messageFinish,
     messageCompletedAt,
     messageCreatedAt,
 
@@ -1370,8 +1368,9 @@ const AssistantMessageBody = React.memo(({
     const liveFinalActivity = React.useContext(LiveFinalActivityContext);
     const collapsedPreviewCount = 7;
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
-    const hasStopFinish = messageFinish === 'stop';
-    const effectiveStreamPhase: StreamPhase = hasStopFinish ? 'completed' : streamPhase;
+    const isTurnCompleted = !turnGroupingContext?.isWorking && isMessageCompleted;
+    const isFinalAnswer = isLastAssistantInTurn && (isTurnCompleted || isMessageCompleted);
+    const effectiveStreamPhase: StreamPhase = (isFinalAnswer || isMessageCompleted) ? 'completed' : streamPhase;
 
     const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
     const sessionProjectRef = React.useMemo(() => {
@@ -1696,11 +1695,11 @@ const AssistantMessageBody = React.memo(({
         return toolParts.some((toolPart) => isQuestionTool(toolPart.toolName));
     }, [toolParts]);
 
-    const shouldDeferSortedInlineText = isSortedRenderMode && !hasStopFinish && !hasQuestionTool;
+    const shouldDeferSortedInlineText = isSortedRenderMode && !isFinalAnswer && !hasQuestionTool;
     const showErrorMessage = Boolean(errorMessage);
     const isPeekSurface = chatSurfaceMode === 'peek';
     const shouldShowMessageActions = hasCopyableText && !isPeekSurface;
-    const shouldShowTurnFooter = isLastAssistantInTurn && hasTextContent && (hasStopFinish || Boolean(errorMessage)) && !isPeekSurface;
+    const shouldShowTurnFooter = isLastAssistantInTurn && hasTextContent && (isFinalAnswer || Boolean(errorMessage)) && !isPeekSurface;
     const shouldRenderActionsInActivity = isSortedRenderMode;
     const shouldShowStandaloneMessageActions = showSplitAssistantMessageActions && shouldShowMessageActions && !shouldShowTurnFooter && !shouldRenderActionsInActivity;
 
@@ -1789,9 +1788,9 @@ const AssistantMessageBody = React.memo(({
         const answerRendered: React.ReactNode[] = [];
         const activityRendered: React.ReactNode[] = [];
         let rendered = answerRendered;
-        const splitLiveActivity = !isSortedRenderMode && liveFinalActivity?.messageId === messageId && hasStopFinish;
+        const splitLiveActivity = !isSortedRenderMode && liveFinalActivity?.messageId === messageId && isFinalAnswer;
         let hasRenderedAnswerText = false;
-        const isFinalLiveAnswer = chatRenderMode === 'live' && isLastAssistantInTurn && hasStopFinish;
+        const isFinalLiveAnswer = chatRenderMode === 'live' && isFinalAnswer;
         const hasEarlierVisibleActivity = isFinalLiveAnswer && Boolean(turnGroupingContext?.activityParts?.some((activity) => {
             if (activity.messageId === messageId) {
                 return false;
@@ -2078,8 +2077,7 @@ const AssistantMessageBody = React.memo(({
         isActivityOwnerMessage,
         isSortedRenderMode,
         liveFinalActivity,
-        isLastAssistantInTurn,
-        hasStopFinish,
+        isFinalAnswer,
         lastRenderableTextPartIndex,
         messageId,
         messageActionButtons,
@@ -2099,12 +2097,12 @@ const AssistantMessageBody = React.memo(({
     ]);
 
     const turnDurationText = React.useMemo(() => {
-        if (!isLastAssistantInTurn || !hasStopFinish) return undefined;
+        if (!isFinalAnswer) return undefined;
         const userCreatedAt = turnGroupingContext?.userMessageCreatedAt;
         if (typeof userCreatedAt !== 'number' || typeof messageCompletedAt !== 'number') return undefined;
         if (messageCompletedAt <= userCreatedAt) return undefined;
         return formatTurnDuration(messageCompletedAt - userCreatedAt);
-    }, [isLastAssistantInTurn, hasStopFinish, turnGroupingContext?.userMessageCreatedAt, messageCompletedAt]);
+    }, [isFinalAnswer, turnGroupingContext?.userMessageCreatedAt, messageCompletedAt]);
 
     const footerTimestamp = React.useMemo(() => {
         void locale;
@@ -2525,7 +2523,7 @@ const AssistantMessageBody = React.memo(({
                       </div>
                         {/* Changed files keep their own line: they are a list that
                             grows, not a fact about the run. */}
-                        {!isMiniChatSurface && isLastAssistantInTurn && hasStopFinish ? (
+                        {!isMiniChatSurface && isFinalAnswer ? (
                             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                                 <TurnChangedFilePills
                                     files={turnGroupingContext?.changedFiles}

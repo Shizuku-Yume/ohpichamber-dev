@@ -1,18 +1,29 @@
-import { describe, expect, test } from 'bun:test';
-import type { Session } from '@/lib/opencode/model';
+import { describe, expect, mock, test } from 'bun:test';
+mock.module('@/stores/useGlobalSessionsStore', () => ({
+  resolveGlobalSessionDirectory: () => null,
+  useGlobalSessionsStore: () => undefined,
+}));
+import type { Session } from '@openchamber/agent-contract';
 import { relocateRestoredSessionIfDirectoryMissing } from './relocateRestoredSession';
 
 const WORKTREE = '/worktrees/feature';
 const PROJECT = '/projects/app';
 
-const session = (id: string, overrides: Partial<Session> = {}): Session => ({
-  id,
-  projectID: 'app',
-  title: id,
-  directory: WORKTREE,
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
+const session = (sessionId: string, overrides: Partial<Session> = {}): Session => ({
+  sessionId,
+  projectId: 'app',
+  workspaceId: 'workspace',
+  displayPath: WORKTREE,
+  rootSessionId: 'root',
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: 'epoch-1',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  metadata: { title: sessionId },
+  metadataRevision: '1',
+  archiveRevision: '0',
   ...overrides,
 });
 
@@ -22,18 +33,18 @@ const setup = (options: {
   projectRoot?: string | null;
   failMove?: boolean;
 }) => {
-  const moves: Array<{ id: string; from: string; to: string }> = [];
-  const byId = new Map(options.sessions.map((entry) => [entry.id, entry]));
+  const moves: Array<{ sessionId: string; from: string; to: string }> = [];
+  const byId = new Map(options.sessions.map((entry) => [entry.sessionId, entry]));
   return {
     moves,
     deps: {
-      getSession: (id: string) => byId.get(id),
+      getSession: (sessionId: string) => byId.get(sessionId),
       getActiveSessions: () => options.sessions,
       getDirectoryAvailability: async (directory: string) => options.availability[directory] ?? 'unknown',
       resolveProjectRoot: () => (options.projectRoot === undefined ? PROJECT : options.projectRoot),
       moveSession: async (moved: Session, from: string, to: string) => {
         if (options.failMove) throw new Error('move rejected');
-        moves.push({ id: moved.id, from, to });
+        moves.push({ sessionId: moved.sessionId, from, to });
       },
     },
   };
@@ -42,14 +53,12 @@ const setup = (options: {
 describe('relocateRestoredSessionIfDirectoryMissing', () => {
   test('a session whose folder still exists stays where it is', async () => {
     const { deps, moves } = setup({ sessions: [session('root')], availability: { [WORKTREE]: 'available', [PROJECT]: 'available' } });
-
     expect(await relocateRestoredSessionIfDirectoryMissing('root', deps)).toEqual({ outcome: 'kept' });
     expect(moves).toEqual([]);
   });
 
   test('an unknown answer is not proof the folder is gone', async () => {
     const { deps, moves } = setup({ sessions: [session('root')], availability: { [PROJECT]: 'available' } });
-
     expect(await relocateRestoredSessionIfDirectoryMissing('root', deps)).toEqual({ outcome: 'kept' });
     expect(moves).toEqual([]);
   });
@@ -57,17 +66,16 @@ describe('relocateRestoredSessionIfDirectoryMissing', () => {
   test('moves the session and its subsessions in that folder to the project root, deepest first', async () => {
     const sessions = [
       session('root'),
-      session('child', { parentID: 'root' }),
-      session('grandchild', { parentID: 'child' }),
-      session('elsewhere', { parentID: 'root', directory: '/other' }),
+      session('child', { parentSessionId: 'root', rootSessionId: 'root' }),
+      session('grandchild', { parentSessionId: 'child', rootSessionId: 'root' }),
+      session('elsewhere', { parentSessionId: 'root', rootSessionId: 'root', displayPath: '/other' }),
     ];
     const { deps, moves } = setup({ sessions, availability: { [WORKTREE]: 'missing', [PROJECT]: 'available' } });
-
     expect(await relocateRestoredSessionIfDirectoryMissing('root', deps)).toEqual({ outcome: 'moved', projectRoot: PROJECT });
     expect(moves).toEqual([
-      { id: 'grandchild', from: WORKTREE, to: PROJECT },
-      { id: 'child', from: WORKTREE, to: PROJECT },
-      { id: 'root', from: WORKTREE, to: PROJECT },
+      { sessionId: 'grandchild', from: WORKTREE, to: PROJECT },
+      { sessionId: 'child', from: WORKTREE, to: PROJECT },
+      { sessionId: 'root', from: WORKTREE, to: PROJECT },
     ]);
   });
 
@@ -82,7 +90,6 @@ describe('relocateRestoredSessionIfDirectoryMissing', () => {
 
   test('a rejected move is reported, not swallowed', async () => {
     const { deps } = setup({ sessions: [session('root')], availability: { [WORKTREE]: 'missing', [PROJECT]: 'available' }, failMove: true });
-
     const result = await relocateRestoredSessionIfDirectoryMissing('root', deps);
     expect(result.outcome).toBe('failed');
   });

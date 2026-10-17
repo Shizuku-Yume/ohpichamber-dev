@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { CanonicalEvent, RunningShell, ShellJob, ShellSnapshot } from '@openchamber/agent-contract';
+import type { CanonicalEvent, ShellJob, ShellSnapshot } from '@openchamber/agent-contract';
 import { ENDED_SHELLS_MAX, applyBackgroundShellEvents, backgroundShellRevision, backgroundShellsOfSessions, refreshBackgroundShells, replaceDirectoryShells, resetBackgroundShells, sessionsInTree, useBackgroundShellsStore } from './background-shells';
 import { deferred } from './session-message-loader-test-fixtures';
-const running = (jobId: string, sessionId = 'session_1', background = true): RunningShell => ({ jobId, sessionId, epoch: 'epoch_1', workerGeneration: 'worker_1', workspaceId: 'workspace_1', projectId: 'project_1', command: `run ${jobId}`, background, startedAt: 1000, outputCursor: '0', status: 'running' });
+const running = (jobId: string, sessionId = 'session_1', background = true): Extract<ShellJob, { status: 'running' }> => ({ jobId, sessionId, epoch: 'epoch_1', workerGeneration: 'worker_1', workspaceId: 'workspace_1', projectId: 'project_1', command: `run ${jobId}`, background, startedAt: 1000, outputCursor: '0', status: 'running' });
 const ended = (jobId: string, sessionId = 'session_1'): ShellJob => ({ ...running(jobId, sessionId), status: 'ended', endedAt: 2000, termination: { reason: 'exit', exitCode: 0 } });
 const event = (job: ShellJob): CanonicalEvent => ({ sessionId: job.sessionId, epoch: job.epoch, sequence: '1', timestamp: 1, type: 'shell.updated', job });
-const snapshot = (jobs: ShellJob[]): ShellSnapshot => ({ scope: { kind: 'workspace', workspaceId: 'workspace_1' }, epoch: 'epoch_1', revision: '1', running: jobs.filter((job): job is RunningShell => job.status === 'running'), ended: jobs.filter((job): job is Extract<ShellJob, { status: 'ended' }> => job.status === 'ended'), recovery: { priorEpochs: 'invalidated' } });
+const snapshot = (jobs: ShellJob[]): ShellSnapshot => ({ scope: { kind: 'workspace', workspaceId: 'workspace_1' }, epoch: 'epoch_1', revision: '1', running: jobs.filter((job): job is Extract<ShellJob, { status: 'running' }> => job.status === 'running'), ended: jobs.filter((job): job is Extract<ShellJob, { status: 'ended' }> => job.status === 'ended'), recovery: { priorEpochs: 'invalidated' } });
 const ids = () => [...useBackgroundShellsStore.getState().byId.values()].map((job) => job.jobId).sort();
 beforeEach(() => resetBackgroundShells());
 describe('native background shell index', () => {

@@ -2,11 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
+import { ChildStoreManager } from '@/sync/child-store';
 import { I18nProvider } from '@/lib/i18n';
-import { SyncProvider } from '@/sync/sync-context';
-import { getSyncChildStores } from '@/sync/sync-refs';
+import '@/sync/sync-context';
 
 // React DOM and the Base UI dialog probe for a DOM when first imported; without
 // one the dialog never mounts its popup. Give the probe a document, then
@@ -29,14 +28,15 @@ const sessionId = 'session-1';
 // A streamed step replaces the session record; an active goal's usage moves
 // with it.
 const session = (updated: number, turnsUsed: number): Session => ({
-  id: sessionId, projectID: 'project', directory, title: 'test', cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 0, updated },
-  metadata: { openchamber: { goal: { id: 'goal-1', objective: 'Ship it', status: 'active', tokensUsed: updated * 100, turnsUsed } } },
+  sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: sessionId,
+  createdAt: 0, updatedAt: updated, epoch: 'epoch', headSequence: String(updated), runtimeStatus: 'idle', activeRunId: null,
+  metadata: { title: 'test', openchamber: { goal: { id: 'goal-1', objective: 'Ship it', status: 'active', tokensUsed: updated * 100, turnsUsed } } },
+  metadataRevision: '1', archiveRevision: '0',
 });
 
 const DOM_GLOBAL_NAMES = ['window', 'document', 'navigator', 'Node', 'Element', 'HTMLElement', 'localStorage', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame', 'IS_REACT_ACT_ENVIRONMENT'] as const;
-const installDom = () => {
+type InstallDomResult = { container: HTMLElement; restore: () => void };
+const installDom = (): InstallDomResult => {
   const win = new Window({ url: 'http://localhost' });
   const previous = DOM_GLOBAL_NAMES.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
   const values = { window: win, document: win.document, navigator: win.navigator, Node: win.Node, Element: win.Element,
@@ -56,38 +56,43 @@ const installDom = () => {
 
 describe('SessionGoalDialog', () => {
   let root: Root;
-  let dom: ReturnType<typeof installDom>;
+  let dom: InstallDomResult;
+  let childStores: ChildStoreManager;
   let renders = 0;
-  // Bootstrap stays pending, so each test owns the directory store's contents.
-  const sdk = OpenCode.make({ baseUrl: 'http://goal.test', fetch: () => new Promise<Response>(() => undefined) });
-  const store = () => {
-    const result = getSyncChildStores().getChild(directory);
-    if (!result) throw new Error('Expected mounted directory store');
-    return result;
-  };
   const stage = (record: Session) => act(async () => {
-    store().setState({ session: [record] });
+    childStores.ensureChild(directory, { bootstrap: false }).setState({ session: [record] });
   });
-  const render = (open: boolean) => act(async () => root.render(
-    <SyncProvider sdk={sdk} directory={directory}>
-      <I18nProvider>
-        <React.Profiler id="goal-dialog" onRender={() => { renders += 1; }}>
-          <SessionGoalDialog open={open} onOpenChange={() => undefined} sessionId={sessionId} directory={directory} />
-        </React.Profiler>
-      </I18nProvider>
-    </SyncProvider>,
-  ));
+  const render = (open: boolean) => act(async () => {
+    const globals = globalThis as typeof globalThis & {
+      __openchamber_sync_context__?: React.Context<unknown>;
+      __openchamber_sync_runtime_context__?: React.Context<unknown>;
+    };
+    const syncContext = globals.__openchamber_sync_context__;
+    const syncRuntimeContext = globals.__openchamber_sync_runtime_context__;
+    if (!syncContext || !syncRuntimeContext) throw new Error('Expected sync contexts');
+    const runtime = { childStores, messageLoader: {}, client: {}, runtimeKey: 'test', currentDirectory: { get: () => directory, subscribe: () => () => undefined } };
+    root.render(React.createElement(syncContext.Provider, { value: { ...runtime, directory } },
+      React.createElement(syncRuntimeContext.Provider, { value: runtime }, React.createElement(I18nProvider, null,
+        React.createElement(React.Profiler, { id: 'goal-dialog', onRender: () => { renders += 1; } },
+          React.createElement(SessionGoalDialog, { open, onOpenChange: () => undefined, sessionId, directory }),
+        ),
+      )),
+    ));
+  });
 
   beforeEach(() => {
     renders = 0;
     dom = installDom();
+    childStores = new ChildStoreManager();
     root = createRoot(dom.container);
   });
 
   afterEach(async () => {
     await act(async () => root.unmount());
+    childStores.disposeAll();
     dom.restore();
   });
+
 
   test('a closed dialog does not re-render while the session streams', async () => {
     await render(false);

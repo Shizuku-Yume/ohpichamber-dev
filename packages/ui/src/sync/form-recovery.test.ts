@@ -26,8 +26,8 @@ describe("hasActiveFormToolInCurrentTurn", () => {
   })
 
   test("ignores non-question tools", () => {
-    const tool: Part = { ...questionTool("running"), toolName: "bash", toolCallId: "call-bash", partId: "tool-bash" }
-    expect(hasActiveFormToolInCurrentTurn([message("user"), message("assistant", [tool])])).toBe(false)
+    const tool: Part = { type: 'tool_call', partId: 'tool-bash', toolCallId: 'call-bash', toolName: 'bash', input: {}, status: 'running' }
+    expect(hasActiveFormToolInCurrentTurn([message('user'), message('assistant', [tool])])).toBe(false)
   })
 })
 

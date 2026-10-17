@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { Session } from '@/lib/opencode/model';
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
+import type { Session } from '@openchamber/agent-contract';
 import { installHookTestDom } from '../test-utils/testDom';
 import {
   buildAuthoritativeSessionIdentityMap,
@@ -10,10 +11,16 @@ import {
 } from './authoritativeSessionCleanup';
 
 // SAFETY: cleanup identity tests only consume canonical session ID and display path fields.
-const session = (sessionId: string, displayPath = '/repo'): Session => ({
-  sessionId, projectId: 'project', workspaceId: 'workspace', displayPath, rootSessionId: sessionId,
-  createdAt: 1, updatedAt: 1, epoch: 1, headSequence: 1, runtimeStatus: 'idle', activeRunId: null, title: sessionId,
-});
+const session = (sessionId: string, displayPath = '/repo'): Session => {
+  const workspaceId = `workspace:${displayPath}`;
+  registerWorkspaceDirectory(workspaceId, displayPath);
+  return {
+    sessionId, projectId: 'project', workspaceId, displayPath, rootSessionId: sessionId,
+    createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '1', runtimeStatus: 'idle', activeRunId: null,
+    metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
+  };
+};
+resetWorkspaceDirectories();
 const cleanups: Array<{ runtimeKey: string; directory: string; sessionId: string }> = [];
 mock.module('@/lib/runtime-switch', () => ({ getRuntimeKey: () => 'runtime' }));
 mock.module('@/sync/session-actions', () => ({

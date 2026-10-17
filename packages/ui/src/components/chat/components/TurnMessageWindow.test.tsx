@@ -2,7 +2,6 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import type { AssistantMessage } from '@/lib/opencode/model';
 import type { ChatMessageEntry } from '../lib/turns/types';
 import {
     FULL_MESSAGE_WINDOW,
@@ -17,17 +16,15 @@ import {
 } from '../lib/turns/turnMessageWindow';
 import { TurnMessageWindow } from './TurnMessageWindow';
 
-function assistant(id: string): ChatMessageEntry {
-    const info: AssistantMessage = {
-        id, sessionID: 'session', role: 'assistant', time: { created: 1, completed: 2 },
-        modelID: 'model', providerID: 'provider', agent: 'build',
-        cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, finish: 'tool-calls',
+function assistant(messageId: string): ChatMessageEntry {
+    return {
+        messageId, sessionId: 'session', turnId: 'turn', role: 'assistant', createdAt: 1,
+        parts: [],
     };
-    return { info, parts: [] };
 }
 
 const steps = (count: number): ChatMessageEntry[] => Array.from({ length: count }, (_, index) => assistant(`step-${index}`));
-const renderMessage = (message: ChatMessageEntry) => <div key={message.info.id} data-message-id={message.info.id} />;
+const renderMessage = (message: ChatMessageEntry) => <div key={message.messageId} data-message-id={message.messageId} />;
 
 describe('turn message window', () => {
     let root: Root;
@@ -73,7 +70,7 @@ describe('turn message window', () => {
     test('a long turn mounts only its newest messages behind a spacer', async () => {
         const messages = steps(100);
         await render(createTurnMessageWindowStore(), messages);
-        expect(mountedIds()).toEqual(messages.slice(-TURN_MESSAGE_WINDOW_SIZE).map((message) => message.info.id));
+        expect(mountedIds()).toEqual(messages.slice(-TURN_MESSAGE_WINDOW_SIZE).map((message) => message.messageId));
         expect(spacer()).not.toBeNull();
     });
 
@@ -121,7 +118,7 @@ describe('turn message window', () => {
         store.setRange('turn', openedFoldMessageWindow(100, false));
         const messages = steps(100);
         await render(store, messages);
-        expect(mountedIds()).toEqual(messages.slice(0, TURN_MESSAGE_WINDOW_SIZE).map((message) => message.info.id));
+        expect(mountedIds()).toEqual(messages.slice(0, TURN_MESSAGE_WINDOW_SIZE).map((message) => message.messageId));
         expect(spacer()).toBeNull();
         expect(tailSpacer()).not.toBeNull();
     });
@@ -131,7 +128,7 @@ describe('turn message window', () => {
         store.setRange('turn', openedFoldMessageWindow(100, true));
         const messages = steps(100);
         await render(store, messages);
-        expect(mountedIds()).toEqual(messages.slice(-TURN_MESSAGE_WINDOW_SIZE).map((message) => message.info.id));
+        expect(mountedIds()).toEqual(messages.slice(-TURN_MESSAGE_WINDOW_SIZE).map((message) => message.messageId));
         expect(spacer()).not.toBeNull();
         expect(tailSpacer()).toBeNull();
     });

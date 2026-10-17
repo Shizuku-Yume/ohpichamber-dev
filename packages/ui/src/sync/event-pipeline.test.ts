@@ -1,5 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test"
 import type { CanonicalEvent, SessionSnapshot } from "@openchamber/agent-contract"
+import type { CanonicalClient } from "@/api/canonicalClient"
 import { createEventPipeline } from "./event-pipeline"
 import type { SessionMessageTarget } from "./session-message-loader"
 
@@ -20,7 +21,7 @@ function fakeClient() {
   let callback: ((event: CanonicalEvent) => void) | undefined
   let invalidated: (() => void) | undefined
   let failed: ((error: unknown) => void) | undefined
-  const callbacks: Array<(event: CanonicalEvent) => void> = []
+  const callbacks: ((event: CanonicalEvent) => void)[] = []
   const client = {
     subscribeSessionEvents(sessionId: string, eventCursor: string, onEvent: (event: CanonicalEvent) => void, onInvalidated: () => void, onError: (error: unknown) => void) {
       expect(sessionId).toBe(target.sessionId)
@@ -40,7 +41,7 @@ function clock() {
   const clear = spyOn(globalThis, "clearTimeout").mockImplementation(((id: number) => { timers.delete(id) }) as typeof clearTimeout)
   return {
     delays: () => [...timers.values()].map((timer) => timer.delay),
-    run() { const first = timers.entries().next().value; if (!first) throw new Error("No scheduled recovery"); timers.delete(first[0]); first[1].run() },
+    run() { const first = timers.entries().next().value as [number, { run: () => void; delay: number }] | undefined; if (!first) throw new Error("No scheduled recovery"); timers.delete(first[0]); first[1].run() },
     restore() { timeout.mockRestore(); clear.mockRestore() },
   }
 }

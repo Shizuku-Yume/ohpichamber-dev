@@ -7,7 +7,7 @@ import {
   sectionSpacingAfter,
   sessionSidebarRowSizeKey,
 } from './sessionSidebarVirtualization';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import type { SessionNode } from './types';
 import type { ProjectSection } from './projects/sessionProjectRender';
 import { buildSessionSidebarRowModel, type SessionSidebarActivityItem, type SessionSidebarRow, type SessionSidebarRowModelArgs } from './sessionSidebarRowModel';
@@ -36,7 +36,23 @@ describe('SessionSidebarRows initialization', () => {
 
 describe('SessionSidebarRows section spacing', () => {
   // SAFETY: spacing reads only the row identity, kind, and position fields.
-  const node = (id: string): SessionNode => ({ session: { sessionId: id, projectId: 'project-a', workspaceId: 'workspace-a', displayPath: '/repo', rootSessionId: id, createdAt: 1, updatedAt: 1, epoch: 1, headSequence: 0, runtimeStatus: 'idle', activeRunId: null, title: id } as Session, children: [], worktree: null });
+  const session = (sessionId: string): Session => ({
+    sessionId,
+    projectId: 'project-a',
+    workspaceId: 'workspace-a',
+    displayPath: 'repo',
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+  });
+  const node = (id: string): SessionNode => ({ session: session(id), children: [], worktree: null });
   const item = (id: string): SessionSidebarActivityItem => ({ node: node(id), projectId: 'project-a', groupDirectory: '/repo', secondaryMeta: null });
   const input = (showRecentSection: boolean): SessionSidebarRowModelArgs => {
     const sections: ProjectSection[] = [{

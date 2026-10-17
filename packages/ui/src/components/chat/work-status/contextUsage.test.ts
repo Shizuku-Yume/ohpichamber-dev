@@ -22,7 +22,7 @@ describe('computeContextUsage', () => {
   });
   test('skips messages without positive reported usage', () => {
     expect(measured(computeContextUsage([assistant(usage(300), 'real'), assistant(usage(0), 'empty')], 1000)).totalTokens).toBe(300);
-    expect(computeContextUsage([{ messageId: 'user', sessionId: 'session', turnId: 'turn', role: 'user', createdAt: 1, parts: [] }], 1000)).toBeNull();
+    expect(computeContextUsage([{ messageId: 'user', role: 'user', usage: undefined }], 1000)).toBeNull();
   });
   test('keeps the percentage unrounded and applies the default limit', () => {
     expect(measured(computeContextUsage([assistant(usage(336))], 1000)).percent.toFixed(1)).toBe('33.6');

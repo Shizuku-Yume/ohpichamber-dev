@@ -36,6 +36,9 @@
 **Acceptance matrix status:** W1-W6 retain their existing M0/M1/M2 receipts and focused service/Host evidence; W7 remains open for connected Web/Electron create/stream/abort/reload/reopen and canonical rendering; W8 remains open for connected snapshot/cursor recovery and stale-runtime rejection; W9 has focused canonical settings/Guest/Board/child-navigation evidence but remains open for connected Board/Guest/sidebar observation and residual utility callers; W10 remains open because the UI test project, legacy UI callers, Host execution owners, packaged Electron runtime and connected W7-W10 acceptance are not complete. M3 stays active; no maintainer acceptance decision waives these required items.
 
 **Acceptance output retention:** the focused/package/Web smoke outputs cited above were observed directly in this session, but no durable stdout/stderr receipt was retained for this follow-up (`artifact path: none`). No connected W1-W10 Web/Electron run was performed, so there is no connected-run receipt to attach; the missing receipt is part of the open gate, not a passed result.
+## 2026-10-16 continuation status
+
+M3 remains active. The fixture convergence wave reduced the focused UI test-project diagnostics to `334` on the final rerun, but did not produce a green type-check. Task17 remains blocked by verified legacy UI/Host lifecycle owners and incomplete packaged Electron certification. Task36 has a durable blocker receipt at `.workflow/omp-migration/m3/task36-connected-acceptance-blocked.json`; no connected Web/Electron run was observed. No M3 completion claim is made.
 
 ## Review boundary
 

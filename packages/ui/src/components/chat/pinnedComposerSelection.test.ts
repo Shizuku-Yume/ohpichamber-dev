@@ -1,10 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { resolvePinnedComposerSelection } from './pinnedComposerSelection';
 
-const record = {
-    agent: 'build',
-    model: { providerID: 'anthropic', id: 'claude', variant: 'high' },
-};
+const record = undefined;
 
 describe('pinned composer selection', () => {
     test('follows the session record when nothing was picked in the composer', () => {

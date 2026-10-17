@@ -6,7 +6,7 @@
 
 **Delivers:** One current, non-duplicative connected acceptance packet proves the remaining M3 Web/Electron behavior and preserves exact receipts for every observed result.
 
-**Blocked by:** 15, 17, 33, 34, 35
+**Blocked by:** 15, 17, 35
 **Files:** `.workflow/omp-migration/m3/`, `.workflow/development.md`, `.workflow/tasks/omp-through-m3/36-m3-connected-acceptance.md`
 **Read first:** `.workflow/specs/omp-through-m3.md` W7-W10; Tasks 15, 17, 32-35; package READMEs and runtime docs; the current acceptance records and receipt policy
 **Covers:** W7, W8, W9, W10

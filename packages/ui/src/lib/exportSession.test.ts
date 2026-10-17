@@ -8,7 +8,7 @@ const message = (messageId: string, role: Message['role'], content: string, crea
   turnId: 'turn',
   role,
   createdAt,
-  parts: [{ partId: `${messageId}-text`, messageId, type: 'text', content }],
+  parts: [{ partId: `${messageId}-text`, type: 'text', content }],
 });
 
 describe('session export', () => {

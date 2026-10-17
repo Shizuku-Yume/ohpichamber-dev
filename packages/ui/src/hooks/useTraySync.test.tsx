@@ -2,15 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { useTraySync } from './useTraySync';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useNotificationStore } from '@/sync/notification-store';
 
-const session = (id: string, parentID?: string): Session => ({
-  id, parentID, projectID: 'project', directory: '/project', title: id, cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, time: { created: 1, updated: 1 },
+const session = (sessionId: string, parentSessionId?: string): Session => ({
+  sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/project',
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 
 const Harness = () => {
@@ -116,7 +117,7 @@ describe('Dock badge with the macOS menu bar disabled', () => {
   test('counts all unread chats at startup, beyond the tray menu limit', async () => {
     const sessions = Array.from({ length: 25 }, (_, index) => session(`root-${index}`));
     useGlobalSessionsStore.setState({ activeSessions: sessions });
-    for (const item of sessions) append(item.id);
+    for (const item of sessions) append(item.sessionId);
     await act(async () => root.render(<Harness />));
     expect(counts).toEqual([25]);
   });

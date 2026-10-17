@@ -26,7 +26,7 @@ const approval = (approvalId: string, sessionId: string): ApprovalRequest => ({
   commandSummary: "ls", details: {}, status: "pending", requestedAt: 1,
 })
 const question = (questionId: string, sessionId: string): QuestionRequest => ({
-  version: "1", epoch: "epoch-1", workerGeneration: "worker-1", questionId, turnId: "turn-1",
+  version: "1", epoch: "epoch-1", workerGeneration: "worker-1", questionId, sessionId, turnId: "turn-1",
   prompt: "Continue?", status: "pending", requestedAt: 1,
 })
 const message = (messageId: string, sessionId = "session-1") => ({

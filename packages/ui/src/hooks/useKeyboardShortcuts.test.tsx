@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { OpenCode } from '@opencode/client';
 import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -40,10 +39,6 @@ test('Ctrl+L adds a selection outside chat and yields to a sequence without one'
   }
 
   opencodeClient.reconnectToRuntimeBaseUrl();
-  const sdk = OpenCode.make({
-    baseUrl: 'https://shortcut.test',
-    fetch: fetchResponse,
-  });
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -67,7 +62,7 @@ test('Ctrl+L adds a selection outside chat and yields to a sequence without one'
   try {
     await act(async () => root.render(
       <ThemeSystemProvider>
-        <SyncProvider sdk={sdk} directory={directory}><ShortcutOwner /></SyncProvider>
+        <SyncProvider directory={directory}><ShortcutOwner /></SyncProvider>
       </ThemeSystemProvider>,
     ));
 

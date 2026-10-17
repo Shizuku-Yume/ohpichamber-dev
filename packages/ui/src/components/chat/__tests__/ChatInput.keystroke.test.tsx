@@ -151,22 +151,6 @@ const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
 const { ChatInput } = await import('../ChatInput');
 const { SyncProvider } = await import('@/sync/sync-context');
 const { useDirectoryStore } = await import('@/stores/useDirectoryStore');
-const { OpenCode } = await import('@opencode/client');
-
-const sdk = OpenCode.make({
-  baseUrl: 'https://sync.test',
-  fetch: async (request) => {
-    const path = new URL(request instanceof Request ? request.url : request.toString()).pathname;
-    if (path.endsWith('/event')) {
-      return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });
-    }
-    const body = path.endsWith('/location')
-      ? { directory: '/workspace', project: { id: 'project', directory: '/workspace', canonical: '/workspace' } }
-      : path.endsWith('/session/active') ? {}
-      : { data: [] };
-    return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
-  },
-});
 
 // SAFETY: Mounting and typing read only the runtime descriptor and the
 // source-control object's identity; no runtime API method is invoked.
@@ -205,7 +189,7 @@ const measureTyping = async (scenario: 'session' | 'draft'): Promise<TypingCost>
         <RuntimeAPIContext.Provider value={runtimeAPIs}>
           <ThemeSystemProvider>
             <I18nProvider>
-              <SyncProvider sdk={sdk} directory="/workspace">
+              <SyncProvider directory="/workspace">
                 <Profiler id="composer" onRender={(_id, _phase, actual) => { commits += 1; renderMs += actual; }}>
                   <ChatInput />
                 </Profiler>

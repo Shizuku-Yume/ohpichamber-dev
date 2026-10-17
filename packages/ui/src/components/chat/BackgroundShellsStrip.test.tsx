@@ -5,10 +5,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { I18nProvider } from '@/lib/i18n';
-import type { CanonicalEvent, RunningShell, Session, ShellJob } from '@openchamber/agent-contract';
+import type { CanonicalEvent, Session, ShellJob } from '@openchamber/agent-contract';
 import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from '@/lib/runtime-url';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { applyBackgroundShellEvents, resetBackgroundShells } from '@/sync/background-shells';
+import { applyBackgroundShellEvents, resetBackgroundShells, type RunningShell } from '@/sync/background-shells';
 import { BackgroundShellsStrip } from './BackgroundShellsStrip';
 
 const session = (sessionId: string, parentSessionId?: string): Session => ({

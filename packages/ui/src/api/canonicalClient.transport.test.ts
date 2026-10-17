@@ -228,8 +228,8 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     respondWith({ kind: 'mcp', status: 'no-active-workers', configuration, workers: [] });
     expect((await client.configureWorkspaceMcp(workspaceId, { expectedPersistedRevision: '0', config: configuration.config })).status).toBe('no-active-workers');
     expect((await client.applyWorkspaceMcp(workspaceId, { persistedRevision: '1' })).workers).toEqual([]);
-    respondWith({ workspaceId, serverId: 'server_expected', persistedRevision: '1', status: 'connected', toolCount: 2 });
-    expect((await client.testWorkspaceMcpServer(workspaceId, 'server_expected', { persistedRevision: '1' })).toolCount).toBe(2);
+    const probe = await client.testWorkspaceMcpServer(workspaceId, 'server_expected', { persistedRevision: '1' });
+    expect(probe).toEqual({ workspaceId, serverId: 'server_expected', persistedRevision: '1', status: 'connected', toolCount: 2 });
     expect(calls).toEqual([
       `GET /api/agent/v1/workspaces/${workspaceId}/mcp/config`,
       `PUT /api/agent/v1/workspaces/${workspaceId}/mcp/config`,

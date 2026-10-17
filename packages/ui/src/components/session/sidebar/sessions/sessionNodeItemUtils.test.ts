@@ -5,6 +5,7 @@ import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { getPinnedSessionKey } from '@/stores/useSessionPinnedStore';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import {
   computeNodeStructureKey,
   canShowSessionWorktreeMenu,
@@ -21,7 +22,7 @@ import type { SessionNode } from '../types';
 const session = (sessionId: string, title: string): Session => ({
   sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/repo',
   metadata: { title }, createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-  metadataRevision: '0', archiveRevision: '0',
+  metadataRevision: '1', archiveRevision: '0',
 });
 
 const rootWithChild = (childSession: Session): SessionNode => ({
@@ -39,17 +40,21 @@ describe('computeNodeStructureKey', () => {
 
   test('changes when a descendant session object changes', () => {
     const previous = session('child', 'Before');
-    const next = { ...previous, title: 'After' };
+    const next = session('child', 'After');
 
     expect(computeNodeStructureKey(rootWithChild(previous))).not.toBe(computeNodeStructureKey(rootWithChild(next)));
   });
 });
 
 describe('selectBlockingBadgeSessionScopes', () => {
-  const withDirectory = (node: SessionNode, displayPath: string | null): SessionNode => ({
-    ...node,
-    session: { ...node.session, displayPath },
-  });
+  const withDirectory = (node: SessionNode, directory: string): SessionNode => {
+    const workspaceId = `wsp_${directory}`;
+    registerWorkspaceDirectory(workspaceId, directory);
+    return {
+      ...node,
+      session: { ...node.session, workspaceId, displayPath: directory },
+    };
+  };
 
   test('rolls up the hidden subtree by owning directory when a parent is collapsed', () => {
     const grandchild = withDirectory({ session: session('grandchild', 'Grandchild'), children: [], worktree: null }, '/worktrees/feature');

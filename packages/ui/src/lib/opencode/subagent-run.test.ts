@@ -15,7 +15,7 @@ const message: Message = {
   turnId: "turn_parent",
   role: "assistant",
   createdAt: 20,
-  parts: [{ type: "text", text: "completed subagent output" }],
+  parts: [{ type: "text", partId: "part_report", content: "completed subagent output" }],
 }
 
 describe("canonical subagent transcript limitations", () => {

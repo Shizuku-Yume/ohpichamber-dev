@@ -22,7 +22,9 @@ const buildSession = (sessionId: string, displayPath: string): Session => ({
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
-  title: sessionId,
+  metadata: null,
+  metadataRevision: '0',
+  archiveRevision: '0',
 });
 
 describe('openSessionFromRoute', () => {

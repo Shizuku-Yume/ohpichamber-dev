@@ -159,7 +159,7 @@ describe('sidebar project sections keep references across unrelated updates', ()
 
     expect(section('a')).not.toBe(before);
     const groupOne = section('a')?.groups.find((group) => group.label === 'one');
-    expect(groupOne?.sessions.map((node) => node.session.id).sort()).toEqual(['a1', 'a2']);
+    expect(groupOne?.sessions.map((node) => node.session.sessionId).sort()).toEqual(['a1', 'a2']);
   });
 
   test('a rank change rebuilds only the project whose session moved', async () => {

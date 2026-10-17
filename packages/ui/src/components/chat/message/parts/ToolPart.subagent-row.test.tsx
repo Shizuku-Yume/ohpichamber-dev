@@ -39,7 +39,7 @@ const themeContext: ThemeContextValue = {
 const parent: Session = {
   sessionId: 'parent', rootSessionId: 'parent', projectId: 'project', workspaceId: 'workspace', displayPath: 'workspace',
   createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-  metadata: null, metadataRevision: '0', archiveRevision: '0',
+  archivedAt: undefined, metadata: null, metadataRevision: '0', archiveRevision: '0',
 };
 const call: ToolCallPart = {
   type: 'tool_call', partId: 'task-part', toolCallId: 'native-task', toolName: 'task', status: 'completed',
@@ -81,7 +81,7 @@ async function withHarness(load: (sessionId: string) => Promise<Subagent[]>, run
           parts={[{ id: 'activity', turnId: 'turn', messageId: 'message', kind: 'tool', partIndex: 0, part: { ...call, status } }]}
           sessionId={sessionId} directory={directory} isExpanded isMobile={mobile} onToggle={noAction}
           expandedTools={new Set([call.partId])} onToggleTool={noAction} onShowPopup={noAction}
-          streamPhase="settled" showHeader={false} animateRows={false}
+          streamPhase="completed" showHeader={false} animateRows={false}
         /> : <ToolPart part={{ ...call, status }} sessionId={sessionId} directory={directory} isExpanded={expanded} isMobile={mobile} onToggle={noAction} />}
       </ThemeSystemContext.Provider></I18nProvider>);
     });

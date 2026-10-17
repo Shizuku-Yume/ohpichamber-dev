@@ -6,13 +6,9 @@ import type { Session } from '@openchamber/agent-contract';
 import { runForkCommand, type ForkCommandDeps } from '../forkCommand';
 
 const forked: Session = {
-    id: 'session-fork',
-    projectID: 'project-a',
-    directory: '/repo',
-    title: 'Fork',
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    time: { created: 1, updated: 1 },
+    sessionId: 'session-fork', projectId: 'project-a', workspaceId: 'workspace-a', displayPath: '.', rootSessionId: 'session-fork',
+    createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    metadata: { title: 'Fork' }, metadataRevision: '1', archiveRevision: '0',
 };
 const selection = { providerID: 'p', modelID: 'm', agent: 'build' };
 
@@ -21,7 +17,7 @@ function createDeps(overrides: Partial<ForkCommandDeps> = {}) {
     const restores: Array<{ target: ChatDraftIdentity; text: string }> = [];
     const deps: ForkCommandDeps = {
         fork: async () => forked,
-        directoryFor: (session) => session.directory,
+        directoryFor: (_session) => '/repo',
         send: async (text, _selection, target) => {
             sends.push({ text, ...target });
         },

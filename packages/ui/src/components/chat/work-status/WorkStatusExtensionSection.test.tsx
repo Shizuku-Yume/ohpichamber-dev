@@ -1,7 +1,6 @@
 import { expect, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { OpenCode } from '@opencode/client';
 import { Window } from 'happy-dom';
 import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL } from '@openchamber/sdk';
 import { hostMessageSchema } from '@openchamber/sdk/schemas';
@@ -61,15 +60,6 @@ test('a status frame keeps subscriptions and storage alive while project changes
     if (target.includes('/vcs')) return Response.json({ data: { branch: { current: 'main', default: 'main' } } });
     return Response.json({ data: [], cursor: {} });
   });
-  const sdk = OpenCode.make({ baseUrl: 'http://sync.test', fetch: async (request) => {
-    const path = new URL(request instanceof Request ? request.url : request.toString()).pathname;
-    if (path.endsWith('/shell')) return Response.json({ location: { directory: null }, data: [] });
-    if (path.endsWith('/event')) return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });
-    const body = path.endsWith('/location')
-      ? { directory: '/visible', project: { id: 'project', directory: '/visible', canonical: '/visible' } }
-      : path.endsWith('/session/active') ? {} : { data: [] };
-    return Response.json(body);
-  } });
   const theme = getDefaultTheme(false);
   const themeContext: ThemeContextValue = {
     currentTheme: theme, availableThemes: [theme], customThemeIds: [], setTheme: () => {}, customThemesLoading: false,
@@ -138,7 +128,7 @@ test('a status frame keeps subscriptions and storage alive while project changes
   const root = createRoot(container);
   const renderSection = (directory: string) => (
     <I18nProvider><ThemeSystemContext.Provider value={activeThemeContext}>
-      <SyncProvider sdk={sdk} directory={directory}><WorkStatusExtensionSection guest={guest} directory={directory} /></SyncProvider>
+      <SyncProvider directory={directory}><WorkStatusExtensionSection guest={guest} directory={directory} /></SyncProvider>
     </ThemeSystemContext.Provider></I18nProvider>
   );
   try {

@@ -1,7 +1,8 @@
 import React, { act } from 'react';
 import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import type { Session } from '@/lib/opencode/model';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
+import type { Session } from '@openchamber/agent-contract';
 import { I18nProvider } from '@/lib/i18n';
 import { replaceGlobalSessionStatusById } from '@/sync/global-session-status';
 import { useNotificationStore } from '@/sync/notification-store';
@@ -26,10 +27,15 @@ test('a collapsed virtual folder shows live and unread descendants without mount
   document.body.append(container);
   const root = createRoot(container);
   const originalNotifications = useNotificationStore.getState();
-  const session = (sessionId: string, parentSessionId?: string): Session => ({
-    sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/repo', title: sessionId,
-    createdAt: 1, updatedAt: 1, epoch: 1, headSequence: 0, runtimeStatus: 'idle', activeRunId: null,
-  });
+  const session = (sessionId: string, parentSessionId?: string): Session => {
+    const workspaceId = 'workspace:/repo';
+    registerWorkspaceDirectory(workspaceId, '/repo');
+    return {
+      sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId, projectId: 'project', workspaceId, displayPath: '/repo',
+      createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+      metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
+    };
+  };
   const sessions = [{ session: session('parent'), worktree: null, children: [{ session: session('child', 'parent'), worktree: null, children: [] }] }];
   const render = (notifyOnSubtasks = false, isCollapsed = true, archivedBucket = false) => root.render(
     <I18nProvider><SessionSidebarFolderItem
@@ -43,7 +49,7 @@ test('a collapsed virtual folder shows live and unread descendants without mount
     replaceGlobalSessionStatusById(new Map());
     useNotificationStore.setState({ list: [], index: { session: { unseenCount: {}, unseenHasError: {} }, project: { unseenCount: {}, unseenHasError: {} } } });
     await act(async () => render());
-    await act(async () => replaceGlobalSessionStatusById(new Map([['child', { status: { type: 'busy' }, directory: '/repo' }]])));
+    await act(async () => replaceGlobalSessionStatusById(new Map([['child', { status: 'running', directory: '/repo' }]])));
     expect(container.querySelector('[aria-label="Session active"]')).not.toBeNull();
     expect(container.querySelector('[data-hidden-session]')).toBeNull();
     await act(async () => {

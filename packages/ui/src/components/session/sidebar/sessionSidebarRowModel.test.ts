@@ -27,10 +27,9 @@ const pinnedIds = (...ids: string[]): Set<string> => new Set(
 // SAFETY: the row model only reads the supplied session identity, title, directory, parent, and lifecycle fields.
 const session = (sessionId: string, parentSessionId?: string): Session => ({
   sessionId,
-  title: sessionId,
   projectId: 'project-a',
   workspaceId: 'workspace',
-  displayPath: '/repo',
+  displayPath: 'repo',
   parentSessionId,
   rootSessionId: parentSessionId ? 'parent' : sessionId,
   createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
@@ -225,7 +224,15 @@ describe('buildSessionSidebarRowModel', () => {
   });
 
   test('search counts every matching subsession of a session in work', () => {
-    const titled = (id: string, title: string, children: SessionNode[] = []): SessionNode => ({ session: { ...session(id), title }, children, worktree: null });
+    const titled = (id: string, title: string, children: SessionNode[] = []): SessionNode => ({
+      session: {
+        ...session(id),
+        metadata: { title },
+        metadataRevision: '1',
+      },
+      children,
+      worktree: null,
+    });
     const parent = titled('ses_parent', 'Parent', [titled('ses_a', 'fix header'), titled('ses_b', 'header spacing'), titled('ses_c', 'footer')]);
     const input = args([]);
     input.mode = 'search';
@@ -275,7 +282,7 @@ describe('buildSessionSidebarRowModel', () => {
       query: '',
     });
     const rows = buildSessionSidebarRowModel(input).rows.flatMap((row) => row.kind === 'session'
-      ? [{ id: row.node.session.id, metadata: row.secondaryMeta }]
+      ? [{ id: row.node.session.sessionId, metadata: row.secondaryMeta }]
       : []);
     expect(rows).toEqual([
       { id: 'parent', metadata: { projectLabel: 'repo', branchLabel: 'main', inSpace: false } },
@@ -317,7 +324,7 @@ describe('buildSessionSidebarRowModel', () => {
 
     const model = buildSessionSidebarRowModel(input);
 
-    expect(model.rows.filter((row) => row.kind === 'session').map((row) => row.node.session.id)).toEqual(['parent', 'child']);
+    expect(model.rows.filter((row) => row.kind === 'session').map((row) => row.node.session.sessionId)).toEqual(['parent', 'child']);
     const parentEntry = model.selectionEntries.find((entry) => entry.id === 'parent');
     expect(parentEntry?.descendantRange).toBeDefined();
     expect(parentEntry?.descendantRange
@@ -371,14 +378,14 @@ describe('buildSessionSidebarRowModel', () => {
     input.chatGroup = group([node('retained-chat')], { id: 'managed-chats' });
     input.groupStatusByKey = new Map([['activity:chats', { state: 'load-failed', directory: '/chats', canGrantAccess: false }]]);
     const rows = buildSessionSidebarRowModel(input).rows;
-    expect(rows.some((row) => row.kind === 'session' && row.node.session.id === 'retained-chat')).toBe(true);
+    expect(rows.some((row) => row.kind === 'session' && row.node.session.sessionId === 'retained-chat')).toBe(true);
     expect(rows.find((row) => row.kind === 'status')).toMatchObject({ groupKey: 'activity:chats', status: { state: 'load-failed' } });
     expect(rows.some((row) => row.kind === 'empty')).toBe(false);
   });
 
   test('a collapsed folder retains activity coverage from nested folders without flattening subtasks', () => {
     const child = node('child');
-    child.session.parentID = 'parent';
+    child.session.parentSessionId = 'parent';
     const parent = node('parent', [child]);
     const input = args([project([group([parent])])]);
     input.foldersMap = { '/repo': [
@@ -398,7 +405,7 @@ describe('buildSessionSidebarRowModel', () => {
 
   test('sessions inside a folder sit one level deeper than ungrouped sessions', () => {
     const child = node('child');
-    child.session.parentID = 'in-folder';
+    child.session.parentSessionId = 'in-folder';
     const input = args([project([group([node('in-folder', [child]), node('top-level')])])]);
     input.foldersMap = { '/repo': [
       { id: 'outer', name: 'Outer', createdAt: 1, sessionIds: [] },
@@ -407,7 +414,7 @@ describe('buildSessionSidebarRowModel', () => {
     input.expandedParents = new Set(['project:active:in-folder']);
     const rows = buildSessionSidebarRowModel(input).rows.filter((row) => row.kind === 'folder-header' || row.kind === 'session');
 
-    expect(rows.map((row) => (row.kind === 'session' ? `${row.node.session.id}@${row.depth}` : row.displayName))).toEqual([
+    expect(rows.map((row) => (row.kind === 'session' ? `${row.node.session.sessionId}@${row.depth}` : row.displayName))).toEqual([
       'Outer', 'Outer / Inner', 'in-folder@1', 'child@2', 'top-level@0',
     ]);
   });
@@ -481,7 +488,7 @@ describe('buildSessionSidebarRowModel', () => {
     expect(model.rows.some((row) => row.kind === 'group-header')).toBe(false);
     expect(model.rows.find((row) => row.kind === 'activity-header')).toMatchObject({ activityKey: 'timeline' });
     expect(model.stickyHeaders.map((header) => header.id)).toEqual(['timeline']);
-    expect(sessions.map((row) => row.node.session.id)).toEqual(['a', 'b']);
+    expect(sessions.map((row) => row.node.session.sessionId)).toEqual(['a', 'b']);
     expect(sessions.every((row) => row.renderContext === 'timeline' && row.depth === 0)).toBe(true);
     expect(model.rows.some((row) => row.kind === 'show-control')).toBe(false);
   });
@@ -494,7 +501,7 @@ describe('buildSessionSidebarRowModel', () => {
     input.pinnedSessionIds = pinnedIds('pinned-1', 'pinned-2');
 
     const model = buildSessionSidebarRowModel(input);
-    const shown = model.rows.filter((row) => row.kind === 'session').map((row) => row.node.session.id);
+    const shown = model.rows.filter((row) => row.kind === 'session').map((row) => row.node.session.sessionId);
 
     expect(shown).toContain('pinned-1');
     expect(shown).toContain('pinned-2');
@@ -523,10 +530,11 @@ describe('buildSessionSidebarRowModel', () => {
   describe('multi-run rows', () => {
     const runMember = (id: string): Session => ({
       ...session(id),
-      metadata: withMultiRunMembership({}, {
+      metadata: withMultiRunMembership({ metadata: null }, {
         version: 1, sessionID: id, group: { kind: 'id', id: '9f512893-6e63-4e49-a534-5de733ca103e' },
         groupSlug: 'fix-auth', role: 'run', providerID: 'anthropic', modelID: 'claude', title: 'Fix auth',
       }),
+      metadataRevision: '1',
     });
     const runIndex = buildMultiRunIndex([runMember('lane-1'), runMember('lane-2')], () => '/repo');
     const runKey = [...runIndex.runs.keys()][0] ?? '';
@@ -535,7 +543,7 @@ describe('buildSessionSidebarRowModel', () => {
       const input = args([project([group([node('lane-1'), node('other'), node('lane-2')])])]);
       input.runIndex = runIndex;
       const model = buildSessionSidebarRowModel(input);
-      const listed = model.rows.flatMap((row) => (row.kind === 'run' ? [`run:${row.run.title}`] : row.kind === 'session' ? [row.node.session.id] : []));
+      const listed = model.rows.flatMap((row) => (row.kind === 'run' ? [`run:${row.run.title}`] : row.kind === 'session' ? [row.node.session.sessionId] : []));
 
       expect(listed).toEqual(['run:Fix auth', 'other']);
       expect(model.selectionEntries.map((entry) => entry.id)).toEqual(['other']);
@@ -547,7 +555,7 @@ describe('buildSessionSidebarRowModel', () => {
       input.expandedParents = new Set([runExpansionKey('project', runKey)]);
       const rows = buildSessionSidebarRowModel(input).rows.filter((row) => row.kind === 'run' || row.kind === 'session');
 
-      expect(rows.map((row) => (row.kind === 'session' ? `${row.node.session.id}@${row.depth}` : `run@${row.depth}`))).toEqual(['run@0', 'lane-1@1', 'lane-2@1']);
+      expect(rows.map((row) => (row.kind === 'session' ? `${row.node.session.sessionId}@${row.depth}` : `run@${row.depth}`))).toEqual(['run@0', 'lane-1@1', 'lane-2@1']);
     });
 
     test('a run inside a folder and its lanes sit one level deeper', () => {
@@ -557,7 +565,7 @@ describe('buildSessionSidebarRowModel', () => {
       input.expandedParents = new Set([runExpansionKey('project', runKey)]);
       const rows = buildSessionSidebarRowModel(input).rows.filter((row) => row.kind === 'run' || row.kind === 'session');
 
-      expect(rows.map((row) => (row.kind === 'session' ? `${row.node.session.id}@${row.depth}` : `run@${row.depth}`))).toEqual(['run@1', 'lane-1@2', 'lane-2@2']);
+      expect(rows.map((row) => (row.kind === 'session' ? `${row.node.session.sessionId}@${row.depth}` : `run@${row.depth}`))).toEqual(['run@1', 'lane-1@2', 'lane-2@2']);
     });
 
     test('a run spends one slot of the reveal limit', () => {
@@ -607,7 +615,7 @@ describe('buildSessionSidebarRowModel', () => {
       input.timelineItems = [timelineItem('lane-1'), timelineItem('a'), timelineItem('lane-2')];
       const rows = buildSessionSidebarRowModel(input).rows.filter((row) => row.kind === 'run' || row.kind === 'session');
 
-      expect(rows.map((row) => (row.kind === 'session' ? row.node.session.id : row.kind))).toEqual(['run', 'a']);
+      expect(rows.map((row) => (row.kind === 'session' ? row.node.session.sessionId : row.kind))).toEqual(['run', 'a']);
     });
   });
 
@@ -616,6 +624,6 @@ describe('buildSessionSidebarRowModel', () => {
     const input = args([]);
     input.authoritativeSections = [authoritative];
 
-    expect(buildSessionSidebarRowModel(input).sessionById.get('hidden')?.id).toBe('hidden');
+    expect(buildSessionSidebarRowModel(input).sessionById.get('hidden')?.sessionId).toBe('hidden');
   });
 });

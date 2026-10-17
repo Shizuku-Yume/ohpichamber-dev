@@ -15,6 +15,10 @@ function makeSession(sessionId: string, parentSessionId?: string): Session {
     headSequence: '0',
     runtimeStatus: 'idle',
     activeRunId: null,
+    archivedAt: undefined,
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
   };
   if (parentSessionId) session.parentSessionId = parentSessionId;
   return session;

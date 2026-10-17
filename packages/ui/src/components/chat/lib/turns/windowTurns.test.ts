@@ -1,18 +1,17 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, Part } from '@/lib/opencode/model';
+import type { Message } from '@openchamber/agent-contract';
 import { buildTurnWindowModel, updateTurnWindowModelIncremental } from './windowTurns';
 import type { ChatMessageEntry } from './types';
 
-function message({ id, role, parentID }: { id: string; role: 'user' | 'assistant' | 'system'; parentID?: string }): ChatMessageEntry {
+function message({ id, role, turnId }: { id: string; role: 'user' | 'assistant' | 'system'; turnId?: string }): ChatMessageEntry {
     return {
-        info: {
-            id,
-            role,
-            ...(parentID ? { parentID } : {}),
-            time: { created: 1 },
-        } as Message,
-        parts: [] as Part[],
-    };
+        messageId: id,
+        sessionId: 'session_1',
+        turnId: turnId ?? id,
+        role,
+        createdAt: 1,
+        parts: [],
+    } satisfies Message;
 }
 
 describe('windowTurns', () => {
@@ -39,7 +38,7 @@ describe('windowTurns', () => {
 
     test('maps assistant messages to their parent user turn', () => {
         const user = message({ id: 'u1', role: 'user' });
-        const assistant = message({ id: 'a1', role: 'assistant', parentID: 'u1' });
+        const assistant = message({ id: 'a1', role: 'assistant', turnId: 'u1' });
 
         const model = buildTurnWindowModel([user, assistant]);
 

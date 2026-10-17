@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { CompactionMessage } from '@/lib/opencode/model';
+import type { Message } from '@openchamber/agent-contract';
 import type { TurnGroupingContext } from '../lib/turns/types';
 import { areRelevantTurnGroupingContextsEqual, areRenderRelevantMessagesEqual } from './renderCompare';
 
@@ -51,17 +51,18 @@ describe('completed-turn changed files', () => {
   });
 });
 
-describe('running compaction', () => {
-  const running: CompactionMessage = {
-    id: 'msg_compact', sessionID: 'ses_1', role: 'compaction', time: { created: 1 }, status: 'running', reason: 'auto', summary: '',
+describe('message render comparison', () => {
+  const running: Message = {
+    messageId: 'msg_1', sessionId: 'ses_1', turnId: 'turn_1', role: 'assistant', createdAt: 1,
+    parts: [{ type: 'text', partId: 'part_1', content: 'Summary so far' }],
   };
 
-  test('re-renders as the summary streams in', () => {
-    const grown = { ...running, summary: 'Summary so far' };
-    expect(areRenderRelevantMessagesEqual({ info: running, parts: [] }, { info: grown, parts: [] })).toBe(false);
+  test('re-renders as message content changes', () => {
+    const grown: Message = { ...running, parts: [{ type: 'text', partId: 'part_1', content: 'Summary so far, with more' }] };
+    expect(areRenderRelevantMessagesEqual({ info: running, parts: running.parts }, { info: grown, parts: grown.parts })).toBe(false);
   });
 
   test('preserves an equivalent rebuilt record', () => {
-    expect(areRenderRelevantMessagesEqual({ info: running, parts: [] }, { info: { ...running }, parts: [] })).toBe(true);
+    expect(areRenderRelevantMessagesEqual({ info: running, parts: running.parts }, { info: { ...running }, parts: [...running.parts] })).toBe(true);
   });
 });

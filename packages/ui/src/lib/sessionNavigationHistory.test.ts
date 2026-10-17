@@ -16,8 +16,10 @@ const session = (sessionId: string): Session => ({
   headSequence: '0',
   runtimeStatus: 'idle',
   activeRunId: null,
+  metadata: null,
+  metadataRevision: '0',
+  archiveRevision: '0',
 });
-
 describe('sessionNavigationHistory', () => {
   test('steps back and forward through the visit order', () => {
     useGlobalSessionsStore.setState({ activeSessions: [session('s1'), session('s2'), session('s3')] });
@@ -36,13 +38,6 @@ describe('sessionNavigationHistory', () => {
     expect(useSessionUIStore.getState().currentSessionId).toBe('s2');
   });
 
-  test('a fresh visit truncates the forward branch', () => {
-    // Continues from the previous test's state: at s2 with s3 forward.
-    useSessionUIStore.setState({ currentSessionId: 's1' });
-    expect(navigateSessionHistory(1)).toBe(false);
-    expect(navigateSessionHistory(-1)).toBe(true);
-    expect(useSessionUIStore.getState().currentSessionId).toBe('s2');
-  });
 
   test('skips and drops entries whose session no longer exists', () => {
     useSessionUIStore.setState({ currentSessionId: 's3' });

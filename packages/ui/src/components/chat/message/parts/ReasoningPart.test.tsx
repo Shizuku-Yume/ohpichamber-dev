@@ -5,8 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { OpenCode } from '@opencode/client';
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 import { SyncProvider } from '@/sync/sync-context';
 
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
@@ -39,13 +38,9 @@ const runtimeApis: RuntimeAPIs = {
   get notifications() { return unavailable(); },
   get sourceControl() { return unavailable(); },
 };
-const sdk = OpenCode.make({
-  baseUrl: 'http://localhost',
-  fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
-});
 const TestProviders = ({ children }: { children: React.ReactNode }) => (
   <RuntimeAPIContext.Provider value={runtimeApis}>
-    <SyncProvider sdk={sdk} directory="">
+    <SyncProvider directory="">
       <I18nProvider>{children}</I18nProvider>
     </SyncProvider>
   </RuntimeAPIContext.Provider>
@@ -280,15 +275,12 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
   const BUSY_INDICATOR = 'animate-busy-wave';
 
   const makeReasoningPart = (
-    time: ReasoningPartFixture['time'],
+    _time: { start: number; end?: number },
     text: string = SHORT_REASONING,
   ): ReasoningPartFixture => ({
-    id: 'prt_reasoning_2020',
-    sessionID: 'ses_2020',
-    messageID: 'msg_2020',
     type: 'reasoning',
-    text,
-    time,
+    partId: 'prt_reasoning_2020',
+    content: text,
   });
 
   // Server rendering reads the UI store's initial state, which is

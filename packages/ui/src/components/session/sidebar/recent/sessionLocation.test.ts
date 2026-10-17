@@ -1,20 +1,24 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { createSessionOwnershipIndex } from '../sessions/sessionOwnership';
 import { deriveTimelineActivityItems } from './activitySections';
 import { resolveSidebarSessionLocations } from './sessionLocation';
 
 const projects = [{ id: 'repo', normalizedPath: '/repo', label: 'Repo' }];
-const session = (sessionId: string, displayPath: string): Session => ({
-  sessionId,
-  rootSessionId: sessionId,
-  projectId: 'opencode-repo',
-  workspaceId: 'workspace',
-  displayPath,
-  createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-  metadata: null, metadataRevision: '0', archiveRevision: '0',
-});
+const session = (sessionId: string, displayPath: string): Session => {
+  const workspaceId = `workspace-${sessionId}`;
+  registerWorkspaceDirectory(workspaceId, displayPath);
+  return {
+    sessionId, rootSessionId: sessionId,
+    projectId: 'repo',
+    workspaceId,
+    displayPath,
+    createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    metadata: null, metadataRevision: '0', archiveRevision: '0',
+  };
+};
 
 const worktreeMeta = (path: string, branch: string): WorktreeMetadata => ({
   path,
@@ -41,7 +45,7 @@ describe('resolveSidebarSessionLocations', () => {
   test('keeps a restored missing-worktree session in Timeline with its actual request directory', () => {
     const restored = session('restored', '/worktrees/deleted');
     const ownership = createSessionOwnershipIndex(
-      [restored], projects, new Map(), [], [{ id: 'opencode-repo', worktree: '/repo' }],
+      [restored], projects, new Map(), [], [{ id: 'opencode-repo', name: 'Repo space', state: 'complete', projectDirectory: '/repo', directory: '/repo' }],
     );
     for (const hideBranchMatchingProjectLabel of [true, false]) {
       const locations = resolveSidebarSessionLocations({
@@ -82,7 +86,7 @@ describe('resolveSidebarSessionLocations', () => {
   });
 
   test('leaves unrelated sessions unassigned and hides detached HEAD', () => {
-    const records = [session('unowned', '/elsewhere'), session('detached', '/repo')];
+    const records = [{ ...session('unowned', '/elsewhere'), projectId: 'missing-project' }, session('detached', '/repo')];
     const ownership = createSessionOwnershipIndex(records, projects, new Map());
     const locations = resolveSidebarSessionLocations({
       sessions: records, projects, ownerBySessionId: ownership.bySessionId,
@@ -173,9 +177,7 @@ describe('resolveSidebarSessionLocations', () => {
   test('labels a session of an isolated space with the space name and groups it by the space directory', () => {
     const SPACE = 'a1b2c3d4e5f6';
     const records = [session('in-space', `/spaces/${SPACE}/repo/src`), session('at-root', '/repo')];
-    const ownership = createSessionOwnershipIndex(records, projects, new Map(), [], [], [
-      { id: SPACE, name: 'Fix login', state: 'complete', projectDirectory: '/repo', directory: `/spaces/${SPACE}/repo` },
-    ]);
+    const ownership = createSessionOwnershipIndex(records, projects, new Map(), [], [{ id: SPACE, name: 'Fix login', state: 'complete', projectDirectory: '/repo', directory: `/spaces/${SPACE}/repo` }]);
     const locations = resolveSidebarSessionLocations({
       sessions: records, projects, ownerBySessionId: ownership.bySessionId,
       availableWorktreesByProject: new Map(), gitBranches: new Map([[`/spaces/${SPACE}/repo`, 'master']]), homeDirectory: null,

@@ -1,13 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { useSessionPrefetch, type SessionHoverPrefetch } from './useSessionPrefetch';
 import { installHookTestDom } from '../test-utils/testDom';
-
+const PREFETCH_DIRECTORY = '/workspace';
+const PREFETCH_WORKSPACE_ID = 'workspace:/workspace';
+resetWorkspaceDirectories();
+registerWorkspaceDirectory(PREFETCH_WORKSPACE_ID, PREFETCH_DIRECTORY);
 const session = (sessionId: string): Session => ({
-  sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/workspace', rootSessionId: sessionId, title: sessionId,
-  createdAt: 1, updatedAt: 1, epoch: 1, headSequence: 0, runtimeStatus: 'idle', activeRunId: null,
+  sessionId, projectId: 'project', workspaceId: PREFETCH_WORKSPACE_ID, displayPath: PREFETCH_DIRECTORY, rootSessionId: sessionId,
+  createdAt: 1, updatedAt: 1, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
 });
 
 describe('session prefetch demand', () => {
@@ -20,10 +25,10 @@ describe('session prefetch demand', () => {
     const Harness = () => {
       useSessionPrefetch({
         enabled: true,
-        currentSessionId: current.id,
+        currentSessionId: current.sessionId,
         sortedSessions: [current, nearby],
         recentSessions: [current, nearby],
-        prefetchSession: async ({ sessionID }) => { calls.push(sessionID); },
+        prefetchSession: async ({ sessionId }) => { calls.push(sessionId); },
       });
       return null;
     };
@@ -45,10 +50,10 @@ describe('session prefetch demand', () => {
     const Harness = () => {
       hover = useSessionPrefetch({
         enabled: true,
-        currentSessionId: current.id,
+        currentSessionId: current.sessionId,
         // No neighbours: only hover demand can prefetch here.
         sortedSessions: [current],
-        prefetchSession: async ({ sessionID }) => { calls.push(sessionID); },
+        prefetchSession: async ({ sessionId }) => { calls.push(sessionId); },
       });
       return null;
     };
@@ -109,9 +114,9 @@ describe('session prefetch demand', () => {
     const Harness = () => {
       hover = useSessionPrefetch({
         enabled: true,
-        currentSessionId: current.id,
+        currentSessionId: current.sessionId,
         sortedSessions: [current, nearby],
-        prefetchSession: async ({ sessionID }) => { calls.push(sessionID); },
+        prefetchSession: async ({ sessionId }) => { calls.push(sessionId); },
       });
       return null;
     };
