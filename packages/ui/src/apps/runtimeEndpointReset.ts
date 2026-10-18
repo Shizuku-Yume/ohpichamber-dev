@@ -24,6 +24,7 @@ import { repositoryBindingOwner } from '@/lib/source-control/repository-binding'
 import { useChangeRequestContextStore } from '@/stores/useChangeRequestContextStore';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { sessionEvents } from '@/lib/sessionEvents';
+import { fileTreeChanges } from '@/lib/fileTreeChanges';
 import { useLinearAuthStore } from '@/stores/useLinearAuthStore';
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import { useMcpStore } from '@/stores/useMcpStore';
@@ -72,7 +73,6 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   hostFilesystem.resetRequests();
   useConfigStore.setState({
     providers: [],
-    agents: [],
     isConnected: false,
     isInitialized: false,
     connectionPhase: 'connecting',
@@ -105,6 +105,7 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   useFileSearchStore.getState().resetForRuntimeSwitch();
   useGitStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
   sessionEvents.cancelPendingGitRefreshes();
+  fileTreeChanges.reset();
   useGitIdentitiesStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
   useSourceControlAuthStore.getState().resetForRuntimeSwitch();
   repositoryBindingOwner.reset();

@@ -27,6 +27,8 @@ import { getSessionMaterializationStatus } from "./materialization"
 import { appendNotification } from "./notification-store"
 import { recordSessionError, summarizeSessionError } from "./session-error-log"
 import type { State } from "./types"
+import { sessionEvents } from "@/lib/sessionEvents"
+import { fileTreeChanges } from "@/lib/fileTreeChanges"
 
 export type CurrentDirectorySource = { get: () => string; subscribe: (notify: () => void) => () => void }
 export type SyncRuntime = { childStores: ChildStoreManager; messageLoader: SessionMessageLoader; runtimeKey: string; client: CanonicalClient; currentDirectory: CurrentDirectorySource }
@@ -86,6 +88,32 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
     if (result.kind === "resnapshot") { contiguous = false; break }
     if (result.kind === "duplicate") continue
     if ((event.type === "run.completed" || event.type === "run.failed") && next.snapshot[target.sessionId]?.activeRun?.runId === event.runId) outcomes.push(event)
+    if (event.type === "tool.completed" || event.type === "part.started" || event.type === "part.completed") {
+      const toolCallId = event.type === "tool.completed" ? event.toolCallId
+        : event.part.type === "tool_call" || event.part.type === "tool_result" ? event.part.toolCallId : undefined
+      if (toolCallId) {
+        const before = next.message[target.sessionId] ?? []
+        const after = result.state.message[target.sessionId] ?? []
+        let incoming: Part | undefined = event.type === "tool.completed" ? undefined : event.part
+        let previous: Part | undefined
+        if (!incoming) for (const message of after) {
+          incoming = message.parts.find((part) => part.type === "tool_call" && part.toolCallId === toolCallId)
+          if (incoming) break
+        }
+        for (const message of before) {
+          previous = message.parts.find((part) => part.type === "tool_call" && part.toolCallId === toolCallId)
+          if (previous) break
+        }
+        if (incoming) {
+          sessionEvents.requestGitRefreshForToolTransition(target.directory, target.sessionId, previous, incoming)
+          fileTreeChanges.toolTransition(target.directory, target.sessionId, previous, incoming)
+        }
+      }
+    }
+    if ((event.type === "run.completed" || event.type === "run.failed" || event.type === "run.cancelled")
+      && next.snapshot[target.sessionId]?.activeRun?.runId === event.runId) {
+      fileTreeChanges.runCompleted(target.directory, target.sessionId)
+    }
     accepted.push(event)
     if (event.type === "part.started") markDirectorySessionPartChanged(store, target.sessionId, event.messageId)
     else if (event.type === "part.delta" || event.type === "part.completed") {

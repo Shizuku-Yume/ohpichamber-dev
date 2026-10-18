@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { CompletionWorkerBootstrapSchema, WorkerBootstrapSchema, WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema, WorkerPolicyResultSchema } from '../protocol.ts';
+import { UsageWorkerBootstrapSchema, CompletionWorkerBootstrapSchema, WorkerBootstrapSchema, WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema, WorkerPolicyResultSchema } from '../protocol.ts';
 import type { CompletionWorkerBootstrap, WorkerBootstrap, WorkerApprovalPolicy, WorkerInfo, WorkerOperation, WorkerOperationResult, WorkerPolicyRequest, WorkerPolicyResult, WorkerInteraction } from '../protocol.ts';
 import type { ProjectionSeed, ProjectionInput } from '../projection/protocol.ts';
 import type { NativeOperationDescriptor, HostActionRequest, HostActionResult, HostNativePolicySnapshot } from './host-authorization-protocol.ts';
@@ -24,10 +24,10 @@ export type StatelessWorkerInput = Omit<CompletionWorkerBootstrap, 'type' | 'wor
   rootSessionId: string;
   env?: Record<string, string>;
 };
-export type RegisteredWorkerInfo = WorkerInfo & { kind: 'session' | 'stateless' };
+export type RegisteredWorkerInfo = WorkerInfo & { kind: 'session' | 'stateless' | 'usage' };
 export type WorkerAuthorizationScope = Pick<WorkerBootstrap, 'rootSessionId' | 'projectId' | 'workspaceId' | 'cwd' | 'agentDirectory' | 'agentDirectoryId'> & { workerGeneration: string };
 
-type WorkerInput = { kind: 'session'; input: WorkerBootstrap } | { kind: 'stateless'; input: StatelessWorkerInput };
+type WorkerInput = { kind: 'session'; input: WorkerBootstrap } | { kind: 'stateless' | 'usage'; input: StatelessWorkerInput };
 type WorkerEntry = WorkerInput & {
   info: WorkerInfo;
   child: ChildProcess;
@@ -93,14 +93,14 @@ export class WorkerRegistry {
   }
   authorizationPolicy(workspaceId: string, agentDirectoryId: string, rootSessionId?: string): HostNativePolicySnapshot {
     const candidates = rootSessionId === undefined ? [...this.entries.values()] : [this.entries.get(rootSessionId)];
-    const entry = candidates.find(candidate => candidate?.input.workspaceId === workspaceId && candidate.input.agentDirectoryId === agentDirectoryId && candidate.child.connected && (candidate.info.state === 'starting' || candidate.info.state === 'ready') && candidate.policySnapshot !== undefined);
+    const entry = candidates.find(candidate => candidate?.kind !== 'usage' && candidate?.input.workspaceId === workspaceId && candidate.input.agentDirectoryId === agentDirectoryId && candidate.child.connected && (candidate.info.state === 'starting' || candidate.info.state === 'ready') && candidate.policySnapshot !== undefined);
     if (!entry?.policySnapshot) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     return structuredClone(entry.policySnapshot);
   }
 
   authorizationScope(rootSessionId: string): WorkerAuthorizationScope | undefined {
     const entry = this.entries.get(rootSessionId);
-    if (this.closing || !entry || !entry.child.connected || (entry.info.state !== 'starting' && entry.info.state !== 'ready')) return undefined;
+    if (this.closing || !entry || entry.kind === 'usage' || !entry.child.connected || (entry.info.state !== 'starting' && entry.info.state !== 'ready')) return undefined;
     const { projectId, workspaceId, cwd, agentDirectory, agentDirectoryId } = entry.input;
     return { rootSessionId, workerGeneration: entry.info.workerGeneration, projectId, workspaceId, cwd, agentDirectory, agentDirectoryId };
   }
@@ -123,7 +123,7 @@ export class WorkerRegistry {
     return this.withRoot(input.rootSessionId, async () => {
       if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       const previous = this.entries.get(input.rootSessionId);
-      if (previous?.kind === 'stateless') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (previous && previous.kind !== 'session') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
       if (previous?.info.state === 'ready' && !replace) return { ...previous.info };
       if (previous) await this.stopEntry(previous);
       if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
@@ -138,11 +138,23 @@ export class WorkerRegistry {
     return this.withRoot(input.rootSessionId, async () => {
       if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       const previous = this.entries.get(input.rootSessionId);
-      if (previous?.kind === 'session') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (previous && previous.kind !== 'stateless') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
       if (previous?.info.state === 'ready' && !replace) return { ...previous.info };
       if (previous) await this.stopEntry(previous);
       if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       return this.launch({ kind: 'stateless', input: structuredClone(input) });
+    });
+  }
+
+  async startUsage(input: StatelessWorkerInput): Promise<WorkerInfo> {
+    return this.withRoot(input.rootSessionId, async () => {
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      const previous = this.entries.get(input.rootSessionId);
+      if (previous && previous.kind !== 'usage') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (previous?.info.state === 'ready') return { ...previous.info };
+      if (previous) await this.stopEntry(previous);
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      return this.launch({ kind: 'usage', input: structuredClone(input) });
     });
   }
 
@@ -179,7 +191,9 @@ export class WorkerRegistry {
     const { rootSessionId: authorizationRootId, ...statelessBootstrap } = bootstrap;
     const command = owner.kind === 'session'
       ? WorkerBootstrapMessageSchema.parse({ ...bootstrap, type: 'bootstrap', workerGeneration, approvalPolicies })
-      : CompletionWorkerBootstrapSchema.parse({ ...statelessBootstrap, authorizationRootId, type: 'completion.bootstrap', workerGeneration });
+      : owner.kind === 'usage'
+        ? UsageWorkerBootstrapSchema.parse({ ...statelessBootstrap, authorizationRootId, type: 'usage.bootstrap', workerGeneration })
+        : CompletionWorkerBootstrapSchema.parse({ ...statelessBootstrap, authorizationRootId, type: 'completion.bootstrap', workerGeneration });
     const ready = Promise.withResolvers<void>();
     const exited = Promise.withResolvers<void>();
     const env: NodeJS.ProcessEnv = { ...process.env, ...privateEnvironment, PI_CODING_AGENT_DIR: input.agentDirectory };

@@ -1,17 +1,11 @@
-import { carriesFileDiffs, isFileChangeTool } from '@/lib/toolHelpers';
+import type { JsonValue, ToolResultPart } from '@openchamber/agent-contract';
 
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/typography';
-import { formatToolInput, detectToolOutputLanguage } from '@/lib/toolHelpers';
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
-import { parseWebSearchOutput } from '@/lib/opencode/websearch';
+import { parseNativeSearchOutput } from '@/lib/native-web-search';
 import { WebSearchResults } from './parts/WebSearchResults';
 
-const cleanOutput = (output: string) => {
-    let cleaned = output.replace(/^<file>\s*\n?/, '').replace(/\n?<\/file>\s*$/, '');
-    cleaned = cleaned.replace(/^\s*\d{5}\|\s?/gm, '');
-    return cleaned.trim();
-};
 
 export const coerceToText = (value: unknown, fallback = ''): string => {
     if (typeof value === 'string') return value;
@@ -22,6 +16,38 @@ export const coerceToText = (value: unknown, fallback = ''): string => {
     } catch {
         return fallback;
     }
+};
+
+/** SDK result envelopes are retained verbatim by the canonical projection. */
+export const nativeToolResultContent = (result: ToolResultPart | undefined): {
+    text: string;
+    images: Array<{ mediaType: string; data: string }>;
+    details?: JsonValue;
+} => {
+    const output = result?.output;
+    if (output === null) return { text: 'null', images: [] };
+    if (!output || typeof output !== 'object' || Array.isArray(output) || !Array.isArray(output.content)) {
+        return { text: coerceToText(output), images: [] };
+    }
+    const text: string[] = [];
+    const images: Array<{ mediaType: string; data: string }> = [];
+    for (const block of output.content) {
+        if (block && typeof block === 'object' && !Array.isArray(block)) {
+            if (block.type === 'text' && typeof block.text === 'string') {
+                text.push(block.text);
+                continue;
+            }
+            if (block.type === 'image' && typeof block.data === 'string' && typeof block.mimeType === 'string'
+                && ['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(block.mimeType)
+                && block.data.length <= 14 * 1024 * 1024) {
+                images.push({ mediaType: block.mimeType, data: block.data });
+                continue;
+            }
+        }
+        // Unrecognized content is still inspectable rather than silently discarded.
+        text.push(coerceToText(block));
+    }
+    return { text: text.join('\n'), images, details: output.details };
 };
 
 // Guards the renderer process against V8 "Zone Allocation failed" OOM crashes
@@ -46,71 +72,6 @@ export const capToolOutputText = (
     return output.slice(0, maxChars) + notice;
 };
 
-const hasLspDiagnostics = (output: string): boolean => {
-    if (!output) return false;
-    return output.includes('<diagnostics')
-        || output.includes('<file_diagnostics>')
-        || output.includes('LSP errors detected')
-        || output.includes('This file has errors');
-};
-
-const stripLspDiagnostics = (output: string): string => {
-    if (!output) return '';
-    return output
-        .replace(/\n{0,2}LSP errors detected[\s\S]*?<diagnostics[^>]*>[\s\S]*?<\/diagnostics>/g, '')
-        .replace(/\n{0,2}This file has errors[\s\S]*?<\/file_diagnostics>/g, '')
-        .replace(/<diagnostics[^>]*>[\s\S]*?<\/diagnostics>/g, '')
-        .replace(/<file_diagnostics>[\s\S]*?<\/file_diagnostics>/g, '')
-        .trim();
-};
-
-const formatInputForDisplay = (input: Record<string, unknown>, toolName?: string) => {
-    if (!input || typeof input !== 'object') {
-        return String(input);
-    }
-    return formatToolInput(input, toolName || '');
-};
-
-const getPatchText = (value: unknown): string | undefined => {
-    if (typeof value === 'string') {
-        const trimmed = value.trim();
-        return trimmed.length > 0 ? trimmed : undefined;
-    }
-
-    if (value && typeof value === 'object') {
-        const patch = (value as { patch?: unknown }).patch;
-        if (typeof patch === 'string') {
-            const trimmed = patch.trim();
-            return trimmed.length > 0 ? trimmed : undefined;
-        }
-    }
-
-    return undefined;
-};
-
-const getToolMetadataPatch = (metadata?: Record<string, unknown>): string | undefined => {
-    if (!metadata || typeof metadata !== 'object') {
-        return undefined;
-    }
-
-    const topLevelPatch = getPatchText((metadata as { patch?: unknown }).patch) ?? getPatchText(metadata.diff);
-    if (topLevelPatch) {
-        return topLevelPatch;
-    }
-
-    const files = Array.isArray((metadata as { files?: unknown }).files) ? (metadata as { files: unknown[] }).files : [];
-    for (const file of files) {
-        if (!file || typeof file !== 'object') {
-            continue;
-        }
-        const patch = getPatchText((file as { patch?: unknown }).patch) ?? getPatchText((file as { diff?: unknown }).diff);
-        if (patch) {
-            return patch;
-        }
-    }
-
-    return undefined;
-};
 
 export const tryParseJsonOutput = (output: string): { data: unknown; isJson: boolean } => {
     if (!output || typeof output !== 'string') {
@@ -142,22 +103,6 @@ export const tryParseJsonOutput = (output: string): { data: unknown; isJson: boo
     }
 };
 
-export const formatEditOutput = (output: string, toolName: string, metadata?: Record<string, unknown>): string => {
-    let cleaned = cleanOutput(output);
-
-    if (isFileChangeTool(toolName) && hasLspDiagnostics(cleaned)) {
-        cleaned = stripLspDiagnostics(cleaned);
-    }
-
-    if (carriesFileDiffs(toolName) && cleaned.trim().length === 0) {
-        const diff = getToolMetadataPatch(metadata);
-        if (diff) {
-            return diff;
-        }
-    }
-
-    return cleaned;
-};
 
 interface ParsedReadOutputLine {
     text: string;
@@ -359,13 +304,13 @@ export const renderGlobOutput = (output: string, isMobile: boolean, options?: { 
     }
 };
 
-export const renderWebSearchOutput = (output: string, options?: { unstyled?: boolean }) => {
+export const renderWebSearchOutput = (output: JsonValue | undefined, options?: { unstyled?: boolean }) => {
     try {
-        const parsed = parseWebSearchOutput(output);
+        const parsed = parseNativeSearchOutput(output);
         if (parsed) {
             return (
                 <div className={cn('w-full min-w-0', options?.unstyled ? null : 'p-2 bg-muted/20 rounded-xl border border-border/20')}>
-                    <WebSearchResults output={parsed} providerId={null} />
+                    <WebSearchResults output={parsed} />
                 </div>
             );
         }
@@ -377,7 +322,7 @@ export const renderWebSearchOutput = (output: string, options?: { unstyled?: boo
                 )}
                 style={typography.tool.popup}
             >
-                <SimpleMarkdownRenderer content={output} variant="tool" />
+                <SimpleMarkdownRenderer content={coerceToText(output)} variant="tool" />
             </div>
         );
     } catch {
@@ -459,9 +404,3 @@ export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
 
     return hunks;
 };
-
-export const detectLanguageFromOutput = (output: string, toolName: string, input?: Record<string, unknown>) => {
-    return detectToolOutputLanguage(toolName, output, input);
-};
-
-export { formatInputForDisplay };

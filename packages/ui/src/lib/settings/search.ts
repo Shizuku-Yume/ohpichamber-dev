@@ -1157,8 +1157,8 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     id: 'web-search.provider',
     page: 'web-search',
     titleKey: 'settings.webSearch.section.provider',
-    descriptionKey: 'settings.webSearch.section.providerInfo',
-    keywords: ['web search', 'websearch', 'internet', 'default provider', 'disable', 'off', 'random'],
+    descriptionKey: 'settings.webSearch.native.info',
+    keywords: ['web search', 'web_search', 'internet', 'provider', 'disable', 'off', 'fallback', 'timeout'],
   },
   {
     id: 'web-search.keys',

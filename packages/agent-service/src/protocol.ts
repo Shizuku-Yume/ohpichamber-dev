@@ -6,7 +6,9 @@ import { CatalogOperationSchema, CatalogResultSchema } from './catalogs/protocol
 import { McpOperationSchema, McpResultSchema } from './worker/mcp/protocol.ts';
 import { ShellOperationSchema, ShellResultSchema } from './shell/protocol.ts';
 import { CompletionOperationSchema, CompletionResultSchema } from './completion/protocol.ts';
+import { UsageQuerySchema, UsageStatsSchema, UsageToolsResponseSchema } from '@openchamber/agent-contract';
 import { NativePolicyContextSchema, HostActionRequestSchema, HostActionResultSchema, HostNativePolicySnapshotSchema } from './native-policy-protocol.ts';
+import { WebSearchOperationSchema, WebSearchResultSchema } from './worker/websearch/protocol.ts';
 
 const PrivatePathSchema = z.string().min(1).refine(isAbsolute);
 const AttachmentReferenceSchema = z.strictObject({ attachmentId: EntityIdSchema, path: PrivatePathSchema });
@@ -42,8 +44,19 @@ export const CompletionWorkerBootstrapSchema = z.strictObject({
 });
 export type CompletionWorkerBootstrap = z.infer<typeof CompletionWorkerBootstrapSchema>;
 
+export const UsageWorkerBootstrapSchema = CompletionWorkerBootstrapSchema.extend({ type: z.literal('usage.bootstrap') });
+export type UsageWorkerBootstrap = z.infer<typeof UsageWorkerBootstrapSchema>;
+export const UsageSessionReferenceSchema = z.strictObject({
+  sessionId: EntityIdSchema, rootSessionId: EntityIdSchema, workspaceId: EntityIdSchema, projectId: EntityIdSchema,
+  sessionFile: PrivatePathSchema, cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema,
+  sessionsDirectory: PrivatePathSchema.optional(), parentSessionId: EntityIdSchema.optional(),
+});
+export type UsageSessionReference = z.infer<typeof UsageSessionReferenceSchema>;
+export const UsageAuthorizationSchema = z.array(z.strictObject({ workspaceId: EntityIdSchema, projectId: EntityIdSchema }));
+
 export const WorkerPolicyRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('provider-entry') }),
+  z.strictObject({ type: z.literal('web-search') }),
   z.strictObject({ type: z.literal('mcp-server'), server: MCPServerConfigSchema }),
   z.strictObject({ type: z.literal('mcp-oauth'), server: MCPServerConfigSchema, configuration: JsonObjectSchema }),
   z.strictObject({ type: z.literal('shell'), request: ShellStartRequestSchema }),
@@ -67,9 +80,12 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('branch'), request: SessionBranchRequestSchema }),
   z.strictObject({ type: z.literal('delete') }),
   z.strictObject({ type: z.literal('catalog'), operation: CatalogOperationSchema, revision: CounterSchema }),
+  z.strictObject({ type: z.literal('web-search'), operation: WebSearchOperationSchema }),
   z.strictObject({ type: z.literal('mcp'), operation: McpOperationSchema }),
   z.strictObject({ type: z.literal('shell'), operation: ShellOperationSchema }),
   z.strictObject({ type: z.literal('completion'), operation: CompletionOperationSchema }),
+  z.strictObject({ type: z.literal('usage.stats'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema) }),
+  z.strictObject({ type: z.literal('usage.tools'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema) }),
   z.strictObject({ type: z.literal('mcp.configuration.read') }),
 ]);
 export type WorkerOperation = z.infer<typeof WorkerOperationSchema>;
@@ -95,9 +111,12 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('branch'), result: SessionBranchResultSchema, seed: ProjectionSeedSchema }),
   z.strictObject({ type: z.literal('delete'), deletedSessionIds: z.array(EntityIdSchema).min(1) }),
   z.strictObject({ type: z.literal('catalog'), result: CatalogResultSchema }),
+  z.strictObject({ type: z.literal('web-search'), result: WebSearchResultSchema }),
   z.strictObject({ type: z.literal('mcp'), result: McpResultSchema }),
   z.strictObject({ type: z.literal('shell'), result: ShellResultSchema }),
   z.strictObject({ type: z.literal('completion'), result: CompletionResultSchema }),
+  z.strictObject({ type: z.literal('usage.stats'), result: UsageStatsSchema }),
+  z.strictObject({ type: z.literal('usage.tools'), result: UsageToolsResponseSchema }),
   z.strictObject({ type: z.literal('mcp.configuration'), configuration: MCPConfigurationStateSchema.nullable() }),
 ]);
 export type WorkerOperationResult = z.infer<typeof WorkerOperationResultSchema>;
@@ -107,6 +126,7 @@ const WorkerOperationCommandSchema = z.strictObject({
 export const WorkerCommandSchema = z.discriminatedUnion('type', [
   WorkerBootstrapMessageSchema,
   CompletionWorkerBootstrapSchema,
+  UsageWorkerBootstrapSchema,
   z.strictObject({ type: z.literal('policy.result'), workerGeneration: EntityIdSchema, requestId: EntityIdSchema, result: WorkerPolicyResultSchema }),
   z.strictObject({ type: z.literal('action.result'), workerGeneration: EntityIdSchema, requestId: EntityIdSchema, result: HostActionResultSchema }),
   z.strictObject({ type: z.literal('stop'), workerGeneration: EntityIdSchema }),

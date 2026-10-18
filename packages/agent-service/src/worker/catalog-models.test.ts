@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { YAML } from 'bun';
@@ -10,7 +10,7 @@ import { filterAvailableModelsByEnabledPatterns } from '@oh-my-pi/pi-coding-agen
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
 import { cfgExtendedContext } from '@oh-my-pi/pi-coding-agent/session/context-settings';
-import { NativeModels, publicModel, type NativeCatalogModel } from './catalog-models.ts';
+import { NativeModels, credentialReference, publicModel, type NativeCatalogModel } from './catalog-models.ts';
 import { openNativeRuntime } from './native-runtime.ts';
 
 const routed = getBundledModel('openrouter', 'openrouter/auto');
@@ -171,3 +171,216 @@ for (const field of ['input', 'output', 'cacheRead', 'cacheWrite'] as const) {
     expect(publicModel(native).pricing).toBeNull();
   });
 }
+
+test('custom endpoint, literal private headers and canonical models save and reopen together', async () => {
+  const requests: { path: string; authorization: string | null; custom: string | null }[] = [];
+  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
+    requests.push({ path: new URL(request.url).pathname, authorization: request.headers.get('authorization'), custom: request.headers.get('x-private') });
+    return Response.json({ data: [{ id: configuredModel.modelId, name: 'Discovered' }] });
+  } });
+  const fixture = await openCatalogFixture();
+  const saved = { ...configuration, endpoint: `http://127.0.0.1:${server.port}/v1` };
+  try {
+    const result = await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration: saved,
+      headers: { Authorization: 'Bearer private-value', 'X-Private': '!literal-not-a-command' }, models: [configuredModel] }, '1');
+    expect(JSON.stringify(result)).not.toContain('private-value');
+    const reopened = await fixture.reader.models.readProviderConfiguration(saved.providerId, '1');
+    expect(reopened.configuration).toEqual(saved);
+    expect(reopened.headerNames.sort()).toEqual(['Authorization', 'X-Private']);
+    expect(reopened.models).toEqual([configuredModel]);
+    expect(JSON.stringify(reopened)).not.toContain('private-value');
+    expect(JSON.stringify(await fixture.reader.models.readProviders('workspace_1', '1'))).not.toContain('private-value');
+    const selection = await fixture.reader.models.selection({ providerId: saved.providerId, modelId: configuredModel.modelId });
+    expect(selection.nativeModel.baseUrl).toBe(saved.endpoint);
+    expect(await selection.nativeModel.resolveHeaders?.()).toMatchObject({ Authorization: 'Bearer private-value', 'X-Private': '!literal-not-a-command' });
+    expect((await stat(fixture.writer.modelsPath)).mode & 0o777).toBe(0o600);
+    expect(await fixture.reader.models.discoverProviderModels({ providerId: saved.providerId, endpoint: saved.endpoint, protocol: saved.protocol }))
+      .toEqual({ models: [{ modelId: configuredModel.modelId, name: 'Discovered' }] });
+    expect(requests).toEqual([{ path: '/v1/models', authorization: 'Bearer private-value', custom: '!literal-not-a-command' }]);
+    await fixture.writer.models.configureProvider({ expectedRevision: '1', configuration: { ...saved, name: 'Renamed' } }, '2');
+    expect((await fixture.reader.models.readProviderConfiguration(saved.providerId, '2')).headerNames).toHaveLength(2);
+    await fixture.writer.models.configureProvider({ expectedRevision: '2', configuration: saved, headers: {}, models: [] }, '3');
+    expect(await fixture.reader.models.readProviderConfiguration(saved.providerId, '3')).toMatchObject({ headerNames: [], models: [] });
+    await expect(fixture.reader.models.selection({ providerId: saved.providerId, modelId: configuredModel.modelId })).rejects.toMatchObject({ code: 'MODEL_UNAVAILABLE' });
+  } finally { server.stop(true); await fixture.close(); }
+});
+
+for (const protocol of ['chat-completions', 'responses', 'messages', 'generate-content'] as const) {
+  test(`worker model discovery uses write-only ${protocol} authentication and real metadata`, async () => {
+    const requests: Array<{ url: string; headers: Record<string, string> }> = [];
+    const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
+      requests.push({ url: request.url, headers: Object.fromEntries(request.headers.entries()) });
+      return Response.json(protocol === 'generate-content'
+        ? { models: [{ name: 'models/loopback-model', displayName: 'Loopback', inputTokenLimit: 8192, outputTokenLimit: 1024 }] }
+        : { data: [{ id: 'loopback-model', name: 'Loopback' }] });
+    } });
+    const fixture = await openCatalogFixture();
+    try {
+      const discovered = await fixture.reader.models.discoverProviderModels({ endpoint: `http://127.0.0.1:${server.port}/v1`, protocol,
+        apiKey: 'write-only-secret', headers: { 'x-private': 'write-only-header' } });
+      expect(discovered).toEqual({ models: [{ modelId: 'loopback-model', name: 'Loopback',
+        ...(protocol === 'generate-content' ? { contextWindow: 8192, maxOutputTokens: 1024 } : {}) }] });
+      expect(requests).toHaveLength(1);
+      expect(new URL(requests[0]!.url).pathname).toBe('/v1/models');
+      const headerName = protocol === 'messages' ? 'x-api-key' : protocol === 'generate-content' ? 'x-goog-api-key' : 'authorization';
+      expect(requests[0]!.headers[headerName]).toBe(headerName === 'authorization' ? 'Bearer write-only-secret' : 'write-only-secret');
+      expect(requests[0]!.headers['x-private']).toBe('write-only-header');
+      if (protocol === 'messages') expect(requests[0]!.headers['anthropic-version']).toBe('2023-06-01');
+      expect(JSON.stringify(discovered)).not.toContain('write-only');
+      expect(await readFile(fixture.writer.modelsPath, 'utf8').catch(() => '')).not.toContain('write-only');
+    } finally { server.stop(true); await fixture.close(); }
+  });
+}
+
+test('selected stored account survives reopen and changes the actual native credential binding', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    await fixture.writer.authStorage.credentials.upsert(configuration.providerId, { type: 'api_key', key: 'first-loopback-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.upsert(configuration.providerId, { type: 'api_key', key: 'second-loopback-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.reload();
+    const rows = fixture.writer.authStorage.credentials.list(configuration.providerId);
+    const first = rows.find(row => row.credential.type === 'api_key' && row.credential.key === 'first-loopback-key')!;
+    const second = rows.find(row => row.credential.type === 'api_key' && row.credential.key === 'second-loopback-key')!;
+    const firstRef = credentialReference(configuration.providerId, first.id);
+    const secondRef = credentialReference(configuration.providerId, second.id);
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration, models: [configuredModel] }, '1');
+    await fixture.writer.models.selectCredential(configuration.providerId, secondRef, '2');
+    await fixture.reader.models.selection({ providerId: configuration.providerId, modelId: configuredModel.modelId });
+    expect(fixture.reader.models.defaultCredentialRef(configuration.providerId)).toBe(secondRef);
+    expect(await fixture.reader.models.resolveProviderCredential(configuration.providerId, 'reader-session')).toEqual({
+      bound: true, credential: { apiKey: 'second-loopback-key', credentialId: second.id },
+    });
+    await fixture.writer.models.selectCredential(configuration.providerId, firstRef, '3');
+    expect(await fixture.reader.models.resolveProviderCredential(configuration.providerId, 'reader-session')).toEqual({
+      bound: true, credential: { apiKey: 'first-loopback-key', credentialId: first.id },
+    });
+    await expect(fixture.writer.models.selectCredential(configuration.providerId, 'credential_missing', '4')).rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    expect((await fixture.reader.models.readProviderConfiguration(configuration.providerId, '3')).configuration.credentialRef).toBe(firstRef);
+  } finally { await fixture.close(); }
+});
+
+test('invalid bundled model write leaves the previous provider configuration and headers intact', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration, headers: { 'x-private': 'old-secret' }, models: [configuredModel] }, '1');
+    const before = await readFile(fixture.writer.modelsPath, 'utf8');
+    await expect(fixture.writer.models.configureProvider({ expectedRevision: '1', configuration: { ...configuration, name: 'Uncommitted' },
+      headers: { 'x-private': 'uncommitted-secret' }, models: [{ ...configuredModel, reasoningEffortSupported: true,
+        reasoningOptions: [{ reasoningEffort: 'not-native', label: 'Invalid', budgetTokens: null }] }] }, '2')).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    expect(await readFile(fixture.writer.modelsPath, 'utf8')).toBe(before);
+    expect((await fixture.reader.models.readProviderConfiguration(configuration.providerId, '1')).configuration.name).toBe(configuration.name);
+  } finally { await fixture.close(); }
+});
+
+test('discovery errors and redirects cannot reveal keys or forward credentials to another endpoint', async () => {
+  let redirected = 0;
+  const sink = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch() { redirected++; return Response.json({ data: [] }); } });
+  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
+    return new URL(request.url).pathname.startsWith('/redirect')
+      ? Response.redirect(`http://127.0.0.1:${sink.port}/models`)
+      : new Response('private-response-key', { status: 401 });
+  } });
+  const fixture = await openCatalogFixture();
+  try {
+    for (const path of ['error', 'redirect']) {
+      await expect(fixture.reader.models.discoverProviderModels({ endpoint: `http://127.0.0.1:${server.port}/${path}`,
+        protocol: 'responses', apiKey: 'private-response-key' })).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE', message: 'Provider model discovery failed' });
+    }
+    expect(redirected).toBe(0);
+  } finally { server.stop(true); sink.stop(true); await fixture.close(); }
+});
+
+test('stored discovery credentials are opaque and saved headers do not follow endpoint edits', async () => {
+  const requests: { path: string; key: string | null; custom: string | null }[] = [];
+  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
+    requests.push({ path: new URL(request.url).pathname, key: request.headers.get('authorization'), custom: request.headers.get('x-private') });
+    return Response.json({ data: [] });
+  } });
+  const fixture = await openCatalogFixture();
+  const saved = { ...configuration, endpoint: `http://127.0.0.1:${server.port}/original` };
+  try {
+    await fixture.writer.authStorage.credentials.upsert(saved.providerId, { type: 'api_key', key: 'opaque-discovery-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.reload();
+    const row = fixture.writer.authStorage.credentials.list(saved.providerId)[0]!;
+    const reference = credentialReference(saved.providerId, row.id);
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration: { ...saved, credentialRef: reference }, headers: { 'x-private': 'saved-secret' } }, '1');
+    await fixture.reader.models.discoverProviderModels({ providerId: saved.providerId, endpoint: saved.endpoint, protocol: saved.protocol });
+    const changedEndpoint = `http://127.0.0.1:${server.port}/changed`;
+    await fixture.reader.models.discoverProviderModels({ providerId: saved.providerId, endpoint: changedEndpoint, protocol: saved.protocol });
+    await fixture.reader.models.discoverProviderModels({ providerId: saved.providerId, endpoint: changedEndpoint, protocol: saved.protocol, credentialRef: reference });
+    expect(requests).toEqual([
+      { path: '/original/models', key: 'Bearer opaque-discovery-key', custom: 'saved-secret' },
+      { path: '/changed/models', key: null, custom: null },
+      { path: '/changed/models', key: 'Bearer opaque-discovery-key', custom: null },
+    ]);
+    await expect(fixture.reader.models.discoverProviderModels({ providerId: saved.providerId, endpoint: saved.endpoint,
+      protocol: saved.protocol, credentialRef: 'credential_unknown' })).rejects.toMatchObject({ code: 'PROVIDER_UNAVAILABLE' });
+    expect(requests).toHaveLength(3);
+  } finally { server.stop(true); await fixture.close(); }
+});
+
+for (const protocol of ['messages', 'generate-content'] as const) {
+  test(`${protocol} model discovery follows native pagination without duplicate identities`, async () => {
+    const pages: string[] = [];
+    const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
+      const url = new URL(request.url);
+      pages.push(url.search);
+      const second = url.search !== '';
+      return Response.json(protocol === 'messages'
+        ? { data: second ? [{ id: 'model-one' }, { id: 'model-two' }] : [{ id: 'model-one' }], has_more: !second, last_id: 'model-one' }
+        : { models: second ? [{ name: 'models/model-one' }, { name: 'models/model-two' }] : [{ name: 'models/model-one' }], ...(!second ? { nextPageToken: 'page-two' } : {}) });
+    } });
+    const fixture = await openCatalogFixture();
+    try {
+      const result = await fixture.reader.models.discoverProviderModels({ endpoint: `http://127.0.0.1:${server.port}/v1`, protocol });
+      expect(result.models.map(model => model.modelId)).toEqual(['model-one', 'model-two']);
+      expect(pages).toEqual(['', protocol === 'messages' ? '?after_id=model-one' : '?pageToken=page-two']);
+    } finally { server.stop(true); await fixture.close(); }
+  });
+}
+
+test('default stored credential selection never replaces a source-owned native override', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    await fixture.writer.authStorage.credentials.upsert(configuration.providerId, { type: 'api_key', key: 'stored-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.reload();
+    const row = fixture.writer.authStorage.credentials.list(configuration.providerId)[0]!;
+    await fixture.writer.models.selectCredential(configuration.providerId, credentialReference(configuration.providerId, row.id), '1');
+    fixture.writer.authStorage.keys.setRuntime(configuration.providerId, 'source-owned-key');
+    expect(await fixture.writer.models.resolveProviderCredential(configuration.providerId, 'session')).toEqual({ bound: false });
+    expect(fixture.writer.models.provider(configuration.providerId).auth).toMatchObject({ source: 'managed-environment' });
+    expect(await fixture.writer.authStorage.keys.peek(configuration.providerId)).toBe('source-owned-key');
+  } finally { await fixture.close(); }
+});
+
+test('configured discovery falls back to native key cascade when no explicit account is selected', async () => {
+  const requests: Array<{ authorization: string | null }> = [];
+  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
+    requests.push({ authorization: request.headers.get('authorization') });
+    return Response.json({ data: [] });
+  } });
+  const fixture = await openCatalogFixture();
+  const saved = { ...configuration, endpoint: `http://127.0.0.1:${server.port}/v1`, credentialRef: null };
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration: saved }, '1');
+    // Runtime overrides belong to one AuthStorage instance; persisted native keys
+    // are the normal configure-then-key-write flow observed by the separate reader.
+    await fixture.writer.authStorage.credentials.upsert(saved.providerId, { type: 'api_key', key: 'cascade-key', source: 'login' });
+    await fixture.reader.models.discoverProviderModels({ providerId: saved.providerId, endpoint: saved.endpoint, protocol: saved.protocol });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]!.authorization).toBe('Bearer cascade-key');
+  } finally { server.stop(true); await fixture.close(); }
+});
+
+test('explicit empty headers replace old native provider headers and remain empty after reopen', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration, headers: { 'x-old': 'old-secret' } }, '1');
+    await fixture.writer.models.configureProvider({ expectedRevision: '1', configuration, headers: {} }, '2');
+    const reopened = await fixture.reader.models.readProviderConfiguration(configuration.providerId, '2');
+    expect(reopened.headerNames).toEqual([]);
+    const persisted = YAML.parse(await readFile(fixture.writer.modelsPath, 'utf8'));
+    expect(persisted.providers[configuration.providerId].headers).toBeUndefined();
+    expect(persisted.openchamber.providerHeaders[configuration.providerId]).toEqual({});
+  } finally { await fixture.close(); }
+});

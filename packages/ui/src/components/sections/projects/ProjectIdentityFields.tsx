@@ -16,7 +16,6 @@ import { PROJECT_COLORS, PROJECT_ICONS, PROJECT_COLOR_MAP as COLOR_MAP, ProjectI
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import {
   PROJECT_SETTINGS_CONTROL_WIDTH,
   ProjectSettingsSubsection,
@@ -113,9 +112,8 @@ export const ProjectIdentityFields: React.FC<ProjectIdentityFieldsProps> = ({ fo
         >
           <AgentSelector
             directory={project.path}
-            agentName={defaultAgent || ''}
+            agentId={defaultAgent || ''}
             onChange={(agentName) => setDefaultAgent(agentName || undefined)}
-            filter={(agent) => isPrimaryMode(agent.mode)}
             className={SETTINGS_CUSTOM_TRIGGER_CLASS}
           />
         </SettingsFieldRow>

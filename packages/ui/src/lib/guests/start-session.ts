@@ -24,6 +24,7 @@ import { normalizePath } from '@/lib/pathNormalization';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import * as sessionActions from '@/sync/session-actions';
@@ -102,7 +103,6 @@ export type StartGuestSessionDeps = {
     branch: string,
     kind: 'pr' | 'standard',
   ) => Promise<CreatedSession | null>;
-  initializeSession: (sessionId: string) => void;
   setLinkedIssue: (sessionId: string, directory: string, issue: LinkedGuestIssue) => Promise<void>;
   sendFirstMessage: (sessionId: string, directory: string, text: string) => Promise<'sent' | 'no-model' | 'failed'>;
   closeSurfaces: () => void;
@@ -122,7 +122,6 @@ export const runStartGuestSession = async (
   if (!created) {
     return { ok: false, reason: plan.worktree ? 'worktree-failed' : 'create-failed' };
   }
-  deps.initializeSession(created.id);
   deps.closeSurfaces();
   await deps.setLinkedIssue(created.id, created.directory, plan.linked);
   if (!plan.text) {
@@ -137,11 +136,10 @@ const resolveDefaultAgentName = (): string | undefined => {
   if (configState.settingsDefaultAgent) {
     return configState.settingsDefaultAgent;
   }
-  const visibleAgents = configState.agents.filter((agent) => !agent.hidden);
+  const agents = selectAgentsForDirectory(useAgentsStore.getState(), configState.activeDirectoryKey);
   return (
     configState.currentAgentName
-    || visibleAgents.find((agent) => agent.mode === 'primary' || !agent.mode)?.name
-    || visibleAgents[0]?.name
+    || agents[0]?.agentId
   );
 };
 
@@ -440,9 +438,6 @@ export const startGuestSession = async (args: {
         assertCurrent();
         metadata = { ...metadata, kind, createdFromBranch: custom?.baseBranch };
         return createTargetSession(plan.title, metadata.path);
-      },
-      initializeSession: (sessionId) => {
-        useSessionUIStore.getState().initializeNewOpenChamberSession(sessionId, useConfigStore.getState().agents);
       },
       setLinkedIssue: async (sessionId, directory, issue) => {
         assertCurrent();

@@ -62,6 +62,7 @@ export const createSettingsRuntime = (deps) => {
     normalizeStringArray,
     formatSettingsResponse,
     resolveDirectoryCandidate,
+    managedChatsRoot,
     normalizeManagedRemoteTunnelHostname,
     normalizeManagedRemoteTunnelPresets,
     normalizeManagedRemoteTunnelPresetTokens,
@@ -91,6 +92,18 @@ export const createSettingsRuntime = (deps) => {
 
   const PROJECTS_ROOT_DIR = path.join(path.dirname(SETTINGS_FILE_PATH), 'projects');
   const PROJECT_ICONS_DIR = path.join(path.dirname(SETTINGS_FILE_PATH), 'project-icons');
+
+  const isManagedChatDirectory = async (candidate) => {
+    if (!managedChatsRoot) return false;
+    const root = await fsPromises.realpath(managedChatsRoot).catch((error) => {
+      if (error?.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (!root) return false;
+    const directory = await fsPromises.realpath(candidate);
+    const relative = path.relative(root, directory);
+    return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+  };
 
   const sha1Hex = (value) => crypto.createHash('sha1').update(value).digest('hex');
   const projectIconBaseName = (projectId) => `project-${sha1Hex(projectId)}`;
@@ -786,7 +799,8 @@ export const createSettingsRuntime = (deps) => {
       if (candidate) {
         try {
           const stats = await fsPromises.stat(candidate);
-          if (stats.isDirectory()) {
+          // Automatic legacy promotion must not reassign the managed namespace.
+          if (stats.isDirectory() && !await isManagedChatDirectory(candidate)) {
             const id = createProjectIdFromPath(candidate);
             nextProjects = [
               {

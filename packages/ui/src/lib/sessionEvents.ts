@@ -1,6 +1,5 @@
-import type { Session } from '@openchamber/agent-contract';
-import type { Part } from '@/lib/opencode/model';
-import { isExecuteTool, isFileChangeTool, isFinalToolStatus, isShellTool } from '@/lib/toolHelpers';
+import type { Part, Session } from '@openchamber/agent-contract';
+import { isFileChangeTool, isShellTool } from '@/lib/toolHelpers';
 import { notifyGitStatusInvalidated } from '@/lib/gitStatusInvalidation';
 import type { WorktreeMetadata } from '@/types/worktree';
 
@@ -30,16 +29,15 @@ const deleteListeners = new Set<DeleteListener>();
 const createListeners = new Set<CreateListener>();
 const directoryListeners = new Set<DirectoryListener>();
 const gitRefreshListeners = new Set<GitRefreshListener>();
-// Shell and code-mode scripts can touch the worktree too, so they count
-// alongside the file tools.
-const isGitMutatingTool = (tool: string): boolean =>
-  isFileChangeTool(tool) || isShellTool(tool) || isExecuteTool(tool);
+// Native bash commands can touch the worktree alongside edit/write calls.
+const isGitMutatingTool = (tool: string): boolean => isFileChangeTool(tool) || isShellTool(tool);
 // Agent tools finish in bursts: parallel calls in one step, steps a fraction
 // of a second apart. Each refresh is a status read of a dozen or more Git
 // processes, so a burst in one directory gets one refresh at the end of this
 // window. Tool hints carry no paths, so the merged hint is unscoped.
 const TOOL_GIT_REFRESH_WINDOW_MS = 250;
 const pendingToolGitRefreshes = new Map<string, ReturnType<typeof setTimeout>>();
+const completedToolCalls = new Map<string, Set<string>>();
 
 export const sessionEvents = {
   onDeleteRequest(listener: DeleteListener) {
@@ -86,17 +84,19 @@ export const sessionEvents = {
     notifyGitStatusInvalidated(hint.directory);
     gitRefreshListeners.forEach((listener) => listener(hint));
   },
-  requestGitRefreshForToolTransition(directory: string, previousPart: Part | undefined, nextPart: Part) {
-    // A failed patch or shell command may still have written files.
-    if (nextPart.type !== 'tool' || !isFinalToolStatus(nextPart.state.status)) {
-      return;
-    }
-    if (previousPart?.type === 'tool' && isFinalToolStatus(previousPart.state.status)) {
-      return;
-    }
-    if (!isGitMutatingTool(nextPart.tool)) {
-      return;
-    }
+  requestGitRefreshForToolTransition(directory: string, sessionId: string, previousPart: Part | undefined, nextPart: Part) {
+    if (nextPart.type !== 'tool_call' && nextPart.type !== 'tool_result') return;
+    if (nextPart.type === 'tool_call' && !['completed', 'failed', 'cancelled'].includes(nextPart.status)) return;
+    if (previousPart?.type === 'tool_call' && previousPart.toolCallId === nextPart.toolCallId && previousPart.status === 'denied') return;
+    if (nextPart.type === 'tool_call' && previousPart?.type === 'tool_call' && previousPart.toolCallId === nextPart.toolCallId
+      && ['completed', 'failed', 'cancelled', 'denied'].includes(previousPart.status)) return;
+    if (previousPart?.type === 'tool_result' && previousPart.toolCallId === nextPart.toolCallId) return;
+    if (!isGitMutatingTool(nextPart.toolName)) return;
+    const key = `${directory}\n${sessionId}`;
+    const completed = completedToolCalls.get(key) ?? new Set<string>();
+    if (completed.has(nextPart.toolCallId)) return;
+    completed.add(nextPart.toolCallId);
+    completedToolCalls.set(key, completed);
     if (pendingToolGitRefreshes.has(directory)) {
       return;
     }
@@ -111,5 +111,6 @@ export const sessionEvents = {
       clearTimeout(timer);
     }
     pendingToolGitRefreshes.clear();
+    completedToolCalls.clear();
   },
 };

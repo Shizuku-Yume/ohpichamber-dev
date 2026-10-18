@@ -9,8 +9,8 @@ import {
 import { getClaudeCliAuthStatus } from './claude-cli-auth.js';
 import { OPENCODE_CONFIG_DIR, readConfigLayers } from './shared.js';
 import { settingsSurfaceOf } from '../host/settings-files.js';
-import { parseWebSearchSelection, readSectionEntry, toProviderEntity } from './config-v2.js';
-import { getWebSearchSource, setWarmingEnabled, setWebSearchSelection } from './websearch-config.js';
+import { readSectionEntry, toProviderEntity } from './config-v2.js';
+import { setWarmingEnabled } from './websearch-config.js';
 import {
   CREDENTIAL_LIST_ERROR,
   ENTERPRISE_MODE_ERROR,
@@ -315,36 +315,7 @@ export const registerOpenCodeRoutes = (app, dependencies) => {
     }
   });
 
-  // The web search choice (`websearch` in OpenCode config). OpenCode watches
-  // the file and announces `config.updated`, so nothing restarts.
-  // Whether a project config decides `websearch` for the directory, so
-  // Settings can say so instead of letting a write snap back.
-  app.get('/api/config/websearch', async (req, res) => {
-    try {
-      const resolved = await resolveProjectDirectory(req);
-      return res.json(getWebSearchSource(resolved.directory || null));
-    } catch (error) {
-      console.error('Failed to read the web search config source:', error);
-      return res.status(500).json({ error: error.message || 'Failed to read the web search config source' });
-    }
-  });
-
-  app.put('/api/config/websearch', (req, res) => {
-    const selection = parseWebSearchSelection(req.body?.selection);
-    if (selection === undefined) {
-      return res.status(400).json({ error: 'selection must be false, null, "random" or a provider id' });
-    }
-    try {
-      const result = setWebSearchSelection(selection);
-      return res.json({ success: true, changed: result.changed });
-    } catch (error) {
-      console.error('Failed to save the web search choice:', error);
-      return res.status(500).json({ error: error.message || 'Failed to save the web search choice' });
-    }
-  });
-
-  // Session warming (`warming` in OpenCode config), written like the web
-  // search choice above. Settings reads the effective value from OpenCode.
+  // Session warming is written to the watched OpenCode user config.
   app.put('/api/config/warming', (req, res) => {
     const enabled = req.body?.enabled;
     if (typeof enabled !== 'boolean') {

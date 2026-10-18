@@ -4,9 +4,9 @@ import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { z } from 'zod';
 import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema, SessionBranchRequestSchema, SubagentSchema } from '@openchamber/agent-contract';
-import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, Subagent } from '@openchamber/agent-contract';
+import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, Subagent, UsageQuery } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema } from '../protocol.ts';
-import type { WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
+import type { UsageSessionReference, WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
 import { HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, type HostSessionRelocationPrepare } from '../supervisor/host-authorization-protocol.ts';
 import { nativePrivateRootContext, rememberPrivateRoots, resolveCanonicalMessage, WorkerProjection } from '../worker/projection.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
@@ -135,6 +135,29 @@ export class SessionRegistry {
       }
     }
     return { items, errors: references.errors };
+  }
+
+  usageReferences(authorized: readonly { workspaceId: string; projectId: string }[], query: UsageQuery): UsageSessionReference[] {
+    this.ensureOpen();
+    const scopes = new Map(authorized.map(scope => [scope.workspaceId, scope.projectId]));
+    const result: UsageSessionReference[] = [];
+    const inventory = this.references.list();
+    if (inventory.errors.length) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+    for (const root of inventory.items) {
+      if (scopes.get(root.workspaceId) !== root.projectId
+        || (query.workspaceId !== undefined && query.workspaceId !== root.workspaceId)
+        || (query.projectId !== undefined && query.projectId !== root.projectId)) continue;
+      if (this.controls.has(root.rootSessionId) || this.references.relocation(root.rootSessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+      const common = { rootSessionId: root.rootSessionId, workspaceId: root.workspaceId, projectId: root.projectId,
+        cwd: root.cwd, agentDirectory: root.agentDirectory, sessionsDirectory: root.sessionsDirectory };
+      result.push({ ...common, sessionId: root.rootSessionId, sessionFile: root.sessionFile, parentSessionId: root.parentSessionId });
+      for (const child of this.references.listSubagents(root.rootSessionId)) {
+        if (child.rootSessionId !== root.rootSessionId || child.workspaceId !== root.workspaceId || child.projectId !== root.projectId)
+          throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+        result.push({ ...common, sessionId: child.childSessionId, sessionFile: child.sessionFile, parentSessionId: child.parentSessionId });
+      }
+    }
+    return result;
   }
 
   async onSubagent(rootSessionId: string, generation: string, input: SubagentLifecycleInput): Promise<void> {

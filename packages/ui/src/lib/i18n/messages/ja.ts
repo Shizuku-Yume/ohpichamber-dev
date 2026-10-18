@@ -2721,6 +2721,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.modelControls.modeValue.subagent': 'サブエージェント',
   'chat.modelControls.modeValue.all': 'すべて',
   'chat.modelControls.modeValue.none': '—',
+  'chat.modelControls.toolAvailability': 'ツールの利用可能性',
   'chat.reasoningTrace.thinking': '思考',
   'chat.reasoningTrace.justification': '正当化',
   'chat.reasoningTrace.expandAria': '推論トレースを展開',

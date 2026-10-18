@@ -2722,6 +2722,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.modelControls.modeValue.subagent': '서브 에이전트',
   'chat.modelControls.modeValue.all': '전체',
   'chat.modelControls.modeValue.none': '—',
+  'chat.modelControls.toolAvailability': '도구 사용 가능 여부',
   'chat.reasoningTrace.thinking': '추론',
   'chat.reasoningTrace.justification': '근거',
   'chat.reasoningTrace.expandAria': '추론 트레이스 펼치기',

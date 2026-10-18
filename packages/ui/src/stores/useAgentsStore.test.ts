@@ -19,7 +19,7 @@ Object.assign(globalThis, {
 // Import-time system-info probes are unrelated to the canonical agent contract.
 const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ data: [] }));
 // Store imports read browser storage during module initialization; install happy-dom first.
-const { useAgentsStore, invalidateAgentsLoadCache, selectAgentsForDirectory } = await import('@/stores/useAgentsStore');
+const { useAgentsStore, invalidateAgentsLoadCache, selectAgentsForDirectory, selectAgentCatalogStatus } = await import('@/stores/useAgentsStore');
 const { useProjectsStore } = await import('./useProjectsStore');
 const DIRECTORY = '/workspace/project';
 const OTHER_DIRECTORY = '/workspace/other';
@@ -70,6 +70,31 @@ afterAll(() => { fetchSpy.mockRestore(); browser.close(); });
 const agents = (directory = DIRECTORY): Agent[] => selectAgentsForDirectory(useAgentsStore.getState(), directory);
 
 describe('native agent catalogs', () => {
+  test('readiness is directory-scoped and a successful empty catalog is ready', async () => {
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('loading');
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(true);
+    expect(agents()).toEqual([]);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('ready');
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), OTHER_DIRECTORY)).toBe('loading');
+    useAgentsStore.getState().resetForRuntimeSwitch();
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('loading');
+  });
+
+  test('a failed refresh is unavailable even with retained data, and recovery clears it', async () => {
+    getAgents.mockResolvedValue(catalog([agent('retained')], '1'));
+    await useAgentsStore.getState().loadAgents(DIRECTORY);
+    invalidateAgentsLoadCache(DIRECTORY);
+    getAgents.mockRejectedValueOnce(new Error('Service unavailable'));
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(false);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('error');
+    expect(agents()).toEqual([agent('retained')]);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), OTHER_DIRECTORY)).toBe('loading');
+    getAgents.mockResolvedValue(catalog([], '2'));
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(true);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('ready');
+    expect(agents()).toEqual([]);
+  });
+
   test('resolves the directory and retains complete native profiles and revision', async () => {
     const profiles = [agent('build', 'stable-build-id'), agent('deploy')];
     getAgents.mockResolvedValue(catalog(profiles, '17'));

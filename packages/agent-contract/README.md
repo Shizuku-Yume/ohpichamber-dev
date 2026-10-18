@@ -6,6 +6,8 @@ Session metadata retains typed OpenChamber workflow fields, including review off
 
 `src/index.ts` exports each DTO and its `<Type>Schema`. Public package imports resolve to compiled JavaScript and declarations in `dist/`, so Node Hosts do not need a TypeScript loader or Bun. The package depends on Zod, not an agent SDK, UI framework or runtime implementation.
 
+Historical usage contracts (`usage.ts`) require an explicit range, inclusive `from` for bounded ranges, exclusive `to`, and viewer IANA timezone. Optional opaque project/workspace IDs narrow Host-authorized registered sources; no filesystem paths are accepted. Reports distinguish partial per-session failures from complete empty success. Unavailable reasoning tokens and tool duration medians are `null`; tool outcomes account for successful, failed, and unfinished calls. Native source parsing remains worker-private.
+
 From this directory:
 
 ```sh

@@ -157,6 +157,13 @@ The directory event reducer (`applyDirectoryEvent` in `event-reducer.ts`) enforc
 - **Resume signals**: Online, visibility becoming visible, persisted-page restore, system resume, and authentication returning to `ok` interrupt pending recovery. Directory bootstrap retry/revalidation uses the existing priority scheduler. Offline invalidates live status instead of leaving active indicators behind.
 - **Observed run outcomes**: Accepted matching `run.completed` and `run.failed` events retain completion/error notifications and bounded error summaries. Duplicate events do not add a second notification; historical snapshots do not invent unseen activity.
 
+### Native tool completion and Host refresh hints
+
+Accepted live events in `sync-context.tsx` feed canonical tool parts to `sessionEvents` and `fileTreeChanges`. Calls and results keep separate `partId` identities and pair by native `toolCallId`; a call's terminal status and its later result produce one completion hint. Duplicate or sequence-gapped events do not invalidate Host state, and historical snapshot installation does not replay tool completion side effects.
+
+Native `bash`, `edit`, and `write` completion hints invalidate Host Git status with a 250 ms per-directory debounce. Denied and read-only calls do not produce mutation hints. File-tree writes use their native `path`; raw edit modes and commands may touch unnamed paths, so their whole-tree hints coalesce until `run.completed`, `run.failed`, or `run.cancelled`. Native transcripts have no legacy step file-list snapshot. Runtime endpoint reset cancels pending refresh timers and clears file-tree pending/deduplication state, so old-runtime paths cannot refresh the new Host.
+
+
 ## Independent Host metadata and durable queue
 
 The canonical snapshot (`SessionSnapshot`) contains:

@@ -87,9 +87,38 @@ export class CanonicalClient {
     if (!response.ok) return false;
     return C.AgentServiceReadySchema.safeParse(await response.json().catch(() => null)).success;
   }
-  resolveWorkspace(directory: string): Promise<Workspace> {
+  resolveWorkspace(directory: string, options: { signal?: AbortSignal } = {}): Promise<Workspace> {
     return request('/api/agent/v1/workspaces/resolve', C.WorkspaceSchema, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory }), signal: options.signal,
+    });
+  }
+
+  getUsageStats(input: C.UsageQuery, options: { signal?: AbortSignal } = {}): Promise<C.UsageStats> {
+    const parsed = C.UsageQuerySchema.parse(input);
+    return request(`/api/agent/v1/usage${query(parsed)}`, C.UsageStatsSchema, { signal: options.signal });
+  }
+
+  getUsageTools(input: C.UsageToolsQuery, options: { signal?: AbortSignal } = {}): Promise<C.UsageToolsResponse> {
+    const parsed = C.UsageToolsQuerySchema.parse(input);
+    return request(`/api/agent/v1/usage/tools${query(parsed)}`, C.UsageToolsResponseSchema, { signal: options.signal });
+  }
+
+  getWebSearch(workspaceId: string): Promise<C.WebSearchConfigState> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/web-search`, scoped(C.WebSearchConfigStateSchema, state => state.workspaceId === workspaceId));
+  }
+  updateWebSearch(workspaceId: string, input: C.WebSearchUpdateRequest): Promise<C.WebSearchMutationResult> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/web-search`, scoped(C.WebSearchMutationResultSchema, result => result.state.workspaceId === workspaceId), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.WebSearchUpdateRequestSchema, input),
+    });
+  }
+  writeWebSearchCredential(workspaceId: string, input: C.WebSearchCredentialWriteRequest): Promise<C.WebSearchMutationResult> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/web-search/credentials/${id(input.providerId)}`, scoped(C.WebSearchMutationResultSchema, result => result.state.workspaceId === workspaceId), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.WebSearchCredentialWriteRequestSchema, input),
+    });
+  }
+  deleteWebSearchCredential(workspaceId: string, input: C.WebSearchCredentialDeleteRequest): Promise<C.WebSearchMutationResult> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/web-search/credentials/${id(input.providerId)}`, scoped(C.WebSearchMutationResultSchema, result => result.state.workspaceId === workspaceId), {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.WebSearchCredentialDeleteRequestSchema, input),
     });
   }
 
@@ -201,7 +230,42 @@ export class CanonicalClient {
   deleteQueueItem(sessionId: string, queueItemId: string, input: QueueDeleteRequest): Promise<QueueState> { return request(`/api/agent/v1/sessions/${id(sessionId)}/queue/${id(queueItemId)}`, scoped(C.QueueStateSchema, result => result.sessionId === sessionId), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.QueueDeleteRequestSchema, input, body => body.queueItemId === queueItemId) }); }
 
   getModels(workspaceId: string): Promise<ModelCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/models`, scoped(C.ModelCatalogSchema, result => result.workspaceId === workspaceId)); }
+
+  readCacheWarming(workspaceId: string, signal?: AbortSignal): Promise<C.CacheWarmingState> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/cache-warming`, scoped(C.CacheWarmingStateSchema, result => result.workspaceId === workspaceId), { signal });
+  }
+  updateCacheWarming(workspaceId: string, input: C.CacheWarmingUpdateRequest, signal?: AbortSignal): Promise<C.CacheWarmingApplyResult> {
+    const parsed = C.CacheWarmingUpdateRequestSchema.parse(input);
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/cache-warming`, scoped(C.CacheWarmingApplyResultSchema, result => result.persisted.workspaceId === workspaceId && result.persisted.mode === parsed.mode && BigInt(result.persisted.revision) > BigInt(parsed.expectedRevision)), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsed), signal,
+    });
+  }
   getProviders(workspaceId: string): Promise<ProviderCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers`, scoped(C.ProviderCatalogSchema, result => result.workspaceId === workspaceId)); }
+  providerAccounts(workspaceId: string, providerId: string): Promise<C.ProviderAccounts> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/accounts`, scoped(C.ProviderAccountsSchema, result => result.providerId === providerId));
+  }
+  mutateProviderAccount(workspaceId: string, providerId: string, input: C.ProviderAccountMutationRequest): Promise<C.ProviderAccounts> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/accounts`, scoped(C.ProviderAccountsSchema, result => result.providerId === providerId), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ProviderAccountMutationRequestSchema, input),
+    });
+  }
+  providerOAuthMethods(workspaceId: string): Promise<C.ProviderOAuthMethods> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/oauth-methods`, C.ProviderOAuthMethodsSchema);
+  }
+  providerOAuth(workspaceId: string, methodId: string, input: C.ProviderOAuthRequest): Promise<C.ProviderOAuthResult> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(methodId)}/oauth`, scoped(C.ProviderOAuthResultSchema, result => input.action === 'start'
+      ? result.revision === input.expectedRevision : result.flowId === input.flowId && result.generation === input.generation), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ProviderOAuthRequestSchema, input),
+    });
+  }
+  discoverProviderModels(workspaceId: string, input: C.ProviderModelDiscoveryRequest): Promise<C.ProviderModelDiscoveryResult> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/discover`, C.ProviderModelDiscoveryResultSchema, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ProviderModelDiscoveryRequestSchema, input),
+    });
+  }
+  providerConfiguration(workspaceId: string, providerId: string): Promise<C.ProviderConfigurationRead> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/config`, scoped(C.ProviderConfigurationReadSchema, result => result.configuration.providerId === providerId));
+  }
   getAgents(workspaceId: string): Promise<AgentCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/agents`, scoped(C.AgentCatalogSchema, result => result.workspaceId === workspaceId)); }
   createAgent(workspaceId: string, input: AgentCreateRequest): Promise<AgentMutationResult> {
     const agentId = input.agent.agentId;

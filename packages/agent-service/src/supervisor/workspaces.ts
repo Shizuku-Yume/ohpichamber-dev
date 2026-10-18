@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
-import { CounterSchema, EntityIdSchema } from '@openchamber/agent-contract';
+import { CounterSchema, EntityIdSchema, CacheWarmingApplyResultSchema, CacheWarmingUpdateRequestSchema, type CacheWarmingState, type CacheWarmingUpdateRequest, type CacheWarmingApplyResult, type CacheWarmingWorkerApplyOutcome } from '@openchamber/agent-contract';
+import { CacheWarmingPartialWriteDetailsSchema } from '@openchamber/agent-contract';
 import type { CatalogOperation, CatalogResult } from '../catalogs/protocol.ts';
 import { WorkerOperationError, type WorkerRegistry } from './workers.ts';
 import { HostWorkspaceBootstrapSchema } from './host-authorization-protocol.ts';
@@ -107,12 +108,48 @@ export class WorkspaceCatalogs {
   }
   async operation(workspaceId: string, operation: CatalogOperation): Promise<CatalogResult> {
     const workspace = this.get(workspaceId);
+    return this.serial(workspace.agentDirectoryId, () => this.operationNow(workspaceId, operation));
+  }
+
+  async readCacheWarming(workspaceId: string): Promise<CacheWarmingState> {
+    const result = await this.operation(workspaceId, { type: 'catalog.warming.read' });
+    if (result.type !== 'catalog.warming') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    return result.state;
+  }
+
+  async updateCacheWarming(workspaceId: string, input: CacheWarmingUpdateRequest): Promise<CacheWarmingApplyResult> {
+    const request = CacheWarmingUpdateRequestSchema.parse(input);
+    const workspace = this.get(workspaceId);
     return this.serial(workspace.agentDirectoryId, async () => {
+      const result = await this.operationNow(workspaceId, { type: 'catalog.warming.persist', request });
+      if (result.type !== 'catalog.warming') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      const persisted = result.state;
+      // Capture generations after persistence; never restart cold workers just to warm them.
+      const active = this.workers.list().filter(worker => worker.kind === 'session' && worker.workspaceId === workspaceId && (worker.state === 'ready' || worker.state === 'starting'));
+      const workers = await Promise.all(active.map(async (worker): Promise<CacheWarmingWorkerApplyOutcome> => {
+        const identity = { workspaceId, rootSessionId: worker.rootSessionId, workerGeneration: worker.workerGeneration };
+        try {
+          const applied = await this.workers.request(worker.rootSessionId, { type: 'catalog', revision: persisted.revision, operation: { type: 'catalog.warming.apply', mode: persisted.mode } }, worker.workerGeneration);
+          const current = this.workers.info(worker.rootSessionId);
+          if (applied.type !== 'catalog' || applied.result.type !== 'catalog.warming.applied' || applied.result.mode !== persisted.mode || current?.workerGeneration !== worker.workerGeneration || current.state !== 'ready') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+          return { worker: identity, outcome: 'applied', mode: persisted.mode };
+        } catch {
+          return { worker: identity, outcome: 'failed', mode: persisted.mode, error: { code: 'SERVICE_UNAVAILABLE', detail: 'The active worker did not confirm the configured cache-warming mode.', retryable: true } };
+        }
+      }));
+      const applied = workers.filter(worker => worker.outcome === 'applied').length;
+      const status = workers.length === 0 ? 'no-active-workers' : applied === workers.length ? 'applied' : applied === 0 ? 'failed' : 'partial';
+      return CacheWarmingApplyResultSchema.parse({ persisted, status, workers });
+    });
+  }
+
+  private async operationNow(workspaceId: string, operation: CatalogOperation): Promise<CatalogResult> {
+      const workspace = this.get(workspaceId);
       const owner = this.owners.get(workspace.agentDirectoryId);
       if (!owner) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       const expectedRevision = 'request' in operation && 'expectedRevision' in operation.request ? operation.request.expectedRevision : undefined;
-      const mutation = expectedRevision !== undefined;
-      if (mutation && expectedRevision !== owner.revision) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', { currentRevision: owner.revision });
+      const mutation = expectedRevision !== undefined && (operation.type !== 'catalog.provider.oauth' || operation.request.action === 'commit');
+      if (expectedRevision !== undefined && expectedRevision !== owner.revision) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', { currentRevision: owner.revision });
       const revision = mutation ? CounterSchema.parse((BigInt(owner.revision) + 1n).toString()) : owner.revision;
       const root = await this.stateless(workspaceId);
       const result = await this.workers.request(root, { type: 'catalog', operation, revision });
@@ -123,11 +160,19 @@ export class WorkspaceCatalogs {
           const previous = owner.revision;
           owner.revision = revision;
           try { await this.persist(); }
-          catch (error) { owner.revision = previous; throw error; }
+          catch (error) {
+            owner.revision = previous;
+            if (operation.type === 'catalog.warming.persist' && result.result.type === 'catalog.warming') {
+              throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', CacheWarmingPartialWriteDetailsSchema.parse({
+                workspaceId, configuredMode: result.result.state.mode, currentRevision: previous,
+                nativeConfigurationCommitted: true, liveApplication: 'not-started',
+              }));
+            }
+            throw error;
+          }
         });
       }
       return result.result;
-    });
   }
   private serial<T>(owner: string, operation: () => Promise<T>): Promise<T> {
     const result = (this.tails.get(owner) ?? Promise.resolve()).then(operation);

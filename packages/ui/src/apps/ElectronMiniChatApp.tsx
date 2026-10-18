@@ -13,6 +13,7 @@ import { useRoutingSync } from '@/hooks/useRoutingSync';
 import { useRootScrollLock } from '@/hooks/useRootScrollLock';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useGitStore } from '@/stores/useGitStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -74,9 +75,8 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
   const isInitialized = useConfigStore((state) => state.isInitialized);
   const isConnected = useConfigStore((state) => state.isConnected);
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgents = useConfigStore((state) => state.loadAgents);
-  const providersCount = useConfigStore((state) => state.providers.length);
-  const agentsCount = useConfigStore((state) => state.agents.length);
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
+  const providersLoaded = useConfigStore((state) => state.providersLoaded);
   const sync = useSync();
 
   React.useEffect(() => {
@@ -125,9 +125,9 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
 
   React.useEffect(() => {
     if (!isConnected) return;
-    if (providersCount === 0) void loadProviders({ source: 'electronMiniChat:recovery' });
-    if (agentsCount === 0) void loadAgents({ source: 'electronMiniChat:recovery' });
-  }, [agentsCount, isConnected, loadAgents, loadProviders, providersCount]);
+    if (!providersLoaded) void loadProviders({ source: 'electronMiniChat:recovery' });
+    void loadAgents(currentDirectory);
+  }, [currentDirectory, isConnected, loadAgents, loadProviders, providersLoaded]);
 
   const sessionBootstrappedRef = React.useRef(false);
   React.useEffect(() => {

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { DesktopSettings } from '@/lib/desktop';
+import type { Agent } from '@openchamber/agent-contract';
 
 type ProviderState = {
   id: string;
@@ -24,7 +25,6 @@ type ConfigState = {
   setSettingsDefaultAgent: () => void;
   selectionSource: 'auto';
   agentSelectionSource: 'auto';
-  agents: Array<{ name: string; model?: { providerID: string; id: string } }>;
   currentAgentName: string | undefined;
 };
 
@@ -41,13 +41,11 @@ const configState: ConfigState = {
   setSettingsDefaultAgent: () => undefined,
   selectionSource: 'auto',
   agentSelectionSource: 'auto',
-  agents: [],
   currentAgentName: undefined,
 };
 
-type TestAgent = { name: string; model: { providerId: string; modelId: string } | null };
-const agents: TestAgent[] = [];
-const agentState = { agents };
+const agents: Agent[] = [];
+const agentState: { agentsByDirectory: Record<string, Agent[]> } = { agentsByDirectory: {} };
 
 const settingsState = {
   showDeletionDialog: false,
@@ -64,6 +62,7 @@ let savedSettings: DesktopSettings | null = null;
 const updateCalls: Array<Partial<DesktopSettings>> = [];
 
 mock.module('@/stores/useAgentsStore', () => ({
+  selectAgentsForDirectory: (state: typeof agentState, directory?: string | null) => state.agentsByDirectory[directory ?? '__default__'] ?? agents,
   useAgentsStore: <T,>(selector: (state: typeof agentState) => T): T => selector(agentState),
 }));
 mock.module('@/stores/useConfigStore', () => ({
@@ -108,9 +107,6 @@ mock.module('@/lib/opencode/client', () => ({
 }));
 mock.module('@/lib/i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
-}));
-mock.module('@/components/chat/mobileControlsUtils', () => ({
-  isPrimaryMode: (mode: string | undefined) => mode === 'primary',
 }));
 mock.module('@/components/sections/agents/ModelSelector', () => ({
   ModelSelector: () => <button type="button">model</button>,

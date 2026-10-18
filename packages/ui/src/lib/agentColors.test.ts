@@ -4,7 +4,7 @@ import { getDefaultTheme, getThemeById } from './theme/themes';
 import { chromaticDistance } from './theme/color';
 import type { Theme } from '@/types/theme';
 
-const roster = ['architect', 'build', 'plan', 'simplifier'].map((name) => ({ name }));
+const roster = ['architect', 'build', 'plan', 'simplifier'].map((agentId) => ({ agentId, name: agentId }));
 // 'var(--syntax-keyword)' -> '--syntax-keyword'
 const tokenOf = ({ color }: { color: string }) => color.slice(4, -1);
 function colorValue(theme: Theme, token: string) {
@@ -51,14 +51,14 @@ test('aliases, near-duplicates and the Build green do not consume separate palet
   }
 });
 
-test('roster order and additional subagents do not change primary assignments', () => {
+test('roster order and renamed labels preserve ID assignments', () => {
   const theme = getDefaultTheme(true);
   const first = createAgentColorResolver(theme, roster);
   const reordered = createAgentColorResolver(theme, [...roster].reverse());
-  const withSubagent = createAgentColorResolver(theme, [{ name: 'aaa-helper', mode: 'subagent' }, ...roster]);
-  for (const { name } of roster) {
-    expect(reordered(name)).toEqual(first(name));
-    expect(withSubagent(name)).toEqual(first(name));
+  const renamed = createAgentColorResolver(theme, roster.map((agent) => ({ ...agent, name: 'Same display name' })));
+  for (const { agentId } of roster) {
+    expect(reordered(agentId)).toEqual(first(agentId));
+    expect(renamed(agentId)).toEqual(first(agentId));
   }
   expect(first(undefined).color).toBe('var(--status-success)');
   expect(first('removed-agent')).toEqual(first('removed-agent'));
@@ -69,31 +69,21 @@ test('sparse palettes reuse syntax colors without borrowing new status colors', 
   for (const key of ['keyword', 'type', 'function', 'number', 'string', 'operator', 'variable'] as const) {
     theme.colors.syntax.base[key] = '#dddddd';
   }
-  const agents = Array.from({ length: 50 }, (_, index) => ({ name: `agent-${index}` }));
+  const agents = Array.from({ length: 50 }, (_, index) => ({ agentId: `agent-${index}` }));
   const resolve = createAgentColorResolver(theme, agents);
-  for (const { name } of agents) {
+  for (const { agentId: name } of agents) {
     expect(resolve(name).color.startsWith('var(--syntax-')).toBe(true);
     expect(colorValue(theme, tokenOf(resolve(name)))).toBe('#dddddd');
   }
   expect(resolve('build').color).toBe('var(--status-success)');
 });
 
-test('a colour set in the agent config wins, and the rest keep their colours', () => {
-  const theme = getDefaultTheme(true);
-  const plain = createAgentColorResolver(theme, roster);
-  const configured = createAgentColorResolver(theme, roster.map((agent) => (
-    agent.name === 'plan' ? { ...agent, color: '#ff6b6b' } : agent.name === 'build' ? { ...agent, color: '#112233' } : agent
-  )));
-  expect(configured('plan')).toEqual({ color: '#ff6b6b' });
-  expect(configured('build')).toEqual({ color: '#112233' });
-  for (const name of ['architect', 'simplifier']) expect(configured(name)).toEqual(plain(name));
-});
-
-test('ignores colours OpenCode v2 does not accept and the migration placeholder', () => {
-  const theme = getDefaultTheme(true);
-  const plain = createAgentColorResolver(theme, roster);
-  for (const color of ['primary', '#abc', '#aaaaaa', '#AAAAAA', '']) {
-    const resolve = createAgentColorResolver(theme, roster.map((agent) => (agent.name === 'plan' ? { ...agent, color } : agent)));
-    expect(resolve('plan')).toEqual(plain('plan'));
-  }
+test('duplicate labels retain distinct colors by ID and build labels are not aliases', () => {
+  const agents = [
+    { agentId: 'review-a', name: 'build' },
+    { agentId: 'review-b', name: 'build' },
+  ];
+  const resolve = createAgentColorResolver(getDefaultTheme(true), agents);
+  expect(resolve('review-a')).not.toEqual(resolve('review-b'));
+  expect(resolve('review-a').color.startsWith('var(--syntax-')).toBe(true);
 });

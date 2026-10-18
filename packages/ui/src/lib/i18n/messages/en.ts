@@ -2722,6 +2722,7 @@ export const dict = {
   'chat.modelControls.modeValue.subagent': 'Subagent',
   'chat.modelControls.modeValue.all': 'All',
   'chat.modelControls.modeValue.none': '—',
+  'chat.modelControls.toolAvailability': 'Tool availability',
   'chat.reasoningTrace.thinking': 'Thinking',
   'chat.reasoningTrace.justification': 'Justification',
   'chat.reasoningTrace.expandAria': 'Expand reasoning trace',

@@ -6,6 +6,7 @@ import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
 import { registerCanonicalHostRoutes } from '../host/canonical-routes.js';
+import { createAgentServiceSupervisor } from '../host/agent-service-supervisor.js';
 import { createSelectedCredentialHandoff } from '../host/private-credential.js';
 import { createTunnelAuth } from '../host/tunnel-auth.js';
 import { createRemoteClientAuthRuntime } from '../client-auth/remote-clients.js';
@@ -131,6 +132,79 @@ async function loginCookie() {
 }
 
 describe('canonical Host authenticated real-service boundary', () => {
+  it('protects native search with real client authentication, origin, workspace and strict-body boundaries', async () => {
+    servicePhase = 'ready';
+    const endpoint = '/api/agent/v1/workspaces/workspace_1/web-search';
+    assertProblem(await request(app).get(endpoint), 401, 'UNAUTHORIZED');
+    assertProblem(await request(app).put(endpoint).set('Authorization', `Bearer ${token}`).set('Origin', 'null').send({ expectedRevision: '0', enabled: true }), 403, 'INVALID_ORIGIN');
+    assertProblem(await request(app).get('/api/agent/v1/workspaces/foreign/web-search').set('Authorization', `Bearer ${token}`), 403, 'UNAUTHORIZED');
+    assertProblem(await request(app).put(endpoint).set('Authorization', `Bearer ${token}`).send({ expectedRevision: '0', credentials: { exa: 'SECRET' } }), 400, 'INVALID_REQUEST');
+    assertProblem(await request(app).put(`${endpoint}/credentials/exa`).set('Authorization', `Bearer ${token}`).send({ expectedRevision: '0', providerId: 'kagi', key: 'SECRET' }), 400, 'INVALID_REQUEST');
+    expect(requests).toHaveLength(0);
+  });
+
+  it('blocks credential entry in enterprise mode but permits configuration and credential removal', async () => {
+    servicePhase = 'ready';
+    policyEnabled = true;
+    const endpoint = '/api/agent/v1/workspaces/workspace_1/web-search';
+    assertProblem(await request(app).put(`${endpoint}/credentials/exa`).set('Authorization', `Bearer ${token}`).send({ expectedRevision: '0', providerId: 'exa', key: 'SECRET' }), 403, 'enterprise_mode');
+    expect(requests).toHaveLength(0);
+    requestService = async () => Response.json({ type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Unavailable', status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'Worker unavailable', retryable: true }, { status: 503 });
+    assertProblem(await request(app).put(endpoint).set('Authorization', `Bearer ${token}`).send({ expectedRevision: '0', enabled: false }), 503, 'SERVICE_UNAVAILABLE');
+    assertProblem(await request(app).delete(`${endpoint}/credentials/openai%2Fgpt-5`).set('Authorization', `Bearer ${token}`).send({ expectedRevision: '0', providerId: 'openai/gpt-5' }), 503, 'SERVICE_UNAVAILABLE');
+    expect(requests).toHaveLength(2);
+  });
+
+  it('rejects secret-bearing and foreign-workspace search responses rather than exposing them', async () => {
+    servicePhase = 'ready';
+    const endpoint = '/api/agent/v1/workspaces/workspace_1/web-search';
+    const state = { workspaceId: 'workspace_1', revision: '0', enabled: true, selectedProviderId: null, fallbackProviderIds: [], timeoutSeconds: 60, providers: [] };
+    requestService = async () => Response.json({ ...state, key: 'SECRET' });
+    const leaked = await request(app).get(endpoint).set('Authorization', `Bearer ${token}`);
+    assertProblem(leaked, 503, 'SERVICE_UNAVAILABLE');
+    expect(JSON.stringify(leaked.body)).not.toContain('SECRET');
+    requestService = async () => Response.json({ state: { ...state, workspaceId: 'foreign' }, status: 'applied', persistence: 'persisted', workers: [] });
+    assertProblem(await request(app).put(endpoint).set('Authorization', `Bearer ${token}`).send({ expectedRevision: '0', enabled: false }), 503, 'SERVICE_UNAVAILABLE');
+  });
+
+  it('authenticates every native provider management route before forwarding', async () => {
+    servicePhase = 'ready';
+    for (const [method, suffix, body] of [
+      ['get', 'oauth-methods'], ['post', 'discover', { endpoint: 'https://provider.invalid/v1', protocol: 'responses' }],
+      ['get', 'native/accounts'], ['post', 'native/accounts', { action: 'select', credentialRef: 'opaque', expectedRevision: '0' }],
+      ['post', 'native/oauth', { action: 'start', expectedRevision: '0' }], ['get', 'native/config'],
+    ]) {
+      let call = request(app)[method](`/api/agent/v1/workspaces/workspace_1/providers/${suffix}`);
+      if (body) call = call.send(body);
+      assertProblem(await call, 401, 'UNAUTHORIZED');
+    }
+    expect(requests).toHaveLength(0);
+  });
+  it('gates OAuth entry actions at use time but permits cancellation, polling and existing account changes', async () => {
+    servicePhase = 'ready';
+    const identity = { flowId: 'flow', generation: 'generation' };
+    const oauth = '/api/agent/v1/workspaces/workspace_1/providers/login-method/oauth';
+    requestService = async (_url, init) => {
+      const body = JSON.parse(init.body);
+      if (body.credentialRef) return Response.json({ revision: '1', providerId: 'stored-provider', accounts: [] });
+      return Response.json({ ...identity, providerId: 'stored-provider', revision: '0', status: body.action === 'cancel' ? 'cancelled' : 'pending', manualInput: false });
+    };
+    policyEnabled = true;
+    for (const body of [{ action: 'start', expectedRevision: '0' }, { action: 'input', ...identity, input: 'private-input' }, { action: 'commit', ...identity, expectedRevision: '0' }]) {
+      const response = await request(app).post(oauth).set('Authorization', `Bearer ${token}`).send(body);
+      assertProblem(response, 403, 'enterprise_mode');
+      expect(response.text).not.toContain('private-input');
+    }
+    assertProblem(await request(app).post('/api/agent/v1/workspaces/workspace_1/providers/discover').set('Authorization', `Bearer ${token}`)
+      .send({ endpoint: 'https://provider.invalid/v1', protocol: 'responses' }), 403, 'enterprise_mode');
+    expect(requests).toHaveLength(0);
+    for (const action of ['status', 'cancel']) await request(app).post(oauth).set('Authorization', `Bearer ${token}`).send({ action, ...identity }).expect(200);
+    for (const action of ['select', 'remove', 'label']) await request(app).post('/api/agent/v1/workspaces/workspace_1/providers/stored-provider/accounts')
+      .set('Authorization', `Bearer ${token}`).send({ action, expectedRevision: '0', credentialRef: 'opaque', ...(action === 'label' ? { label: 'Work' } : {}) }).expect(200);
+    policyEnabled = false;
+    await request(app).post(oauth).set('Authorization', `Bearer ${token}`).send({ action: 'start', expectedRevision: '0' }).expect(200);
+    expect(requests).toHaveLength(6);
+  });
   it('authorizes workspace MCP Settings independently of session admission and rejects foreign workspace access', async () => {
     servicePhase = 'ready';
     const configuration = { workspaceId: 'workspace_1', persistedRevision: '0', config: { servers: [] } };
@@ -179,6 +253,126 @@ describe('canonical Host authenticated real-service boundary', () => {
     expect(localRegistrations).toEqual({ queue: 1, session: 1, attachment: 1 });
     expect(requests).toHaveLength(0);
   });
+  it('forwards historical usage only through Host-authorized canonical scopes and rejects path-shaped queries', async () => {
+    servicePhase = 'ready';
+    const stats = { range: { from: 1, to: 2 }, sessions: 0, subagents: 0, prompts: 0, steps: 0,
+      tokens: { input: 0, output: 0, reasoning: null, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0,
+      tools: { mode: 'none' }, activeDays: 0, streak: 0, activity: [], models: [], partial: false };
+    requestService = async (url, init) => {
+      expect(url).toBe('/internal/usage');
+      expect(init.method).toBe('POST');
+      const body = JSON.parse(init.body);
+      expect(body).toEqual({ query: { range: '7d', from: 1, to: 2, timezone: 'UTC', workspaceId: 'workspace_1' }, authorizedScopes: [{ workspaceId: 'workspace_1', projectId: 'project_1' }] });
+      expect(JSON.stringify(body)).not.toContain(privateDir);
+      return Response.json(stats);
+    };
+    await request(app).get('/api/agent/v1/usage?range=7d&from=1&to=2&timezone=UTC&workspaceId=workspace_1')
+      .set('Authorization', `Bearer ${token}`).expect(200, stats);
+    assertProblem(await request(app).get('/api/agent/v1/usage?range=7d&from=1&to=2&timezone=UTC&workspaceId=workspace_foreign')
+      .set('Authorization', `Bearer ${token}`), 403, 'UNAUTHORIZED');
+    assertProblem(await request(app).get('/api/agent/v1/usage?range=7d&from=1&to=2&timezone=UTC&path=~%2F.omp%2Fstats.db')
+      .set('Authorization', `Bearer ${token}`), 400, 'INVALID_REQUEST');
+    expect(requests).toHaveLength(1);
+  });
+  it('loads tool usage through the separate canonical operation without accepting arbitrary filesystem scopes', async () => {
+    servicePhase = 'ready';
+    const tools = { totals: { calls: 0, succeeded: 0, failed: 0, unfinished: 0 }, usage: [], partial: false };
+    requestService = async (url, init) => {
+      expect(url).toBe('/internal/usage/tools');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body).query.projectId).toBe('project_1');
+      return Response.json(tools);
+    };
+    await request(app).get('/api/agent/v1/usage/tools?range=all&to=2&timezone=UTC&projectId=project_1')
+      .set('Authorization', `Bearer ${token}`).expect(200, tools);
+    assertProblem(await request(app).get('/api/agent/v1/usage/tools?range=all&to=2&timezone=UTC&projectId=%2Ftmp%2Fstats.db')
+      .set('Authorization', `Bearer ${token}`), 400, 'INVALID_REQUEST');
+  });
+  it('queries real cold workers using only registered roots and children in the authorized global/project inventory', async () => {
+    const state = path.join(privateDir, 'agent-state');
+    const sessionDirectory = path.join(privateDir, 'sessions');
+    const agentDirectory = path.join(privateDir, 'agent');
+    fs.mkdirSync(state, { recursive: true });
+    fs.mkdirSync(sessionDirectory);
+    fs.mkdirSync(agentDirectory);
+    const timestamp = Date.parse('2026-10-18T12:00:00Z');
+    const files = {};
+    const transcript = (name, input) => {
+      const file = path.join(sessionDirectory, `${name}.jsonl`);
+      files[name] = file;
+      const userId = `${input.toString(16).padStart(6, '0')}01`;
+      const assistantId = `${input.toString(16).padStart(6, '0')}02`;
+      const rows = [
+        { type: 'session', version: 3, id: `native-${name}`, cwd: privateDir, timestamp: new Date(timestamp).toISOString() },
+        { type: 'message', id: userId, parentId: null, timestamp: new Date(timestamp).toISOString(), message: { role: 'user', content: 'Question', timestamp } },
+        { type: 'message', id: assistantId, parentId: userId, timestamp: new Date(timestamp).toISOString(), message: { role: 'assistant', content: [{ type: 'text', text: 'Answer' }], api: 'openai-completions', provider: 'fixture', model: 'fixture', stopReason: 'stop', timestamp,
+          usage: { input, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: input + 1, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } } },
+      ];
+      fs.writeFileSync(file, rows.map(row => JSON.stringify(row)).join('\n') + '\n');
+      return file;
+    };
+    const reference = (id, workspaceId, projectId, input) => ({ rootSessionId: id, workspaceId, projectId, cwd: privateDir, agentDirectory,
+      agentDirectoryId: 'usage-agent', sessionsDirectory: sessionDirectory, sessionFile: transcript(id, input), displayPath: '.', createdAt: timestamp, updatedAt: timestamp });
+    const references = {
+      first: reference('first', 'workspace_1', 'project_1', 10), second: reference('second', 'workspace_2', 'project_1', 20),
+      foreign: reference('foreign', 'workspace_foreign', 'project_foreign', 900),
+    };
+    transcript('unregistered', 800);
+    const childFile = transcript('native-child', 30);
+    fs.writeFileSync(path.join(state, 'session-references.json'), JSON.stringify({ references, relocations: {}, subagents: {
+      first: [{ subagentId: 'subagent_1', parentSessionId: 'first', childSessionId: 'canonical_child', rootSessionId: 'first',
+        workspaceId: 'workspace_1', projectId: 'project_1', role: 'fixture', status: 'completed', sessionFile: childFile }],
+    } }));
+    const service = createAgentServiceSupervisor({ entrypoint: new URL('../../../../agent-service/src/index.ts', import.meta.url).pathname,
+      dataDir: privateDir, env: { HOME: privateDir, XDG_CONFIG_HOME: path.join(privateDir, 'config'), XDG_DATA_HOME: path.join(privateDir, 'data') }, startupTimeoutMs: 30_000 });
+    try {
+      await service.start();
+      for (const [workspaceId, projectId] of [['workspace_1', 'project_1'], ['workspace_2', 'project_1'], ['workspace_foreign', 'project_foreign']]) {
+        const registered = await service.request(`/internal/workspaces/${workspaceId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, cwd: privateDir, agentDirectory, agentDirectoryId: 'usage-agent', env: { HOME: privateDir } }) });
+        expect(registered.status).toBe(201);
+      }
+      servicePhase = 'ready';
+      workspaceCatalog.items.push({ workspaceId: 'workspace_2', projectId: 'project_1', name: 'Second', displayPath: '.' });
+      projectCatalog.items[0].workspaceIds.push('workspace_2');
+      resolveScope = async workspaceId => ['workspace_1', 'workspace_2'].includes(workspaceId)
+        ? { workspaceId, projectId: 'project_1', cwd: privateDir, agentDirectory, agentDirectoryId: 'usage-agent' } : null;
+      requestService = (url, init) => service.request(url, init);
+      const query = { range: 'all', from: timestamp - 1, to: timestamp + 1, timezone: 'UTC' };
+      const usage = (suffix = '', values = {}) => request(app).get(`/api/agent/v1/usage${suffix}`).query({ ...query, ...values }).set('Authorization', `Bearer ${token}`);
+      const all = await usage().expect(200);
+      expect(all.body).toMatchObject({ sessions: 2, subagents: 1, prompts: 2, steps: 2, tokens: { input: 60, output: 3, total: 63, reasoning: null }, tools: { mode: 'none' }, partial: false });
+      const project = await usage('', { projectId: 'project_1' }).expect(200);
+      expect(project.body).toEqual(all.body);
+      const workspace = await usage('', { workspaceId: 'workspace_1' }).expect(200);
+      expect(workspace.body).toMatchObject({ sessions: 1, subagents: 1, tokens: { input: 40 } });
+      const tools = await usage('/tools', { projectId: 'project_1' }).expect(200);
+      expect(tools.body).toEqual({ totals: { calls: 0, succeeded: 0, failed: 0, unfinished: 0 }, usage: [], partial: false });
+      assertProblem(await usage('', { workspaceId: 'workspace_foreign' }), 403, 'UNAUTHORIZED');
+      assertProblem(await usage('', { projectId: 'project_foreign' }), 403, 'UNAUTHORIZED');
+      for (const values of [{ path: '~/.omp/stats.db' }, { sessionFile: files.foreign }, { projectId: files.foreign }, { directory: privateDir }, { timezone: 'not/a-timezone' }]) {
+        const rejected = await usage('', values);
+        assertProblem(rejected, 400, 'INVALID_REQUEST');
+        expect(rejected.text).not.toContain(privateDir);
+      }
+      const rejectedScope = await service.request('/internal/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: { ...query, workspaceId: 'workspace_foreign' }, authorizedScopes: [{ workspaceId: 'workspace_1', projectId: 'project_1' }] }) });
+      expect(rejectedScope.status).toBe(403);
+      const rejectedPath = await service.request('/internal/usage', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: { ...query, path: '~/.omp/stats.db' }, authorizedScopes: [{ workspaceId: 'workspace_1', projectId: 'project_1' }] }) });
+      expect(rejectedPath.status).toBe(400);
+      expect(await rejectedPath.text()).not.toContain('~/.omp/stats.db');
+      fs.writeFileSync(files.second, 'malformed\n');
+      const partial = await usage().expect(200);
+      expect(partial.body).toMatchObject({ sessions: 1, subagents: 1, tokens: { input: 40 }, partial: true, errors: { second: 'USAGE_SESSION_CORRUPT' } });
+      assertProblem(await usage('', { workspaceId: 'workspace_2' }), 503, 'SERVICE_UNAVAILABLE');
+      expect(partial.text).not.toContain(privateDir);
+      const workers = await service.request('/internal/workers');
+      expect((await workers.json()).workers.map(worker => worker.kind)).toEqual(['usage']);
+      workspaceCatalog.errors = { workspace_2: 'WORKSPACE_UNAVAILABLE' };
+      assertProblem(await usage(), 503, 'SERVICE_UNAVAILABLE');
+    } finally { await service.stop(); }
+  }, 90_000);
   it('keeps Host liveness separate from actual service readiness and capabilities', async () => {
     const health = await request(app).get('/api/agent/v1/health');
     expect(health.body).toEqual({ status: 'ok', engine: 'omp', agent: { status: 'failed', ready: false } });

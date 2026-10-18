@@ -9,9 +9,11 @@ import { createSettingsRuntime } from './settings-runtime.js';
 const createRuntime = async ({
   mergePersistedSettings = (_current, changes) => changes,
   onManagedPluginSettingsChanged = undefined,
+  existingRoot,
 } = {}) => {
-  const tempRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'oc-settings-runtime-'));
+  const tempRoot = existingRoot ?? await fsPromises.mkdtemp(path.join(os.tmpdir(), 'oc-settings-runtime-'));
   const settingsFilePath = path.join(tempRoot, 'settings.json');
+  const managedChatsRoot = path.join(tempRoot, 'relocated-managed-chats');
   const runtime = createSettingsRuntime({
     fsPromises,
     path,
@@ -24,6 +26,7 @@ const createRuntime = async ({
     normalizeStringArray: (values) => Array.isArray(values) ? values.filter((value) => typeof value === 'string') : [],
     formatSettingsResponse: (settings) => settings,
     resolveDirectoryCandidate: (value) => value,
+    managedChatsRoot,
     normalizeManagedRemoteTunnelHostname: (value) => value,
     normalizeManagedRemoteTunnelPresets: (value) => value,
     normalizeManagedRemoteTunnelPresetTokens: (value) => value,
@@ -36,6 +39,7 @@ const createRuntime = async ({
     runtime,
     settingsFilePath,
     tempRoot,
+    managedChatsRoot,
     cleanup: async () => {
       await fsPromises.rm(tempRoot, { recursive: true, force: true });
     },
@@ -95,6 +99,51 @@ describe('settings runtime', () => {
       // Removing the last project forgets the last directory with ''.
       await runtime.writeSettingsToDisk({ projects: [], lastDirectory: '' });
       expect((await runtime.readSettingsFromDiskMigrated()).projects).toEqual([]);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('never auto-promotes canonical or aliased managed chat directories, including after restart', async () => {
+    const { runtime, tempRoot, managedChatsRoot, cleanup } = await createRuntime();
+    try {
+      const physicalRoot = path.join(tempRoot, 'physical-chats');
+      const directory = path.join(physicalRoot, 'day', 'session-one');
+      await fsPromises.mkdir(directory, { recursive: true });
+      await fsPromises.symlink(physicalRoot, managedChatsRoot, 'dir');
+      const alias = path.join(tempRoot, 'chat-alias');
+      await fsPromises.symlink(directory, alias, 'dir');
+      for (const lastDirectory of [managedChatsRoot, directory, path.join(managedChatsRoot, 'day', 'session-one'), alias]) {
+        await runtime.writeSettingsToDisk({ projects: [], lastDirectory, activeProjectId: 'stale-project' });
+        const migrated = await runtime.readSettingsFromDiskMigrated();
+        expect(migrated.projects).toEqual([]);
+        expect(migrated.activeProjectId).toBeUndefined();
+        expect(migrated.lastDirectory).toBe(lastDirectory);
+        const restarted = await createRuntime({ existingRoot: tempRoot });
+        expect((await restarted.runtime.readSettingsFromDiskMigrated()).projects).toEqual([]);
+      }
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('preserves explicit overlapping projects and promotes ordinary directories beside or aliased outside the managed root', async () => {
+    const { runtime, tempRoot, managedChatsRoot, cleanup } = await createRuntime();
+    try {
+      await fsPromises.mkdir(managedChatsRoot);
+      const explicit = { id: createProjectIdFromPath(managedChatsRoot), path: managedChatsRoot, addedAt: 1, lastOpenedAt: 1 };
+      await runtime.writeSettingsToDisk({ projects: [explicit], activeProjectId: explicit.id, lastDirectory: managedChatsRoot });
+      expect((await runtime.readSettingsFromDiskMigrated()).projects).toEqual([explicit]);
+      const ordinary = `${managedChatsRoot}-project`;
+      await fsPromises.mkdir(ordinary);
+      const alias = path.join(managedChatsRoot, 'external-project');
+      await fsPromises.symlink(ordinary, alias, 'dir');
+      for (const lastDirectory of [ordinary, alias]) {
+        await runtime.writeSettingsToDisk({ projects: [], lastDirectory });
+        expect((await runtime.readSettingsFromDiskMigrated()).projects).toEqual([
+          expect.objectContaining({ path: lastDirectory }),
+        ]);
+      }
     } finally {
       await cleanup();
     }

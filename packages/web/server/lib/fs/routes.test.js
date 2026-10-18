@@ -2324,6 +2324,39 @@ describe('canonical managed roots with real filesystem aliases', () => {
     await expect(nativeFs.stat(path.join(canonicalHome, 'escaped-session'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  for (const enclosingRoot of ['project', 'config']) {
+    it(`creates chats through an independently authorized alias nested under the ${enclosingRoot} root`, async context => {
+      const root = await nativeFs.mkdtemp(path.join(tmpdir(), 'oc-overlapping-chat-roots-'));
+      context.onTestFinished(() => nativeFs.rm(root, { recursive: true, force: true }));
+      const project = path.join(root, 'project');
+      const config = path.join(root, 'config');
+      const relocatedChats = path.join(root, 'relocated-chats');
+      const unmanaged = path.join(root, 'unmanaged');
+      await Promise.all([project, config, relocatedChats, unmanaged].map(directory => nativeFs.mkdir(directory)));
+      const chatsRoot = path.join(enclosingRoot === 'project' ? project : config, 'chats');
+      await nativeFs.symlink(relocatedChats, chatsRoot, 'junction');
+      const { app, getRoute } = createRouteRegistry();
+      registerFsRoutes(app, {
+        os: { homedir: () => root }, path, fsPromises: nativeFs,
+        normalizeDirectoryPath: value => value,
+        resolveProjectDirectory: async () => ({ directory: project }),
+        openchamberUserConfigRoot: config, managedChatsRoot: chatsRoot,
+      });
+
+      const directory = path.join(chatsRoot, 'day', 'session');
+      const created = createMockResponse();
+      await getRoute('POST', '/api/fs/mkdir')({ body: { path: directory } }, created);
+      expect(created.statusCode).toBe(200);
+      expect(await nativeFs.realpath(directory)).toBe(path.join(relocatedChats, 'day', 'session'));
+
+      await nativeFs.symlink(unmanaged, path.join(relocatedChats, 'escape'), 'junction');
+      const denied = createMockResponse();
+      await getRoute('POST', '/api/fs/mkdir')({ body: { path: path.join(chatsRoot, 'escape', 'session') } }, denied);
+      expect(denied.statusCode).toBe(400);
+      await expect(nativeFs.stat(path.join(unmanaged, 'session'))).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+  }
+
   it('reports on-disk home casing on a case-insensitive macOS volume', { skip: process.platform !== 'darwin' }, async context => {
     const { getRoute, canonicalChats, rawChats, reportedHome } = await setup(context, { caseAlias: true });
     const response = createMockResponse();

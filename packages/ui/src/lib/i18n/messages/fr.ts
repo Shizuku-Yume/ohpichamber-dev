@@ -2401,6 +2401,7 @@ export const dict = {
   'chat.modelControls.modeValue.subagent': 'Sous-agent',
   'chat.modelControls.modeValue.all': 'Tous',
   'chat.modelControls.modeValue.none': '—',
+  'chat.modelControls.toolAvailability': 'Disponibilité des outils',
   'chat.reasoningTrace.thinking': 'Pensée',
   'chat.reasoningTrace.justification': 'Justification',
   'chat.reasoningTrace.expandAria': 'Développer la trace du raisonnement',

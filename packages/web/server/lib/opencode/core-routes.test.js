@@ -188,21 +188,6 @@ describe('core-routes', () => {
     expect(parsed.body).toEqual({ body: { a: '1', b: '2' }, raw: '' });
   });
 
-  it('should parse JSON bodies for the web search config route', async () => {
-    const app = express();
-    registerCommonRequestMiddleware(app, { express });
-    app.put('/api/config/websearch', (req, res) => {
-      res.json({ body: req.body });
-    });
-
-    const response = await request(app)
-      .put('/api/config/websearch')
-      .send({ selection: 'random' })
-      .expect(200);
-
-    expect(response.body).toEqual({ body: { selection: 'random' } });
-  });
-
   it('should parse JSON bodies for custom provider upsert routes', async () => {
     const app = express();
     registerCommonRequestMiddleware(app, { express });

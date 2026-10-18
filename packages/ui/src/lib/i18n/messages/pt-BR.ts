@@ -2676,6 +2676,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.modelControls.modeValue.subagent": "Subagente",
   "chat.modelControls.modeValue.all": "Todos",
   "chat.modelControls.modeValue.none": "—",
+  "chat.modelControls.toolAvailability": "Disponibilidade de ferramentas",
   "chat.reasoningTrace.thinking": "Pensando",
   "chat.reasoningTrace.justification": "Justificativa",
   "chat.reasoningTrace.expandAria": "Expandir rastro de raciocínio",

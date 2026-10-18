@@ -362,7 +362,7 @@ export const CommandsPage: React.FC = () => {
           label={t('settings.commands.page.field.overrideAgent')}
         >
           <AgentSelector
-            agentName={agent}
+            agentId={agent}
             onChange={(agentName: string) => {
               setAgent(agentName);
               requestSave();

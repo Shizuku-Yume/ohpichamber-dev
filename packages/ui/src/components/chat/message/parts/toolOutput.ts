@@ -132,28 +132,3 @@ export const renderTerminalOutput = (output: string): string => {
 
     return lines.map((line) => line.join('')).join('\n');
 };
-
-export const getToolOutput = (
-    tool: string,
-    stateOutput: unknown,
-    metadataOutput: unknown,
-    status?: string,
-): string | undefined => {
-    const isBash = isShellTool(tool);
-    const shouldNormalize = isBash && status !== 'running';
-
-    if (typeof stateOutput === 'string') {
-        return shouldNormalize ? renderTerminalOutput(stateOutput) : stateOutput;
-    }
-
-    if (isBash && typeof metadataOutput === 'string' && metadataOutput.length > 0) {
-        return shouldNormalize ? renderTerminalOutput(metadataOutput) : metadataOutput;
-    }
-
-    return undefined;
-};
-
-export const getStreamingOutputAppend = (previous: string, next: string): string | undefined => {
-    return next.startsWith(previous) ? next.slice(previous.length) : undefined;
-};
-import { isShellTool } from '@/lib/toolHelpers';

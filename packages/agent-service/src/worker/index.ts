@@ -1,5 +1,5 @@
 import { WorkerCommandSchema } from '../protocol.ts';
-import type { CompletionWorkerBootstrap, WorkerBootstrapMessage, WorkerReply } from '../protocol.ts';
+import type { CompletionWorkerBootstrap, UsageWorkerBootstrap, WorkerBootstrapMessage, WorkerReply } from '../protocol.ts';
 import { ProblemCodeSchema } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
 import { WorkerSession } from './session.ts';
@@ -7,6 +7,7 @@ import { StatelessWorker } from './stateless.ts';
 import { WorkerPolicy } from './policy.ts';
 import { NativeMcpError } from './mcp.ts';
 import { WorkerHostActions } from './host-actions.ts';
+import { getUsageStats, getUsageTools } from './usage.ts';
 
 function nativeMcpStatus(error: NativeMcpError): number {
   switch (error.code) {
@@ -18,7 +19,7 @@ function nativeMcpStatus(error: NativeMcpError): number {
   }
 }
 
-let bootstrap: WorkerBootstrapMessage | CompletionWorkerBootstrap | undefined;
+let bootstrap: WorkerBootstrapMessage | CompletionWorkerBootstrap | UsageWorkerBootstrap | undefined;
 let initialization: Promise<void> | undefined;
 let resources: WorkerSession | StatelessWorker | undefined;
 let policy: WorkerPolicy | undefined;
@@ -74,12 +75,16 @@ process.on('message', raw => {
   if (command.type === 'operation') {
     if (stopping || command.workerGeneration !== bootstrap?.workerGeneration) return;
     const owned = resources;
-    if (!owned) {
+    const usage = command.operation.type === 'usage.stats' || command.operation.type === 'usage.tools';
+    if ((!owned && !usage) || (usage && bootstrap?.type !== 'usage.bootstrap')) {
       send({ type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId, status: 503, code: 'SERVICE_UNAVAILABLE' });
       return;
     }
     // Deliberately not serialized: cancel/abort/interactive replies must interrupt active work.
     void (async () => {
+      if (command.operation.type === 'usage.stats') return { type: 'usage.stats' as const, result: await getUsageStats(command.operation.query, command.operation.references) };
+      if (command.operation.type === 'usage.tools') return { type: 'usage.tools' as const, result: await getUsageTools(command.operation.query, command.operation.references) };
+      if (!owned) throw new Error('Worker resources are unavailable');
       if (owned instanceof StatelessWorker) send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot: await owned.authorizationPolicy() });
       const result = await owned.operation(command.operation);
       if (owned instanceof StatelessWorker) send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot: await owned.authorizationPolicy() });
@@ -96,6 +101,12 @@ process.on('message', raw => {
   }
   if (bootstrap || stopping) return;
   bootstrap = command;
+  if (command.type === 'usage.bootstrap') {
+    // Cold reporting never constructs providers, AuthStorage, a live session, or the policy runtime.
+    send({ type: 'lifecycle', workerGeneration: command.workerGeneration, state: 'initialized' });
+    send({ type: 'ready', workerGeneration: command.workerGeneration });
+    return;
+  }
   const authorization = new WorkerPolicy(command.workerGeneration, send);
   policy = authorization;
   hostActions = new WorkerHostActions(command.workerGeneration, send);

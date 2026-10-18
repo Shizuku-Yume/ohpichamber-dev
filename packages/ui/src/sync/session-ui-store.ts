@@ -494,7 +494,6 @@ export type SessionUIState = {
   clearError: () => void
   markSessionAsOpenChamberCreated: (sessionId: string) => void
   isOpenChamberCreatedSession: (sessionId: string) => boolean
-  initializeNewOpenChamberSession: (sessionId: string, agents: unknown[]) => void
   setWorktreeMetadata: (sessionId: string, metadata: WorktreeMetadata | null) => void
   overrideNewSessionDraftTarget: (options: Record<string, unknown>) => void
   resolvePendingDraftWorktreeTarget: (requestId: string, directory: string | null, options?: Record<string, unknown>) => void
@@ -1144,7 +1143,6 @@ export async function materializeOpenDraftSession(selection: {
     useSelectionStore.getState().saveAgentModelVariantForSession(created.sessionId, effectiveDraftAgent, selection.providerId, selection.modelId, variantOverride)
   }
 
-  store.initializeNewOpenChamberSession(created.sessionId, configState.agents ?? [])
 
   // Without a choice in the draft the server writes the default mode itself.
   if (draftPermissionMode) {
@@ -1709,9 +1707,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
   isOpenChamberCreatedSession: (sessionId) => get().webUICreatedSessions.has(sessionId),
 
-  initializeNewOpenChamberSession: () => {
-    // Stub — was a no-op in old store
-  },
 
   setWorktreeMetadata: (sessionId, metadata) => {
     // Write to authoritative session-worktree-store

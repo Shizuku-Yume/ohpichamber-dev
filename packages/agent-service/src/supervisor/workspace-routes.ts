@@ -1,11 +1,17 @@
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import {
   AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema,
   ProviderConfigureRequestSchema, ProviderDeleteRequestSchema, ModelConfigureRequestSchema, ModelDeleteRequestSchema,
   ProviderCredentialWriteRequestSchema, ProviderCredentialDeleteRequestSchema,
+  ProviderAccountMutationRequestSchema, ProviderOAuthRequestSchema, ProviderModelDiscoveryRequestSchema,
   CompletionRequestSchema, CompletionCancelRequestSchema, EntityIdSchema,
   MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPConnectionTestRequestSchema, MCPWorkspaceReconnectRequestSchema, MCPOAuthRequestSchema, MCPSecretWriteRequestSchema,
+  CacheWarmingUpdateRequestSchema,
+  UsageQuerySchema, UsageStatsSchema, UsageToolsResponseSchema,
+  WebSearchUpdateRequestSchema, WebSearchCredentialWriteRequestSchema, WebSearchCredentialDeleteRequestSchema,
 } from '@openchamber/agent-contract';
 import type { WorkspaceCatalogs } from './workspaces.ts';
 import type { WorkerRegistry } from './workers.ts';
@@ -14,6 +20,11 @@ import type { CatalogOperation, CatalogResult } from '../catalogs/protocol.ts';
 import { PrivateCredentialResolveRequestSchema, PrivateCredentialHandoffRequestSchema } from '../catalogs/private-credentials.ts';
 import type { CatalogCoordinator } from './catalog.ts';
 import type { McpOperation } from '../worker/mcp/protocol.ts';
+import { UsageAuthorizationSchema } from '../protocol.ts';
+import type { SessionRegistry } from '../sessions/registry.ts';
+import type { WebSearchCoordinator } from './websearch.ts';
+
+const UsageRequestSchema = z.strictObject({ query: UsageQuerySchema, authorizedScopes: UsageAuthorizationSchema });
 
 function id(value: string): string {
   try { return EntityIdSchema.parse(decodeURIComponent(value)); }
@@ -26,14 +37,73 @@ function unwrap(result: CatalogResult) {
   switch (result.type) {
     case 'catalog.models': case 'catalog.providers': case 'catalog.agents': return result.catalog;
     case 'catalog.provider.mutated': case 'catalog.model.mutated': case 'catalog.credential.mutated': case 'catalog.agent.mutated': return result.result;
+    case 'catalog.provider.accounts': case 'catalog.provider.oauth.methods': case 'catalog.provider.oauth':
+    case 'catalog.provider.models.discovered': case 'catalog.provider.configuration': return result.result;
     default: throw new WorkerOperationError(503, 'INTERNAL_ERROR');
   }
 }
 
 /** Exact workspace catalog paths; private native envelopes never become canonical responses. */
 export class WorkspaceRoutes {
-  constructor(private readonly catalogs: WorkspaceCatalogs, private readonly workers: WorkerRegistry, private readonly mcp: CatalogCoordinator) {}
+  private readonly usageWorkerId = randomUUID();
+  constructor(private readonly catalogs: WorkspaceCatalogs, private readonly workers: WorkerRegistry, private readonly mcp: CatalogCoordinator,
+    private readonly sessions: SessionRegistry, private readonly stateDirectory: string, private readonly webSearch: WebSearchCoordinator) {}
   async handle(request: IncomingMessage, url: URL, readBody: <T>(request: IncomingMessage, schema: z.ZodType<T>) => Promise<T>) {
+    if ((url.pathname === '/internal/usage' || url.pathname === '/internal/usage/tools') && request.method === 'POST') {
+      if (url.search) throw new WorkerOperationError(400, 'INVALID_REQUEST');
+      const { query, authorizedScopes } = await readBody(request, UsageRequestSchema);
+      const projects = new Map(authorizedScopes.map(scope => [scope.workspaceId, scope.projectId]));
+      if ((query.workspaceId !== undefined && !projects.has(query.workspaceId))
+        || (query.projectId !== undefined && authorizedScopes.length > 0 && !authorizedScopes.some(scope => scope.projectId === query.projectId
+          && (query.workspaceId === undefined || scope.workspaceId === query.workspaceId)))) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+      for (const scope of authorizedScopes) {
+        if (this.catalogs.get(scope.workspaceId).projectId !== scope.projectId) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+      }
+      const references = this.sessions.usageReferences(authorizedScopes, query);
+      await mkdir(this.stateDirectory, { recursive: true, mode: 0o700 });
+      await this.workers.startUsage({ rootSessionId: this.usageWorkerId, workspaceId: this.usageWorkerId, projectId: this.usageWorkerId,
+        cwd: this.stateDirectory, agentDirectory: this.stateDirectory, agentDirectoryId: this.usageWorkerId, catalogRevision: '0' });
+      if (url.pathname === '/internal/usage/tools') {
+        const result = await this.workers.request(this.usageWorkerId, { type: 'usage.tools', query, references });
+        if (result.type !== 'usage.tools') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        return { status: 200, body: UsageToolsResponseSchema.parse(result.result) };
+      }
+      const result = await this.workers.request(this.usageWorkerId, { type: 'usage.stats', query, references });
+      if (result.type !== 'usage.stats') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return { status: 200, body: UsageStatsSchema.parse(result.result) };
+    }
+    const searchRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/web-search(?:\/credentials\/([^/]+))?$/.exec(url.pathname);
+    if (searchRoute) {
+      const workspaceId = id(searchRoute[1]);
+      this.catalogs.get(workspaceId);
+      if (searchRoute[2] === undefined) {
+        if (request.method === 'GET') return { status: 200, body: await this.webSearch.read(workspaceId) };
+        if (request.method === 'PUT') return { status: 200, body: await this.webSearch.mutate(workspaceId, { type: 'update', request: await readBody(request, WebSearchUpdateRequestSchema) }) };
+      } else {
+        let providerId: string;
+        try { providerId = z.string().min(1).parse(decodeURIComponent(searchRoute[2])); }
+        catch { throw new WorkerOperationError(400, 'INVALID_REQUEST'); }
+        if (request.method === 'PUT') {
+          const body = await readBody(request, WebSearchCredentialWriteRequestSchema);
+          match(body.providerId, providerId);
+          return { status: 200, body: await this.webSearch.mutate(workspaceId, { type: 'credential.write', request: body }) };
+        }
+        if (request.method === 'DELETE') {
+          const body = await readBody(request, WebSearchCredentialDeleteRequestSchema);
+          match(body.providerId, providerId);
+          return { status: 200, body: await this.webSearch.mutate(workspaceId, { type: 'credential.delete', request: body }) };
+        }
+      }
+      return null;
+    }
+    const warming = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/cache-warming$/.exec(url.pathname);
+    if (warming) {
+      const workspaceId = id(warming[1]);
+      this.catalogs.get(workspaceId);
+      if (request.method === 'GET') return { status: 200, body: await this.catalogs.readCacheWarming(workspaceId) };
+      if (request.method === 'PUT') return { status: 200, body: await this.catalogs.updateCacheWarming(workspaceId, await readBody(request, CacheWarmingUpdateRequestSchema)) };
+      return null;
+    }
     const mcpRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/mcp\/(config|apply|servers\/([^/]+)\/(test|reconnect|oauth|credentials))$/.exec(url.pathname);
     if (mcpRoute) {
       const workspaceId = id(mcpRoute[1]);
@@ -117,6 +187,21 @@ export class WorkspaceRoutes {
       const result = await this.workers.request(rootSessionId, { type: 'completion', operation: { type: 'completion.start', request: body } });
       if (result.type !== 'completion' || result.result.type !== 'completion.result') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
       return { status: 200, body: result.result.result };
+    }
+    const providerRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/providers\/(oauth-methods|discover|([^/]+)\/(accounts|oauth|config))$/.exec(url.pathname);
+    if (providerRoute) {
+      const workspaceId = id(providerRoute[1]);
+      const providerId = providerRoute[3] === undefined ? undefined : id(providerRoute[3]);
+      let operation: CatalogOperation | undefined;
+      if (providerRoute[2] === 'oauth-methods' && request.method === 'GET') operation = { type: 'catalog.provider.oauth.methods' };
+      else if (providerRoute[2] === 'discover' && request.method === 'POST') operation = { type: 'catalog.provider.models.discover', request: await readBody(request, ProviderModelDiscoveryRequestSchema) };
+      else if (providerId !== undefined) {
+        if (providerRoute[4] === 'accounts' && request.method === 'GET') operation = { type: 'catalog.provider.accounts.read', providerId };
+        else if (providerRoute[4] === 'accounts' && request.method === 'POST') operation = { type: 'catalog.provider.account.mutate', providerId, request: await readBody(request, ProviderAccountMutationRequestSchema) };
+        else if (providerRoute[4] === 'oauth' && request.method === 'POST') operation = { type: 'catalog.provider.oauth', providerId, request: await readBody(request, ProviderOAuthRequestSchema) };
+        else if (providerRoute[4] === 'config' && request.method === 'GET') operation = { type: 'catalog.provider.configuration.read', providerId };
+      }
+      if (operation) return { status: 200, body: unwrap(await this.catalogs.operation(workspaceId, operation)) };
     }
     const route = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/(models|providers|agents)(?:\/([^/]+))?(?:\/(config|models|credential)(?:\/([^/]+))?)?$/.exec(url.pathname);
     if (!route) return null;

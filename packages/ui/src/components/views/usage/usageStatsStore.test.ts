@@ -1,10 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 
-import type { UsageStats, UsageTools } from '@/lib/opencode/session-stats';
+import type { UsageStats, UsageToolsResponse } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
 
-import { createUsageStatsStore, usageStatsKey, type UsageStatsRequest } from './usageStatsStore';
+import { createUsageStatsStore, useUsageStatsStore, usageStatsKey, type UsageStatsRequest } from './usageStatsStore';
 
-const toolCalls = (calls: number): UsageTools => ({ mode: 'detail', totals: { calls, succeeded: calls, failed: 0, unfinished: 0 }, usage: [] });
+const toolCalls = (calls: number): UsageToolsResponse => ({ totals: { calls, succeeded: calls, failed: 0, unfinished: 0 }, usage: [], partial: false });
 
 const report = (prompts: number): UsageStats => ({
   range: { from: 0, to: 1 },
@@ -19,14 +20,16 @@ const report = (prompts: number): UsageStats => ({
   streak: 1,
   activity: [],
   models: [],
+  partial: false,
 });
 
-type Pending = { request: UsageStatsRequest; resolve: (stats: UsageStats) => void; reject: (error: Error) => void };
+type Pending = { request: UsageStatsRequest; signal: AbortSignal; resolve: (stats: UsageStats) => void; reject: (error: Error) => void };
 
 type PendingTools = {
   request: UsageStatsRequest;
   window: UsageStats['range'];
-  resolve: (tools: UsageTools) => void;
+  signal: AbortSignal;
+  resolve: (tools: UsageToolsResponse) => void;
   reject: (error: Error) => void;
 };
 
@@ -35,10 +38,10 @@ function setup() {
   const pendingTools: PendingTools[] = [];
   let runtime = 'runtime-a';
   const store = createUsageStatsStore(
-    (request) => new Promise<UsageStats>((resolve, reject) => pending.push({ request, resolve, reject })),
+    (request, signal) => new Promise<UsageStats>((resolve, reject) => pending.push({ request, signal, resolve, reject })),
     () => runtime,
     () => 1000,
-    (request, window) => new Promise<UsageTools>((resolve, reject) => pendingTools.push({ request, window, resolve, reject })),
+    (request, window, signal) => new Promise<UsageToolsResponse>((resolve, reject) => pendingTools.push({ request, window, signal, resolve, reject })),
   );
   return { store, pending, pendingTools, setRuntime: (next: string) => { runtime = next; } };
 }
@@ -98,6 +101,7 @@ describe('usage stats cache', () => {
     const ctx = setup();
     const a = ctx.store.getState().load(A);
     ctx.store.getState().reset();
+    expect(ctx.pending[0].signal.aborted).toBe(true);
     ctx.setRuntime('runtime-b');
     ctx.pending[0].resolve(report(9));
     await a;
@@ -161,8 +165,73 @@ describe('tool calls on request', () => {
     await loaded(ctx, A, report(3));
     const read = ctx.store.getState().loadTools(A);
     ctx.store.getState().reset();
+    expect(ctx.pendingTools[0].signal.aborted).toBe(true);
     ctx.pendingTools[0].resolve(toolCalls(5));
     await read;
     expect(ctx.store.getState().toolEntries).toEqual({});
   });
+
+  test('partial reports and tools retain explicit per-session failures', async () => {
+    const ctx = setup();
+    const partial = { ...report(3), partial: true, errors: { session_bad: 'Unreadable transcript' } };
+    await loaded(ctx, A, partial);
+    expect(entry(ctx, A)?.stats).toEqual(partial);
+    const read = ctx.store.getState().loadTools(A);
+    const result = { ...toolCalls(2), partial: true, errors: partial.errors };
+    ctx.pendingTools[0].resolve(result);
+    await read;
+    expect(tools(ctx, A)?.tools).toEqual(result);
+  });
+
+  test('tools finishing after a report refresh cannot replace the new window', async () => {
+    const ctx = setup();
+    await loaded(ctx, A, report(3));
+    const oldTools = ctx.store.getState().loadTools(A);
+    const refresh = ctx.store.getState().load(A, { force: true });
+    ctx.pending[1].resolve({ ...report(4), range: { from: 300, to: 400 } });
+    await refresh;
+    ctx.pendingTools[0].resolve(toolCalls(9));
+    await oldTools;
+    expect(tools(ctx, A)?.tools).toBeNull();
+    expect(ctx.pendingTools[1].window).toEqual({ from: 300, to: 400 });
+    ctx.pendingTools[1].resolve(toolCalls(2));
+    await Promise.resolve();
+    expect(tools(ctx, A)?.tools).toEqual(toolCalls(2));
+  });
+});
+
+test('canonical usage resolves directory identities and tools reuse explicit report bounds', async () => {
+  const workspace = { workspaceId: 'workspace_usage', projectId: 'project_usage', name: 'Usage', displayPath: '.' };
+  const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue(workspace);
+  const stats = spyOn(canonicalClient, 'getUsageStats').mockResolvedValue({ ...report(3), range: { from: 100, to: 200 } });
+  const tools = spyOn(canonicalClient, 'getUsageTools').mockResolvedValue(toolCalls(2));
+  try {
+    useUsageStatsStore.getState().reset();
+    await useUsageStatsStore.getState().load(B);
+    expect(resolve.mock.calls[0][0]).toBe('/code/app');
+    expect(stats.mock.calls[0][0]).toMatchObject({ range: '30d', workspaceId: workspace.workspaceId, projectId: workspace.projectId });
+    expect(stats.mock.calls[0][0].from).toBeNumber();
+    expect(stats.mock.calls[0][0].to).toBeNumber();
+    expect(stats.mock.calls[0][0].timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+    expect(stats.mock.calls[0][1]?.signal).toBe(resolve.mock.calls[0][1]?.signal);
+    await useUsageStatsStore.getState().loadTools(B);
+    expect(tools.mock.calls[0][0]).toMatchObject({ range: '30d', from: 100, to: 200, workspaceId: workspace.workspaceId, projectId: workspace.projectId });
+  } finally {
+    resolve.mockRestore(); stats.mockRestore(); tools.mockRestore();
+    useUsageStatsStore.getState().reset();
+  }
+});
+
+test('failed directory resolution never falls back to unfiltered usage', async () => {
+  const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockRejectedValue(new Error('Scope unavailable'));
+  const stats = spyOn(canonicalClient, 'getUsageStats');
+  try {
+    useUsageStatsStore.getState().reset();
+    await useUsageStatsStore.getState().load(B);
+    expect(stats).not.toHaveBeenCalled();
+    expect(Object.values(useUsageStatsStore.getState().entries)[0].error).toBe('Scope unavailable');
+  } finally {
+    resolve.mockRestore(); stats.mockRestore();
+    useUsageStatsStore.getState().reset();
+  }
 });

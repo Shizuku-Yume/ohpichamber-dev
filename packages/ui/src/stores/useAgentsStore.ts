@@ -13,6 +13,7 @@ import {
 import { waitForAgentServiceConnection } from "@/stores/waitForAgentServiceConnection";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
 import { useConfigStore } from "@/stores/useConfigStore";
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import { invalidateCommandsLoadCache, useCommandsStore } from "@/stores/useCommandsStore";
 import { useProjectsStore } from "@/stores/useProjectsStore";
 import { useSkillsCatalogStore } from "@/stores/useSkillsCatalogStore";
@@ -144,6 +145,16 @@ const sleep = (ms: number): Promise<void> => new Promise<void>((resolve) => {
 export const selectAgentsForDirectory = (state: Pick<AgentsStore, 'agentsByDirectory'>, directory?: string | null): Agent[] =>
   state.agentsByDirectory[getAgentsCacheKey(resolveDirectory(directory))] ?? EMPTY_AGENTS;
 
+export type AgentCatalogStatus = 'loading' | 'ready' | 'error';
+export const selectAgentCatalogStatus = (
+  state: Pick<AgentsStore, 'revisionsByDirectory' | 'errorsByDirectory'>,
+  directory?: string | null,
+): AgentCatalogStatus => {
+  const key = getAgentsCacheKey(resolveDirectory(directory));
+  if (state.errorsByDirectory[key]) return 'error';
+  return state.revisionsByDirectory[key] === undefined ? 'loading' : 'ready';
+};
+
 export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<AgentsStore>()(devtools(persist((set, get) => {
   const fail = (key: string, error: unknown): AgentMutationResult => {
     const message = error instanceof Error ? error.message : String(error);
@@ -162,6 +173,13 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
         ...(directory === getConfigDirectory() ? { agents: catalog.agents } : {}),
       };
     });
+    const config = useConfigStore.getState();
+    if (config.activeDirectoryKey === directory
+        && !useSessionUIStore.getState().currentSessionId
+        && config.selectionSource === 'auto' && config.agentSelectionSource === 'auto'
+        && config.currentVariantSelection.override === undefined) {
+      config.applyDefaultModelAgentSelection();
+    }
   };
   const mutate = async (
     directory: string | null | undefined,
@@ -331,7 +349,6 @@ async function performConfigRefresh(options: {
     const skillsCatalogStore = useSkillsCatalogStore.getState();
 
     const refreshProviders = scopes.includes("all") || scopes.includes("providers");
-    const refreshSdkAgents = scopes.includes("all") || scopes.includes("agents");
     const refreshAgentConfigs = scopes.includes("all") || scopes.includes("agents");
     const refreshCommands = scopes.includes("all") || scopes.includes("commands");
     const refreshSkills = scopes.includes("all") || scopes.includes("skills");
@@ -359,15 +376,14 @@ async function performConfigRefresh(options: {
       if (refreshProviders) {
         sdkRefreshTasks.push(configStore.loadProviders({ directory, source: 'agentsStore:refreshConfig' }).then(() => undefined));
       }
-      if (refreshSdkAgents) {
-        sdkRefreshTasks.push(configStore.loadAgents({ directory, source: 'agentsStore:refreshConfig' }).then(() => undefined));
-      }
     }
 
     const uiRefreshTasks: Promise<void>[] = [];
     if (refreshAgentConfigs) {
-      invalidateAgentsLoadCache(currentDirectory);
-      uiRefreshTasks.push(agentConfigStore.loadAgents().then(() => undefined));
+      for (const directory of directoriesToRefresh) {
+        invalidateAgentsLoadCache(directory);
+        uiRefreshTasks.push(agentConfigStore.loadAgents(directory).then(() => undefined));
+      }
     }
     if (refreshCommands) {
       invalidateCommandsLoadCache(currentDirectory);

@@ -20,10 +20,24 @@ const EmptyRequestBodySchema = z.strictObject({});
 const WorkspaceResolveRequestSchema = z.strictObject({ directory: z.string().min(1) });
 // Only SDK-owned operations appear here. Host session admission, metadata and delivery have their own routers.
 const AGENT_ROUTES = [
+  { method: 'GET', pattern: /^\/usage$/, response: C.UsageStatsSchema, query: ['range', 'from', 'to', 'timezone', 'workspaceId', 'projectId'], usage: true },
+  { method: 'GET', pattern: /^\/usage\/tools$/, response: C.UsageToolsResponseSchema, query: ['range', 'from', 'to', 'timezone', 'workspaceId', 'projectId'], usage: true },
   { method: 'GET', pattern: /^\/subagents$/, response: z.array(C.SubagentSchema), query: ['sessionId'], subagent: true },
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/models$/, response: C.ModelCatalogSchema },
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers$/, response: C.ProviderCatalogSchema },
+  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/oauth-methods$/, response: C.ProviderOAuthMethodsSchema },
+  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/discover$/, request: C.ProviderModelDiscoveryRequestSchema, response: C.ProviderModelDiscoveryResultSchema, providerEntry: true },
+  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/accounts$/, response: C.ProviderAccountsSchema },
+  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/accounts$/, request: C.ProviderAccountMutationRequestSchema, response: C.ProviderAccountsSchema },
+  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/oauth$/, request: C.ProviderOAuthRequestSchema, response: C.ProviderOAuthResultSchema, providerOAuth: true },
+  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/config$/, response: C.ProviderConfigurationReadSchema },
   { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/agents$/, response: C.AgentCatalogSchema },
+  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/cache-warming$/, response: C.CacheWarmingStateSchema },
+  { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/cache-warming$/, request: C.CacheWarmingUpdateRequestSchema, response: C.CacheWarmingApplyResultSchema },
+  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/web-search$/, response: C.WebSearchConfigStateSchema },
+  { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/web-search$/, request: C.WebSearchUpdateRequestSchema, response: C.WebSearchMutationResultSchema, websearch: true },
+  { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/web-search\/credentials\/(?<websearchProviderId>[^/]+)$/, request: C.WebSearchCredentialWriteRequestSchema, response: C.WebSearchMutationResultSchema, providerEntry: true, websearch: true },
+  { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/web-search\/credentials\/(?<websearchProviderId>[^/]+)$/, request: C.WebSearchCredentialDeleteRequestSchema, response: C.WebSearchMutationResultSchema, websearch: true },
   { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/agents$/, request: C.AgentCreateRequestSchema, response: C.AgentMutationResultSchema },
   { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/agents\/[^/]+$/, request: C.AgentUpdateRequestSchema, response: C.AgentMutationResultSchema },
   { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/agents\/[^/]+$/, request: C.AgentDeleteRequestSchema, response: C.AgentMutationResultSchema },
@@ -240,16 +254,50 @@ export function registerCanonicalHostRoutes(app, {
         if (!(route.query ?? []).includes(key) || url.searchParams.getAll(key).length !== 1)
           return problem(res, 400, 'INVALID_REQUEST', 'The canonical query is invalid.');
       }
+      let usageRequest;
+      if (route.usage) {
+        const input = Object.fromEntries(url.searchParams);
+        for (const key of ['from', 'to']) {
+          if (input[key] !== undefined) input[key] = /^\d+$/.test(input[key]) ? Number(input[key]) : NaN;
+        }
+        const query = C.UsageQuerySchema.parse(input);
+        if (query.projectId !== undefined) {
+          const projects = C.ProjectListSchema.parse(await listProjects());
+          if (Object.keys(projects.errors).length) return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Host project inventory is incomplete.');
+          if (!projects.items.some(project => project.projectId === query.projectId))
+            return problem(res, 403, 'UNAUTHORIZED', 'The selected project is not authorized.');
+        }
+        let workspaceIds;
+        if (query.workspaceId !== undefined) workspaceIds = [query.workspaceId];
+        else {
+          const workspaces = C.WorkspaceListSchema.parse(await listWorkspaces(query.projectId));
+          if (Object.keys(workspaces.errors).length) return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Host workspace inventory is incomplete.');
+          workspaceIds = workspaces.items.filter(workspace => query.projectId === undefined || workspace.projectId === query.projectId).map(workspace => workspace.workspaceId);
+        }
+        const authorizedScopes = [];
+        for (const workspaceId of new Set(workspaceIds)) {
+          const authorized = capturedScope(await resolveWorkspaceScope(workspaceId), workspaceId);
+          if (!authorized || (query.projectId !== undefined && authorized.projectId !== query.projectId))
+            return problem(res, 403, 'UNAUTHORIZED', 'The selected usage scope is not authorized.');
+          authorizedScopes.push({ workspaceId: authorized.workspaceId, projectId: authorized.projectId });
+        }
+        usageRequest = { query, authorizedScopes };
+      }
       let body;
       if (route.request) {
         const parsed = route.request.safeParse(req.body);
         if (!parsed.success) return problem(res, 400, 'INVALID_REQUEST', 'The canonical request is invalid.');
+        if (route.providerOAuth && ['start', 'input', 'commit'].includes(parsed.data.action) && isEnterpriseMode(enterprisePolicyOptions))
+          return problem(res, 403, 'enterprise_mode', 'Provider entry is not available in enterprise mode.');
         if ('workspaceId' in parsed.data && parsed.data.workspaceId !== scope?.workspaceId)
           return problem(res, 403, 'UNAUTHORIZED', 'The request does not match the selected workspace.');
+        if (groups?.websearchProviderId !== undefined && parsed.data.providerId !== decodeURIComponent(groups.websearchProviderId))
+          return problem(res, 400, 'INVALID_REQUEST', 'The credential provider does not match the selected search provider.');
         body = JSON.stringify(parsed.data);
       } else if (req.body !== undefined && !EmptyRequestBodySchema.safeParse(req.body).success) {
         return problem(res, 400, 'INVALID_REQUEST', 'This canonical operation accepts no body.');
       }
+      if (usageRequest) body = JSON.stringify(usageRequest);
       const headers = { Accept: route.stream ? 'text/event-stream' : 'application/json' };
       if (body !== undefined) headers['Content-Type'] = 'application/json';
       if (route.stream && req.headers['last-event-id'] !== undefined) {
@@ -257,8 +305,9 @@ export function registerCanonicalHostRoutes(app, {
         if (!cursor.success) return problem(res, 400, 'INVALID_CURSOR', 'Only one event cursor is accepted.');
         headers['Last-Event-ID'] = cursor.data;
       }
-      const response = await service.request(`${PREFIX}${req.path}${url.search}`, {
-        method: req.method, headers, body, signal: controller.signal,
+      const target = route.usage ? (req.path === '/usage/tools' ? '/internal/usage/tools' : '/internal/usage') : `${PREFIX}${req.path}${url.search}`;
+      const response = await service.request(target, {
+        method: route.usage ? 'POST' : req.method, headers, body, signal: controller.signal,
       });
       if (!response.ok) {
         const parsedError = C.ProblemDetailsSchema.safeParse(await response.json());
@@ -279,6 +328,10 @@ export function registerCanonicalHostRoutes(app, {
       const result = parsedResult.data;
       if (result.workspaceId !== undefined && scope && result.workspaceId !== scope.workspaceId)
         return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The agent response does not match its selected workspace.');
+      if (route.response === C.CacheWarmingApplyResultSchema && (!scope || result.persisted.workspaceId !== scope.workspaceId || result.workers.some(outcome => outcome.worker.workspaceId !== scope.workspaceId)))
+        return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The cache-warming response does not match its selected workspace.');
+      if (route.websearch && (!scope || result.state.workspaceId !== scope.workspaceId))
+        return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The search response does not match its selected workspace.');
       if (route.response === C.ShellSnapshotSchema) {
         for (const job of [...result.running, ...result.ended]) {
           const jobScope = capturedScope(await resolveSessionScope(job.sessionId));

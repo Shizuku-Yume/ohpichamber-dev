@@ -221,12 +221,13 @@ and the send path reading the same grammar.
   drawn caret through a class it only writes while applying an update, so the
   selection has to be the update that follows the focus.
 - `submit/buildOutgoingMessage.ts` flattens queued messages, the composer text,
-  context drafts and linked references into OpenCode's one-primary-plus-parts
-  shape. The oldest queued message becomes primary. **Every attached context
-  item (inline comments, terminal selections, browser annotations, PR context,
-  linked issue/PR) becomes its own synthetic text part carrying structured
-  metadata** built by `lib/messages/contextParts.ts`; the timeline reads that
-  metadata back to render context blocks. PR instructions precede the PR diff.
+  context drafts and linked references into the local outgoing-message shape.
+  The oldest queued message becomes primary. Every attached context item
+  (inline comments, terminal selections, browser annotations, PR context,
+  linked issue/PR) retains local text and structured metadata built by
+  `lib/messages/contextParts.ts`. Canonical prompt capture formats this
+  context before delivery; transcript `Part` records expose `content`, not
+  local composer metadata. PR instructions precede the PR diff.
   The same module's `buildComposerContext` captures that context when a message
   is **queued** instead of sent: the chips leave the composer with the message
   (as `QueuedContextPart`s on the queue item), the server delivers them through

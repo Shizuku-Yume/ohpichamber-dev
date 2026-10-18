@@ -2,6 +2,7 @@ import * as React from 'react';
 import { toast } from '@/components/ui/toast';
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 
 const TOAST_ID = 'project-config-invalid';
 
@@ -23,7 +24,7 @@ export const ProjectConfigErrorToast: React.FC = () => {
     setIsRetrying(true);
     void Promise.all([
       store.loadProviders({ directory, source: 'projectConfigError:retry' }),
-      store.loadAgents({ directory, source: 'projectConfigError:retry' }),
+      useAgentsStore.getState().loadAgents(directory),
     ]).finally(() => setIsRetrying(false));
   }, []);
 

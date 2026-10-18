@@ -2,7 +2,9 @@
 
 **Effort:** omp-through-m3
 **Task type:** feature
-**Base commit:** <commit-sha>
+**Base commit:** 93d519221527e15cf52a5dde0d6ddf011c7527bb
+**Started:** 2026-10-18
+**Status:** active
 
 **Delivers:** End-to-end native provider management across canonical contracts, Agent Service, Host Gateway, and UI: non-secret account roster, account labels, default account selection, native OAuth flow lifecycle (start, status, input, cancel) backed by the native SDK provider registry, and custom provider configuration, persistence, and model discovery.
 
@@ -33,3 +35,14 @@
 - [ ] Enterprise policy and Host authentication guard all provider routes.
 - [ ] Node Host and UI remain free of SDK imports.
 - [ ] Focused provider tests pass; actual native storage/reopen/selection is verified.
+
+## Progress
+
+- Implementation branch: `m3-native/providers-20261018`; isolated worktree: `/home/shizuku/Project/ohpichamber-worktrees/m3-native-providers`. The initial alternate-index worktree setup was corrected with parent-authorized `git read-tree HEAD` without modifying working files.
+- Added intentional native provider-management contracts and authenticated canonical transport for account rosters/labels/default selection/removal, native OAuth method identity versus stored provider identity, explicit OAuth lifecycle and CAS commit, custom provider configuration readback and discovery.
+- Native Bun workers own SDK storage and flow memory. Native registry login callbacks return grants into private memory; start/status/input/cancel do not advance catalog revision. Only explicit serialized `commit` writes credentials after retained starting revision and generation/flow checks. Disconnect and worker close abort flows.
+- Pending/ready OAuth resources use a worker-owned 60-second lease renewed by active status/input calls. Browser departure or a lost start response therefore aborts callback resources and discards private grants rather than retaining them indefinitely. This is abandonment cleanup only; the native SDK still owns login protocol lifetime.
+- Account labels are private app metadata keyed by opaque credential references, not native database IDs or OpenCode settings. Default selected credentials bind actual native model resolution; source-owned authentication remains source-owned. Custom header values are literal, private, write-only configuration; public readback exposes names only.
+- Runtime surfaces: Web/PWA, Electron, hosted mobile and Capacitor all use the same Canonical Client → authenticated Host → Bun worker path. Remote/mobile browser OAuth supports manual callback/code input; browser-session cookie prompts use masked manual entry. Enterprise mode refuses provider entry/discovery while retaining account selection/removal/labels and cancellation/status.
+- Added focused deterministic contract, coordinator, Host/client, native persistence/selection, OAuth lifecycle and loopback discovery regressions. Official third-party grants remain unexercised.
+- Verification intentionally NOT run: no builds, tests, type-checks, lint or formatters during parallel implementation. Parent must run focused regressions and integrated checks once after landing all slices. Acceptance boxes remain unchecked and this task stays unarchived pending actual proof.

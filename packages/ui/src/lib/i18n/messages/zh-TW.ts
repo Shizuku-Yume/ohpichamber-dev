@@ -2697,6 +2697,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.modelControls.modeValue.subagent': '子 Agent',
   'chat.modelControls.modeValue.all': '全部',
   'chat.modelControls.modeValue.none': '—',
+  'chat.modelControls.toolAvailability': '工具可用性',
   'chat.reasoningTrace.thinking': '思考',
   'chat.reasoningTrace.justification': '理由',
   'chat.reasoningTrace.expandAria': '展開推理軌跡',

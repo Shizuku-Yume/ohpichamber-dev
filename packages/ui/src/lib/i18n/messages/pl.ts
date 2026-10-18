@@ -1477,6 +1477,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.modelControls.showThinkingModes': 'Pokaż tryby myślenia',
   'chat.modelControls.temperature': 'Temperatura',
   'chat.modelControls.thinking': 'Myślenie',
+  'chat.modelControls.toolAvailability': 'Dostępność narzędzi',
   'chat.modelControls.topP': 'Top P',
   'chat.modelControls.unfavoriteAria': 'Usuń z ulubionych',
   'chat.modelControls.webFetch': 'WebFetch',

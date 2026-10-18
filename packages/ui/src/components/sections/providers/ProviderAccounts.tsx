@@ -1,235 +1,51 @@
 import React from 'react';
-import type { ConnectionInfo } from '@opencode/client';
-import { SETTINGS_ICON_BUTTON_CLASS } from '@/components/sections/shared/SettingsSection';
+import type { ProviderAccounts as Accounts, ProviderAccountMutationRequest } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Icon } from '@/components/icon/Icon';
-import type { IconName } from '@/components/icon/icons';
 import { useI18n } from '@/lib/i18n';
-import { openExternalUrl } from '@/lib/url';
-import { cn } from '@/lib/utils';
-import { connectionNeedsAuth, type CredentialConnection } from './providerAuth';
 
-interface ProviderAccountsProps {
-  /** Stored credentials first, then environment variables the server can see. */
-  connections: readonly ConnectionInfo[];
-  /** The one credential requests go through, when a stored credential is in use. */
-  activeId: string | null;
-  /**
-   * Credentials stored under an integration the provider does not use right now
-   * (OpenCode Go keys while the Console sign-in serves Go). Removable, never switchable.
-   */
-  unusedIds: ReadonlySet<string>;
-  /** Credential id with a write in flight; every account action waits for it. */
-  busyId: string | null;
-  onActivate: (account: CredentialConnection) => void;
-  onRename: (account: CredentialConnection, label: string) => void;
-  onRemove: (account: CredentialConnection) => void;
-}
-
-const AccountTile: React.FC<{ icon: IconName }> = ({ icon }) => (
-  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-muted)] text-muted-foreground">
-    <Icon name={icon} className="size-4" />
-  </span>
-);
-
-/**
- * The line under an account: what OpenCode reported when the connection needs
- * a new sign-in, otherwise how the account connects.
- */
-const AccountSubtitle: React.FC<{ connection: ConnectionInfo; fallback: string }> = ({ connection, fallback }) => (
-  connectionNeedsAuth(connection) && connection.status ? (
-    <div className="typography-micro text-[var(--status-warning)] break-words">{connection.status.message}</div>
-  ) : (
-    <div className="typography-micro text-muted-foreground">{fallback}</div>
-  )
-);
-
-/** Opens the page OpenCode named for signing in again (an SSO login, for one). */
-const SignInAgainButton: React.FC<{ connection: ConnectionInfo; account: string }> = ({ connection, account }) => {
+export function ProviderAccounts({ roster, onMutate, disabled = false }: {
+  roster: Accounts; onMutate: (request: ProviderAccountMutationRequest) => Promise<void>; disabled?: boolean;
+}) {
   const { t } = useI18n();
-  const url = connectionNeedsAuth(connection) ? connection.status?.url : undefined;
-  if (!url) return null;
-  return (
-    <Button
-      variant="outline"
-      size="xs"
-      onClick={() => { void openExternalUrl(url); }}
-      aria-label={t('settings.providers.accounts.signInAria', { account })}
-    >
-      {t('settings.providers.accounts.signIn')}
-    </Button>
-  );
-};
-
-const RenameField: React.FC<{
-  initial: string;
-  onSave: (label: string) => void;
-  onCancel: () => void;
-}> = ({ initial, onSave, onCancel }) => {
-  const { t } = useI18n();
-  const [value, setValue] = React.useState(initial);
-  const trimmed = value.trim();
-  const save = () => {
-    if (trimmed.length === 0 || trimmed === initial) {
-      onCancel();
-      return;
-    }
-    onSave(trimmed);
+  const [editing, setEditing] = React.useState<string | null>(null);
+  const [label, setLabel] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const mutate = async (request: ProviderAccountMutationRequest) => {
+    if (busy || disabled) return;
+    setBusy(true); setError(null);
+    try { await onMutate(request); setEditing(null); }
+    catch { setError(t(request.action === 'label' ? 'settings.providers.accounts.toast.renameFailed'
+      : request.action === 'select' ? 'settings.providers.accounts.toast.switchFailed' : 'settings.providers.accounts.toast.removeFailed')); }
+    finally { setBusy(false); }
   };
-
-  return (
-    <form
-      className="flex min-w-0 flex-1 items-center gap-2"
-      onSubmit={(event) => {
-        event.preventDefault();
-        save();
-      }}
-    >
-      <Input
-        autoFocus
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation();
-            onCancel();
-          }
-        }}
-        aria-label={t('settings.providers.accounts.nameAria')}
-        className="h-8 max-w-[18rem]"
-      />
-      <Button type="submit" size="xs">{t('settings.providers.accounts.save')}</Button>
-      <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
-        {t('settings.providers.page.actions.cancel')}
-      </Button>
-    </form>
-  );
-};
-
-/** Stored accounts and environment connections for one provider. */
-export const ProviderAccounts: React.FC<ProviderAccountsProps> = ({
-  connections,
-  activeId,
-  unusedIds,
-  busyId,
-  onActivate,
-  onRename,
-  onRemove,
-}) => {
-  const { t } = useI18n();
-  const [renamingId, setRenamingId] = React.useState<string | null>(null);
-  const switchableCount = connections.filter(
-    (connection) => connection.type === 'credential' && !unusedIds.has(connection.id),
-  ).length;
-  // With a single usable account there is nothing to switch between, so it
-  // carries no Use button; the Active mark still shows when idle ones sit next to it.
-  const canSwitch = switchableCount > 1;
-  const showActive = connections.filter((connection) => connection.type === 'credential').length > 1;
-
-  return (
-    <div className="divide-y divide-[var(--surface-subtle)]">
-      {connections.map((connection) => {
-        if (connection.type === 'env') {
-          return (
-            <div key={`env:${connection.name}`} className="flex min-w-0 items-center gap-3 py-2.5">
-              <AccountTile icon="terminal-box" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-mono typography-ui-label text-foreground">{connection.name}</div>
-                <AccountSubtitle connection={connection} fallback={t('settings.providers.accounts.environment')} />
-              </div>
-              <SignInAgainButton connection={connection} account={connection.name} />
-            </div>
-          );
-        }
-
-        const active = connection.id === activeId;
-        const unused = unusedIds.has(connection.id);
-        const busy = busyId !== null;
-        const methodLabel = connection.method === 'oauth'
-          ? (unused ? t('settings.providers.accounts.method.oauthUnused') : t('settings.providers.accounts.method.oauth'))
-          : connection.method === 'external'
-            ? (unused ? t('settings.providers.accounts.method.externalUnused') : t('settings.providers.accounts.method.external'))
-            : (unused ? t('settings.providers.accounts.method.keyUnused') : t('settings.providers.accounts.method.key'));
-        // An external credential (a cloud CLI login or profile) lives outside OpenCode's store.
-        const methodIcon = connection.method === 'oauth' ? 'user-3' : connection.method === 'external' ? 'terminal-box' : 'key';
-
-        return (
-          <div key={connection.id} className={cn('flex min-w-0 items-center gap-3 py-2.5', unused && 'opacity-60')}>
-            <AccountTile icon={methodIcon} />
-            {renamingId === connection.id ? (
-              <RenameField
-                initial={connection.label}
-                onCancel={() => setRenamingId(null)}
-                onSave={(label) => {
-                  setRenamingId(null);
-                  onRename(connection, label);
-                }}
-              />
-            ) : (
-              <>
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="truncate typography-ui-label font-medium text-foreground">{connection.label}</span>
-                    {showActive && active ? (
-                      <span className="shrink-0 rounded-full bg-[var(--interactive-selection)] px-2 py-px text-[10px] font-medium text-[var(--interactive-selection-foreground)]">
-                        {t('settings.providers.accounts.active')}
-                      </span>
-                    ) : null}
-                  </div>
-                  <AccountSubtitle connection={connection} fallback={methodLabel} />
-                </div>
-                <SignInAgainButton connection={connection} account={connection.label} />
-                {canSwitch && !active && !unused ? (
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    disabled={busy}
-                    onClick={() => onActivate(connection)}
-                    aria-label={t('settings.providers.accounts.useAria', { account: connection.label })}
-                  >
-                    {busyId === connection.id ? <Icon name="loader-4" className="size-3.5 animate-spin" /> : null}
-                    {t('settings.providers.accounts.use')}
-                  </Button>
-                ) : null}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={busy}
-                      className={cn(SETTINGS_ICON_BUTTON_CLASS, 'shrink-0')}
-                      aria-label={t('settings.providers.accounts.menuAria', { account: connection.label })}
-                    >
-                      <Icon name="more-2" className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setRenamingId(connection.id)}>
-                      <Icon name="pencil" className="size-4" />
-                      {t('settings.providers.accounts.rename')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onSelect={() => onRemove(connection)}
-                    >
-                      <Icon name="delete-bin" className="size-4" />
-                      {t('settings.providers.accounts.remove')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
+  return <div className="space-y-3">
+    {roster.accounts.map((account, index) => {
+      const name = account.label || account.email || account.accountId || `${t(account.method === 'oauth' ? 'settings.providers.accounts.method.oauth' : 'settings.providers.accounts.method.key')} ${index + 1}`;
+      return <div key={account.credentialRef} className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+        <div className="min-w-36 flex-1">
+          <p className="break-words text-sm font-medium">{name}</p>
+          <p className="text-xs text-muted-foreground">{t(account.active ? 'settings.providers.accounts.active'
+            : account.method === 'oauth' ? 'settings.providers.accounts.method.oauthUnused' : 'settings.providers.accounts.method.keyUnused')}</p>
+        </div>
+        {editing === account.credentialRef ? <form className="flex flex-wrap gap-2" onSubmit={(event) => {
+          event.preventDefault();
+          void mutate({ action: 'label', expectedRevision: roster.revision, credentialRef: account.credentialRef, label });
+        }}>
+          <Input aria-label={t('settings.providers.accounts.nameAria')} autoFocus maxLength={128} disabled={busy || disabled} value={label} onChange={(event) => setLabel(event.target.value)} />
+          <Button type="submit" size="sm" disabled={busy || disabled}>{t('settings.providers.accounts.save')}</Button>
+          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setEditing(null)}>{t('settings.providers.page.actions.cancel')}</Button>
+        </form> : <>
+          {!account.active && <Button type="button" size="sm" variant="outline" disabled={busy || disabled || account.disabled}
+            aria-label={t('settings.providers.accounts.useAria', { account: name })}
+            onClick={() => void mutate({ action: 'select', expectedRevision: roster.revision, credentialRef: account.credentialRef })}>{t('settings.providers.accounts.use')}</Button>}
+          <Button type="button" size="sm" variant="ghost" disabled={busy || disabled} onClick={() => { setEditing(account.credentialRef); setLabel(account.label ?? ''); }}>{t('settings.providers.accounts.rename')}</Button>
+          <Button type="button" size="sm" variant="ghost" disabled={busy || disabled}
+            onClick={() => void mutate({ action: 'remove', expectedRevision: roster.revision, credentialRef: account.credentialRef })}>{t('settings.providers.accounts.remove')}</Button>
+        </>}
+      </div>;
+    })}
+    {error && <p role="alert" className="text-sm text-[var(--status-error)]">{error}</p>}
+  </div>;
+}

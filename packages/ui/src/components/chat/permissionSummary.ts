@@ -94,7 +94,7 @@ export const summarizePermission = (
     }
     case 'webfetch':
       return { titleKey: 'chat.permissionCard.summary.webfetch', targets: [], metadataExplained: true };
-    case 'websearch':
+    case 'web_search':
       return { titleKey: 'chat.permissionCard.summary.websearch', targets: textTargets(resources, false), metadataExplained: true };
     case 'skill':
       return { titleKey: 'chat.permissionCard.summary.skill', targets: textTargets(resources, false), metadataExplained: true };

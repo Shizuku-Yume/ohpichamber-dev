@@ -77,10 +77,10 @@ const result: ToolResultPart = {
   partId: 'result_tasks_list',
   toolCallId: 'call_tasks_list',
   toolName: 'mcp.tasks.list',
-  output: JSON.stringify({ total: 2, items: [
+  output: { content: [{ type: 'text', text: JSON.stringify({ total: 2, items: [
     { id: 'DEMO-1', title: 'Write docs', assignee: { name: 'Ada' } },
     { id: 'DEMO-2', title: 'Ship it' },
-  ] }),
+  ] }) }] },
   isError: false,
 };
 
@@ -120,7 +120,7 @@ test('a declared tool rule sets the header, icon, and table body of a matching t
         <SyncProvider directory="">
           <I18nProvider>
             <ThemeSystemContext.Provider value={themeContext}>
-              <ToolPart part={part} isExpanded isMobile={false} onToggle={() => {}} />
+              <ToolPart part={result} pairedCall={part} isExpanded isMobile={false} onToggle={() => {}} />
             </ThemeSystemContext.Provider>
           </I18nProvider>
         </SyncProvider>,

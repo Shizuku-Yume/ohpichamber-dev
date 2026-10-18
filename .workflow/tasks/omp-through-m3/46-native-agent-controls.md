@@ -18,7 +18,7 @@
 - Map agent profile model binding to native `providerId`/`modelId`.
 - Drive favorites and cycling via native `agentId` and `name`.
 - Retire legacy `mode`, `hidden`, and `displayName` filtering per `decisions.md: 2026-10-18 - Canonical agent profiles are the selectable UI roster`.
-- Treat legacy per-agent HTTP sampling as read-only tooltip metadata; native `Agent` defines no sampling fields.
+- Retire legacy sampling tooltip metadata; invent no Canonical sampling fields. Native per-profile model/variant selection is retained, and tool availability is distinct from authorization.
 - Display native `allowedTools` tool availability and `permissionPresetId`. Never equate `allowedTools` membership to authorization allow/deny rules.
 - Retain Host approval edit mode controls unchanged; the native SDK owns authorization policy without client-side `PermissionRuleset` simulation.
 - Remove duplicate legacy agent loading and state from `useConfigStore`, `useOpenCodeReadiness.ts`, and `App.tsx` startup sequence, stopping legacy `/api/agent` polling loops.

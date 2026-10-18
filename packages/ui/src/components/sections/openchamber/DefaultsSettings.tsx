@@ -20,7 +20,8 @@ import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useAgentsStore } from '@/stores/useAgentsStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSelectionStore } from '@/sync/selection-store';
@@ -29,7 +30,6 @@ import { useI18n } from '@/lib/i18n';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 
 const getDisplayModel = (
   storedModel: string | undefined
@@ -64,10 +64,11 @@ const getDisplayModel = (
   const agentIsPicked = useConfigStore((state) => state.agentSelectionSource === 'manual');
   // An agent picked for this chat brings the model its config pins, and a pin
   // outranks the global default the same way it does in `setAgent`.
-  const agents = useAgentsStore((state) => state.agents);
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
   const pickedAgentPinsModel = useConfigStore((state) => {
     if (state.agentSelectionSource !== 'manual') return false;
-    const agent = agents.find((candidate) => candidate.name === state.currentAgentName);
+    const agent = agents.find((candidate) => candidate.agentId === state.currentAgentName);
     return Boolean(agent?.model?.providerId && agent.model.modelId);
   });
   const chatHasOwnModel = Boolean(
@@ -358,9 +359,8 @@ const getDisplayModel = (
               label={t('settings.openchamber.defaults.field.defaultAgent')}
             >
               <AgentSelector
-                agentName={defaultAgent || ''}
+                agentId={defaultAgent || ''}
                 onChange={handleAgentChange}
-                filter={(agent) => isPrimaryMode(agent.mode)}
                 className={SETTINGS_CUSTOM_TRIGGER_CLASS}
               />
             </SettingsFieldRow>

@@ -1,6 +1,9 @@
+import { nativeProvidersI18n } from './native-providers.i18n';
+
 /** Providers settings strings (card grid, provider accounts) — merged into each locale's main dictionary. */
 export const providersI18n = {
   en: {
+    ...nativeProvidersI18n.en,
     'settings.providers.grid.description': 'Model providers OpenCode can use. Open one to manage its accounts and models.',
     'settings.providers.enterpriseTitle': 'Enterprise mode',
     'settings.providers.enterpriseManagedBy': 'Managed by {organization}.',
@@ -57,6 +60,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': 'Couldn’t rename the account',
   },
   nl: {
+    ...nativeProvidersI18n.nl,
     'settings.providers.enterpriseTitle': 'Enterprise-modus',
     'settings.providers.enterpriseManagedBy': 'Beheerd door {organization}.',
     'settings.providers.enterprisePolicyUnreadable': 'Het beleidsbestand op deze computer kon niet worden gelezen, dus de enterprise-modus blijft aan. Vraag uw beheerder het te controleren.',
@@ -113,6 +117,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': 'Kan het account niet hernoemen',
   },
   uk: {
+    ...nativeProvidersI18n.uk,
     'settings.providers.grid.description': 'Провайдери моделей, якими може користуватися OpenCode. Відкрийте провайдера, щоб керувати його акаунтами й моделями.',
     'settings.providers.enterpriseTitle': 'Режим enterprise',
     'settings.providers.enterpriseManagedBy': 'Керує {organization}.',
@@ -169,6 +174,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': 'Не вдалося перейменувати акаунт',
   },
   de: {
+    ...nativeProvidersI18n.de,
     'settings.providers.grid.description': 'Modellanbieter, die OpenCode nutzen kann. Öffne einen, um seine Konten und Modelle zu verwalten.',
     'settings.providers.enterpriseTitle': 'Enterprise-Modus',
     'settings.providers.enterpriseManagedBy': 'Verwaltet von {organization}.',
@@ -225,6 +231,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': 'Konto konnte nicht umbenannt werden',
   },
   es: {
+    ...nativeProvidersI18n.es,
     'settings.providers.grid.description': 'Proveedores de modelos que OpenCode puede usar. Abre uno para gestionar sus cuentas y modelos.',
     'settings.providers.enterpriseTitle': 'Modo empresa',
     'settings.providers.enterpriseManagedBy': 'Gestionado por {organization}.',
@@ -281,6 +288,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': 'No se pudo renombrar la cuenta',
   },
   fr: {
+    ...nativeProvidersI18n.fr,
     'settings.providers.grid.description': 'Les fournisseurs de modèles qu’OpenCode peut utiliser. Ouvrez-en un pour gérer ses comptes et ses modèles.',
     'settings.providers.enterpriseTitle': 'Mode entreprise',
     'settings.providers.enterpriseManagedBy': 'Géré par {organization}.',
@@ -337,6 +345,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': 'Impossible de renommer le compte',
   },
   ja: {
+    ...nativeProvidersI18n.ja,
     'settings.providers.grid.description': 'OpenCode が使えるモデルプロバイダーです。開くとアカウントとモデルを管理できます。',
     'settings.providers.enterpriseTitle': 'エンタープライズモード',
     'settings.providers.enterpriseManagedBy': '{organization} が管理しています。',
@@ -393,6 +402,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': 'アカウント名を変更できませんでした',
   },
   ko: {
+    ...nativeProvidersI18n.ko,
     'settings.providers.grid.description': 'OpenCode가 사용할 수 있는 모델 제공자입니다. 열어서 계정과 모델을 관리하세요.',
     'settings.providers.enterpriseTitle': '엔터프라이즈 모드',
     'settings.providers.enterpriseManagedBy': '{organization}에서 관리합니다.',
@@ -449,6 +459,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': '계정 이름을 변경하지 못했습니다',
   },
   pl: {
+    ...nativeProvidersI18n.pl,
     'settings.providers.grid.description': 'Dostawcy modeli, z których może korzystać OpenCode. Otwórz dostawcę, aby zarządzać jego kontami i modelami.',
     'settings.providers.enterpriseTitle': 'Tryb enterprise',
     'settings.providers.enterpriseManagedBy': 'Zarządzane przez {organization}.',
@@ -505,6 +516,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': 'Nie udało się zmienić nazwy konta',
   },
   'pt-BR': {
+    ...nativeProvidersI18n['pt-BR'],
     'settings.providers.grid.description': 'Provedores de modelos que o OpenCode pode usar. Abra um para gerenciar suas contas e modelos.',
     'settings.providers.enterpriseTitle': 'Modo empresarial',
     'settings.providers.enterpriseManagedBy': 'Gerenciado por {organization}.',
@@ -561,6 +573,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': 'Não foi possível renomear a conta',
   },
   tr: {
+    ...nativeProvidersI18n.tr,
     'settings.providers.grid.description': 'OpenCode’un kullanabileceği model sağlayıcıları. Hesaplarını ve modellerini yönetmek için birini açın.',
     'settings.providers.enterpriseTitle': 'Kurumsal mod',
     'settings.providers.enterpriseManagedBy': '{organization} tarafından yönetiliyor.',
@@ -617,6 +630,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': 'Hesap yeniden adlandırılamadı',
   },
   'zh-CN': {
+    ...nativeProvidersI18n['zh-CN'],
     'settings.providers.grid.description': 'OpenCode 可以使用的模型提供商。打开一个即可管理它的账号和模型。',
     'settings.providers.enterpriseTitle': '企业模式',
     'settings.providers.enterpriseManagedBy': '由 {organization} 管理。',
@@ -673,6 +687,7 @@ export const providersI18n = {
     'settings.providers.accounts.toast.renameFailed': '无法重命名账号',
   },
   'zh-TW': {
+    ...nativeProvidersI18n['zh-TW'],
     'settings.providers.grid.description': 'OpenCode 可以使用的模型供應商。開啟一個即可管理它的帳號和模型。',
     'settings.providers.enterpriseTitle': '企業模式',
     'settings.providers.enterpriseManagedBy': '由 {organization} 管理。',

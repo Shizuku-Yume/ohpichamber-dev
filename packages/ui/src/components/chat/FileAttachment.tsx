@@ -1,14 +1,15 @@
 import React, { useRef, memo } from 'react';
+import type { AttachmentPart, Part } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useDraftAttachedFiles, useInputStore } from '@/sync/input-store';
 import type { ChatDraftIdentity } from '@/lib/chatDraftPersistence';
 import type { AttachedFile } from '@/sync/session-ui-store';
 import { useUIStore } from '@/stores/useUIStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { openExternalUrl } from '@/lib/url';
 import { formatFileSize } from '@/lib/fileSize';
-import { getLanguageFromExtension, isDrawioFile, isExcalidrawFile } from '@/lib/toolHelpers';
+import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
@@ -118,12 +119,6 @@ const ImagePreview = memo(({ file, onRemove, onShowPopup, gallery, index = 0 }: 
       open: true,
       title: displayName || 'Image',
       content: '',
-      metadata: {
-        tool: 'image-preview',
-        filename: displayName,
-        mime: file.mimeType,
-        size: file.size,
-      },
       image: {
         url: imageUrl,
         mimeType: file.mimeType,
@@ -322,426 +317,161 @@ export const AttachedFilesList = memo(({ onShowPopup, className, draftIdentity }
 
 AttachedFilesList.displayName = 'AttachedFilesList';
 
-interface FilePart {
-  type: string;
-  mime?: string;
-  url?: string;
-  filename?: string;
-  size?: number;
-  source?: Record<string, unknown>;
-}
+const NativeAttachmentThumbnail = memo(({ part, workspaceId, runtimeKey, compact, onReady, onOpen }: {
+  part: AttachmentPart;
+  workspaceId: string | undefined;
+  runtimeKey: string;
+  compact: boolean;
+  onReady: (attachmentId: string, url: string | null) => void;
+  onOpen: () => void;
+}) => {
+  const { t } = useI18n();
+  const [state, setState] = React.useState<{ kind: 'loading' } | { kind: 'ready'; url: string } | { kind: 'failed' }>({ kind: 'loading' });
+  React.useEffect(() => {
+    if (!workspaceId) {
+      setState({ kind: 'failed' });
+      return;
+    }
+    let active = true;
+    let objectUrl: string | undefined;
+    void canonicalClient.readAttachment(workspaceId, part.attachmentId).then((blob) => {
+      if (!active || getRuntimeKey() !== runtimeKey) return;
+      objectUrl = URL.createObjectURL(blob);
+      setState({ kind: 'ready', url: objectUrl });
+      onReady(part.attachmentId, objectUrl);
+    }).catch(() => {
+      if (active && getRuntimeKey() === runtimeKey) setState({ kind: 'failed' });
+    });
+    return () => {
+      active = false;
+      if (objectUrl) {
+        onReady(part.attachmentId, null);
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [workspaceId, runtimeKey, part.attachmentId, onReady]);
+  return (
+    <button type="button" aria-label={part.name} disabled={state.kind !== 'ready'} onClick={onOpen}
+      title={state.kind === 'failed' ? t('filesView.error.readFileFailed') : part.name}
+      className={cn('relative border border-border/40 bg-muted/10 overflow-hidden rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', compact ? 'flex-none h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16' : 'aspect-video w-full')}>
+      {state.kind === 'ready' ? (
+        <img src={state.url} alt={part.name} className="h-full w-full object-cover" loading="lazy" />
+      ) : (
+        <span className="flex h-full items-center justify-center text-muted-foreground"><Icon name="file-image" className="h-6 w-6" /></span>
+      )}
+      <span className="sr-only">{state.kind === 'failed' ? t('filesView.error.readFileFailed') : part.name}</span>
+    </button>
+  );
+});
 
-const GITHUB_ISSUE_LINK_MIME = 'application/vnd.github.issue-link';
-const GITLAB_ISSUE_LINK_MIME = 'application/vnd.openchamber.gitlab-issue-link';
-const GITHUB_PR_LINK_MIME = 'application/vnd.github.pull-request-link';
-const LINEAR_ISSUE_LINK_MIME = 'application/vnd.openchamber.linear-issue-link';
-const GUEST_ISSUE_LINK_MIME = 'application/vnd.openchamber.guest-issue-link';
-const GUEST_PR_LINK_MIME = 'application/vnd.openchamber.guest-pr-link';
-
-type IssueLinkKind = 'github-issue' | 'gitlab-issue' | 'github-pr' | 'linear-issue' | 'guest-issue' | 'guest-pr';
-
-const getIssueLinkKind = (file: FilePart): IssueLinkKind | null => {
-  if (file.mime === GITHUB_ISSUE_LINK_MIME) {
-    return 'github-issue';
-  }
-  if (file.mime === GITLAB_ISSUE_LINK_MIME) {
-    return 'gitlab-issue';
-  }
-  if (file.mime === GITHUB_PR_LINK_MIME) {
-    return 'github-pr';
-  }
-  if (file.mime === LINEAR_ISSUE_LINK_MIME) {
-    return 'linear-issue';
-  }
-  if (file.mime === GUEST_ISSUE_LINK_MIME) {
-    return 'guest-issue';
-  }
-  if (file.mime === GUEST_PR_LINK_MIME) {
-    return 'guest-pr';
-  }
-  return null;
-};
-
-const issueLinkIcon = (kind: IssueLinkKind): 'github' | 'gitlab' | 'git-pull-request' | 'linear' | 'attachment-2' => {
-  if (kind === 'github-pr' || kind === 'guest-pr') return 'git-pull-request';
-  if (kind === 'gitlab-issue') return 'gitlab';
-  if (kind === 'linear-issue') return 'linear';
-  if (kind === 'guest-issue') return 'attachment-2';
-  return 'github';
-};
-
-const TEXT_LIKE_MIME_PREFIXES = ['text/', 'application/json'];
-
-const isTextLikeFile = (file: FilePart): boolean => {
-  const mime = file.mime;
-  return mime !== undefined && TEXT_LIKE_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix));
-};
-
-/**
- * Decodes the base64 data URL the message pipeline stores for pasted files
- * (`data:<mime>;base64,<data>`) into UTF-8 text. Returns null for any other
- * URL shape, which keeps remote-URI attachments on the image-dialog path.
- */
-const decodeDataUrlText = (url: string): string | null => {
-  const match = /^data:[^,]*;base64,(.+)$/.exec(url);
-  if (!match) return null;
-  try {
-    const bytes = Uint8Array.from(atob(match[1]), (char) => char.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  } catch {
-    return null;
-  }
-};
+NativeAttachmentThumbnail.displayName = 'NativeAttachmentThumbnail';
 
 interface MessageFilesDisplayProps {
-  files: FilePart[];
+  files: readonly Part[];
+  workspaceId: string | undefined;
   onShowPopup?: (content: ToolPopupContent) => void;
   compact?: boolean;
-  /** Compact only: replaces the default top margin, for placement above content. */
   className?: string;
 }
 
-export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false, className }: MessageFilesDisplayProps) => {
+export const MessageFilesDisplay = memo(({ files, workspaceId, onShowPopup, compact = false, className }: MessageFilesDisplayProps) => {
   const { t } = useI18n();
-
-  const fileItems = files.filter(f => f.type === 'file' && (f.mime || f.url));
-
-  const extractFilename = (path?: string): string => {
-    if (!path) return 'Unnamed file';
-
-    const normalized = path.replace(/\\/g, '/');
-    const parts = normalized.split('/');
-    const filename = parts[parts.length - 1];
-
-    return filename || path;
-  };
-
-  const resolveDisplayName = React.useCallback((file: FilePart): string => {
-    const isGitHubLink = getIssueLinkKind(file) !== null;
-    if (isGitHubLink && typeof file.filename === 'string' && file.filename.trim().length > 0) {
-      return file.filename.trim();
-    }
-    return extractFilename(file.filename || file.url);
+  const runtimeKey = React.useSyncExternalStore(subscribeRuntimeEndpointChanged, getRuntimeKey, getRuntimeKey);
+  const scope = JSON.stringify([runtimeKey, workspaceId]);
+  const attachments = files.filter((part): part is AttachmentPart => part.type === 'attachment');
+  const currentFiles = React.useRef(files);
+  currentFiles.current = files;
+  const [images, setImages] = React.useState<{ scope: string; urls: Map<string, string> }>(() => ({ scope, urls: new Map() }));
+  const popupUrl = React.useRef<{ attachmentId: string; url: string } | null>(null);
+  const clearPopupUrl = React.useCallback(() => {
+    if (popupUrl.current) URL.revokeObjectURL(popupUrl.current.url);
+    popupUrl.current = null;
   }, []);
-
-  const imageFiles = fileItems.filter(f => f.mime?.startsWith('image/') && f.url);
-  const otherFiles = fileItems.filter(f => !f.mime?.startsWith('image/'));
-
-  const imageGallery = React.useMemo(
-    () =>
-      imageFiles.flatMap((file) => {
-        if (!file.url) return [];
-        const filename = resolveDisplayName(file) || 'Image';
-        return [{
-          url: file.url,
-          mimeType: file.mime,
-          filename,
-          size: file.size,
-        }];
-      }),
-    [imageFiles, resolveDisplayName]
-  );
-
-  const handleImageClick = React.useCallback((index: number) => {
-    if (!onShowPopup) {
-      return;
-    }
-
-    const file = imageGallery[index];
-    if (!file?.url) return;
-
-    const filename = file.filename || 'Image';
-
-    onShowPopup({
-      open: true,
-      title: filename,
-      content: '',
-      metadata: {
-        tool: 'image-preview',
-        filename,
-        mime: file.mimeType,
-        size: file.size,
-      },
-      image: {
-        url: file.url,
-        mimeType: file.mimeType,
-        filename,
-        size: file.size,
-        gallery: imageGallery,
-        index,
-      },
+  const generation = React.useRef(0);
+  React.useEffect(() => {
+    generation.current += 1;
+    return () => {
+      generation.current += 1;
+      clearPopupUrl();
+    };
+  }, [scope, clearPopupUrl]);
+  React.useEffect(() => {
+    const popup = popupUrl.current;
+    if (popup && !files.some((part) => part.type === 'attachment' && part.attachmentId === popup.attachmentId)) clearPopupUrl();
+  }, [files, clearPopupUrl]);
+  const onImageReady = React.useCallback((attachmentId: string, url: string | null) => {
+    setImages((current) => {
+      const urls = new Map(current.scope === scope ? current.urls : []);
+      if (url) urls.set(attachmentId, url);
+      else urls.delete(attachmentId);
+      return { scope, urls };
     });
-  }, [imageGallery, onShowPopup]);
-
-  const showFilePopup = React.useCallback((file: FilePart, fileName: string) => {
-    if (!onShowPopup || !file.url) {
+  }, [scope]);
+  const openImage = (attachmentId: string) => {
+    if (!onShowPopup || images.scope !== scope) return;
+    const gallery = attachments.flatMap((part) => {
+      const url = images.urls.get(part.attachmentId);
+      return url ? [{ url, mimeType: part.mediaType, filename: part.name, size: part.size }] : [];
+    });
+    const url = images.urls.get(attachmentId);
+    const index = gallery.findIndex((image) => image.url === url);
+    const image = gallery[index];
+    if (image) {
+      generation.current += 1;
+      clearPopupUrl();
+      onShowPopup({ open: true, title: image.filename, content: '', image: { ...image, gallery, index } });
+    }
+  };
+  const showFilePopup = async (part: AttachmentPart) => {
+    if (!onShowPopup) return;
+    if (!workspaceId) {
+      toast.error(t('filesView.error.readFileFailed'));
       return;
     }
-
-    if (isTextLikeFile(file)) {
-      const text = decodeDataUrlText(file.url);
-      if (text !== null) {
-        onShowPopup({
-          open: true,
-          title: fileName,
-          content: text,
-          language: getLanguageFromExtension(fileName) || undefined,
-        });
+    generation.current += 1;
+    const requestGeneration = generation.current;
+    const current = () => requestGeneration === generation.current && getRuntimeKey() === runtimeKey
+      && currentFiles.current.some((item) => item.type === 'attachment' && item.attachmentId === part.attachmentId);
+    try {
+      const blob = await canonicalClient.readAttachment(workspaceId, part.attachmentId);
+      if (!current()) return;
+      if (part.mediaType.startsWith('text/') || part.mediaType === 'application/json') {
+        const content = await blob.text();
+        if (!current()) return;
+        clearPopupUrl();
+        onShowPopup({ open: true, title: part.name, content, language: getLanguageFromExtension(part.name) || undefined });
         return;
       }
+      clearPopupUrl();
+      const url = URL.createObjectURL(blob);
+      popupUrl.current = { attachmentId: part.attachmentId, url };
+      onShowPopup({ open: true, title: part.name, content: '', image: { url, mimeType: part.mediaType, filename: part.name, size: part.size } });
+    } catch {
+      if (current()) toast.error(t('filesView.error.readFileFailed'));
     }
-
-    onShowPopup({
-      open: true,
-      title: fileName,
-      content: '',
-      image: {
-        url: file.url,
-        mimeType: file.mime,
-        filename: fileName,
-      },
-    });
-  }, [onShowPopup]);
-
-  if (fileItems.length === 0) return null;
-
-  if (compact) {
-    return (
-      <div className={cn('space-y-1.5', className ?? 'mt-1.5')}>
-        {otherFiles.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {otherFiles.map((file, index) => {
-              const fileName = resolveDisplayName(file);
-              const ext = fileName.split('.').pop() || '';
-              const sizeText = formatFileSize(file.size);
-              const issueLinkKind = getIssueLinkKind(file);
-              return (
-                <Tooltip key={`file-${file.url || file.filename || index}`}>
-                  <TooltipTrigger asChild>
-                    {issueLinkKind && file.url ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void openExternalUrl(file.url || '');
-                        }}
-                        className="inline-flex items-center bg-muted/30 border border-border/30 typography-meta gap-1 px-2 py-0.5 rounded-lg text-foreground hover:text-primary transition-colors"
-                      >
-                        <Icon name={issueLinkIcon(issueLinkKind)} className="text-muted-foreground h-3.5 w-3.5" />
-                        <div className="overflow-hidden max-w-[220px]">
-                          <span className="truncate block" title={fileName}>{fileName}</span>
-                        </div>
-                      </button>
-                    ) : onShowPopup && file.url && isTextLikeFile(file) ? (
-                      <button
-                        type="button"
-                        onClick={() => showFilePopup(file, fileName)}
-                        className="inline-flex items-center bg-muted/30 border border-border/30 typography-meta gap-1 px-2 py-0.5 rounded-lg text-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-ring"
-                      >
-                        <FileTypeIcon filePath={fileName} extension={ext} className="text-muted-foreground h-3.5 w-3.5" />
-                        <div className="overflow-hidden max-w-[140px]">
-                          <span className="truncate block" title={fileName}>{fileName}</span>
-                        </div>
-                      </button>
-                    ) : (
-                      <div className="inline-flex items-center bg-muted/30 border border-border/30 typography-meta gap-1 px-2 py-0.5 rounded-lg">
-                        {file.mime?.includes('pdf') ? (
-                          <Icon name="file-pdf" className="text-muted-foreground h-3.5 w-3.5" />
-                        ) : (
-                          <FileTypeIcon filePath={fileName} extension={ext} className="text-muted-foreground h-3.5 w-3.5" />
-                        )}
-                        <div className="overflow-hidden max-w-[140px]">
-                          <span className="truncate block" title={fileName}>{fileName}</span>
-                        </div>
-                      </div>
-                    )}
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{fileName}{sizeText ? ` (${sizeText})` : ''}</p>
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })}
-          </div>
-        )}
-
-        {imageFiles.length > 0 && (
-          <div className="overflow-x-auto -mx-1 px-1 py-0.5 scrollbar-thin">
-            <div className="flex snap-x snap-mandatory gap-2">
-              {imageFiles.map((file, index) => {
-                const filename = resolveDisplayName(file) || 'Image';
-
-                return (
-                  <Tooltip key={`img-${file.url || file.filename || index}`}>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => handleImageClick(index)}
-                        className="relative flex-none border border-border/40 bg-muted/10 overflow-hidden snap-start h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-ring"
-                        aria-label={filename}
-                      >
-                        {file.url ? (
-                          <img
-                            src={file.url}
-                            alt={filename}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.visibility = 'hidden';
-                            }}
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center bg-muted/30 text-muted-foreground">
-                            <Icon name="file-image" className="h-6 w-6" />
-                          </div>
-                        )}
-                        <span className="sr-only">{filename}</span>
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={6} className="typography-meta px-2 py-1">
-                      {filename}
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
+  };
+  if (attachments.length === 0) return null;
   return (
-    <div className={cn(
-      "grid gap-2",
-      compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"
-    )}>
-      {fileItems.map((file, index) => {
-        const fileName = resolveDisplayName(file);
-        const isImage = file.mime?.startsWith('image/');
-        const sizeText = formatFileSize(file.size);
-        const issueLinkKind = getIssueLinkKind(file);
-
-        if (isImage && file.url) {
-          return (
-            <div
-              key={file.url || `${fileName}-${index}`}
-              className="relative aspect-video rounded-lg border border-border/40 bg-muted/10 overflow-hidden group"
-            >
-              <img
-                src={file.url}
-                alt={fileName}
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="absolute bottom-0 left-0 right-0 p-2 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                <p className="text-xs font-medium truncate">{fileName}</p>
-                {sizeText && <p className="text-xs opacity-80">{sizeText}</p>}
-              </div>
-            </div>
-          );
-        }
-
-        if (issueLinkKind && file.url) {
-          return (
-            <Tooltip key={file.url || `${fileName}-${index}`}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void openExternalUrl(file.url || '');
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/10 hover:bg-muted/20 transition-colors text-left",
-                    compact ? "text-xs" : "text-sm"
-                  )}
-                >
-                  <div className="flex-shrink-0">
-                    <Icon name={issueLinkIcon(issueLinkKind)} className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{fileName}</p>
-                    {sizeText && <p className="text-xs text-muted-foreground">{sizeText}</p>}
-                  </div>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{fileName}{sizeText ? ` (${sizeText})` : ''}</p>
-              </TooltipContent>
-            </Tooltip>
-          );
-        }
-
-        const source = file.source;
-        const sourceType = typeof source?.type === 'string' ? source.type : undefined;
-        const sourcePath = source && typeof (source as Record<string, unknown>).path === 'string' ? (source as Record<string, unknown>).path as string : undefined;
-        const filePath = sourceType === 'file' && sourcePath ? sourcePath : (file.url || '');
-        const opensInDiagramEditor = filePath && (isDrawioFile(filePath) || isExcalidrawFile(filePath));
-
-        if (opensInDiagramEditor) {
-          return (
-            <Tooltip key={file.url || `${fileName}-${index}`}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const directory = useDirectoryStore.getState().currentDirectory;
-                    if (directory) {
-                      useUIStore.getState().openContextFile(directory, filePath);
-                    }
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/10 hover:bg-muted/20 transition-colors text-left cursor-pointer",
-                    compact ? "text-xs" : "text-sm"
-                  )}
-                >
-                  <Icon name="file" className={cn("text-muted-foreground shrink-0", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{fileName}</p>
-                    <p className="text-xs text-status-info">{t('chat.fileAttachment.openInDiagram')}</p>
-                  </div>
-                  <Icon name="external-link" className={cn("text-muted-foreground shrink-0", compact ? "h-3 w-3" : "h-3.5 w-3.5")} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{t('chat.fileAttachment.openInDiagram')}</p>
-              </TooltipContent>
-            </Tooltip>
-          );
-        }
-
+    <div className={cn(compact ? 'flex flex-wrap items-center gap-1.5' : 'grid grid-cols-1 sm:grid-cols-2 gap-2', className ?? (compact ? 'mt-1.5' : undefined))}>
+      {attachments.map((part) => {
+        if (part.mediaType.startsWith('image/')) return (
+          <NativeAttachmentThumbnail key={`${scope}:${part.partId}`} part={part} workspaceId={workspaceId} runtimeKey={runtimeKey} compact={compact} onReady={onImageReady} onOpen={() => openImage(part.attachmentId)} />
+        );
+        const isText = part.mediaType.startsWith('text/') || part.mediaType === 'application/json';
+        const content = <>
+          {part.mediaType.includes('pdf') ? <Icon name="file-pdf" className="h-3.5 w-3.5 text-muted-foreground" /> : <FileTypeIcon filePath={part.name} extension={part.name.split('.').pop() || ''} className="h-3.5 w-3.5 text-muted-foreground" />}
+          <span className="max-w-[220px] truncate" title={part.name}>{part.name}</span>
+        </>;
         return (
-          <Tooltip key={file.url || `${fileName}-${index}`}>
+          <Tooltip key={part.partId}>
             <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => {
-                  showFilePopup(file, fileName);
-                }}
-                className={cn(
-                  "flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/10 hover:bg-muted/20 transition-colors text-left",
-                  compact ? "text-xs" : "text-sm"
-                )}
-              >
-                <div className="flex-shrink-0">
-                  {file.mime?.startsWith('image/') ? (
-                    <Icon name="file-image" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
-                  ) : file.mime?.includes('pdf') ? (
-                    <Icon name="file-pdf" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
-                  ) : (
-                    <Icon name="file" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{fileName}</p>
-                  {sizeText && <p className="text-xs text-muted-foreground">{sizeText}</p>}
-                </div>
-              </button>
+              {compact && !isText ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-border/30 bg-muted/30 typography-meta">{content}</span>
+              ) : (
+                <button type="button" onClick={() => { void showFilePopup(part); }} className={cn('inline-flex items-center gap-1 rounded-lg border border-border/30 bg-muted/30 hover:bg-muted/50', compact ? 'px-2 py-0.5 typography-meta' : 'gap-2 p-2 text-sm')}>{content}</button>
+              )}
             </TooltipTrigger>
-            <TooltipContent>
-              <p>{fileName}{sizeText ? ` (${sizeText})` : ''}</p>
-            </TooltipContent>
+            <TooltipContent>{part.name} ({formatFileSize(part.size)})</TooltipContent>
           </Tooltip>
         );
       })}

@@ -22,6 +22,12 @@
 
 **Status:** blocked
 
-## Blocked
+## Blocked (resolution specified in Task 46)
 
-`ModelControls.tsx` still reads legacy `Agent.permissions`, `Agent.request.body` sampling, `Agent.mode`, and OpenCode model identifiers. The canonical Agent schema exposes none of the permission-rule, sampling, or role fields and uses a different pinned-model shape. Evidence is recorded in `.workflow/omp-migration/m3/task39-modelcontrols-contract-blocked.json`. Keep the caller unchanged until a canonical owner is intentionally specified; do not add an adapter or silently remove the visible details.
+Historical audit: `ModelControls.tsx` previously read legacy `Agent.permissions`, `Agent.request.body` sampling, `Agent.mode`, and OpenCode model identifiers. The canonical Agent schema exposes none of the permission-rule, sampling, or role fields and uses a different pinned-model shape. Evidence is recorded in `.workflow/omp-migration/m3/task39-modelcontrols-contract-blocked.json`.
+
+Resolution: Task 46 (`.workflow/tasks/omp-through-m3/46-native-agent-controls.md`) and settled maintainer decisions (`decisions.md: 2026-10-18 - Canonical agent profiles are the selectable UI roster` and `decisions.md: 2026-10-18 - Native agent controls and ConfigStore catalog retirement`) resolve this contract boundary:
+- ModelControls and chat callers migrate to `useAgentsStore`, using canonical agent profiles as the selectable roster.
+- Native `allowedTools` indicates tool availability and `permissionPresetId` maps permission presets; client-side `PermissionRuleset` simulation is retired because Host approval and native SDK own authorization policy.
+- Legacy per-agent HTTP sampling was read-only tooltip metadata and is retired; profile defaults bind via `providerId`/`modelId`.
+- Task 39 remains tracked with `Status: blocked` in workflow sequencing until the coordinator archives/closes it alongside connected acceptance.

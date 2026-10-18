@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
@@ -58,7 +57,6 @@ function ReviewFlowDialogView({
 }: ReviewFlowDialogProps) {
   const { t } = useI18n();
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadConfigAgents = useConfigStore((state) => state.loadAgents);
   const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
@@ -76,9 +74,8 @@ function ReviewFlowDialogView({
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'reviewFlowDialog' });
-    void loadConfigAgents({ directory: projectDirectory });
-    void loadAgentsStoreAgents();
-  }, [open, loadProviders, loadConfigAgents, loadAgentsStoreAgents, projectDirectory]);
+    void loadAgentsStoreAgents(projectDirectory);
+  }, [open, loadProviders, loadAgentsStoreAgents, projectDirectory]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -101,7 +98,6 @@ function ReviewFlowDialogView({
     setExecution((prev) => ({ ...prev, providerId: provider?.providerId ?? '', modelId: hasModel ? prev.modelId : fallbackModelId, variant: '' }));
   }, [open, providers, execution.providerId, execution.modelId]);
 
-  const agentFilter = React.useCallback((agent: { mode?: string }) => isPrimaryMode(agent.mode), []);
 
   const variantOptions = React.useMemo(() => {
     const provider = providers.find((item) => item.providerId === execution.providerId);
@@ -196,8 +192,8 @@ function ReviewFlowDialogView({
           <div className="flex flex-col gap-1.5">
             <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
             <AgentSelector
-              agentName={execution.agentId}
-              filter={agentFilter}
+              agentId={execution.agentId}
+              directory={projectDirectory ?? undefined}
               dropdownPortalToBody
               onChange={(agent) => setExecution((prev) => ({ ...prev, agentId: agent }))}
             />

@@ -1,64 +1,110 @@
 import React from 'react';
-import { SettingsCheckboxRow } from '@/components/sections/shared/SettingsSection';
+import type { CacheWarmingApplyResult, CacheWarmingState } from '@openchamber/agent-contract';
+import { CacheWarmingPartialWriteDetailsSchema } from '@openchamber/agent-contract';
+import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
+import { SettingsCheckboxRow, SETTINGS_HELPER_CLASS } from '@/components/sections/shared/SettingsSection';
+import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n } from '@/lib/i18n';
-import { opencodeClient } from '@/lib/opencode/client';
 import { reportSettingsSaveState } from '@/lib/persistence';
-import { runtimeFetch } from '@/lib/runtime-fetch';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 
-/**
- * OpenCode's `warming` config key: keeps an idle session's prompt cache alive
- * with small keep-alive requests. The checkbox shows the effective value
- * OpenCode reports and writes through `PUT /api/config/warming`.
- */
-export const SessionWarmingCheckbox: React.FC = () => {
+const modeKeys = {
+  off: 'settings.openchamber.defaults.warming.off',
+  idle: 'settings.openchamber.defaults.warming.idle',
+  streaming: 'settings.openchamber.defaults.warming.streaming',
+} as const;
+const outcomeKeys = {
+  applied: 'settings.openchamber.defaults.warming.applied',
+  partial: 'settings.openchamber.defaults.warming.partial',
+  failed: 'settings.openchamber.defaults.warming.failed',
+  'no-active-workers': 'settings.openchamber.defaults.warming.noActiveWorkers',
+} as const;
+
+const WorkspaceWarming: React.FC<{ directory: string | null }> = ({ directory }) => {
   const { t } = useI18n();
-  const [enabled, setEnabled] = React.useState<boolean | null>(null);
-  const latestWrite = React.useRef(0);
+  const [persisted, setPersisted] = React.useState<CacheWarmingState | null>(null);
+  const [outcome, setOutcome] = React.useState<CacheWarmingApplyResult['status'] | null>(null);
+  const [error, setError] = React.useState(false);
+  const [partialWriteMode, setPartialWriteMode] = React.useState<CacheWarmingState['mode'] | null>(null);
+  const [saving, setSaving] = React.useState(false);
+  const owner = React.useRef<AbortController | null>(null);
+  const writing = React.useRef(false);
 
   React.useEffect(() => {
-    let cancelled = false;
-    opencodeClient.getConfig(null).then(
-      (config) => {
-        if (!cancelled && latestWrite.current === 0) setEnabled(Boolean(config.warming));
-      },
-      (error) => console.warn('[session-warming] failed to read config', error),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    const controller = new AbortController();
+    const runtimeKey = getRuntimeKey();
+    owner.current = controller;
+    const unsubscribe = subscribeRuntimeEndpointWillChange(() => controller.abort());
+    const current = () => !controller.signal.aborted && getRuntimeKey() === runtimeKey;
+    if (directory) {
+      void (async () => {
+        try {
+          const workspace = await canonicalClient.resolveWorkspace(directory);
+          if (!current()) return;
+          const state = await canonicalClient.readCacheWarming(workspace.workspaceId, controller.signal);
+          if (current()) setPersisted(state);
+        } catch {
+          if (current()) setError(true);
+        }
+      })();
+    }
+    return () => { controller.abort(); unsubscribe(); };
+  }, [directory]);
 
-  const handleChange = React.useCallback(async (next: boolean) => {
-    const previous = enabled;
-    const write = ++latestWrite.current;
-    setEnabled(next);
+  const handleChange = async (checked: boolean) => {
+    const controller = owner.current;
+    if (!persisted || partialWriteMode !== null || !controller || controller.signal.aborted || writing.current) return;
+    const runtimeKey = getRuntimeKey();
+    const current = () => !controller.signal.aborted && owner.current === controller && getRuntimeKey() === runtimeKey;
+    writing.current = true;
+    setSaving(true);
+    setError(false);
+    setOutcome(null);
     reportSettingsSaveState('saving');
     try {
-      const response = await runtimeFetch('/api/config/warming', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ enabled: next }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      reportSettingsSaveState('saved');
-      opencodeClient.clearConfigCache();
-    } catch (error) {
-      console.warn('[session-warming] failed to save', error);
+      const result = await canonicalClient.updateCacheWarming(persisted.workspaceId, {
+        expectedRevision: persisted.revision, mode: checked ? 'idle' : 'off',
+      }, controller.signal);
+      if (!current()) return;
+      setPersisted(result.persisted);
+      setOutcome(result.status);
+      reportSettingsSaveState(result.status === 'failed' || result.status === 'partial' ? 'error' : 'saved');
+    } catch (failure) {
+      if (!current()) return;
+      if (failure instanceof CanonicalApiError && failure.problem.code === 'SERVICE_UNAVAILABLE') {
+        const details = CacheWarmingPartialWriteDetailsSchema.safeParse(failure.problem.details);
+        if (details.success && details.data.workspaceId === persisted.workspaceId) {
+          setPartialWriteMode(details.data.configuredMode);
+        }
+      }
+      setError(true);
       reportSettingsSaveState('error');
-      if (write === latestWrite.current) setEnabled(previous);
+    } finally {
+      if (current()) { writing.current = false; setSaving(false); }
     }
-  }, [enabled]);
+  };
 
   return (
-    <SettingsCheckboxRow
-      settingsItem="sessions.warming"
-      checked={enabled ?? false}
-      disabled={enabled === null}
-      onChange={(checked) => {
-        void handleChange(checked);
-      }}
-      label={t('settings.openchamber.defaults.field.sessionWarming')}
-      info={t('settings.openchamber.defaults.field.sessionWarmingInfo')}
-    />
+    <div className="space-y-1">
+      <SettingsCheckboxRow
+        settingsItem="sessions.warming"
+        checked={partialWriteMode !== null ? partialWriteMode !== 'off' : persisted !== null && persisted.mode !== 'off'}
+        disabled={!persisted || partialWriteMode !== null || saving || owner.current?.signal.aborted}
+        onChange={(checked) => { void handleChange(checked); }}
+        label={t('settings.openchamber.defaults.field.sessionWarming')}
+        info={t('settings.openchamber.defaults.field.sessionWarmingInfo')}
+        description={partialWriteMode !== null ? t(modeKeys[partialWriteMode]) : persisted ? t(modeKeys[persisted.mode]) : error ? undefined : t(directory ? 'settings.openchamber.defaults.warming.loading' : 'settings.openchamber.defaults.warming.noWorkspace')}
+      />
+      <div className={SETTINGS_HELPER_CLASS} role="status" aria-live="polite">
+        {partialWriteMode !== null ? t('settings.openchamber.defaults.warming.partialWrite') : error ? t('settings.openchamber.defaults.warming.error') : outcome ? t(outcomeKeys[outcome]) : null}
+      </div>
+    </div>
   );
+};
+
+export const SessionWarmingCheckbox: React.FC = () => {
+  const directory = useSettingsDirectory();
+  const [runtimeEpoch, setRuntimeEpoch] = React.useState(0);
+  React.useEffect(() => subscribeRuntimeEndpointChanged(() => setRuntimeEpoch(epoch => epoch + 1)), []);
+  return <WorkspaceWarming key={JSON.stringify([runtimeEpoch, directory])} directory={directory} />;
 };

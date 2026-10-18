@@ -14,6 +14,10 @@ import type {
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
   QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
   ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult, StreamInvalidated,
+  ProviderAccounts, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderConfigurationRead,
+  CacheWarmingState, CacheWarmingApplyResult,
+  UsageStats, UsageToolsResponse,
+  WebSearchConfigState, WebSearchMutationResult,
 } from '@openchamber/agent-contract';
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
@@ -26,6 +30,7 @@ import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo } from 
 import { CatalogCoordinator, CatalogCoordinatorError } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
 import { WorkspaceRoutes } from './workspace-routes.ts';
+import { WebSearchCoordinator } from './websearch.ts';
 import { ShellCoordinator } from './shell.ts';
 import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema, HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
 import type { PrivateCredentialResolveResult, PrivateCredentialHandoffResult } from '../catalogs/private-credentials.ts';
@@ -71,7 +76,10 @@ type ServiceResponse =
   | SkillsCatalogState | SkillsApplyResult | SkillExpandResult | SkillInstallResult
   | ModelCatalog | ProviderCatalog | AgentCatalog
   | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
-  | CompletionResult | CompletionCancelResult
+  | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderConfigurationRead
+  | CacheWarmingState | CacheWarmingApplyResult
+  | WebSearchConfigState | WebSearchMutationResult
+  | CompletionResult | CompletionCancelResult | UsageStats | UsageToolsResponse
   | PrivateCredentialResolveResult | PrivateCredentialHandoffResult
   | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult;
 
@@ -114,6 +122,7 @@ export class AgentService {
   private readonly sessions: SessionRegistry;
   private readonly catalog: CatalogCoordinator;
   private readonly workspaceCatalogs: WorkspaceCatalogs;
+  private readonly webSearch: WebSearchCoordinator;
   private readonly workspaceRoutes: WorkspaceRoutes;
   private readonly shell: ShellCoordinator;
   private readonly observationEpoch = randomUUID();
@@ -155,7 +164,8 @@ export class AgentService {
       },
     });
     this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad);
-    this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers, this.catalog);
+    this.webSearch = new WebSearchCoordinator(this.workspaceCatalogs, this.workers);
+    this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers, this.catalog, this.sessions, options.stateDirectory, this.webSearch);
     this.shell = new ShellCoordinator(this.workers, this.sessions, this.observationEpoch, rootSessionId => {
       const input = this.workers.bootstrap(rootSessionId);
       return input !== undefined && this.workspaceCatalogs.matches(input);
@@ -171,7 +181,7 @@ export class AgentService {
     if (captured && (captured.workspaceId !== input.workspaceId || captured.projectId !== input.projectId || captured.cwd !== input.cwd || captured.agentDirectory !== input.agentDirectory || (input.agentDirectoryId !== undefined && captured.agentDirectoryId !== input.agentDirectoryId))) throw new WorkerOperationError(403, 'UNAUTHORIZED');
     const agentDirectoryId = await this.workspaceCatalogs.registerRoot(input);
     await this.catalog.registerWorkspace(input.workspaceId, agentDirectoryId);
-    return this.catalog.admit({ workspaceId: input.workspaceId, agentDirectoryId, catalogRevision: this.workspaceCatalogs.revision(input.workspaceId, agentDirectoryId) }, async authority => {
+    return this.webSearch.admit(agentDirectoryId, () => this.catalog.admit({ workspaceId: input.workspaceId, agentDirectoryId, catalogRevision: this.workspaceCatalogs.revision(input.workspaceId, agentDirectoryId) }, async authority => {
       const bootstrap = WorkerBootstrapSchema.parse({ ...input, ...authority, agentDirectoryId, observationEpoch: this.observationEpoch, mcpConfigPath: join(input.cwd, '.omp', 'mcp.json') });
       const result = await launch(bootstrap);
       try {
@@ -183,7 +193,7 @@ export class AgentService {
         await this.workers.stop(bootstrap.rootSessionId);
         throw error;
       }
-    });
+    }));
   }
   private async registerCatalogWorker(input: WorkerBootstrap, generation: string): Promise<void> {
     const root = input.rootSessionId;

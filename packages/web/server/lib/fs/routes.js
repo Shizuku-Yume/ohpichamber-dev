@@ -801,11 +801,22 @@ export const registerFsRoutes = (app, dependencies) => {
         if (!resolved.ok) {
           return res.status(400).json({ error: resolved.error });
         }
-        const [canonicalBase, canonicalTarget] = await Promise.all([
-          canonicalDirectoryPath(resolved.base, fsPromises, path),
-          canonicalDirectoryPath(resolved.resolved, fsPromises, path),
-        ]);
-        if (!isPathWithinRoot(canonicalTarget, canonicalBase, path, os)) {
+        const canonicalTarget = await canonicalDirectoryPath(resolved.resolved, fsPromises, path);
+        let authorized = false;
+        let resolutionError;
+        for (const root of [resolved.base, ...managedRoots]) {
+          try {
+            const canonicalRoot = await canonicalDirectoryPath(root, fsPromises, path);
+            if (isPathWithinRoot(canonicalTarget, canonicalRoot, path, os)) {
+              authorized = true;
+              break;
+            }
+          } catch (error) {
+            resolutionError ??= error;
+          }
+        }
+        if (!authorized) {
+          if (resolutionError) throw resolutionError;
           return res.status(400).json({ error: 'Path is outside of active workspace' });
         }
         resolvedPath = resolved.resolved;

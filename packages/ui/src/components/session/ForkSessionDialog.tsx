@@ -13,7 +13,6 @@ import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { EXECUTION_FORK_DEFAULT_INSTRUCTIONS, EXECUTION_FORK_GOAL_INSTRUCTIONS } from '@/lib/messages/executionMeta';
 import { useI18n } from '@/lib/i18n';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -52,7 +51,6 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   const ensureGitStatus = useGitStore((state) => state.ensureStatus);
 
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadConfigAgents = useConfigStore((state) => state.loadAgents);
   const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
@@ -84,9 +82,8 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'forkSessionDialog' });
-    void loadConfigAgents({ directory: projectDirectory });
-    void loadAgentsStoreAgents();
-  }, [open, loadProviders, loadConfigAgents, loadAgentsStoreAgents, projectDirectory]);
+    void loadAgentsStoreAgents(projectDirectory);
+  }, [open, loadProviders, loadAgentsStoreAgents, projectDirectory]);
 
   React.useEffect(() => {
     if (!open || !resolvedWorktreeProjectDirectory || !git) return;
@@ -123,7 +120,6 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
     setVariant('');
   }, [open, providers, providerID, modelID]);
 
-  const agentFilter = React.useCallback((candidate: { mode?: string }) => isPrimaryMode(candidate.mode), []);
 
   const variantOptions = React.useMemo(() => {
     const provider = providers.find((item) => item.providerId === providerID);
@@ -200,8 +196,8 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
           <div className="flex flex-col gap-1.5">
             <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
             <AgentSelector
-              agentName={agent}
-              filter={agentFilter}
+              agentId={agent}
+              directory={projectDirectory ?? undefined}
               dropdownPortalToBody
               onChange={setAgent}
             />

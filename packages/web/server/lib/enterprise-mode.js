@@ -37,6 +37,10 @@ import { z } from 'zod';
  *   routes and stays allowed.
  *   Canonical OMP credential-handoff preflight is also refused at use time
  *   (`host/canonical-routes.js`), without reading or importing credentials.
+ *   Native web-search credential writes are provider entry; configuration and
+ *   credential deletion remain allowed (`host/canonical-routes.js`). Actual
+ *   native search queries request use-time authorization and are refused
+ *   (`host/worker-operation-authorizer.js`), including self-hosted providers.
  * - Jev classification is off, unless the administrator pinned their own
  *   endpoint (`routing/runtime.js`).
  * - External tunnels are refused: their provider sees plain text (`tunnels`).

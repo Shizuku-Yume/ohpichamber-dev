@@ -99,7 +99,7 @@ const TOOL_BUCKETS = new Map<string, ToolBucket>(Object.entries({
     shell: 'command',
     execute: 'command',
     webfetch: 'lookup',
-    websearch: 'lookup',
+    web_search: 'lookup',
     codesearch: 'lookup',
     subagent: 'delegate',
     question: 'question',

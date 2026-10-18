@@ -22,7 +22,6 @@ import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
 import { useBrowserProviderSync } from '@/hooks/useBrowserProviderSync';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
-import { useIntegrationCatalogPrefetch } from '@/hooks/useIntegrationCatalogPrefetch';
 import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useRootScrollLock } from '@/hooks/useRootScrollLock';
@@ -211,12 +210,8 @@ function App({ apis }: AppProps) {
   const initializeApp = useConfigStore((s) => s.initializeApp);
   const isInitialized = useConfigStore((s) => s.isInitialized);
   const isConnected = useConfigStore((s) => s.isConnected);
-  // Loaded flags, not list lengths: a catalog shown from the persisted cache is
-  // not a live load, and recovery must keep trying until one succeeds.
   const providersLoaded = useConfigStore((state) => state.providersLoaded);
-  const agentsLoaded = useConfigStore((state) => state.agentsLoaded);
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgents = useConfigStore((state) => state.loadAgents);
   const error = useSessionUIStore((s) => s.error);
   const clearError = useSessionUIStore((s) => s.clearError);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -466,33 +461,23 @@ function App({ apis }: AppProps) {
     }
   }, [initRetryExhausted]);
 
-  // Startup recovery: poll until providers AND agents are loaded.
-  // loadProviders/loadAgents resolve normally even on failure (errors swallowed),
-  // so a reactive effect can't detect failure — we need an interval.
   React.useEffect(() => {
-    if (!isConnected) return;
-    if (providersLoaded && agentsLoaded) return;
-
-    let active = true;
+    if (!isConnected || providersLoaded) return;
     let retries = 0;
-    const MAX_RETRIES = 15;
-    const attempt = async () => {
-      const state = useConfigStore.getState();
-      if (state.providersLoaded && state.agentsLoaded) return;
-      try {
-        if (!state.providersLoaded) await loadProviders({ source: 'startupRecovery' });
-        if (!useConfigStore.getState().agentsLoaded) await loadAgents({ source: 'startupRecovery' });
-      } catch { /* retry next interval */ }
+    const attempt = () => {
+      if (!useConfigStore.getState().providersLoaded) void loadProviders({ source: 'startupRecovery' });
     };
-
-    void attempt();
+    attempt();
     const id = setInterval(() => {
-      if (!active) return;
-      if (++retries >= MAX_RETRIES) { clearInterval(id); return; }
-      void attempt();
+      if (++retries >= 15 || useConfigStore.getState().providersLoaded) {
+        clearInterval(id);
+        return;
+      }
+      attempt();
     }, 2000);
-    return () => { active = false; clearInterval(id); };
-  }, [isConnected, loadAgents, loadProviders, providersLoaded, agentsLoaded]);
+    return () => clearInterval(id);
+  }, [isConnected, loadProviders, providersLoaded]);
+
 
   React.useEffect(() => {
     if (isSwitchingDirectory) {
@@ -678,7 +663,6 @@ function App({ apis }: AppProps) {
   useBrowserProviderSync();
   useRoutingSync();
   useEnterprisePolicySync();
-  useIntegrationCatalogPrefetch(isInitialized && isConnected, runtimeEndpointEpoch);
   usePwaInstallPrompt();
 
   useWindowTitle();

@@ -7,7 +7,10 @@ describe('agentLabel', () => {
         expect(agentLabel({ name: 'code-reviewer' })).toBe('code-reviewer');
     });
 
-    test('does not synthesize a display field', () => {
-        expect(agentLabel({ name: 'build' })).toBe('build');
+    test('preserves the exact native label independently of agent identity', () => {
+        const first = { agentId: 'review-one', name: 'code reviewer' };
+        const second = { agentId: 'review-two', name: 'code reviewer' };
+        expect(agentLabel(first)).toBe('code reviewer');
+        expect(agentLabel(second)).toBe('code reviewer');
     });
 });

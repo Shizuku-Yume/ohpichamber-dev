@@ -72,6 +72,36 @@ afterEach(async () => {
 });
 
 describe('CanonicalClient real HTTP scope boundary', () => {
+  test('usage reads preserve canonical filters, explicit time bounds and honest nullable metrics', async () => {
+    const input: C.UsageQuery = { range: '7d', from: 1, to: 1000, timezone: 'America/New_York', workspaceId, projectId: 'project_expected' };
+    const stats: C.UsageStats = {
+      range: { from: 1, to: 1000 }, sessions: 1, subagents: 0, prompts: 1, steps: 1,
+      tokens: { input: 2, output: 3, reasoning: null, cacheRead: 0, cacheWrite: 0, total: 5 }, cost: 0,
+      tools: { mode: 'none' }, activeDays: 1, streak: 1, activity: [], models: [], partial: true,
+      errors: { session_bad: 'SESSION_READ_FAILED' },
+    };
+    respondWith(stats);
+    expect(await client.getUsageStats(input)).toEqual(stats);
+    const url = new URL(calls[0].slice(4), 'http://localhost');
+    expect(url.pathname).toBe('/api/agent/v1/usage');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ range: '7d', from: '1', to: '1000', timezone: 'America/New_York', workspaceId, projectId: 'project_expected' });
+    const tools: C.UsageToolsResponse = { totals: { calls: 1, succeeded: 0, failed: 0, unfinished: 1 },
+      usage: [{ name: 'read', calls: 1, succeeded: 0, failed: 0, unfinished: 1, durationP50: null }], partial: false };
+    respondWith(tools);
+    expect(await client.getUsageTools(input)).toEqual(tools);
+    expect(calls[1]).toContain('GET /api/agent/v1/usage/tools?');
+    respondWith({ ...stats, tokens: { ...stats.tokens, reasoning: 'unknown' } });
+    await expect(client.getUsageStats(input)).rejects.toThrow();
+  });
+
+  test('usage requests propagate aborts and reject malformed queries before transport', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(client.getUsageStats({ range: 'all', to: 1000, timezone: 'UTC' }, { signal: controller.signal })).rejects.toThrow();
+    expect(calls).toHaveLength(0);
+    expect(() => client.getUsageStats({ range: '7d', from: 10, to: 1, timezone: 'UTC' })).toThrow();
+    expect(calls).toHaveLength(0);
+  });
   test('validates canonical Agent Service readiness', async () => {
     respondWith({ ready: true, engine: 'omp', version: '1.0.0' });
     expect(await client.checkReady()).toBe(true);

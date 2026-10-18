@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { Agent } from '@/lib/opencode/model';
 import type { Model } from '@openchamber/agent-contract';
 import {
   type CachedProvider,
@@ -8,7 +7,6 @@ import {
   CATALOG_CACHE_SCHEMA,
   readCachedCatalog,
   resetCatalogCacheForTests,
-  shouldHoldFirstLoadAgainstCache,
   writeCachedCatalog,
   writeCachedCatalogWhenSettled,
 } from './configCatalogCache';
@@ -141,21 +139,6 @@ const zen: CachedProvider = {
   providerId: 'zen', name: 'Zen', endpoint: null, protocol: 'chat-completions', authMethods: ['api-key'], auth: { status: 'missing' }, models: [bigPickle],
 };
 
-const build: Agent = {
-  id: 'build',
-  name: 'build',
-  displayName: 'Build',
-  model: { id: 'big-pickle', providerID: 'zen' },
-  request: {
-    settings: { apiKey: SECRET },
-    headers: { Authorization: `Bearer ${SECRET}` },
-    body: { temperature: 0.2, topP: 0.9, api_key: SECRET },
-  },
-  system: `private prompt ${SECRET}`,
-  mode: 'primary',
-  hidden: false,
-  permissions: [{ action: 'edit', resource: '*', effect: 'ask' }],
-};
 
 describe('configCatalogCache', () => {
   test('a directory with nothing cached reads as missing', async () => {
@@ -163,7 +146,7 @@ describe('configCatalogCache', () => {
   });
 
   test('a written catalog reads back with what the pickers show', async () => {
-    await writeCachedCatalog('runtime-a', '/project', { providers: [zen], defaultProviders: { zen: 'big-pickle' }, agents: [build] });
+    await writeCachedCatalog('runtime-a', '/project', { providers: [zen], defaultProviders: { zen: 'big-pickle' } });
     const cached = await readCachedCatalog('runtime-a', '/project');
     expect(cached?.providers?.map((entry) => entry.providerId)).toEqual(['zen']);
     const model = cached?.providers?.[0]?.models[0];
@@ -172,15 +155,11 @@ describe('configCatalogCache', () => {
     expect(model?.reasoningEffortSupported).toBe(true);
     expect(model?.contextWindow).toBe(200_000);
     expect(cached?.defaultProviders).toEqual({ zen: 'big-pickle' });
-    const agent = cached?.agents?.[0];
-    expect(agent?.name).toBe('build');
-    expect(agent?.displayName).toBe('Build');
-    expect(agent?.request.body).toEqual({ temperature: 0.2, topP: 0.9 });
-    expect(agent?.permissions).toEqual([{ action: 'edit', resource: '*', effect: 'ask' }]);
+    expect(cached).not.toHaveProperty('agents');
   });
 
   test('credentials, headers, request bodies and system prompts are never stored', async () => {
-    await writeCachedCatalog('runtime-a', '/project', { providers: [zen], agents: [build] });
+    await writeCachedCatalog('runtime-a', '/project', { providers: [zen] });
     const stored = records.get('runtime-a\n/project');
     const serialized = JSON.stringify(stored);
     expect(serialized).not.toContain(SECRET);
@@ -189,17 +168,16 @@ describe('configCatalogCache', () => {
     }
   });
 
-  test('providers and agents written separately are kept together', async () => {
-    await writeCachedCatalog('runtime-a', '/project', { providers: [zen], defaultProviders: { zen: 'big-pickle' } });
-    await writeCachedCatalog('runtime-a', '/project', { agents: [build] });
+  test('provider models and defaults written separately are kept together', async () => {
+    await writeCachedCatalog('runtime-a', '/project', { providers: [zen] });
+    await writeCachedCatalog('runtime-a', '/project', { defaultProviders: { zen: 'big-pickle' } });
     const cached = await readCachedCatalog('runtime-a', '/project');
     expect(cached?.providers?.map((entry) => entry.providerId)).toEqual(['zen']);
     expect(cached?.defaultProviders).toEqual({ zen: 'big-pickle' });
-    expect(cached?.agents?.map((entry) => entry.name)).toEqual(['build']);
   });
 
   test('another runtime or directory never sees the record', async () => {
-    await writeCachedCatalog('runtime-a', '/project', { agents: [build] });
+    await writeCachedCatalog('runtime-a', '/project', { providers: [zen] });
     expect(await readCachedCatalog('runtime-b', '/project')).toBeNull();
     expect(await readCachedCatalog('runtime-a', '/other')).toBeNull();
   });
@@ -258,13 +236,13 @@ describe('writeCachedCatalogWhenSettled', () => {
 
   test('stores a catalog no catalog event superseded once the delay has passed', async () => {
     const { pending, schedule } = manualSchedule();
-    writeCachedCatalogWhenSettled('runtime-a', '/project', { agents: [build] }, () => false, schedule);
+    writeCachedCatalogWhenSettled('runtime-a', '/project', { providers: [zen] }, () => false, schedule);
     await settleWrites();
     expect(records.size).toBe(0);
     expect(pending[0]?.delayMs).toBe(CATALOG_PERSIST_SETTLE_MS);
     pending[0]?.callback();
     await settleWrites();
-    expect((await readCachedCatalog('runtime-a', '/project'))?.agents?.map((agent) => agent.name)).toEqual(['build']);
+    expect((await readCachedCatalog('runtime-a', '/project'))?.providers?.map((provider) => provider.providerId)).toEqual(['zen']);
   });
 
   test('never stores the partial first answer of a starting location', async () => {
@@ -279,18 +257,3 @@ describe('writeCachedCatalogWhenSettled', () => {
   });
 });
 
-describe('shouldHoldFirstLoadAgainstCache', () => {
-  test('an empty or partial first answer is held against a fuller cache', () => {
-    expect(shouldHoldFirstLoadAgainstCache(12, 0)).toBe(true);
-    expect(shouldHoldFirstLoadAgainstCache(12, 9)).toBe(true);
-  });
-
-  test('a first answer at least as full as the cache replaces it', () => {
-    expect(shouldHoldFirstLoadAgainstCache(12, 12)).toBe(false);
-    expect(shouldHoldFirstLoadAgainstCache(12, 15)).toBe(false);
-  });
-
-  test('nothing is held when the cache showed nothing', () => {
-    expect(shouldHoldFirstLoadAgainstCache(0, 0)).toBe(false);
-  });
-});

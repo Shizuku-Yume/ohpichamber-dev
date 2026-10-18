@@ -1,305 +1,96 @@
 import { describe, expect, test } from 'bun:test';
-
+import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 import {
-    extractFirstChangedLineFromDiff,
-    getApplyPatchFilePath,
-    getDiffPatchEntries,
-    getFirstChangedLineFromMetadata,
-    getPrimaryDiffFromMetadata,
-    getPrimaryToolPath,
-    getRenderablePatchInfo,
-    resolveToolQuickOpenTarget,
+    extractFirstChangedLineFromDiff, getPrimaryToolPath, getToolDiffs,
+    getToolFileChanges, resolveToolQuickOpenTarget,
 } from './toolDiffUtils';
-import {
-    getToolDiffPreviewText,
-    isToolDiffPreviewOversized,
-    TOOL_DIFF_PREVIEW_MAX_CHARS,
-    TOOL_DIFF_PREVIEW_MAX_LINES,
-} from './toolDiffPreview';
+import { getToolDiffPreviewText, isToolDiffPreviewOversized, TOOL_DIFF_PREVIEW_MAX_CHARS, TOOL_DIFF_PREVIEW_MAX_LINES } from './toolDiffPreview';
 
-const identity = (path: string) => path;
+const call = (toolName: string, path = '/project/file.ts'): ToolCallPart => ({
+    type: 'tool_call', partId: 'call-part', toolCallId: 'call', toolName, input: { path, content: 'new\n' }, status: 'completed',
+});
+const result = (details: NonNullable<ToolResultPart['output']>, toolName = 'edit', isError = false): ToolResultPart => ({
+    type: 'tool_result', partId: 'result-part', toolCallId: 'call', toolName, isError,
+    output: { content: [{ type: 'text', text: 'Updated file' }], details },
+});
 
-describe('toolDiffUtils', () => {
-    test('prefers the absolute patch path over its worktree-relative label', () => {
-        expect(getPrimaryToolPath('patch', undefined, {
-            files: [{
-                filePath: '/workspace/project/src/file.ts',
-                relativePath: 'workspace/project/src/file.ts',
-                type: 'update',
-            }],
-        })).toBe('/workspace/project/src/file.ts');
+describe('native tool diffs', () => {
+    test('converts numbered compact rows into a renderable unified diff', () => {
+        const part = result({ path: '/project/file.ts', diff: ' 10|context\n-11|before\n+11|after\n+12|extra\n 12|tail' });
+        expect(getToolDiffs(part)).toEqual([{
+            path: '/project/file.ts', additions: 2, deletions: 1,
+            diff: '--- a//project/file.ts\n+++ b//project/file.ts\n@@ -10,3 +10,4 @@\n context\n-before\n+after\n+extra\n tail\n',
+        }]);
+        expect(resolveToolQuickOpenTarget(part)).toEqual({ filePath: '/project/file.ts', line: 11 });
     });
-
-    test('opens the move destination and skips deleted patch files', () => {
-        expect(getPrimaryToolPath('patch', undefined, {
-            files: [
-                { filePath: '/workspace/deleted.ts', relativePath: 'deleted.ts', type: 'delete' },
-                {
-                    filePath: '/workspace/old.ts',
-                    relativePath: 'new.ts',
-                    movePath: '/workspace/new.ts',
-                    type: 'move',
-                },
-            ],
-        })).toBe('/workspace/new.ts');
+    test('preserves separated regions and cumulative line offsets', () => {
+        const [file] = getToolDiffs(result({ path: 'a.ts', diff: '+1|first\n…\n 8|context\n-9|old\n+10|new' }));
+        expect(file?.diff).toContain('@@ -0,0 +1,1 @@\n+first');
+        expect(file?.diff).toContain('@@ -8,2 +9,2 @@\n context\n-old\n+new');
+        expect(file).toMatchObject({ additions: 2, deletions: 1 });
     });
-
-    test('falls back to the relative patch path for legacy metadata', () => {
-        expect(getPrimaryToolPath('patch', undefined, {
-            files: [{ relativePath: 'src/file.ts', type: 'update' }],
-        })).toBe('src/file.ts');
+    test('uses each per-file result exactly once and ignores aggregate text', () => {
+        const part = result({ diff: 'combined display only', perFileResults: [
+            { path: '/project/deleted.ts', op: 'delete', diff: '-1|gone' },
+            { path: '/project/new.ts', sourcePath: '/project/old.ts', move: '/project/new.ts', op: 'update', diff: '-42|before\n+42|after' },
+            { path: '/project/error.ts', diff: '+1|not applied', isError: true },
+        ] });
+        expect(getToolDiffs(part).map((file) => file.path)).toEqual(['/project/deleted.ts', '/project/new.ts']);
+        expect(resolveToolQuickOpenTarget(part)).toEqual({ filePath: '/project/new.ts', line: 42 });
+        expect(getToolFileChanges(part)[1]?.sourcePath).toBe('/project/old.ts');
     });
-
-    test('resolves each patch file independently', () => {
-        expect(getApplyPatchFilePath({
-            filePath: '/workspace/project/src/first.ts',
-            relativePath: 'workspace/project/src/first.ts',
-        })).toBe('/workspace/project/src/first.ts');
-        expect(getApplyPatchFilePath({
-            filePath: '/workspace/project/src/old.ts',
-            movePath: '/workspace/project/src/second.ts',
-            relativePath: 'src/second.ts',
-        })).toBe('/workspace/project/src/second.ts');
-    });
-
-    test('selects the move patch and line from the same non-deleted file', () => {
-        const deletedPatch = '@@ -3 +3 @@\n-old\n+deleted';
-        const movedPatch = '@@ -42 +42 @@\n-before\n+after';
-        const metadata = {
-            patch: deletedPatch,
-            files: [
-                {
-                    filePath: '/workspace/project/src/deleted.ts',
-                    relativePath: 'src/deleted.ts',
-                    patch: deletedPatch,
-                    type: 'delete',
-                },
-                {
-                    filePath: '/workspace/project/src/old.ts',
-                    movePath: '/workspace/project/src/moved.ts',
-                    relativePath: 'src/moved.ts',
-                    patch: movedPatch,
-                    type: 'move',
-                },
-            ],
-        };
-
-        expect(getPrimaryDiffFromMetadata('patch', metadata, '/workspace/project/src/moved.ts'))
-            .toBe(movedPatch);
-        expect(getFirstChangedLineFromMetadata('patch', metadata, '/workspace/project/src/moved.ts'))
-            .toBe(42);
-    });
-
-    test('treats raw patch envelopes as text, not visual diffs', () => {
-        const entries = getDiffPatchEntries(undefined, [
-            '*** Begin Patch',
-            '*** Update File: src/app.ts',
-            '@@ -1 +1 @@',
-            '-old',
-            '+new',
-            '*** End Patch',
-        ].join('\n'), identity);
-
-        expect(entries).toHaveLength(1);
-        expect(entries[0]?.renderMode).toBe('text');
-        expect(entries[0]?.patch).toContain('*** Begin Patch');
-    });
-
-    test('splits multi-file unified patches into one renderable entry per file', () => {
-        const entries = getDiffPatchEntries(undefined, [
-            '--- a/src/a.ts',
-            '+++ b/src/a.ts',
-            '@@ -1 +1 @@',
-            '-old',
-            '+new',
-            '--- a/src/b.ts',
-            '+++ b/src/b.ts',
-            '@@ -1 +1 @@',
-            '-left',
-            '+right',
-        ].join('\n'), identity);
-
-        expect(entries.map((entry) => entry.renderMode)).toEqual(['diff', 'diff']);
-        expect(entries.map((entry) => entry.title)).toEqual(['src/a.ts', 'src/b.ts']);
-    });
-
-    test('uses metadata.files patches before top-level fallback diffs', () => {
-        const entries = getDiffPatchEntries({
-            files: [{
-                relativePath: 'src/file.ts',
-                patch: [
-                    '--- a/src/file.ts',
-                    '+++ b/src/file.ts',
-                    '@@ -1 +1 @@',
-                    '-old',
-                    '+new',
-                ].join('\n'),
-            }],
-        }, 'not a diff', identity);
-
-        expect(entries).toHaveLength(1);
-        expect(entries[0]?.renderMode).toBe('diff');
-        expect(entries[0]?.title).toBe('src/file.ts');
-    });
-
-    test('keeps the authoritative path for every metadata file entry', () => {
-        const patch = [
-            '--- a/src/file.ts',
-            '+++ b/src/file.ts',
-            '@@ -1 +1 @@',
-            '-old',
-            '+new',
-        ].join('\n');
-        const entries = getDiffPatchEntries({
-            files: [
-                { filePath: '/workspace/project/src/first.ts', relativePath: 'src/first.ts', patch },
-                { filePath: '/workspace/project/src/second.ts', relativePath: 'src/second.ts', patch },
-            ],
-        }, undefined, identity);
-
-        expect(entries.map((entry) => entry.filePath)).toEqual([
-            '/workspace/project/src/first.ts',
-            '/workspace/project/src/second.ts',
+    test('retains zero-line creates, deletes, and moves', () => {
+        expect(getToolFileChanges(result({ path: 'empty', op: 'create', diff: '' }))).toEqual([
+            { path: 'empty', op: 'create', sourcePath: undefined, diff: '', additions: 0, deletions: 0 },
         ]);
+        expect(getToolDiffs(result({ path: 'empty', op: 'create', diff: '' }))).toEqual([]);
     });
-
-    test('synthesizes headers for valid headerless hunks', () => {
-        const entries = getDiffPatchEntries(undefined, [
-            '@@ -1 +1 @@',
-            '-old',
-            '+new',
-        ].join('\n'), identity);
-
-        expect(entries).toHaveLength(1);
-        expect(entries[0]?.renderMode).toBe('diff');
-        expect(getRenderablePatchInfo(entries[0]?.patch ?? '')).not.toBeNull();
+    test('does not turn malformed or legacy payloads into successful diffs', () => {
+        expect(getToolDiffs(result({ path: 'a', diff: '@@ -1 +1 @@\n-old\n+new' }))).toEqual([]);
+        expect(getToolDiffs({ ...result({}), output: { files: [{ file: 'a', patch: '+new' }] } })).toEqual([]);
+        expect(getToolDiffs(result({ path: 'a', diff: '+1|new' }, 'edit', true))).toEqual([]);
+        expect(getToolDiffs(call('edit'))).toEqual([]);
+        expect(getToolDiffs(result({ path: 'a', diff: '+1|new' }, 'patch'))).toEqual([]);
     });
-
-    test('keeps malformed unified patches as text fallbacks', () => {
-        const entries = getDiffPatchEntries(undefined, [
-            '--- a/src/file.ts',
-            '+++ b/src/file.ts',
-            '@@',
-            '-old',
-            '+new',
-        ].join('\n'), identity);
-
-        expect(entries).toHaveLength(1);
-        expect(entries[0]?.renderMode).toBe('text');
-        expect(entries[0]?.patch).toContain('@@');
+    test('write results expose the resolved path without inventing line counts', () => {
+        const part = result({ resolvedPath: '/resolved/file.ts' }, 'write');
+        expect(getToolFileChanges(part, call('write'))).toEqual([{ path: '/resolved/file.ts' }]);
+        expect(getToolDiffs(part, call('write'))).toEqual([]);
+        expect(getPrimaryToolPath(part, call('write'))).toBe('/resolved/file.ts');
+        expect(resolveToolQuickOpenTarget(part, call('write'))).toEqual({ filePath: '/resolved/file.ts', line: undefined });
     });
-
-    test('keeps oversized metadata patches out of the rich diff renderer', () => {
-        const patch = [
-            '--- a/src/generated.ts',
-            '+++ b/src/generated.ts',
-            `@@ -1,${TOOL_DIFF_PREVIEW_MAX_LINES + 1} +0,0 @@`,
-            ...Array.from(
-                { length: TOOL_DIFF_PREVIEW_MAX_LINES + 1 },
-                (_, index) => `-${String(index).padStart(40, '0')}`,
-            ),
-        ].join('\n');
-        const metadata = {
-            files: [{ relativePath: 'src/generated.ts', patch }],
-        };
-        const entries = getDiffPatchEntries(metadata, undefined, identity);
-
-        expect(entries).toHaveLength(1);
-        expect(entries[0]?.renderMode).toBe('text');
-        expect(entries[0]?.patch).toBe(patch);
-        expect(resolveToolQuickOpenTarget('patch', undefined, metadata)?.line).toBe(extractFirstChangedLineFromDiff(patch));
-
-        const preview = getToolDiffPreviewText(entries[0]?.patch ?? '');
-        expect(preview.endsWith('\n…')).toBe(true);
-        expect(preview.split('\n')).toHaveLength(TOOL_DIFF_PREVIEW_MAX_LINES + 1);
-        expect(preview.length).toBeLessThan(patch.length);
+    test('successful writes can recover the input path, but not device writes or mismatched calls', () => {
+        const part = result({}, 'write');
+        expect(getToolFileChanges(part, call('write'))).toEqual([{ path: '/project/file.ts' }]);
+        expect(getToolFileChanges(part, call('write', 'agent://worker'))).toEqual([]);
+        expect(getToolFileChanges(part, { ...call('write'), toolCallId: 'other' })).toEqual([]);
+        expect(getToolFileChanges(part, call('edit'))).toEqual([]);
+        expect(getToolFileChanges({ ...part, isError: true }, call('write'))).toEqual([]);
     });
-
-    test('bounds oversized single-line diff previews by character count', () => {
-        const patch = `+${'x'.repeat(TOOL_DIFF_PREVIEW_MAX_CHARS + 1_000)}`;
-        const preview = getToolDiffPreviewText(patch);
-
-        expect(preview.endsWith('\n…')).toBe(true);
-        expect(preview.length).toBe(TOOL_DIFF_PREVIEW_MAX_CHARS + 2);
+    test('quick-open call previews never become reported results', () => {
+        expect(getPrimaryToolPath(call('edit'))).toBe('/project/file.ts');
+        expect(getToolDiffs(call('write'))).toEqual([]);
+        expect(extractFirstChangedLineFromDiff('@@ -10,2 +12,3 @@\n context\n-old\n+new\n+extra')).toBe(13);
     });
+});
 
-    test('does not cut an astral character in half at the character limit', () => {
-        // The boundary lands between the two halves of the emoji, which would
-        // otherwise leave a lone surrogate rendering as the replacement glyph.
-        const patch = `+${'x'.repeat(TOOL_DIFF_PREVIEW_MAX_CHARS - 2)}\u{1F600}${'y'.repeat(100)}`;
-        const preview = getToolDiffPreviewText(patch);
-        const body = preview.slice(0, -2);
-
+describe('bounded tool diff previews', () => {
+    test('bounds oversized previews by lines and characters', () => {
+        const patch = Array.from({ length: TOOL_DIFF_PREVIEW_MAX_LINES + 1 }, () => '+line').join('\n');
         expect(isToolDiffPreviewOversized(patch)).toBe(true);
-        expect(body).toBe(`+${'x'.repeat(TOOL_DIFF_PREVIEW_MAX_CHARS - 2)}`);
-        expect(/[\uD800-\uDFFF]/.test(body)).toBe(false);
+        expect(getToolDiffPreviewText(patch).split('\n')).toHaveLength(TOOL_DIFF_PREVIEW_MAX_LINES + 1);
+        const long = `+${'x'.repeat(TOOL_DIFF_PREVIEW_MAX_CHARS + 1000)}`;
+        expect(getToolDiffPreviewText(long)).toHaveLength(TOOL_DIFF_PREVIEW_MAX_CHARS + 2);
     });
-
-    test('preserves diff previews at the character and line limits', () => {
-        const characterLimit = 'x'.repeat(TOOL_DIFF_PREVIEW_MAX_CHARS);
-        const lineLimit = Array.from({ length: TOOL_DIFF_PREVIEW_MAX_LINES }, () => '+line').join('\n');
-        const terminatedLineLimit = `${lineLimit}\n`;
-
-        expect(getToolDiffPreviewText(characterLimit)).toBe(characterLimit);
-        expect(getToolDiffPreviewText(lineLimit)).toBe(lineLimit);
-        expect(getToolDiffPreviewText(terminatedLineLimit)).toBe(terminatedLineLimit);
+    test('does not split astral characters at the limit', () => {
+        const prefix = `+${'x'.repeat(TOOL_DIFF_PREVIEW_MAX_CHARS - 2)}`;
+        expect(getToolDiffPreviewText(`${prefix}😀${'y'.repeat(100)}`)).toBe(`${prefix}\n…`);
     });
-
-    test('counts bare carriage returns as line separators', () => {
-        const patch = Array.from(
-            { length: TOOL_DIFF_PREVIEW_MAX_LINES + 1 },
-            (_, index) => `+${index}`,
-        ).join('\r');
-
-        expect(isToolDiffPreviewOversized(patch)).toBe(true);
-        expect(getToolDiffPreviewText(patch).split('\r')).toHaveLength(TOOL_DIFF_PREVIEW_MAX_LINES);
-    });
-
-    test('resolves the quick-open target from the same entry the expanded card renders', () => {
-        const patch = [
-            '--- a/src/file.ts',
-            '+++ b/src/file.ts',
-            '@@ -10,3 +12,4 @@',
-            ' context',
-            '+added',
-        ].join('\n');
-        const metadata = {
-            files: [{
-                filePath: '/workspace/project/src/file.ts',
-                relativePath: 'src/file.ts',
-                patch,
-                type: 'update',
-            }],
-        };
-        const entries = getDiffPatchEntries(metadata, undefined, identity);
-
-        expect(resolveToolQuickOpenTarget('patch', undefined, metadata)).toEqual({
-            filePath: '/workspace/project/src/file.ts',
-            line: extractFirstChangedLineFromDiff(entries[0]?.patch ?? ''),
-        });
-    });
-
-    test('picks the entry matching the primary path in a multi-file patch', () => {
-        const firstPatch = ['--- a/src/a.ts', '+++ b/src/a.ts', '@@ -1,2 +1,3 @@', ' a', '+first'].join('\n');
-        const secondPatch = ['--- a/src/b.ts', '+++ b/src/b.ts', '@@ -30,2 +40,3 @@', ' b', '+second'].join('\n');
-        const metadata = {
-            files: [
-                { filePath: '/workspace/project/src/a.ts', relativePath: 'src/a.ts', patch: firstPatch, type: 'delete' },
-                { filePath: '/workspace/project/src/b.ts', relativePath: 'src/b.ts', patch: secondPatch, type: 'update' },
-            ],
-        };
-        const target = resolveToolQuickOpenTarget('patch', undefined, metadata);
-
-        expect(target?.filePath).toBe('/workspace/project/src/b.ts');
-        expect(target?.line).toBe(41);
-    });
-
-    test('reports no line when the tool has no diff entry', () => {
-        expect(resolveToolQuickOpenTarget('write', { filePath: '/workspace/project/src/new.ts' }, undefined))
-            .toEqual({ filePath: '/workspace/project/src/new.ts', line: undefined });
-    });
-
-    test('returns no quick-open target without a primary path', () => {
-        expect(resolveToolQuickOpenTarget('bash', { command: 'ls' }, undefined)).toBeNull();
+    test('preserves previews at limits and recognizes carriage returns', () => {
+        const characters = 'x'.repeat(TOOL_DIFF_PREVIEW_MAX_CHARS);
+        const lines = Array.from({ length: TOOL_DIFF_PREVIEW_MAX_LINES }, () => '+line').join('\n');
+        expect(getToolDiffPreviewText(characters)).toBe(characters);
+        expect(getToolDiffPreviewText(`${lines}\n`)).toBe(`${lines}\n`);
+        expect(isToolDiffPreviewOversized(`${lines.replaceAll('\n', '\r')}\r+extra`)).toBe(true);
     });
 });

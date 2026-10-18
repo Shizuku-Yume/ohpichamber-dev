@@ -29,7 +29,7 @@ export const btwModelAvailability = (
 };
 
 export const resolveBtwSelection = ({ agents, savedAgent, savedModel, savedVariant, composerModel, composerVariant, isModelAvailable }: {
-  agents: readonly (Pick<Agent, 'name'> & { readonly hidden?: boolean; readonly mode?: string | null })[];
+  agents: readonly Pick<Agent, 'agentId' | 'name'>[];
   savedAgent: string | null;
   savedModel: BtwModelSelection | null;
   savedVariant?: string | null;
@@ -38,17 +38,16 @@ export const resolveBtwSelection = ({ agents, savedAgent, savedModel, savedVaria
   /** Live-catalog check; when omitted the saved model wins, as before. */
   isModelAvailable?: (model: BtwModelSelection) => boolean;
 }): BtwSelection => {
-  const selectable = agents.filter((agent) => !agent.hidden && (agent.mode === 'primary' || agent.mode === 'all'));
-  const agent = selectable.find((candidate) => candidate.name === savedAgent)
-    ?? selectable.find((candidate) => candidate.name === 'plan')
-    ?? selectable[0];
+  const agent = agents.find((candidate) => candidate.agentId === savedAgent)
+    ?? agents.find((candidate) => candidate.name === 'plan')
+    ?? agents[0];
   // A saved model from before a provider rename or catalog change must not
   // win over the composer's live one: the fork would be switched onto a slug
   // no provider serves and its first prompt dies without reaching the catch
   // that shows the failure toast (#4353).
   const savedUsable = savedModel !== null && (isModelAvailable === undefined || isModelAvailable(savedModel));
   return {
-    agent: agent?.name,
+    agent: agent?.agentId,
     model: savedUsable ? savedModel : composerModel,
     variant: savedUsable ? savedVariant : composerVariant,
   };

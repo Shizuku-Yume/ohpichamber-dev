@@ -52,7 +52,7 @@ describe('Host MCP OAuth authorization', () => {
   });
 });
 
-async function nativeHarness(rows = []) {
+async function nativeHarness(rows = [], enterprisePolicyOptions) {
   const root = await fs.mkdtemp(path.join(tmpdir(), 'native-host-policy-'));
   await Promise.all(['workspace', 'agent', 'outside'].map(name => fs.mkdir(path.join(root, name))));
   const cwd = await fs.realpath(path.join(root, 'workspace'));
@@ -61,7 +61,7 @@ async function nativeHarness(rows = []) {
   const policy = { projectId: nativeScope.projectId, workspaceId: nativeScope.workspaceId, agentDirectoryId: nativeScope.agentDirectoryId, cwd, agentDirectory,
     providers: [{ providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' }], mcpServers: [], fileTools: ['read', 'write'], shellCommands: [], toolRequests: [], agentIds: [], permissionPresetIds: [], providerEntry: true };
   const directoryOwner = createProjectDirectoryRuntime({ fsPromises: fs, path, normalizeDirectoryPath: value => value });
-  const nativeAuthorize = createWorkerOperationAuthorizer({ resolvePolicy: async () => policy, validateDirectoryPath: directoryOwner.validateDirectoryPath, approvalPolicyStore: { list: () => rows } });
+  const nativeAuthorize = createWorkerOperationAuthorizer({ resolvePolicy: async () => policy, validateDirectoryPath: directoryOwner.validateDirectoryPath, approvalPolicyStore: { list: () => rows }, enterprisePolicyOptions });
   return { scope: nativeScope, policy, authorize: nativeAuthorize, outside: path.join(root, 'outside'), close: () => fs.rm(root, { recursive: true, force: true }) };
 }
 
@@ -140,6 +140,32 @@ describe('Host-owned native descriptor authority', () => {
       const descriptor = { toolName: 'bash', sourcePaths: [], destinationPaths: [], fileOps: [], command,
         approvalGrant: { approvalId: 'approval', toolCallId: 'call', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch', command } };
       expect(await harness.authorize(harness.scope, request, descriptor)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await harness.close(); }
+  });
+});
+
+describe('native web-search egress authority', () => {
+  it('reads machine policy for each actual query and fails closed for malformed policy', async () => {
+    let policyText = JSON.stringify({ enterpriseMode: false });
+    const harness = await nativeHarness([], { env: {}, readFile: () => policyText });
+    try {
+      expect(await harness.authorize(harness.scope, { type: 'web-search' })).toEqual({ allowed: true });
+      policyText = JSON.stringify({ enterpriseMode: true });
+      expect(await harness.authorize(harness.scope, { type: 'web-search' })).toEqual({ allowed: false, code: 'enterprise_mode', status: 403 });
+      policyText = '{broken';
+      expect(await harness.authorize(harness.scope, { type: 'web-search' })).toEqual({ allowed: false, code: 'enterprise_mode', status: 403 });
+      policyText = JSON.stringify({ enterpriseMode: false });
+      expect(await harness.authorize(harness.scope, { type: 'web-search' })).toEqual({ allowed: true });
+    } finally { await harness.close(); }
+  });
+
+  it('requires captured workspace and source authority even when enterprise mode is off', async () => {
+    const harness = await nativeHarness([], { env: {}, readFile: () => '{}' });
+    try {
+      for (const mismatch of [{ workspaceId: 'foreign' }, { agentDirectoryId: 'foreign' }, { cwd: harness.outside }, { agentDirectory: harness.outside }]) {
+        expect(await harness.authorize({ ...harness.scope, ...mismatch }, { type: 'web-search' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      }
+      expect(await harness.authorize(harness.scope, { type: 'web-search', endpoint: 'http://localhost:8080' })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
     } finally { await harness.close(); }
   });
 });

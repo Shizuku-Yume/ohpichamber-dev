@@ -95,8 +95,6 @@ export type CatalogKind =
   | "model"
   | "credential"
   | "project"
-  /** Web search providers or the default choice changed (`websearch.updated`). */
-  | "websearch"
 
 export type SyncEvent =
   | { type: "server.connected"; properties: Record<never, never> }
@@ -817,8 +815,6 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
       return [{ type: "catalog.updated", properties: { kind: "provider" } }]
     case "model.updated":
       return [{ type: "catalog.updated", properties: { kind: "model" } }]
-    case "websearch.updated":
-      return [{ type: "catalog.updated", properties: { kind: "websearch" } }]
 
     // --- known events the sync layer deliberately does not model -------------
     //

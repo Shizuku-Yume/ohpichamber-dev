@@ -75,7 +75,7 @@ import { useHardwareKeyboard } from '@/lib/hardwareKeyboard';
 import { isCapacitorApp } from '@/lib/platform';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { setNativeImagePasteEnabled, subscribeToNativeImagePastes } from '@/lib/nativeImagePaste';
-import { getCycledPrimaryAgentName, type MobileControlsPanel } from './mobileControlsUtils';
+import { getCycledAgentId, type MobileControlsPanel } from './mobileControlsUtils';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
@@ -595,9 +595,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const configAgentName = useConfigStore((state) => state.currentAgentName);
     const currentAgentName = pinnedComposerSelection?.agent ?? configAgentName;
     const setAgent = useConfigStore((state) => state.setAgent);
-    // Filtered here rather than through `getVisibleAgents()`, which returns a
-    // new array on every call: that identity would rebuild the language
-    // context, and with it re-tokenize the editor, on every keystroke.
+    // Preserve the directory roster reference while typing so the editor's
+    // language context does not rebuild on every keystroke.
     const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
     const btwSavedVariant = useSelectionStore(React.useCallback(
         (state) => btwComposerSessionId && btwAgentSelection && btwModelSelection
@@ -2550,7 +2549,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // Auto hides the agent control, so the shortcut must not change a
         // choice the user cannot see.
         if (isAutoModel(currentProviderId, currentModelId)) return;
-        const nextAgentName = getCycledPrimaryAgentName(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
+        const nextAgentName = getCycledAgentId(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
         if (!nextAgentName) return;
 
         // A pinned column's agent is its own session's choice only.

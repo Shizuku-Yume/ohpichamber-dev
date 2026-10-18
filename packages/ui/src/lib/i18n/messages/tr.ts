@@ -2555,6 +2555,7 @@ export const dict = {
   'chat.modelControls.modeValue.subagent': 'Subagent',
   'chat.modelControls.modeValue.all': 'Tümü',
   'chat.modelControls.modeValue.none': '—',
+  'chat.modelControls.toolAvailability': 'Araç kullanılabilirliği',
   'chat.reasoningTrace.thinking': 'Düşünme',
   'chat.reasoningTrace.justification': 'Gerekçe',
   'chat.reasoningTrace.expandAria': 'Akıl yürütme izini genişlet',

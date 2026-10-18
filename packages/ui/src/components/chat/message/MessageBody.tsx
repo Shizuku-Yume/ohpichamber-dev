@@ -369,8 +369,9 @@ const CopyMessageLinkButton: React.FC<{ onCopyLink: () => void }> = ({ onCopyLin
     );
 };
 
-const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onCopyLink, onShowPopup, agentMention, onRevert, onFork, contextPinned, contextPinPending, onToggleContextPin, userActionsMode = 'inline', stickyUserHeaderEnabled = true, extraActions }: {
+const UserMessageBody = React.memo(({ workspaceId, messageId, parts, messageCreatedAt, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onCopyLink, onShowPopup, agentMention, onRevert, onFork, contextPinned, contextPinPending, onToggleContextPin, userActionsMode = 'inline', stickyUserHeaderEnabled = true, extraActions }: {
     messageId: string;
+    workspaceId: string | undefined;
     parts: Part[];
     messageCreatedAt?: number | null;
     isMobile: boolean;
@@ -764,6 +765,7 @@ const UserMessageBody = React.memo(({ messageId, parts, messageCreatedAt, isMobi
         >
             {/* Attachments lead the bubble, above the text. */}
             <MessageFilesDisplay
+                workspaceId={workspaceId}
                 files={parts}
                 onShowPopup={onShowPopup}
                 compact
@@ -1131,6 +1133,7 @@ const AssistantMessageActionButtons = React.memo(({
 
 const AssistantMessageBody = React.memo(({
     sessionId,
+    workspaceId,
     messageId,
     parts,
     isMessageCompleted,
@@ -1162,7 +1165,7 @@ const AssistantMessageBody = React.memo(({
     footerVariant,
     isDarkTheme = false,
     extraActions,
-}: Omit<MessageBodyProps, 'isUser'>) => {
+}: Omit<MessageBodyProps, 'isUser'> & { workspaceId: string | undefined }) => {
     const { t, locale } = useI18n();
     const chatSurfaceMode = useChatSurfaceMode();
     const streamPhase = _streamPhase;
@@ -1188,6 +1191,17 @@ const AssistantMessageBody = React.memo(({
     const toolParts = React.useMemo(() => {
         return visibleParts.filter((part): part is ToolPartType => part.type === 'tool_call' || part.type === 'tool_result');
     }, [visibleParts]);
+
+    const callsForTurn = React.useMemo(() => {
+        const calls = new Map<string, ToolCallPart>();
+        for (const activity of turnGroupingContext?.activityParts ?? []) {
+            if (activity.part.type === 'tool_call') calls.set(activity.part.toolCallId, activity.part);
+        }
+        for (const part of parts) {
+            if (part.type === 'tool_call') calls.set(part.toolCallId, part);
+        }
+        return calls;
+    }, [parts, turnGroupingContext?.activityParts]);
 
     const toolRevealStateRef = React.useRef<{
         messageId: string;
@@ -1815,6 +1829,7 @@ const AssistantMessageBody = React.memo(({
                 <div key={`progressive-group-${segment.id}`} className="mb-3">
                     <TurnActivity
                         parts={visibleSegmentParts}
+                        contextParts={turnGroupingContext?.activityParts}
                         sessionId={sessionId}
                         directory={effectiveDirectory}
                         isExpanded={turnGroupingContext?.isGroupExpanded === true}
@@ -1989,12 +2004,13 @@ const AssistantMessageBody = React.memo(({
                 }
 
                 // Expandable tools: bash, edit, write, task, question — individual rows
-                if (isExpandableTool(toolName)) {
+                if (toolPart.type === 'tool_result' || isExpandableTool(toolName)) {
                     rendered.push(
                         <FadeInOnReveal key={`tool-${toolPart.partId}`}>
                             <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.partId)} wipe>
                                 <ToolPart
                                     part={toolPart}
+                                    pairedCall={toolPart.type === 'tool_result' ? callsForTurn.get(toolPart.toolCallId) : undefined}
                                     sessionId={sessionId}
                                     directory={effectiveDirectory}
                                     isExpanded={expandedTools.has(toolPart.partId)}
@@ -2065,6 +2081,7 @@ const AssistantMessageBody = React.memo(({
         return answerRendered;
     }, [
         activityByPart,
+        callsForTurn,
         activityGroupSegmentsForMessage,
         alwaysShowMessageActions,
         animatedToolIdsLookup,
@@ -2418,7 +2435,7 @@ const AssistantMessageBody = React.memo(({
                         </FadeInOnReveal>
                     )}
                 </div>
-                <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
+                <MessageFilesDisplay files={parts} workspaceId={workspaceId} onShowPopup={onShowPopup} />
                 <MarkdownImageGallery
                     sessionId={sessionId}
                     messageId={messageId}
@@ -2578,10 +2595,12 @@ function AgentModelIcon({ agentName }: { agentName: string | undefined }) {
 }
 
 const MessageBody = React.memo(({ isUser, ...props }: MessageBodyProps) => {
+    const workspaceId = useGlobalSessionsStore(React.useCallback((state) => props.sessionId ? state.entityById.get(props.sessionId)?.workspaceId : undefined, [props.sessionId]));
 
     if (isUser) {
         return (
             <UserMessageBody
+                workspaceId={workspaceId}
                 messageId={props.messageId}
                 parts={props.parts}
                 messageCreatedAt={props.messageCreatedAt}
@@ -2606,7 +2625,7 @@ const MessageBody = React.memo(({ isUser, ...props }: MessageBodyProps) => {
         );
     }
 
-    return <AssistantMessageBody {...props} />;
+    return <AssistantMessageBody {...props} workspaceId={workspaceId} />;
 });
 
 export default MessageBody;

@@ -15,25 +15,24 @@ import type { IntegrationInfo } from "@opencode/client"
 import { getRuntimeKey } from "../runtime-switch"
 import { normalizeOpencodeError, opencodeClient } from "./client"
 import { hostFilesystem } from '@/lib/host-filesystem';
-import { listWebSearchProviders } from "./websearch"
+import { canonicalClient } from '@/api/canonicalClient';
 
 export interface IntegrationCatalog {
   integrations: IntegrationInfo[]
   /**
-   * Web search providers are integrations too, but their keys live in
-   * Settings → Web search. `null` when that list could not be read, so the
-   * caller keeps them rather than hiding real providers.
+   * Native search provider identities, when their canonical catalog was read.
+   * Null means unavailable, not an authoritative empty provider list.
    */
   webSearchIds: ReadonlySet<string> | null
 }
 
-let snapshot: { runtimeKey: string; catalog: IntegrationCatalog } | null = null
+let snapshot: { runtimeKey: string; directory: string | null; catalog: IntegrationCatalog } | null = null
 let latestRead = 0
 let prefetching = false
 
 /** The last list read from the current runtime, or `null` when there is none. */
 export function peekIntegrationCatalog(): IntegrationCatalog | null {
-  return snapshot?.runtimeKey === getRuntimeKey() ? snapshot.catalog : null
+  return snapshot?.runtimeKey === getRuntimeKey() && snapshot.directory === (hostFilesystem.getDirectory() || null) ? snapshot.catalog : null
 }
 
 /**
@@ -60,15 +59,19 @@ export async function loadIntegrationCatalog(): Promise<IntegrationCatalog> {
   const directory = hostFilesystem.getDirectory() || null
   const [integrations, webSearchProviders] = await Promise.all([
     readIntegrations(directory),
-    listWebSearchProviders(directory).catch(() => null),
+    directory ? canonicalClient.resolveWorkspace(directory).then(workspace => {
+      if (runtimeKey !== getRuntimeKey() || directory !== hostFilesystem.getDirectory()) throw new Error('Search catalog scope changed');
+      return canonicalClient.getWebSearch(workspace.workspaceId);
+    }).catch(() => null) : Promise.resolve(null),
   ])
   const catalog: IntegrationCatalog = {
     integrations,
-    webSearchIds: webSearchProviders ? new Set(webSearchProviders.map((provider) => provider.id)) : null,
+    webSearchIds: webSearchProviders ? new Set(webSearchProviders.providers.map((provider) => provider.providerId)) : null,
   }
-  if (read === latestRead && runtimeKey === getRuntimeKey()) {
-    snapshot = { runtimeKey, catalog }
+  if (read !== latestRead || runtimeKey !== getRuntimeKey() || directory !== (hostFilesystem.getDirectory() || null)) {
+    throw new Error('Integration catalog scope changed');
   }
+  snapshot = { runtimeKey, directory, catalog }
   return catalog
 }
 

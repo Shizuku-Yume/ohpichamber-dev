@@ -77,7 +77,21 @@ owner cannot replace the catalog or finish the current owner's loading state.
 
 ### Feature cache / query stores
 
-The Stats page keeps its reports in a feature-local store, `components/views/usage/usageStatsStore.ts`: keyed by runtime, range and project, in memory only, never refetched on its own once a key has a report, cleared on runtime switch. A failed refresh keeps the cached report. The report is requested with `tools: "none"`; tool calls, which make OpenCode scan every tool call in the range, load on request under the same key, over the loaded report's own window. Once the user asks for them, every report shown later in the app session fetches its tool calls after it lands. A failed tool read shows an error with retry and never reads as zero calls.
+`useWebSearchStore` owns canonical workspace web-search settings for web/PWA,
+Electron, hosted mobile and Capacitor through the same active Host transport.
+It resolves the current directory with `CanonicalClient.resolveWorkspace`,
+then reads `getWebSearch`; failures retain the previous authoritative snapshot
+and expose a read error. Writes carry `expectedRevision`, never optimistically
+apply, and retain the complete mutation result so persisted-but-partial worker
+application is distinguishable from failed persistence. Runtime generations,
+directory identity and mutation revisions reject stale continuations. Provider
+identities are native selector strings, not integration IDs. API keys are
+write-only: `credentialConfigured` reports stored-key presence independently
+from native readiness (`configured`) and write capability (`credentialWritable`).
+Enterprise mode disables new key entry but retains configuration and key removal.
+
+
+The Stats page keeps reports in the feature-local `components/views/usage/usageStatsStore.ts`, keyed by runtime, range and project directory, in memory only. Cached keys do not refetch automatically; runtime switches abort pending reads and clear entries. Canonical usage reads resolve selected directories through `resolveWorkspace` and send canonical workspace/project IDs with explicit range, bounds and viewer IANA timezone. The initial `/api/agent/v1/usage` report omits expensive tool parsing (`tools.mode: 'none'`); `/api/agent/v1/usage/tools` loads lazily over the loaded report window. Once requested, tools follow subsequent reports. Stale tool completions cannot replace a refreshed window. Failed refreshes preserve cached reports and tools with retry feedback. Partial reports retain valid sessions and expose per-session errors; unavailable reasoning and duration metrics remain null rather than fabricated zeroes. Web/PWA, Electron, hosted mobile and Capacitor share the active Host transport.
 
 PR status reads share the aggregate background-network budget as well as their PR-specific cap. Command discovery gates each scope/config read, including body decoding, rather than only gating the initial SDK list. Command reads have a bounded deadline and abort on runtime reset. Reset clears server-derived command caches and invalidates late reads and mutation responses while preserving unsaved command drafts.
 

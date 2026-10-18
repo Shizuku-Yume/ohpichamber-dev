@@ -3,21 +3,15 @@
  *
  * Every user-attached context item — an inline code comment, a terminal
  * selection, a browser annotation, a GitHub PR comment or failed check, a
- * linked issue or PR — is sent as its own synthetic text part. The part's
- * `text` is what the model reads; the part's `metadata[CONTEXT_METADATA_KEY]`
- * carries the same information structured, so the timeline can render the
- * context as a dedicated block after the message round-trips through the
- * OpenCode server (which persists part metadata verbatim).
- *
- * This module owns both directions: building the part at send time and
- * parsing the metadata back at render time. Keeping them together is what
- * guarantees they cannot drift apart.
+ * linked issue or PR — is built as local composer text plus structured
+ * metadata. The send boundary formats that local context into canonical
+ * prompt text. Native transcript Part records carry content, not metadata;
+ * the read-back helpers here inspect local composer and queued context only.
  */
 
 import { z } from 'zod';
 import type { SourceControlProvider } from '@/lib/api/types';
-import type { JsonValue } from '@openchamber/agent-contract';
-import type { Metadata } from '@/lib/opencode/model';
+import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import { chatQuoteAnchorSchema, type ChatQuoteAnchor } from '@/lib/chatQuoteAnchor';
 import { appendTerminalContexts } from './terminalContext';
@@ -164,9 +158,9 @@ export type ContextPartMetadata = {
 };
 
 /**
- * One context item as it goes on the wire: a synthetic message whose `text` is
- * what the model reads and whose metadata carries the same information
- * structured, so the timeline can render it as a dedicated block.
+ * One local composer context item. The send boundary formats its text and
+ * metadata into canonical prompt context; transcript parts do not expose
+ * these local fields.
  */
 export type ContextPart = {
     text: string;
@@ -445,16 +439,14 @@ export const contextPartMetadataSchema = z.object({
 });
 
 /**
- * The subset of a record that context read-back inspects. Context now travels
- * as synthetic messages, which carry no `type`; the optional field keeps the
- * reader usable for anything else that carries the same metadata.
+ * Local composer context metadata, before canonical prompt capture. This is
+ * not a transcript Part contract.
  */
-export type ContextCarrierPart = { type?: string; metadata?: Metadata };
+export type ContextCarrierPart = { type?: string; metadata?: JsonObject };
 
 /**
- * Read the structured context payload from a message part, if it carries one.
- * The part comes from the server or an optimistic insert, so the payload is
- * schema-validated before it is trusted.
+ * Read structured context from local composer or queued metadata. Payloads
+ * are schema-validated before being used to restore drafts or format prompts.
  */
 export function readContextPart(part: ContextCarrierPart): ContextPartPayload | null {
     if (part.type !== undefined && part.type !== 'text') return null;

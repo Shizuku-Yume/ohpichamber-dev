@@ -13,13 +13,13 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { toast } from '@/components/ui';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from '@/components/chat/CommandAutocomplete';
 import { FileMentionAutocomplete, type FileMentionHandle } from '@/components/chat/FileMentionAutocomplete';
 import { SnippetAutocomplete, type SnippetAutocompleteHandle } from '@/components/chat/SnippetAutocomplete';
 import { Icon } from "@/components/icon/Icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import type { ScheduledTask } from '@/lib/scheduledTasksApi';
@@ -770,7 +770,8 @@ export function ScheduledTaskEditorDialog(props: {
     if (open) void refreshGlobalSessions().catch(() => undefined);
   }, [open]);
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgents = useConfigStore((state) => state.loadAgents);
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
+  const projectDirectory = projects.find((project) => project.id === props.projectId)?.path ?? null;
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
   const currentModelID = useConfigStore((state) => state.currentModelId);
@@ -838,8 +839,8 @@ export function ScheduledTaskEditorDialog(props: {
       return;
     }
     void loadProviders({ source: 'scheduledTaskEditor' });
-    void loadAgents({ source: 'scheduledTaskEditor' });
-  }, [open, loadProviders, loadAgents]);
+    void loadAgents(projectDirectory);
+  }, [open, loadProviders, loadAgents, projectDirectory]);
 
   React.useEffect(() => {
     if (!open) {
@@ -1630,8 +1631,8 @@ export function ScheduledTaskEditorDialog(props: {
           <div className="flex min-w-0 flex-col gap-1">
             <FieldLabel>{t('sessions.scheduledTasks.editor.agent.label')}</FieldLabel>
             <AgentSelector
-              agentName={draft.execution.agent}
-              filter={(agent) => isPrimaryMode(agent.mode)}
+              agentId={draft.execution.agent}
+              directory={projectDirectory ?? undefined}
               onChange={(agent) => setDraft((prev) => ({
                 ...prev,
                 execution: {
