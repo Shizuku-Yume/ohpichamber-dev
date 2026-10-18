@@ -3,7 +3,7 @@ import type { Message, Part, StepSummaryPart } from '@openchamber/agent-contract
 import { useSessionUIStore, getRememberedSessionDirectory } from '@/sync/session-ui-store';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { opencodeClient } from '@/lib/opencode/client';
+import { canonicalClient } from '@/api/canonicalClient';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
@@ -43,7 +43,7 @@ type SessionDirectoryReport = {
     rememberedForRuntime: string | null;
     persistedAcrossRestarts: string | null;
     activeDirectory: string | null;
-    opencodeClientDirectory: string | null;
+    hostDirectory: string | null;
   };
 };
 
@@ -308,18 +308,23 @@ export const debugUtils = {
     let settingsInfo: unknown = null;
     let opencodeHealth: unknown = null;
 
-    try {
-      pathInfo = await opencodeClient.getLocation(currentDirectory);
-    } catch (error) {
-      pathInfo = { error: error instanceof Error ? error.message : String(error) };
+    if (currentDirectory) {
+      try {
+        const workspace = await canonicalClient.resolveWorkspace(currentDirectory);
+        pathInfo = {
+          directory: currentDirectory,
+          worktree: workspace.displayPath,
+          workspaceId: workspace.workspaceId,
+          projectId: workspace.projectId,
+        };
+      } catch (error) {
+        pathInfo = { error: error instanceof Error ? error.message : String(error) };
+      }
+    } else {
+      pathInfo = { error: 'No active workspace directory' };
     }
     const locationInfo = DebugLocationSchema.safeParse(pathInfo).data;
-
-    try {
-      projectInfo = await opencodeClient.getCurrentProject(currentDirectory);
-    } catch (error) {
-      projectInfo = { error: error instanceof Error ? error.message : String(error) };
-    }
+    projectInfo = projectsState.getActiveProject();
 
     settingsInfo = await safeFetchJson('/api/config/settings');
 
@@ -520,7 +525,7 @@ export const debugUtils = {
         rememberedForRuntime: remembered.runtime,
         persistedAcrossRestarts: remembered.persisted,
         activeDirectory: useDirectoryStore.getState().currentDirectory ?? null,
-        opencodeClientDirectory: hostFilesystem.getDirectory() ?? null,
+        hostDirectory: hostFilesystem.getDirectory() ?? null,
       },
     };
 

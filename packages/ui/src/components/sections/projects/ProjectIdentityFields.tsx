@@ -12,7 +12,6 @@ import {
   SETTINGS_SELECT_SIZE,
 } from '@/components/sections/shared/SettingsSection';
 import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
-import { modelVariantNames } from '@/lib/modelVariants';
 import { PROJECT_COLORS, PROJECT_ICONS, PROJECT_COLOR_MAP as COLOR_MAP, ProjectIconImage } from '@/lib/projectMeta';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useI18n } from '@/lib/i18n';
@@ -77,9 +76,9 @@ export const ProjectIdentityFields: React.FC<ProjectIdentityFieldsProps> = ({ fo
     const { providerId, modelId } = parsedDefaultModel;
     if (!providerId || !modelId) return [];
     const model = providers
-      .find((provider) => provider.id === providerId)
-      ?.models.find((entry) => entry.id === modelId);
-    return modelVariantNames(model);
+      .find((provider) => provider.providerId === providerId)
+      ?.models.find((entry) => entry.modelId === modelId);
+    return model?.variants.map((variant) => variant.variant) ?? [];
   }, [parsedDefaultModel, providers]);
 
   if (!project) {

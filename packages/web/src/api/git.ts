@@ -12,6 +12,7 @@ export const createWebGitAPI = (): GitAPI => ({
   configureTransportBinding: configureWebTransportBinding,
   removeTransportBinding: removeWebTransportBinding,
   configureAuxiliaryBinding: configureWebAuxiliaryBinding,
+  initializeGit: gitApiHttp.initializeGit,
   checkIsGitRepository: gitApiHttp.checkIsGitRepository,
   getGitStatus: gitApiHttp.getGitStatus,
   getGitDiff: gitApiHttp.getGitDiff,

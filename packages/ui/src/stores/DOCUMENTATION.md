@@ -570,10 +570,11 @@ active.
 
 Any other failed `initializeApp` attempt records `lastInitFailure` (runtime-only,
 cleared on success and on runtime switch): which step failed —
-`serverUnreachable` (no answer or a gateway error), `openCodeUnavailable` (the
-server answered but OpenCode is not healthy), `loadAgents`, or `unexpected` —
-plus the error text when there is one. The startup recovery screen reads it, so
-only a real network failure tells the user to check that the server is running.
+`serverUnreachable` (no answer or a gateway error), `agentServiceUnavailable`
+(the server answered but the Agent Service is not ready), `loadAgents`, or
+`unexpected` — plus the error text when there is one. The startup recovery
+screen reads it, so only a real network failure tells the user to check that
+the server is running.
 
 #### Native agent profiles and retained Host configuration
 

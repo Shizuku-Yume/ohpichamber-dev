@@ -9,7 +9,7 @@ import {
   updateConfigUpdateMessage,
 } from "@/lib/configUpdate";
 import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
-import { waitForOpenCodeConnection } from "@/stores/waitForOpenCodeConnection";
+import { waitForAgentServiceConnection } from "@/stores/waitForAgentServiceConnection";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
 import { useProjectsStore } from "@/stores/useProjectsStore";
 import { runtimeFetch } from "@/lib/runtime-fetch";
@@ -601,7 +601,7 @@ async function performFullConfigRefresh(options: { message?: string; delayMs?: n
   }
 
   try {
-    await waitForOpenCodeConnection(delayMs);
+    await waitForAgentServiceConnection(delayMs);
     if (generation !== commandsGeneration) return;
     updateConfigUpdateMessage("Refreshing commands…");
 

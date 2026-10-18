@@ -26,7 +26,6 @@ import type { ScheduledTask } from '@/lib/scheduledTasksApi';
 import { useI18n } from '@/lib/i18n';
 import { isValidCronExpression, getNextRuns, CRON_EXAMPLES } from '@/lib/cron';
 import { canonicalizeTimezone } from '@/lib/timezones';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore, refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
 import { useAllLiveSessions } from '@/sync/sync-context';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -881,9 +880,9 @@ export function ScheduledTaskEditorDialog(props: {
   }, [isDatePickerOpen]);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === draft.execution.providerID);
-    const model = provider?.models?.find((item) => item.id === draft.execution.modelID) as { variants?: ModelVariantSource } | undefined;
-    return listModelVariantIds(model?.variants);
+    const provider = providers.find((item) => item.providerId === draft.execution.providerID);
+    const model = provider?.models?.find((item) => item.modelId === draft.execution.modelID);
+    return model?.variants.map((entry) => entry.variant) ?? [];
   }, [providers, draft.execution.providerID, draft.execution.modelID]);
   const hasVariantOptions = variantOptions.length > 0;
   const selectedVariantValue = React.useMemo(() => {

@@ -10,7 +10,8 @@ import { copyTextToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/lib/i18n';
 import { getToolMetadata } from '@/lib/toolHelpers';
 import { cn } from '@/lib/utils';
-import { normalizeToolName, toolDescription } from '@/lib/opencode/tools';
+import { normalizeToolName } from '@/lib/toolHelpers';
+import { toolDescription } from '@/lib/opencode/tools';
 import type { ToolPopupContent } from '../types';
 import {
     capToolOutputText,

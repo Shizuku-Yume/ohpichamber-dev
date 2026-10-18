@@ -12,9 +12,9 @@
 - `pwa-manifest-routes.js` generates the dynamic install manifest and recent-session shortcuts.
 - `project-directory-runtime.js` resolves and validates workspace roots; `project-icon-routes.js` owns project icon upload, discovery, and serving.
 - `network-runtime.js` builds the managed OpenCode connection URL and performs readiness checks. Compatibility parsing is supplied by composition as required dependencies so this Host module does not import the legacy integration path.
-- `login-shell-env.js` provides the login-shell environment snapshot used when embedding the server in Electron and when starting host commands.
+- `path-utils.js` owns shared PATH heuristics and merge utilities used by Electron's login-shell environment setup and Host command environment resolution. It is Host infrastructure, not an OpenCode lifecycle owner.
+- `sse-stream.js` owns response backpressure for Host and isolated-space event streams; `session-list.js` owns the allowlisted session-list projection shared by the Host proxy and spaces.
 - `server-startup-runtime.js`, `startup-pipeline-runtime.js`, and `static-routes-runtime.js` own Host HTTP startup, static assets, SPA fallback, and manifest wiring.
-- `managed-process-registry.js` and its declaration file track managed child processes and reap only verified orphaned processes. `startup-performance.js` records opt-in startup diagnostics shared by lifecycle, proxy, and startup callers.
 - `agent-service-supervisor.js` and `agent-service-supervisor.d.ts` start the separate Bun service, discover its loopback endpoint, supervise lifecycle, verify Linux process birth identity, handle worker operation authorization, and route native approval policy IPC.
 - `agent-runtime.js` integrates the supervisor, scope runtime, approval policy store, and worker operation authorizer, resolving authorized workspace and session scopes for Host operations.
 - `agent-scope-store.js` and `agent-scope-runtime.js` manage project, directory, workspace, and session containment in Host SQLite, validating roots against configured projects, Git worktrees, and managed chats.

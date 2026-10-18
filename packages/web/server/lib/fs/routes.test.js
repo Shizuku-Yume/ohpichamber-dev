@@ -2218,6 +2218,7 @@ describe('fs managed chats root', () => {
       fsPromises: {
         realpath: async directory => {
           if (directory === '/srv/chat-alias') return '/storage/chats';
+          if (directory.startsWith('/storage/chats')) return directory;
           throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
         },
       },
@@ -2240,7 +2241,7 @@ describe('fs managed chats root', () => {
 });
 
 describe('canonical managed roots with real filesystem aliases', () => {
-  const setup = async (context, { relocated = false, caseAlias = false } = {}) => {
+  const setup = async (context, { relocated = false, caseAlias = false, noProject = false } = {}) => {
     const root = await nativeFs.mkdtemp(path.join(tmpdir(), 'oc-canonical-chats-'));
     context.onTestFinished(() => nativeFs.rm(root, { recursive: true, force: true }));
     const home = path.join(root, 'Home');
@@ -2258,7 +2259,9 @@ describe('canonical managed roots with real filesystem aliases', () => {
     registerFsRoutes(app, {
       os: { homedir: () => reportedHome }, path, fsPromises: nativeFs,
       normalizeDirectoryPath: value => value,
-      resolveProjectDirectory: async () => ({ directory: path.join(root, 'unrelated-project') }),
+      resolveProjectDirectory: async () => noProject
+        ? { directory: null, error: 'Directory parameter or active project is required' }
+        : { directory: path.join(root, 'unrelated-project') },
       openchamberUserConfigRoot: config, managedChatsRoot: rawChats,
     });
     return { getRoute, canonicalHome, canonicalChats, rawChats, reportedHome };
@@ -2292,6 +2295,34 @@ describe('canonical managed roots with real filesystem aliases', () => {
       expect((await nativeFs.stat(path.join(canonicalChats, 'legacy-session'))).isDirectory()).toBe(true);
     });
   }
+
+  it('creates and deletes managed chats without any configured project', async context => {
+    const { getRoute, canonicalChats, rawChats, canonicalHome } = await setup(context, { relocated: true, noProject: true });
+    for (const chatsRoot of [rawChats, canonicalChats]) {
+      const directory = path.join(chatsRoot, 'day', 'session-first');
+      const created = createMockResponse();
+      await getRoute('POST', '/api/fs/mkdir')({ body: { path: directory } }, created);
+      expect(created.statusCode).toBe(200);
+      expect((await nativeFs.stat(directory)).isDirectory()).toBe(true);
+      const deleted = createMockResponse();
+      await getRoute('POST', '/api/fs/delete')({ body: { path: directory } }, deleted);
+      expect(deleted.statusCode).toBe(200);
+      await expect(nativeFs.stat(directory)).rejects.toMatchObject({ code: 'ENOENT' });
+    }
+
+    const outside = path.join(canonicalHome, 'unmanaged', 'session-no');
+    const denied = createMockResponse();
+    await getRoute('POST', '/api/fs/mkdir')({ body: { path: outside } }, denied);
+    expect(denied.statusCode).toBe(400);
+    await expect(nativeFs.stat(outside)).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const escape = path.join(canonicalChats, 'escape');
+    await nativeFs.symlink(canonicalHome, escape, 'junction');
+    const escaped = createMockResponse();
+    await getRoute('POST', '/api/fs/mkdir')({ body: { path: path.join(escape, 'escaped-session') } }, escaped);
+    expect(escaped.statusCode).toBe(400);
+    await expect(nativeFs.stat(path.join(canonicalHome, 'escaped-session'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
 
   it('reports on-disk home casing on a case-insensitive macOS volume', { skip: process.platform !== 'darwin' }, async context => {
     const { getRoute, canonicalChats, rawChats, reportedHome } = await setup(context, { caseAlias: true });

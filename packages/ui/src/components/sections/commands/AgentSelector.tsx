@@ -9,7 +9,7 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { canonicalClient } from '@/api/canonicalClient';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 interface AgentSelectorProps {
     agentName: string;
     onChange: (agentName: string) => void;
@@ -28,11 +28,12 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     directory,
 }) => {
     const { t } = useI18n();
-    const [agents, setAgents] = React.useState<Agent[]>([]);
-    const [isLoading, setIsLoading] = React.useState(true);
-    const [isUnavailable, setIsUnavailable] = React.useState(false);
     const effectiveDirectory = useEffectiveDirectory();
     const workspaceDirectory = directory ?? effectiveDirectory ?? null;
+    const agents = useAgentsStore((state) => selectAgentsForDirectory(state, workspaceDirectory));
+    const loadAgents = useAgentsStore((state) => state.loadAgents);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isUnavailable, setIsUnavailable] = React.useState(false);
     const isReady = !isLoading && !isUnavailable;
     const selectedAgent = agents.find((agent) => agent.name === agentName);
     const selectedAgentLabel = selectedAgent ? selectedAgent.name : agentName;
@@ -50,25 +51,16 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
         setIsLoading(true);
         setIsUnavailable(false);
         if (!workspaceDirectory) {
-            setAgents([]);
             setIsLoading(false);
             return;
         }
-        void canonicalClient.resolveWorkspace(workspaceDirectory)
-            .then((workspace) => canonicalClient.getAgents(workspace.workspaceId))
-            .then((catalog) => {
-                if (cancelled) return;
-                setAgents(catalog.agents);
-                setIsLoading(false);
-            })
-            .catch(() => {
-                if (cancelled) return;
-                setAgents([]);
-                setIsUnavailable(true);
-                setIsLoading(false);
-            });
+        void loadAgents(workspaceDirectory).then((loaded) => {
+            if (cancelled) return;
+            setIsUnavailable(!loaded);
+            setIsLoading(false);
+        });
         return () => { cancelled = true; };
-    }, [workspaceDirectory]);
+    }, [loadAgents, workspaceDirectory]);
 
     const closeMobilePanel = () => setIsMobilePanelOpen(false);
 

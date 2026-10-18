@@ -14,7 +14,6 @@ import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { generateBranchSlug } from '@/lib/git/branchNameGenerator';
 import { buildLinkedGuestIssue, type LinkedGuestIssue } from '@/lib/linkedIssues';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
-import { modelVariantNames } from '@/lib/modelVariants';
 import { resolveProjectRef } from '@/lib/worktreeSessionCreator';
 import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
 import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
@@ -163,18 +162,12 @@ const resolveDefaultVariant = (providerId: string, modelId: string): string | un
   const currentVariant = configState.currentProviderId === providerId && configState.currentModelId === modelId
     ? configState.currentVariant
     : undefined;
-  const provider = configState.providers.find((entry) => entry.id === providerId);
-  const model = provider?.models.find((entry) => entry.id === modelId);
-  const variantNames = modelVariantNames(model);
-  if (variantNames.length === 0) {
-    return settingsDefaultVariant || currentVariant || undefined;
-  }
-  if (settingsDefaultVariant && variantNames.includes(settingsDefaultVariant)) {
-    return settingsDefaultVariant;
-  }
-  if (currentVariant && variantNames.includes(currentVariant)) {
-    return currentVariant;
-  }
+  const provider = configState.providers.find((entry) => entry.providerId === providerId);
+  const model = provider?.models.find((entry) => entry.modelId === modelId);
+  const variantNames = model?.variants.map((entry) => entry.variant) ?? [];
+  if (variantNames.length === 0) return settingsDefaultVariant || currentVariant || undefined;
+  if (settingsDefaultVariant && variantNames.includes(settingsDefaultVariant)) return settingsDefaultVariant;
+  if (currentVariant && variantNames.includes(currentVariant)) return currentVariant;
   return undefined;
 };
 

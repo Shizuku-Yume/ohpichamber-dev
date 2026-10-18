@@ -10,7 +10,7 @@ import {
   getProviderCardStatus,
   getSignInIntegrationId,
   getSignInMethods,
-  hasCanonicalStoredApiKey,
+  hasCanonicalStoredCredential,
   providerHasCredentials,
   shouldAutoOpenAuthPanel,
   shouldShowApiKeyAuth,
@@ -120,7 +120,7 @@ describe('provider credential state helpers', () => {
     expect(providerHasCredentials({ connections: [], optionsApiKey: null })).toBe(false);
   });
 
-  test('canonical stored API keys satisfy provider auth without integration rows', () => {
+  test('canonical stored credentials satisfy provider auth without integration rows', () => {
     const auth: ProviderAuthState = {
       status: 'configured',
       credentialRef: 'provider_credential',
@@ -128,7 +128,7 @@ describe('provider credential state helpers', () => {
       source: 'stored-credential',
     };
     expect(providerHasCredentials({ canonicalAuth: auth })).toBe(true);
-    expect(hasCanonicalStoredApiKey(auth)).toBe(true);
+    expect(hasCanonicalStoredCredential(auth)).toBe(true);
     expect(getProviderCardStatus({ integrations: null, providerId: 'anthropic', canonicalAuth: auth }))
       .toEqual({ kind: 'connected' });
     const managedEnvironment: ProviderAuthState = {
@@ -153,14 +153,11 @@ describe('provider credential state helpers', () => {
     expect(getProviderCardStatus({
       integrations: [integration()], providerId: 'anthropic', canonicalAuth: storedOAuth,
     })).toEqual({ kind: 'connected' });
-    expect(hasCanonicalStoredApiKey(storedOAuth)).toBe(false);
-    expect(hasCanonicalStoredApiKey({
-      status: 'configured', credentialRef: 'provider_credential', method: 'oauth', source: 'stored-credential',
-    })).toBe(false);
-    expect(hasCanonicalStoredApiKey({
+    expect(hasCanonicalStoredCredential(storedOAuth)).toBe(true);
+    expect(hasCanonicalStoredCredential({
       status: 'configured', credentialRef: 'provider_credential', method: 'api-key', source: 'managed-environment',
     })).toBe(false);
-    expect(hasCanonicalStoredApiKey({ status: 'missing' })).toBe(false);
+    expect(hasCanonicalStoredCredential({ status: 'missing' })).toBe(false);
   });
   test('OAuth-only provider without credentials opens the panel and hides models', () => {
     const hasCredentials = providerHasCredentials({ connections: [] });

@@ -16,11 +16,10 @@ import { getConfigDirectory, invalidateAgentsLoadCache, useAgentsStore } from "@
 import { invalidateCommandsLoadCache, useCommandsStore } from "@/stores/useCommandsStore";
 import { invalidateSkillsLoadCache, useSkillsStore } from "@/stores/useSkillsStore";
 import { useSkillsCatalogStore } from "@/stores/useSkillsCatalogStore";
-import { invalidateConfigAgentsLoad, useConfigStore } from "@/stores/useConfigStore";
+import { useConfigStore } from "@/stores/useConfigStore";
 import { useMcpConfigStore } from "@/stores/useMcpConfigStore";
 import { usePluginsStore } from "@/stores/usePluginsStore";
 import { refreshWebSearchIfLoaded } from "@/stores/useWebSearchStore";
-
 const SOURCE = "catalogRefresh";
 
 const refreshAgents = async (eventDirectories: readonly string[] = []): Promise<void> => {
@@ -32,19 +31,13 @@ const refreshAgents = async (eventDirectories: readonly string[] = []): Promise<
   ));
 
   invalidateAgentsLoadCache();
-  invalidateConfigAgentsLoad();
   for (const directory of scopedDirectories) {
     invalidateAgentsLoadCache(directory);
-    invalidateConfigAgentsLoad(directory);
   }
 
   await Promise.allSettled([
     useAgentsStore.getState().loadAgents(),
-    useConfigStore.getState().loadAgents({ source: SOURCE, fresh: true }),
-    ...scopedDirectories.flatMap((directory) => [
-      useAgentsStore.getState().loadAgents(directory),
-      useConfigStore.getState().loadAgents({ directory, source: SOURCE, fresh: true }),
-    ]),
+    ...scopedDirectories.map((directory) => useAgentsStore.getState().loadAgents(directory)),
   ]);
 };
 

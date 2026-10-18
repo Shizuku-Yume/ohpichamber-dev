@@ -1,12 +1,12 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useChatSessionSelection } from './chatColumnSession';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useSelectionStore } from '@/sync/selection-store';
+import { useChatSessionSelection } from './chatColumnSession';
 import { getAgentDisplayName } from './mobileControlsUtils';
 import { useAgentColors } from '@/hooks/useAgentColors';
 import { isAutoModel } from '@/lib/routing/autoModel';
-
 interface MobileAgentButtonProps {
     onCycleAgent: () => void;
     onOpenAgentPanel: () => void;
@@ -21,13 +21,12 @@ export const MobileAgentButton: React.FC<MobileAgentButtonProps> = ({ onCycleAge
     const currentAgentName = useConfigStore((state) => state.currentAgentName);
     const currentProviderId = useConfigStore((state) => state.currentProviderId);
     const currentModelId = useConfigStore((state) => state.currentModelId);
-    const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
+    const agents = useAgentsStore((state) => state.agents);
     const currentSessionId = useChatSessionSelection().sessionId;
     const sessionAgentName = useSelectionStore((state) =>
         currentSessionId ? state.getSessionAgentSelection(currentSessionId) : null
     );
 
-    const agents = getVisibleAgents();
     const uiAgentName = currentSessionId ? (sessionAgentName || currentAgentName) : currentAgentName;
     const agentLabel = getAgentDisplayName(agents, uiAgentName);
     const agentColor = getAgentColor(uiAgentName);

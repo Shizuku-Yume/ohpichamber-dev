@@ -73,7 +73,7 @@ export function useParallelComposer(input: {
     const config = useConfigStore.getState();
     const providerId = config.currentProviderId;
     const modelId = config.currentModelId;
-    const displayName = config.providers.find((provider) => provider.id === providerId)?.models.find((model) => model.id === modelId)?.name;
+    const displayName = config.providers.find((provider) => provider.providerId === providerId)?.models.find((model) => model.modelId === modelId)?.name;
     const seed: ParallelModel[] = providerId && modelId && !isAutoModel(providerId, modelId)
       ? [{ providerId, modelId, displayName: displayName || undefined, variant: config.currentVariant || undefined, count: 1 }]
       : [];

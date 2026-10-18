@@ -2,22 +2,24 @@ import { describe, expect, test } from "bun:test"
 
 import {
   patchInputFiles,
-  isQuestionTool,
-  carriesFileDiffs,
   executeOutputTruncation,
   executeScript,
   executeToolCalls,
+  subagentSessionId,
+  toolDescription,
+  toolFileDiffs,
+  toolInputPath,
+} from "./tools"
+import {
+  isQuestionTool,
+  carriesFileDiffs,
   isExplorationTool,
   isFileChangeTool,
   isShellTool,
   isSubagentTool,
   isWebTool,
   normalizeToolName,
-  subagentSessionId,
-  toolDescription,
-  toolFileDiffs,
-  toolInputPath,
-} from "./tools"
+} from "../toolHelpers"
 
 describe("tool identity", () => {
   test("recognizes the v2 names, not the v1 ones", () => {

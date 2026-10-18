@@ -1,11 +1,62 @@
-import { normalizeToolName } from '@/lib/opencode/tools';
-import {
-  isEditTool,
-  isPatchTool,
-  isShellTool,
-  isSubagentTool,
-  isWriteTool,
-} from '@/lib/opencode/tools';
+/** Built-in tool names as the server reports them. */
+export const OPENCODE_TOOLS = {
+  edit: "edit",
+  execute: "execute",
+  glob: "glob",
+  grep: "grep",
+  patch: "patch",
+  question: "question",
+  read: "read",
+  shell: "shell",
+  skill: "skill",
+  subagent: "subagent",
+  webfetch: "webfetch",
+  websearch: "websearch",
+  write: "write",
+  sessionRename: "session_rename",
+  sessionMove: "session_move",
+  models: "models",
+} as const;
+
+type OpencodeToolName = (typeof OPENCODE_TOOLS)[keyof typeof OPENCODE_TOOLS];
+export type ToolName = string | undefined;
+
+export function normalizeToolName(toolName: ToolName): string {
+  const trimmed = toolName?.trim().toLowerCase();
+  if (!trimmed) return "";
+  const withoutIndex = trimmed.replace(/:\d+$/, "");
+  if (!withoutIndex.includes(".")) return withoutIndex;
+  const segments = withoutIndex.split(".").filter(Boolean);
+  return segments[segments.length - 1] ?? withoutIndex;
+}
+
+const is = (name: OpencodeToolName) => (toolName: ToolName): boolean => normalizeToolName(toolName) === name;
+export const isFinalToolStatus = (status: string): boolean => status === 'completed' || status === 'error';
+export const isShellTool = is(OPENCODE_TOOLS.shell);
+export const isExecuteTool = is(OPENCODE_TOOLS.execute);
+export const isSubagentTool = is(OPENCODE_TOOLS.subagent);
+export const isQuestionTool = is(OPENCODE_TOOLS.question);
+export const isSkillTool = is(OPENCODE_TOOLS.skill);
+export const isEditTool = is(OPENCODE_TOOLS.edit);
+export const isWriteTool = is(OPENCODE_TOOLS.write);
+export const isPatchTool = is(OPENCODE_TOOLS.patch);
+
+const FILE_CHANGE_TOOLS = new Set<string>([OPENCODE_TOOLS.edit, OPENCODE_TOOLS.write, OPENCODE_TOOLS.patch]);
+const EXPLORATION_TOOLS = new Set<string>([
+  OPENCODE_TOOLS.read,
+  OPENCODE_TOOLS.grep,
+  OPENCODE_TOOLS.glob,
+  OPENCODE_TOOLS.skill,
+]);
+const WEB_TOOLS = new Set<string>([OPENCODE_TOOLS.webfetch, OPENCODE_TOOLS.websearch]);
+export const isFileChangeTool = (toolName: ToolName): boolean => FILE_CHANGE_TOOLS.has(normalizeToolName(toolName));
+export const carriesFileDiffs = (toolName: ToolName): boolean => {
+  const name = normalizeToolName(toolName);
+  return name === OPENCODE_TOOLS.edit || name === OPENCODE_TOOLS.patch;
+};
+export const isExplorationTool = (toolName: ToolName): boolean => EXPLORATION_TOOLS.has(normalizeToolName(toolName));
+export const isWebTool = (toolName: ToolName): boolean => WEB_TOOLS.has(normalizeToolName(toolName));
+export const isWebSearchTool = (toolName: ToolName): boolean => normalizeToolName(toolName) === OPENCODE_TOOLS.websearch;
 
 /** v2 file tools report `path`; the other keys cover MCP and plugin tools. */
 const readInputPath = (input: Record<string, unknown> | undefined): string | null => {

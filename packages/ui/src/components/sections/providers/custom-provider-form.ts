@@ -151,6 +151,7 @@ export type ValidateCustomProviderResult = {
 
 export type ProviderLikeForCustomForm = {
   id: string;
+  integrationID?: string;
   name?: string;
   env?: string[];
   /** v2 spelling. */
@@ -171,6 +172,18 @@ export type ProviderLikeForCustomForm = {
       capabilities?: { tools?: boolean; input?: string[]; output?: string[] };
     }>
     | Record<string, unknown>;
+};
+/**
+ * Canonical catalog providers deliberately do not expose OpenCode config
+ * fields. Only an object carrying the legacy `id` shape may enter the custom
+ * provider form helpers below.
+ */
+export const isProviderLikeForCustomForm = (value: unknown): value is ProviderLikeForCustomForm => {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.id !== 'string') return false;
+  return ['name', 'env', 'package', 'settings', 'headers', 'options', 'models']
+    .some((field) => field in candidate);
 };
 
 /** The SDK package of a provider or of one of its models, either spelling. */

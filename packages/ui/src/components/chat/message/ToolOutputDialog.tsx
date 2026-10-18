@@ -1,4 +1,4 @@
-import { isShellTool, isSubagentTool, isWriteTool } from '@/lib/opencode/tools';
+import { isShellTool, isSubagentTool, isWriteTool } from '@/lib/toolHelpers';
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { File as PierreFile, PatchDiff } from '@pierre/diffs/react';

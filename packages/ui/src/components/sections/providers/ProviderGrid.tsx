@@ -8,7 +8,7 @@ import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
-import type { Model, Provider } from '@/lib/opencode/model';
+import type { Model, Provider } from '@openchamber/agent-contract';
 import {
   SETTINGS_CARD_GRID_CLASS,
   SettingsAddCard,
@@ -18,7 +18,7 @@ import {
   SettingsCardSearch,
   type SettingsCardTone,
 } from '@/components/sections/shared/SettingsCards';
-import { findIntegrationForProvider, getProviderCardStatus, readProviderApiKeySetting, type ProviderCardStatus } from './providerAuth';
+import { findIntegrationForProvider, getProviderCardStatus, type ProviderCardStatus } from './providerAuth';
 import { SETTINGS_CALLOUT_TITLE_CLASS, SettingsSection } from '@/components/sections/shared/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -142,7 +142,7 @@ const ClassificationCard: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
   );
 };
 
-type GridProvider = Provider & { models: Model[]; canonicalAuth?: ProviderAuthState };
+type GridProvider = Provider & { models: Model[] };
 
 interface ProviderGridProps {
   providers: readonly GridProvider[];
@@ -171,14 +171,14 @@ const useProjectProviderIds = (providers: readonly GridProvider[], directory: st
     const query = directory ? `?directory=${encodeURIComponent(directory)}` : '';
     void Promise.all(providers.map(async (provider) => {
       try {
-        const response = await runtimeFetch(`/api/provider/${encodeURIComponent(provider.id)}/source${query}`, {
+        const response = await runtimeFetch(`/api/provider/${encodeURIComponent(provider.providerId)}/source${query}`, {
           method: 'GET',
           headers: { Accept: 'application/json' },
         });
         if (!response.ok) return null;
         const payload = await response.json().catch(() => null);
         const sources = payload?.sources ?? payload?.data?.sources;
-        return sources?.project?.exists === true ? provider.id : null;
+        return sources?.project?.exists === true ? provider.providerId : null;
       } catch {
         // A provider whose source cannot be read just loses its Project chip.
         return null;
@@ -220,8 +220,8 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({ providers, integrati
   // Alphabetical by name, so a card is found by scanning rather than in the
   // order the providers happened to be configured.
   const alphabetical = React.useMemo(() => [...providers].sort((a, b) =>
-    (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' })), [providers]);
-  const filtered = rankByQuery(alphabetical, query, (provider) => [provider.name || provider.id, provider.id]);
+    (a.name || a.providerId).localeCompare(b.name || b.providerId, undefined, { sensitivity: 'base' })), [providers]);
+  const filtered = rankByQuery(alphabetical, query, (provider) => [provider.name || provider.providerId, provider.providerId]);
   const hasQuery = query.trim().length > 0;
   // The server refuses new providers and keys; this only keeps the way in hidden.
   const locked = useEnterpriseMode();
@@ -256,15 +256,15 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({ providers, integrati
         {filtered.map((provider) => {
           const status = getProviderCardStatus({
             integrations,
-            providerId: provider.id,
-            optionsApiKey: readProviderApiKeySetting(provider),
-            canonicalAuth: provider.canonicalAuth,
+            providerId: provider.providerId,
+            optionsApiKey: null,
+            canonicalAuth: provider.auth,
           });
           return (
             <SettingsCard
-              key={provider.id}
-              icon={<ProviderLogo providerId={provider.id} className="size-5" />}
-              title={provider.name || provider.id}
+              key={provider.providerId}
+              icon={<ProviderLogo providerId={provider.providerId} className="size-5" />}
+              title={provider.name || provider.providerId}
               badges={status ? <StatusPill status={status} /> : null}
               footer={(
                 <>
@@ -272,10 +272,10 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({ providers, integrati
                     <Icon name="stack" className="size-3.5 opacity-70" aria-hidden />
                     <span className="tabular-nums">{provider.models.length}</span>
                   </span>
-                  {projectIds.has(provider.id) ? <SettingsCardChip>{t('settings.providers.card.source.project')}</SettingsCardChip> : null}
+                  {projectIds.has(provider.providerId) ? <SettingsCardChip>{t('settings.providers.card.source.project')}</SettingsCardChip> : null}
                 </>
               )}
-              onOpen={() => onSelect(provider.id)}
+              onOpen={() => onSelect(provider.providerId)}
             />
           );
         })}

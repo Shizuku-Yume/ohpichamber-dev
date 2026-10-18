@@ -28,7 +28,7 @@ export const useSpaceModelProviders = (projectDirectory?: string | null): SpaceM
   const catalog = missing ? activeCatalog : projectCatalog;
   return React.useMemo(() => SPACE_MODEL_PROVIDERS
     .flatMap((known) => {
-      const entry = catalog.find((provider) => provider.id === known.id);
+      const entry = catalog.find((provider) => provider.providerId === known.id);
       return entry ? [{ ...known, name: entry.name }] : [];
     })
     .sort((a, b) => Number(b.id === currentProviderId) - Number(a.id === currentProviderId)), [catalog, currentProviderId]);

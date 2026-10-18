@@ -476,6 +476,22 @@ export function registerGitRoutes(app, {
     }
   });
 
+  app.post('/api/git/init', userAction(async (req, res) => {
+    const { initializeRepository } = await getGitLibraries();
+    try {
+      const directory = resolveDirectoryQuery(req.query.directory);
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+      await initializeRepository(directory);
+      return res.status(204).end();
+    } catch (error) {
+      console.error('Failed to initialize git repository:', error);
+      return res.status(Number.isInteger(error?.statusCode) ? error.statusCode : 500)
+        .json({ error: error?.message || 'Failed to initialize Git' });
+    }
+  }));
+
   app.get('/api/git/remote-url', async (req, res) => {
     const { getRemoteUrl } = await getGitLibraries();
     try {

@@ -1,15 +1,14 @@
 import { create } from "zustand";
-import { listModelVariantIds, modelVariantNames } from "@/lib/modelVariants";
 import { AUTO_MODEL_ID, AUTO_PROVIDER_ID, isAutoModel } from '@/lib/routing/autoModel';
 import { selectAutoReady, useRoutingStore } from '@/stores/useRoutingStore';
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist } from "zustand/middleware";
-import { findCatalogModel, type Provider, type Model, type Agent, type Config } from '@/lib/opencode/model';
-import type { ModelCatalog, ProviderAuthState, ProviderCatalog } from '@openchamber/agent-contract';
+import { type Agent, type Config } from '@/lib/opencode/model';
+import type { Model, ModelCatalog, Provider, ProviderAuthState, ProviderCatalog } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import type { DesktopSettings } from "@/lib/desktop";
 import type { CatalogKind } from "@/lib/opencode/events";
-import { opencodeClient, type OpencodeHealthProbe } from "@/lib/opencode/client";
+import { opencodeClient } from "@/lib/opencode/client";
 import { hostFilesystem } from '@/lib/host-filesystem';
 
 import { isSameProjectConfigError, readProjectConfigError, type ProjectConfigError } from "@/lib/opencode/configError";
@@ -197,40 +196,10 @@ const parseModelString = (modelString: string): { providerId: string; modelId: s
 const normalizeProviderId = (value: string) => value?.toLowerCase?.() ?? '';
 
 type ProviderModel = Model;
-/**
- * OpenCode v2 reports providers and models as two flat lists. Every selection
- * path in this store works provider-first, so the loader regroups the catalog's
- * models under their provider and the rest of the store keeps that shape.
- */
+/** Canonical providers with their workspace models grouped for picker consumers. */
 type ProviderWithModelList = Provider & { models: Model[]; canonicalAuth?: ProviderAuthState };
 
-/** Convert canonical catalogs to the provider-first shape retained by picker consumers. */
-const adaptCanonicalModel = (model: ModelCatalog['models'][number]): Model => ({
-    id: `${model.provider}/${model.modelId}`,
-    modelID: model.modelId,
-    providerID: model.provider,
-    name: model.name,
-    capabilities: {
-        tools: model.toolsSupported ?? false,
-        input: model.modalities,
-        output: model.modalities,
-    },
-    variants: model.variants.map((variant) => ({ id: variant.variant })),
-    time: { released: 0 },
-    cost: [{
-        input: model.pricing?.inputPerMillionTokens ?? 0,
-        output: model.pricing?.outputPerMillionTokens ?? 0,
-        cache: {
-            read: model.pricing?.cacheReadPerMillionTokens ?? 0,
-            write: model.pricing?.cacheWritePerMillionTokens ?? 0,
-        },
-    }],
-    status: model.status ?? 'active',
-    enabled: model.enabled ?? true,
-    limit: { context: model.contextWindow, output: model.maxOutputTokens },
-});
-
-const adaptCanonicalCatalog = (
+const combineCanonicalCatalog = (
     providerCatalog: ProviderCatalog,
     modelCatalog: ModelCatalog,
 ): ProviderWithModelList[] => {
@@ -238,22 +207,18 @@ const adaptCanonicalCatalog = (
     for (const model of modelCatalog.models) {
         if (model.enabled === false) continue;
         const bucket = modelsByProvider.get(model.provider);
-        const adapted = adaptCanonicalModel(model);
-        if (bucket) bucket.push(adapted);
-        else modelsByProvider.set(model.provider, [adapted]);
+        if (bucket) bucket.push(model);
+        else modelsByProvider.set(model.provider, [model]);
     }
     return providerCatalog.providers
         .filter((provider) => modelsByProvider.has(provider.providerId))
         .map((provider) => ({
-            id: provider.providerId,
-            name: provider.name,
-            activation: 'enabled' as const,
-            package: provider.providerId,
-            canonicalAuth: provider.auth,
+            ...provider,
             models: modelsByProvider.get(provider.providerId) ?? [],
+            canonicalAuth: provider.auth,
         }));
-
 };
+
 type GitModelSelection = { providerId: string; modelId: string };
 type ProviderModelSelection = { providerId: string; modelId: string; variant?: string } | null;
 
@@ -262,9 +227,7 @@ const sanitizePersistedSelectedProviderId = (providerId: string | undefined): st
 );
 
 const normalizeOptionalString = (value: unknown): string | undefined => {
-    if (typeof value !== "string") {
-        return undefined;
-    }
+    if (typeof value !== "string") return undefined;
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;
 };
@@ -273,13 +236,12 @@ const findProviderModel = (
     providers: ProviderWithModelList[],
     providerId: string,
     modelId: string,
-): Model | undefined => (
-    findCatalogModel(providers.find((provider) => provider.id === providerId)?.models, modelId)
-);
+): Model | undefined => providers.find((provider) => provider.providerId === providerId)?.models.find((model) => model.modelId === modelId);
 
-/** v2 lists model variants as records with an `id`, not as a keyed map. */
+const modelVariantIds = (model: Model | undefined): string[] => model?.variants.map((variant) => variant.variant) ?? [];
+
 const modelHasVariant = (model: Model | undefined, variant: string | null | undefined): boolean => (
-    typeof variant === "string" && listModelVariantIds(model?.variants).includes(variant)
+    typeof variant === "string" && modelVariantIds(model).includes(variant)
 );
 
 const hasProviderModel = (
@@ -287,16 +249,8 @@ const hasProviderModel = (
     providerId: string,
     modelId: string
 ): boolean => {
-    // Auto is not a provider OpenCode reports; it is a valid selection exactly
-    // while the server says routing can honour it.
-    if (isAutoModel(providerId, modelId)) {
-        return selectAutoReady(useRoutingStore.getState());
-    }
-    const provider = providers.find((item) => item.id === providerId);
-    if (!provider) {
-        return false;
-    }
-    return findCatalogModel(provider.models, modelId) !== undefined;
+    if (isAutoModel(providerId, modelId)) return selectAutoReady(useRoutingStore.getState());
+    return findProviderModel(providers, providerId, modelId) !== undefined;
 };
 
 /**
@@ -414,9 +368,9 @@ const resolveFallbackModel = (
         return { providerId: FALLBACK_PROVIDER_ID, modelId: FALLBACK_MODEL_ID };
     }
     for (const provider of providers) {
-        const visibleModel = provider.models.find((model) => isVisible(provider.id, model.modelID));
+        const visibleModel = provider.models.find((model) => isVisible(provider.providerId, model.modelId));
         if (visibleModel) {
-            return { providerId: provider.id, modelId: visibleModel.modelID };
+            return { providerId: provider.providerId, modelId: visibleModel.modelId };
         }
     }
 
@@ -426,7 +380,7 @@ const resolveFallbackModel = (
     const firstProvider = providers[0];
     const firstModel = firstProvider?.models[0];
     if (firstProvider && firstModel) {
-        return { providerId: firstProvider.id, modelId: firstModel.modelID };
+        return { providerId: firstProvider.providerId, modelId: firstModel.modelId };
     }
     return null;
 };
@@ -537,19 +491,20 @@ const resolveDefaultAgentModelSelection = ({
         providerId = resolvedAgent.model.providerID;
         modelId = resolvedAgent.model.id;
         variant = hasProviderModel(providers, providerId, modelId)
-            ? resolveVariant(providerId, modelId, resolvedAgent.model.variant)
-            : resolvedAgent.model.variant;
+            ? resolveVariant(providerId, modelId)
+            : undefined;
     }
 
     // OpenCode's global default model — used when neither our settings nor the agent pin a model.
     if (!providerId && opencodeDefaultModel) {
-        const parsed = parseModelSelection(opencodeDefaultModel);
-        if (parsed) {
-            providerId = parsed.providerID;
-            modelId = parsed.modelID;
+        const modelRef = parseModelSelection(opencodeDefaultModel);
+        if (modelRef) {
+            // OpenCode config/session model refs retain the legacy providerID/modelID keys.
+            providerId = modelRef.providerID;
+            modelId = modelRef.modelID;
             variant = hasProviderModel(providers, providerId, modelId)
-                ? resolveVariant(providerId, modelId, parsed.variant)
-                : parsed.variant;
+                ? resolveVariant(providerId, modelId, modelRef.variant)
+                : modelRef.variant;
         }
     }
 
@@ -586,10 +541,10 @@ const resolveGitGenerationModelSelection = ({
         return { providerId: GIT_UTILITY_PROVIDER_ID, modelId: GIT_UTILITY_PREFERRED_MODEL_ID };
     }
 
-    const zenProvider = providers.find((provider) => provider.id === GIT_UTILITY_PROVIDER_ID);
+    const zenProvider = providers.find((provider) => provider.providerId === GIT_UTILITY_PROVIDER_ID);
     if (zenProvider?.models.length) {
         const randomIndex = Math.floor(Math.random() * zenProvider.models.length);
-        const randomModelId = normalizeOptionalString(zenProvider.models[randomIndex]?.modelID);
+        const randomModelId = normalizeOptionalString(zenProvider.models[randomIndex]?.modelId);
         if (randomModelId) {
             return { providerId: GIT_UTILITY_PROVIDER_ID, modelId: randomModelId };
         }
@@ -669,41 +624,23 @@ const buildModelMetadataKey = (providerId: string, modelId: string) => {
     return `${normalizedProvider}/${modelId}`;
 };
 
-/**
- * Fallback metadata for models models.dev does not list (custom providers,
- * proxies). v2 prices a model per context tier; the untiered entry is the base
- * price, so that is what the UI quotes.
- *
- * v2 has no reasoning capability flag. Its model record signals reasoning only
- * through reasoning variants (effort levels) and the reasoning compatibility
- * fields, so reasoning is claimed when one of those is present and left
- * unknown otherwise.
- */
-const deriveModelMetadata = (providerId: string, model: ProviderModel): ModelMetadata => {
-    const baseCost = model.cost.find((entry) => !entry.tier) ?? model.cost[0];
-    const hasReasoningSignal = modelVariantNames(model).length > 0
-        || model.compatibility?.reasoningField !== undefined
-        || model.compatibility?.requireReasoning === true;
-    return {
-        id: model.modelID,
-        providerId,
-        name: model.name,
-        tool_call: model.capabilities.tools,
-        attachment: model.capabilities.input.includes('image'),
-        ...(hasReasoningSignal ? { reasoning: true } : {}),
-        modalities: {
-            input: model.capabilities.input,
-            output: model.capabilities.output,
-        },
-        cost: baseCost ? {
-            input: baseCost.input,
-            output: baseCost.output,
-            cache_read: baseCost.cache.read,
-            cache_write: baseCost.cache.write,
-        } : undefined,
-        limit: { context: model.limit.context, output: model.limit.output },
-    };
-};
+/** Fallback metadata for models models.dev does not list. */
+const deriveModelMetadata = (providerId: string, model: ProviderModel): ModelMetadata => ({
+    id: model.modelId,
+    providerId,
+    name: model.name,
+    tool_call: model.toolsSupported,
+    attachment: model.modalities.includes('image'),
+    reasoning: model.reasoningEffortSupported,
+    modalities: { input: model.modalities, output: model.modalities },
+    cost: model.pricing ? {
+        input: model.pricing.inputPerMillionTokens,
+        output: model.pricing.outputPerMillionTokens,
+        cache_read: model.pricing.cacheReadPerMillionTokens ?? 0,
+        cache_write: model.pricing.cacheWritePerMillionTokens ?? 0,
+    } : undefined,
+    limit: { context: model.contextWindow, output: model.maxOutputTokens },
+});
 
 const transformModelsDevResponse = (payload: unknown): Map<string, ModelMetadata> => {
     const metadataMap = new Map<string, ModelMetadata>();
@@ -874,18 +811,16 @@ const ensureModelsMetadataFetch = (
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const CONNECTION_PROBE_TIMEOUT_MS = 800;
-// How long the server may hold one startup health probe for OpenCode to become
-// ready. It answers within ~100 ms of readiness, so startup notices OpenCode
-// at once instead of on the next poll.
+// The Agent Service readiness route can wait for the supervised worker to settle.
 const CONNECTION_HEALTH_WAIT_MS = 3_000;
+type AgentServiceReadiness = 'ready' | 'unavailable' | 'unreachable';
 
-const probeOpenCodeHealth = async (timeoutMs = CONNECTION_PROBE_TIMEOUT_MS): Promise<boolean> => {
+const probeAgentServiceReadiness = async (timeoutMs = CONNECTION_PROBE_TIMEOUT_MS): Promise<AgentServiceReadiness> => {
     return Promise.race([
-        opencodeClient.checkHealth().catch(() => false),
-        sleep(Math.max(1, timeoutMs)).then(() => false),
+        canonicalClient.checkReady().then((ready) => ready ? 'ready' : 'unavailable').catch(() => 'unreachable' as const),
+        sleep(Math.max(1, timeoutMs)).then(() => 'unreachable' as const),
     ]);
 };
-
 const DIRECTORY_KEY_GLOBAL = "__global__";
 
 const toDirectoryKey = (directory: string | null | undefined): string => {
@@ -1111,41 +1046,18 @@ const getConfigLoadKey = (context: ConfigRuntimeContext, directoryKey: string): 
     JSON.stringify([context.generation, context.runtimeKey, directoryKey])
 );
 
-// Catalogs shown from the persisted cache (configCatalogCache.ts), by load key,
-// with the entry count they showed: providers count their models. The first
-// live load of such a directory is checked against that count; see
-// `shouldHoldFirstLoadAgainstCache`.
-const _providersShownFromCache = new Map<string, number>();
 const _agentsShownFromCache = new Map<string, number>();
-// A location OpenCode is still starting completes its catalog about two
-// seconds after the first, partial answer.
-const CATALOG_CACHE_RECHECK_MS = 2_500;
-const CATALOG_CACHE_RECHECK_SOURCE = 'catalogCacheRecheck';
-
-const countCatalogModels = (providers: readonly ProviderWithModelList[]): number =>
-    providers.reduce((count, provider) => count + provider.models.length, 0);
-
-/**
- * True when a first live catalog for a directory shown from the cache is
- * smaller than the cache. The caller keeps the cached catalog on screen and
- * re-reads once; that re-read is applied whatever it holds.
- */
 const holdFirstLoadAgainstCache = (shownFromCache: Map<string, number>, loadKey: string, loadedCount: number): boolean => {
     const cachedCount = shownFromCache.get(loadKey);
     if (cachedCount === undefined) return false;
     shownFromCache.delete(loadKey);
     return shouldHoldFirstLoadAgainstCache(cachedCount, loadedCount);
 };
-
-/**
- * Persists a catalog a live load applied, once it has settled. A location
- * OpenCode is still starting answers partial first (no plugin providers or
- * agents) and announces the full catalog with catalog events about two seconds
- * later; a load such an event superseded is never stored, the re-read the event
- * triggers is. An empty catalog is stored only by the re-read after a held
- * first load: a cold location answers empty before it has started, and that
- * answer must not erase a good cached catalog.
- */
+// A location OpenCode is still starting completes its catalog about two
+// seconds after the first, partial answer.
+const CATALOG_CACHE_RECHECK_MS = 2_500;
+const CATALOG_CACHE_RECHECK_SOURCE = 'catalogCacheRecheck';
+/** Persists settled canonical catalogs and picker-visible agents. */
 const persistLoadedCatalog = (
     context: ConfigRuntimeContext,
     directoryKey: string,
@@ -1157,20 +1069,12 @@ const persistLoadedCatalog = (
 ): void => {
     if (directoryKey === DIRECTORY_KEY_GLOBAL) return;
     if (isEmpty && source !== CATALOG_CACHE_RECHECK_SOURCE) return;
-    writeCachedCatalogWhenSettled(
-        context.runtimeKey,
-        directoryKey,
-        update,
-        () => !isConfigRuntimeContextCurrent(context) || isCatalogStaleSince(staleAt, directoryKey, loadRevision),
-    );
+    writeCachedCatalogWhenSettled(context.runtimeKey, directoryKey, update, () => (
+        !isConfigRuntimeContextCurrent(context) || isCatalogStaleSince(staleAt, directoryKey, loadRevision)
+    ));
 };
 
-/**
- * Shows the cached catalog of a directory whose live catalog has not loaded
- * yet, so the pickers render while OpenCode starts. Never replaces a live
- * catalog, and never marks anything loaded: settings pickers keep waiting for
- * the live load, which revalidates and replaces it.
- */
+/** Shows cached canonical catalogs while live provider/model and agent loads start. */
 const hydrateConfigCatalogFromCache = async (directoryKey: string): Promise<void> => {
     if (directoryKey === DIRECTORY_KEY_GLOBAL) return;
     const context = captureConfigRuntimeContext();
@@ -1180,26 +1084,16 @@ const hydrateConfigCatalogFromCache = async (directoryKey: string): Promise<void
     useConfigStore.setState((state) => {
         const snapshot = state.directoryScoped[directoryKey] ?? createEmptyDirectoryScopedConfig();
         const isActive = state.activeDirectoryKey === directoryKey;
-        const providersLive = snapshot.providersLoaded === true || snapshot.providers.length > 0
-            || (isActive && (state.providersLoaded || state.providers.length > 0));
-        const agentsLive = snapshot.agentsLoaded === true || snapshot.agents.length > 0
-            || (isActive && (state.agentsLoaded || state.agents.length > 0));
+        const providersLive = snapshot.providersLoaded === true || snapshot.providers.length > 0 || (isActive && (state.providersLoaded || state.providers.length > 0));
+        const agentsLive = snapshot.agentsLoaded === true || snapshot.agents.length > 0 || (isActive && (state.agentsLoaded || state.agents.length > 0));
         const providers = !providersLive && cached.providers?.length ? cached.providers : null;
         const agents = !agentsLive && cached.agents?.length ? cached.agents : null;
         if (!providers && !agents) return state;
-        if (providers) _providersShownFromCache.set(loadKey, countCatalogModels(providers));
         if (agents) _agentsShownFromCache.set(loadKey, agents.length);
-        markStartupTrace('configCatalogCache:hydrated', { directoryKey, providers: providers?.length ?? 0, agents: agents?.length ?? 0 });
-        const defaultProviders = providers && cached.defaultProviders ? cached.defaultProviders : snapshot.defaultProviders;
-        const nextSnapshot: DirectoryScopedConfig = {
-            ...snapshot,
-            ...(providers ? { providers, defaultProviders } : {}),
-            ...(agents ? { agents } : {}),
-        };
+        const nextSnapshot = { ...snapshot, ...(providers ? { providers } : {}), ...(agents ? { agents } : {}) };
         return {
             directoryScoped: { ...state.directoryScoped, [directoryKey]: nextSnapshot },
-            ...(isActive && providers ? { providers, defaultProviders } : {}),
-            ...(isActive && agents ? { agents } : {}),
+            ...(isActive ? { ...(providers ? { providers } : {}), ...(agents ? { agents } : {}) } : {}),
         };
     });
 };
@@ -1225,7 +1119,6 @@ subscribeRuntimeEndpointChanged((detail) => {
     _providersStaleAt.clear();
     _agentsStaleAt.clear();
     _agentsLoadErrors.clear();
-    _providersShownFromCache.clear();
     _agentsShownFromCache.clear();
     _inFlightProviders.clear();
     _inFlightAgents.clear();
@@ -1646,7 +1539,7 @@ type ConfigStoreWithPersist = UseBoundStore<StoreApi<ConfigStore>> & {
 
 /** The startup step that failed, with the underlying error text when one exists. */
 export type InitFailure = {
-    step: 'serverUnreachable' | 'openCodeUnavailable' | 'loadAgents' | 'unexpected';
+    step: 'serverUnreachable' | 'agentServiceUnavailable' | 'loadAgents' | 'unexpected';
     message: string | null;
 };
 
@@ -1709,9 +1602,8 @@ export const selectKnownCatalogModel = (
     providerId: string,
     modelId: string,
 ): ProviderModel | undefined => {
-    if (!providerId || !modelId) return undefined;
     const fromProviders = (providers: ProviderWithModelList[]) =>
-        findCatalogModel(providers.find((provider) => provider.id === providerId)?.models, modelId);
+        providers.find((provider) => provider.providerId === providerId)?.models.find((model) => model.modelId === modelId);
     const active = fromProviders(state.providers);
     if (active) return active;
     for (const snapshot of Object.values(state.directoryScoped)) {
@@ -2278,23 +2170,13 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                 ),
                             ]);
                             if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-                            const processedProviders = adaptCanonicalCatalog(providerCatalog, modelCatalog);
+                            const processedProviders = combineCanonicalCatalog(providerCatalog, modelCatalog);
                             // Canonical catalogs intentionally do not publish a resolved default.
                             // Keep the prior map for cache/selection compatibility; model selection
                             // still resolves from explicit settings, the current pick, or fallback.
                             const defaults = previousDefaults;
 
                             if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-                            if (holdFirstLoadAgainstCache(_providersShownFromCache, inFlightKey, countCatalogModels(processedProviders))) {
-                                // The cached catalog stays on screen; this answer is likely a
-                                // location still starting. The re-read is applied as it is.
-                                markStartupTrace('loadProviders:heldAgainstCache', { directoryKey, source, providers: processedProviders.length });
-                                setTimeout(() => {
-                                    if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-                                    void get().loadProviders({ directory: fromDirectoryKey(directoryKey), source: CATALOG_CACHE_RECHECK_SOURCE, fresh: true });
-                                }, CATALOG_CACHE_RECHECK_MS);
-                                return;
-                            }
                             // A re-read that returns the same catalog keeps the arrays the
                             // store already holds, so nothing subscribed to them re-renders.
                             const nextProviders = isSameProviderCatalog(previousProviders, processedProviders)
@@ -2346,7 +2228,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                 // The add-provider sentinel is kept for the same reason (issue #1765).
                                 const selectedProviderId = currentSelectedProviderId
                                     ? currentSelectedProviderId
-                                    : (resolvedModel?.providerId ?? nextProviders[0]?.id ?? "");
+                                    : (resolvedModel?.providerId ?? nextProviders[0]?.providerId ?? "");
 
                                 const heldVariantSelection = state.activeDirectoryKey === directoryKey
                                     ? state.currentVariantSelection
@@ -2421,9 +2303,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                 models: processedProviders.reduce((count, provider) => count + provider.models.length, 0),
                             });
                             markCatalogLoaded(_providersLoadedAt, _providersStaleAt, directoryKey, loadRevision);
-                            if (nextProviders !== previousProviders || nextDefaults !== previousDefaults || source === CATALOG_CACHE_RECHECK_SOURCE) {
-                                persistLoadedCatalog(runtimeContext, directoryKey, source, { providers: nextProviders, defaultProviders: nextDefaults }, nextProviders.length === 0, _providersStaleAt, loadRevision);
-                            }
+                                persistLoadedCatalog(runtimeContext, directoryKey, source, { providers: nextProviders, defaultProviders: nextDefaults }, false, _providersStaleAt, loadRevision);
                             return;
                         } catch (error) {
                             lastError = error;
@@ -2485,8 +2365,8 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             if (!state.currentProviderId && !state.currentModelId && state.settingsDefaultModel) {
                                 const parsed = parseModelString(state.settingsDefaultModel);
                                 if (parsed) {
-                                    const settingsProvider = previousProviders.find((p) => p.id === parsed.providerId);
-                                    const model = findCatalogModel(settingsProvider?.models, parsed.modelId);
+                                    const settingsProvider = previousProviders.find((p) => p.providerId === parsed.providerId);
+                                    const model = settingsProvider?.models.find((entry) => entry.modelId === parsed.modelId);
                                     if (model) {
                                         const currentVariant = modelHasVariant(model, state.settingsDefaultVariant)
                                             ? state.settingsDefaultVariant
@@ -2536,7 +2416,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                 setProvider: (providerId: string) => {
                     const { providers } = get();
-                    const provider = providers.find((p) => p.id === providerId);
+                    const provider = providers.find((p) => p.providerId === providerId);
                     const isAuto = providerId === AUTO_PROVIDER_ID && hasProviderModel(providers, AUTO_PROVIDER_ID, AUTO_MODEL_ID);
  
                     if (!provider && !isAuto) {
@@ -2544,7 +2424,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     }
  
                     const firstModel = provider?.models[0];
-                    const newModelId = isAuto ? AUTO_MODEL_ID : (firstModel?.modelID || "");
+                    const newModelId = isAuto ? AUTO_MODEL_ID : (firstModel?.modelId || "");
 
                     if (isUnchangedSelection(get(), { currentProviderId: providerId, currentModelId: newModelId, selectionSource: "manual" })) {
                         return;
@@ -2663,7 +2543,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                 },
 
                 getCurrentModelVariants: () => {
-                    return modelVariantNames(get().getCurrentModel());
+                    return modelVariantIds(get().getCurrentModel());
                 },
 
                 cycleCurrentVariant: () => {
@@ -3381,7 +3261,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             agentVariant?: string,
                         ): CurrentVariantSelection => {
                             const model = findProviderModel(providers, providerId, modelId);
-                            if (model && modelVariantNames(model).length === 0) return { override: undefined, inherited: undefined };
+                            if (model && modelVariantIds(model).length === 0) return { override: undefined, inherited: undefined };
 
                             // A model the catalog does not list (Auto, or a stale
                             // selection) cannot rule a variant out, so inherited
@@ -3433,7 +3313,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                 applyResolvedModelSelection(
                                     existingAgentModel.providerId,
                                     existingAgentModel.modelId,
-                                    resolveVariantSelectionForModel(existingAgentModel.providerId, existingAgentModel.modelId, agent?.model?.variant),
+                                    resolveVariantSelectionForModel(existingAgentModel.providerId, existingAgentModel.modelId),
                                     "manual",
                                 );
                                 return;
@@ -3443,15 +3323,15 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                         // No session override — use the agent's configured/pinned model.
                         const agentModelSelection = agent?.model;
                         if (agentModelSelection?.providerID && agentModelSelection?.id) {
-                            const { providerID, id: modelID } = agentModelSelection;
-                            const agentProvider = providers.find((provider) => provider.id === providerID);
-                            const agentModel = findCatalogModel(agentProvider?.models, modelID);
+                            const providerId = agentModelSelection.providerID;
+                            const modelId = agentModelSelection.id;
+                            const agentModel = findProviderModel(providers, providerId, modelId);
 
                             if (agentModel) {
                                 applyResolvedModelSelection(
-                                    providerID,
-                                    modelID,
-                                    resolveVariantSelectionForModel(providerID, modelID, agent?.model?.variant),
+                                    providerId,
+                                    modelId,
+                                    resolveVariantSelectionForModel(providerId, modelId, agentModelSelection.variant),
                                     "auto",
                                 );
                                 return;
@@ -3493,12 +3373,12 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                         if (settingsDefaultModel) {
                             const parsed = parseModelString(settingsDefaultModel);
                             if (parsed) {
-                                const settingsProvider = providers.find((p) => p.id === parsed.providerId);
-                                if (findCatalogModel(settingsProvider?.models, parsed.modelId)) {
+                                const settingsProvider = providers.find((p) => p.providerId === parsed.providerId);
+                                if (settingsProvider?.models.some((model) => model.modelId === parsed.modelId)) {
                                     applyResolvedModelSelection(
                                         parsed.providerId,
                                         parsed.modelId,
-                                        resolveVariantSelectionForModel(parsed.providerId, parsed.modelId, agent?.model?.variant),
+                                        resolveVariantSelectionForModel(parsed.providerId, parsed.modelId),
                                         "auto",
                                     );
                                     return;
@@ -4071,7 +3951,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                 },
 
                 probeConnection: async (options?: { timeoutMs?: number }) => {
-                    const isHealthy = await probeOpenCodeHealth(options?.timeoutMs);
+                    const isHealthy = (await probeAgentServiceReadiness(options?.timeoutMs)) === 'ready';
                     if (isHealthy) {
                         set({ isConnected: true, hasEverConnected: true, connectionPhase: "connected" });
                         return true;
@@ -4096,7 +3976,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     const maxAttempts = 5;
                     let attempt = 0;
                     let lastError: unknown = null;
-                    let lastProbe: OpencodeHealthProbe = 'unreachable';
+                    let lastProbe: AgentServiceReadiness = 'unreachable';
 
                     while (attempt < maxAttempts) {
                         if (!isConfigRuntimeContextCurrent(runtimeContext)) return false;
@@ -4104,11 +3984,11 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             markStartupTrace('checkConnection:attempt', { attempt: attempt + 1 });
                             const probeStarted = Date.now();
                             lastProbe = await measureStartupTrace(
-                                'checkConnection:health',
-                                () => opencodeClient.probeHealth({ waitMs: CONNECTION_HEALTH_WAIT_MS }),
+                                'checkConnection:agent-service',
+                                () => probeAgentServiceReadiness(CONNECTION_HEALTH_WAIT_MS),
                                 { attempt: attempt + 1 },
                             );
-                            const isHealthy = lastProbe === 'healthy';
+                            const isHealthy = lastProbe === 'ready';
                             if (!isConfigRuntimeContextCurrent(runtimeContext)) return false;
                             if (!isHealthy && attempt < maxAttempts - 1) {
                                 const hasEverConnected = get().hasEverConnected;
@@ -4145,7 +4025,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                     if (!isConfigRuntimeContextCurrent(runtimeContext)) return false;
                     if (lastError) {
-                        console.warn("[ConfigStore] Failed to reach OpenCode after retrying:", lastError);
+                        console.warn("[ConfigStore] Failed to reach Agent Service after retrying:", lastError);
                     }
                     set({
                         isConnected: false,
@@ -4184,7 +4064,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                     isConnected: false,
                                     connectionPhase: get().hasEverConnected ? "reconnecting" : "connecting",
                                     lastInitFailure: {
-                                        step: get().lastDisconnectReason === 'health_check_unhealthy' ? 'openCodeUnavailable' : 'serverUnreachable',
+                                        step: get().lastDisconnectReason === 'health_check_unhealthy' ? 'agentServiceUnavailable' : 'serverUnreachable',
                                         message: null,
                                     },
                                 });
@@ -4292,7 +4172,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                 getCurrentProvider: () => {
                     const { providers, currentProviderId } = get();
-                    return providers.find((p) => p.id === currentProviderId);
+                    return providers.find((p) => p.providerId === currentProviderId);
                 },
 
                 getCurrentModel: () => {
@@ -4301,7 +4181,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     if (!provider) {
                         return undefined;
                     }
-                    return findCatalogModel(provider.models, currentModelId);
+                    return provider.models.find((model) => model.modelId === currentModelId);
                 },
 
                 getCurrentAgent: () => {
@@ -4316,14 +4196,14 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     }
                     const { modelsMetadata, providers } = get();
                     const cached = modelsMetadata.get(key);
-                    const model = findCatalogModel(providers.find((p) => p.id === providerId)?.models, modelId);
+                    const model = providers.find((p) => p.providerId === providerId)?.models.find((entry) => entry.modelId === modelId);
 
                     // The running OpenCode's limits win over the models.dev
                     // catalog: providers adjust them per auth (ChatGPT sign-in
                     // serves GPT models with a 400K window, the catalog says 1M+).
                     if (cached) {
-                        if (!model || model.limit.context <= 0) return cached;
-                        return { ...cached, limit: { ...cached.limit, context: model.limit.context, output: model.limit.output } };
+                        if (!model || model.contextWindow <= 0) return cached;
+                        return { ...cached, limit: { ...cached.limit, context: model.contextWindow, output: model.maxOutputTokens } };
                     }
 
                     // Fallback: derive metadata from provider model data (covers custom providers not in models.dev)

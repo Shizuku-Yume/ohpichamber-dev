@@ -12,6 +12,7 @@ import { normalizeGitOutputPath } from './output-path.js';
 
 import {
   configureGitEnvironment,
+  initializeRepository,
   getCurrentIdentity,
   checkoutBranch,
   checkoutCommit,
@@ -189,6 +190,20 @@ async function createTempRepo() {
 // ---------------------------------------------------------------------------
 // resolveBaseRefForLog
 // ---------------------------------------------------------------------------
+
+describe('initializeRepository', () => {
+  it('initializes an ordinary directory and rejects unsupported roots', async () => {
+    if (!canRunGit()) return;
+    const directory = createTempDir();
+    await initializeRepository(directory);
+    expect(await isGitRepository(directory)).toBe(true);
+    await expect(initializeRepository(os.homedir())).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('rejects missing directories before invoking Git', async () => {
+    await expect(initializeRepository(path.join(os.tmpdir(), 'missing-openchamber-git-init'))).rejects.toThrow();
+  });
+});
 
 describe('getLog on a repository with no commits yet', () => {
   it('answers an empty history instead of failing, then the first commit appears', async () => {

@@ -8,7 +8,7 @@ import {
     isShellTool,
     isSubagentTool,
     isWebTool,
-} from '@/lib/opencode/tools';
+} from '@/lib/toolHelpers';
 import type { ChatMessageEntry } from './types';
 
 const patchTextSchema = z.string().regex(/\S/);

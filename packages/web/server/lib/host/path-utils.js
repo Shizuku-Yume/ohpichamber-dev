@@ -39,14 +39,15 @@ const TOOLCHAIN_BASENAMES = new Set([
  * @param {string} delim  - The PATH delimiter (':' on POSIX, ';' on Windows).
  */
 export function pathLooksUserConfigured(value, home, delim) {
-  if (typeof value !== 'string' || !value) {
+  const segments = value?.split?.(delim);
+  if (!segments) {
     return false;
   }
 
-  const normalizedHome = typeof home === 'string' ? home.replaceAll('\\', '/') : '';
+  const normalizedHome = home?.replaceAll?.('\\', '/') ?? '';
   const homeWithSep = normalizedHome ? normalizedHome + '/' : '';
 
-  return value.split(delim).some((segment) => {
+  return segments.some((segment) => {
     if (!segment) return false;
     const normalizedSegment = segment.replaceAll('\\', '/');
 
@@ -84,8 +85,9 @@ export function mergePathValues(primary, fallback, delim) {
   const result = [];
 
   const addSegments = (value) => {
-    if (typeof value !== 'string' || !value) return;
-    for (const segment of value.split(delim)) {
+    const segments = value?.split?.(delim);
+    if (!segments) return;
+    for (const segment of segments) {
       if (segment && !seen.has(segment)) {
         seen.add(segment);
         result.push(segment);

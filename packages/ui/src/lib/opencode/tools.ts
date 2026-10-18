@@ -1,6 +1,7 @@
 /**
- * The tools OpenCode v2 ships, and the only place chat rendering is allowed to
- * branch on a tool name.
+ * The OpenCode-specific input, metadata and row-description accessors. Pure
+ * tool names and predicates live in `toolHelpers` so presentation consumers do
+ * not depend on the OpenCode model layer.
  *
  * v2 renamed and reshaped the built-ins: `bash` became `shell`, `task` became
  * `subagent`, `apply_patch` became `patch`, and `todowrite`, `todoread`, `lsp`,
@@ -8,10 +9,10 @@
  * a tool state no longer carries a server-rendered `title` — the row's
  * description has to be derived from the call's own input and metadata.
  *
- * Everything outside this module works with the predicates and accessors here,
- * so the next rename is one file. Names that are not in this list (MCP servers,
- * OpenChamber's own plugin tools) still flow through the generic renderers;
- * every helper answers "no"/"unknown" for them instead of throwing.
+ * Everything outside this module works with the accessors here. Names that are
+ * not in the built-in list (MCP servers, OpenChamber's own plugin tools) still
+ * flow through the generic renderers; every helper answers "no"/"unknown" for
+ * them instead of throwing.
  *
  * A call's `input` and `metadata` are free-form JSON the model and the tool
  * produced, so every read here parses the fields it claims to understand and
@@ -21,86 +22,7 @@
 import { z } from "zod"
 
 import type { Metadata, ToolInput } from "./model"
-
-/** Built-in tool names as the server reports them. */
-export const OPENCODE_TOOLS = {
-  edit: "edit",
-  execute: "execute",
-  glob: "glob",
-  grep: "grep",
-  patch: "patch",
-  question: "question",
-  read: "read",
-  shell: "shell",
-  skill: "skill",
-  subagent: "subagent",
-  webfetch: "webfetch",
-  websearch: "websearch",
-  write: "write",
-  // The `opencode` namespace: tools that manage OpenCode itself. On the wire
-  // they arrive as `opencode.<name>`; `normalizeToolName` keeps the last segment.
-  sessionRename: "session_rename",
-  sessionMove: "session_move",
-  models: "models",
-} as const
-
-type OpencodeToolName = (typeof OPENCODE_TOOLS)[keyof typeof OPENCODE_TOOLS]
-
-/** A tool name as it arrives on a part: always a string, sometimes namespaced. */
-export type ToolName = string | undefined
-
-/**
- * Comparable form of a tool name: lowercased, without a trailing `:index`
- * dedup suffix, and reduced to the last segment of a namespaced name
- * (`opencode.session_rename` -> `session_rename`).
- */
-export function normalizeToolName(toolName: ToolName): string {
-  const trimmed = toolName?.trim().toLowerCase()
-  if (!trimmed) return ""
-  const withoutIndex = trimmed.replace(/:\d+$/, "")
-  if (!withoutIndex.includes(".")) return withoutIndex
-  const segments = withoutIndex.split(".").filter(Boolean)
-  return segments[segments.length - 1] ?? withoutIndex
-}
-
-const is = (name: OpencodeToolName) => (toolName: ToolName): boolean => normalizeToolName(toolName) === name
-
-export const isShellTool = is(OPENCODE_TOOLS.shell)
-/**
- * Code Mode: one tool that runs a short JS script which calls the MCP and
- * integration tools as functions. The script is `input.code`; what it actually
- * called is `metadata.toolCalls`.
- */
-export const isExecuteTool = is(OPENCODE_TOOLS.execute)
-export const isSubagentTool = is(OPENCODE_TOOLS.subagent)
-export const isQuestionTool = is(OPENCODE_TOOLS.question)
-export const isSkillTool = is(OPENCODE_TOOLS.skill)
-export const isEditTool = is(OPENCODE_TOOLS.edit)
-export const isWriteTool = is(OPENCODE_TOOLS.write)
-export const isPatchTool = is(OPENCODE_TOOLS.patch)
-
-const FILE_CHANGE_TOOLS = new Set<string>([OPENCODE_TOOLS.edit, OPENCODE_TOOLS.write, OPENCODE_TOOLS.patch])
-const EXPLORATION_TOOLS = new Set<string>([
-  OPENCODE_TOOLS.read,
-  OPENCODE_TOOLS.grep,
-  OPENCODE_TOOLS.glob,
-  OPENCODE_TOOLS.skill,
-])
-const WEB_TOOLS = new Set<string>([OPENCODE_TOOLS.webfetch, OPENCODE_TOOLS.websearch])
-
-/** Tools that mutate a file, so a turn counts their result as a change. */
-export const isFileChangeTool = (toolName: ToolName): boolean => FILE_CHANGE_TOOLS.has(normalizeToolName(toolName))
-
-/** Tools whose result metadata carries `files: FileDiff.Info[]`. */
-export const carriesFileDiffs = (toolName: ToolName): boolean => {
-  const name = normalizeToolName(toolName)
-  return name === OPENCODE_TOOLS.edit || name === OPENCODE_TOOLS.patch
-}
-
-export const isExplorationTool = (toolName: ToolName): boolean => EXPLORATION_TOOLS.has(normalizeToolName(toolName))
-export const isWebTool = (toolName: ToolName): boolean => WEB_TOOLS.has(normalizeToolName(toolName))
-export const isWebSearchTool = (toolName: ToolName): boolean => normalizeToolName(toolName) === OPENCODE_TOOLS.websearch
-
+import { OPENCODE_TOOLS, normalizeToolName, type ToolName } from "../toolHelpers"
 // ---------------------------------------------------------------------------
 // Input and metadata accessors
 // ---------------------------------------------------------------------------

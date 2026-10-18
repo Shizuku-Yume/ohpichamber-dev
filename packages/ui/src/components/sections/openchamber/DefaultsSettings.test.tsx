@@ -45,6 +45,10 @@ const configState: ConfigState = {
   currentAgentName: undefined,
 };
 
+type TestAgent = { name: string; model: { providerId: string; modelId: string } | null };
+const agents: TestAgent[] = [];
+const agentState = { agents };
+
 const settingsState = {
   showDeletionDialog: false,
   setShowDeletionDialog: () => undefined,
@@ -59,11 +63,17 @@ const sessionState = { currentSessionId: null } satisfies { currentSessionId: st
 let savedSettings: DesktopSettings | null = null;
 const updateCalls: Array<Partial<DesktopSettings>> = [];
 
+mock.module('@/stores/useAgentsStore', () => ({
+  useAgentsStore: <T,>(selector: (state: typeof agentState) => T): T => selector(agentState),
+}));
 mock.module('@/stores/useConfigStore', () => ({
   useConfigStore: <T,>(selector: (state: ConfigState) => T): T => selector(configState),
 }));
 mock.module('@/stores/useUIStore', () => ({
   useUIStore: <T,>(selector: (state: typeof settingsState) => T): T => selector(settingsState),
+}));
+mock.module('@/stores/useSessionDisplayStore', () => ({
+  useSessionDisplayStore: <T,>(selector: (state: typeof settingsState) => T): T => selector(settingsState),
 }));
 mock.module('@/sync/selection-store', () => ({
   useSelectionStore: <T,>(selector: (state: typeof selectionState) => T): T => selector(selectionState),

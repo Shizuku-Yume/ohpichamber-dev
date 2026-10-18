@@ -398,7 +398,6 @@ export const partIds = {
   userAgent: (messageID: string, index: number) => `${messageID}:agent:${index}`,
 } as const
 
-export const isFinalToolStatus = (status: string): boolean => status === "completed" || status === "error"
 
 /** Assistant reply messages carry parts; every other role is a single record. */
 export const hasParts = (message: Message): message is UserMessage | AssistantMessage =>

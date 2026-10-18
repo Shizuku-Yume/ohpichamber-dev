@@ -1,4 +1,4 @@
-import { isQuestionTool, normalizeToolName, type ToolName } from '@/lib/opencode/tools';
+import { isQuestionTool, normalizeToolName, type ToolName } from '@/lib/toolHelpers';
 import { ACTIVITY_STANDALONE_TOOL_NAMES } from './constants';
 import type {
     ChatMessageEntry,

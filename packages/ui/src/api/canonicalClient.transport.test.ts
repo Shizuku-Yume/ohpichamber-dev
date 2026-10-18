@@ -72,6 +72,14 @@ afterEach(async () => {
 });
 
 describe('CanonicalClient real HTTP scope boundary', () => {
+  test('validates canonical Agent Service readiness', async () => {
+    respondWith({ ready: true, engine: 'omp', version: '1.0.0' });
+    expect(await client.checkReady()).toBe(true);
+    expect(calls).toEqual(['GET /api/agent/v1/ready']);
+
+    respondWith({ ready: true });
+    expect(await client.checkReady()).toBe(false);
+  });
   test('reads exact attachment bytes with explicit source workspace scope', async () => {
     handler = (_request, response) => {
       response.writeHead(200, { 'Content-Type': 'application/octet-stream' });

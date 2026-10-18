@@ -118,7 +118,7 @@ export const SpaceGroupStatus: React.FC<{ spaceId: string; className?: string }>
   const entry = useSpacesStore((state) => state.journey?.get(spaceId));
   const access = useSpacesStore((state) => state.creationAccess.get(spaceId));
   const catalog = useConfigStore((state) => state.providers);
-  const providerName = (providerId: string) => catalog.find((provider) => provider.id === providerId)?.name ?? providerId;
+  const providerName = (providerId: string) => catalog.find((provider) => provider.providerId === providerId)?.name ?? providerId;
   // The access line is the way to the grant dialog (the maintainer's call of 2026-10-08): no
   // button under it, the line itself opens the dialog, named "Grant access" for the pointer and
   // the screen reader.

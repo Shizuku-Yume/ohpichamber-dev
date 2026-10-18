@@ -57,37 +57,40 @@ const makeStorage = (): Storage => ({
 }) as Storage;
 
 const model = (providerId: string, modelId: string, variantIds?: string[]) => ({
-  id: `${providerId}/${modelId}`,
-  modelID: modelId,
-  providerID: providerId,
+  modelId,
+  provider: providerId,
   name: modelId,
-  capabilities: { tools: true, input: ['text'], output: ['text'] },
-  variants: (variantIds ?? []).map((id) => ({ id })),
-  time: { released: 0 },
-  cost: [{ input: 0, output: 0, cache: { read: 0, write: 0 } }],
-  status: 'active' as const,
+  modalities: ['text' as const],
+  contextWindow: 1000,
+  maxOutputTokens: 100,
+  reasoningEffortSupported: false,
+  reasoningOptions: [],
+  variants: (variantIds ?? []).map((variant) => ({ variant, label: variant, reasoningEffort: null })),
+  toolsSupported: true,
   enabled: true,
-  limit: { context: 0, output: 0 },
+  status: 'active' as const,
+  pricing: null,
 });
 
-const providerInfo = (id: string) => ({
-  id,
-  name: id,
-  activation: 'enabled' as const,
-  package: id,
+const providerInfo = (providerId: string) => ({
+  providerId,
+  name: providerId,
+  endpoint: null,
+  protocol: null,
+  authMethods: [],
+  auth: { status: 'missing' as const },
 });
 
-/** A provider as the store keeps it: catalog models regrouped under it. */
-const provider = (id: string, modelId = `${id}-model`, variantIds?: string[]) => ({
-  ...providerInfo(id),
-  models: [model(id, modelId, variantIds)],
+/** A provider as the store keeps it: canonical catalog models grouped under it. */
+const provider = (providerId: string, modelId = `${providerId}-model`, variantIds?: string[]) => ({
+  ...providerInfo(providerId),
+  models: [model(providerId, modelId, variantIds)],
 });
 
-/** A whole `getProvidersForConfig` answer: two flat lists plus one default. */
-const providerResponse = (id: string, modelId = `${id}-model`, variantIds?: string[]) => ({
-  providers: [providerInfo(id)],
-  models: [model(id, modelId, variantIds)],
-  default: { providerID: id, id: modelId },
+/** A whole canonical catalog answer: two flat lists. */
+const providerResponse = (providerId: string, modelId = `${providerId}-model`, variantIds?: string[]) => ({
+  providers: [providerInfo(providerId)],
+  models: [model(providerId, modelId, variantIds)],
 });
 
 let canonicalResponsePromises = new Map<string, Promise<TestProviderResponse>>();
@@ -224,6 +227,10 @@ class TestCanonicalApiError extends Error {
 mock.module('@/api/canonicalClient', () => ({
   CanonicalApiError: TestCanonicalApiError,
   canonicalClient: {
+    checkReady: mock(async () => {
+      const probe = probeHealthImpl ? await probeHealthImpl() : (await checkHealthImpl() ? 'healthy' : 'unhealthy');
+      return probe === 'healthy';
+    }),
     resolveWorkspace: mock(async (directory: string) => {
       resolvedWorkspaceDirectories.push(directory);
       return { workspaceId: `workspace:${directory}`, projectId: 'project', name: 'Workspace' };
@@ -234,38 +241,18 @@ mock.module('@/api/canonicalClient', () => ({
       return {
         workspaceId,
         revision: '0',
-        providers: response.providers.map((provider) => ({
-          providerId: provider.id,
-          name: provider.name,
-          endpoint: null,
-          protocol: null,
-          authMethods: [],
-          auth: { status: 'missing' as const },
-        })),
+        providers: response.providers,
       };
     }),
     getModels: mock(async (workspaceId: string) => {
+      getProvidersCalls += 1;
       const responsePromise = canonicalResponseFor(workspaceId);
       canonicalResponsePromises.delete(workspaceId);
       const response = await responsePromise;
       return {
         workspaceId,
         revision: '0',
-        models: response.models.map((model) => ({
-          modelId: model.modelID,
-          provider: model.providerID,
-          name: model.name,
-          modalities: ['text' as const],
-          contextWindow: 1000,
-          maxOutputTokens: 1000,
-          reasoningEffortSupported: false,
-          reasoningOptions: [],
-          variants: model.variants.map((variant) => ({ variant: variant.id, label: variant.id, reasoningEffort: null })),
-          toolsSupported: model.capabilities.tools,
-          enabled: model.enabled,
-          status: model.status,
-          pricing: { inputPerMillionTokens: 0, outputPerMillionTokens: 0, cacheReadPerMillionTokens: 0, cacheWritePerMillionTokens: 0 },
-        })),
+        models: response.models,
       };
     }),
   },
@@ -429,19 +416,18 @@ describe('useConfigStore provider persistence', () => {
     getProvidersForConfigImpl = async () => ({
       providers: [providerInfo('alpha'), providerInfo('beta')],
       models: [model('alpha', 'first'), { ...model('alpha', 'disabled'), enabled: false }, model('beta', 'second')],
-      default: { providerID: 'alpha', id: 'first' },
     });
 
     await useConfigStore.getState().loadProviders({ directory: DIRECTORY });
 
     expect(resolvedWorkspaceDirectories).toEqual([DIRECTORY]);
     expect(useConfigStore.getState().providers.map((entry) => ({
-      id: entry.id,
-      models: entry.models.map((item) => item.modelID),
+      providerId: entry.providerId,
+      models: entry.models.map((item) => item.modelId),
       canonicalAuth: entry.canonicalAuth,
     }))).toEqual([
-      { id: 'alpha', models: ['first'], canonicalAuth: { status: 'missing' } },
-      { id: 'beta', models: ['second'], canonicalAuth: { status: 'missing' } },
+      { providerId: 'alpha', models: ['first'], canonicalAuth: { status: 'missing' } },
+      { providerId: 'beta', models: ['second'], canonicalAuth: { status: 'missing' } },
     ]);
   });
 
@@ -474,7 +460,7 @@ describe('useConfigStore provider persistence', () => {
     expect(requested).toEqual([worktree]);
     expect(agentRequests).toEqual([worktree]);
     expect(state.activeDirectoryKey).toBe(worktree);
-    expect(state.providers[0]?.models[0]?.modelID).toBe('worktree-model');
+    expect(state.providers[0]?.models[0]?.modelId).toBe('worktree-model');
     expect(state.agents[0]?.name).toBe('worktree-agent');
     expect(state.directoryScoped[DIRECTORY]?.providers).toEqual([]);
 
@@ -496,12 +482,12 @@ describe('useConfigStore provider persistence', () => {
     state = useConfigStore.getState();
     expect(requested).toEqual([worktree, DIRECTORY]);
     expect(agentRequests).toEqual([worktree, DIRECTORY]);
-    expect(state.providers[0]?.models[0]?.modelID).toBe('root-model');
+    expect(state.providers[0]?.models[0]?.modelId).toBe('root-model');
     expect(state.directoryScoped[worktree]?.currentModelId).toBe('worktree-model');
 
     await useConfigStore.getState().activateDirectory(worktree);
     state = useConfigStore.getState();
-    expect(state.providers[0]?.models[0]?.modelID).toBe('worktree-model');
+    expect(state.providers[0]?.models[0]?.modelId).toBe('worktree-model');
     expect(state.currentModelId).toBe('worktree-model');
     expect(state.selectionSource).toBe('manual');
   });
@@ -520,7 +506,6 @@ describe('useConfigStore provider persistence', () => {
       getProvidersForConfigImpl = async () => ({
         providers: [providerInfo('shared')],
         models: [model('shared', 'A', ['low']), model('shared', 'B', ['low', 'high'])],
-        default: { providerID: 'shared', id: 'A' },
       });
 
       if (cached) {
@@ -536,7 +521,7 @@ describe('useConfigStore provider persistence', () => {
       await useConfigStore.getState().activateDirectory(worktree, { preserveManualModel: true });
       const state = useConfigStore.getState();
       expect(state.activeDirectoryKey).toBe(worktree);
-      expect(state.providers[0]?.models.map((entry) => entry.modelID)).toEqual(['A', 'B']);
+      expect(state.providers[0]?.models.map((entry) => entry.modelId)).toEqual(['A', 'B']);
       expect(state.currentModelId).toBe('B');
       expect(state.selectionSource).toBe('manual');
       expect(state.directoryScoped[worktree]?.currentModelId).toBe('B');
@@ -555,12 +540,11 @@ describe('useConfigStore provider persistence', () => {
       const fullCatalog = {
         providers: [providerInfo('shared')],
         models: [model('shared', 'B', ['low', 'high'])],
-        default: { providerID: 'shared', id: 'B' },
       };
       let worktreeStarting = false;
       getProvidersForConfigImpl = async (directory) => (
         directory === worktree && worktreeStarting
-          ? { providers: [], models: [], default: { providerID: 'shared', id: 'B' } }
+          ? { providers: [], models: [] }
           : fullCatalog
       );
 
@@ -589,7 +573,6 @@ describe('useConfigStore provider persistence', () => {
     getProvidersForConfigImpl = async () => ({
       providers: [providerInfo('shared')],
       models: [model('shared', 'B', ['low', 'high'])],
-      default: { providerID: 'shared', id: 'B' },
     });
     await useConfigStore.getState().activateDirectory(DIRECTORY);
     expect(useConfigStore.getState()).toMatchObject({ currentModelId: 'B', currentVariant: 'low' });
@@ -610,7 +593,7 @@ describe('useConfigStore provider persistence', () => {
     };
     await useConfigStore.getState().activateDirectory(directory);
     expect(useConfigStore.getState().activeDirectoryKey).toBe(directory);
-    expect(useConfigStore.getState().providers[0]?.models[0]?.modelID).toBe('new-model');
+    expect(useConfigStore.getState().providers[0]?.models[0]?.modelId).toBe('new-model');
   });
 
   test('worktree catalog keeps its parent project agent default', async () => {
@@ -693,21 +676,21 @@ describe('useConfigStore provider persistence', () => {
     // A blob from before the slim format still carries catalogs; they are
     // hydrated as-is so the pickers paint instantly on that first cold start.
     const hydrated = useConfigStore.getState();
-    expect(hydrated.providers.map((entry) => entry.id)).toEqual(['stale']);
+    expect(hydrated.providers.map((entry) => entry.providerId)).toEqual(['stale']);
     expect(hydrated.defaultProviders).toEqual({ default: 'stale' });
-    expect(hydrated.directoryScoped[DIRECTORY]?.providers.map((entry) => entry.id)).toEqual(['stale']);
+    expect(hydrated.directoryScoped[DIRECTORY]?.providers.map((entry) => entry.providerId)).toEqual(['stale']);
     expect(hydrated.directoryScoped[DIRECTORY]?.defaultProviders).toEqual({ default: 'stale' });
     expect(hydrated.directoryScoped[DIRECTORY]?.agents).toEqual([{ name: 'build', mode: 'primary' }]);
     expect(hydrated.directoryScoped[DIRECTORY]?.currentAgentName).toBe('build');
-    expect(hydrated.directoryScoped[OTHER_DIRECTORY]?.providers.map((entry) => entry.id)).toEqual(['other-stale']);
+    expect(hydrated.directoryScoped[OTHER_DIRECTORY]?.providers.map((entry) => entry.providerId)).toEqual(['other-stale']);
 
     liveProviderId = 'fresh';
     await hydrated.initializeApp();
 
     const reloaded = useConfigStore.getState();
-    expect(getProvidersCalls).toBe(1);
-    expect(reloaded.providers.map((entry) => entry.id)).toEqual(['fresh']);
-    expect(reloaded.directoryScoped[DIRECTORY]?.providers.map((entry) => entry.id)).toEqual(['fresh']);
+    expect(getProvidersCalls).toBe(2);
+    expect(reloaded.providers.map((entry) => entry.providerId)).toEqual(['fresh']);
+    expect(reloaded.directoryScoped[DIRECTORY]?.providers.map((entry) => entry.providerId)).toEqual(['fresh']);
     expect(reloaded.currentProviderId).toBe('fresh');
     expect(reloaded.currentModelId).toBe('fresh-model');
 
@@ -842,10 +825,10 @@ describe('useConfigStore provider persistence', () => {
     await configListener?.({ scopes: ['providers'], timestamp: Date.now() });
 
     const state = useConfigStore.getState();
-    expect(getProvidersCalls).toBe(2);
-    expect(state.directoryScoped[DIRECTORY]?.providers.map((entry) => entry.id)).toEqual(['active-live']);
-    expect(state.directoryScoped[OTHER_DIRECTORY]?.providers.map((entry) => entry.id)).toEqual(['inactive-live']);
-    expect(state.directoryScoped[OTHER_DIRECTORY]?.defaultProviders).toEqual({ 'inactive-live': 'inactive-live-model' });
+    expect(getProvidersCalls).toBe(4);
+    expect(state.directoryScoped[DIRECTORY]?.providers.map((entry) => entry.providerId)).toEqual(['active-live']);
+    expect(state.directoryScoped[OTHER_DIRECTORY]?.providers.map((entry) => entry.providerId)).toEqual(['inactive-live']);
+    expect(state.directoryScoped[OTHER_DIRECTORY]?.defaultProviders).toEqual({});
   });
 
   test('provider reload preserves a valid current variant', async () => {
@@ -885,7 +868,7 @@ describe('useConfigStore provider persistence', () => {
     await useConfigStore.getState().loadProviders({ source: 'test:missing-selection' });
 
     const state = useConfigStore.getState();
-    expect(state.providers.map((entry) => entry.id)).toEqual(['live']);
+    expect(state.providers.map((entry) => entry.providerId)).toEqual(['live']);
     expect(state.selectedProviderId).toBe('plugin-provider');
     expect(state.directoryScoped[DIRECTORY]?.selectedProviderId).toBe('plugin-provider');
   });
@@ -1010,23 +993,6 @@ describe('useConfigStore provider persistence', () => {
     expect(useSelectionStore.getState().getSessionAgentSelection('ses_follow_agent')).toBe('plan');
   });
 
-  test('a model without a variants list reads as having no thinking levels', () => {
-    const withoutVariants = provider('openai', 'gpt-legacy');
-    // A stored snapshot or a live catalog can carry a model without `variants`.
-    Reflect.deleteProperty(withoutVariants.models[0], 'variants');
-    useConfigStore.setState({
-      providers: [withoutVariants],
-      currentProviderId: 'openai',
-      currentModelId: 'gpt-legacy',
-      currentVariant: 'high',
-      currentVariantSelection: { override: undefined, inherited: 'high' },
-      directoryScoped: {},
-    });
-
-    expect(useConfigStore.getState().getCurrentModelVariants()).toEqual([]);
-    // Cycling reads the same list; it must not throw on the missing field.
-    useConfigStore.getState().cycleCurrentVariant();
-  });
 
   test('cycleCurrentVariant reaches Default, low, and medium from inherited high', () => {
     useConfigStore.setState({
@@ -1596,28 +1562,29 @@ describe('useConfigStore provider persistence', () => {
   });
 
   test('an unreachable server is recorded as the startup failure', async () => {
-    probeHealthImpl = async () => 'unreachable';
+    probeHealthImpl = async () => {
+      throw new Error('server unreachable');
+    };
     await useConfigStore.getState().initializeApp();
 
     expect(useConfigStore.getState().isInitialized).toBe(false);
     expect(useConfigStore.getState().lastInitFailure).toEqual({ step: 'serverUnreachable', message: null });
   }, 10_000);
 
-  test('a live server with OpenCode not ready is not reported as unreachable', async () => {
+  test('a live server with Agent Service not ready is not reported as unreachable', async () => {
     probeHealthImpl = async () => 'unhealthy';
     await useConfigStore.getState().initializeApp();
 
-    expect(useConfigStore.getState().lastInitFailure).toEqual({ step: 'openCodeUnavailable', message: null });
+    expect(useConfigStore.getState().lastInitFailure).toEqual({ step: 'agentServiceUnavailable', message: null });
   }, 10_000);
 
-  test('startup asks the server to hold the health answer until OpenCode is ready', async () => {
+  test('startup waits for Agent Service readiness before connecting', async () => {
     let probes = 0;
     probeHealthImpl = async () => (++probes < 2 ? 'unhealthy' : 'healthy');
     await useConfigStore.getState().checkConnection();
 
     expect(useConfigStore.getState().isConnected).toBe(true);
-    expect(probeHealthOptions.length).toBe(2);
-    expect(probeHealthOptions.every((options) => (options?.waitMs ?? 0) > 0)).toBe(true);
+    expect(probes).toBe(2);
   }, 10_000);
 
   test('a project whose folder is gone does not block startup', async () => {
@@ -1730,7 +1697,7 @@ describe('useConfigStore provider persistence', () => {
     const activation = useConfigStore.getState().activateDirectory(DIRECTORY);
     try {
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
-      expect(getProvidersCalls).toBe(1);
+      expect(getProvidersCalls).toBe(2);
       expect(listAgentsCalls).toBe(1);
     } finally {
       providers.resolve(providerResponse('live'));
@@ -1750,9 +1717,9 @@ describe('useConfigStore provider persistence', () => {
     expect(settingsLoadCalls).toBe(1);
   });
 
-  test('loads preferences before a slow OpenCode health check finishes', async () => {
-    const health = deferred<boolean>();
-    checkHealthImpl = () => health.promise;
+  test('loads preferences before a slow Agent Service readiness check finishes', async () => {
+    const health = deferred<'healthy' | 'unhealthy' | 'unreachable'>();
+    probeHealthImpl = () => health.promise;
     persistedOpenChamberSettings = { defaultModel: 'sidecar/chosen', defaultAgent: 'review' };
     useConfigStore.setState({ settingsDefaultsLoaded: false });
     liveAgents = [testAgent('review')];
@@ -1764,7 +1731,7 @@ describe('useConfigStore provider persistence', () => {
       expect(settingsLoadCalls).toBe(1);
       expect(getProvidersCalls).toBe(0);
     } finally {
-      health.resolve(true);
+      health.resolve('healthy');
       await initialization;
     }
   });
@@ -1917,7 +1884,7 @@ describe('useConfigStore provider persistence', () => {
     pendingB.resolve(providerResponse('b'));
     await initB;
     expect(useConfigStore.getState().isInitialized).toBe(true);
-    expect(useConfigStore.getState().providers[0]?.id).toBe('b');
+    expect(useConfigStore.getState().providers[0]?.providerId).toBe('b');
   });
 
   test('an A to B to A switch still rejects the first A completion', async () => {
@@ -1931,7 +1898,7 @@ describe('useConfigStore provider persistence', () => {
     await useConfigStore.getState().loadProviders({ directory: DIRECTORY });
     pending.resolve(providerResponse('obsolete'));
     await firstA;
-    expect(useConfigStore.getState().providers[0]?.id).toBe('fresh');
+    expect(useConfigStore.getState().providers[0]?.providerId).toBe('fresh');
   });
 
   test('a fresh provider load reads again instead of joining an older read', async () => {
@@ -1948,7 +1915,7 @@ describe('useConfigStore provider persistence', () => {
     await Promise.all([first, joined, fresh]);
 
     expect(calls).toBe(2);
-    expect(useConfigStore.getState().providers.map((entry) => entry.id)).toEqual(['plugin']);
+    expect(useConfigStore.getState().providers.map((entry) => entry.providerId)).toEqual(['plugin']);
   });
 
   test('a directory whose providers never loaded is read once more on its own', async () => {
@@ -1969,7 +1936,7 @@ describe('useConfigStore provider persistence', () => {
 
     expect(calls).toBe(4);
     expect(useConfigStore.getState().providersLoaded).toBe(true);
-    expect(useConfigStore.getState().providers.map((entry) => entry.id)).toEqual(['live']);
+    expect(useConfigStore.getState().providers.map((entry) => entry.providerId)).toEqual(['live']);
   }, 8000);
 
   // OpenCode answers a directory it is still starting with the providers it has
@@ -1979,9 +1946,8 @@ describe('useConfigStore provider persistence', () => {
   const pluginCatalog = () => ({
     providers: [providerInfo('builtin'), providerInfo('plugin')],
     models: [model('builtin', 'builtin-model'), model('plugin', 'plugin-model')],
-    default: { providerID: 'builtin', id: 'builtin-model' },
   });
-  const catalogIds = () => useConfigStore.getState().providers.map((entry) => entry.id);
+  const catalogIds = () => useConfigStore.getState().providers.map((entry) => entry.providerId);
   const waitForProviders = async (ids: string[]) => {
     const deadline = Date.now() + 2000;
     while (JSON.stringify(catalogIds()) !== JSON.stringify(ids) && Date.now() < deadline) {
@@ -2041,7 +2007,7 @@ describe('useConfigStore provider persistence', () => {
     liveAgents = [testAgent('build')];
     getProvidersForConfigImpl = async (directory) => (
       directory === worktree
-        ? { providers: [], models: [], default: { providerID: 'builtin', id: 'builtin-model' } }
+        ? { providers: [], models: [] }
         : pluginCatalog()
     );
     await useConfigStore.getState().activateDirectory(DIRECTORY);
@@ -2100,7 +2066,7 @@ describe('useConfigStore provider persistence', () => {
     getProvidersForConfigImpl = async () => (providerResponse('sidecar', 'chosen', ['high']));
     await useConfigStore.getState().loadProviders({ directory: DIRECTORY });
     expect(useConfigStore.getState()).toMatchObject({ currentProviderId: 'sidecar', currentModelId: 'chosen', currentVariant: 'high' });
-    expect(useConfigStore.getState().getCurrentModel()?.modelID).toBe('chosen');
+    expect(useConfigStore.getState().getCurrentModel()?.modelId).toBe('chosen');
   });
 
   test('an effort picked in a draft survives the settings document arriving late', async () => {
@@ -2147,7 +2113,6 @@ describe('useConfigStore provider persistence', () => {
     getProvidersForConfigImpl = async () => ({
       providers: [providerResponse('opencode', 'big-pickle').providers[0], providerResponse('deepseek', 'v4-pro').providers[0]],
       models: [providerResponse('opencode', 'big-pickle').models[0], providerResponse('deepseek', 'v4-pro').models[0]],
-      default: { providerID: 'opencode', id: 'big-pickle' },
     });
     useConfigStore.setState({ currentProviderId: '', currentModelId: '' });
     await useConfigStore.getState().loadProviders({ directory: DIRECTORY });
@@ -2176,7 +2141,6 @@ describe('useConfigStore provider persistence', () => {
     getProvidersForConfigImpl = async () => ({
       providers: [providerResponse('opencode', 'big-pickle').providers[0], providerResponse('deepseek', 'v4-pro').providers[0]],
       models: [providerResponse('opencode', 'big-pickle').models[0], providerResponse('deepseek', 'v4-pro').models[0]],
-      default: { providerID: 'opencode', id: 'big-pickle' },
     });
     useConfigStore.setState({ currentProviderId: '', currentModelId: '' });
     await useConfigStore.getState().loadProviders({ directory: DIRECTORY });
@@ -3070,8 +3034,8 @@ describe('useConfigStore provider persistence', () => {
     await hydrated.initializeApp();
 
     const reloaded = useConfigStore.getState();
-    expect(reloaded.providers.map((entry) => entry.id)).toEqual(['fresh']);
-    expect(reloaded.directoryScoped[DIRECTORY]?.providers.map((entry) => entry.id)).toEqual(['fresh']);
+    expect(reloaded.providers.map((entry) => entry.providerId)).toEqual(['fresh']);
+    expect(reloaded.directoryScoped[DIRECTORY]?.providers.map((entry) => entry.providerId)).toEqual(['fresh']);
   });
 
   describe('setters write config-store only when the selection changes', () => {
@@ -3285,7 +3249,8 @@ describe('stale Auto selection', () => {
 describe('getModelMetadata limits', () => {
   test('the running OpenCode limits override the models.dev catalog', () => {
     const live = provider('openai', 'gpt-6-astra');
-    live.models[0].limit = { context: 400_000, output: 128_000 };
+    live.models[0].contextWindow = 400_000;
+    live.models[0].maxOutputTokens = 128_000;
     useConfigStore.setState({
       providers: [live],
       modelsMetadata: new Map([['openai/gpt-6-astra', {
@@ -3301,12 +3266,4 @@ describe('getModelMetadata limits', () => {
     expect(metadata?.limit).toEqual({ context: 400_000, output: 128_000 });
   });
 
-  test('keeps the catalog limits when OpenCode reports no window', () => {
-    useConfigStore.setState({
-      providers: [provider('custom', 'local')],
-      modelsMetadata: new Map([['custom/local', { id: 'local', providerId: 'custom', limit: { context: 32_000, output: 4_000 } }]]),
-    });
-
-    expect(useConfigStore.getState().getModelMetadata('custom', 'local')?.limit).toEqual({ context: 32_000, output: 4_000 });
-  });
 });

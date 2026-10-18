@@ -137,13 +137,11 @@ const applyDefaultAgentAndModelSelection = (sessionId: string, configState = use
       return;
     }
 
-    const provider = configState.providers.find((p) => p.id === providerId);
-    const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === modelId) as
-      | { variants?: Record<string, unknown> }
-      | undefined;
-    const variants = model?.variants;
+    const provider = configState.providers.find((entry) => entry.providerId === providerId);
+    const model = provider?.models.find((entry) => entry.modelId === modelId);
+    const variants = model?.variants.map((entry) => entry.variant) ?? [];
 
-    if (variants && Object.prototype.hasOwnProperty.call(variants, settingsDefaultVariant)) {
+    if (variants.includes(settingsDefaultVariant)) {
       configState.setCurrentVariant(settingsDefaultVariant);
       useContextStore
         .getState()

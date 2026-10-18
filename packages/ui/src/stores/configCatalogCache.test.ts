@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { Agent, Model } from '@/lib/opencode/model';
+import type { Agent } from '@/lib/opencode/model';
+import type { Model } from '@openchamber/agent-contract';
 import {
   type CachedProvider,
   CATALOG_CACHE_MAX_RECORDS,
@@ -18,8 +19,8 @@ import {
 // cache must reject.
 type SeedCatalog = {
   schema?: number;
-  providers?: ReadonlyArray<{ id: string | number; name?: string; headers?: { [name: string]: string }; models?: ReadonlyArray<{ id: string; providerID: string; name?: string }> }>;
-  defaultProviders?: { [providerID: string]: string };
+  providers?: ReadonlyArray<{ providerId: string | number; name?: string; headers?: { [name: string]: string }; models?: ReadonlyArray<{ modelId: string; provider: string; name?: string }> }>;
+  defaultProviders?: { [providerId: string]: string };
   agents?: ReadonlyArray<{ name: string }>;
 };
 type StoredRecord = SeedCatalog & { key: string; savedAt?: number; runtimeKey?: string; directoryKey?: string };
@@ -129,32 +130,15 @@ const seed = (runtimeKey: string, directoryKey: string, catalog: SeedCatalog) =>
 const SECRET = 'sk-live-secret';
 
 const bigPickle: Model = {
-  id: 'big-pickle',
-  modelID: 'big-pickle',
-  providerID: 'zen',
-  name: 'Big Pickle',
-  compatibility: { reasoningField: 'reasoning_content', supportsPromptCacheKey: true },
-  settings: { apiKey: SECRET },
-  headers: { Authorization: `Bearer ${SECRET}` },
-  body: { api_key: SECRET },
-  capabilities: { tools: true, input: ['text', 'image'], output: ['text'] },
-  variants: [{ id: 'high', headers: { 'x-api-key': SECRET }, settings: { apiKey: SECRET }, body: { key: SECRET } }],
-  time: { released: 1 },
-  cost: [{ input: 1, output: 2, cache: { read: 0.1, write: 0.2 } }],
-  status: 'active',
-  enabled: true,
-  limit: { context: 200_000, output: 32_000 },
+  modelId: 'big-pickle', provider: 'zen', name: 'Big Pickle', modalities: ['text', 'image'],
+  contextWindow: 200_000, maxOutputTokens: 32_000, reasoningEffortSupported: true,
+  reasoningOptions: [{ reasoningEffort: 'high', label: 'High', budgetTokens: null }],
+  variants: [{ variant: 'high', label: 'High', reasoningEffort: 'high' }], toolsSupported: true, enabled: true, status: 'active',
+  pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 2, cacheReadPerMillionTokens: 0.1, cacheWritePerMillionTokens: 0.2 },
 };
 
 const zen: CachedProvider = {
-  id: 'zen',
-  name: 'Zen',
-  activation: 'auto',
-  package: '@ai-sdk/openai-compatible',
-  settings: { apiKey: SECRET, timeout: 1_000 },
-  headers: { Authorization: `Bearer ${SECRET}` },
-  body: { token: SECRET },
-  models: [bigPickle],
+  providerId: 'zen', name: 'Zen', endpoint: null, protocol: 'chat-completions', authMethods: ['api-key'], auth: { status: 'missing' }, models: [bigPickle],
 };
 
 const build: Agent = {
@@ -181,12 +165,12 @@ describe('configCatalogCache', () => {
   test('a written catalog reads back with what the pickers show', async () => {
     await writeCachedCatalog('runtime-a', '/project', { providers: [zen], defaultProviders: { zen: 'big-pickle' }, agents: [build] });
     const cached = await readCachedCatalog('runtime-a', '/project');
-    expect(cached?.providers?.map((entry) => entry.id)).toEqual(['zen']);
+    expect(cached?.providers?.map((entry) => entry.providerId)).toEqual(['zen']);
     const model = cached?.providers?.[0]?.models[0];
     expect(model?.name).toBe('Big Pickle');
-    expect(model?.variants.map((variant) => variant.id)).toEqual(['high']);
-    expect(model?.compatibility?.reasoningField).toBe('reasoning_content');
-    expect(model?.limit.context).toBe(200_000);
+    expect(model?.variants.map((variant) => variant.variant)).toEqual(['high']);
+    expect(model?.reasoningEffortSupported).toBe(true);
+    expect(model?.contextWindow).toBe(200_000);
     expect(cached?.defaultProviders).toEqual({ zen: 'big-pickle' });
     const agent = cached?.agents?.[0];
     expect(agent?.name).toBe('build');
@@ -200,7 +184,7 @@ describe('configCatalogCache', () => {
     const stored = records.get('runtime-a\n/project');
     const serialized = JSON.stringify(stored);
     expect(serialized).not.toContain(SECRET);
-    for (const key of ['settings', 'headers', 'body', 'request', 'system', 'apiKey', 'api_key', 'Authorization', 'supportsPromptCacheKey']) {
+    for (const key of ['settings', 'headers', 'body', 'request', 'system', 'apiKey', 'api_key', 'Authorization']) {
       expect(serialized).not.toContain(`"${key}"`);
     }
   });
@@ -209,7 +193,7 @@ describe('configCatalogCache', () => {
     await writeCachedCatalog('runtime-a', '/project', { providers: [zen], defaultProviders: { zen: 'big-pickle' } });
     await writeCachedCatalog('runtime-a', '/project', { agents: [build] });
     const cached = await readCachedCatalog('runtime-a', '/project');
-    expect(cached?.providers?.map((entry) => entry.id)).toEqual(['zen']);
+    expect(cached?.providers?.map((entry) => entry.providerId)).toEqual(['zen']);
     expect(cached?.defaultProviders).toEqual({ zen: 'big-pickle' });
     expect(cached?.agents?.map((entry) => entry.name)).toEqual(['build']);
   });
@@ -221,7 +205,7 @@ describe('configCatalogCache', () => {
   });
 
   test('a corrupt record is not shown and is deleted', async () => {
-    seed('runtime-a', '/project', { providers: [{ id: 7 }] });
+    seed('runtime-a', '/project', { providers: [{ providerId: 7 }] });
     expect(await readCachedCatalog('runtime-a', '/project')).toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(records.has('runtime-a\n/project')).toBe(false);

@@ -82,6 +82,11 @@ const sameJob = (actual: C.ShellJobIdentity, expected: C.ShellJobIdentity): bool
 const headersFor = (commandId?: string): HeadersInit => commandId ? { 'Idempotency-Key': commandId } : {};
 
 export class CanonicalClient {
+  async checkReady(options: { signal?: AbortSignal } = {}): Promise<boolean> {
+    const response = await runtimeFetch('/api/agent/v1/ready', { signal: options.signal, cache: 'no-store' });
+    if (!response.ok) return false;
+    return C.AgentServiceReadySchema.safeParse(await response.json().catch(() => null)).success;
+  }
   resolveWorkspace(directory: string): Promise<Workspace> {
     return request('/api/agent/v1/workspaces/resolve', C.WorkspaceSchema, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory }),

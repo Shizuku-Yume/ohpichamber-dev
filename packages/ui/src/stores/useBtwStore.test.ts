@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { Model, Provider } from '@openchamber/agent-contract';
 import { btwModelAvailability, resolveBtwSelection, useBtwStore } from './useBtwStore';
 import { useSelectionStore } from '@/sync/selection-store';
 
@@ -161,7 +162,16 @@ describe('resolveBtwSelection with a live-catalog check', () => {
 });
 
 describe('btwModelAvailability', () => {
-  const catalog = [{ id: 'omniroute', models: [{ id: 'orchestrator', modelID: 'orchestrator' }] }];
+  const catalogModel: Model = {
+    modelId: 'orchestrator', provider: 'omniroute', name: 'Orchestrator', modalities: ['text'],
+    contextWindow: 128_000, maxOutputTokens: 8_192, reasoningEffortSupported: false,
+    reasoningOptions: [], variants: [], pricing: null,
+  };
+  const catalogProvider: Provider & { models: Model[] } = {
+    providerId: 'omniroute', name: 'OmniRoute', endpoint: null, protocol: null,
+    authMethods: [], auth: { status: 'missing' }, models: [catalogModel],
+  };
+  const catalog = [catalogProvider];
   const AUTO = { providerId: 'openchamber', modelId: 'auto' };
 
   test('offers no check while the catalog is empty, so the saved model wins', () => {

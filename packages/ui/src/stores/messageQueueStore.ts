@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { z } from 'zod';
-import type { SyncEvent } from '@/lib/opencode/events';
 import { createInputHistoryIdentity, createInputHistorySubmission, useInputHistoryStore } from './useInputHistoryStore';
 import { createDeferredSafeJSONStorage } from './utils/safeStorage';
 import type { AttachedFile } from './types/sessionTypes';
@@ -840,7 +839,7 @@ export const messageQueueUpdatedEventSchema = z.object({
 export type MessageQueueUpdatedEvent = z.infer<typeof messageQueueUpdatedEventSchema>;
 
 /** `openchamber:message-queue.updated` broadcast → projection. */
-export const applyMessageQueueUpdatedEvent = (payload: SyncEvent | MessageQueueUpdatedEvent, expectedRuntimeKey: string): void => {
+export const applyMessageQueueUpdatedEvent = (payload: MessageQueueUpdatedEvent, expectedRuntimeKey: string): void => {
     const parsed = messageQueueUpdatedEventSchema.safeParse(payload);
     if (!parsed.success) return;
     const { session, revision } = parsed.data.properties;

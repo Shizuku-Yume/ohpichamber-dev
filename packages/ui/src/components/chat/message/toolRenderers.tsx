@@ -1,4 +1,4 @@
-import { carriesFileDiffs, isFileChangeTool } from '@/lib/opencode/tools';
+import { carriesFileDiffs, isFileChangeTool } from '@/lib/toolHelpers';
 
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/typography';

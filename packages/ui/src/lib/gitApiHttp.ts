@@ -795,6 +795,16 @@ function buildUrl(
   return getRuntimeUrlResolver().api(spaceApiPath(path, directory), query);
 }
 
+export async function initializeGit(directory: string): Promise<void> {
+  const response = await runtimeFetch(buildUrl(`${API_BASE}/init`, directory), { method: 'POST' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message = body && typeof body.error === 'string' ? body.error : `Failed to initialize Git: ${response.statusText}`;
+    throw new Error(message);
+  }
+  invalidateGitStatusCache(directory);
+}
+
 export async function checkIsGitRepository(directory: string): Promise<boolean> {
   const key = getDirectoryCacheKey(getRuntimeKey(), directory);
   const now = Date.now();

@@ -156,4 +156,4 @@ export const getToolOutput = (
 export const getStreamingOutputAppend = (previous: string, next: string): string | undefined => {
     return next.startsWith(previous) ? next.slice(previous.length) : undefined;
 };
-import { isShellTool } from '@/lib/opencode/tools';
+import { isShellTool } from '@/lib/toolHelpers';

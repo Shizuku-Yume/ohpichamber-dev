@@ -28,7 +28,7 @@ import { listConnectableProviders } from './connectableProviders';
 import { ProviderConnectPicker } from './ProviderConnectPicker';
 import {
   providerHasCredentials,
-  hasCanonicalStoredApiKey,
+  hasCanonicalStoredCredential,
   shouldAutoOpenAuthPanel,
   shouldShowApiKeyAuth,
   shouldShowModelsSection,
@@ -55,6 +55,7 @@ import {
   buildProviderUpsertRequest,
   storeKeyAfterConfigWrite,
   CUSTOM_PROVIDER_ID,
+  isProviderLikeForCustomForm,
   isConfigDefinedCustomProvider,
   providerToEditFormState,
   resolveProviderConfigScope,
@@ -241,7 +242,7 @@ export const ProvidersPage: React.FC = () => {
   }, [integrationsRevision, t]);
 
   const connectedProviderIds = React.useMemo(
-    () => new Set(providers.map((provider) => provider.id)),
+    () => new Set(providers.map((provider) => provider.providerId)),
     [providers]
   );
 
@@ -297,13 +298,14 @@ export const ProvidersPage: React.FC = () => {
     if (!sources || integrations === null) {
       return;
     }
-    const provider = providers.find((entry) => entry.id === selectedProviderId);
+    const provider = providers.find((entry) => entry.providerId === selectedProviderId);
+    const legacyProvider = provider && isProviderLikeForCustomForm(provider) ? provider : null;
     const hasCreds = providerHasCredentials({
       connections: getProviderConnections(integrations, selectedProviderId),
-      optionsApiKey: readProviderApiKeySetting(provider),
+      optionsApiKey: readProviderApiKeySetting(legacyProvider),
     });
     const isEditableCustomProvider = Boolean(
-      provider && isConfigDefinedCustomProvider(provider, sources)
+      legacyProvider && isConfigDefinedCustomProvider(legacyProvider, sources)
     );
     if (
       shouldAutoOpenAuthPanel({
@@ -393,7 +395,7 @@ export const ProvidersPage: React.FC = () => {
     refreshIntegrations();
   }, [refreshIntegrations, refreshProviderSources, setSelectedProvider]);
 
-  const selectedProvider = providers.find((provider) => provider.id === selectedProviderId);
+  const selectedProvider = providers.find((provider) => provider.providerId === selectedProviderId);
   const selectedSources = selectedProviderId ? providerSources[selectedProviderId] : undefined;
 
   const handleSaveCustomProvider = async (plan: CustomProviderPersistPlan) => {
@@ -519,8 +521,8 @@ export const ProvidersPage: React.FC = () => {
       if (!provider) {
         throw new Error(`Provider ${providerId} is not present in the canonical catalog`);
       }
-      if (provider.auth.status !== 'configured' || provider.auth.method !== 'api-key' || provider.auth.source !== 'stored-credential') {
-        throw new Error(`Provider ${providerId} has no stored API key to disconnect`);
+      if (provider.auth.status !== 'configured' || provider.auth.source !== 'stored-credential') {
+        throw new Error(`Provider ${providerId} has no stored credential to disconnect`);
       }
       await canonicalClient.deleteProviderCredential(workspace.workspaceId, providerId, {
         expectedRevision: catalog.revision,
@@ -613,7 +615,7 @@ export const ProvidersPage: React.FC = () => {
   // A classification source that needs a key links to the provider holding it:
   // its own page when OpenCode already lists it, the connect form otherwise.
   const openProviderForKey = (providerId: string) => {
-    if (providers.some((provider) => provider.id === providerId)) {
+    if (providers.some((provider) => provider.providerId === providerId)) {
       setSelectedProvider(providerId);
       return;
     }
@@ -745,19 +747,23 @@ export const ProvidersPage: React.FC = () => {
   }
 
   const providerModels = Array.isArray(selectedProvider.models) ? selectedProvider.models : [];
-  const selectedIntegration = findIntegrationForProvider(integrations ?? [], selectedProvider.id);
+  const selectedIntegration = findIntegrationForProvider(integrations ?? [], selectedProvider.providerId);
   const signInMethods = getSignInMethods(
-    findIntegrationForProvider(integrations ?? [], getSignInIntegrationId(selectedProvider.id)),
+    findIntegrationForProvider(integrations ?? [], getSignInIntegrationId(selectedProvider.providerId)),
   );
   const showApiKeyAuth = shouldShowApiKeyAuth(selectedIntegration);
   const integrationsLoaded = integrations !== null;
   const sourcesLoaded = Boolean(selectedSources);
-  const isEditableCustomProvider = sourcesLoaded
-    && isConfigDefinedCustomProvider(selectedProvider, selectedSources);
+  const legacySelectedProvider = isProviderLikeForCustomForm(selectedProvider) ? selectedProvider : null;
+  const isEditableCustomProvider = Boolean(
+    legacySelectedProvider
+    && sourcesLoaded
+    && isConfigDefinedCustomProvider(legacySelectedProvider, selectedSources)
+  );
   const hasCredentials = providerHasCredentials({
-    connections: getProviderConnections(integrations ?? [], selectedProvider.id),
-    optionsApiKey: readProviderApiKeySetting(selectedProvider),
-    canonicalAuth: selectedProvider.canonicalAuth,
+    connections: getProviderConnections(integrations ?? [], selectedProvider.providerId),
+    optionsApiKey: readProviderApiKeySetting(legacySelectedProvider),
+    canonicalAuth: selectedProvider.auth,
   });
   const authStatusIncomplete = requiresProviderAuth(integrationsLoaded, hasCredentials, isEditableCustomProvider);
   const showModelsSection = shouldShowModelsSection({
@@ -766,12 +772,12 @@ export const ProvidersPage: React.FC = () => {
     hasCredentials,
     isEditableCustomProvider,
   });
-  const providerConnections = getProviderConnections(integrations ?? [], selectedProvider.id) ?? [];
+  const providerConnections = getProviderConnections(integrations ?? [], selectedProvider.providerId) ?? [];
   // Requests go through one integration only: the provider's own, or the one it
   // is bound to (OpenCode Go moves to the Console once you are signed in there).
   // Its first credential is the active account; credentials stored under the
   // other integration stay listed so they can be removed, but are not in use.
-  const usedIntegrationId = selectedProvider.integrationID ?? selectedProvider.id;
+  const usedIntegrationId = legacySelectedProvider?.integrationID ?? selectedProvider.providerId;
   const usedCredentials = getCredentialConnections(findIntegrationForProvider(integrations ?? [], usedIntegrationId));
   const activeAccountId = usedCredentials[0]?.id ?? null;
   const unusedAccountIds = new Set(
@@ -789,12 +795,12 @@ export const ProvidersPage: React.FC = () => {
   const providerTitleLeading = (
     <span className="flex items-center gap-2">
       {backButton}
-      <ProviderLogo providerId={selectedProvider.id} className="h-5 w-5 shrink-0" />
+      <ProviderLogo providerId={selectedProvider.providerId} className="h-5 w-5 shrink-0" />
     </span>
   );
   const providerDescription = (
     <span className="typography-settings-description text-muted-foreground">
-      <span className="font-mono">{selectedProvider.id}</span>
+      <span className="font-mono">{selectedProvider.providerId}</span>
       {configSources.length > 0
         ? <> · {t('settings.providers.page.configuredIn', { sources: configSources.join(', ') })}</>
         : null}
@@ -803,13 +809,13 @@ export const ProvidersPage: React.FC = () => {
 
   const filteredModels = rankByQuery(providerModels, modelQuery, (model) => [
     typeof model?.name === 'string' ? model.name : '',
-    typeof model?.id === 'string' ? model.id : '',
+    typeof model?.modelId === 'string' ? model.modelId : '',
   ]);
 
   if (isCustomEditMode && isEditableCustomProvider && editingCustomFormInitial) {
     return (
       <SettingsPageLayout
-        title={selectedProvider.name || selectedProvider.id}
+        title={selectedProvider.name || selectedProvider.providerId}
         titleLeading={providerTitleLeading}
         description={providerDescription}
         showSaveStatus={false}
@@ -828,7 +834,7 @@ export const ProvidersPage: React.FC = () => {
             setCustomAuthFailureHint(null);
             setLastCustomPersistId(null);
           }}
-          onDisconnect={() => void handleDisconnectCustomProvider(selectedProvider.id)}
+          onDisconnect={() => void handleDisconnectCustomProvider(selectedProvider.providerId)}
           onSubmit={handleSaveCustomProvider}
         />
       </SettingsPageLayout>
@@ -837,7 +843,7 @@ export const ProvidersPage: React.FC = () => {
 
   return (
     <SettingsPageLayout
-      title={selectedProvider.name || selectedProvider.id}
+      title={selectedProvider.name || selectedProvider.providerId}
       titleLeading={providerTitleLeading}
       description={providerDescription}
       showSaveStatus={false}
@@ -854,14 +860,15 @@ export const ProvidersPage: React.FC = () => {
                 size="xs"
                 className="!font-normal"
                 onClick={() => {
+                  if (!legacySelectedProvider) return;
                   setCustomAuthFailureHint(null);
                   setEditingCustomFormInitial(providerToEditFormState(
-                    selectedProvider,
-                    storedProviderConfigs[selectedProvider.id] ?? null,
-                    customProviderIcons[selectedProvider.id],
+                    legacySelectedProvider,
+                    storedProviderConfigs[selectedProvider.providerId] ?? null,
+                    customProviderIcons[selectedProvider.providerId],
                   ));
                   setEditingCustomScope(resolveProviderConfigScope(selectedSources));
-                  setEditingCustomProviderId(selectedProvider.id);
+                  setEditingCustomProviderId(selectedProvider.providerId);
                 }}
               >
                 {t('settings.providers.page.actions.edit')}
@@ -873,18 +880,18 @@ export const ProvidersPage: React.FC = () => {
                 size="xs"
                 className="!font-normal"
                 title={t('settings.providers.disabled.disableHint')}
-                onClick={() => void handleProviderDisabled(selectedProvider.id, true)}
+                onClick={() => void handleProviderDisabled(selectedProvider.providerId, true)}
               >
                 {t('settings.providers.disabled.disable')}
               </Button>
             ) : null}
-            {hasCanonicalStoredApiKey(selectedProvider.canonicalAuth) && !enterpriseLocked ? (
+            {hasCanonicalStoredCredential(selectedProvider.auth) && !enterpriseLocked ? (
               <Button
                 variant="outline"
                 size="xs"
                 className="!font-normal"
-                disabled={authBusyKey === `disconnect:${selectedProvider.id}`}
-                onClick={() => void handleDisconnectProvider(selectedProvider.id)}
+                disabled={authBusyKey === `disconnect:${selectedProvider.providerId}`}
+                onClick={() => void handleDisconnectProvider(selectedProvider.providerId)}
               >
                 {t('settings.providers.page.actions.disconnect')}
               </Button>
@@ -897,7 +904,7 @@ export const ProvidersPage: React.FC = () => {
               onClick={() => {
                 const nextOpen = !showAuthPanel;
                 setShowAuthPanel(nextOpen);
-                setAuthPanelDismissedForId(nextOpen ? null : selectedProvider.id);
+                setAuthPanelDismissedForId(nextOpen ? null : selectedProvider.providerId);
               }}
             >
               {showAuthPanel ? (
@@ -950,21 +957,21 @@ export const ProvidersPage: React.FC = () => {
           >
             {showApiKeyAuth ? (
               <ProviderApiKeyForm
-                key={selectedProvider.id}
-                integrationId={selectedProvider.id}
+                key={selectedProvider.providerId}
+                integrationId={selectedProvider.providerId}
                 keyMethod={getKeyMethod(selectedIntegration)}
                 connectKey={connectIntegrationKey}
-                writeCanonicalKey={(apiKey) => writeCanonicalProviderKey(selectedProvider.id, apiKey)}
-                onSaved={(source) => markAuthWriteSucceeded(selectedProvider.id, source)}
+                writeCanonicalKey={(apiKey) => writeCanonicalProviderKey(selectedProvider.providerId, apiKey)}
+                onSaved={(source) => markAuthWriteSucceeded(selectedProvider.providerId, source)}
               />
             ) : null}
 
             {signInMethods.length > 0 && (
               <ProviderOAuthMethods
-                key={selectedProvider.id}
-                integrationId={getSignInIntegrationId(selectedProvider.id)}
+                key={selectedProvider.providerId}
+                integrationId={getSignInIntegrationId(selectedProvider.providerId)}
                 methods={signInMethods}
-                onConnected={() => handleOAuthConnected(selectedProvider.id)}
+                onConnected={() => handleOAuthConnected(selectedProvider.providerId)}
                 className={cn(showApiKeyAuth && 'border-t border-[var(--surface-subtle)] pt-2')}
               />
             )}
@@ -988,9 +995,9 @@ export const ProvidersPage: React.FC = () => {
               className="!font-normal"
               onClick={() => {
                 const allIds = providerModels
-                  .map((model) => (typeof model?.id === 'string' ? model.id : ''))
+                  .map((model) => (typeof model?.modelId === 'string' ? model.modelId : ''))
                   .filter((id) => id.length > 0);
-                hideAllModels(selectedProvider.id, allIds);
+                hideAllModels(selectedProvider.providerId, allIds);
               }}
             >
               {t('settings.providers.page.actions.hideAll')}
@@ -999,7 +1006,7 @@ export const ProvidersPage: React.FC = () => {
               variant="outline"
               size="xs"
               className="!font-normal"
-              onClick={() => showAllModels(selectedProvider.id)}
+              onClick={() => showAllModels(selectedProvider.providerId)}
             >
               {t('settings.providers.page.actions.showAll')}
             </Button>
@@ -1022,11 +1029,11 @@ export const ProvidersPage: React.FC = () => {
             ) : (
               <div className="divide-y divide-[var(--surface-subtle)]">
                 {filteredModels.map((model) => {
-                  const modelId = typeof model?.id === 'string' ? model.id : '';
+                  const modelId = typeof model?.modelId === 'string' ? model.modelId : '';
                   const modelName = typeof model?.name === 'string' ? model.name : modelId;
-                  const metadata = modelId ? getModelMetadata(selectedProvider.id, modelId) as ModelMetadata | undefined : undefined;
+                  const metadata = modelId ? getModelMetadata(selectedProvider.providerId, modelId) as ModelMetadata | undefined : undefined;
                   const isHidden = hiddenModels.some(
-                    (item) => item.providerID === selectedProvider.id && item.modelID === modelId
+                    (item) => item.providerID === selectedProvider.providerId && item.modelID === modelId
                   );
 
                   const contextTokens = formatTokens(metadata?.limit?.context);
@@ -1094,7 +1101,7 @@ export const ProvidersPage: React.FC = () => {
                         )}
                         <button
                           type="button"
-                          onClick={() => toggleHiddenModel(selectedProvider.id, modelId)}
+                          onClick={() => toggleHiddenModel(selectedProvider.providerId, modelId)}
                           className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-[var(--interactive-hover)]/50"
                           title={isHidden ? t('settings.providers.page.models.actions.showModelInSelectors') : t('settings.providers.page.models.actions.hideModelFromSelectors')}
                           aria-label={isHidden ? t('settings.providers.page.models.actions.showModel') : t('settings.providers.page.models.actions.hideModel')}

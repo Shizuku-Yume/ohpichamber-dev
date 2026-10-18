@@ -20,7 +20,7 @@ export const StatusRowContainer: React.FC = React.memo(() => {
             return null;
         }
         const provider = providers.length > 0
-            ? providers.find((candidate) => candidate.id === activeModel.providerId)
+            ? providers.find((candidate) => candidate.providerId === activeModel.providerId)
             : undefined;
         return getProviderModelDisplayName(provider, activeModel.modelId) || null;
     }, [activeModel, providers]);

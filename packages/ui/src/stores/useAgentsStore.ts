@@ -10,7 +10,7 @@ import {
   finishConfigUpdate,
   updateConfigUpdateMessage,
 } from "@/lib/configUpdate";
-import { waitForOpenCodeConnection } from "@/stores/waitForOpenCodeConnection";
+import { waitForAgentServiceConnection } from "@/stores/waitForAgentServiceConnection";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
 import { useConfigStore } from "@/stores/useConfigStore";
 import { invalidateCommandsLoadCache, useCommandsStore } from "@/stores/useCommandsStore";
@@ -322,7 +322,7 @@ async function performConfigRefresh(options: {
   }
 
   try {
-    await waitForOpenCodeConnection(delayMs);
+    await waitForAgentServiceConnection(delayMs);
 
     const configStore = useConfigStore.getState();
     const agentConfigStore = useAgentsStore.getState();

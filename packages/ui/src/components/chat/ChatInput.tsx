@@ -3,7 +3,7 @@ import { formatChangeRequestReference } from '@/lib/source-control/identity';
 import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 // sessionStore removed — currentSessionId comes from useSessionUIStore
 import { useConfigStore } from '@/stores/useConfigStore';
-import { filterVisibleAgents } from '@/lib/opencode/model';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { createMessageQueueTarget, getMessageQueueKey, useMessageQueueStore, type QueuedContextPart, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
@@ -598,8 +598,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     // Filtered here rather than through `getVisibleAgents()`, which returns a
     // new array on every call: that identity would rebuild the language
     // context, and with it re-tokenize the editor, on every keystroke.
-    const allAgents = useConfigStore((state) => state.agents);
-    const agents = React.useMemo(() => filterVisibleAgents(allAgents), [allAgents]);
+    const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
     const btwSavedVariant = useSelectionStore(React.useCallback(
         (state) => btwComposerSessionId && btwAgentSelection && btwModelSelection
             ? state.getAgentModelVariantForSession(
@@ -1734,7 +1733,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // it stays in the input with the reason and the way to the grant dialog.
         const spaceRefusal = spaceTarget ? spaceModelRefusal(spaceTarget, providerIdToSend) : null;
         if (spaceRefusal) {
-            const provider = useConfigStore.getState().providers.find((entry) => entry.id === spaceRefusal.providerId)?.name ?? spaceRefusal.providerId;
+            const provider = useConfigStore.getState().providers.find((entry) => entry.providerId === spaceRefusal.providerId)?.name ?? spaceRefusal.providerId;
             toast.error(spaceRefusal.reason === 'domain_blocked'
                 ? t('spaces.draft.modelDomainBlocked', { domain: spaceRefusal.domain })
                 : spaceRefusal.reason === 'needs_again'

@@ -15,7 +15,8 @@
  */
 
 import { getNormalizedParentDirectory, normalizePath } from '@/lib/pathNormalization';
-import { isFinalToolStatus, type Part } from '@/lib/opencode/model';
+import type { Part } from '@/lib/opencode/model';
+import { isFinalToolStatus } from '@/lib/toolHelpers';
 import { toolListingChanges } from '@/lib/opencode/tools';
 
 /**

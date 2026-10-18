@@ -18,8 +18,7 @@ import type {
   IntegrationOAuthMethod,
 } from '@opencode/client';
 import { z } from 'zod';
-import type { Provider } from '@/lib/opencode/model';
-
+import type { ProviderLikeForCustomForm } from './custom-provider-form';
 export type CredentialConnection = Extract<ConnectionInfo, { type: 'credential' }>;
 
 /**
@@ -29,7 +28,7 @@ export type CredentialConnection = Extract<ConnectionInfo, { type: 'credential' 
  * read as a free-form entry and kept only when it is a string.
  */
 const providerApiKeySetting = z.string();
-export const readProviderApiKeySetting = (provider: Pick<Provider, 'settings'> | undefined): string | null =>
+export const readProviderApiKeySetting = (provider: ProviderLikeForCustomForm | null | undefined): string | null =>
   providerApiKeySetting.safeParse(provider?.settings?.apiKey).data ?? null;
 
 /** Integrations are keyed by their own id; a provider matches on the same id. */
@@ -119,8 +118,8 @@ const getCanonicalProviderCardStatus = (auth: ProviderAuthState | undefined): Pr
     : { kind: 'connected' };
 };
 
-export const hasCanonicalStoredApiKey = (auth: ProviderAuthState | undefined): boolean =>
-  auth?.status === 'configured' && auth.method === 'api-key' && auth.source === 'stored-credential';
+export const hasCanonicalStoredCredential = (auth: ProviderAuthState | undefined): boolean =>
+  auth?.status === 'configured' && auth.source === 'stored-credential';
 /**
  * Canonical auth is the provider-level signal. Integration connections and
  * inline config keys remain signals for retained authentication flows.

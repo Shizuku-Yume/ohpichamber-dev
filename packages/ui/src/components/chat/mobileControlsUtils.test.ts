@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import type { Agent } from '@/lib/opencode/model';
+import type { Agent } from '@openchamber/agent-contract';
 import { getCycledPrimaryAgentName } from './mobileControlsUtils';
 
-const agent = (name: string, mode: Agent['mode'] = 'primary'): Pick<Agent, 'name' | 'mode'> => ({ name, mode });
+type TestAgent = Pick<Agent, 'name'> & { mode?: string | null };
+const agent = (name: string, mode: TestAgent['mode'] = 'primary'): TestAgent => ({ name, mode });
 const agents = [agent('build'), agent('plan'), agent('incident'), agent('review'), agent('helper', 'subagent')];
 
 describe('getCycledPrimaryAgentName', () => {

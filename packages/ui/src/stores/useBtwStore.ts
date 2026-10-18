@@ -1,8 +1,7 @@
 import type { PermissionMode } from './utils/permissionAutoAccept';
 import { create } from 'zustand';
-import { findCatalogModel, type Agent } from '@/lib/opencode/model';
+import type { Agent, Model, Provider } from '@openchamber/agent-contract';
 import { isAutoModel } from '@/lib/routing/autoModel';
-
 type BtwModelSelection = { providerId: string; modelId: string };
 export type BtwSelection = {
   agent: string | undefined;
@@ -18,19 +17,19 @@ export type BtwSelection = {
  * gone: there is no check then and the saved model wins.
  */
 export const btwModelAvailability = (
-  providers: readonly { id: string; models: readonly { id: string; modelID: string }[] }[],
+  providers: readonly (Provider & { models: readonly Model[] })[],
   autoReady: boolean,
 ): ((model: BtwModelSelection) => boolean) | undefined => {
   if (providers.length === 0) return undefined;
   return ({ providerId, modelId }) => {
     if (isAutoModel(providerId, modelId)) return autoReady;
-    const provider = providers.find((candidate) => candidate.id === providerId);
-    return Boolean(provider && findCatalogModel(provider.models, modelId));
+    const provider = providers.find((candidate) => candidate.providerId === providerId);
+    return Boolean(provider?.models.some((model) => model.modelId === modelId));
   };
 };
 
 export const resolveBtwSelection = ({ agents, savedAgent, savedModel, savedVariant, composerModel, composerVariant, isModelAvailable }: {
-  agents: readonly Pick<Agent, 'name' | 'hidden' | 'mode'>[];
+  agents: readonly (Pick<Agent, 'name'> & { readonly hidden?: boolean; readonly mode?: string | null })[];
   savedAgent: string | null;
   savedModel: BtwModelSelection | null;
   savedVariant?: string | null;

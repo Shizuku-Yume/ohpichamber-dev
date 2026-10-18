@@ -63,7 +63,7 @@ export const ThirdPartyIntegrationsSection: React.FC<ThirdPartyIntegrationsSecti
       source: 'settings:third-party-provider-setup',
     });
     const providers = selectProvidersForDirectory(useConfigStore.getState(), settingsDirectory);
-    if (!providers.some((provider) => provider.id === providerId)) {
+    if (!providers.some((provider) => provider.providerId === providerId)) {
       return false;
     }
     const ui = useUIStore.getState();

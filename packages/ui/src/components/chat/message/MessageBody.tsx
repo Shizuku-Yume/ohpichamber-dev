@@ -1,7 +1,7 @@
 import React from 'react';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import type { Part, Session, ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
-import { isQuestionTool } from '@/lib/opencode/tools';
+import { isQuestionTool } from '@/lib/toolHelpers';
 
 import UserTextPart from './parts/UserTextPart';
 import ToolPart from './parts/ToolPart';

@@ -1,4 +1,4 @@
-import { OPENCODE_TOOLS, normalizeToolName, type ToolName } from '@/lib/opencode/tools';
+import { OPENCODE_TOOLS, normalizeToolName, type ToolName } from '@/lib/toolHelpers';
 
 // Keep only tools with a direct in-app navigation destination compact. Every
 // other tool uses ToolPart so custom, plugin, and MCP calls expose their input

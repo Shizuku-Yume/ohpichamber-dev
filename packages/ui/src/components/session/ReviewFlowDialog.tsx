@@ -17,7 +17,6 @@ import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 
 export type ReviewFlowExecution = {
   providerId: string;
@@ -94,27 +93,20 @@ function ReviewFlowDialogView({
   React.useEffect(() => {
     if (!open || providers.length === 0) return;
 
-    const provider = providers.find((item) => item.id === execution.providerId) ?? providers[0];
+    const provider = providers.find((item) => item.providerId === execution.providerId) ?? providers[0];
     const models = Array.isArray(provider?.models) ? provider.models : [];
-    const hasModel = models.some((item) => item.id === execution.modelId);
-    const fallbackModelId = models[0]?.id ?? '';
-
-    if (provider?.id === execution.providerId && hasModel) return;
-
-    setExecution((prev) => ({
-      ...prev,
-      providerId: provider?.id ?? '',
-      modelId: hasModel ? prev.modelId : fallbackModelId,
-      variant: '',
-    }));
+    const hasModel = models.some((item) => item.modelId === execution.modelId);
+    const fallbackModelId = models[0]?.modelId ?? '';
+    if (provider?.providerId === execution.providerId && hasModel) return;
+    setExecution((prev) => ({ ...prev, providerId: provider?.providerId ?? '', modelId: hasModel ? prev.modelId : fallbackModelId, variant: '' }));
   }, [open, providers, execution.providerId, execution.modelId]);
 
   const agentFilter = React.useCallback((agent: { mode?: string }) => isPrimaryMode(agent.mode), []);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === execution.providerId);
-    const model = provider?.models?.find((item) => item.id === execution.modelId) as { variants?: ModelVariantSource } | undefined;
-    return listModelVariantIds(model?.variants);
+    const provider = providers.find((item) => item.providerId === execution.providerId);
+    const model = provider?.models?.find((item) => item.modelId === execution.modelId);
+    return model?.variants.map((entry) => entry.variant) ?? [];
   }, [providers, execution.providerId, execution.modelId]);
 
   const hasVariantOptions = variantOptions.length > 0;

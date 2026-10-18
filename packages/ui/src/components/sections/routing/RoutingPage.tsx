@@ -30,7 +30,6 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import type { RoutingCategory, RoutingConfig } from '@/lib/routing/routingApi';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
-import { modelVariantNames } from '@/lib/modelVariants';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { useRoutingStore } from '@/stores/useRoutingStore';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
@@ -54,15 +53,15 @@ const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean =>
 
 const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 
-/** The thinking levels OpenCode reports for one model; empty when the model has none. */
-const useModelVariants = (providerID: string | null | undefined, modelID: string | null | undefined): string[] => {
+/** The thinking levels the native catalog reports for one model; empty when the model has none. */
+const useModelVariants = (providerId: string | null | undefined, modelId: string | null | undefined): string[] => {
   const providers = useConfigStore((state) => state.providers);
   return React.useMemo(() => {
-    if (!providerID || !modelID) return [];
-    const provider = providers.find((entry) => entry.id === providerID);
-    const model = provider?.models.find((entry) => entry.id === modelID);
-    return modelVariantNames(model);
-  }, [modelID, providerID, providers]);
+    if (!providerId || !modelId) return [];
+    const provider = providers.find((entry) => entry.providerId === providerId);
+    const model = provider?.models.find((entry) => entry.modelId === modelId);
+    return model?.variants.map((entry) => entry.variant) ?? [];
+  }, [modelId, providerId, providers]);
 };
 
 /**
@@ -75,15 +74,15 @@ const knownVariant = (value: string | null | undefined, variants: string[]): str
 );
 
 const VariantSelect: React.FC<{
-  providerID: string | null | undefined;
-  modelID: string | null | undefined;
+  providerId: string | null | undefined;
+  modelId: string | null | undefined;
   value: string | null;
   onChange: (variant: string | null) => void;
   ariaLabel: string;
   className?: string;
-}> = ({ providerID, modelID, value, onChange, ariaLabel, className }) => {
+}> = ({ providerId, modelId, value, onChange, ariaLabel, className }) => {
   const { t } = useI18n();
-  const variants = useModelVariants(providerID, modelID);
+  const variants = useModelVariants(providerId, modelId);
   const selected = knownVariant(value, variants) ?? DEFAULT_VARIANT_VALUE;
   const label = (variant: string) => (variant === DEFAULT_VARIANT_VALUE
     ? t('settings.routing.thinking.default')
@@ -170,8 +169,8 @@ const CategoryRow: React.FC<{
             </SettingsStackedField>
             <SettingsStackedField label={t('settings.routing.category.thinking')} controlClassName="max-w-none">
               <VariantSelect
-                providerID={category.model?.providerID}
-                modelID={category.model?.modelID}
+                providerId={category.model?.providerID}
+                modelId={category.model?.modelID}
                 value={category.variant}
                 onChange={(variant) => onChange({ variant })}
                 ariaLabel={t('settings.routing.category.thinking')}
@@ -405,8 +404,8 @@ export const RoutingPage: React.FC = () => {
                 info={t('settings.routing.auto.fallbackThinkingInfo')}
               >
                 <VariantSelect
-                  providerID={draft.fallback?.model.providerID}
-                  modelID={draft.fallback?.model.modelID}
+                  providerId={draft.fallback?.model.providerID}
+                  modelId={draft.fallback?.model.modelID}
                   value={draft.fallback?.variant ?? null}
                   onChange={(variant) => update((config) => (config.fallback ? { ...config, fallback: { ...config.fallback, variant } } : config))}
                   ariaLabel={t('settings.routing.auto.fallbackThinking')}

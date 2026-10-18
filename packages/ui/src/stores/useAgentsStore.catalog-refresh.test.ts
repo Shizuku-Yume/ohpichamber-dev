@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test, type Mock } from 'bun:test';
 import type { Agent, AgentCatalog } from '@openchamber/agent-contract';
 import { canonicalClient, type CanonicalClient } from '@/api/canonicalClient';
-import { useConfigStore } from './useConfigStore';
 import { useProjectsStore } from './useProjectsStore';
 import { invalidateAgentsLoadCache, selectAgentsForDirectory, useAgentsStore } from './useAgentsStore';
 import { refreshStoresForCatalogKind } from './catalogRefresh';
 
 const AMBIENT = '/workspace/ambient';
 const DIRECTORY = '/workspace/settings-project';
-const originalConfigLoad = useConfigStore.getState().loadAgents;
 const agent = (name: string): Agent => ({
   agentId: name, name, description: '', model: null, allowedTools: [],
 });
@@ -27,13 +25,11 @@ beforeEach(() => {
   getAgents = spyOn(canonicalClient, 'getAgents');
   useProjectsStore.setState({ projects: [{ id: 'ambient', path: AMBIENT }], activeProjectId: 'ambient' });
   useAgentsStore.getState().resetForRuntimeSwitch();
-  useConfigStore.setState({ loadAgents: async () => true });
 });
 
 afterEach(() => {
   resolveWorkspace.mockRestore();
   getAgents.mockRestore();
-  useConfigStore.setState({ loadAgents: originalConfigLoad });
 });
 
 describe('native agent catalog refresh', () => {

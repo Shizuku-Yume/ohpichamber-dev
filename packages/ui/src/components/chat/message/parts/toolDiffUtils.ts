@@ -1,4 +1,4 @@
-import { carriesFileDiffs, isEditTool, isPatchTool, isWriteTool } from '@/lib/opencode/tools';
+import { carriesFileDiffs, isEditTool, isPatchTool, isWriteTool } from '@/lib/toolHelpers';
 import { parsePatchFiles } from '@pierre/diffs';
 
 import { isToolDiffPreviewOversized } from './toolDiffPreview';

@@ -595,9 +595,9 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
       ) : (
         <ul className="flex flex-col gap-3">
           {ranked.map((model) => {
-            const provider = providers.find((entry) => entry.id === model.providerID);
+            const provider = providers.find((entry) => entry.providerId === model.providerID);
             const providerName = provider?.name || model.providerID;
-            const name = getProviderModelDisplayName(provider, model.modelID) || model.modelID;
+            const name = provider?.models.find((entry) => entry.modelId === model.modelID)?.name || model.modelID;
             const share = max > 0 ? (valueOf(model) / max) * 100 : 0;
             return (
               <li key={`${model.providerID}/${model.modelID}#${model.variant ?? ''}`} className="flex min-w-0 flex-col gap-1">

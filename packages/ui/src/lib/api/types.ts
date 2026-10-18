@@ -1049,6 +1049,7 @@ interface GitWorktreeAPI {
 }
 
 export interface GitAPI {
+  initializeGit(directory: string): Promise<void>;
   checkIsGitRepository(directory: string): Promise<boolean>;
   getGitStatus(directory: string, options?: { mode?: 'light'; fresh?: boolean }): Promise<GitStatus>;
   getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse>;

@@ -14,7 +14,6 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { useI18n } from '@/lib/i18n';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 
 type TodoSendTarget = 'session' | 'worktree';
 
@@ -90,27 +89,20 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
   React.useEffect(() => {
     if (!open || providers.length === 0) return;
 
-    const provider = providers.find((item) => item.id === execution.providerID) ?? providers[0];
+    const provider = providers.find((item) => item.providerId === execution.providerID) ?? providers[0];
     const models = Array.isArray(provider?.models) ? provider.models : [];
-    const hasModel = models.some((item) => item.id === execution.modelID);
-    const fallbackModelID = models[0]?.id ?? '';
-
-    if (provider?.id === execution.providerID && hasModel) return;
-
-    setExecution((prev) => ({
-      ...prev,
-      providerID: provider?.id ?? '',
-      modelID: hasModel ? prev.modelID : fallbackModelID,
-      variant: '',
-    }));
+    const hasModel = models.some((item) => item.modelId === execution.modelID);
+    const fallbackModelID = models[0]?.modelId ?? '';
+    if (provider?.providerId === execution.providerID && hasModel) return;
+    setExecution((prev) => ({ ...prev, providerID: provider?.providerId ?? '', modelID: hasModel ? prev.modelID : fallbackModelID, variant: '' }));
   }, [open, providers, execution.providerID, execution.modelID]);
 
   const agentFilter = React.useCallback((agent: { mode?: string }) => isPrimaryMode(agent.mode), []);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === execution.providerID);
-    const model = provider?.models?.find((item) => item.id === execution.modelID) as { variants?: ModelVariantSource } | undefined;
-    return listModelVariantIds(model?.variants);
+    const provider = providers.find((item) => item.providerId === execution.providerID);
+    const model = provider?.models?.find((item) => item.modelId === execution.modelID);
+    return model?.variants.map((entry) => entry.variant) ?? [];
   }, [providers, execution.providerID, execution.modelID]);
 
   const hasVariantOptions = variantOptions.length > 0;

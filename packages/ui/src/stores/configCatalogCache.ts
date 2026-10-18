@@ -1,5 +1,20 @@
 import { z } from 'zod';
-import type { Agent, Model, Provider } from '@/lib/opencode/model';
+import type { Model, Provider } from '@openchamber/agent-contract';
+import type { Agent } from '@/lib/opencode/model';
+export type CachedProvider = Provider & { models: Model[] };
+
+export type CachedCatalog = {
+  providers?: CachedProvider[];
+  defaultProviders?: Record<string, string>;
+  agents?: Agent[];
+};
+
+const DATABASE = 'openchamber-config-catalog';
+const DATABASE_VERSION = 1;
+const STORE = 'catalogs';
+const SAVED_AT_INDEX = 'savedAt';
+/** Bump when the stored provider, model or agent shape changes; older records are dropped. */
+export const CATALOG_CACHE_SCHEMA = 3;
 
 /**
  * Last known provider/model and agent catalogs, per runtime and config
@@ -19,21 +34,6 @@ import type { Agent, Model, Provider } from '@/lib/opencode/model';
  * dropped.
  */
 
-export type CachedProvider = Provider & { models: Model[] };
-
-export type CachedCatalog = {
-  providers?: CachedProvider[];
-  defaultProviders?: Record<string, string>;
-  agents?: Agent[];
-};
-
-const DATABASE = 'openchamber-config-catalog';
-const DATABASE_VERSION = 1;
-const STORE = 'catalogs';
-const SAVED_AT_INDEX = 'savedAt';
-/** Bump when the stored provider, model or agent shape changes; older records are dropped. */
-export const CATALOG_CACHE_SCHEMA = 2;
-/** Directories kept across all runtimes; the least recently saved go first. */
 export const CATALOG_CACHE_MAX_RECORDS = 24;
 
 const recordKey = (runtimeKey: string, directoryKey: string): string => `${runtimeKey}\n${directoryKey}`;
@@ -68,70 +68,35 @@ const openDatabase = (): Promise<IDBDatabase | null> => {
 };
 
 const storedModelSchema = z.strictObject({
-  id: z.string(),
-  modelID: z.string(),
-  providerID: z.string(),
-  canonical: z.string().optional(),
-  family: z.string().optional(),
-  name: z.string(),
-  compatibility: z.strictObject({
-    reasoningField: z.string().optional(),
-    requireReasoning: z.boolean().optional(),
-  }).optional(),
-  capabilities: z.strictObject({ tools: z.boolean(), input: z.array(z.string()), output: z.array(z.string()) }),
-  variants: z.array(z.strictObject({ id: z.string() })),
-  time: z.strictObject({ released: z.number() }),
-  cost: z.array(z.strictObject({
-    tier: z.strictObject({ type: z.literal('context'), size: z.number() }).optional(),
-    input: z.number(),
-    output: z.number(),
-    cache: z.strictObject({ read: z.number(), write: z.number() }),
-  })),
-  status: z.enum(['alpha', 'beta', 'deprecated', 'active']),
-  enabled: z.boolean(),
-  limit: z.strictObject({ context: z.number(), input: z.number().optional(), output: z.number() }),
+  modelId: z.string(), provider: z.string(), name: z.string(),
+  modalities: z.array(z.enum(['text', 'image', 'audio', 'embedding'])), contextWindow: z.number(), maxOutputTokens: z.number(),
+  reasoningEffortSupported: z.boolean(),
+  reasoningOptions: z.array(z.strictObject({ reasoningEffort: z.string(), label: z.string(), budgetTokens: z.number().nullable() })),
+  variants: z.array(z.strictObject({ variant: z.string(), label: z.string(), reasoningEffort: z.string().nullable() })),
+  toolsSupported: z.boolean().optional(), enabled: z.boolean().optional(), status: z.enum(['alpha', 'beta', 'deprecated', 'active']).optional(),
+  pricing: z.strictObject({ inputPerMillionTokens: z.number(), outputPerMillionTokens: z.number(), cacheReadPerMillionTokens: z.number().nullable(), cacheWritePerMillionTokens: z.number().nullable() }).nullable(),
 });
 
 const storedProviderSchema = z.strictObject({
-  id: z.string(),
-  canonical: z.string().optional(),
-  integrationID: z.string().optional(),
-  name: z.string(),
-  activation: z.enum(['auto', 'enabled', 'disabled']),
-  package: z.string(),
+  providerId: z.string(), name: z.string(), endpoint: z.string().url().nullable(),
+  protocol: z.enum(['chat-completions', 'responses', 'messages', 'generate-content']).nullable(),
+  authMethods: z.array(z.enum(['api-key', 'oauth'])),
+  auth: z.discriminatedUnion('status', [
+    z.strictObject({ status: z.literal('missing') }),
+    z.strictObject({ status: z.literal('configured'), credentialRef: z.string(), method: z.enum(['api-key', 'oauth']), source: z.enum(['stored-credential', 'managed-environment', 'external-environment']) }),
+  ]),
   models: z.array(storedModelSchema),
 });
 
-/** An agent without its request and system prompt; only the sampling values the composer shows. */
 const storedAgentSchema = z.strictObject({
-  id: z.string(),
-  name: z.string(),
-  displayName: z.string(),
+  id: z.string(), name: z.string(), displayName: z.string(),
   model: z.strictObject({ id: z.string(), providerID: z.string(), variant: z.string().optional() }).optional(),
-  description: z.string().optional(),
-  mode: z.enum(['subagent', 'primary', 'all']),
-  hidden: z.boolean(),
-  color: z.string().optional(),
-  steps: z.number().optional(),
-  permissions: z.array(z.strictObject({
-    action: z.string(),
-    resource: z.string(),
-    effect: z.enum(['allow', 'deny', 'ask']),
-  })),
+  description: z.string().optional(), mode: z.enum(['subagent', 'primary', 'all']), hidden: z.boolean(), color: z.string().optional(), steps: z.number().optional(),
+  permissions: z.array(z.strictObject({ action: z.string(), resource: z.string(), effect: z.enum(['allow', 'deny', 'ask']) })),
   sampling: z.strictObject({ temperature: z.number().optional(), topP: z.number().optional() }),
 });
 
-const storedRecordSchema = z.strictObject({
-  key: z.string(),
-  schema: z.number(),
-  runtimeKey: z.string(),
-  directoryKey: z.string(),
-  savedAt: z.number(),
-  providers: z.array(storedProviderSchema).optional(),
-  defaultProviders: z.record(z.string(), z.string()).optional(),
-  agents: z.array(storedAgentSchema).optional(),
-});
-
+const storedRecordSchema = z.strictObject({ key: z.string(), schema: z.number(), runtimeKey: z.string(), directoryKey: z.string(), savedAt: z.number(), providers: z.array(storedProviderSchema).optional(), defaultProviders: z.record(z.string(), z.string()).optional(), agents: z.array(storedAgentSchema).optional() });
 type StoredRecord = z.infer<typeof storedRecordSchema>;
 type StoredProvider = z.infer<typeof storedProviderSchema>;
 type StoredModel = z.infer<typeof storedModelSchema>;
@@ -139,42 +104,13 @@ type StoredAgent = z.infer<typeof storedAgentSchema>;
 type StoredCatalog = Pick<StoredRecord, 'providers' | 'defaultProviders' | 'agents'>;
 
 const toStoredModel = (model: Model): StoredModel => ({
-  id: model.id,
-  modelID: model.modelID,
-  providerID: model.providerID,
-  canonical: model.canonical,
-  family: model.family,
-  name: model.name,
-  compatibility: model.compatibility && {
-    reasoningField: model.compatibility.reasoningField,
-    requireReasoning: model.compatibility.requireReasoning,
-  },
-  capabilities: {
-    tools: model.capabilities.tools,
-    input: [...model.capabilities.input],
-    output: [...model.capabilities.output],
-  },
-  variants: model.variants.map((variant) => ({ id: variant.id })),
-  time: { released: model.time.released },
-  cost: model.cost.map((entry) => ({
-    tier: entry.tier && { type: entry.tier.type, size: entry.tier.size },
-    input: entry.input,
-    output: entry.output,
-    cache: { read: entry.cache.read, write: entry.cache.write },
-  })),
-  status: model.status,
-  enabled: model.enabled,
-  limit: { context: model.limit.context, input: model.limit.input, output: model.limit.output },
+  modelId: model.modelId, provider: model.provider, name: model.name, modalities: [...model.modalities], contextWindow: model.contextWindow, maxOutputTokens: model.maxOutputTokens,
+  reasoningEffortSupported: model.reasoningEffortSupported, reasoningOptions: model.reasoningOptions.map((option) => ({ ...option })), variants: model.variants.map((variant) => ({ ...variant })),
+  toolsSupported: model.toolsSupported, enabled: model.enabled, status: model.status, pricing: model.pricing && { ...model.pricing },
 });
 
 const toStoredProvider = (provider: CachedProvider): StoredProvider => ({
-  id: provider.id,
-  canonical: provider.canonical,
-  integrationID: provider.integrationID,
-  name: provider.name,
-  activation: provider.activation,
-  package: provider.package,
-  models: provider.models.map(toStoredModel),
+  providerId: provider.providerId, name: provider.name, endpoint: provider.endpoint, protocol: provider.protocol, authMethods: [...provider.authMethods], auth: { ...provider.auth }, models: provider.models.map(toStoredModel),
 });
 
 // The request body is free-form JSON; a sampling value is kept only when it is a number.

@@ -2512,6 +2512,27 @@ const applyUpstreamConfiguration = async (args) => {
 
 const warnedUnsupportedRoots = new Set();
 
+/** Initialize a normal project directory as a Git repository. */
+export async function initializeRepository(directory) {
+  const normalizedDirectory = normalizeDirectoryPath(directory);
+  if (typeof normalizedDirectory !== 'string' || !normalizedDirectory.trim()) {
+    throw Object.assign(new Error('directory is required'), { statusCode: 400 });
+  }
+  const directoryPath = path.resolve(normalizedDirectory);
+  const rootReason = unsupportedRepositoryRootReason(directoryPath);
+  if (rootReason === 'home') {
+    throw Object.assign(new Error('Git is not initialized in the home directory: a repository there covers every file you own.'), { statusCode: 400 });
+  }
+  if (rootReason === 'filesystem-root') {
+    throw Object.assign(new Error('Git is not initialized at the root of a disk.'), { statusCode: 400 });
+  }
+  await fsp.stat(directoryPath);
+  const result = await runGitCommand(directoryPath, ['init']);
+  if (!result.success) {
+    throw Object.assign(new Error(result.message || 'Failed to initialize Git'), { statusCode: 500 });
+  }
+}
+
 export async function isGitRepository(directory) {
   const directoryPath = normalizeDirectoryPath(directory);
   if (!directoryPath || !fs.existsSync(directoryPath)) {

@@ -1,4 +1,5 @@
-import { isSkillTool, toolDescription } from '@/lib/opencode/tools';
+import { isSkillTool } from '@/lib/toolHelpers';
+import { toolDescription } from '@/lib/opencode/tools';
 import React from 'react';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import { cn } from '@/lib/utils';

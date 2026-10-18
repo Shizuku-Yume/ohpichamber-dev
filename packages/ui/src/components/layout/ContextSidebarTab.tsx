@@ -1,6 +1,6 @@
 import React from 'react';
 import type { JsonValue, Message, Part } from '@openchamber/agent-contract';
-import type { Model, Provider } from '@/lib/opencode/model';
+import type { Model, Provider } from '@openchamber/agent-contract';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 
 import { Icon } from "@/components/icon/Icon";
@@ -178,13 +178,13 @@ const resolveProviderAndModel = (
   providerID: string,
   modelID: string,
 ): ProviderModelDisplay => {
-  const provider = providers.find((entry) => entry.id === providerID);
-  const model = provider?.models?.find((entry) => entry.id === modelID);
+  const provider = providers.find((entry) => entry.providerId === providerID);
+  const model = provider?.models?.find((entry) => entry.modelId === modelID);
 
   return {
     providerName: provider?.name || providerID || '-',
     modelName: model?.name || modelID || '-',
-    contextLimit: model?.limit?.context ?? null,
+    contextLimit: model?.contextWindow ?? null,
   };
 };
 

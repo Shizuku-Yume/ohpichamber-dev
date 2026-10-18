@@ -1,6 +1,6 @@
 import type { Session } from '@openchamber/agent-contract';
-import { isFinalToolStatus, type Part } from '@/lib/opencode/model';
-import { isExecuteTool, isFileChangeTool, isShellTool } from '@/lib/opencode/tools';
+import type { Part } from '@/lib/opencode/model';
+import { isExecuteTool, isFileChangeTool, isFinalToolStatus, isShellTool } from '@/lib/toolHelpers';
 import { notifyGitStatusInvalidated } from '@/lib/gitStatusInvalidation';
 import type { WorktreeMetadata } from '@/types/worktree';
 

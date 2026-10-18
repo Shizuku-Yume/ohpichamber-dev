@@ -10,8 +10,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
 import { useI18n } from '@/lib/i18n';
 import { ModelPickerList, type ModelPickerEntry } from '@/components/model-picker/ModelPickerList';
-import { listModelVariantIds } from '@/lib/modelVariants';
-import { findCatalogModel } from '@/lib/opencode/model';
 import type { MultiRunModelSelection } from '@/types/multirun';
 
 /** Chip height class - shared between chips and add button */
@@ -216,9 +214,9 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
 
   const handleSelectModel = React.useCallback((entry: ModelPickerEntry) => {
     const nextModel = {
-      providerId: entry.providerID,
-      modelId: entry.modelID,
-      displayName: entry.model.name || entry.modelID,
+      providerId: entry.providerId,
+      modelId: entry.modelId,
+      displayName: entry.model.name || entry.modelId,
       instanceId: generateInstanceId(),
     };
     if (isSingleSelect && selectedModels.length > 0 && onUpdate) {
@@ -300,14 +298,14 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
                 onSearchQueryChange={setSearchQuery}
                 onSelect={handleSelectModel}
                 labels={labels}
-                selectionCount={(entry) => modelCounts.get(`${entry.providerID}:${entry.modelID}`) || 0}
+                selectionCount={(entry) => modelCounts.get(`${entry.providerId}:${entry.modelId}`) || 0}
                 disabled={!canAddModel}
                 maxHeightClassName="flex-1"
                 maxHeightStyle={{ maxHeight: availableHeight ? `${availableHeight}px` : '300px' }}
                 stickyHeaders
                 tooltipsEnabled={isOpen}
-                isFavorite={(entry) => isFavoriteModel(entry.providerID, entry.modelID)}
-                onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerID, entry.modelID)}
+                isFavorite={(entry) => isFavoriteModel(entry.providerId, entry.modelId)}
+                onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerId, entry.modelId)}
                 onEscape={() => {
                   setIsOpen(false);
                   setSearchQuery('');
@@ -325,8 +323,8 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
               const totalSameModel = modelCounts.get(key) || 1;
               const instanceIndex = getInstanceIndex(model);
 
-              const providerModel = findCatalogModel(providers.find((provider) => provider.id === model.providerId)?.models, model.modelId);
-              const variantKeys = listModelVariantIds(providerModel?.variants);
+              const providerModel = providers.find((provider) => provider.providerId === model.providerId)?.models.find((entry) => entry.modelId === model.modelId);
+              const variantKeys = providerModel?.variants.map((entry) => entry.variant) ?? [];
               const hasVariants = variantKeys.length > 0;
 
               const DEFAULT_VARIANT_VALUE = '__default__';

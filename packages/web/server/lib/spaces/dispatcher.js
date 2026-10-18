@@ -21,7 +21,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { pipeline } from 'node:stream';
 
-import { writeSseChunkWithBackpressure } from '../opencode/proxy.js';
+import { writeSseChunkWithBackpressure } from '../host/sse-stream.js';
 import { SpaceError } from './errors.js';
 import { isSpaceId } from './labels.js';
 import { SPACE_SERVER_HOST, SPACE_SERVER_PORT, spaceWorkPath } from './layout.js';

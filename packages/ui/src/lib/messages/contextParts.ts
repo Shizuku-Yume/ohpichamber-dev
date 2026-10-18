@@ -16,7 +16,7 @@
 
 import { z } from 'zod';
 import type { SourceControlProvider } from '@/lib/api/types';
-import type { JsonValue } from '@openchamber/sdk';
+import type { JsonValue } from '@openchamber/agent-contract';
 import type { Metadata } from '@/lib/opencode/model';
 import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import { chatQuoteAnchorSchema, type ChatQuoteAnchor } from '@/lib/chatQuoteAnchor';

@@ -42,7 +42,7 @@ const WorkingPillBody: React.FC<{ onClick: () => void }> = ({ onClick }) => {
 
     const modelName = React.useMemo(() => {
         if (!activeModel) return null;
-        const provider = providers.find((candidate) => candidate.id === activeModel.providerId);
+        const provider = providers.find((candidate) => candidate.providerId === activeModel.providerId);
         return getProviderModelDisplayName(provider, activeModel.modelId) || null;
     }, [activeModel, providers]);
 

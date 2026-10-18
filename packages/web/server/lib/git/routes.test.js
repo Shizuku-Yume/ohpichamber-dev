@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const gitLibraries = {
+  initializeRepository: vi.fn(),
   stageFiles: vi.fn(),
   unstageFiles: vi.fn(),
   isGitRepository: vi.fn(),
@@ -25,6 +26,7 @@ const gitLibraries = {
 };
 
 vi.mock('./index.js', () => ({
+  initializeRepository: gitLibraries.initializeRepository,
   stageFiles: gitLibraries.stageFiles,
   unstageFiles: gitLibraries.unstageFiles,
   isGitRepository: gitLibraries.isGitRepository,
@@ -89,6 +91,9 @@ const createMockResponse = () => {
     json(payload) {
       body = payload;
     },
+    end() {
+      body = null;
+    },
     get statusCode() {
       return statusCode;
     },
@@ -97,6 +102,31 @@ const createMockResponse = () => {
     },
   };
 };
+describe('git initialization route', () => {
+  beforeEach(() => {
+    gitLibraries.initializeRepository.mockReset();
+  });
+
+  it('runs the Host operation for a directory and returns no content', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+    await getRoute('POST', '/api/git/init')({ query: { directory: '/repo' } }, response);
+    expect(gitLibraries.initializeRepository).toHaveBeenCalledWith('/repo');
+    expect(response.statusCode).toBe(204);
+  });
+
+  it('preserves the Host refusal status and message', async () => {
+    gitLibraries.initializeRepository.mockRejectedValue(Object.assign(new Error('refused'), { statusCode: 400 }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+    await getRoute('POST', '/api/git/init')({ query: { directory: '/repo' } }, response);
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toEqual({ error: 'refused' });
+  });
+});
+
 
 describe('git route renderer DTOs', () => {
   beforeEach(() => {

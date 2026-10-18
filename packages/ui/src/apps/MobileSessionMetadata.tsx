@@ -386,10 +386,10 @@ export const MobileSessionMetadataButton = React.memo(function MobileSessionMeta
   const modelRef = latestMessageModel
     ?? (savedSessionModel ? { providerID: savedSessionModel.providerId, modelID: savedSessionModel.modelId } : null)
     ?? (currentProviderId && currentModelId ? { providerID: currentProviderId, modelID: currentModelId } : null);
-  const provider = modelRef ? providers.find((entry) => entry.id === modelRef.providerID) : undefined;
-  const liveModel = provider?.models.find((model) => model.id === modelRef?.modelID);
+  const provider = modelRef ? providers.find((entry) => entry.providerId === modelRef.providerID) : undefined;
+  const liveModel = provider?.models.find((model) => model.modelId === modelRef?.modelID);
   const metadata = modelRef ? getModelMetadata(modelRef.providerID, modelRef.modelID) : undefined;
-  const contextLimit = liveModel?.limit?.context
+  const contextLimit = liveModel?.contextWindow
     ?? metadata?.limit?.context
     ?? 0;
   const contextFill = React.useMemo(() => findLatestContextFill(activeSessionMessages), [activeSessionMessages]);
