@@ -316,45 +316,19 @@ const resolveWorkspacePathFromWorktrees = async ({ targetPath, baseDirectory, pa
 
 const resolveWorkspacePathFromContext = async ({ req, targetPath, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots }) => {
   const resolvedProject = await resolveProjectDirectory(req);
-  if (!resolvedProject.directory) {
-    return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
-  }
-
-  const resolved = resolveWorkspacePath({
-    targetPath,
-    baseDirectory: resolvedProject.directory,
-    path,
-    os,
-    normalizeDirectoryPath,
-    managedRoots,
-  });
-  if (resolved.ok || resolved.error !== 'Path is outside of active workspace') {
-    return resolved;
-  }
-
-  // The active project directory is validated with fs.realpath, so the base is
-  // canonical while the client (and the file tree) addresses files under the
-  // user-visible root, which may itself be a symlink. Retry against the raw
-  // directory the client asked for so those paths stay addressable. Symlink
-  // resolution still happens afterwards, and the routes that need canonical
-  // containment re-check it against this base.
-  const requestedBase = resolvedProject.requestedDirectory;
-  if (typeof requestedBase === 'string' && requestedBase && requestedBase !== resolvedProject.directory) {
-    const lexical = resolveWorkspacePath({
-      targetPath,
-      baseDirectory: requestedBase,
-      path,
-      os,
-      normalizeDirectoryPath,
-      managedRoots,
+  // Managed chats do not require a configured project. Each base is an
+  // independently authorized root, not a fallback to the user's home.
+  const bases = [resolvedProject.directory, ...managedRoots, resolvedProject.requestedDirectory];
+  for (const baseDirectory of bases) {
+    if (!baseDirectory) continue;
+    const resolved = resolveWorkspacePath({
+      targetPath, baseDirectory, path, os, normalizeDirectoryPath, managedRoots: [],
     });
-    if (lexical.ok) {
-      return lexical;
-    }
+    if (resolved.ok || resolved.error !== 'Path is outside of active workspace') return resolved;
   }
 
-  // Keep legacy lexical paths valid, but also accept the canonical roots
-  // returned by /fs/home. Never infer filesystem identity from letter case.
+  // Keep lexical aliases addressable, then check filesystem-confirmed roots.
+  // Write routes retain their canonical-target containment checks.
   let resolutionError;
   for (const root of managedRoots) {
     try {
@@ -366,6 +340,10 @@ const resolveWorkspacePathFromContext = async ({ req, targetPath, resolveProject
     } catch (error) {
       resolutionError ??= error;
     }
+  }
+  if (!resolvedProject.directory) {
+    if (resolutionError) throw resolutionError;
+    return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
   }
   const worktree = await resolveWorkspacePathFromWorktrees({
     targetPath,
@@ -822,6 +800,24 @@ export const registerFsRoutes = (app, dependencies) => {
         });
         if (!resolved.ok) {
           return res.status(400).json({ error: resolved.error });
+        }
+        const canonicalTarget = await canonicalDirectoryPath(resolved.resolved, fsPromises, path);
+        let authorized = false;
+        let resolutionError;
+        for (const root of [resolved.base, ...managedRoots]) {
+          try {
+            const canonicalRoot = await canonicalDirectoryPath(root, fsPromises, path);
+            if (isPathWithinRoot(canonicalTarget, canonicalRoot, path, os)) {
+              authorized = true;
+              break;
+            }
+          } catch (error) {
+            resolutionError ??= error;
+          }
+        }
+        if (!authorized) {
+          if (resolutionError) throw resolutionError;
+          return res.status(400).json({ error: 'Path is outside of active workspace' });
         }
         resolvedPath = resolved.resolved;
       }
