@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/54",
+  "observedAt": "2026-10-21",
+  "status": "connected-stats-verified",
+  "baseCommit": "93d519221527e15cf52a5dde0d6ddf011c7527bb",
+  "implementationCommit": "f590395a1 (original Task54 branch record); current source includes later canonical integration commits",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "head": "11b35bfa6",
+    "webHost": "http://127.0.0.1:3164 (isolated HOME /tmp/ohpi-task54-home)",
+    "browser": "Google Chrome headless CDP 9236, timezone America/New_York",
+    "webDist": {
+      "path": "packages/web/dist",
+      "indexSha256": "c438247e7abd698759fc8fe55e50a4b08ed147a86d213906732d9789fdfa478e"
+    },
+    "fixtures": {
+      "providerA": "http://127.0.0.1:4610/v1 model stats-model, native write tool, input 100/output 20 tokens per assistant message",
+      "providerB": "http://127.0.0.1:4611/v1 model stats-model, native write tool, input 200/output 30 tokens per assistant message",
+      "note": "Local provider fixtures only; sessions were created and run through the canonical Host/Agent Service and native SDK wrote real JSONL transcripts."
+    }
+  },
+  "setup": {
+    "projects": [
+      "/tmp/ohpi-task54/a",
+      "/tmp/ohpi-task54/b"
+    ],
+    "sessions": [
+      {
+        "sessionId": "18cde323-aa9c-4ef3-9f16-7cf8bd33d1ff",
+        "workspaceId": "ws_62cb8a55-0ac8-48a6-8e48-d5c414ede765",
+        "projectId": "pro_94d3367a-e519-4415-8f8a-39d65f60497d",
+        "transcript": "/tmp/ohpi-task54-home/.omp/agent/sessions/-tmp-ohpi-task54-a/2026-10-20T19-15-34-798Z_01a15abd-8f0e-7466-80a8-4e951f846322.jsonl"
+      },
+      {
+        "sessionId": "e688a444-0835-4bd9-b9dd-2c76a235edc6",
+        "workspaceId": "ws_95ace57d-3e84-4109-b0e3-7eb4b75bc260",
+        "projectId": "pro_e042509f-638f-401b-b974-ad593be1902c",
+        "transcript": "/tmp/ohpi-task54-home/.omp/agent/sessions/-tmp-ohpi-task54-b/2026-10-20T19-15-41-717Z_01a15abd-aa15-7631-82bd-b3b24633aa2d.jsonl"
+      }
+    ],
+    "auth": "page loaded through the isolated Host auth gate; all canonical reads below returned HTTP 200"
+  },
+  "observed": {
+    "allProjects30d": {
+      "requestUrl": "/api/agent/v1/usage?from=1789963200000&to=1792523792697&timezone=America%2FNew_York",
+      "fromIso": "2026-09-21T04:00:00Z (2026-09-21 00:00 America/New_York)",
+      "response": {
+        "sessions": 2,
+        "prompts": 2,
+        "steps": 4,
+        "tokens": {
+          "input": 800,
+          "output": 120,
+          "total": 920,
+          "reasoning": null
+        },
+        "activeDays": 1,
+        "cost": 0,
+        "partial": false
+      },
+      "rendered": [
+        "Sessions 2",
+        "Prompts 2",
+        "Tokens 920 (In 800, Out 120, Cache 0)",
+        "Cost $0.00",
+        "Active days 1",
+        "Longest streak 1",
+        "Token composition 87% input / 13% output",
+        "Stats Model / Stats Fixture 920",
+        "Reasoning share \u2014"
+      ],
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-all-projects.png"
+    },
+    "range7dBoundary": {
+      "requestUrl": "/api/agent/v1/usage?from=1791950400000&to=1792523796097&timezone=America%2FNew_York",
+      "fromIso": "2026-10-14T04:00:00Z",
+      "expectedLocalMidnight": 1791950400000,
+      "expectedLocalMidnightIso": "2026-10-14 00:00 America/New_York",
+      "responseRange": {
+        "from": 1791950400000,
+        "to": 1792523796097
+      },
+      "response": {
+        "sessions": 2,
+        "tokens": {
+          "input": 800,
+          "output": 120,
+          "total": 920
+        },
+        "partial": false
+      },
+      "rendered": [
+        "Daily activity Oct 14, 2026 \u2013 Oct 20, 2026",
+        "2 sessions / 920 tokens"
+      ],
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-7d-ny.png"
+    },
+    "projectFilterB": {
+      "requestUrl": "/api/agent/v1/usage?from=1791950400000&to=1792523799710&timezone=America%2FNew_York&workspaceId=ws_95ace57d-3e84-4109-b0e3-7eb4b75bc260&projectId=pro_e042509f-638f-401b-b974-ad593be1902c",
+      "response": {
+        "sessions": 1,
+        "prompts": 1,
+        "steps": 2,
+        "tokens": {
+          "input": 400,
+          "output": 60,
+          "total": 460
+        },
+        "partial": false
+      },
+      "rendered": [
+        "Projects b",
+        "Sessions 1",
+        "Prompts 1",
+        "Tokens 460 (In 400, Out 60)",
+        "Stats Model 460"
+      ],
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-project-b.png"
+    },
+    "lazyTools": {
+      "before": "No /api/agent/v1/usage/tools request existed before clicking Show tool calls.",
+      "requestUrl": "/api/agent/v1/usage/tools?from=1791950400000&to=1792523835481&timezone=America%2FNew_York&workspaceId=ws_95ace57d-3e84-4109-b0e3-7eb4b75bc260&projectId=pro_e042509f-638f-401b-b974-ad593be1902c",
+      "response": {
+        "totals": {
+          "calls": 1,
+          "succeeded": 1,
+          "failed": 0,
+          "unfinished": 0
+        },
+        "usage": [
+          {
+            "name": "write",
+            "calls": 1,
+            "succeeded": 1,
+            "failed": 0,
+            "unfinished": 0,
+            "durationP50": null
+          }
+        ],
+        "partial": false
+      },
+      "rendered": [
+        "Tool calls",
+        "Calls 1",
+        "Success rate 100%",
+        "Failed 0",
+        "Unfinished 0",
+        "write: calls: 1 (no duration clause)"
+      ],
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-tools-lazy.png"
+    },
+    "allTime": {
+      "requestUrl": "/api/agent/v1/usage?to=1792523831739&timezone=America%2FNew_York&workspaceId=ws_95ace57d-3e84-4109-b0e3-7eb4b75bc260&projectId=pro_e042509f-638f-401b-b974-ad593be1902c",
+      "responseRange": {
+        "from": 1792523744901,
+        "to": 1792523831739
+      },
+      "response": {
+        "sessions": 1,
+        "steps": 2,
+        "tokens": {
+          "total": 460
+        },
+        "partial": false
+      },
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-all-time.png"
+    },
+    "partialCorruptSibling": {
+      "setup": "Appended a malformed JSON line to the real B native transcript after restoring it for cleanup; A remained valid.",
+      "requestUrl": "/api/agent/v1/usage?from=1791950400000&to=1792523845387&timezone=America%2FNew_York",
+      "response": {
+        "sessions": 1,
+        "prompts": 1,
+        "steps": 2,
+        "tokens": {
+          "input": 400,
+          "output": 60,
+          "total": 460
+        },
+        "partial": true,
+        "errors": {
+          "e688a444-0835-4bd9-b9dd-2c76a235edc6": "USAGE_SESSION_CORRUPT"
+        }
+      },
+      "toolsResponse": {
+        "totals": {
+          "calls": 1,
+          "succeeded": 1
+        },
+        "partial": true,
+        "errors": {
+          "e688a444-0835-4bd9-b9dd-2c76a235edc6": "USAGE_SESSION_CORRUPT"
+        }
+      },
+      "rendered": [
+        "Some sessions could not be read. These statistics are incomplete.",
+        "e688a444-0835-4bd9-b9dd-2c76a235edc6: USAGE_SESSION_CORRUPT",
+        "A's Sessions 1 / Tokens 460 preserved"
+      ],
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-partial.png"
+    }
+  },
+  "reusedEvidence": {
+    "focused": "contract/native worker/UI store-view-model 37 tests / 134 assertions; Host canonical usage route 5 tests; not rerun",
+    "sourceReview": "UI/Node contain no native SDK imports and the legacy session-stats owner is absent (prior review, unchanged)"
+  },
+  "limitations": [
+    "The connected run verified that the 7d request starts at the viewer's local midnight and that the server echoes that range, but the native data did not straddle local midnight; straddling/DST behavior remains covered by the prior deterministic worker fixtures.",
+    "The connected partial path was exercised by corrupting one real registered transcript; the separate failed-refresh retention path remains covered by the prior store test, not re-run here."
+  ],
+  "cleanup": "Completed: Host 3164, Chrome CDP 9236, fixtures 4610/4611 stopped; isolated HOME, temporary workspaces/profiles/scripts removed; ports closed.",
+  "screenshots": [
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-all-projects.png",
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-7d-ny.png",
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-project-b.png",
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-tools-lazy.png",
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-all-time.png",
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task54-stats-partial.png"
+  ]
+}
