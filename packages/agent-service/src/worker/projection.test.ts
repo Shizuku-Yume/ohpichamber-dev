@@ -319,6 +319,115 @@ test('an unrecovered live assistant error fails the run at agent_end', async () 
   }
 });
 
+test('live history reports an unsettled active turn running and a recorded terminal afterwards', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-live-history-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    const user = { role: 'user' as const, content: 'Hold this turn open.', timestamp: 1 };
+    journal.append(projection.consume({ type: 'message_start', message: user }));
+    manager.appendMessage(user);
+    journal.append(projection.consume({ type: 'message_end', message: user }));
+    projection.bindPending();
+    const live = projection.history({ sessionId: 'session' });
+    expect(live.turns).toHaveLength(1);
+    expect(live.turns[0]).toMatchObject({ runId: 'run', status: 'running' });
+    expect(live.turns[0]?.finishedAt).toBeUndefined();
+    const terminal = projection.cancelRun(2);
+    journal.append(terminal);
+    expect(terminal.map(({ event }) => event.type)).toContain('run.cancelled');
+    expect(terminal.map(({ event }) => event.type)).not.toContain('run.completed');
+    expect(projection.history({ sessionId: 'session' }).turns[0]).toMatchObject({ status: 'cancelled', finishedAt: 2 });
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an abort latch settles turn_end and agent_end cancelled without an aborted assistant message_end', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-live-abort-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    const deliver = (message: NativeMessage): void => {
+      journal.append(projection.consume({ type: 'message_start', message }));
+      manager.appendMessage(message);
+      journal.append(projection.consume({ type: 'message_end', message }));
+      projection.bindPending();
+    };
+    journal.append(projection.beginRun('run', 1));
+    deliver({ role: 'user', content: 'Hold this turn open.', timestamp: 1 });
+    projection.requestCancel('run');
+    const turnEnd = projection.consume({ type: 'turn_end', message: assistant([{ type: 'text', text: 'Partial' }], 'stop', 2), toolResults: [] });
+    journal.append(turnEnd);
+    expect(turnEnd.map(({ event }) => event.type)).not.toContain('turn.completed');
+    const end = projection.consume({ type: 'agent_end', isTerminal: true });
+    journal.append(end);
+    expect(end.map(({ event }) => event.type)).toContain('run.cancelled');
+    expect(end.map(({ event }) => event.type)).not.toContain('run.completed');
+    expect(end.filter(({ event }) => event.type === 'run.cancelled')).toHaveLength(1);
+    const snapshot = journal.snapshot();
+    expect(snapshot.turns.at(-1)).toMatchObject({ status: 'cancelled' });
+    expect(snapshot.activeRun).toBeNull();
+    expect(snapshot.session).toMatchObject({ runtimeStatus: 'idle', activeRunId: null });
+    expect(projection.history({ sessionId: 'session' }).turns.at(-1)).toMatchObject({ status: 'cancelled' });
+    expect(projection.settledRun('run')).toMatchObject({ runId: 'run', status: 'cancelled' });
+    expect(projection.consume({ type: 'agent_end', isTerminal: true })).toEqual([]);
+
+    journal.append(projection.beginRun('next', 10));
+    expect(projection.settledRun('run')).toBeNull();
+    projection.requestCancel('run');
+    deliver({ role: 'user', content: 'A later run.', timestamp: 10 });
+    const reply = assistant([{ type: 'text', text: 'Done.' }], 'stop', 11);
+    deliver(reply);
+    const nextTurnEnd = projection.consume({ type: 'turn_end', message: reply, toolResults: [] });
+    journal.append(nextTurnEnd);
+    expect(nextTurnEnd.map(({ event }) => event.type)).toContain('turn.completed');
+    const nextEnd = projection.consume({ type: 'agent_end', isTerminal: true });
+    journal.append(nextEnd);
+    expect(nextEnd.map(({ event }) => event.type)).toContain('run.completed');
+    expect(nextEnd.map(({ event }) => event.type)).not.toContain('run.cancelled');
+    expect(journal.snapshot().turns.at(-1)).toMatchObject({ status: 'completed' });
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a latched cancellation turns a late completed settlement into cancelled exactly once', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-live-complete-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    const user = { role: 'user' as const, content: 'Hold this turn open.', timestamp: 1 };
+    journal.append(projection.consume({ type: 'message_start', message: user }));
+    manager.appendMessage(user);
+    journal.append(projection.consume({ type: 'message_end', message: user }));
+    projection.bindPending();
+    projection.requestCancel('run');
+    const settled = projection.completeRun(2);
+    journal.append(settled);
+    expect(settled.map(({ event }) => event.type)).toContain('run.cancelled');
+    expect(settled.map(({ event }) => event.type)).not.toContain('run.completed');
+    expect(settled.map(({ event }) => event.type)).not.toContain('turn.completed');
+    expect(journal.snapshot().turns.at(-1)).toMatchObject({ status: 'cancelled' });
+    expect(journal.snapshot().activeRun).toBeNull();
+    expect(projection.history({ sessionId: 'session' }).turns[0]).toMatchObject({ status: 'cancelled' });
+    expect(projection.completeRun(3)).toEqual([]);
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('native history applies recovered retries and terminal outcomes', async () => {
   const root = await mkdtemp(join(tmpdir(), 'canonical-retry-history-'));
   const manager = SessionManager.create(root, root);

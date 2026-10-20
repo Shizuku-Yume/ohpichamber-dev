@@ -29,7 +29,7 @@ const fixture = async () => {
   const source = await store.ensureWorkspace({ hostProjectId: 'project', projectDirectory: cwd, workspaceDirectory: cwd, agentDirectory, name: 'Project' });
   const destination = await store.ensureWorkspace({ hostProjectId: 'project', projectDirectory: cwd, workspaceDirectory: destinationCwd, agentDirectory, name: 'Project' });
   for (const sessionId of ['public-root', 'public-child']) await store.bindSession({ sessionId, rootSessionId: 'public-root', workspaceId: source.workspaceId });
-  const native = { workspaceId: source.workspaceId, pending: null, commitFailure: false, loseCommitResponse: false, prepareFailure: false, active: false, calls: [] };
+  const native = { workspaceId: source.workspaceId, pending: null, commitFailure: false, loseCommitResponse: false, prepareFailure: false, abortFailure: false, active: false, calls: [] };
   const runtime = (sessionId = 'public-root') => {
     const session = { sessionId, rootSessionId: 'public-root',
       projectId: source.projectId, workspaceId: native.workspaceId, displayPath: '.', createdAt: 1700000000000, updatedAt: 1700000000001,
@@ -60,6 +60,10 @@ const fixture = async () => {
       const branch = { branchId: body.branchId, branchVersion: String(BigInt(body.branchVersion) + 1n), leafMessageId: null };
       if (body.action === 'revert') branch.revert = { messageId: body.messageId };
       return Response.json({ sessionId: 'public-root', branch, draft: null });
+    }
+    if (pathname.endsWith('/abort')) {
+      if (native.abortFailure) return Response.json({ type: 'urn:ohpichamber:problem:RUN_NOT_FOUND', title: 'Run not found', status: 404, code: 'RUN_NOT_FOUND', detail: 'Run not found', retryable: false }, { status: 404 });
+      return Response.json({ run: { runId: decodeURIComponent(pathname.split('/').at(-2)), sessionId: 'public-root', status: 'cancelled', createdAt: 1700000000000, finishedAt: 1700000000002 } });
     }
     if (pathname.startsWith('/api/agent/v1/sessions/')) return Response.json(runtime(decodeURIComponent(pathname.split('/').at(-1))));
     throw new Error(`Unexpected private request ${pathname}`);
@@ -107,6 +111,18 @@ describe('Host native session control saga', () => {
       await expect(mutate()).rejects.toMatchObject({ statusCode: 409, code: 'SESSION_READ_ONLY' });
     }
     expect(native.calls).toEqual([]);
+  });
+  it('returns the settled abort run unchanged and preserves native run-not-found and non-abort refusal', async () => {
+    const { native, makeService } = await fixture();
+    const service = makeService();
+    await expect(service.control('public-root', { type: 'abort', runId: 'active-run' }))
+      .resolves.toMatchObject({ run: { runId: 'active-run', status: 'cancelled' } });
+    native.abortFailure = true;
+    await expect(service.control('public-root', { type: 'abort', runId: 'active-run' }))
+      .rejects.toMatchObject({ statusCode: 404, code: 'RUN_NOT_FOUND' });
+    await expect(service.control('public-root', { type: 'restart', runId: 'active-run' }))
+      .rejects.toMatchObject({ statusCode: 400 });
+    expect(native.calls.filter((call) => call.pathname.endsWith('/abort'))).toHaveLength(2);
   });
   it('publishes all admitted family identities at the destination and retains Host metadata and archive revisions', async () => {
     const { owner, store, destination, makeService } = await fixture();

@@ -49,6 +49,7 @@ History uses an opaque cursor bound to the selected branch version and leaf. It 
 - **Compaction**: On native `auto_compaction_end`, when the action completes without abort, retry, or skip, the projection emits a canonical `session.compacted` event containing `compactionId`, `tokensBefore`, and `completedAt`. Compaction is projected as an opaque canonical lifecycle transition without fabricating synthetic turns or exposing internal summary text.
 - **Token usage**: Message metadata extracts `providerId`, `modelId`, and parsed `TokenUsage` (`input`, `output`, `cacheRead`, `cacheWrite`) from native assistant messages. Canonical events (`message.created`, `message.updated`) carry usage objects, and `SessionJournal` indexes usage per message in history and snapshots.
 - **Run and turn lifecycle**: A run begins with `run.started` and tracks active execution state. Tool execution results and partial turn progress update incrementally. A run settles to `completed`, `failed`, or `cancelled` on terminal outcomes.
+- **Live cancellation**: `requestCancel(runId)` latches abort intent before the worker awaits the native abort. While the latch matches, `turn_end`, `agent_end` and a late completed settlement record the turn and run `cancelled`, so an interrupted turn without its aborted assistant `message_end` cannot publish `completed`; `beginRun` clears the latch. History reports the open active-run turn as `running` until a recorded terminal settles it.
 
 ## Approvals and questions
 

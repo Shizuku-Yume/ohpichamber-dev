@@ -534,7 +534,8 @@ export class WorkerSession {
         const accepted: Run = { ...run };
         this.promptTask = this.session.prompt(prepared.text, prepared.options).then(async dispatched => {
           await this.bind();
-          if (!dispatched) this.emit(this.projection.completeRun(Date.now()));
+          if (!dispatched) this.emit(this.cancellingRunId === operation.runId
+            ? this.projection.cancelRun(Date.now()) : this.projection.completeRun(Date.now()));
         }).catch(() => {
           this.emit(this.cancellingRunId === operation.runId
             ? this.projection.cancelRun(Date.now()) : this.projection.failRun('Agent execution failed', Date.now()));
@@ -544,14 +545,17 @@ export class WorkerSession {
       case 'abort': {
         const run = this.projection.activeRun();
         if (!run || run.runId !== operation.runId) throw new ProjectionError(404, 'RUN_NOT_FOUND', 'Run not found');
+        this.projection.requestCancel(operation.runId);
         this.cancellingRunId = operation.runId;
         this.interaction.cancelAll();
         await this.session.abort();
         await this.promptTask;
         await this.bind();
         this.emit(this.projection.cancelRun(Date.now()));
+        const settled = this.projection.settledRun(operation.runId);
         this.cancellingRunId = undefined;
-        return { type: 'abort', run: { ...run } };
+        if (!settled) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Run cancellation did not settle');
+        return { type: 'abort', run: settled };
       }
       case 'approval.resolve':
         if (!this.interaction.resolveApproval(operation.approvalId, operation.decision)) throw new ProjectionError(404, 'APPROVAL_NOT_FOUND', 'Approval request is not pending');

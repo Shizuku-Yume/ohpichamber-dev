@@ -157,6 +157,8 @@ export class WorkerProjection {
   private readonly queuedPrompts = new WeakMap<NativeMessage, { messageId: string; attachments: PromptAttachment[] }>();
   private entryOffset: number;
   private stopReason: 'error' | 'aborted' | undefined;
+  private cancelRequestedRunId: string | undefined;
+  private lastSettledRun: Run | null = null;
   private readonly privateRoots: PrivateRoot[];
   private readonly textSuffixes = new Map<string, { suffix: string; context: string }>();
 
@@ -278,8 +280,19 @@ export class WorkerProjection {
     return messageId;
   }
 
+  /** Abort intent is latched before the native abort await so a losing completion cannot overwrite it. */
+  requestCancel(runId: string): void {
+    if (this.run?.runId === runId) this.cancelRequestedRunId = runId;
+  }
+  settledRun(runId: string): Run | null {
+    const run = this.run?.runId === runId ? this.run : this.lastSettledRun?.runId === runId ? this.lastSettledRun : null;
+    return run === null ? null : { ...run };
+  }
+
   beginRun(runId: string, timestamp: number, attachments: PromptAttachment[] = []): ProjectionInput[] {
     if (this.run) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
+    this.cancelRequestedRunId = undefined;
+    this.lastSettledRun = null;
     this.run = { runId, sessionId: this.sessionId, status: 'running', createdAt: timestamp };
     this.turn = undefined;
     this.message = undefined;
@@ -406,12 +419,16 @@ export class WorkerProjection {
         emit({ type: 'session.compacted', compactionId: randomUUID(), tokensBefore: event.result.tokensBefore, completedAt: timestamp });
         break;
       case 'turn_end':
-        if (this.turn?.open && this.stopReason === undefined) {
+        if (!this.turn?.open) break;
+        if (this.cancelRequestedRunId === run.runId) { this.recordTurn('cancelled', timestamp); break; }
+        if (this.stopReason === undefined) {
           emit({ type: 'turn.completed', turnId: this.turn.turnId, runId: run.runId });
           this.recordTurn('completed', timestamp);
         }
         break;
       case 'agent_end':
+        // An abort latched before the native await owns the outcome, including an end that loses its aborted message.
+        if (this.cancelRequestedRunId === run.runId) { result.push(...this.cancelRun(timestamp)); break; }
         // The pinned SDK also marks completed requests yielded; isTerminal owns completion.
         if (event.isTerminal === false || event.awaitingAsyncWork === true) break;
         if (this.stopReason === 'error') result.push(...this.failRun('Agent execution failed', timestamp));
@@ -437,20 +454,22 @@ export class WorkerProjection {
   private finish(status: 'completed' | 'failed' | 'cancelled', timestamp: number, error?: string): ProjectionInput[] {
     const run = this.run;
     if (!run) return [];
+    const settled = status === 'completed' && this.cancelRequestedRunId === run.runId ? 'cancelled' : status;
     const result: ProjectionInput[] = [];
-    if (status === 'completed' && this.turn?.open) {
+    if (settled === 'completed' && this.turn?.open) {
       result.push({ timestamp, event: { type: 'turn.completed', turnId: this.turn.turnId, runId: run.runId } });
     }
-    this.recordTurn(status, timestamp, error);
-    const event: ProjectionEvent = status === 'failed'
+    this.recordTurn(settled, timestamp, error);
+    const event: ProjectionEvent = settled === 'failed'
       ? { type: 'run.failed', runId: run.runId, finishedAt: timestamp, error: error ?? 'Agent execution failed' }
-      : status === 'cancelled' ? { type: 'run.cancelled', runId: run.runId, finishedAt: timestamp }
+      : settled === 'cancelled' ? { type: 'run.cancelled', runId: run.runId, finishedAt: timestamp }
       : { type: 'run.completed', runId: run.runId, finishedAt: timestamp };
     result.push({ timestamp, event });
-    run.status = status;
+    run.status = settled;
     run.finishedAt = timestamp;
     if (error !== undefined) run.error = error;
-    this.manager.appendCustomEntry(RUN_TYPE, { runId: run.runId, status, finishedAt: timestamp, error });
+    this.manager.appendCustomEntry(RUN_TYPE, { runId: run.runId, status: settled, finishedAt: timestamp, error });
+    this.lastSettledRun = { ...run };
     this.run = null;
     return result;
   }
@@ -532,6 +551,7 @@ export class WorkerProjection {
     const turns: Turn[] = [];
     const messages: Message[] = [];
     const turnById = new Map<string, Turn>();
+    const activeRunId = this.run?.runId;
     let current: Turn | undefined;
     let leafMessageId: string | null = null;
     for (const entry of entries) {
@@ -547,8 +567,10 @@ export class WorkerProjection {
         const userMessageId = reference?.userMessageId ?? messageId;
         const runId = reference?.runId ?? opaqueNativeId('run', this.sessionId, entry.id);
         const terminal = turnTerminals.get(turnId);
+        const live = activeRunId !== undefined && runId === activeRunId;
         turn = { turnId, sessionId: this.sessionId, runId, userMessageId, assistantMessageIds: [],
-          status: terminal?.status ?? 'completed', startedAt: terminal?.startedAt ?? timestamp, finishedAt: terminal?.finishedAt ?? timestamp,
+          status: terminal?.status ?? (live ? 'running' : 'completed'), startedAt: terminal?.startedAt ?? timestamp,
+          ...(terminal?.finishedAt !== undefined ? { finishedAt: terminal.finishedAt } : live ? {} : { finishedAt: timestamp }),
           error: terminal?.error,
         };
         turns.push(turn);
@@ -562,12 +584,17 @@ export class WorkerProjection {
       });
       if (native.role === 'assistant') turn.assistantMessageIds.push(messageId);
       if (!turnTerminals.has(turn.turnId)) {
-        const recovered = native.role === 'assistant'
-          && (native.retryRecovery?.status === 'recovered' || native.retryRecovery?.status === 'superseded');
-        if (native.role === 'assistant' && native.stopReason === 'error' && !recovered) turn.status = 'failed';
-        else if (native.role === 'assistant' && native.stopReason === 'aborted') turn.status = 'cancelled';
-        else if (native.role === 'assistant' && native.stopReason !== 'toolUse') turn.status = 'completed';
-        turn.finishedAt = timestamp;
+        if (this.run?.runId === turn.runId) {
+          turn.status = 'running';
+          delete turn.finishedAt;
+        } else {
+          const recovered = native.role === 'assistant'
+            && (native.retryRecovery?.status === 'recovered' || native.retryRecovery?.status === 'superseded');
+          if (native.role === 'assistant' && native.stopReason === 'error' && !recovered) turn.status = 'failed';
+          else if (native.role === 'assistant' && native.stopReason === 'aborted') turn.status = 'cancelled';
+          else if (native.role === 'assistant' && native.stopReason !== 'toolUse') turn.status = 'completed';
+          turn.finishedAt = timestamp;
+        }
       }
       leafMessageId = messageId;
     }
@@ -579,6 +606,12 @@ export class WorkerProjection {
       turn.status = terminal.status;
       turn.finishedAt = terminal.finishedAt;
       if (terminal.error !== undefined) turn.error = terminal.error;
+    }
+    // A history read may race message binding; the open turn is still the live turn.
+    const openTurn = this.turn?.open ? turns.at(-1) : undefined;
+    if (openTurn && !turnTerminals.has(openTurn.turnId)) {
+      openTurn.status = 'running';
+      delete openTurn.finishedAt;
     }
     const header = this.manager.getHeader();
     const createdAt = header ? Date.parse(header.timestamp) : Date.now();
