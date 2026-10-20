@@ -119,6 +119,8 @@ function visible(message: NativeMessage): message is VisibleMessage {
   return message.role === 'assistant' || message.role === 'toolResult' || (message.role === 'user' && message.synthetic !== true);
 }
 function partId(messageId: string, index: number): string { return `${messageId}:${index}`; }
+/** SDK tool arguments can carry symbol-keyed markers; canonical records are JSON (see NativeInteraction.observeToolCall). */
+function toolInput(value: unknown): JsonObject { return JsonObjectSchema.parse(JSON.parse(JSON.stringify(value))); }
 function parts(message: VisibleMessage, messageId: string, attachments: PromptAttachment[], toolResults?: ReadonlyMap<string, boolean>): Part[] {
   const result: Part[] = [];
   if (message.role === 'toolResult') {
@@ -134,7 +136,7 @@ function parts(message: VisibleMessage, messageId: string, attachments: PromptAt
         signature: item.thinkingSignature,
       });
       else if (item.type === 'toolCall') result.push({ type: 'tool_call', partId: partId(messageId, index), toolCallId: item.id,
-        toolName: item.name, input: JsonObjectSchema.parse(item.arguments),
+        toolName: item.name, input: toolInput(item.arguments),
         status: toolResults?.has(item.id) ? toolResults.get(item.id) ? 'failed' : 'completed' : 'running',
       });
     }
@@ -351,7 +353,7 @@ export class WorkerProjection {
           case 'toolcall_end': {
             const call = update.toolCall;
             const part: Part = { type: 'tool_call', partId: partId(current.messageId, update.contentIndex),
-              toolCallId: call.id, toolName: call.name, input: JsonObjectSchema.parse(call.arguments), status: 'running' };
+              toolCallId: call.id, toolName: call.name, input: toolInput(call.arguments), status: 'running' };
             if (!current.started.has(update.contentIndex)) {
               current.started.add(update.contentIndex);
               emit({ type: 'part.started', messageId: current.messageId, part });
@@ -378,14 +380,19 @@ export class WorkerProjection {
           Object.assign(current, finalMetadata);
           emit({ type: 'message.updated', messageId: current.messageId, ...finalMetadata });
         }
-        if (event.message.role === 'assistant' && (event.message.stopReason === 'error' || event.message.stopReason === 'aborted')) {
-          this.stopReason = event.message.stopReason;
+        if (event.message.role === 'assistant') {
+          // The last assistant message decides the run outcome. A recovered
+          // retry ends with a successful assistant message, which must clear
+          // the earlier attempt's latched error.
+          this.stopReason = event.message.stopReason === 'error' || event.message.stopReason === 'aborted'
+            ? event.message.stopReason
+            : undefined;
         }
         this.message = undefined;
         break;
       }
       case 'tool_execution_start':
-        emit({ type: 'tool.started', toolCallId: event.toolCallId, toolName: event.toolName, input: JsonObjectSchema.parse(event.args) });
+        emit({ type: 'tool.started', toolCallId: event.toolCallId, toolName: event.toolName, input: toolInput(event.args) });
         break;
       case 'tool_execution_end':
         emit({ type: 'tool.completed', toolCallId: event.toolCallId, status: event.isError ? 'failed' : 'completed',
@@ -555,8 +562,11 @@ export class WorkerProjection {
       });
       if (native.role === 'assistant') turn.assistantMessageIds.push(messageId);
       if (!turnTerminals.has(turn.turnId)) {
-        if (native.role === 'assistant' && native.stopReason === 'error') turn.status = 'failed';
+        const recovered = native.role === 'assistant'
+          && (native.retryRecovery?.status === 'recovered' || native.retryRecovery?.status === 'superseded');
+        if (native.role === 'assistant' && native.stopReason === 'error' && !recovered) turn.status = 'failed';
         else if (native.role === 'assistant' && native.stopReason === 'aborted') turn.status = 'cancelled';
+        else if (native.role === 'assistant' && native.stopReason !== 'toolUse') turn.status = 'completed';
         turn.finishedAt = timestamp;
       }
       leafMessageId = messageId;

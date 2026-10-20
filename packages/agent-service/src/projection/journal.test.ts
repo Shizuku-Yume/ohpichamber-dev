@@ -60,6 +60,32 @@ describe('SessionJournal consumer boundary', () => {
     expect(journal.snapshot().messages.flatMap(message => message.parts).find(part => part.type === 'text' && part.partId === 'mp')?.content).toBe('partial');
   });
 
+  test('tool results stay between assistant messages in live and restored snapshots', () => {
+    const journal = new SessionJournal(session, seed);
+    begin(journal);
+    journal.append([
+      input({ type: 'part.started', messageId: 'm', part: { type: 'tool_call', partId: 'call-part', toolCallId: 'edit-call', toolName: 'edit', input: { path: 'example.ts' }, status: 'running' } }),
+      input({ type: 'message.created', messageId: 'result', turnId: 't', role: 'system' }),
+      input({ type: 'part.started', messageId: 'result', part: { type: 'tool_result', partId: 'result-part', toolCallId: 'edit-call', toolName: 'edit', output: { content: [{ type: 'text', text: 'Edited example.ts' }] }, isError: false } }),
+      input({ type: 'tool.completed', toolCallId: 'edit-call', status: 'completed', isError: false }),
+      input({ type: 'message.created', messageId: 'answer', turnId: 't', role: 'assistant' }),
+      input({ type: 'part.started', messageId: 'answer', part: { type: 'text', partId: 'answer-part', content: 'The file is updated.' } }),
+      input({ type: 'turn.completed', turnId: 't', runId: 'r' }),
+      input({ type: 'run.completed', runId: 'r', finishedAt: 3 }, 3),
+    ]);
+    const snapshot = journal.snapshot();
+    expect(snapshot.messages.map(message => message.messageId)).toEqual(['u', 'm', 'result', 'answer']);
+    expect(snapshot.branch.leafMessageId).toBe('answer');
+    expect(snapshot.window.lastMessageId).toBe('answer');
+    expect(snapshot.messages).toEqual(journal.history({ sessionId: 's' }).messages);
+    expect(snapshot.messages[1]?.parts.find(part => part.type === 'tool_call')).toMatchObject({ status: 'completed' });
+    journal.replace({ ...seed, branch: snapshot.branch, turns: snapshot.turns, messages: snapshot.messages });
+    const restored = journal.snapshot();
+    expect(restored.messages).toEqual(snapshot.messages);
+    expect(restored.window).toEqual(snapshot.window);
+    expect(restored.activeRun).toBeNull();
+  });
+
   test('replay/live handoff is contiguous; restart retains partial output but expires old activity', () => {
     const journal = new SessionJournal(session, seed);
     begin(journal);

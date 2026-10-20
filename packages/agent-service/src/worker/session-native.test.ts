@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { JsonValueSchema, type ApprovalRequest, type JsonObject, type JsonValue, type PromptRequest } from '@openchamber/agent-contract';
+import { cfgEditMode } from '@oh-my-pi/pi-coding-agent/edit/settings';
 import { cfgBashPatterns } from '@oh-my-pi/pi-coding-agent/exec/settings';
 import type { SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
 import { cfgToolsApprovalMode } from '@oh-my-pi/pi-coding-agent/tools/settings';
@@ -469,3 +470,37 @@ test('actual native TaskTool owns a child session and persists its history', asy
     await harness.close();
   }
 }, 60000);
+
+
+test('actual SDK edit reaches Host policy and projects its exact replace arguments', async () => {
+  const input = { path: 'fixture-diff.txt', old_string: "export const greeting = 'hello';",
+    new_string: "export const greeting = 'hello, restored UI';\nexport const mood = 'warm';" };
+  const harness = await fixture({ respond(payload) {
+    return payload.messages.at(-1)?.role === 'tool'
+      ? completion()
+      : completion({ name: 'edit', id: 'native-edit', input });
+  } });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+  try {
+    cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
+    cfgEditMode.override(harness.worker.session.settings, 'replace');
+    await writeFile(join(harness.root, 'fixture-diff.txt'), "export const greeting = 'hello';\nexport const count = 1;\n");
+    await harness.worker.operation({ type: 'prompt', runId: 'edit-run', request: prompt('Edit fixture-diff.txt using the configured native replace mode.') });
+    await terminal.promise;
+    expect(await readFile(join(harness.root, 'fixture-diff.txt'), 'utf8'))
+      .toBe("export const greeting = 'hello, restored UI';\nexport const mood = 'warm';\nexport const count = 1;\n");
+    expect(harness.fatal()).toBe(false);
+    const started = harness.events.map(event => event.event)
+      .filter(event => event.type === 'tool.started' && event.toolCallId === 'native-edit');
+    expect(started).toEqual([{ type: 'tool.started', toolCallId: 'native-edit', toolName: 'edit', input }]);
+    const completed = harness.events.map(event => event.event)
+      .filter(event => event.type === 'tool.completed' && event.toolCallId === 'native-edit');
+    expect(completed).toHaveLength(1);
+    expect(completed[0]).toMatchObject({ status: 'completed', isError: false });
+    expect(harness.events.some(event => event.event.type === 'run.failed')).toBe(false);
+  } finally {
+    unsubscribe();
+    await harness.close();
+  }
+}, 30000);

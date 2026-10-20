@@ -77,14 +77,7 @@ export class SessionJournal {
     const turns = this.turns.slice(-100);
     const messages: Message[] = [];
     for (const turn of turns) {
-      const user = this.messageById.get(turn.userMessageId);
-      if (user?.turnId === turn.turnId) messages.push(user);
-      for (const messageId of turn.assistantMessageIds) {
-        const message = this.messageById.get(messageId);
-        if (message) messages.push(message);
-      }
-      // System/tool-result messages also belong to the addressed turn.
-      for (const message of this.systemMessages(turn.turnId)) messages.push(message);
+      for (const message of this.messagesByTurn.get(turn.turnId) ?? []) messages.push(message);
     }
     return SessionSnapshotSchema.parse({
       session: this.runtime(), cursor: `${this.epoch}:${this.head}`, activeRun: this.activeRunId ? this.runs.get(this.activeRunId) : null,
@@ -168,15 +161,14 @@ export class SessionJournal {
     this.events.fill(undefined); this.eventCount = 0; this.eventStart = 0;
   }
 
-  private readonly systemByTurn = new Map<string, Message[]>();
-  private systemMessages(turnId: string): readonly Message[] { return this.systemByTurn.get(turnId) ?? []; }
+  private readonly messagesByTurn = new Map<string, Message[]>();
 
   private rebuildIndexes(): void {
-    this.turnById.clear(); this.messageById.clear(); this.partById.clear(); this.toolPartByCall.clear(); this.systemByTurn.clear();
+    this.turnById.clear(); this.messageById.clear(); this.partById.clear(); this.toolPartByCall.clear(); this.messagesByTurn.clear();
     for (const turn of this.turns) this.turnById.set(turn.turnId, turn);
     for (const message of this.messages) {
       this.messageById.set(message.messageId, message);
-      if (message.role === 'system') this.addSystem(message);
+      this.indexMessage(message);
       message.parts.forEach((part, index) => {
         this.partById.set(part.partId, { message, index });
         if (part.type === 'tool_call') this.toolPartByCall.set(part.toolCallId, part);
@@ -184,9 +176,9 @@ export class SessionJournal {
     }
   }
 
-  private addSystem(message: Message): void {
-    const messages = this.systemByTurn.get(message.turnId);
-    if (messages) messages.push(message); else this.systemByTurn.set(message.turnId, [message]);
+  private indexMessage(message: Message): void {
+    const messages = this.messagesByTurn.get(message.turnId);
+    if (messages) messages.push(message); else this.messagesByTurn.set(message.turnId, [message]);
   }
 
   private settleRun(runId: string, status: 'completed' | 'failed' | 'cancelled', finishedAt: number, error?: string): void {
@@ -235,7 +227,7 @@ export class SessionJournal {
         this.messages.push(message); this.messageById.set(message.messageId, message);
         const turn = this.turnById.get(message.turnId);
         if (turn && message.role === 'assistant') turn.assistantMessageIds.push(message.messageId);
-        if (message.role === 'system') this.addSystem(message);
+        this.indexMessage(message);
         this.branch.leafMessageId = message.messageId;
         this.branch.branchVersion = (BigInt(this.branch.branchVersion) + 1n).toString();
         delete this.branch.revert;

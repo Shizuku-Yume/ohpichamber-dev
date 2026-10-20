@@ -223,3 +223,126 @@ test('selected fork of legacy history inherits later tree-wide private roots bef
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('SDK symbol-keyed edit arguments project to the exact canonical tool input', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-symbol-input-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    projection.beginRun('run', 1);
+    const input = { path: 'fixture-diff.txt', old_string: "export const greeting = 'hello';",
+      new_string: "export const greeting = 'hello, restored UI';\nexport const mood = 'warm';" };
+    const marker = Symbol('sdk.validation');
+    const marked = Object.assign({}, input, { [marker]: true });
+    const toolCall = { type: 'toolCall' as const, id: 'call_fixture_edit', name: 'edit', arguments: marked };
+
+    const startedPart = projection.consume({ type: 'message_start', message: assistant([toolCall], 'toolUse', 2) })
+      .flatMap(({ event }) => event.type === 'part.started' && event.part.type === 'tool_call' ? [event.part.input] : []);
+    expect(startedPart).toEqual([input]);
+
+    const streamed = assistant([], 'toolUse', 3);
+    projection.consume({ type: 'message_start', message: streamed });
+    const endedPart = projection.consume({ type: 'message_update', message: streamed,
+      assistantMessageEvent: { type: 'toolcall_end', contentIndex: 0, toolCall, partial: streamed } })
+      .flatMap(({ event }) => event.type === 'part.started' && event.part.type === 'tool_call' ? [event.part.input] : []);
+    expect(endedPart).toEqual([input]);
+
+    const started = projection.consume({ type: 'tool_execution_start', toolCallId: toolCall.id, toolName: toolCall.name, args: marked });
+    expect(started).toHaveLength(1);
+    expect(started[0]?.event).toEqual({ type: 'tool.started', toolCallId: toolCall.id, toolName: toolCall.name, input });
+    expect(Reflect.ownKeys(marked)).toContainEqual(marker);
+    expect(toolCall.arguments).toHaveProperty('old_string', input.old_string);
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a recovered retry clears the failed attempt and completes the run', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-retry-live-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', Date.now()));
+    const deliver = (message: NativeMessage): void => {
+      journal.append(projection.consume({ type: 'message_start', message }));
+      manager.appendMessage(message);
+      journal.append(projection.consume({ type: 'message_end', message }));
+      projection.bindPending();
+    };
+    deliver({ role: 'user', content: 'Ask a question.', timestamp: 1 });
+    deliver(assistant([], 'error', 2));
+    deliver(assistant([{ type: 'text', text: 'Answered after retry.' }], 'stop', 3));
+    const terminal = projection.consume({ type: 'agent_end', isTerminal: true });
+    journal.append(terminal);
+    expect(terminal.map(({ event }) => event.type)).toContain('run.completed');
+    expect(terminal.map(({ event }) => event.type)).not.toContain('run.failed');
+    const snapshot = journal.snapshot();
+    expect(snapshot.turns).toHaveLength(1);
+    expect(snapshot.turns[0]).toMatchObject({ status: 'completed' });
+    expect(snapshot.activeRun).toBeNull();
+    await manager.flush();
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an unrecovered live assistant error fails the run at agent_end', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-error-live-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', Date.now()));
+    const deliver = (message: NativeMessage): void => {
+      journal.append(projection.consume({ type: 'message_start', message }));
+      manager.appendMessage(message);
+      journal.append(projection.consume({ type: 'message_end', message }));
+      projection.bindPending();
+    };
+    deliver({ role: 'user', content: 'Ask a question.', timestamp: 1 });
+    deliver(assistant([], 'error', 2));
+    const terminal = projection.consume({ type: 'agent_end', isTerminal: true });
+    journal.append(terminal);
+    expect(terminal.map(({ event }) => event.type)).toContain('run.failed');
+    expect(terminal.map(({ event }) => event.type)).not.toContain('run.completed');
+    expect(journal.snapshot().turns[0]).toMatchObject({ status: 'failed' });
+    await manager.flush();
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('native history applies recovered retries and terminal outcomes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-retry-history-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const recovery = { kind: 'auto-retry' as const, status: 'recovered' as const, attempt: 1, recoveredAt: new Date(3).toISOString(),
+      recovery: 'plain' as const, note: 'error; retried' };
+    manager.appendMessage({ role: 'user', content: 'Ask a question.', timestamp: 1 });
+    manager.appendMessage({ ...assistant([], 'error', 2), retryRecovery: recovery });
+    manager.appendMessage(assistant([{ type: 'text', text: 'Answered after retry.' }], 'stop', 3));
+    const recovered = new WorkerProjection(manager, 'session').seed();
+    expect(recovered.turns).toHaveLength(1);
+    expect(recovered.turns[0]).toMatchObject({ status: 'completed' });
+    manager.appendMessage({ role: 'user', content: 'Retry again.', timestamp: 4 });
+    manager.appendMessage({ ...assistant([], 'error', 5), retryRecovery: { kind: 'auto-retry', status: 'superseded', attempt: 2, recovery: 'plain', note: 'error; retried' } });
+    manager.appendMessage(assistant([], 'error', 6));
+    const failed = new WorkerProjection(manager, 'session').seed();
+    expect(failed.turns.at(-1)).toMatchObject({ status: 'failed' });
+    manager.appendMessage({ role: 'user', content: 'Abort this.', timestamp: 7 });
+    manager.appendMessage(assistant([], 'aborted', 8));
+    const aborted = new WorkerProjection(manager, 'session').seed();
+    expect(aborted.turns.at(-1)).toMatchObject({ status: 'cancelled' });
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30000);
