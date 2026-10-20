@@ -4,7 +4,6 @@ import { resetSpaceModelAccess } from '@/lib/spaces/space-model-access';
 import { resetSpaceCreationRequests } from '@/lib/spaces/space-creation';
 import { useGuestsStore } from '@/lib/guests/store';
 import { useGuestOauthStore } from '@/lib/guests/oauth-store';
-import { opencodeClient } from '@/lib/opencode/client';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { subscribeRuntimeEndpointChanged, type RuntimeEndpointChangedDetail } from '@/lib/runtime-switch';
 import { disposeTerminalInputTransport } from '@/lib/terminalApi';
@@ -24,10 +23,12 @@ import { repositoryBindingOwner } from '@/lib/source-control/repository-binding'
 import { useChangeRequestContextStore } from '@/stores/useChangeRequestContextStore';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { sessionEvents } from '@/lib/sessionEvents';
+import { fileTreeChanges } from '@/lib/fileTreeChanges';
 import { useLinearAuthStore } from '@/stores/useLinearAuthStore';
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import { useMcpStore } from '@/stores/useMcpStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
+import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
@@ -46,17 +47,9 @@ import { resetSessionActivityTiming } from '@/sync/session-activity-timing';
 import { syncDesktopSettings } from '@/lib/persistence';
 import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
 
-// Same-device transport switch (LAN⇄relay for one paired device): rebind the SDK
-// to the new transport WITHOUT tearing down connection/session state or remounting
-// the sync layer. `reconnectToRuntimeBaseUrl` swaps in a fresh SDK client; the
-// caller then forces a re-render so SyncProvider receives it as a new `sdk` prop,
-// which re-runs its event-pipeline + bootstrap effects (keyed on `sdk`) to
-// reconnect over the new transport IN PLACE. Message-pagination refs, the open
-// session, and the whole view are preserved — no reconnecting screen, no flash,
-// no bounce back to the draft.
+// Transport-only switches preserve session state; SyncProvider reconnects canonical streams on the endpoint event.
 export const reconnectAppForTransportSwitch = (): void => {
   disposeTerminalInputTransport();
-  opencodeClient.reconnectToRuntimeBaseUrl();
   hostFilesystem.resetRequests();
   resetStreamingState();
 };
@@ -68,11 +61,9 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   }
   disposeTerminalInputTransport();
   useTerminalStore.getState().clearAll();
-  opencodeClient.reconnectToRuntimeBaseUrl();
   hostFilesystem.resetRequests();
   useConfigStore.setState({
     providers: [],
-    agents: [],
     isConnected: false,
     isInitialized: false,
     connectionPhase: 'connecting',
@@ -105,6 +96,7 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   useFileSearchStore.getState().resetForRuntimeSwitch();
   useGitStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
   sessionEvents.cancelPendingGitRefreshes();
+  fileTreeChanges.reset();
   useGitIdentitiesStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
   useSourceControlAuthStore.getState().resetForRuntimeSwitch();
   repositoryBindingOwner.reset();
@@ -131,6 +123,7 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   useQuotaStore.getState().resetForRuntimeSwitch();
   useMcpStore.getState().resetForRuntimeSwitch();
   useSkillsStore.getState().resetForRuntimeSwitch();
+  useSkillsCatalogStore.getState().resetForRuntimeSwitch();
   useAgentMemoryStore.getState().reset();
   useSessionUIStore.getState().restoreForRuntimeSwitch(detail.runtimeKey, detail.previousRuntimeKey);
   useSessionUIStore.setState({ worktreeDiscoveryByProject: new Map() });
@@ -147,12 +140,10 @@ export const isSameRuntimeEndpoint = (detail: RuntimeEndpointChangedDetail): boo
   detail.runtimeKey === detail.previousRuntimeKey && detail.apiBaseUrl === detail.previousApiBaseUrl
 );
 
-// Web and desktop reset for a change of runtime from the entry point, not from
-// App: the auth and compatibility gates unmount App while they show the login,
-// error, or version screen, and a host switch made from their switcher would
-// otherwise leave the SDK client and stores on the previous runtime. App then
-// mounts against the new runtime with an SDK that still calls the old one, so
-// initialization never completes and the startup overlay never lifts.
+// Web and desktop reset endpoint changes from the entrypoint because
+// SessionAuthGate can unmount App while showing login or error states. A host
+// switch from that gate must still clear runtime-scoped state before App mounts
+// against the new host.
 // A same-runtime credential change stays with App, which resets only while
 // mounted: a sign-in on the login screen must keep the terminal tabs and
 // auto-review runs of the host being unlocked. Mobile keeps its own subscriber

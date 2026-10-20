@@ -82,11 +82,115 @@ const sameJob = (actual: C.ShellJobIdentity, expected: C.ShellJobIdentity): bool
 const headersFor = (commandId?: string): HeadersInit => commandId ? { 'Idempotency-Key': commandId } : {};
 
 export class CanonicalClient {
-  resolveWorkspace(directory: string): Promise<Workspace> {
+  readonly plugins = {
+    list: (workspaceId: string): Promise<C.PluginCatalogState> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins`, scoped(C.PluginCatalogStateSchema, result => result.workspaceId === workspaceId)),
+    install: (workspaceId: string, input: C.PluginInstallRequest): Promise<C.PluginMutationResult> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/install`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginInstallRequestSchema, input) }),
+    uninstall: (workspaceId: string, input: C.PluginUninstallRequest): Promise<C.PluginMutationResult> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/uninstall`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginUninstallRequestSchema, input) }),
+    configure: (workspaceId: string, input: C.PluginConfigureRequest): Promise<C.PluginMutationResult> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/${id(input.target.name)}`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginConfigureRequestSchema, input) }),
+    update: (workspaceId: string, input: C.PluginUpdateRequest): Promise<C.PluginMutationResult> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/${id(input.target.name)}/update`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginUpdateRequestSchema, input) }),
+    apply: (workspaceId: string, input: C.PluginApplyRequest): Promise<C.PluginMutationResult> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/apply`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PluginApplyRequestSchema, input) }),
+    marketplace: (workspaceId: string): Promise<C.PluginMarketplaceState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/marketplace`, scoped(C.PluginMarketplaceStateSchema, result => result.workspaceId === workspaceId)),
+    doctor: (workspaceId: string): Promise<C.PluginDoctorResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/doctor`, scoped(C.PluginDoctorResultSchema, result => result.workspaceId === workspaceId)),
+    readLocal: (workspaceId: string, extensionId: string): Promise<C.LocalExtensionSource> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/local/${id(extensionId)}`, scoped(C.LocalExtensionSourceSchema, result => result.workspaceId === workspaceId && result.extension.extensionId === extensionId)),
+    writeLocal: (workspaceId: string, input: C.LocalExtensionWriteRequest): Promise<C.PluginMutationResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/local/${id(input.extensionId)}`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.LocalExtensionWriteRequestSchema, input) }),
+    deleteLocal: (workspaceId: string, input: C.LocalExtensionDeleteRequest): Promise<C.PluginMutationResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/local/${id(input.extensionId)}`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.LocalExtensionDeleteRequestSchema, input) }),
+  };
+  readonly fileResources = {
+    getCommands: (workspaceId: string): Promise<C.CommandCatalogState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/commands`, scoped(C.CommandCatalogStateSchema, result => result.workspaceId === workspaceId)),
+    createCommand: (workspaceId: string, input: C.CommandCreateRequest): Promise<C.CommandCatalogState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/commands`, scoped(C.CommandCatalogStateSchema, result => result.workspaceId === workspaceId && BigInt(result.revision) === BigInt(input.expectedRevision) + 1n), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.CommandCreateRequestSchema, input) }),
+    updateCommand: (workspaceId: string, input: C.CommandUpdateRequest): Promise<C.CommandCatalogState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/commands/${id(input.commandId)}`, scoped(C.CommandCatalogStateSchema, result => result.workspaceId === workspaceId && BigInt(result.revision) === BigInt(input.expectedRevision) + 1n), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.CommandUpdateRequestSchema, input) }),
+    deleteCommand: (workspaceId: string, input: C.CommandDeleteRequest): Promise<C.CommandCatalogState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/commands/${id(input.commandId)}`, scoped(C.CommandCatalogStateSchema, result => result.workspaceId === workspaceId && BigInt(result.revision) === BigInt(input.expectedRevision) + 1n), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.CommandDeleteRequestSchema, input) }),
+    expandCommand: (workspaceId: string, input: C.CommandExpandRequest): Promise<C.FileResourceExpandResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/commands/expand`, C.FileResourceExpandResultSchema, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.CommandExpandRequestSchema, input) }),
+    expandPromptInput: (workspaceId: string, input: C.FileResourceExpandTextRequest): Promise<C.FileResourcePromptInputResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/commands/expand-text`, C.FileResourcePromptInputResultSchema, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.FileResourceExpandTextRequestSchema, input) }),
+    getPromptTemplates: (workspaceId: string): Promise<C.PromptTemplateCatalogState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/prompt-templates`, scoped(C.PromptTemplateCatalogStateSchema, result => result.workspaceId === workspaceId)),
+    createPromptTemplate: (workspaceId: string, input: C.PromptTemplateCreateRequest): Promise<C.PromptTemplateCatalogState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/prompt-templates`, scoped(C.PromptTemplateCatalogStateSchema, result => result.workspaceId === workspaceId && BigInt(result.revision) === BigInt(input.expectedRevision) + 1n), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PromptTemplateCreateRequestSchema, input) }),
+    updatePromptTemplate: (workspaceId: string, input: C.PromptTemplateUpdateRequest): Promise<C.PromptTemplateCatalogState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/prompt-templates/${id(input.templateId)}`, scoped(C.PromptTemplateCatalogStateSchema, result => result.workspaceId === workspaceId && BigInt(result.revision) === BigInt(input.expectedRevision) + 1n), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PromptTemplateUpdateRequestSchema, input) }),
+    deletePromptTemplate: (workspaceId: string, input: C.PromptTemplateDeleteRequest): Promise<C.PromptTemplateCatalogState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/prompt-templates/${id(input.templateId)}`, scoped(C.PromptTemplateCatalogStateSchema, result => result.workspaceId === workspaceId && BigInt(result.revision) === BigInt(input.expectedRevision) + 1n), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PromptTemplateDeleteRequestSchema, input) }),
+    expandPromptTemplate: (workspaceId: string, input: C.PromptTemplateExpandRequest): Promise<C.FileResourceExpandResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/prompt-templates/expand`, C.FileResourceExpandResultSchema, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.PromptTemplateExpandRequestSchema, input) }),
+    expandPromptText: (workspaceId: string, input: C.FileResourceExpandTextRequest): Promise<C.FileResourceExpandResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/prompt-templates/expand-text`, C.FileResourceExpandResultSchema, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.FileResourceExpandTextRequestSchema, input) }),
+    getSkills: (workspaceId: string): Promise<C.FileResourceSkillCatalog> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/catalog`, scoped(C.FileResourceSkillCatalogSchema, result => result.workspaceId === workspaceId)),
+    expandSkills: (workspaceId: string, input: C.FileResourceSkillExpandRequest): Promise<C.FileResourceExpandResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/expand`, C.FileResourceExpandResultSchema, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.FileResourceSkillExpandRequestSchema, input) }),
+    getSkillFileCatalog: (workspaceId: string): Promise<C.SkillFileCatalogState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/files`, scoped(C.SkillFileCatalogStateSchema, result => result.workspaceId === workspaceId)),
+    getSkillFiles: (workspaceId: string, skillId: string, scope: C.FileResourceScope): Promise<C.SkillFilesState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/files/${id(skillId)}?scope=${encodeURIComponent(scope)}`, scoped(C.SkillFilesStateSchema, result => result.workspaceId === workspaceId && result.skillId === skillId && result.scope === scope)),
+    readSkillFile: (workspaceId: string, skillId: string, filePath: string, scope: C.FileResourceScope): Promise<C.SkillFileRead> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/files/${id(skillId)}/${filePath.split('/').map(id).join('/')}?scope=${encodeURIComponent(scope)}`, scoped(C.SkillFileReadSchema, result => result.workspaceId === workspaceId && result.skillId === skillId && result.filePath === filePath && result.scope === scope)),
+    writeSkillFile: (workspaceId: string, skillId: string, filePath: string, input: C.SkillFileWriteRequest): Promise<C.SkillInstallResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/files/${id(skillId)}/${filePath.split('/').map(id).join('/')}`, scoped(C.SkillInstallResultSchema, result => result.scope.kind === input.scope && (result.scope.kind !== 'workspace' || result.scope.workspaceId === workspaceId) && BigInt(result.sourceRevision) === BigInt(input.expectedSourceRevision) + 1n), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SkillFileWriteRequestSchema, input) }),
+    renameSkill: (workspaceId: string, skillId: string, input: C.SkillFileRenameRequest): Promise<C.SkillInstallResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/files/${id(skillId)}/rename`, scoped(C.SkillInstallResultSchema, result => result.scope.kind === input.scope && (result.scope.kind !== 'workspace' || result.scope.workspaceId === workspaceId) && BigInt(result.sourceRevision) === BigInt(input.expectedSourceRevision) + 1n), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SkillFileRenameRequestSchema, input) }),
+    deleteSkill: (workspaceId: string, skillId: string, input: C.SkillFileDeleteRequest): Promise<C.SkillInstallResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/files/${id(skillId)}`, scoped(C.SkillInstallResultSchema, result => result.scope.kind === input.scope && (result.scope.kind !== 'workspace' || result.scope.workspaceId === workspaceId) && BigInt(result.sourceRevision) === BigInt(input.expectedSourceRevision) + 1n), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SkillFileDeleteRequestSchema, input) }),
+    writeSupportingFile: (workspaceId: string, skillId: string, filePath: string, input: C.SkillFileWriteRequest): Promise<C.SkillInstallResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/files/${id(skillId)}/${filePath.split('/').map(id).join('/')}`, scoped(C.SkillInstallResultSchema, result => result.scope.kind === input.scope && (result.scope.kind !== 'workspace' || result.scope.workspaceId === workspaceId) && BigInt(result.sourceRevision) === BigInt(input.expectedSourceRevision) + 1n), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SkillFileWriteRequestSchema, input) }),
+    deleteSkillFile: (workspaceId: string, skillId: string, filePath: string, input: C.SkillFileDeleteRequest): Promise<C.SkillInstallResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/files/${id(skillId)}/${filePath.split('/').map(id).join('/')}`, scoped(C.SkillInstallResultSchema, result => result.scope.kind === input.scope && (result.scope.kind !== 'workspace' || result.scope.workspaceId === workspaceId) && BigInt(result.sourceRevision) === BigInt(input.expectedSourceRevision) + 1n), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SkillFileDeleteRequestSchema, input) }),
+    applySkillFiles: (workspaceId: string, input: C.SkillFileDeleteRequest): Promise<C.SkillInstallResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/files/apply`, scoped(C.SkillInstallResultSchema, result => result.scope.kind === input.scope && (result.scope.kind !== 'workspace' || result.scope.workspaceId === workspaceId) && BigInt(result.sourceRevision) === BigInt(input.expectedSourceRevision)), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SkillFileDeleteRequestSchema, input) }),
+  };
+  readonly skillRepositories = {
+    catalog: (workspaceId: string): Promise<C.SkillRepositoryCatalog> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/repositories`, scoped(C.SkillRepositoryCatalogSchema, result => result.workspaceId === workspaceId)),
+    source: (workspaceId: string, input: C.SkillRepositorySourceRequest): Promise<C.SkillRepositoryItems> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/repositories/source`, scoped(C.SkillRepositoryItemsSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SkillRepositorySourceRequestSchema, input) }),
+    scan: (workspaceId: string, input: C.SkillRepositoryScanRequest): Promise<C.SkillRepositoryItems> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/repositories/scan`, scoped(C.SkillRepositoryItemsSchema, result => result.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SkillRepositoryScanRequestSchema, input) }),
+    install: (workspaceId: string, input: C.SkillRepositoryInstallRequest): Promise<C.SkillRepositoryInstallResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/skills/repositories/install`, scoped(C.SkillRepositoryInstallResultSchema, result => !result.ok || (result.workspaceId === workspaceId && (!result.commit || (result.commit.scope.kind === input.scope && (result.commit.scope.kind !== 'workspace' || result.commit.scope.workspaceId === workspaceId) && BigInt(result.commit.sourceRevision) > BigInt(input.expectedSourceRevision))))), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.SkillRepositoryInstallRequestSchema, input) }),
+  };
+
+  async checkReady(options: { signal?: AbortSignal } = {}): Promise<boolean> {
+    const response = await runtimeFetch('/api/agent/v1/ready', { signal: options.signal, cache: 'no-store' });
+    if (!response.ok) return false;
+    return C.AgentServiceReadySchema.safeParse(await response.json().catch(() => null)).success;
+  }
+  resolveWorkspace(directory: string, options: { signal?: AbortSignal } = {}): Promise<Workspace> {
     return request('/api/agent/v1/workspaces/resolve', C.WorkspaceSchema, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directory }), signal: options.signal,
     });
   }
+
+  getUsageStats(input: C.UsageQuery, options: { signal?: AbortSignal } = {}): Promise<C.UsageStats> {
+    const parsed = C.UsageQuerySchema.parse(input);
+    return request(`/api/agent/v1/usage${query(parsed)}`, C.UsageStatsSchema, { signal: options.signal });
+  }
+
+  getUsageTools(input: C.UsageToolsQuery, options: { signal?: AbortSignal } = {}): Promise<C.UsageToolsResponse> {
+    const parsed = C.UsageToolsQuerySchema.parse(input);
+    return request(`/api/agent/v1/usage/tools${query(parsed)}`, C.UsageToolsResponseSchema, { signal: options.signal });
+  }
+
+  getWebSearch(workspaceId: string, options: { signal?: AbortSignal } = {}): Promise<C.WebSearchConfigState> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/web-search`, scoped(C.WebSearchConfigStateSchema, state => state.workspaceId === workspaceId), { signal: options.signal });
+  }
+  updateWebSearch(workspaceId: string, input: C.WebSearchUpdateRequest, options: { signal?: AbortSignal } = {}): Promise<C.WebSearchMutationResult> {
+    const parsed = C.WebSearchUpdateRequestSchema.parse(input);
+    const expected = BigInt(parsed.expectedRevision);
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/web-search`, scoped(C.WebSearchMutationResultSchema, result => {
+      if (result.state.workspaceId !== workspaceId) return false;
+      const revision = BigInt(result.state.revision);
+      return result.persistence === 'persisted' ? revision === expected + 1n : revision === expected || revision === expected + 1n;
+    }), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.WebSearchUpdateRequestSchema, parsed), signal: options.signal,
+    });
+  }
+  writeWebSearchCredential(workspaceId: string, input: C.WebSearchCredentialWriteRequest, options: { signal?: AbortSignal } = {}): Promise<C.WebSearchMutationResult> {
+    const parsed = C.WebSearchCredentialWriteRequestSchema.parse(input);
+    const expected = BigInt(parsed.expectedRevision);
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/web-search/credentials/${id(parsed.providerId)}`, scoped(C.WebSearchMutationResultSchema, result => {
+      if (result.state.workspaceId !== workspaceId) return false;
+      const revision = BigInt(result.state.revision);
+      return result.persistence === 'persisted' ? revision === expected + 1n : revision === expected || revision === expected + 1n;
+    }), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.WebSearchCredentialWriteRequestSchema, parsed), signal: options.signal,
+    });
+  }
+  deleteWebSearchCredential(workspaceId: string, input: C.WebSearchCredentialDeleteRequest, options: { signal?: AbortSignal } = {}): Promise<C.WebSearchMutationResult> {
+    const parsed = C.WebSearchCredentialDeleteRequestSchema.parse(input);
+    const expected = BigInt(parsed.expectedRevision);
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/web-search/credentials/${id(parsed.providerId)}`, scoped(C.WebSearchMutationResultSchema, result => {
+      if (result.state.workspaceId !== workspaceId) return false;
+      const revision = BigInt(result.state.revision);
+      return result.persistence === 'persisted' ? revision === expected + 1n : revision === expected || revision === expected + 1n;
+    }), {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.WebSearchCredentialDeleteRequestSchema, parsed), signal: options.signal,
+    });
+  }
+
 
   uploadAttachment(workspaceId: string, metadata: Pick<C.Attachment, 'name' | 'mediaType' | 'size'>, data: string): Promise<C.Attachment> {
     return request('/api/agent/v1/attachments', C.AttachmentSchema, {
@@ -196,7 +300,42 @@ export class CanonicalClient {
   deleteQueueItem(sessionId: string, queueItemId: string, input: QueueDeleteRequest): Promise<QueueState> { return request(`/api/agent/v1/sessions/${id(sessionId)}/queue/${id(queueItemId)}`, scoped(C.QueueStateSchema, result => result.sessionId === sessionId), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.QueueDeleteRequestSchema, input, body => body.queueItemId === queueItemId) }); }
 
   getModels(workspaceId: string): Promise<ModelCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/models`, scoped(C.ModelCatalogSchema, result => result.workspaceId === workspaceId)); }
+
+  readCacheWarming(workspaceId: string, signal?: AbortSignal): Promise<C.CacheWarmingState> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/cache-warming`, scoped(C.CacheWarmingStateSchema, result => result.workspaceId === workspaceId), { signal });
+  }
+  updateCacheWarming(workspaceId: string, input: C.CacheWarmingUpdateRequest, signal?: AbortSignal): Promise<C.CacheWarmingApplyResult> {
+    const parsed = C.CacheWarmingUpdateRequestSchema.parse(input);
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/cache-warming`, scoped(C.CacheWarmingApplyResultSchema, result => result.persisted.workspaceId === workspaceId && result.persisted.mode === parsed.mode && BigInt(result.persisted.revision) === BigInt(parsed.expectedRevision) + 1n), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsed), signal,
+    });
+  }
   getProviders(workspaceId: string): Promise<ProviderCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers`, scoped(C.ProviderCatalogSchema, result => result.workspaceId === workspaceId)); }
+  providerAccounts(workspaceId: string, providerId: string): Promise<C.ProviderAccounts> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/accounts`, scoped(C.ProviderAccountsSchema, result => result.providerId === providerId));
+  }
+  mutateProviderAccount(workspaceId: string, providerId: string, input: C.ProviderAccountMutationRequest): Promise<C.ProviderAccounts> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/accounts`, scoped(C.ProviderAccountsSchema, result => result.providerId === providerId), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ProviderAccountMutationRequestSchema, input),
+    });
+  }
+  providerOAuthMethods(workspaceId: string): Promise<C.ProviderOAuthMethods> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/oauth-methods`, C.ProviderOAuthMethodsSchema);
+  }
+  providerOAuth(workspaceId: string, methodId: string, input: C.ProviderOAuthRequest): Promise<C.ProviderOAuthResult> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(methodId)}/oauth`, scoped(C.ProviderOAuthResultSchema, result => input.action === 'start'
+      ? result.revision === input.expectedRevision : result.flowId === input.flowId && result.generation === input.generation), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ProviderOAuthRequestSchema, input),
+    });
+  }
+  discoverProviderModels(workspaceId: string, input: C.ProviderModelDiscoveryRequest): Promise<C.ProviderModelDiscoveryResult> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/discover`, C.ProviderModelDiscoveryResultSchema, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ProviderModelDiscoveryRequestSchema, input),
+    });
+  }
+  providerConfiguration(workspaceId: string, providerId: string): Promise<C.ProviderConfigurationRead> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/config`, scoped(C.ProviderConfigurationReadSchema, result => result.configuration.providerId === providerId));
+  }
   getAgents(workspaceId: string): Promise<AgentCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/agents`, scoped(C.AgentCatalogSchema, result => result.workspaceId === workspaceId)); }
   createAgent(workspaceId: string, input: AgentCreateRequest): Promise<AgentMutationResult> {
     const agentId = input.agent.agentId;

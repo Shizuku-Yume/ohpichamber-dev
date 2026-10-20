@@ -877,6 +877,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['worktree', 'branch', 'repository'],
   },
   {
+    id: 'projects.worktree.directory',
+    page: 'projects',
+    titleKey: 'settings.openchamber.worktrees.directory.label',
+    descriptionKey: 'settings.openchamber.worktrees.directory.info',
+    keywords: ['worktree', 'directory', 'folder', 'location', 'path', 'home', 'absolute', 'relative'],
+  },
+  {
     id: 'projects.worktree.setup.wait',
     page: 'projects',
     titleKey: 'settings.openchamber.worktrees.setup.waitForCommands',
@@ -923,13 +930,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.remoteInstances.direct.description',
     keywords: ['server url', 'connection token', 'import link', 'host switcher', 'additional headers', 'request headers', 'cloudflare access', 'service token'],
     isAvailable: (ctx) => ctx.isDesktop,
-  },
-  {
-    id: 'behavior.system-prompt',
-    page: 'behavior',
-    titleKey: 'settings.behavior.page.section.systemPrompt',
-    descriptionKey: 'settings.behavior.page.warning.title',
-    keywords: ['agents.md', 'global instructions', 'system prompt'],
   },
   {
     id: 'behavior.response-style',
@@ -1157,8 +1157,8 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     id: 'web-search.provider',
     page: 'web-search',
     titleKey: 'settings.webSearch.section.provider',
-    descriptionKey: 'settings.webSearch.section.providerInfo',
-    keywords: ['web search', 'websearch', 'internet', 'default provider', 'disable', 'off', 'random'],
+    descriptionKey: 'settings.webSearch.native.info',
+    keywords: ['web search', 'web_search', 'internet', 'provider', 'disable', 'off', 'fallback', 'timeout'],
   },
   {
     id: 'web-search.keys',

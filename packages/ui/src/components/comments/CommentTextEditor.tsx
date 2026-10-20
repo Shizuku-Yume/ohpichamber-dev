@@ -6,7 +6,7 @@
  *
  * It is the composer's own editor with comment policy on top, so a comment
  * reads like the prompt it ends up in: pasted images show as file chips,
- * `#snippet` references as snippet chips, Markdown is highlighted. Agents,
+ * native `/template` references as template chips, Markdown is highlighted. Agents,
  * commands and file mentions do not resolve in a comment.
  *
  * Keys: Enter submits (Shift+Enter breaks the line; with `enterSubmits` off,
@@ -22,7 +22,8 @@ import { ComposerEditor, type ComposerEditorHandle } from '@/components/chat/com
 import type { ComposerLanguageContext } from '@/components/chat/composer/language/tokenize';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { cn } from '@/lib/utils';
-import { useSnippetsStore } from '@/stores/useSnippetsStore';
+import { selectSnippetsForDirectory, useSnippetsStore } from '@/stores/useSnippetsStore';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useInputStore } from '@/sync/input-store';
 import type { CommentImagePaste } from './useCommentImagePaste';
 import { useCommentSnippetPicker } from './useCommentSnippetPicker';
@@ -61,7 +62,8 @@ export function CommentTextEditor({
 }: CommentTextEditorProps) {
     const editorRef = React.useRef<ComposerEditorHandle>(null);
 
-    const snippets = useSnippetsStore((state) => state.snippets);
+    const directory = useEffectiveDirectory();
+    const snippets = useSnippetsStore(state => selectSnippetsForDirectory(state, directory));
     const attachedFiles = useInputStore((state) => state.attachedFiles);
     const themeVariant = useOptionalThemeSystem()?.currentTheme.metadata.variant === 'light' ? 'light' : 'dark';
     const { pendingFilenames } = imagePaste;
@@ -69,7 +71,6 @@ export function CommentTextEditor({
         const knownSnippetTriggers = new Set<string>();
         for (const snippet of snippets) {
             knownSnippetTriggers.add(snippet.name.toLowerCase());
-            for (const alias of snippet.aliases ?? []) knownSnippetTriggers.add(alias.toLowerCase());
         }
         return {
             inputMode: 'normal',

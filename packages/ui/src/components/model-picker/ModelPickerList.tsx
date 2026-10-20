@@ -19,31 +19,33 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { handleDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
 import { getCurrentIntlLocale } from '@/lib/i18n';
-import { mergeModelMetadataWithLiveModel } from '@/lib/modelMetadata';
 import { getModelDisplayName as getSharedModelDisplayName } from '@/lib/modelDisplay';
 import { formatCompactNumber } from '@/lib/numberFormat';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useModelPickerSectionsStore } from '@/stores/useModelPickerSectionsStore';
 import type { ModelMetadata } from '@/types';
+import type { Model, Provider } from '@openchamber/agent-contract';
 
-type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
+type ProviderModel = Model;
 
-export type ModelPickerProvider = {
-  id: string;
-  name?: string;
-  models?: ProviderModel[];
-};
+export type ModelPickerProvider = Provider & { models?: ProviderModel[] };
 
+/** Native catalog identity used throughout the picker. */
 export type ModelPickerEntry = {
   model: ProviderModel;
+  providerId: string;
+  modelId: string;
+};
+
+/** Favorites/recents retain persisted legacy keys only at this boundary. */
+type ModelPickerFavoriteEntry = Omit<ModelPickerEntry, 'providerId' | 'modelId'> & {
   providerID: string;
   modelID: string;
 };
 
-type ModelPickerFavoriteEntry = ModelPickerEntry;
-
 type HiddenModel = { providerID: string; modelID: string };
+
 
 type IndexSelectionStore = {
   getSnapshot: () => number;
@@ -352,7 +354,7 @@ const VirtualProviderRows: React.FC<{
     estimateSize: () => rowHeight,
     overscan: 10,
     scrollMargin,
-    getItemKey: (index) => `${entries[index]?.providerID}-${entries[index]?.modelID}`,
+    getItemKey: (index) => `${entries[index]?.providerId}-${entries[index]?.modelId}`,
   });
 
   // The list's offset inside the scroller moves when sections above it
@@ -482,7 +484,7 @@ interface ModelPickerListProps {
    * Per-model gate, for callers whose feature needs a capability rather than a
    * provider (e.g. structured output). Applied on top of `allowedProviderIds`.
    */
-  isModelAllowed?: (providerID: string, modelID: string) => boolean;
+  isModelAllowed?: (providerId: string, modelId: string) => boolean;
   includeNotSelected?: boolean;
   onSelectNone?: () => void;
   selectionCount?: (entry: ModelPickerEntry) => number;
@@ -594,53 +596,53 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
     return new Set(allowedProviderIds);
   }, [allowedProviderIds]);
 
-  const providerById = React.useMemo(() => new Map(providers.map((provider) => [provider.id, provider])), [providers]);
+  const providerById = React.useMemo(() => new Map(providers.map((provider) => [provider.providerId, provider])), [providers]);
 
-  const isHidden = React.useCallback((providerID: string, modelID: string) => {
-    return hiddenModels.some((hidden) => hidden.providerID === providerID && hidden.modelID === modelID);
+  const isHidden = React.useCallback((providerId: string, modelId: string) => {
+    return hiddenModels.some((hidden) => hidden.providerID === providerId && hidden.modelID === modelId);
   }, [hiddenModels]);
 
   const matchesQuery = React.useCallback(
-    (modelName: string, providerName: string, modelID?: string) =>
-      matchesRankQuery([modelName, modelID, providerName], searchQuery),
+    (modelName: string, providerName: string, modelId?: string) =>
+      matchesRankQuery([modelName, modelId, providerName], searchQuery),
     [searchQuery],
   );
 
-  const filteredFavorites = React.useMemo(() => favoriteModels.filter(({ model, providerID, modelID }) => {
-    if (allowedProviderSet && !allowedProviderSet.has(providerID)) return false;
-    if (isModelAllowed && !isModelAllowed(providerID, modelID)) return false;
-    if (isHidden(providerID, modelID)) return false;
-    const providerName = providerById.get(providerID)?.name || providerID;
-    return matchesQuery(getModelDisplayName(model), providerName, modelID);
+  const filteredFavorites = React.useMemo(() => favoriteModels.map(({ model, providerID, modelID }) => ({ model, providerId: providerID, modelId: modelID })).filter(({ model, providerId, modelId }) => {
+    if (allowedProviderSet && !allowedProviderSet.has(providerId)) return false;
+    if (isModelAllowed && !isModelAllowed(providerId, modelId)) return false;
+    if (isHidden(providerId, modelId)) return false;
+    const providerName = providerById.get(providerId)?.name || providerId;
+    return matchesQuery(getModelDisplayName(model), providerName, modelId);
   }), [allowedProviderSet, favoriteModels, isHidden, isModelAllowed, matchesQuery, providerById]);
 
-  const filteredRecents = React.useMemo(() => recentModels.filter(({ model, providerID, modelID }) => {
-    if (allowedProviderSet && !allowedProviderSet.has(providerID)) return false;
-    if (isModelAllowed && !isModelAllowed(providerID, modelID)) return false;
-    if (isHidden(providerID, modelID)) return false;
-    const providerName = providerById.get(providerID)?.name || providerID;
-    return matchesQuery(getModelDisplayName(model), providerName, modelID);
+  const filteredRecents = React.useMemo(() => recentModels.map(({ model, providerID, modelID }) => ({ model, providerId: providerID, modelId: modelID })).filter(({ model, providerId, modelId }) => {
+    if (allowedProviderSet && !allowedProviderSet.has(providerId)) return false;
+    if (isModelAllowed && !isModelAllowed(providerId, modelId)) return false;
+    if (isHidden(providerId, modelId)) return false;
+    const providerName = providerById.get(providerId)?.name || providerId;
+    return matchesQuery(getModelDisplayName(model), providerName, modelId);
   }), [allowedProviderSet, isHidden, isModelAllowed, matchesQuery, providerById, recentModels]);
 
   const orderedProviders = React.useMemo(() => {
     if (!providerOrder || providerOrder.length === 0) return providers;
     const rank = new Map(providerOrder.map((id, index) => [id, index] as const));
     const ranked = providers
-      .filter((provider) => rank.has(provider.id))
-      .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
-    const unranked = providers.filter((provider) => !rank.has(provider.id));
+      .filter((provider) => rank.has(provider.providerId))
+      .sort((a, b) => (rank.get(a.providerId) ?? 0) - (rank.get(b.providerId) ?? 0));
+    const unranked = providers.filter((provider) => !rank.has(provider.providerId));
     return [...ranked, ...unranked];
   }, [providerOrder, providers]);
 
   const filteredProviders = React.useMemo(() => orderedProviders
-    .filter((provider) => !allowedProviderSet || allowedProviderSet.has(provider.id))
+    .filter((provider) => !allowedProviderSet || allowedProviderSet.has(provider.providerId))
     .map((provider) => {
       const models = Array.isArray(provider.models) ? provider.models : [];
       const filteredModels = models.filter((model) => {
-        const modelID = typeof model.id === 'string' ? model.id : '';
-        if (!modelID || isHidden(provider.id, modelID)) return false;
-        if (isModelAllowed && !isModelAllowed(provider.id, modelID)) return false;
-        return matchesQuery(getModelDisplayName(model), provider.name || provider.id, modelID);
+        const modelID = model.modelId;
+        if (isHidden(provider.providerId, modelID)) return false;
+        if (isModelAllowed && !isModelAllowed(provider.providerId, modelID)) return false;
+        return matchesQuery(getModelDisplayName(model), provider.name || provider.providerId, modelID);
       });
       return { ...provider, models: filteredModels };
     })
@@ -649,7 +651,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
   const visibleSectionKeys = React.useMemo(() => [
     ...(filteredFavorites.length > 0 ? ['favorites'] : []),
     ...(filteredRecents.length > 0 ? ['recent'] : []),
-    ...filteredProviders.map((provider) => `provider:${provider.id}`),
+    ...filteredProviders.map((provider) => `provider:${provider.providerId}`),
   ], [filteredFavorites.length, filteredProviders, filteredRecents.length]);
 
   React.useEffect(() => {
@@ -716,7 +718,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
 
   const visibleLeadingEntry = React.useMemo(() => {
     if (!leadingEntry) return null;
-    return matchesQuery(getModelDisplayName(leadingEntry.model), leadingEntry.providerID, leadingEntry.modelID) ? leadingEntry : null;
+    return matchesQuery(getModelDisplayName(leadingEntry.model), leadingEntry.providerId, leadingEntry.modelId) ? leadingEntry : null;
   }, [leadingEntry, matchesQuery]);
 
   const showLeadingAction = Boolean(leadingAction) && !searchQuery.trim();
@@ -728,9 +730,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
     if (!collapsedSections.has('favorites')) filteredFavorites.forEach((entry) => items.push(entry));
     if (!collapsedSections.has('recent')) filteredRecents.forEach((entry) => items.push(entry));
     filteredProviders.forEach((provider) => {
-      if (collapsedSections.has(`provider:${provider.id}`)) return;
-      // SAFETY: filteredProviders keeps only models whose id is a non-empty string.
-      provider.models.forEach((model) => items.push({ model, providerID: provider.id, modelID: model.id as string }));
+      provider.models.forEach((model) => items.push({ model, providerId: provider.providerId, modelId: model.modelId }));
     });
     return items;
   }, [collapsedSections, filteredFavorites, filteredProviders, filteredRecents, showLeadingAction, visibleLeadingEntry]);
@@ -739,12 +739,12 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
   const favoriteSortingEnabled = Boolean(onReorderFavorite) && searchQuery.trim().length === 0 && filteredFavorites.length > 1;
   const providerSortingEnabled = Boolean(onReorderProvider) && searchQuery.trim().length === 0 && !allowedProviderSet && filteredProviders.length > 1;
   const favoriteLookup: Map<string, ModelPickerEntry> = React.useMemo(() => new Map(
-    filteredFavorites.map((entry) => [`${entry.providerID}:${entry.modelID}`, entry] as const),
+    filteredFavorites.map((entry) => [`${entry.providerId}:${entry.modelId}`, entry] as const),
   ), [filteredFavorites]);
 
   const selectedModelIndex = searchQuery.trim() || !selectedModel ? 0 : flatModelList.findIndex((item) => {
     const entry = entryOf(item);
-    return entry?.providerID === selectedModel.providerID && entry.modelID === selectedModel.modelID;
+    return entry?.providerId === selectedModel.providerID && entry.modelId === selectedModel.modelID;
   });
   const initialSelectionIndex = Math.max(0, selectedModelIndex);
   // Scrolling to the current model answers opening the list, a new query, or a
@@ -892,16 +892,22 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
   );
 
   const renderRow = (entry: ModelPickerEntry, keyPrefix: string, showProviderLogo: boolean, rowIndex: number, dragHandleProps?: SortableFavoriteHandleProps | null) => {
-    const metadata = mergeModelMetadataWithLiveModel(entry.providerID, entry.model, getModelMetadata(entry.providerID, entry.modelID));
-    const contextTokens = formatModelContextTokens(metadata?.limit?.context);
+    const metadata = {
+      ...(getModelMetadata(entry.providerId, entry.modelId) ?? {}),
+      id: entry.model.modelId,
+      providerId: entry.providerId,
+      name: entry.model.name,
+      limit: { context: entry.model.contextWindow, output: entry.model.maxOutputTokens },
+    } satisfies ModelMetadata;
+    const contextTokens = formatModelContextTokens(entry.model.contextWindow);
     const count = selectionCount?.(entry) ?? 0;
-    const isSelected = selectedModel?.providerID === entry.providerID && selectedModel.modelID === entry.modelID;
+    const isSelected = selectedModel?.providerID === entry.providerId && selectedModel.modelID === entry.modelId;
     const favorite = isFavorite?.(entry) ?? false;
 
     const handleMouseActivity = (event: React.MouseEvent) => highlightOnPointer(event, rowIndex);
 
     return (
-      <ModelPickerRowHighlight key={`${keyPrefix}-${entry.providerID}-${entry.modelID}`} store={selectionStore} index={rowIndex} renderVersion={renderVersion}>
+      <ModelPickerRowHighlight key={`${keyPrefix}-${entry.providerId}-${entry.modelId}`} store={selectionStore} index={rowIndex} renderVersion={renderVersion}>
         {(isHighlighted) => {
           const rowElement = (
             <div
@@ -931,7 +937,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
                   </button>
                 ) : null}
                 {keyPrefix === 'leading' ? <Icon name="openchamber" className="h-3.5 w-3.5 flex-shrink-0" /> : null}
-                {showProviderLogo ? <ProviderLogo providerId={entry.providerID} className="h-3.5 w-3.5 flex-shrink-0" /> : null}
+                {showProviderLogo ? <ProviderLogo providerId={entry.providerId} className="h-3.5 w-3.5 flex-shrink-0" /> : null}
                 <span className="font-medium truncate">{getModelDisplayName(entry.model)}</span>
                 {contextTokens ? <span className={cn('typography-micro flex-shrink-0', isHighlighted ? 'text-interactive-selection-foreground/70' : 'text-muted-foreground')}>{contextTokens}</span> : null}
               </div>
@@ -972,7 +978,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const ids = orderedProviders.map((provider) => provider.id);
+    const ids = orderedProviders.map((provider) => provider.providerId);
     const from = ids.indexOf(String(active.id));
     const to = ids.indexOf(String(over.id));
     if (from === -1 || to === -1) return;
@@ -1051,7 +1057,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
 
   const renderProviderRows = (provider: (typeof filteredProviders)[number], sectionKey: string) => {
     // SAFETY: filteredProviders keeps only models whose id is a non-empty string.
-    const entries = provider.models.map((model) => ({ model, providerID: provider.id, modelID: model.id as string }));
+    const entries = provider.models.map((model) => ({ model, providerId: provider.providerId, modelId: model.modelId }));
     if (entries.length < VIRTUAL_SECTION_MIN_ROWS) {
       return entries.map((entry) => renderRow(entry, 'provider', false, currentFlatIndex++));
     }
@@ -1073,13 +1079,13 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
     providerIndex: number,
     headerDragProps?: SortableFavoriteHandleProps,
   ) => {
-    const sectionKey = `provider:${provider.id}`;
+    const sectionKey = `provider:${provider.providerId}`;
     return (
       <>
         {providerIndex > 0 ? <div className="h-px bg-border/40 my-1" /> : null}
         <div className="relative">
           {renderSectionSentinel(sectionKey)}
-          {renderSectionHeader(sectionKey, <ProviderLogo providerId={provider.id} className="h-4 w-4 flex-shrink-0" />, provider.name || provider.id, headerDragProps)}
+          {renderSectionHeader(sectionKey, <ProviderLogo providerId={provider.providerId} className="h-4 w-4 flex-shrink-0" />, provider.name || provider.providerId, headerDragProps)}
           {!isSectionCollapsed(sectionKey) ? renderProviderRows(provider, sectionKey) : null}
         </div>
       </>
@@ -1105,7 +1111,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
     const providerId = sectionKey.startsWith('provider:') ? sectionKey.slice('provider:'.length) : '';
     const provider = providerById.get(providerId);
     if (!provider) return null;
-    return <><ProviderLogo providerId={providerId} className="h-4 w-4 flex-shrink-0" /><span className="min-w-0 truncate">{provider.name || provider.id}</span></>;
+    return <><ProviderLogo providerId={providerId} className="h-4 w-4 flex-shrink-0" /><span className="min-w-0 truncate">{provider.name || provider.providerId}</span></>;
   };
 
   return (
@@ -1184,11 +1190,11 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
               {renderSectionHeader('favorites', <Icon name="star-fill" className="h-4 w-4 text-primary" />, labels.favorites)}
               {!isSectionCollapsed('favorites') && (favoriteSortingEnabled ? (
                 <DndContext sensors={favoriteRowSensors} collisionDetection={closestCenter} onDragEnd={handleFavoriteDragEnd}>
-                  <SortableContext items={filteredFavorites.map((entry) => `${entry.providerID}:${entry.modelID}`)} strategy={verticalListSortingStrategy}>
+                  <SortableContext items={filteredFavorites.map((entry) => `${entry.providerId}:${entry.modelId}`)} strategy={verticalListSortingStrategy}>
                     {filteredFavorites.map((entry) => {
                       const rowIndex = currentFlatIndex++;
                       return (
-                        <SortableFavoriteModelRow key={`fav-sortable-${entry.providerID}-${entry.modelID}`} id={`${entry.providerID}:${entry.modelID}`} disabled={disabled}>
+                        <SortableFavoriteModelRow key={`fav-sortable-${entry.providerId}-${entry.modelId}`} id={`${entry.providerId}:${entry.modelId}`} disabled={disabled}>
                           {(dragHandleProps) => renderRow(entry, 'fav', true, rowIndex, dragHandleProps)}
                         </SortableFavoriteModelRow>
                       );
@@ -1214,9 +1220,9 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
 
           {providerSortingEnabled ? (
             <DndContext sensors={providerSectionSensors} collisionDetection={closestCenter} onDragEnd={handleProviderDragEnd}>
-              <SortableContext items={filteredProviders.map((provider) => provider.id)} strategy={verticalListSortingStrategy}>
+              <SortableContext items={filteredProviders.map((provider) => provider.providerId)} strategy={verticalListSortingStrategy}>
                 {filteredProviders.map((provider, providerIndex) => (
-                  <SortableProviderSection key={provider.id} id={provider.id} disabled={disabled}>
+                  <SortableProviderSection key={provider.providerId} id={provider.providerId} disabled={disabled}>
                     {(dragHandleProps) => renderProviderSection(provider, providerIndex, dragHandleProps)}
                   </SortableProviderSection>
                 ))}
@@ -1224,7 +1230,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
             </DndContext>
           ) : (
             filteredProviders.map((provider, providerIndex) => (
-              <div key={provider.id}>
+              <div key={provider.providerId}>
                 {renderProviderSection(provider, providerIndex)}
               </div>
             ))

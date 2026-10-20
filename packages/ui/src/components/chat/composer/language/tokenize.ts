@@ -40,7 +40,7 @@ export interface ComposerLanguageContext {
     confirmedMentions: ReadonlySet<string>;
     /** Lowercased command and built-in names invocable with `/`. */
     knownSlashNames: ReadonlySet<string>;
-    /** Lowercased snippet names and aliases invocable with `#`. */
+    /** Native prompt template names invocable with a leading `/`. */
     knownSnippetTriggers: ReadonlySet<string>;
     /** Filenames of the currently attached files, cited inline as `[name]`. */
     attachmentFilenames: readonly string[];
@@ -97,7 +97,7 @@ export function tokenizeComposer(
         }
     }
 
-    for (const token of filterKnownTokens(scanPrefixTokens(text, '#'), context.knownSnippetTriggers)) {
+    for (const token of filterKnownTokens(scanPrefixTokens(text, '/'), context.knownSnippetTriggers)) {
         ranges.push({ start: token.start, end: token.end, style: 'mentionSnippet' });
     }
 

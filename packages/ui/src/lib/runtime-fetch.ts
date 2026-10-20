@@ -64,7 +64,7 @@ const appendRuntimeQuery = (url: URL, query?: RuntimeUrlQuery): void => {
 // A request about a directory inside an isolated space goes to that space, under
 // `/api/spaces/<id>/`. The directory is read where the request already names it in the
 // open, as the server's guards read it: the `directory` or `location[directory]` query, the
-// `x-opencode-directory` header (URI-encoded by the SDK, plain from the files API), or the
+// `x-opencode-directory` header (URI-encoded by the SDK, or sent by a legacy client), or the
 // caller's explicit option for a request that carries it only in a body. Nothing is
 // remembered between calls.
 const decodeDirectoryHint = (value: string | null | undefined): string | null => {

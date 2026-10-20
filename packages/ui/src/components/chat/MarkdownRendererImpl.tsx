@@ -669,10 +669,6 @@ const useMermaidInlineInteractions = ({
         open: true,
         title: filename,
         content: '',
-        metadata: {
-          tool: 'mermaid-preview',
-          filename,
-        },
         mermaid: {
           url: `data:text/plain;charset=utf-8,${encodeURIComponent(source)}`,
           source,

@@ -11,10 +11,9 @@ import * as knowledge from '@/lib/sessionKnowledgeApi';
 import * as sessionActions from '@/sync/session-actions';
 import { useProjectsStore } from './useProjectsStore';
 import { useGlobalSessionsStore } from './useGlobalSessionsStore';
-import { useSnippetsStore } from './useSnippetsStore';
 import { getMultiRunMembership } from '@/lib/multirun/identity';
 import { resetWorkspaceDirectories, resolveWorkspaceDirectory } from './globalSessions';
-import { registerMultiRunSession, useMultiRunStore } from './useMultiRunStore';
+import { dispatchRunPrompt, registerMultiRunSession, useMultiRunStore } from './useMultiRunStore';
 import * as messageLoader from '@/sync/session-message-loader';
 import * as syncRefs from '@/sync/sync-refs';
 import { ChildStoreManager } from '@/sync/child-store';
@@ -56,7 +55,6 @@ function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boole
     return { name: args.preferredName ?? 'lane', path: `/worktrees/${worktrees.length}`, branch: 'lane', label: 'lane', projectDirectory: '/repo' };
   }));
   spies.push(spyOn(useGlobalSessionsStore.getState(), 'upsertSession').mockImplementation((session) => { published.push(session); }));
-  spies.push(spyOn(useSnippetsStore.getState(), 'expandText').mockImplementation(async (text) => text));
   spies.push(spyOn(knowledge, 'fetchSessionKnowledge').mockResolvedValue({ text: '', signature: '' }));
   spies.push(spyOn(sessionActions, 'sendMessage').mockImplementation(async (request) => {
     expect(observed).toContain(request.sessionId);
@@ -98,6 +96,39 @@ function fixture(input: { rejectFirst?: boolean; isolate?: boolean; wait?: boole
   };
   return { deleted, published, dispatched, order, worktrees, waitForDispatch, observed, manager, loader };
 }
+
+const laneInput = () => ({ runtimeKey: runtime.getRuntimeKey(), assertCurrent: () => {}, sessionId: 'lane', workspaceId: 'workspace', directory: '/repo', prompt: '/review "two words"\n tail  ', providerId: 'captured', modelId: 'model', agentId: 'agent', variant: 'high', reasoningEffort: 'medium' });
+
+describe('lane native expansion delivery', () => {
+  for (const kind of ['command', 'template', 'text'] as const) test(`uses one authoritative ${kind} expansion`, async () => {
+    const api = fixture();
+    const input = laneInput();
+    const requests: Request[] = [];
+    spies.push(spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const request = new Request(new URL(url instanceof Request ? url.url : String(url), 'http://test'), init);
+      requests.push(request);
+      expect(new URL(request.url).pathname).toBe('/api/agent/v1/workspaces/workspace/commands/expand-text');
+      expect(await request.json()).toEqual({ text: input.prompt });
+      return Response.json(kind === 'text' ? { kind, content: input.prompt } : { kind, content: '/already expanded\n', modelSelection: { providerId: 'bound', modelId: 'bound-model' }, agentId: 'bound-agent' });
+    }));
+    await dispatchRunPrompt(input);
+    expect(requests).toHaveLength(1);
+    expect(api.dispatched[0].request).toMatchObject({ input: { text: kind === 'text' ? input.prompt : '/already expanded\n' }, options: { providerId: kind === 'text' ? 'captured' : 'bound', modelId: kind === 'text' ? 'model' : 'bound-model', agentId: kind === 'text' ? 'agent' : 'bound-agent', variant: 'high', reasoningEffort: 'medium' } });
+  });
+  test('expansion failure never dispatches original text', async () => {
+    const api = fixture();
+    spies.push(spyOn(globalThis, 'fetch').mockResolvedValue(new Response('unavailable', { status: 503 })));
+    await expect(dispatchRunPrompt(laneInput())).rejects.toThrow();
+    expect(api.dispatched).toEqual([]);
+  });
+  test('late expansion cannot dispatch after its captured owner changes', async () => {
+    const api = fixture();
+    let current = true;
+    spies.push(spyOn(globalThis, 'fetch').mockImplementation(async () => { current = false; return Response.json({ kind: 'command', content: 'Expanded' }); }));
+    await expect(dispatchRunPrompt({ ...laneInput(), assertCurrent: () => { if (!current) throw new Error('owner changed'); } })).rejects.toThrow('owner changed');
+    expect(api.dispatched).toEqual([]);
+  });
+});
 
 const models = [
   { providerId: 'provider-a', modelId: 'vendor/a', variant: 'high', reasoningEffort: 'high' },

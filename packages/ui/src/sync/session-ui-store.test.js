@@ -16,7 +16,7 @@ import { ChildStoreManager } from './child-store';
 import { setSyncRefs } from './sync-refs';
 import { setActionRefs } from './session-actions';
 import { useSessionWorktreeStore } from './session-worktree-store';
-import { expandSlashCommandGoalObjective, routeMessage, useSessionUIStore } from './session-ui-store';
+import { routeMessage, useSessionUIStore } from './session-ui-store';
 import { useSelectionStore } from './selection-store';
 import { deferred, nativeSnapshot } from './session-message-loader-test-fixtures';
 
@@ -59,6 +59,23 @@ const seedCanonicalSession = () => {
   manager.ensureChild('/repo', { bootstrap: false });
   manager.children.get('/repo').setState({ session: [hostSession('session-a')] });
 };
+const fakeFileResources = ({ expand, fallback } = {}) => {
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const path = new URL(request.url).pathname;
+    const match = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/commands\/expand-text$/.exec(path);
+    if (!match) {
+      if (path.startsWith('/api/agent/')) throw new Error(`Unexpected canonical request ${request.method} ${path}`);
+      return fallback ? fallback(request) : Response.json({ text: '', signature: '' });
+    }
+    const workspaceId = decodeURIComponent(match[1]);
+    const body = await request.json();
+    requests.push({ workspaceId, method: request.method, body });
+    return expand ? expand({ workspaceId, body }) : Response.json({ kind: 'text', content: body.text });
+  };
+  return requests;
+};
 
 
 beforeEach(async () => {
@@ -94,7 +111,7 @@ beforeEach(async () => {
   });
   resolvedDirectories = [];
   runCalls = [];
-  globalThis.fetch = async () => Response.json({ text: '', signature: '' });
+  fakeFileResources();
   stub(hostFilesystem, 'getDirectoryAvailability', async () => 'available');
   stub(canonicalClient, 'resolveWorkspace', async (directory) => {
     resolvedDirectories.push(directory);
@@ -200,28 +217,158 @@ describe('draft materialization transition identity', () => {
   });
 });
 
-describe('slash-command goal objectives', () => {
-  test('expands every $ARGUMENTS reference from the authoritative command template', () => {
-    expect(expandSlashCommandGoalObjective('/issue--to-pr LIN-123 --draft', [{
-      name: 'issue--to-pr',
-      template: 'Run the issue pipeline for $ARGUMENTS. Verify $ARGUMENTS is represented by the PR.',
-    }])).toBe('Run the issue pipeline for LIN-123 --draft. Verify LIN-123 --draft is represented by the PR.');
+describe('worker-owned slash expansion', () => {
+  test('uses worker output verbatim instead of interpreting repeated argument references', async () => {
+    const content = 'Run LIN-123 --draft. Verify LIN-123 --draft.\nLiteral $ARGUMENTS remains worker-owned.';
+    const requests = fakeFileResources({
+      expand: () => Response.json({ kind: 'command', content }),
+    });
+    await route({ content: '/issue--to-pr LIN-123 --draft' });
+    expect(requests[0].body).toEqual({ text: '/issue--to-pr LIN-123 --draft' });
+    expect(runCalls[0].request.input.text).toBe(content);
   });
 
-  test('keeps the invocation when the command template is unavailable', () => {
-    expect(expandSlashCommandGoalObjective('/issue--to-pr LIN-123', [{ name: 'issue--to-pr' }]))
-      .toBe('/issue--to-pr LIN-123');
+  test.each(['command', 'template'])('keeps a matched %s authoritative even when worker content is unchanged', async kind => {
+    seedCanonicalSession();
+    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ skillId: 'skill-review', name: 'review', description: '', content: 'Review instructions', scope: 'workspace', readOnly: false, source: 'project' }] } });
+    const content = '/review auth';
+    const requests = fakeFileResources({ expand: () => Response.json({ kind, content }) });
+    expect(await route({ content })).toBe('command');
+    expect(requests).toEqual([{ workspaceId: 'workspace-1', method: 'POST', body: { text: content } }]);
+    expect(runCalls[0].request.input).toEqual({ text: content, attachments: [], context: [] });
   });
 
-  test('expands positional and implicit command arguments', () => {
-    expect(expandSlashCommandGoalObjective('/move "src old" dist extra', [{
-      name: 'move',
-      template: 'Move $1 to $2',
-    }])).toBe('Move src old to dist extra');
-    expect(expandSlashCommandGoalObjective('/review auth module', [{
-      name: 'review',
-      template: 'Review the requested scope.',
-    }])).toBe('Review the requested scope.\n\nauth module');
+  test('keeps an unknown invocation when the worker returns it unchanged', async () => {
+    const requests = fakeFileResources();
+    expect(await route({ content: '/issue--to-pr LIN-123' })).toBe('prompt');
+    expect(requests[0].body).toEqual({ text: '/issue--to-pr LIN-123' });
+    expect(runCalls[0].request.input.text).toBe('/issue--to-pr LIN-123');
+  });
+
+  test('forwards tabs and newlines without interpreting native invocation delimiters', async () => {
+    const requests = fakeFileResources();
+    for (const content of ['/inspect\tauth', '/inspect\nauth', '/inspect\tauth more']) {
+      expect(await route({ content })).toBe('prompt');
+    }
+    expect(requests.map(request => request.body)).toEqual([
+      { text: '/inspect\tauth' }, { text: '/inspect\nauth' }, { text: '/inspect\tauth more' },
+    ]);
+    expect(runCalls.map(call => call.request.input.text)).toEqual(['/inspect\tauth', '/inspect\nauth', '/inspect\tauth more']);
+  });
+
+  test('preserves quoted positional, implicit, newline and trailing arguments for the worker', async () => {
+    const requests = fakeFileResources({
+      expand: ({ body }) => Response.json({ kind: 'command', content: body.text.startsWith('/move ') ? 'Move src old to dist extra' : 'Review the requested scope.\n\nauth module' }),
+    });
+    await route({ content: '/move "src old" dist extra' });
+    await route({ content: '/review  auth module\n next line  ' });
+    expect(requests.filter(request => request.method === 'POST').map(request => request.body)).toEqual([
+      { text: '/move "src old" dist extra' },
+      { text: '/review  auth module\n next line  ' },
+    ]);
+    expect(runCalls.map(call => call.request.input.text)).toEqual(['Move src old to dist extra', 'Review the requested scope.\n\nauth module']);
+  });
+
+  test('expands a native prompt template and carries its model and agent bindings', async () => {
+    const requests = fakeFileResources({
+      expand: () => Response.json({ kind: 'template', content: 'Native release notes', modelSelection: { providerId: 'bound-provider', modelId: 'bound-model' }, agentId: 'release-agent' }),
+    });
+    expect(await route({ content: '/release/notes "v2 beta"\n --draft  ', agent: 'build', variant: 'high', reasoningEffort: 'medium', commandId: 'submit-template' })).toBe('command');
+    expect(requests).toEqual([{
+      workspaceId: 'workspace-1', method: 'POST', body: { text: '/release/notes "v2 beta"\n --draft  ' },
+    }]);
+    expect(runCalls).toEqual([{
+      sessionId: 'session-a', commandId: 'submit-template',
+      request: {
+        input: { text: 'Native release notes', attachments: [], context: [] },
+        options: { providerId: 'bound-provider', modelId: 'bound-model', agentId: 'release-agent', variant: 'high', reasoningEffort: 'medium' },
+      },
+    }]);
+  });
+
+  test('delivers already expanded queued slash text without re-expanding or changing captured options', async () => {
+    seedCanonicalSession();
+    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ skillId: 'skill-next', name: 'next', description: '', content: 'New instructions', scope: 'workspace', readOnly: false, source: 'project' }] } });
+    const requests = fakeFileResources({ expand: () => { throw new Error('Queued text must not be expanded twice'); } });
+    const knowledge = deferred();
+    const sending = route({
+      content: '/next', fileResourcesExpanded: true, sessionKnowledge: knowledge.promise,
+      providerID: 'captured-provider', modelID: 'captured-model', agent: 'captured-agent',
+      variant: 'high', reasoningEffort: 'medium', commandId: 'queued-submit',
+    });
+    useConfigStore.setState({ currentProviderId: 'other-provider', currentModelId: 'other-model', currentAgentName: 'other-agent' });
+    useSessionUIStore.setState({ currentSessionId: 'session-b', currentSessionDirectory: '/elsewhere' });
+    knowledge.resolve('');
+    expect(await sending).toBe('prompt');
+    expect(requests).toEqual([]);
+    expect(runCalls).toEqual([{
+      sessionId: 'session-a', commandId: 'queued-submit',
+      request: {
+        input: { text: '/next', attachments: [], context: [] },
+        options: { providerId: 'captured-provider', modelId: 'captured-model', agentId: 'captured-agent', variant: 'high', reasoningEffort: 'medium' },
+      },
+    }]);
+  });
+
+  test('awaits command expansion while preserving the submitted session and execution options', async () => {
+    const pending = deferred();
+    const started = deferred();
+    const requests = fakeFileResources({
+      expand: () => { started.resolve(); return pending.promise; },
+    });
+    const sending = route({ content: '/inspect', agent: 'build', variant: 'high', reasoningEffort: 'medium', commandId: 'submit-command' });
+    await started.promise;
+    expect(runCalls).toEqual([]);
+    useSessionUIStore.setState({ currentSessionId: 'session-b', currentSessionDirectory: '/elsewhere' });
+    useConfigStore.setState({ currentProviderId: 'other-provider', currentModelId: 'other-model', currentAgentName: 'other-agent' });
+    pending.resolve(Response.json({ kind: 'command', content: 'Native inspection', modelSelection: { providerId: 'command-provider', modelId: 'command-model' }, agentId: 'command-agent' }));
+    expect(await sending).toBe('command');
+    expect(requests[0].body).toEqual({ text: '/inspect' });
+    expect(runCalls).toEqual([{
+      sessionId: 'session-a', commandId: 'submit-command',
+      request: {
+        input: { text: 'Native inspection', attachments: [], context: [] },
+        options: { providerId: 'command-provider', modelId: 'command-model', agentId: 'command-agent', variant: 'high', reasoningEffort: 'medium' },
+      },
+    }]);
+  });
+
+  test('propagates worker expansion errors without admitting an unexpanded prompt', async () => {
+    const problem = {
+      type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Worker unavailable', status: 503,
+      detail: 'Native file expansion failed', code: 'SERVICE_UNAVAILABLE', retryable: true,
+    };
+    const requests = fakeFileResources({
+      expand: () => Response.json(problem, { status: 503 }),
+    });
+    await expect(route({ content: '/inspect auth' })).rejects.toMatchObject({ message: problem.detail, problem });
+    expect(requests[0].body).toEqual({ text: '/inspect auth' });
+    expect(runCalls).toEqual([]);
+  });
+
+  test('does not fall back to raw text when a native prompt template expansion fails', async () => {
+    const requests = fakeFileResources({
+      expand: () => new Response(null, { status: 503 }),
+    });
+    await expect(route({ content: '/release staging' })).rejects.toMatchObject({
+      problem: { code: 'SERVICE_UNAVAILABLE', status: 503, retryable: true },
+    });
+    expect(requests[0].body).toEqual({ text: '/release staging' });
+    expect(runCalls).toEqual([]);
+  });
+
+  test('rejects worker output completed after a runtime switch', async () => {
+    const pending = deferred();
+    const started = deferred();
+    fakeFileResources({
+      expand: () => { started.resolve(); return pending.promise; },
+    });
+    const sending = route({ content: '/inspect auth' });
+    await started.promise;
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://other.test', runtimeKey: 'other-native' });
+    pending.resolve(Response.json({ kind: 'command', content: 'Obsolete worker output' }));
+    await expect(sending).rejects.toBeInstanceOf(Error);
+    expect(runCalls).toEqual([]);
   });
 });
 
@@ -963,24 +1110,32 @@ describe('native prompt routing', () => {
     expect(followUp.mock.calls[0][2]).toBe('follow-up-submit');
     expect(runCalls).toEqual([]);
   });
-  test('expands the command cached for the addressed directory into a native prompt', async () => {
+  test('resolves commands from the addressed workspace rather than a stale directory cache', async () => {
     useCommandsStore.setState({ commandsByDirectory: {
-      '/repo': [{ name: 'inspect', template: 'Root $ARGUMENTS' }],
-      '/repo/worktree': [{ name: 'inspect', template: 'Worktree $ARGUMENTS' }],
+      '/repo': [{ commandId: 'root-inspect', name: 'inspect', description: '', content: 'Stale root $ARGUMENTS', scope: 'workspace', source: 'workspace', editable: true }],
+      '/repo/worktree': [{ commandId: 'worktree-inspect', name: 'inspect', description: '', content: 'Stale worktree $ARGUMENTS', scope: 'workspace', source: 'workspace', editable: true }],
     } });
+    const requests = fakeFileResources({
+      expand: () => Response.json({ kind: 'command', content: 'Worktree auth' }),
+    });
     expect(await route({ directory: '/repo/worktree', content: '/inspect auth' })).toBe('command');
+    expect(resolvedDirectories).toEqual(['/repo/worktree']);
+    expect(requests[0]).toEqual({ workspaceId: 'workspace-1', method: 'POST', body: { text: '/inspect auth' } });
     expect(runCalls[0].request.input.text).toBe('Worktree auth');
   });
-  test('keeps cached command precedence over a same-name skill', async () => {
-    useCommandsStore.setState({ commandsByDirectory: { '/repo': [{ name: 'inspect', template: 'Review $ARGUMENTS' }] } });
-    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ name: 'inspect', path: '/skills/inspect', scope: 'project', source: 'agents' }] } });
+  test('keeps worker-expanded text authoritative over a same-name skill', async () => {
+    const requests = fakeFileResources({
+      expand: () => Response.json({ kind: 'command', content: 'Review auth' }),
+    });
+    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ skillId: 'skill-inspect', name: 'inspect', description: '', content: 'Inspect instructions', scope: 'workspace', readOnly: false, source: 'project' }] } });
     expect(await route({ content: '/inspect auth' })).toBe('command');
+    expect(requests).toHaveLength(1);
     expect(runCalls[0].request.input.text).toBe('Review auth');
     expect(runCalls[0].request.input.context).toEqual([]);
   });
   test('expands a cached skill through the canonical catalog with arguments', async () => {
     seedCanonicalSession();
-    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ name: 'review', path: '/skills/review', scope: 'project', source: 'agents' }] } });
+    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ skillId: 'skill-review', name: 'review', description: '', content: 'Review instructions', scope: 'workspace', readOnly: false, source: 'project' }] } });
     expect(await route({ content: '/review auth', skills: { names: [] } })).toBe('prompt');
     expect(runCalls[0].request.input).toMatchObject({
       text: '/review auth', context: [{ kind: 'instruction', text: 'Expanded skill-review auth' }],
@@ -1005,7 +1160,7 @@ describe('native prompt routing', () => {
   });
   test('keeps attachments, knowledge, quoted context and synthetic instructions on command prompts', async () => {
     seedCanonicalSession();
-    useCommandsStore.setState({ commandsByDirectory: { '/repo': [{ name: 'inspect', template: 'Inspect $ARGUMENTS' }] } });
+    fakeFileResources({ expand: () => Response.json({ kind: 'command', content: 'Inspect auth' }) });
     const primary = { attachmentId: 'image-a', uri: 'attachment://image-a', name: 'image.png', mediaType: 'image/png', size: 12 };
     const quoted = { attachmentId: 'quote-a', uri: 'attachment://quote-a', name: 'source.txt', mediaType: 'text/plain', size: 5 };
     const metadata = { openchamberContext: { kind: 'file-quote', fileLabel: 'source.txt', quote: 'Selected code', text: 'Review this selection' } };
@@ -1193,15 +1348,19 @@ describe('goal objective native metadata', () => {
     const session = hostSession('session-a');
     registerWorkspaceDirectory(session.workspaceId, '/repo');
     useGlobalSessionsStore.getState().upsertSession(session);
-    useCommandsStore.setState({ commandsByDirectory: {
-      '/repo': [{ name: 'inspect', template: 'Root $ARGUMENTS' }],
-      '/repo/worktree': [{ name: 'inspect', template: 'Worktree $ARGUMENTS' }],
-    } });
+    useCommandsStore.setState({ commandsByDirectory: { '/repo/worktree': [{ commandId: 'worktree-inspect', name: 'inspect', description: '', content: 'Stale $ARGUMENTS', scope: 'workspace', source: 'workspace', editable: true }] } });
     stub(canonicalClient, 'getSessionMetadata', async sessionId => ({ sessionId, metadata: null, revision: '0' }));
     const writes = stub(canonicalClient, 'patchSessionMetadata', async (sessionId, patch) => ({ sessionId, metadata: patch.changes, revision: '1' }));
-    globalThis.fetch = async () => new Response(null, { status: 503 });
+    const requests = fakeFileResources({
+      expand: () => Response.json({ kind: 'command', content: 'Worktree auth' }),
+      fallback: () => new Response(null, { status: 503 }),
+    });
     useSessionGoalArmStore.getState().setArmed(true, null);
     await send('/inspect auth', { target: { runtimeKey: getRuntimeKey(), sessionId: 'session-a', directory: '/repo/worktree' } });
+    expect(resolvedDirectories).toEqual(['/repo/worktree']);
+    expect(requests).toEqual([{
+      workspaceId: 'workspace-1', method: 'POST', body: { text: '/inspect auth' },
+    }]);
     expect(writes.mock.calls[0][1].changes.openchamber.goal.objective).toBe('Worktree auth');
     expect(runCalls[0].request.input.text).toBe('Worktree auth');
     expect(runCalls[0].request.input.context.some(context => context.kind === 'synthetic')).toBe(true);
@@ -1210,14 +1369,14 @@ describe('goal objective native metadata', () => {
 });
 
 describe('canonical slash skill routing', () => {
-  test('routes a cached command without OpenCode discovery', async () => {
-    useCommandsStore.setState({ commandsByDirectory: { '/repo': [{ name: 'deploy', template: 'Deploy $ARGUMENTS' }] } });
+  test('routes a native command without a cached command or OpenCode discovery', async () => {
+    fakeFileResources({ expand: () => Response.json({ kind: 'command', content: 'Deploy staging' }) });
     expect(await route({ content: '/deploy staging' })).toBe('command');
     expect(runCalls[0].request.input.text).toBe('Deploy staging');
   });
   test('routes a cached skill through canonical expansion', async () => {
     seedCanonicalSession();
-    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ name: 'review', path: '/skills/review', scope: 'project', source: 'agents' }] } });
+    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ skillId: 'skill-review', name: 'review', description: '', content: 'Review instructions', scope: 'workspace', readOnly: false, source: 'project' }] } });
     expect(await route({ content: '/review auth', skills: { names: [] } })).toBe('prompt');
     expect(runCalls[0].request.input.context).toEqual([{ kind: 'instruction', text: 'Expanded skill-review auth' }]);
   });
@@ -1229,7 +1388,7 @@ describe('canonical slash skill routing', () => {
   });
   test('does not dispatch when canonical skill expansion fails', async () => {
     seedCanonicalSession();
-    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ name: 'review', path: '/skills/review', scope: 'project', source: 'agents' }] } });
+    useSkillsStore.setState({ skillsByDirectory: { '/repo': [{ skillId: 'skill-review', name: 'review', description: '', content: 'Review instructions', scope: 'workspace', readOnly: false, source: 'project' }] } });
     const failure = new Error('skill catalog unavailable');
     stub(canonicalClient, 'getSkillsCatalog', async () => { throw failure; });
     await expect(route({ content: '/review auth' })).rejects.toBe(failure);

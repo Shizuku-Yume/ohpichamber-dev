@@ -15,7 +15,6 @@ let _childStores: ChildStoreManager | null = null
 let _directory: string = ""
 let boundRuntimeKey = ""
 const registeredSessionDirectories = new Map<string, string>()
-const configListeners = new Set<(directory: string, config: State["config"]) => void>()
 let cachedSessionManager: ChildStoreManager | null = null
 let cachedSessionSlices = new Map<string, State["session"]>()
 let cachedSessionsById = new Map<string, State["session"][number]>()
@@ -56,25 +55,6 @@ export function getDirectoryState(directory?: string): State | undefined {
   return stores.getState(dir)
 }
 
-/** Read resolved directory configuration, if bootstrapped. */
-export function getSyncConfig(directory?: string): State["config"] | undefined {
-  const config = getDirectoryState(directory)?.config
-  return config && Object.keys(config).length > 0 ? config : undefined
-}
-
-export function subscribeToSyncConfigChanges(listener: (directory: string, config: State["config"]) => void): () => void {
-  configListeners.add(listener)
-  return () => {
-    configListeners.delete(listener)
-  }
-}
-
-export function emitSyncConfigChanged(directory: string, config: State["config"]): void {
-  if (!directory) return
-  for (const listener of configListeners) {
-    listener(directory, config)
-  }
-}
 
 /** Read sessions from current directory's child store */
 export function getSyncSessions(directory?: string): State["session"] {

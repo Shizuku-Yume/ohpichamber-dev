@@ -3,7 +3,7 @@ import { formatChangeRequestReference } from '@/lib/source-control/identity';
 import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 // sessionStore removed — currentSessionId comes from useSessionUIStore
 import { useConfigStore } from '@/stores/useConfigStore';
-import { filterVisibleAgents } from '@/lib/opencode/model';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { createMessageQueueTarget, getMessageQueueKey, useMessageQueueStore, type QueuedContextPart, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
@@ -28,7 +28,9 @@ import * as sessionActions from '@/sync/session-actions';
 const GuestAttachDialog = React.lazy(() => import('@/components/layout/GuestAttachDialog').then((module) => ({ default: module.GuestAttachDialog })));
 import type { AttachIssueRequest } from '@openchamber/sdk';
 import { getInlineCommentDraftKey, useInlineCommentDraftStore, type InlineCommentDraft, type InlineCommentDraftTarget } from '@/stores/useInlineCommentDraftStore';
-import { useSnippetsStore } from '@/stores/useSnippetsStore';
+import { selectSnippetsForDirectory, useSnippetsStore } from '@/stores/useSnippetsStore';
+import { expandNativeFileResource, expandWorkspaceSkillNames } from '@/api/fileResourceExpansion';
+import type { FileResourceExpandResult } from '@openchamber/agent-contract';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { startReviewFlow } from '@/lib/reviewFlow';
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
@@ -55,7 +57,6 @@ import { AutoReviewStrip } from './AutoReviewStrip';
 import type { FileMentionHandle } from './FileMentionAutocomplete';
 import type { CommandAutocompleteHandle, CommandInfo } from './CommandAutocomplete';
 import type { SkillAutocompleteHandle } from './SkillAutocomplete';
-import type { SnippetAutocompleteHandle } from './SnippetAutocomplete';
 import { cn } from "@/lib/utils";
 import { ModelControls } from './ModelControls';
 import { parseAgentMentions } from '@/lib/messages/agentMentions';
@@ -75,7 +76,7 @@ import { useHardwareKeyboard } from '@/lib/hardwareKeyboard';
 import { isCapacitorApp } from '@/lib/platform';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { setNativeImagePasteEnabled, subscribeToNativeImagePastes } from '@/lib/nativeImagePaste';
-import { getCycledPrimaryAgentName, type MobileControlsPanel } from './mobileControlsUtils';
+import { getCycledAgentId, type MobileControlsPanel } from './mobileControlsUtils';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
@@ -450,7 +451,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const mentionRef = React.useRef<FileMentionHandle>(null);
     const commandRef = React.useRef<CommandAutocompleteHandle>(null);
     const skillRef = React.useRef<SkillAutocompleteHandle>(null);
-    const snippetRef = React.useRef<SnippetAutocompleteHandle>(null);
     // Ref to track current message value without triggering re-renders in effects
     const messageRef = React.useRef(message);
     const dictationSendInFlightRef = React.useRef(false);
@@ -595,11 +595,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const configAgentName = useConfigStore((state) => state.currentAgentName);
     const currentAgentName = pinnedComposerSelection?.agent ?? configAgentName;
     const setAgent = useConfigStore((state) => state.setAgent);
-    // Filtered here rather than through `getVisibleAgents()`, which returns a
-    // new array on every call: that identity would rebuild the language
-    // context, and with it re-tokenize the editor, on every keystroke.
-    const allAgents = useConfigStore((state) => state.agents);
-    const agents = React.useMemo(() => filterVisibleAgents(allAgents), [allAgents]);
+    // Preserve the directory roster reference while typing so the editor's
+    // language context does not rebuild on every keystroke.
+    const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
     const btwSavedVariant = useSelectionStore(React.useCallback(
         (state) => btwComposerSessionId && btwAgentSelection && btwModelSelection
             ? state.getAgentModelVariantForSession(
@@ -848,6 +846,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     // @files are.
     const availableCommands = useCommandsStore((s) => selectCommandsForDirectory(s, currentDirectory));
     const availableSkills = useSkillsStore((s) => selectSkillsForDirectory(s, currentDirectory));
+    const availableSnippets = useSnippetsStore(state => selectSnippetsForDirectory(state, currentDirectory));
     const knownSlashNames = React.useMemo(() => {
         const names = new Set<string>([
             'init', 'review', 'undo', 'redo', 'timeline', 'compact', 'fork', 'btw', 'summary', 'workspace-review', 'plan-feature', 'craft-goal', 'schedule-task', 'catch-up', 'debug', 'weigh', 'explore',
@@ -861,9 +860,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         [availableSkills],
     );
 
-    // Extension slash commands. Built-ins and OpenCode commands are reserved:
-    // an extension command with one of those names is ignored.
-    const guestCommands = useGuestCommands(knownSlashNames);
+    const reservedSlashNames = React.useMemo(() => new Set([
+        ...knownSlashNames, ...availableSnippets.map(template => template.name.toLowerCase()),
+    ]), [availableSnippets, knownSlashNames]);
+    const guestCommands = useGuestCommands(reservedSlashNames);
     const knownSlashNamesWithGuests = React.useMemo(() => {
         if (guestCommands.length === 0) return knownSlashNames;
         const names = new Set(knownSlashNames);
@@ -871,15 +871,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         return names;
     }, [guestCommands, knownSlashNames]);
 
-    const availableSnippets = useSnippetsStore((s) => s.snippets);
     const knownSnippetTriggers = React.useMemo(() => {
         const triggers = new Set<string>();
         for (const snippet of availableSnippets) {
-            triggers.add(snippet.name.toLowerCase());
-            for (const alias of snippet.aliases ?? []) triggers.add(alias.toLowerCase());
+            if (!knownSlashNames.has(snippet.name.toLowerCase())) triggers.add(snippet.name.toLowerCase());
         }
         return triggers;
-    }, [availableSnippets]);
+    }, [availableSnippets, knownSlashNames]);
 
     const attachmentFilenames = React.useMemo(
         () => attachedFiles.map((file) => file.filename),
@@ -1377,17 +1375,29 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             { listLocalDirectory: async (directory) => (await runtimeFiles.listDirectory(directory)).entries },
         );
         const availableSkillNames = new Set(
-            selectSkillsForDirectory(useSkillsStore.getState(), currentDirectory).map((skill) => skill.name),
+            selectSkillsForDirectory(useSkillsStore.getState(), queueTarget.directory).map((skill) => skill.name),
         );
         const queuedSkillNames = collectInlineSkillMentions(sanitizedText, availableSkillNames);
-        const skillInstruction = queueSessionId
-            ? await expandCanonicalSkills(queueSessionId, queuedSkillNames)
-            : null;
-        // snippets expand now; `content` keeps them for editing.
-        const textToQueue = await useSnippetsStore.getState().expandText(sanitizedText).catch((error) => {
-            console.warn('[queue] Failed to expand snippets, queueing original text:', error);
-            return sanitizedText;
-        });
+        let skillInstruction: string | null;
+        // Capture native expansion and bindings with the queued selection.
+        let expandedResource: FileResourceExpandResult | null;
+        try {
+            skillInstruction = queueSessionId
+                ? await expandCanonicalSkills(queueSessionId, queuedSkillNames)
+                : await expandWorkspaceSkillNames(queueTarget.directory, queuedSkillNames);
+            expandedResource = await expandNativeFileResource(sanitizedText, queueTarget.directory);
+            const invocation = expandedResource ? null : /^\/([^\s]+)(?:\s([\s\S]*))?$/.exec(sanitizedText);
+            if (invocation && availableSkillNames.has(invocation[1])) {
+                const slashSkill = queueSessionId
+                    ? await expandCanonicalSkills(queueSessionId, [invocation[1]], invocation[2] ?? '')
+                    : await expandWorkspaceSkillNames(queueTarget.directory, [invocation[1]], invocation[2] ?? '');
+                skillInstruction = [skillInstruction, slashSkill].filter(Boolean).join('\n\n');
+            }
+        } catch (error) {
+            toast.error(getSubmitErrorMessage(error, t('chat.queuedMessage.toast.queueFailed')));
+            return;
+        }
+        const textToQueue = expandedResource?.content ?? sanitizedText;
 
         // Everything attached to the composer leaves with the message: the
         // chips are part of what was queued, and come back if it is edited.
@@ -1396,7 +1406,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const drafts = draftTarget ? consumeDrafts(draftTarget) : [];
         const linked = linkedReferences;
         // Queued context is delivered as captured, so comment snippets expand now.
-        const expandedDrafts = await expandCommentSnippets(drafts, useSnippetsStore.getState().expandText);
+        let expandedDrafts: InlineCommentDraft[];
+        try {
+            expandedDrafts = await expandCommentSnippets(drafts, text => useSnippetsStore.getState().expandText(text, queueTarget.directory));
+        } catch (error) {
+            if (draftTarget) useInlineCommentDraftStore.getState().restoreDrafts(draftTarget, drafts);
+            if (syntheticParts.length) useInputStore.getState().setPendingSyntheticParts(syntheticParts, mailboxTarget);
+            toast.error(getSubmitErrorMessage(error, t('chat.queuedMessage.toast.queueFailed')));
+            return;
+        }
         const context = buildComposerContext({
             inlineComments: expandedDrafts,
             syntheticTexts: syntheticParts.map((part) => part.text),
@@ -1422,6 +1440,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             composerRef.current?.focus();
         }
 
+        const queuedProviderId = expandedResource?.modelSelection?.providerId ?? currentProviderId;
+        const queuedModelId = expandedResource?.modelSelection?.modelId ?? currentModelId;
         try {
             await addToQueue(queueTarget, {
                 content: messageToQueue,
@@ -1429,10 +1449,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 agentMention: mention?.name,
                 attachments: attachmentsToQueue.length > 0 ? attachmentsToQueue : undefined,
                 context: context.length > 0 ? context : undefined,
-                sendConfig: currentProviderId && currentModelId ? {
-                    providerID: currentProviderId,
-                    modelID: currentModelId,
-                    agent: currentAgentName ?? undefined,
+                sendConfig: queuedProviderId && queuedModelId ? {
+                    providerID: queuedProviderId,
+                    modelID: queuedModelId,
+                    agent: expandedResource?.agentId ?? currentAgentName ?? undefined,
                     variant: currentVariant ?? undefined,
                 } : undefined,
             });
@@ -1697,11 +1717,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const queuedProjection = queuedMessageId
             ? composerQueuedMessages.filter((message) => message.id === queuedMessageId)
             : composerQueuedMessages;
-        const capturedSendConfig = queuedOnly ? queuedProjection[0]?.sendConfig : undefined;
+        const capturedSendConfig = queuedProjection[0]?.sendConfig;
         const providerIdToSend = capturedSendConfig?.providerID ?? (isBtwActive ? effectiveBtwSelection.model?.providerId : currentProviderId);
         const modelIdToSend = capturedSendConfig?.modelID ?? (isBtwActive ? effectiveBtwSelection.model?.modelId : currentModelId);
-        const agentNameToSend = capturedSendConfig?.agent ?? (isBtwActive ? effectiveBtwSelection.agent : currentAgentName);
-        const variantToSend = capturedSendConfig?.variant ?? (isBtwActive ? effectiveBtwSelection.variant : currentVariant);
+        const agentNameToSend = capturedSendConfig ? capturedSendConfig.agent : (isBtwActive ? effectiveBtwSelection.agent : currentAgentName);
+        const variantToSend = capturedSendConfig ? capturedSendConfig.variant : (isBtwActive ? effectiveBtwSelection.variant : currentVariant);
 
         // The isolated space the message targets, if any: a session by its directory, a draft by
         // the creation request it still waits on or by its directory.
@@ -1734,7 +1754,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // it stays in the input with the reason and the way to the grant dialog.
         const spaceRefusal = spaceTarget ? spaceModelRefusal(spaceTarget, providerIdToSend) : null;
         if (spaceRefusal) {
-            const provider = useConfigStore.getState().providers.find((entry) => entry.id === spaceRefusal.providerId)?.name ?? spaceRefusal.providerId;
+            const provider = useConfigStore.getState().providers.find((entry) => entry.providerId === spaceRefusal.providerId)?.name ?? spaceRefusal.providerId;
             toast.error(spaceRefusal.reason === 'domain_blocked'
                 ? t('spaces.draft.modelDomainBlocked', { domain: spaceRefusal.domain })
                 : spaceRefusal.reason === 'needs_again'
@@ -1853,6 +1873,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             historySubmissions?: InputHistorySubmission[];
             delivery?: 'steer';
             skills?: CanonicalSkillMentions;
+            fileResourcesExpanded?: boolean;
         } | undefined;
         if (isBtwActive && btwSessionId && btwDirectory) {
             sendMessageOptions = {
@@ -1943,7 +1964,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
         // Comments become synthetic context, which the send-time expansion
         // below skips, so their own words expand here.
-        const expandedDrafts = await expandCommentSnippets(drafts, useSnippetsStore.getState().expandText);
+        let expandedDrafts: InlineCommentDraft[];
+        try {
+            expandedDrafts = await expandCommentSnippets(drafts, text => useSnippetsStore.getState().expandText(text, currentDirectory));
+        } catch (error) {
+            restoreConsumedInput();
+            toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.messageSendFailed')));
+            return;
+        }
 
         const outgoing = buildOutgoingMessage({
             queued: queuedMessagesToSend,
@@ -1970,8 +1998,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             collectSkillNames: (text) => collectInlineSkillMentions(text, availableSkillNames),
         });
 
-        let primaryText = outgoing.primaryText;
+        const primaryText = outgoing.primaryText;
         const { primaryAttachments, additionalParts, agentMentionName, skillNames } = outgoing;
+        if (outgoing.primaryFileResourcesExpanded) sendMessageOptions = { ...sendMessageOptions, fileResourcesExpanded: true };
 
         if (outgoing.isEmpty) return;
 
@@ -2064,25 +2093,26 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
 
         const expandOutgoingSnippets = async () => {
-            try {
-                const expandText = useSnippetsStore.getState().expandText;
-                primaryText = await expandText(primaryText);
-                for (const part of additionalParts) {
-                    if (!part.synthetic) part.text = await expandText(part.text);
-                }
-            } catch (error) {
-                console.warn('[ChatInput] Failed to expand snippets, sending original text:', error);
+            const expandText = useSnippetsStore.getState().expandText;
+            for (const part of additionalParts) {
+                if (!part.synthetic && !part.fileResourcesExpanded) part.text = await expandText(part.text, currentDirectory);
             }
         };
         let pendingBtwSend: symbol | null = null;
-        if (isBtwActive && btwPanel.pending && currentSessionId) {
-            pendingBtwSend = await preparePendingBtwSend(currentSessionId, submitRuntimeKey, expandOutgoingSnippets);
-            if (!pendingBtwSend) {
-                if (getRuntimeKey() !== submitRuntimeKey) restoreComposerText();
-                return;
+        try {
+            if (isBtwActive && btwPanel.pending && currentSessionId) {
+                pendingBtwSend = await preparePendingBtwSend(currentSessionId, submitRuntimeKey, expandOutgoingSnippets);
+                if (!pendingBtwSend) {
+                    if (getRuntimeKey() !== submitRuntimeKey) restoreComposerText();
+                    return;
+                }
+            } else {
+                await expandOutgoingSnippets();
             }
-        } else {
-            await expandOutgoingSnippets();
+        } catch (error) {
+            restoreConsumedInput();
+            toast.error(getSubmitErrorMessage(error, t('chat.chatInput.toast.messageSendFailed')));
+            return;
         }
         const ownsPendingBtwSend = () => Boolean(pendingBtwSend && currentSessionId
             && useBtwStore.getState().byParent[currentSessionId]?.pendingSend === pendingBtwSend);
@@ -2117,6 +2147,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     providerId: providerIdToSend,
                     modelId: modelIdToSend,
                     agentId: agentNameToSend,
+                    fileResourcesExpanded: outgoing.primaryFileResourcesExpanded,
                     attachments: sendableAttachments,
                     additionalParts,
                     skills: sendMessageOptions?.skills,
@@ -2394,9 +2425,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
         const autocomplete = openAutocomplete === 'command' ? commandRef.current
             : openAutocomplete === 'skill' ? skillRef.current
-                : openAutocomplete === 'snippet' ? snippetRef.current
-                    : openAutocomplete === 'mention' ? mentionRef.current
-                        : null;
+                : openAutocomplete === 'mention' ? mentionRef.current
+                    : null;
         const autocompleteKey = getDropdownNavigationKey(e) ?? e.key;
         if (autocomplete && (autocompleteKey === 'Enter' || autocompleteKey === 'ArrowUp' || autocompleteKey === 'ArrowDown' || autocompleteKey === 'Escape' || autocompleteKey === 'Tab')) {
             e.preventDefault();
@@ -2551,7 +2581,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // Auto hides the agent control, so the shortcut must not change a
         // choice the user cannot see.
         if (isAutoModel(currentProviderId, currentModelId)) return;
-        const nextAgentName = getCycledPrimaryAgentName(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
+        const nextAgentName = getCycledAgentId(agents, currentAgentName, direction, useUIStore.getState().favoriteAgents);
         if (!nextAgentName) return;
 
         // A pinned column's agent is its own session's choice only.
@@ -3154,24 +3184,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         composerRef.current?.focus();
     });
 
-    const handleSnippetSelect = useStableHandler((_snippet: unknown, trigger: string) => {
-        const textarea = composerRef.current;
-        const cursorPosition = textarea?.getSelection().start ?? message.length;
-        const textBeforeCursor = message.substring(0, cursorPosition);
-        const lastHashSymbol = textBeforeCursor.lastIndexOf('#');
-        const startIndex = lastHashSymbol !== -1 ? lastHashSymbol : cursorPosition;
-        const newMessage = `${message.substring(0, startIndex)}#${trigger} ${message.substring(cursorPosition)}`;
-        setMessage(newMessage);
-        const nextCursor = startIndex + trigger.length + 2;
-        requestAnimationFrame(() => {
-            if (composerRef.current) {
-                composerRef.current.setSelection(nextCursor);
-            }
-            updateAutocompleteState(newMessage, nextCursor);
-        });
-        closeAutocomplete();
-        composerRef.current?.focus();
-    });
 
     const handleCommandSelect = useStableHandler((command: CommandInfo) => {
         if (command.name === 'btw' && currentSessionId) {
@@ -4057,11 +4069,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         overlayPosition={isDesktopExpanded ? autocompleteOverlayPosition : null}
                         commandRef={commandRef}
                         skillRef={skillRef}
-                        snippetRef={snippetRef}
                         mentionRef={mentionRef}
                         onCommandSelect={handleCommandSelect}
                         onSkillSelect={handleSkillSelect}
-                        onSnippetSelect={handleSnippetSelect}
                         onFileSelect={handleFileSelect}
                         onAgentSelect={handleAgentSelect}
                         onClose={closeAutocomplete}

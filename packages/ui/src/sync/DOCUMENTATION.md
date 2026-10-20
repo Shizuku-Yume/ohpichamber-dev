@@ -95,6 +95,22 @@ Workspace resolution and session discovery retain bounded startup retries. Canon
 
 Task 13 establishes the native canonical sync core and freezes shared contracts. Downstream leaf consumers (chat timeline, composer, sidebar tree items, settings) are migrated in Tasks 14, 15, and 16. This documentation update describes the shared core contracts without claiming downstream leaf migration is finished.
 
+## Native authored file resources
+
+Commands, prompt templates, and authored skill files use the namespaced `CanonicalClient.fileResources` contract. Directory-scoped stores retain authoritative catalogs and decimal revisions; a failed read does not clear the previous catalog, and runtime switches invalidate pending publication. Native resource IDs, source, grouping, argument hints, Markdown bodies, `agentId`, and `modelSelection` remain canonical rather than OpenCode config projections. Inherited resources are read-only.
+
+The composer and goal objective use `api/fileResourceExpansion.ts` to submit a leading `/name` input to the shared worker pipeline.
+The renderer forwards raw text, never substitutes `$ARGUMENTS` or positional placeholders, and never executes the native SDK.
+The worker runs native slash-command expansion followed by native prompt-template expansion exactly once, classifying the result as command, template or unmatched text—even when matched output equals the input.
+Top-level native command bindings take precedence over template bindings; selected `agentId`/`modelSelection` override the captured prompt selection. Goal preparation reuses that result for delivery.
+Queue admission captures expanded text, skills and bindings. Queued provenance prevents a second pass when captured output itself starts with a slash.
+Context comments support leading native `/template` invocation; legacy `#snippet` syntax and aliases are not interpreted. Expansion failures remain errors instead of sending a silently unexpanded invocation.
+
+Native session skills still expand through the addressed root's active skills catalog revision and worker generation; workspace authoring IDs are not substitutes for active-session skill IDs. Settings authoring commits remain Host-owned, with persisted source revision distinct from worker apply results. Skill links open the canonical Settings resource rather than guessing Host filesystem paths.
+
+Runtime parity: Web/PWA and Electron use the authenticated Host Canonical gateway. Hosted mobile and Capacitor use the same configured runtime gateway and schemas. All four surfaces keep native parsing and expansion in the Bun worker; none imports SDK code or selects a localhost transport.
+
+
 ## Event pipeline and sequence gating
 
 The event pipeline (`event-pipeline.ts`) connects to the Host's canonical SSE endpoint via `canonicalClient.subscribeSessionEvents(sessionId, cursor, onEvent, onInvalidated, onError)`.
@@ -156,6 +172,13 @@ The directory event reducer (`applyDirectoryEvent` in `event-reducer.ts`) enforc
 - **Reconnect pacing**: Recovery uses consecutive-failure exponential backoff. Offline/background waits and permanent canonical 4xx failures use the long cap; 408, 429, and resync-required responses remain transient. Duplicate callbacks and obsolete recovery completions cannot schedule a second recovery owner.
 - **Resume signals**: Online, visibility becoming visible, persisted-page restore, system resume, and authentication returning to `ok` interrupt pending recovery. Directory bootstrap retry/revalidation uses the existing priority scheduler. Offline invalidates live status instead of leaving active indicators behind.
 - **Observed run outcomes**: Accepted matching `run.completed` and `run.failed` events retain completion/error notifications and bounded error summaries. Duplicate events do not add a second notification; historical snapshots do not invent unseen activity.
+
+### Native tool completion and Host refresh hints
+
+Accepted live events in `sync-context.tsx` feed canonical tool parts to `sessionEvents` and `fileTreeChanges`. Calls and results keep separate `partId` identities and pair by native `toolCallId`; a call's terminal status and its later result produce one completion hint. Duplicate or sequence-gapped events do not invalidate Host state, and historical snapshot installation does not replay tool completion side effects.
+
+Native `bash`, `edit`, and `write` completion hints invalidate Host Git status with a 250 ms per-directory debounce. Denied and read-only calls do not produce mutation hints. File-tree writes use their native `path`; raw edit modes and commands may touch unnamed paths, so their whole-tree hints coalesce until `run.completed`, `run.failed`, or `run.cancelled`. Native transcripts have no legacy step file-list snapshot. Runtime endpoint reset cancels pending refresh timers and clears file-tree pending/deduplication state, so old-runtime paths cannot refresh the new Host.
+
 
 ## Independent Host metadata and durable queue
 

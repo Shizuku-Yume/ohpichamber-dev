@@ -47,8 +47,9 @@ describe('tokenizeComposer — reference constructs', () => {
         expect(styled('run /nosuchthing now')).toEqual([]);
     });
 
-    test('a known snippet trigger is styled as a snippet', () => {
-        expect(styled('end with #sig')).toEqual([['#sig', 'mentionSnippet']]);
+    test('native prompt template invocation is styled without interpreting legacy hashes', () => {
+        expect(styled('/sig')).toEqual([['/sig', 'mentionSnippet']]);
+        expect(styled('end with #sig')).toEqual([]);
     });
 
     test('an attachment citation is styled as a file', () => {

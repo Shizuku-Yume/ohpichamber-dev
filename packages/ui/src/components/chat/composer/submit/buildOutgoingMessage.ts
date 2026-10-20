@@ -27,10 +27,13 @@ export interface OutgoingPart {
     synthetic?: boolean;
     /** Structured context (see contextParts.ts), persisted with the part. */
     metadata?: ContextPartMetadata;
+    /** This queued text already passed through native expansion at capture time. */
+    fileResourcesExpanded?: boolean;
 }
 
 export interface OutgoingMessage {
     primaryText: string;
+    primaryFileResourcesExpanded: boolean;
     primaryAttachments: AttachedFile[];
     additionalParts: OutgoingPart[];
     /** The agent the first `@agent` mention routed to, if any. */
@@ -153,7 +156,7 @@ export function buildOutgoingMessage(
             primaryText = queued.text;
             primaryAttachments = attachments;
         } else {
-            additionalParts.push({ text: queued.text, attachments });
+            additionalParts.push({ text: queued.text, attachments, fileResourcesExpanded: true });
         }
         additionalParts.push(...queuedContextToParts(queued.context ?? []));
     });
@@ -182,6 +185,7 @@ export function buildOutgoingMessage(
 
     return {
         primaryText,
+        primaryFileResourcesExpanded: input.queued.length > 0,
         primaryAttachments,
         additionalParts,
         agentMentionName,
@@ -274,10 +278,9 @@ export function queuedContextToParts(context: readonly QueuedContextPart[]): Out
 }
 
 /**
- * Expand `#snippet` references in the words of each attached comment, before
- * the comments become synthetic context. Only `text` expands: the quoted code
- * or message the comment points at is the user's evidence and stays verbatim.
- * A comment whose expansion fails is sent as written.
+ * Expand native `/template` invocations in the words of each attached comment,
+ * before comments become synthetic context. Quoted code stays verbatim.
+ * Worker failures reject the submission so the composer can restore its input.
  */
 export async function expandCommentSnippets(
     drafts: readonly InlineCommentDraft[],
@@ -285,7 +288,7 @@ export async function expandCommentSnippets(
 ): Promise<InlineCommentDraft[]> {
     return Promise.all(drafts.map(async (draft) => {
         if (!draft.text) return draft;
-        const text = await expandText(draft.text).catch(() => draft.text);
+        const text = await expandText(draft.text);
         return text === draft.text ? draft : { ...draft, text };
     }));
 }

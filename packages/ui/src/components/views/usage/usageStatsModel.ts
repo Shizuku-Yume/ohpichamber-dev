@@ -1,4 +1,4 @@
-import type { UsageStats, UsageTokens } from '@/lib/opencode/session-stats';
+import type { UsageStats, UsageTokens } from '@openchamber/agent-contract';
 
 export type UsageRange = '7d' | '30d' | '90d' | 'all';
 
@@ -11,9 +11,8 @@ const MAX_DAILY_BARS = 92;
 
 /**
  * Start of the range in epoch ms: local midnight, so "7 days" means today plus
- * the six calendar days before it, matching the day buckets OpenCode builds
- * in the viewer's time zone. `all` has no start; OpenCode begins at the
- * oldest message.
+ * the six calendar days before it, matching the worker's day buckets
+ * in the viewer's time zone. `all` begins at the oldest recorded event.
  */
 export function rangeStart(range: UsageRange, now: Date): number | undefined {
   if (range === 'all') return undefined;
@@ -40,7 +39,7 @@ export type ActivitySeries = { unit: 'day' | 'week'; bars: ActivityBar[]; max: n
 
 /**
  * Every calendar day of the report range, active or not, so gaps read as
- * gaps. OpenCode lists active days only. Local dates are used because the
+ * gaps. The worker lists active days only. Local dates are used because the
  * request sends the viewer's own time zone.
  */
 export function buildActivitySeries(stats: Pick<UsageStats, 'range' | 'activity'>): ActivitySeries {
@@ -102,6 +101,7 @@ export const costPerMillionTokens = (cost: number, tokens: number): number | nul
 /** Share of reasoning inside everything the model produced; null when it
  * produced nothing. */
 export const reasoningShare = (tokens: Pick<UsageTokens, 'output' | 'reasoning'>): number | null => {
+  if (tokens.reasoning === null) return null;
   const produced = tokens.output + tokens.reasoning;
   return produced > 0 ? tokens.reasoning / produced : null;
 };
@@ -120,7 +120,7 @@ interface TokenSegment {
  * list so legend order is stable; renderers skip them. */
 export const tokenSegments = (tokens: UsageTokens): TokenSegment[] => [
   { key: 'input', value: tokens.input },
-  { key: 'output', value: tokens.output + tokens.reasoning },
+  { key: 'output', value: tokens.output + (tokens.reasoning ?? 0) },
   { key: 'cacheRead', value: tokens.cacheRead },
   { key: 'cacheWrite', value: tokens.cacheWrite },
 ];

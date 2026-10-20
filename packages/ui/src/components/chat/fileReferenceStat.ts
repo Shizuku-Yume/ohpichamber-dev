@@ -33,13 +33,17 @@ export const fileReferenceExists = (resolvedPath: string, effectiveDirectory: st
   const request = new Promise<boolean>((resolve) => {
     const run = () => {
       activeFileReferenceStatCount += 1;
-      void runtimeFetch(`/api/fs/stat?path=${encodeURIComponent(normalizedPath)}&optional=true`, {
+      void runtimeFetch('/api/fs/stat', {
         method: 'GET',
+        query: {
+          path: normalizedPath,
+          optional: 'true',
+          // The stat route resolves the workspace from this directory. Without
+          // it the server falls back to the browsed lastDirectory, which
+          // rejects session-local files with 400 whenever the two differ.
+          directory: effectiveDirectory || undefined,
+        },
         cache: 'no-store',
-        // The stat route resolves the workspace from this header. Without it
-        // the server falls back to the browsed lastDirectory, which rejects
-        // session-local files with 400 whenever the two directories differ.
-        headers: effectiveDirectory ? { 'x-opencode-directory': effectiveDirectory } : undefined,
       })
         .then(async (response) => {
           if (!response.ok) {
@@ -92,10 +96,10 @@ export const findUniqueFileByName = (name: string, effectiveDirectory: string): 
   const cached = FILE_NAME_LOOKUP_CACHE.get(cacheKey);
   if (cached) return cached;
 
-  const request = runtimeFetch(`/api/fs/find-by-name?name=${encodeURIComponent(name)}`, {
+  const request = runtimeFetch('/api/fs/find-by-name', {
     method: 'GET',
+    query: { name, directory: effectiveDirectory },
     cache: 'no-store',
-    headers: { 'x-opencode-directory': effectiveDirectory },
   })
     .then(async (response) => {
       if (!response.ok) return null;

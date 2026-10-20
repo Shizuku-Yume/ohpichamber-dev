@@ -1,5 +1,4 @@
-import { isQuestionTool, normalizeToolName, type ToolName } from '@/lib/opencode/tools';
-import { ACTIVITY_STANDALONE_TOOL_NAMES } from './constants';
+import { isQuestionTool, isSubagentTool } from '@/lib/toolHelpers';
 import type {
     ChatMessageEntry,
     TurnActivityGroup,
@@ -7,9 +6,6 @@ import type {
     TurnPartRecord,
 } from './types';
 
-const isStandaloneTool = (toolName: ToolName): boolean => {
-    return ACTIVITY_STANDALONE_TOOL_NAMES.has(normalizeToolName(toolName));
-};
 
 const buildTurnPartRecord = (
     turnId: string,
@@ -81,7 +77,7 @@ export const projectTurnActivity = (input: ProjectActivityInput): ProjectActivit
                 : undefined;
             const partId = part.partId;
             const standaloneTool = (part.type === 'tool_call' || part.type === 'tool_result')
-                && isStandaloneTool(part.toolName);
+                && isSubagentTool(part.toolName);
             if (standaloneTool && (part.type === 'tool_call'
                 || (part.type === 'tool_result' && !standaloneCallIds.has(part.toolCallId)))) {
                 standaloneCallIds.add(part.toolCallId);
@@ -123,7 +119,7 @@ export const projectTurnActivity = (input: ProjectActivityInput): ProjectActivit
             };
             activityParts.push(activity);
 
-            if (kind === 'tool' && standaloneTool) {
+            if (kind === 'tool' && standaloneTool && taskMessageById.has(partId)) {
                 return;
             }
 

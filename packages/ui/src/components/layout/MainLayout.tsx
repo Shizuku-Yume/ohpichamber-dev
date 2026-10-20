@@ -36,7 +36,7 @@ const loadSettingsWindow = () => import('@/components/views/SettingsWindow').the
 // the store once mounted, and stays mounted after its first open.
 const loadCommandPalette = () => import('../ui/CommandPalette').then((m) => m.CommandPalette);
 const loadHelpDialog = () => import('../ui/HelpDialog').then((m) => m.HelpDialog);
-const loadOpenCodeStatusDialog = () => import('../ui/OpenCodeStatusDialog').then((m) => m.OpenCodeStatusDialog);
+const loadRuntimeStatusDialog = () => import('../ui/RuntimeStatusDialog').then((m) => m.RuntimeStatusDialog);
 const loadRunOverview = () => import('@/components/multirun/RunOverview').then((m) => m.RunOverview);
 const loadScheduledTasksDialog = () => import('@/components/session/ScheduledTasksDialog').then((m) => m.ScheduledTasksDialog);
 const loadArchiveView = () => import('@/components/views/ArchiveView').then((m) => m.ArchiveView);
@@ -109,7 +109,7 @@ export const MainLayout: React.FC = () => {
     const isSpacesPageOpen = useUIStore((state) => state.isolatedSpacesEnabled && state.spacesPageProjectId !== null);
     const isCommandPaletteOpen = useUIStore((state) => state.isCommandPaletteOpen);
     const isHelpDialogOpen = useUIStore((state) => state.isHelpDialogOpen);
-    const isOpenCodeStatusDialogOpen = useUIStore((state) => state.isOpenCodeStatusDialogOpen);
+    const isRuntimeStatusDialogOpen = useUIStore((state) => state.isRuntimeStatusDialogOpen);
     const isSpaceAccessDialogOpen = useSpacesStore((state) => state.accessDialog !== null);
     const isSpaceApplyDialogOpen = useSpacesStore((state) => state.applyDialog !== null);
     const isSpaceSetupOutputDialogOpen = useSpacesStore((state) => state.setupOutputDialog !== null);
@@ -164,7 +164,7 @@ export const MainLayout: React.FC = () => {
             >
                 <OnDemand needed={isCommandPaletteOpen} load={loadCommandPalette} onFailure={() => useUIStore.getState().setCommandPaletteOpen(false)} />
                 <OnDemand needed={isHelpDialogOpen} load={loadHelpDialog} onFailure={() => useUIStore.getState().setHelpDialogOpen(false)} />
-                <OnDemand needed={isOpenCodeStatusDialogOpen} load={loadOpenCodeStatusDialog} onFailure={() => useUIStore.getState().setOpenCodeStatusDialogOpen(false)} />
+                <OnDemand needed={isRuntimeStatusDialogOpen} load={loadRuntimeStatusDialog} onFailure={() => useUIStore.getState().setRuntimeStatusDialogOpen(false)} />
                 <RunAutoFusion />
                 <SessionDialogs />
                 {isolatedSpacesEnabled ? (

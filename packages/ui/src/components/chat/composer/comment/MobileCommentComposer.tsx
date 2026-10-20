@@ -15,7 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { useSnippetsStore } from '@/stores/useSnippetsStore';
+import { selectSnippetsForDirectory, useSnippetsStore } from '@/stores/useSnippetsStore';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import type { Theme } from '@/types/theme';
 import { composerAutoCorrect } from '../editor/autocorrect';
 import { ComposerEditor, type ComposerEditorHandle } from '../editor/ComposerEditor';
@@ -25,8 +26,8 @@ import { mobileCommentQuotePreview, type MobileCommentDraft } from './mobileComm
 const EMPTY_NAMES: ReadonlySet<string> = new Set();
 
 /**
- * Comments are prose with one exception: `#snippet` references, which expand
- * when the message is sent. Agents, commands and files do not resolve here.
+ * Comments support native `/template` invocations, expanded by the worker
+ * when sent. Agents, commands and files do not resolve here.
  */
 const commentLanguageContext = (knownSnippetTriggers: ReadonlySet<string>): ComposerLanguageContext => ({
     inputMode: 'normal',
@@ -72,12 +73,12 @@ export interface MobileCommentComposerProps {
 export function MobileCommentComposer({ draft, theme: currentTheme, handlers }: MobileCommentComposerProps) {
     const { t } = useI18n();
     const editorRef = React.useRef<ComposerEditorHandle>(null);
-    const snippets = useSnippetsStore((state) => state.snippets);
+    const directory = useEffectiveDirectory();
+    const snippets = useSnippetsStore(state => selectSnippetsForDirectory(state, directory));
     const languageContext = React.useMemo(() => {
         const triggers = new Set<string>();
         for (const snippet of snippets) {
             triggers.add(snippet.name.toLowerCase());
-            for (const alias of snippet.aliases ?? []) triggers.add(alias.toLowerCase());
         }
         return commentLanguageContext(triggers);
     }, [snippets]);

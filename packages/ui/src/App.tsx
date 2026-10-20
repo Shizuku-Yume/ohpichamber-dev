@@ -22,7 +22,6 @@ import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
 import { useBrowserProviderSync } from '@/hooks/useBrowserProviderSync';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
-import { useIntegrationCatalogPrefetch } from '@/hooks/useIntegrationCatalogPrefetch';
 import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useRootScrollLock } from '@/hooks/useRootScrollLock';
@@ -51,7 +50,6 @@ import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-sw
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { resumeAutoReviewRun } from '@/lib/reviewFlow';
 import { SyncProvider } from '@/sync/sync-context';
-import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { useUIStore } from '@/stores/useUIStore';
@@ -68,11 +66,8 @@ import { applyMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 import { SyncAppEffects } from '@/apps/AppEffects';
 import { isSameRuntimeEndpoint, resetAppForRuntimeEndpointChange } from '@/apps/runtimeEndpointReset';
 import { useAppFontEffects } from '@/apps/useAppFontEffects';
-import { ProjectConfigErrorToast } from '@/components/projects/ProjectConfigErrorToast';
 import { markStartupTrace, startupTraceEnabled } from '@/lib/startupTrace';
 import { fetchStartupDiagnostics, getInitRecoveryDescriptionKey, type StartupDiagnostics } from '@/lib/startupDiagnostics';
-import { fetchConnectedServerVersion, isServerBeforeOpenCode2 } from '@/lib/serverCompatibility';
-import { OutdatedServerNotice } from '@/components/update/OutdatedServerNotice';
 
 // Lazy-loaded heavy views — loaded on demand to reduce initial bundle size.
 const OnboardingScreen = lazyWithChunkRecovery(() =>
@@ -125,39 +120,9 @@ const StartupInitializationRecovery: React.FC<{
     };
   }, []);
 
-  // A server before 2.0 answers this app's requests with its web page, which
-  // surfaces as an unrelated load failure. Its own version says why.
-  const [outdatedServerVersion, setOutdatedServerVersion] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    const controller = new AbortController();
-    const runtimeKey = getRuntimeKey();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    void fetchConnectedServerVersion(controller.signal).then((version) => {
-      if (controller.signal.aborted || getRuntimeKey() !== runtimeKey) return;
-      setOutdatedServerVersion(version && isServerBeforeOpenCode2(version) ? version : null);
-    }).catch(() => undefined).finally(() => clearTimeout(timeout));
-    return () => {
-      controller.abort();
-      clearTimeout(timeout);
-    };
-  }, []);
-
   const failure = useConfigStore((s) => s.lastInitFailure);
   // Server diagnostics outrank the client's guess: they prove the server answered.
   const failureMessage = diagnostics ? null : failure?.message ?? null;
-
-  if (outdatedServerVersion) {
-    return (
-      <div className="flex h-full flex-col items-center overflow-y-auto bg-background px-6 py-6 text-foreground">
-        <div className="my-auto flex w-full max-w-xl shrink-0 flex-col items-center gap-4 text-center">
-          <OutdatedServerNotice version={outdatedServerVersion} />
-          <Button type="button" variant="outline" onClick={onRetry} disabled={isRetrying}>
-            {isRetrying ? t('startup.initRecovery.retrying') : t('startup.initRecovery.retry')}
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-full flex-col items-center overflow-y-auto bg-background px-6 py-6 text-foreground">
@@ -211,12 +176,8 @@ function App({ apis }: AppProps) {
   const initializeApp = useConfigStore((s) => s.initializeApp);
   const isInitialized = useConfigStore((s) => s.isInitialized);
   const isConnected = useConfigStore((s) => s.isConnected);
-  // Loaded flags, not list lengths: a catalog shown from the persisted cache is
-  // not a live load, and recovery must keep trying until one succeeds.
   const providersLoaded = useConfigStore((state) => state.providersLoaded);
-  const agentsLoaded = useConfigStore((state) => state.agentsLoaded);
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgents = useConfigStore((state) => state.loadAgents);
   const error = useSessionUIStore((s) => s.error);
   const clearError = useSessionUIStore((s) => s.clearError);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -466,33 +427,23 @@ function App({ apis }: AppProps) {
     }
   }, [initRetryExhausted]);
 
-  // Startup recovery: poll until providers AND agents are loaded.
-  // loadProviders/loadAgents resolve normally even on failure (errors swallowed),
-  // so a reactive effect can't detect failure — we need an interval.
   React.useEffect(() => {
-    if (!isConnected) return;
-    if (providersLoaded && agentsLoaded) return;
-
-    let active = true;
+    if (!isConnected || providersLoaded) return;
     let retries = 0;
-    const MAX_RETRIES = 15;
-    const attempt = async () => {
-      const state = useConfigStore.getState();
-      if (state.providersLoaded && state.agentsLoaded) return;
-      try {
-        if (!state.providersLoaded) await loadProviders({ source: 'startupRecovery' });
-        if (!useConfigStore.getState().agentsLoaded) await loadAgents({ source: 'startupRecovery' });
-      } catch { /* retry next interval */ }
+    const attempt = () => {
+      if (!useConfigStore.getState().providersLoaded) void loadProviders({ source: 'startupRecovery' });
     };
-
-    void attempt();
+    attempt();
     const id = setInterval(() => {
-      if (!active) return;
-      if (++retries >= MAX_RETRIES) { clearInterval(id); return; }
-      void attempt();
+      if (++retries >= 15 || useConfigStore.getState().providersLoaded) {
+        clearInterval(id);
+        return;
+      }
+      attempt();
     }, 2000);
-    return () => { active = false; clearInterval(id); };
-  }, [isConnected, loadAgents, loadProviders, providersLoaded, agentsLoaded]);
+    return () => clearInterval(id);
+  }, [isConnected, loadProviders, providersLoaded]);
+
 
   React.useEffect(() => {
     if (isSwitchingDirectory) {
@@ -678,7 +629,6 @@ function App({ apis }: AppProps) {
   useBrowserProviderSync();
   useRoutingSync();
   useEnterprisePolicySync();
-  useIntegrationCatalogPrefetch(isInitialized && isConnected, runtimeEndpointEpoch);
   usePwaInstallPrompt();
 
   useWindowTitle();
@@ -875,13 +825,11 @@ function App({ apis }: AppProps) {
               <TooltipProvider delayDuration={300} skipDelayDuration={150}>
                 <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
                   <SyncAppEffects backgroundWorkEnabled />
-                  <ProjectConfigErrorToast />
                   <MainLayout />
                   {isDesktopRuntime ? <AppStartupOverlay ready={bootOutcomeKnown && bootViewIsMain} /> : null}
                   <Toaster />
                   <AppLinkConfirmDialog />
                   <SharedTrustConfirmDialog />
-                  <ConfigUpdateOverlay />
                   <AboutDialogWrapper />
                   {showMemoryDebug && (
                     <MemoryDebugPanelLoader onClose={() => setShowMemoryDebug(false)} />

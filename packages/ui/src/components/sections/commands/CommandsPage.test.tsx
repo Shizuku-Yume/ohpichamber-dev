@@ -1,4 +1,5 @@
 import { afterEach, expect, spyOn, test } from 'bun:test';
+import type { CommandEntry } from '@openchamber/agent-contract';
 import { plugin } from 'bun';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -69,13 +70,13 @@ afterEach(async () => {
 
 test('a command refresh during save preserves the newer draft for the queued save', async () => {
   const writes: Array<{ template: string; publish: () => void; finish: (success?: boolean) => void }> = [];
-  const command = { name: 'example', template: 'initial' };
+  const command: CommandEntry = { commandId: 'command_example', name: 'example', content: 'initial', description: '', scope: 'agent', source: 'agent', editable: true };
   useCommandsStore.setState({
     selectedCommandName: command.name,
     commands: [command],
     commandsByDirectory: { __default__: [command] },
     updateCommand: async (_name, config) => new Promise<boolean>((resolve) => {
-      writes.push({ template: config.template || '', publish: () => {
+      writes.push({ template: config.content || '', publish: () => {
         const updated = { ...command, ...config };
         useCommandsStore.setState({ commands: [updated], commandsByDirectory: { __default__: [updated] } });
       }, finish: (success = true) => resolve(success) });
@@ -95,12 +96,12 @@ test('a command refresh during save preserves the newer draft for the queued sav
   };
   await edit(' older ');
   await edit('newer');
-  expect(writes.map((write) => write.template)).toEqual(['older']);
+  expect(writes.map((write) => write.template)).toEqual([' older ']);
   // updateCommand publishes the refreshed catalog before its promise settles.
   await act(async () => { writes[0].publish(); });
   expect(prompt.value).toBe('newer');
   await act(async () => { writes[0].finish(); });
-  expect(writes.map((write) => write.template)).toEqual(['older', 'newer']);
+  expect(writes.map((write) => write.template)).toEqual([' older ', 'newer']);
   await act(async () => { writes[1].publish(); writes[1].finish(); });
   expect(prompt.value).toBe('newer');
 
@@ -110,7 +111,7 @@ test('a command refresh during save preserves the newer draft for the queued sav
   await act(async () => { writes[2].publish(); writes[2].finish(); });
   await act(async () => { writes[2].publish(); });
   expect(prompt.value).toBe('latest');
-  expect(writes.map((write) => write.template)).toEqual(['older', 'newer', 'trimmed', 'latest']);
+  expect(writes.map((write) => write.template)).toEqual([' older ', 'newer', ' trimmed ', 'latest']);
   await act(async () => { writes[3].publish(); writes[3].finish(); });
 
   // A failed write must leave the draft dirty so the next blur retries it.
@@ -118,12 +119,12 @@ test('a command refresh during save preserves the newer draft for the queued sav
   await act(async () => { writes[4].finish(false); });
   expect(prompt.value).toBe('retry me');
   await act(async () => { prompt.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
-  expect(writes.map((write) => write.template)).toEqual(['older', 'newer', 'trimmed', 'latest', 'retry me', 'retry me']);
+  expect(writes.map((write) => write.template)).toEqual([' older ', 'newer', ' trimmed ', 'latest', 'retry me', 'retry me']);
   await act(async () => { writes[5].publish(); writes[5].finish(); });
 
   // An old completion must not replace the baseline for a different command.
   await edit('pending');
-  const other = { name: 'other', template: 'other initial' };
+  const other: CommandEntry = { ...command, commandId: 'command_other', name: 'other', content: 'other initial' };
   await act(async () => {
     useCommandsStore.setState({ selectedCommandName: other.name, commands: [other], commandsByDirectory: { __default__: [other] } });
   });

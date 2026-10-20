@@ -82,9 +82,9 @@ describe('the state of a space', () => {
 });
 
 describe('the actions of a space', () => {
-  test('offers the restarts only for a running space whose gatekeeper can come back', () => {
-    expect(spaceMenuActionsOf(entry())).toEqual(['restart_opencode', 'restart', 'setup', 'stop', 'remove']);
-    expect(spaceMenuActionsOf(entry({ damage: 'repairable' }))).toEqual(['restart_opencode', 'restart', 'setup', 'stop', 'remove']);
+  test('offers the restart only for a running space whose gatekeeper can come back', () => {
+    expect(spaceMenuActionsOf(entry())).toEqual(['restart', 'setup', 'stop', 'remove']);
+    expect(spaceMenuActionsOf(entry({ damage: 'repairable' }))).toEqual(['restart', 'setup', 'stop', 'remove']);
     expect(spaceMenuActionsOf(entry({ damage: 'gatekeeper_gone' }))).toEqual(['stop', 'remove']);
     expect(spaceMenuActionsOf(entry({ state: 'exited' }))).toEqual(['start', 'remove']);
     expect(spaceMenuActionsOf(entry({ state: 'exited', damage: 'gatekeeper_gone' }))).toEqual(['remove']);
@@ -211,7 +211,7 @@ describe('the actions of a space', () => {
     const projectSetup = (commands: string[]) => ({
       trust: { hash: null, trusted: true }, setupWorktree: commands, setupWorktreeWait: false, projectActions: [], projectActionsPrimaryId: null, draftStarters: [],
       shared: { status: 'missing', path: '.openchamber/project.json', setupWorktree: [], setupWorktreeWait: null, projectActions: [], draftStarters: [], plansDir: null },
-      personal: { setupWorktree: commands, setupWorktreeWait: null, setupWorktreeMode: 'append', projectActions: [], projectActionsPrimaryId: null, draftStarters: [], hiddenSharedActionIds: [], sharedTrust: null },
+      personal: { setupWorktree: commands, setupWorktreeWait: null, setupWorktreeMode: 'append', worktreeDirectory: null, projectActions: [], projectActionsPrimaryId: null, draftStarters: [], hiddenSharedActionIds: [], sharedTrust: null },
     });
 
     test('runs the setup commands again as the project has them now', async () => {

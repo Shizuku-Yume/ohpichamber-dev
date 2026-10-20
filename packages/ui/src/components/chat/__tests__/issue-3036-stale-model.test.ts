@@ -24,7 +24,7 @@ describe('issue #3036 stale persisted models', () => {
 
     const applyIndex = candidateLoop.indexOf('const result = tryApplyModelSelection');
     const acceptedIndex = candidateLoop.indexOf("if (result === 'applied')");
-    const setAgentIndex = candidateLoop.indexOf('setAgent(agent.name)');
+    const setAgentIndex = candidateLoop.indexOf('setAgent(agent.agentId, { keepModel: true })');
 
     expect(applyIndex).toBeGreaterThanOrEqual(0);
     expect(acceptedIndex).toBeGreaterThan(applyIndex);

@@ -25,7 +25,6 @@ import { PullRequestComparisonSelector } from '@/components/views/git/PullReques
 import { CommitComparisonSelector } from '@/components/views/git/CommitComparisonSelector';
 import { BranchComparisonSelector } from '@/components/views/git/BranchComparisonSelector';
 import { useGitBaseBranchStore } from '@/stores/useGitBaseBranchStore';
-import { runtimeFetch } from '@/lib/runtime-fetch';
 import { gitPushScopeKey, subscribeGitPush } from '@/lib/gitPushEvents';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useGitBranches, useGitStatus, useGitStore, useIsGitRepo } from '@/stores/useGitStore';
@@ -443,8 +442,11 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   // the picker already hides them from the menu; showing one as selected was
   // the whole "why say so?" failure mode.
   const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
-  const [modelProviders, setModelProviders] = useState<string[] | undefined>(undefined);
-
+  const providers = useConfigStore((state) => state.providers);
+  const providersLoaded = useConfigStore((state) => state.providersLoaded);
+  const modelProviders = providersLoaded
+    ? providers.filter((provider) => provider.canonicalAuth?.status === 'configured').map((provider) => provider.providerId)
+    : undefined;
   const providerIsAuthenticated = (providerId: string | undefined) => {
     if (!providerId) return false;
     // Until the auth list loads, do not present a candidate as selected —
@@ -469,29 +471,6 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const [activeProviderId, ...activeModelParts] = (activeModel ?? '').split('/');
   const activeModelId = activeModelParts.join('/');
 
-  useEffect(() => {
-    if (modelProviders !== undefined) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await runtimeFetch('/api/small-model', {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-        });
-        if (!response.ok) return;
-        const payload = (await response.json().catch(() => null)) as { authenticatedProviders?: unknown } | null;
-        if (!cancelled && Array.isArray(payload?.authenticatedProviders)) {
-          setModelProviders(payload.authenticatedProviders.filter((id): id is string => typeof id === 'string'));
-        }
-      } catch {
-        // Leave undefined: the picker then offers every provider, which is
-        // worse but not broken.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [modelProviders]);
 
   const isStructuredOutputCapable = useCallback(
     (providerId: string, modelId: string) =>

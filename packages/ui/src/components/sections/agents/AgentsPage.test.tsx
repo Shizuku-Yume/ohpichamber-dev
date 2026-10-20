@@ -57,7 +57,6 @@ beforeEach(() => {
     agentsByDirectory: { __default__: [initialAgent] },
     revisionsByDirectory: { __default__: '1' }, errorsByDirectory: {},
     loadAgents: async () => true,
-    fetchAgentPermissions: async () => ({ global: [], agent: [], effective: [], source: 'json', path: '/config.json' }),
     updateAgent: async () => ({ ok: true, revision: '2' }),
     createAgent: async () => ({ ok: true, revision: '2' }),
   });

@@ -9,7 +9,6 @@ import type { GuestMessage, HostMessage } from '@openchamber/sdk';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { I18nProvider } from '@/lib/i18n';
-import { opencodeClient } from '@/lib/opencode/client';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from '@/lib/runtime-url';
 import { useGuestsStore } from '@/lib/guests/store';
@@ -76,7 +75,6 @@ test('a status frame keeps subscriptions and storage alive while project changes
   };
   const previousRuntimeUrlResolver = getRuntimeUrlResolver();
   configureRuntimeUrlResolver({ apiBaseUrl: 'http://sync.test' });
-  opencodeClient.reconnectToRuntimeBaseUrl();
   const runtimeKey = getRuntimeKey();
   const previousProjects = useProjectsStore.getState();
   useProjectsStore.setState({
@@ -450,7 +448,6 @@ test('a status frame keeps subscriptions and storage alive while project changes
     if (indexedDBDescriptor) Object.defineProperty(globalThis, 'indexedDB', indexedDBDescriptor);
     else Reflect.deleteProperty(globalThis, 'indexedDB');
     setRuntimeUrlResolver(previousRuntimeUrlResolver);
-    opencodeClient.reconnectToRuntimeBaseUrl();
     useGuestsStore.getState().resetForRuntimeSwitch(runtimeKey);
     await dom.happyDOM.close();
     for (const frameWindow of iframeWindows.values()) await frameWindow.happyDOM.close();

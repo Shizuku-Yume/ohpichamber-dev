@@ -1,32 +1,20 @@
-import { isShellTool, isSubagentTool, isWriteTool } from '@/lib/opencode/tools';
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { File as PierreFile, PatchDiff } from '@pierre/diffs/react';
+import { PatchDiff } from '@pierre/diffs/react';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { toolDisplayStyles } from '@/lib/typography';
-import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
-import {
-    renderGrepOutput,
-    renderGlobOutput,
-    renderWebSearchOutput,
-    formatInputForDisplay,
-    parseReadToolOutput,
-    tryParseJsonOutput,
-} from './toolRenderers';
+import { renderWebSearchOutput, tryParseJsonOutput } from './toolRenderers';
 import type { ToolPopupContent, DiffViewMode } from './types';
 import { DiffViewToggle } from './DiffViewToggle';
-import { VirtualizedCodeBlock, type CodeLine } from './parts/VirtualizedCodeBlock';
 import { JsonTreeView } from '@/components/ui/JsonTreeView';
 import { Icon } from "@/components/icon/Icon";
-import { getToolIcon } from './parts/toolPresentation';
-import { useGuestToolPresentation } from '@/lib/guests/tool-presentation';
 import { useI18n, type I18nKey, type I18nParams } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { MermaidLoadFailure, getMermaidDataUrlSourcePromise, isCurrentMermaidLoadRequest, isMermaidLoadFailure, nextMermaidLoadRequestId } from './toolOutputDialogMermaid';
@@ -503,90 +491,6 @@ const DialogUnifiedDiff: React.FC<{
 
 DialogUnifiedDiff.displayName = 'DialogUnifiedDiff';
 
-const DialogReadContent: React.FC<{
-    popup: ToolPopupContent;
-    pierreThemeConfig: PierreThemeConfig;
-}> = React.memo(({ popup, pierreThemeConfig }) => {
-    const parsedReadOutput = React.useMemo(() => parseReadToolOutput(popup.content), [popup.content]);
-
-    const inputMeta = popup.metadata?.input;
-    const inputObj = typeof inputMeta === 'object' && inputMeta !== null ? (inputMeta as Record<string, unknown>) : {};
-    const offset = typeof inputObj.offset === 'number' ? inputObj.offset : 0;
-    const filePath =
-        typeof inputObj.file_path === 'string'
-            ? inputObj.file_path
-            : typeof inputObj.filePath === 'string'
-                ? inputObj.filePath
-                : typeof inputObj.path === 'string'
-                    ? inputObj.path
-                    : 'read-output';
-
-    const fileContents = React.useMemo(() => parsedReadOutput.lines.map((line) => line.text).join('\n'), [parsedReadOutput]);
-    const detectedLanguage = React.useMemo(
-        () => popup.language || getLanguageFromExtension(filePath) || 'text',
-        [filePath, popup.language],
-    );
-
-    const codeLines: CodeLine[] = React.useMemo(() => {
-        const hasExplicitLineNumbers = parsedReadOutput.lines.some((line) => line.lineNumber !== null);
-        const result: CodeLine[] = [];
-        let nextLineNumber = offset;
-
-        for (const line of parsedReadOutput.lines) {
-            if (line.lineNumber !== null) {
-                nextLineNumber = line.lineNumber;
-            }
-            const shouldAssignFallback =
-                parsedReadOutput.type === 'file'
-                && !hasExplicitLineNumbers
-                && line.lineNumber === null
-                && !line.isInfo;
-            const effectiveLineNumber = line.lineNumber ?? (shouldAssignFallback
-                ? (nextLineNumber + 1)
-                : null);
-            if (typeof effectiveLineNumber === 'number') {
-                nextLineNumber = effectiveLineNumber;
-            }
-
-            result.push({
-                text: line.text,
-                lineNumber: effectiveLineNumber,
-                isInfo: line.isInfo,
-            });
-        }
-
-        return result;
-    }, [offset, parsedReadOutput]);
-
-    if (parsedReadOutput.type === 'file') {
-        return (
-            <PierreFile
-                file={{
-                    name: filePath,
-                    contents: fileContents,
-                    lang: detectedLanguage || undefined,
-                }}
-                options={{
-                    disableFileHeader: true,
-                    overflow: 'wrap',
-                    theme: pierreThemeConfig.theme,
-                    themeType: pierreThemeConfig.themeType,
-                }}
-                className="block w-full"
-            />
-        );
-    }
-
-    return (
-        <VirtualizedCodeBlock
-            lines={codeLines}
-            language={detectedLanguage}
-            maxHeight="70vh"
-        />
-    );
-});
-
-DialogReadContent.displayName = 'DialogReadContent';
 const MermaidPreviewDialog: React.FC<{
     popup: ToolPopupContent;
     onOpenChange: (open: boolean) => void;
@@ -936,8 +840,6 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
     const { t } = useI18n();
     const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('unified');
     const pierreThemeConfig = usePierreThemeConfig();
-    const popupToolName = typeof popup.metadata?.tool === 'string' ? popup.metadata.tool : null;
-    const popupToolPresentation = useGuestToolPresentation(popupToolName);
 
     React.useEffect(() => {
         if (!popup.open) return;
@@ -965,9 +867,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
             >
                 <div className="flex-shrink-0 pb-1">
                     <div className="flex items-start gap-2 text-foreground typography-ui-header font-semibold">
-                        {popupToolName ? getToolIcon(popupToolName, popupToolPresentation) : (
-                            <Icon name="tools" className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
-                        )}
+                        <Icon name="tools" className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
                         <span className="break-words flex-1 leading-tight">{popup.title}</span>
                         {popup.isDiff && (
                             <DiffViewToggle
@@ -980,76 +880,6 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                 </div>
                 <div className="flex-1 min-h-0 rounded-xl border border-border/30 bg-muted/10 overflow-hidden">
                     <div className="tool-output-surface h-full max-h-[75vh] overflow-y-auto px-3 pr-4">
-                        {popup.metadata?.input && typeof popup.metadata.input === 'object' &&
-                            Object.keys(popup.metadata.input).length > 0 &&
-                            popup.metadata?.tool !== 'patch' ? (() => {
-                                const meta = popup.metadata!;
-                                const metaTool = typeof meta.tool === 'string' ? meta.tool : undefined;
-                                const input = meta.input as Record<string, unknown>;
-
-                                const getInputValue = (key: string): string | null => {
-                                  const val = input[key];
-                                  return typeof val === 'string' ? val : (typeof val === 'number' ? String(val) : null);
-                                };
-                                // v2 file tools report `path`.
-                                const writeTarget = getInputValue('path') || getInputValue('filePath') || getInputValue('file_path') || '';
-                                return (
-                                <div className="border-b border-border/20 p-4 -mx-3">
-                                    <div className="typography-markdown font-medium text-muted-foreground mb-2 px-3">
-                                        {isShellTool(metaTool)
-                                            ? 'Command:'
-                                            : isSubagentTool(metaTool)
-                                                ? 'Subagent Details:'
-                                                : 'Input:'}
-                                    </div>
-                                    {isShellTool(metaTool) && getInputValue('command') ? (
-                                        <div className="tool-input-surface bg-transparent rounded-xl border border-border/20 mx-3">
-                                            <WorkerHighlightedCode
-                                                language="bash"
-                                                code={getInputValue('command')!}
-                                                style={toolDisplayStyles.getPopupStyles()}
-                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
-                                                wrap
-                                            />
-                                        </div>
-                                    ) : isSubagentTool(metaTool) && getInputValue('prompt') ? (
-                                        <div
-                                            className="tool-input-surface bg-transparent rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90 mx-3"
-                                            style={toolDisplayStyles.getPopupStyles()}
-                                        >
-                                            {getInputValue('description') ? `Task: ${getInputValue('description')}\n` : ''}
-                                            {getInputValue('agent') ? `Agent: ${getInputValue('agent')}\n` : ''}
-                                            {`Instructions:\n${getInputValue('prompt')}`}
-                                        </div>
-                                    ) : isWriteTool(metaTool) && getInputValue('content') ? (
-                                        <div className="tool-input-surface bg-transparent rounded-xl border border-border/20 mx-3">
-                                            <PierreFile
-                                                file={{
-                                                    name: writeTarget || 'new-file',
-                                                    contents: getInputValue('content')!,
-                                                    lang: getLanguageFromExtension(writeTarget) || undefined,
-                                                }}
-                                                options={{
-                                                    disableFileHeader: true,
-                                                    overflow: 'wrap',
-                                                    theme: pierreThemeConfig.theme,
-                                                    themeType: pierreThemeConfig.themeType,
-                                                }}
-                                                className="block w-full"
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div
-                                            className="tool-input-surface bg-transparent rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90 mx-3"
-                                            style={toolDisplayStyles.getPopupStyles()}
-                                        >
-                                            {formatInputForDisplay(input, meta.tool as string)}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                            })() : null}
-
                         {popup.isDiff ? (
                             <DialogUnifiedDiff
                                 popup={popup}
@@ -1059,54 +889,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                         ) : popup.content ? (
                         <div className="p-4">
                             {(() => {
-                                const tool = typeof popup.metadata?.tool === 'string' ? popup.metadata.tool : undefined;
-
-                                if (tool === 'grep') {
-                                    return (
-                                        renderGrepOutput(popup.content, isMobile) || (
-                                            <pre className="typography-code bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
-                                                {popup.content}
-                                            </pre>
-                                        )
-                                    );
-                                }
-
-                                if (tool === 'glob') {
-                                    return (
-                                        renderGlobOutput(popup.content, isMobile) || (
-                                            <pre className="typography-code bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
-                                                {popup.content}
-                                            </pre>
-                                        )
-                                    );
-                                }
-
-                                if (isSubagentTool(tool) || tool === 'reasoning') {
-                                    return (
-                                        <div className={tool === 'reasoning' ? "text-muted-foreground/70" : ""}>
-                                            <SimpleMarkdownRenderer content={popup.content} variant="tool" />
-                                        </div>
-                                    );
-                                }
-
-                                if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web') {
-                                    return (
-                                        renderWebSearchOutput(popup.content) || (
-                                            <WorkerHighlightedCode
-                                                language="text"
-                                                code={popup.content}
-                                                style={toolDisplayStyles.getPopupContainerStyles()}
-                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
-                                                wrap
-                                            />
-                                        )
-                                    );
-                                }
-
-                                if (tool === 'read') {
-                                    return <DialogReadContent popup={popup} pierreThemeConfig={pierreThemeConfig} />;
-                                }
-
+                                if (popup.toolResult?.toolName === 'web_search') return renderWebSearchOutput(popup.toolResult.output);
                                 // JSON tree viewer for generic JSON outputs
                                 const jsonResult = popup.content ? tryParseJsonOutput(popup.content) : { data: null, isJson: false };
                                 if (jsonResult.isJson) {

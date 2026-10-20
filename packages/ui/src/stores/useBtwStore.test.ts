@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { Model, Provider } from '@openchamber/agent-contract';
 import { btwModelAvailability, resolveBtwSelection, useBtwStore } from './useBtwStore';
 import { useSelectionStore } from '@/sync/selection-store';
 
 const composerModel = { providerId: 'openai', modelId: 'gpt-5.6-terra' };
 const input = {
-  agents: [{ name: 'build', mode: 'primary' as const, hidden: false }, { name: 'plan', mode: 'primary' as const, hidden: false }],
+  agents: [{ agentId: 'build', name: 'build' }, { agentId: 'plan', name: 'plan' }],
   savedAgent: null,
   savedModel: null,
   composerModel,
@@ -51,9 +52,22 @@ describe('useBtwStore', () => {
     expect(resolveBtwSelection({ ...input, composerVariant: null }).variant).toBeNull();
     expect(resolveBtwSelection({ ...input, composerModel: null }).model).toBeNull();
     expect(resolveBtwSelection({ ...input, agents: [
-      { name: 'hidden', mode: 'primary' as const, hidden: true },
-      { name: 'custom', mode: 'primary' as const, hidden: false },
-    ] })).toEqual({ agent: 'custom', model: composerModel, variant: 'medium' });
+      { agentId: 'custom-id', name: 'custom' },
+      { agentId: 'helper-id', name: 'helper' },
+    ] })).toEqual({ agent: 'custom-id', model: composerModel, variant: 'medium' });
+  });
+
+  test('preserves a saved native ID across label changes and duplicate names', () => {
+    const agents = [
+      { agentId: 'review-one', name: 'reviewer' },
+      { agentId: 'review-two', name: 'reviewer' },
+      { agentId: 'planning-profile', name: 'plan' },
+    ];
+    expect(resolveBtwSelection({ ...input, agents, savedAgent: 'review-two' }).agent).toBe('review-two');
+    expect(resolveBtwSelection({ ...input, agents: agents.map((agent) => ({ ...agent, name: 'Renamed' })), savedAgent: 'review-two' }).agent).toBe('review-two');
+    expect(resolveBtwSelection({ ...input, agents }).agent).toBe('planning-profile');
+    expect(resolveBtwSelection({ ...input, agents, savedAgent: 'reviewer' }).agent).toBe('planning-profile');
+    expect(resolveBtwSelection({ ...input, agents: [] }).agent).toBeUndefined();
   });
 
   test('prefers the saved BTW selection over the current composer', () => {
@@ -96,8 +110,8 @@ describe('useBtwStore', () => {
 });
 
 const AGENTS = [
-  { name: 'build', hidden: false, mode: 'primary' as const },
-  { name: 'plan', hidden: false, mode: 'primary' as const },
+  { agentId: 'build', name: 'build' },
+  { agentId: 'plan', name: 'plan' },
 ];
 const COMPOSER = { providerId: 'omniroute', modelId: 'orchestrator' };
 const SAVED_DEAD = { providerId: 'opencode-omniroute-live', modelId: 'orchestrator' };
@@ -161,7 +175,16 @@ describe('resolveBtwSelection with a live-catalog check', () => {
 });
 
 describe('btwModelAvailability', () => {
-  const catalog = [{ id: 'omniroute', models: [{ id: 'orchestrator', modelID: 'orchestrator' }] }];
+  const catalogModel: Model = {
+    modelId: 'orchestrator', provider: 'omniroute', name: 'Orchestrator', modalities: ['text'],
+    contextWindow: 128_000, maxOutputTokens: 8_192, reasoningEffortSupported: false,
+    reasoningOptions: [], variants: [], pricing: null,
+  };
+  const catalogProvider: Provider & { models: Model[] } = {
+    providerId: 'omniroute', name: 'OmniRoute', endpoint: null, protocol: null,
+    authMethods: [], auth: { status: 'missing' }, models: [catalogModel],
+  };
+  const catalog = [catalogProvider];
   const AUTO = { providerId: 'openchamber', modelId: 'auto' };
 
   test('offers no check while the catalog is empty, so the saved model wins', () => {

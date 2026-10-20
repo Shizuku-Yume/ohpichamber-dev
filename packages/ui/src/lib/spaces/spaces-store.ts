@@ -45,7 +45,7 @@ type SpaceProgress =
 type SpaceCreationAccess = { kind: 'giving' } | { kind: 'failed'; failures: readonly SpaceAccessFailure[] };
 
 /** The actions on a space the user can take from its group, from soft to hard; `setup` runs the project's setup commands again. */
-export type SpaceAction = 'start' | 'stop' | 'restart_opencode' | 'restart' | 'setup' | 'remove';
+export type SpaceAction = 'start' | 'stop' | 'restart' | 'setup' | 'remove';
 
 /**
  * Chats a delete could not save to the Archive page: the titles of those too large to save and

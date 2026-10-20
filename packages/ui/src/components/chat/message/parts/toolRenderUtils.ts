@@ -1,20 +1,7 @@
-import { OPENCODE_TOOLS, normalizeToolName, type ToolName } from '@/lib/opencode/tools';
+import { NATIVE_TOOLS, type ToolName } from '@/lib/toolHelpers';
 
-// Keep only tools with a direct in-app navigation destination compact. Every
-// other tool uses ToolPart so custom, plugin, and MCP calls expose their input
-// and output through the common expandable renderer.
-const STATIC_TOOL_NAMES = new Set<string>([OPENCODE_TOOLS.read, OPENCODE_TOOLS.skill]);
-
-const STANDALONE_TOOL_NAMES = new Set<string>([OPENCODE_TOOLS.subagent]);
-
-export const isExpandableTool = (toolName: ToolName): boolean => {
-    return !isStaticTool(toolName);
-};
-
-export const isStandaloneTool = (toolName: ToolName): boolean => {
-    return STANDALONE_TOOL_NAMES.has(normalizeToolName(toolName));
-};
-
-export const isStaticTool = (toolName: ToolName): boolean => {
-    return STATIC_TOOL_NAMES.has(normalizeToolName(toolName));
-};
+// Only native reads have a direct file-navigation destination. Custom tools
+// always expose their full input and output in the expandable renderer.
+export const isExpandableTool = (toolName: ToolName): boolean => toolName !== NATIVE_TOOLS.read;
+export const isStandaloneTool = (toolName: ToolName): boolean => toolName === NATIVE_TOOLS.task;
+export const isStaticTool = (toolName: ToolName): boolean => toolName === NATIVE_TOOLS.read;

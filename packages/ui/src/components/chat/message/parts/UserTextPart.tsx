@@ -5,9 +5,8 @@ import type { Part } from '@openchamber/agent-contract';
 import type { AgentMentionInfo } from '../types';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { useUIStore } from '@/stores/useUIStore';
-import { useSkillsStore } from '@/stores/useSkillsStore';
+import { selectSkillsForDirectory, useSkillsStore } from '@/stores/useSkillsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { getDirectoryForFilePath } from '@/lib/path-utils';
 import { useI18n } from '@/lib/i18n';
 import {
     INTERACTIVE_REFERENCE_CHIP_CLASS,
@@ -66,9 +65,8 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
     const [isTruncated, setIsTruncated] = React.useState(false);
     const userMessageRenderingMode = useUIStore((state) => state.userMessageRenderingMode);
     const collapsibleUserMessages = useUIStore((state) => state.collapsibleUserMessages);
-    const skills = useSkillsStore((state) => state.skills);
-    const openContextFile = useUIStore((state) => state.openContextFile);
-    const effectiveDirectory = useEffectiveDirectory();
+    const directory = useEffectiveDirectory();
+    const skills = useSkillsStore(state => selectSkillsForDirectory(state, directory));
     const { t } = useI18n();
     const normalizedRenderingMode = normalizeUserMessageRenderingMode(userMessageRenderingMode);
     const isCollapsed = collapsibleUserMessages && !messageExpanded;
@@ -87,9 +85,11 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
 
     const openSkill = React.useCallback((name: string) => {
         const skill = skillByName.get(name);
-        if (!skill?.path) return;
-        openContextFile(effectiveDirectory || getDirectoryForFilePath('', skill.path) || '/', skill.path);
-    }, [effectiveDirectory, openContextFile, skillByName]);
+        if (!skill) return;
+        useSkillsStore.getState().setSelectedSkill(skill.skillId);
+        useUIStore.getState().setSettingsPage('skills');
+        useUIStore.getState().setSettingsDialogOpen(true);
+    }, [skillByName]);
 
     const hasActiveSelectionInElement = React.useCallback((element: HTMLElement): boolean => {
         if (typeof window === 'undefined') {

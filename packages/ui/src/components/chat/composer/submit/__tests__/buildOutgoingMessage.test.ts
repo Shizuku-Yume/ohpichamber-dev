@@ -122,6 +122,8 @@ describe('queued messages', () => {
         }), deps());
         expect(result.primaryText).toBe('first');
         expect(result.additionalParts.map((p) => p.text)).toEqual(['second', 'third']);
+        expect(result.primaryFileResourcesExpanded).toBe(true);
+        expect(result.additionalParts.every(part => part.fileResourcesExpanded)).toBe(true);
     });
 
     test('the composer text lands after everything queued', () => {
@@ -131,6 +133,8 @@ describe('queued messages', () => {
         }), deps());
         expect(result.primaryText).toBe('queued');
         expect(result.additionalParts.map((p) => p.text)).toEqual(['typed now']);
+        expect(result.primaryFileResourcesExpanded).toBe(true);
+        expect(result.additionalParts[0].fileResourcesExpanded).toBeUndefined();
     });
 
     test('the context a message was queued with follows it, before the next message', () => {
@@ -153,6 +157,7 @@ describe('queued messages', () => {
             queued: [{ text: '@agent:plan see @file:doc and /deploy' }],
         }), deps());
         expect(result.primaryText).toBe('@agent:plan see @file:doc and /deploy');
+        expect(result.primaryFileResourcesExpanded).toBe(true);
         expect(result.primaryAttachments).toEqual([]);
         expect(result.agentMentionName).toBe(undefined);
         expect(result.additionalParts).toEqual([]);
@@ -603,19 +608,19 @@ describe('expandCommentSnippets', () => {
         text,
         createdAt: 0,
     });
-    const expandText = async (text: string) => text.replace('#review', 'Review this carefully.');
+    const expandText = async (text: string) => text.replace('/review', 'Review this carefully.');
 
     test('expands the comment words and leaves the quote verbatim', async () => {
-        const [expanded] = await expandCommentSnippets([draft('#review please')], expandText);
+        const [expanded] = await expandCommentSnippets([draft('/review please')], expandText);
         expect(expanded.text).toBe('Review this carefully. please');
         expect(expanded.code).toBe('see #review here');
     });
 
-    test('keeps a comment as written when expansion fails', async () => {
-        const original = draft('#review please');
-        const [kept] = await expandCommentSnippets([original], async () => {
+    test('rejects failed native expansion without changing the original draft', async () => {
+        const original = draft('/review please');
+        await expect(expandCommentSnippets([original], async () => {
             throw new Error('offline');
-        });
-        expect(kept).toBe(original);
+        })).rejects.toThrow('offline');
+        expect(original.text).toBe('/review please');
     });
 });

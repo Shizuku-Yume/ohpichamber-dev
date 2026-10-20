@@ -47,12 +47,15 @@ with the existing 30-second read deadline plus caller cancellation.
 
 ### Catalog refresh
 
-`catalogRefresh.ts` re-reads the lists Settings and the composer show — agents,
-commands, skills, MCP servers, plugins, providers — when OpenCode reports that
-it rebuilt a catalog. The sync layer calls it from `reloadCatalog`; see
-`packages/ui/src/sync/DOCUMENTATION.md` for the kind-to-list table. There is no
-pending-restart queue: config mutations take effect as soon as OpenCode has
-re-read the file, and only the OpenCode binary path restarts the server.
+Canonical catalogs are consumed through their owning feature stores and the
+Canonical Client. There is no shared OpenCode event-to-list reload adapter;
+providers, models, agents, MCP, plugins, commands, skills, and web search retain
+their own workspace or directory scope and explicit read state.
+
+Native worker `catalog.updated` events carry MCP or skill catalog state for the
+addressed root session. They are not provider, model, or agent reload notices;
+the sync layer stores them separately from Settings catalog reads. A failed
+authoritative read must remain an error and cannot clear the last known list.
 
 The agents store counts load generations: `invalidateAgentsLoadCache` starts a
 new one, and a load never joins a read that began in an older generation. It
@@ -69,15 +72,39 @@ directory maps and rejects loads captured from the previous runtime.
 
 A same-runtime load retired by a catalog change waits for the replacement list before it returns. A create or delete waiting for that read therefore keeps its successful result; the retired response itself publishes nothing. A runtime switch still returns failure instead of joining work for another runtime.
 
-Plugin catalogs carry `loadedDirectory` and `loadedRuntimeKey`, the owner of
-the installed list. The editor waits for that directory's catalog before hydrating a draft;
-plugin IDs alone are not unique across projects. Catalog requests and their
-TTL caches are scoped by runtime and directory. A response for a superseded
-owner cannot replace the catalog or finish the current owner's loading state.
+`usePluginsStore` owns the native plugin catalog through `canonicalClient.plugins`.
+`loadedDirectory` and `loadedRuntimeKey` bind its workspace catalog to the Settings
+project selection. Concurrent reads share the current request; a forced refresh
+retires the previous read. Failed reads preserve the last authoritative catalog,
+and stale runtime/directory completions cannot publish into a replacement owner.
+Mutations serialize against the latest committed decimal revision; an older
+in-flight read cannot restore a pre-mutation catalog. Runtime endpoint changes
+clear server-derived state. No OpenCode plugin registry/runtime adapter remains.
+
+Configuration persistence and active-worker apply outcomes are separate. A saved
+configuration remains saved when existing workers cannot apply it. Settings offers
+an explicit confirmed restart of idle sessions; plugin mutations never restart
+sessions automatically. Package installs are global; marketplace installs retain
+their native user/project target. Local source authoring is workspace-confined
+under `.omp/extensions/`. Host policy, not UI heuristics, authorizes external egress.
 
 ### Feature cache / query stores
 
-The Stats page keeps its reports in a feature-local store, `components/views/usage/usageStatsStore.ts`: keyed by runtime, range and project, in memory only, never refetched on its own once a key has a report, cleared on runtime switch. A failed refresh keeps the cached report. The report is requested with `tools: "none"`; tool calls, which make OpenCode scan every tool call in the range, load on request under the same key, over the loaded report's own window. Once the user asks for them, every report shown later in the app session fetches its tool calls after it lands. A failed tool read shows an error with retry and never reads as zero calls.
+`useWebSearchStore` owns canonical workspace web-search settings for web/PWA,
+Electron, hosted mobile and Capacitor through the same active Host transport.
+It resolves the current directory with `CanonicalClient.resolveWorkspace`,
+then reads `getWebSearch`; failures retain the previous authoritative snapshot
+and expose a read error. Writes carry `expectedRevision`, never optimistically
+apply, and retain the complete mutation result so persisted-but-partial worker
+application is distinguishable from failed persistence. Runtime generations,
+directory identity and mutation revisions reject stale continuations. Provider
+identities are native selector strings, not integration IDs. API keys are
+write-only: `credentialConfigured` reports stored-key presence independently
+from native readiness (`configured`) and write capability (`credentialWritable`).
+Enterprise mode disables new key entry but retains configuration and key removal.
+
+
+The Stats page keeps reports in the feature-local `components/views/usage/usageStatsStore.ts`, keyed by runtime, range and project directory, in memory only. Cached keys do not refetch automatically; runtime switches abort pending reads and clear entries. Canonical usage reads resolve selected directories through `resolveWorkspace` and send canonical workspace/project IDs with explicit range, bounds and viewer IANA timezone. The initial `/api/agent/v1/usage` report omits expensive tool parsing (`tools.mode: 'none'`); `/api/agent/v1/usage/tools` loads lazily over the loaded report window. Once requested, tools follow subsequent reports. Stale tool completions cannot replace a refreshed window. Failed refreshes preserve cached reports and tools with retry feedback. Partial reports retain valid sessions and expose per-session errors; unavailable reasoning and duration metrics remain null rather than fabricated zeroes. Web/PWA, Electron, hosted mobile and Capacitor share the active Host transport.
 
 PR status reads share the aggregate background-network budget as well as their PR-specific cap. Command discovery gates each scope/config read, including body decoding, rather than only gating the initial SDK list. Command reads have a bounded deadline and abort on runtime reset. Reset clears server-derived command caches and invalidates late reads and mutation responses while preserving unsaved command drafts.
 
@@ -570,10 +597,11 @@ active.
 
 Any other failed `initializeApp` attempt records `lastInitFailure` (runtime-only,
 cleared on success and on runtime switch): which step failed —
-`serverUnreachable` (no answer or a gateway error), `openCodeUnavailable` (the
-server answered but OpenCode is not healthy), `loadAgents`, or `unexpected` —
-plus the error text when there is one. The startup recovery screen reads it, so
-only a real network failure tells the user to check that the server is running.
+`serverUnreachable` (no answer or a gateway error), `agentServiceUnavailable`
+(the server answered but the Agent Service is not ready), `loadAgents`, or
+`unexpected` — plus the error text when there is one. The startup recovery
+screen reads it, so only a real network failure tells the user to check that
+the server is running.
 
 #### Native agent profiles and retained Host configuration
 
@@ -593,13 +621,11 @@ next revision, so background refreshes cannot silently authorize a stale edit.
 Agent IDs remain stable across rename; duplicate creates a new ID. Native
 profiles have no legacy scope, mode, hidden, color, sampling or file metadata.
 
-The ordered permissions editor remains an explicit **Host configuration**
-capability: `fetchAgentPermissions` reads the Host permissions subresource and
-`saveHostAgentPermissions` PATCHes only `{ permissions }`. These rules are not
-native `allowedTools` or `permissionPresetId`; their execution-policy linkage
-is not claimed. Native allowed-tool names and optional preset IDs can be edited
-directly; no preset catalog or invented preset choices exist in this slice.
-The Host-rules/native-execution linkage remains an explicit W9 gap.
+Native profiles expose `allowedTools` and an optional `permissionPresetId`
+directly; those fields are edited through canonical `updateAgent`. There is no
+store read or patch for the retired Host permissions subresource: execution
+authorization belongs to the native SDK/Host approval path. No preset catalog
+or invented preset choices exist in this slice.
 
 Retained command and MCP configuration still use their Host entity routes.
 Command editors read their own stored `…/config` entries rather than resolved
@@ -765,6 +791,67 @@ There is still one explicit fallback path worth knowing about:
 This is currently acceptable as a narrow bootstrap fallback.
 
 Do not widen it into a polling or broad refresh system.
+
+## Native prompt templates
+
+`useSnippetsStore` owns native prompt-template catalogs and settings drafts. Web/PWA,
+Electron, hosted mobile, and Capacitor all use `CanonicalClient.fileResources`
+through the active authenticated Host Gateway; only the Bun worker loads and
+expands native templates. The renderer never imports the native SDK.
+
+- `Snippet` is the canonical `PromptTemplateEntry`, not a legacy file/alias shape.
+  Existing selection and mutations address opaque `templateId` values. The
+  `selectedSnippetName` field holds that identity for an existing entry and the
+  proposed name for an unsaved draft.
+- `catalogsByDirectory` preserves independent admitted workspace catalogs;
+  `selectSnippetsForDirectory` returns the stored array or a stable empty array.
+  Explicit composer reads do not replace a different settings directory.
+- Writes carry the viewed decimal-string catalog revision. Create is not an
+  upsert. Failures preserve the current catalog and draft; successful mutations
+  publish the returned catalog, preserving scope, grouping, agent and model
+  bindings. A load begun before a mutation cannot overwrite that result.
+- Settings edit Markdown bodies without renderer substitution. External and
+  inherited entries remain visible but expose no writable or delete controls;
+  store mutation guards also reject noneditable entries.
+- Invocation is native leading `/name` with arguments, not `#name`, aliases,
+  prepend/append blocks, or inline token replacement. `expandText` sends the
+  original invocation to the worker and throws on expansion failure. It returns
+  content for comment/context consumers; send routing consumes the canonical
+  expansion result directly to preserve execution bindings.
+- Runtime switching retires in-flight work and clears catalogs, revisions,
+  selection, and drafts. Authoritative read failure is not an empty catalog.
+
+## Native skill files and discovery
+
+`useSkillsStore` uses `CanonicalClient.fileResources` through the authenticated Host
+Gateway on web/PWA, Electron, hosted mobile, and Capacitor. Only the Bun worker
+loads native skills and builds invocation messages; the Host owns source files,
+revision CAS, and apply fanout.
+
+- `skills` and `skillsByDirectory` contain only native `FileResourceSkillEntry`
+  records. Their opaque `skillId` identifies native discovery, never an authoring
+  path. Settings browsing another directory leaves the ambient composer list alone.
+- `filesByDirectory` independently retains the Host's authored-file catalog. The
+  settings sidebar explicitly distinguishes native entries from authored-only
+  entries absent from native discovery. Invalid `SKILL.md` files therefore remain
+  editable without inventing executable IDs or advertising them to the composer.
+- Existing native selection uses `selectedSkillName` as an opaque native ID;
+  drafts use their proposed name. Authored-only selection instead uses
+  `selectedAuthoredSkill: { scope, authoredSkillId }`. Authoring methods accept
+  that explicit reference or resolve a native record's separate `authoredSkillId`.
+  Host catalog membership and native read-only flags gate mutations; external
+  roots retain native raw content for read-only viewing.
+- The editor reads and writes complete raw `SKILL.md` text. It does not reconstruct
+  YAML, trim bodies, expand arguments, or interpret metadata such as `allowedTools`
+  as authorization. Supporting files use the same captured source revision.
+- Writes use the viewed `expectedSourceRevision`, never silently retry with a
+  newer revision after conflicts. Source commit results retain per-root apply
+  outcomes separately; partial/failed application shows a translated saved-source
+  warning instead of claiming that all active sessions applied the change.
+- Native discovery and Host source catalog failures preserve their respective
+  previous successful state independently. Runtime switching drops catalogs,
+  source revisions, selections, drafts, and obsolete async completions. Loads
+  started before a mutation cannot replace newer source state.
 
 ## When Editing These Stores
 

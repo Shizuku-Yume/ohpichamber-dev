@@ -982,7 +982,7 @@ export interface GitWorktreeCreateResult {
 export interface GitCheckoutTrustInspection {
   state: 'awaiting-trust';
   digest: string;
-  actions: Array<{ kind: 'post-checkout-hook' | 'project-start-command' | 'setup-command'; label: string }>;
+  actions: Array<{ kind: 'post-checkout-hook' | 'setup-command'; label: string }>;
 }
 
 export interface RemoveGitWorktreePayload {
@@ -1049,6 +1049,7 @@ interface GitWorktreeAPI {
 }
 
 export interface GitAPI {
+  initializeGit(directory: string): Promise<void>;
   checkIsGitRepository(directory: string): Promise<boolean>;
   getGitStatus(directory: string, options?: { mode?: 'light'; fresh?: boolean }): Promise<GitStatus>;
   getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse>;
@@ -1295,8 +1296,6 @@ export interface SettingsLoadResult {
 export interface SettingsAPI {
   load(): Promise<SettingsLoadResult>;
   save(changes: Partial<SettingsPayload>): Promise<SettingsPayload>;
-
-  restartOpenCode?: () => Promise<{ restarted: boolean }>;
 }
 
 export interface DirectoryPermissionRequest {
@@ -2231,107 +2230,3 @@ export interface RuntimeAPIs {
 
 export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue;
 
-// ============== Skills Catalog Types ==============
-
-type SkillsCatalogSourceId = string;
-
-type SkillsCatalogSourceType = 'github';
-
-export interface SkillsCatalogSource {
-  id: SkillsCatalogSourceId;
-  label: string;
-  description?: string;
-  source: string;
-  defaultSubpath?: string;
-  sourceType?: SkillsCatalogSourceType;
-  /** GitHub repository star count (null when unavailable) */
-  stars?: number | null;
-  /** GitHub repository last-push timestamp, ISO (null when unavailable) */
-  repoUpdatedAt?: string | null;
-}
-
-interface SkillsCatalogItemInstalledBadge {
-  isInstalled: boolean;
-  scope?: 'user' | 'project';
-  source?: 'opencode' | 'agents' | 'claude';
-}
-
-export interface SkillsCatalogItem {
-  sourceId: SkillsCatalogSourceId;
-  repoSource: string;
-  repoSubpath?: string;
-  gitIdentityId?: string;
-  skillDir: string;
-  skillName: string;
-  frontmatterName?: string;
-  description?: string;
-  installable: boolean;
-  warnings?: string[];
-  installed?: SkillsCatalogItemInstalledBadge;
-}
-
-export interface SkillsCatalogResponse {
-  ok: boolean;
-  sources?: SkillsCatalogSource[];
-  itemsBySource?: Record<SkillsCatalogSourceId, SkillsCatalogItem[]>;
-  error?: { kind: string; message: string };
-}
-
-export interface SkillsCatalogSourceResponse {
-  ok: boolean;
-  items?: SkillsCatalogItem[];
-  error?: { kind: string; message: string };
-}
-
-export interface SkillsRepoScanRequest {
-  source: string;
-  subpath?: string;
-  gitIdentityId?: string;
-}
-
-type SkillsRepoScanError =
-  | { kind: 'authRequired'; message: string; sshOnly: true; identities?: Array<{ id: string; name: string }> }
-  | { kind: 'invalidSource'; message: string }
-  | { kind: 'gitUnavailable'; message: string }
-  | { kind: 'networkError'; message: string }
-  | { kind: 'unknown'; message: string };
-
-export interface SkillsRepoScanResponse {
-  ok: boolean;
-  items?: SkillsCatalogItem[];
-  error?: SkillsRepoScanError;
-}
-
-interface SkillsInstallSelection {
-  skillDir: string;
-}
-
-export interface SkillsInstallRequest {
-  source: string;
-  subpath?: string;
-  gitIdentityId?: string;
-  scope: 'user' | 'project';
-  targetSource?: 'opencode' | 'agents';
-  selections: SkillsInstallSelection[];
-  conflictPolicy?: 'prompt' | 'skipAll' | 'overwriteAll';
-  conflictDecisions?: Record<string, 'skip' | 'overwrite'>;
-}
-
-export type SkillsInstallError = SkillsRepoScanError | {
-  kind: 'conflicts';
-  message: string;
-  conflicts: Array<{ skillName: string; scope: 'user' | 'project'; source?: 'opencode' | 'agents' }>;
-};
-
-export interface SkillsInstallResponse {
-  ok: boolean;
-  installed?: Array<{ skillName: string; scope: 'user' | 'project'; source?: 'opencode' | 'agents' }>;
-  skipped?: Array<{ skillName: string; reason: string }>;
-  error?: SkillsInstallError;
-  requiresReload?: boolean;
-  requiresManualRestart?: boolean;
-  reloadFailed?: boolean;
-  warning?: string;
-  message?: string;
-  reloadDelayMs?: number;
-}

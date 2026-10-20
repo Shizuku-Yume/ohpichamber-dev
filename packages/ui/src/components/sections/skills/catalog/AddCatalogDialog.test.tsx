@@ -7,6 +7,7 @@ import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { invalidateSettingsCache } from '@/lib/persistence';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 
 const workIdentity = {
   id: 'work',
@@ -60,6 +61,8 @@ describe('AddCatalogDialog Git identity', () => {
     invalidateSettingsCache();
     registerRuntimeAPIs(null);
     useGitIdentitiesStore.setState({ profiles: [], globalIdentity: null, defaultGitIdentityId: null });
+    useProjectsStore.setState({ projects: [{ id: 'project_test', path: '/workspace', label: 'Workspace', addedAt: 1 }], activeProjectId: 'project_test' });
+    useSkillsCatalogStore.getState().resetForRuntimeSwitch();
     const fetch = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
       const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
@@ -71,11 +74,12 @@ describe('AddCatalogDialog Git identity', () => {
         return Response.json({ defaultGitIdentityId, skillCatalogs: catalogs });
       }
       if (url.pathname === '/api/config/settings' && method !== 'GET') return Response.json({ success: true });
-      if (url.pathname === '/api/config/skills/scan') {
-        return Response.json({ ok: true, items: [{ skillName: 'private-skill' }] });
+      if (url.pathname === '/api/agent/v1/workspaces/resolve') return Response.json({ workspaceId: 'workspace_test', projectId: 'project_test', name: 'Workspace' });
+      if (url.pathname === '/api/agent/v1/workspaces/workspace_test/skills/repositories/scan') {
+        return Response.json({ workspaceId: 'workspace_test', items: [{ sourceId: '', repoSource: 'owner/repo', skillDir: 'private-skill', skillName: 'private-skill', installable: true, installed: { isInstalled: false } }] });
       }
-      if (url.pathname === '/api/config/skills/catalog') return Response.json({ ok: true, sources: [], itemsBySource: {} });
-      if (url.pathname === '/api/config/skills/catalog/source') return Response.json({ ok: true, items: [] });
+      if (url.pathname === '/api/agent/v1/workspaces/workspace_test/skills/repositories') return Response.json({ workspaceId: 'workspace_test', sources: [] });
+      if (url.pathname === '/api/agent/v1/workspaces/workspace_test/skills/repositories/source') return Response.json({ workspaceId: 'workspace_test', items: [] });
       throw new Error(`Unexpected request: ${method} ${url.pathname}`);
     });
     restoreFetch = () => fetch.mockRestore();
@@ -152,7 +156,7 @@ describe('AddCatalogDialog Git identity', () => {
     await enter(input('owner/repo or git@github.com:owner/repo.git'), 'git@github.com:owner/private-skills.git');
     await act(async () => { button('Scan').click(); });
 
-    const scanRequest = requests.find((request) => request.path === '/api/config/skills/scan');
+    const scanRequest = requests.find((request) => request.path === '/api/agent/v1/workspaces/workspace_test/skills/repositories/scan');
     expect(scanRequest?.body).toEqual({ source: 'git@github.com:owner/private-skills.git' });
   });
 
@@ -163,7 +167,7 @@ describe('AddCatalogDialog Git identity', () => {
     expect(button('Default Git setup')).toBeTruthy();
     await act(async () => { button('Scan').click(); });
 
-    expect(requests.find((request) => request.path === '/api/config/skills/scan')?.body).toEqual({ source: 'owner/public' });
+    expect(requests.find((request) => request.path === '/api/agent/v1/workspaces/workspace_test/skills/repositories/scan')?.body).toEqual({ source: 'owner/public' });
   });
 
   test('loads a custom catalog for editing without changing its identity', async () => {
@@ -209,11 +213,11 @@ describe('AddCatalogDialog Git identity', () => {
     const sourceId = 'custom:team';
     const item = (skillName: string, installed: boolean) => ({
       sourceId, repoSource: 'owner/team', skillDir: skillName, skillName,
-      installable: true, installed: { isInstalled: installed, scope: 'user' as const },
+      installable: true, installed: installed ? { isInstalled: true as const, scope: 'agent' as const, authoredSkillId: skillName } : { isInstalled: false as const },
     });
     const store = useSkillsCatalogStore.getState();
     useSkillsCatalogStore.setState({
-      sources: [{ id: sourceId, label: 'Team', source: 'owner/team' }],
+      sources: [{ id: sourceId, label: 'Team', source: 'owner/team', stars: null, repoUpdatedAt: null }],
       selectedSourceId: sourceId,
       itemsBySource: { [sourceId]: [item('installed-one', true), item('installed-two', true), item('new-skill', false)] },
       loadedSourceIds: { [sourceId]: true },

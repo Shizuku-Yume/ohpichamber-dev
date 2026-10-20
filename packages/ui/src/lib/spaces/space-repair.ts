@@ -1,9 +1,9 @@
 // A space's state and its repair (DESIGN.md, user journey step 8): what the group's status line
 // says about a space that is stopped, broken or not answering, which actions its menu offers, and
-// the actions themselves, from soft to hard: start, restart OpenCode, restart the container, stop,
-// delete. What the host lists is the authority; this window only adds the action it has under way
-// or the one that failed, so the line can say so. Since 5d-4 the menu of a running space also runs
-// the project's setup commands again.
+// the actions themselves, from soft to hard: start, restart the container, stop, delete. What the
+// host lists is the authority; this window only adds the action it has under way or the one that
+// failed, so the line can say so. Since 5d-4 the menu of a running space also runs the project's
+// setup commands again.
 
 import { failureOfError } from '@/components/session/spaces/spaceFailureText';
 import { refreshSpaceArchives } from './space-archives';
@@ -12,7 +12,6 @@ import {
   SpacesRequestError,
   removeSpace,
   restartSpace,
-  restartSpaceOpenCode,
   startSpace,
   stopSpace,
   type SpaceEntry,
@@ -66,7 +65,7 @@ export const spaceMenuActionsOf = (entry: SpaceEntry | undefined): SpaceAction[]
   if (entry.state === 'missing') return ['remove'];
   const gone = entry.damage === 'gatekeeper_gone';
   if (entry.state === 'exited') return gone ? ['remove'] : ['start', 'remove'];
-  return gone ? ['stop', 'remove'] : ['restart_opencode', 'restart', 'setup', 'stop', 'remove'];
+  return gone ? ['stop', 'remove'] : ['restart', 'setup', 'stop', 'remove'];
 };
 
 /**
@@ -97,7 +96,6 @@ const call = (spaceId: string, action: SpaceAction, options: SpaceActionOptions)
     case 'start': return startSpace(spaceId).then(() => null);
     case 'stop': return stopSpace(spaceId).then(() => null);
     case 'restart': return restartSpace(spaceId).then(() => null);
-    case 'restart_opencode': return restartSpaceOpenCode(spaceId).then(() => null);
     case 'setup': {
       const entry = useSpacesStore.getState().journey?.get(spaceId);
       if (!entry) return Promise.resolve({ code: 'space_not_found', message: '' });

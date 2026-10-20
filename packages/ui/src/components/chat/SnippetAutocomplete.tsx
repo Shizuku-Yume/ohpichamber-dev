@@ -1,6 +1,7 @@
 import React from 'react';
 import { cn, fuzzyMatch } from '@/lib/utils';
-import { useSnippetsStore } from '@/stores/useSnippetsStore';
+import { selectSnippetsForDirectory, useSnippetsStore } from '@/stores/useSnippetsStore';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useUIStore } from '@/stores/useUIStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from '@/components/icon/Icon';
@@ -37,7 +38,8 @@ export const SnippetAutocomplete = React.forwardRef<SnippetAutocompleteHandle, S
   const selectedIndexRef = React.useRef(0);
   const [filteredSnippets, setFilteredSnippets] = React.useState<Snippet[]>([]);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
-  const snippets = useSnippetsStore((s) => s.snippets);
+  const directory = useEffectiveDirectory();
+  const snippets = useSnippetsStore((state) => selectSnippetsForDirectory(state, directory));
   const loadSnippets = useSnippetsStore((s) => s.loadSnippets);
   const setSnippetDraft = useSnippetsStore((s) => s.setSnippetDraft);
   const setSelectedSnippet = useSnippetsStore((s) => s.setSelectedSnippet);
@@ -45,17 +47,17 @@ export const SnippetAutocomplete = React.forwardRef<SnippetAutocompleteHandle, S
   const setSettingsPage = useUIStore((s) => s.setSettingsPage);
 
   React.useEffect(() => {
-    void loadSnippets();
-  }, [loadSnippets]);
+    void loadSnippets(directory);
+  }, [directory, loadSnippets]);
 
   React.useEffect(() => {
     const query = searchQuery.trim();
     const matches = query.length
-      ? snippets.filter((snippet) => fuzzyMatch(snippet.name, query) || snippet.aliases.some((alias) => fuzzyMatch(alias, query)))
+      ? snippets.filter((snippet) => fuzzyMatch(snippet.name, query))
       : snippets;
     const sortedMatches = [...matches].sort((a, b) => {
-      if (a.source === 'project' && b.source !== 'project') return -1;
-      if (a.source !== 'project' && b.source === 'project') return 1;
+      if (a.scope === 'workspace' && b.scope !== 'workspace') return -1;
+      if (a.scope !== 'workspace' && b.scope === 'workspace') return 1;
       return a.name.localeCompare(b.name);
     });
     setFilteredSnippets(sortedMatches);
@@ -77,10 +79,8 @@ export const SnippetAutocomplete = React.forwardRef<SnippetAutocompleteHandle, S
   }, [onClose]);
 
   const chooseSnippet = React.useCallback((snippet: Snippet) => {
-    const query = searchQuery.trim();
-    const trigger = snippet.aliases.includes(query) ? query : snippet.name;
-    onSnippetSelect(snippet, trigger);
-  }, [onSnippetSelect, searchQuery]);
+    onSnippetSelect(snippet, snippet.name);
+  }, [onSnippetSelect]);
 
   const openNewSnippetSettings = React.useCallback(() => {
     const existing = new Set(snippets.map((snippet) => snippet.name));
@@ -89,7 +89,7 @@ export const SnippetAutocomplete = React.forwardRef<SnippetAutocompleteHandle, S
     while (existing.has(name)) {
       name = `new-snippet-${counter++}`;
     }
-    setSnippetDraft({ name, scope: 'global' });
+    setSnippetDraft({ name, scope: 'agent', content: '' });
     setSelectedSnippet(name);
     setSettingsPage('snippets');
     setSettingsDialogOpen(true);
@@ -136,7 +136,7 @@ export const SnippetAutocomplete = React.forwardRef<SnippetAutocompleteHandle, S
         </div>
         {filteredSnippets.length ? filteredSnippets.map((snippet, index) => (
           <div
-            key={`${snippet.source}:${snippet.filePath}`}
+            key={snippet.templateId}
             ref={(el) => { itemRefs.current[index + 1] = el; }}
             className={cn('flex gap-2 px-3 py-1.5 cursor-pointer rounded-lg typography-ui-label', isMobile ? 'items-center' : 'items-start', index + 1 === selectedIndex && 'bg-interactive-selection')}
             onClick={() => chooseSnippet(snippet)}
@@ -144,8 +144,8 @@ export const SnippetAutocomplete = React.forwardRef<SnippetAutocompleteHandle, S
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="font-semibold truncate">#{snippet.name}</span>
-                <span className="text-[10px] leading-none uppercase font-bold tracking-tight px-1.5 py-1 rounded border flex-shrink-0 bg-[var(--surface-muted)] text-muted-foreground border-[var(--interactive-border)]/60">{t(`snippets.source.${snippet.source}`)}</span>
+                <span className="font-semibold truncate">/{snippet.name}</span>
+                <span className="text-[10px] leading-none uppercase font-bold tracking-tight px-1.5 py-1 rounded border flex-shrink-0 bg-[var(--surface-muted)] text-muted-foreground border-[var(--interactive-border)]/60">{snippet.source}</span>
               </div>
               {!isMobile && (
                 <div className="typography-meta text-muted-foreground mt-0.5 truncate">{snippetPreview(snippet)}</div>

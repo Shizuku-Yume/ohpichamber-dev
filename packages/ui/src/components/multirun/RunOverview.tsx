@@ -8,8 +8,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { normalizePath } from '@/lib/pathNormalization';
-import type { Session } from '@openchamber/agent-contract';
-import { findCatalogModel, type Model } from '@/lib/opencode/model';
+import type { Model, Session } from '@openchamber/agent-contract';
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -39,8 +38,8 @@ type BarMode =
   | { kind: 'keep'; sessionId: string }
   | { kind: 'fuse'; excluded: ReadonlySet<string> };
 
-const modelLabelFor = (member: MultiRunMember, providers: readonly { id: string; models: readonly Model[] }[]): string => {
-  const name = findCatalogModel(providers.find((provider) => provider.id === member.identity.providerID)?.models, member.identity.modelID)?.name || member.identity.modelID;
+const modelLabelFor = (member: MultiRunMember, providers: readonly { providerId: string; models: readonly Model[] }[]): string => {
+  const name = providers.find((provider) => provider.providerId === member.identity.providerID)?.models.find((model) => model.modelId === member.identity.modelID)?.name || member.identity.modelID;
   return member.identity.index && member.identity.index > 1 ? `${name} #${member.identity.index}` : name;
 };
 

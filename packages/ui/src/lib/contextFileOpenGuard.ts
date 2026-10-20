@@ -61,10 +61,10 @@ const readFileContent = async (
   if (allowOutsideWorkspace) {
     params.set('allowOutsideWorkspace', 'true');
   }
-  const response = await runtimeFetch(`/api/fs/read?${params.toString()}`, {
+  const response = await runtimeFetch('/api/fs/read', {
+    query: params,
     // Avoid conditional requests (304 + empty body).
     cache: 'no-store',
-    headers: options?.directory ? { 'x-opencode-directory': options.directory } : undefined,
   });
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => ({ error: response.statusText }));

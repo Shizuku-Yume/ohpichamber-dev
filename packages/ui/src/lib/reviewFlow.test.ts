@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { switchRuntimeEndpoint } from './runtime-switch';
 
 import {
@@ -10,6 +10,13 @@ import {
   stripFinalReviewMarker,
 } from './reviewFlow';
 import type { AutoReviewRun } from '@/stores/useAutoReviewStore';
+import type { Session, SessionSnapshot } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import * as actions from '@/sync/session-actions';
+import * as prompts from '@/lib/magicPrompts';
+import * as knowledge from '@/lib/sessionKnowledgeApi';
+import { useSelectionStore } from '@/sync/selection-store';
+import { sendReviewFeedbackToOriginal } from './reviewFlow';
 
 describe('reviewFlow auto-review helpers', () => {
   beforeEach(() => {
@@ -66,5 +73,54 @@ describe('reviewFlow auto-review helpers', () => {
     const nextKey = claimAutoReviewForward(run, 'msg_assistant_review');
     expect(nextKey).toBe(key);
     releaseAutoReviewForward(nextKey!);
+  });
+});
+
+describe('review native prompt delivery', () => {
+  const spies: Array<{ mockRestore(): void }> = [];
+  afterEach(() => { for (const spy of spies.splice(0).reverse()) spy.mockRestore(); });
+  test.each(['command', 'template', 'text', 'failure', 'stale', 'plain'] as const)('forwards generated primary text through native expansion: %s', async (mode) => {
+    switchRuntimeEndpoint({ apiBaseUrl: 'http://review.test', runtimeKey: 'review-test' });
+    const session: Session = { sessionId: 'review', rootSessionId: 'review', projectId: 'project', workspaceId: 'workspace', displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, metadata: { openchamber: { kind: 'review', originalSessionID: 'original' } }, metadataRevision: '1', archiveRevision: '0' };
+    const snapshot: SessionSnapshot = { session, cursor: 'epoch:0', activeRun: null, branch: { branchId: 'branch', branchVersion: '1', leafMessageId: null }, window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false }, turns: [], messages: [], approvals: [], questions: [], requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' } };
+    spies.push(spyOn(canonicalClient, 'getSession').mockResolvedValue(snapshot));
+    spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: [session], errors: {} }));
+    spies.push(spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ projectId: 'project', workspaceId: 'workspace', name: 'repo' }));
+    const text = mode === 'plain' ? 'Generated review feedback\n#literal' : '/review "two words"\n trailing  ';
+    spies.push(spyOn(prompts, 'renderMagicPrompt').mockResolvedValue(text));
+    spies.push(spyOn(knowledge, 'fetchSessionKnowledge').mockResolvedValue({ text: '', signature: '' }));
+    const selection = useSelectionStore.getState();
+    selection.saveSessionModelSelection('original', 'captured', 'model');
+    selection.saveSessionAgentSelection('original', 'agent');
+    selection.saveAgentModelForSession('original', 'agent', 'captured', 'model');
+    selection.saveAgentModelVariantForSession('original', 'agent', 'captured', 'model', 'high');
+    const send = spyOn(actions, 'sendMessage').mockResolvedValue(undefined);
+    const optimistic = spyOn(actions, 'optimisticSend').mockImplementation(async (input) => {
+      input.beforeOptimisticInsert?.();
+      input.onMessageID?.('message');
+      await input.send('message', input.context ?? []);
+    });
+    spies.push(send, optimistic);
+    const requests: Request[] = [];
+    spies.push(spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const request = new Request(new URL(url instanceof Request ? url.url : String(url), 'http://test'), init);
+      requests.push(request);
+      expect(new URL(request.url).pathname).toBe('/api/agent/v1/workspaces/workspace/commands/expand-text');
+      expect(await request.json()).toEqual({ text });
+      if (mode === 'failure') return new Response('unavailable', { status: 503 });
+      if (mode === 'stale') switchRuntimeEndpoint({ apiBaseUrl: 'http://other.test', runtimeKey: 'other-review' });
+      return Response.json(mode === 'command' || mode === 'template' ? { kind: mode, content: '/expanded once', modelSelection: { providerId: 'bound', modelId: 'bound-model' }, agentId: 'bound-agent' } : { kind: 'text', content: text });
+    }));
+    const result = sendReviewFeedbackToOriginal('review', '/repo', 'Feedback');
+    if (mode === 'failure' || mode === 'stale') {
+      await expect(result).rejects.toThrow();
+      expect(optimistic).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+      return;
+    }
+    expect(await result).toBe('message');
+    expect(requests).toHaveLength(mode === 'plain' ? 0 : 1);
+    const matched = mode === 'command' || mode === 'template';
+    expect(send.mock.calls[0][0].request).toMatchObject({ input: { text: matched ? '/expanded once' : text }, options: { providerId: matched ? 'bound' : 'captured', modelId: matched ? 'bound-model' : 'model', agentId: matched ? 'bound-agent' : 'agent', variant: 'high', reasoningEffort: null } });
   });
 });

@@ -2,18 +2,21 @@ import { describe, expect, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { opencodeClient } from '@/lib/opencode/client';
+import type { Session } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
 import { hostFilesystem } from '@/lib/host-filesystem';
-import { subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import type { SessionPage } from '@/lib/opencode/client';
 import {
   GLOBAL_SESSIONS_REFRESH_INTERVAL_MS,
   startGlobalSessionsPolling,
   useGlobalSessionsPolling,
 } from './useGlobalSessionsPolling';
 
+type SessionList = { items: Session[]; errors: Record<string, string> };
+
 const flush = async () => { await new Promise<void>((resolve) => queueMicrotask(resolve)); };
+const settlePromises = async () => { for (let turn = 0; turn < 32; turn += 1) await Promise.resolve(); };
 const timers = () => {
   let nextId = 0;
   const pending = new Map<number, { callback: () => void; delay: number }>();
@@ -232,13 +235,14 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
   const home = spyOn(hostFilesystem, 'getFilesystemHomeInfo')
     .mockRejectedValueOnce(new Error('startup unavailable'))
     .mockResolvedValue({ home: '/home/user', chatsRoot: '/chats' });
-  const host = spyOn(opencodeClient, 'getHostSessionStatusSnapshot').mockResolvedValue(null);
-  const session = (id: string): SessionPage => ({ sessions: [{
-    id, projectID: 'project', directory: '/project', title: id,
-    time: { created: 1, updated: 2 },
-    cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  }], cursor: {} });
-  const list = spyOn(opencodeClient, 'listSessionsPage').mockResolvedValue(session('restored'));
+  const workspace = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace', projectId: 'project', name: 'Project' });
+  const subagents = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
+  const session = (sessionId: string): SessionList => ({ items: [{
+    sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: sessionId,
+    createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    metadata: null, metadataRevision: '0', archiveRevision: '0',
+  }], errors: {} });
+  const list = spyOn(canonicalClient, 'listSessions').mockResolvedValue(session('restored'));
   const clock = timers();
   // happy-dom returns Node timer handles; retain that contract while controlling time.
   const originalTimeout = dom.setTimeout.bind(dom);
@@ -259,7 +263,18 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
   switchRuntimeEndpoint({ apiBaseUrl: 'http://sessions.test', runtimeKey: 'startup-a' });
   const root = createRoot(document.createElement('div'));
   const Harness = ({ enabled }: { enabled: boolean }) => { useGlobalSessionsPolling(enabled); return null; };
-  let resolveOldPage: (page: SessionPage) => void = () => undefined;
+  let resolveOldPage: (page: SessionList) => void = () => undefined;
+  const subscribeToNextReady = (): Promise<void> => {
+    let unsubscribe: () => void = () => undefined;
+    const ready = new Promise<void>((resolve) => {
+      unsubscribe = useGlobalSessionsStore.subscribe((state) => {
+        if (state.status !== 'ready') return;
+        unsubscribe();
+        resolve();
+      });
+    });
+    return ready;
+  };
   try {
     await act(async () => root.render(React.createElement(Harness, { enabled: false })));
     expect(home.mock.calls.length).toBe(0);
@@ -267,39 +282,39 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
     expect(useGlobalSessionsStore.getState().status).toBe('error');
     expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
     expect(clock.delay()).toBe(1_000);
-    await act(async () => clock.fire());
+    const recovered = subscribeToNextReady();
+    await act(async () => { await clock.fire(); await recovered; });
     expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['restored']);
     expect(useGlobalSessionsStore.getState().status).toBe('ready');
     expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
-    expect(list.mock.calls.every(([options]) => options?.global === true)).toBe(true);
+    expect(list.mock.calls.every(([workspaceId]) => workspaceId === undefined)).toBe(true);
 
-    const oldPage = new Promise<SessionPage>((resolve) => { resolveOldPage = resolve; });
-    list.mockImplementationOnce(() => oldPage);
+    const oldPage = new Promise<SessionList>((resolve) => { resolveOldPage = resolve; });
+    list.mockImplementation(() => getRuntimeKey() === 'startup-a' ? oldPage : Promise.resolve(session('new-runtime')));
     await act(async () => clock.fire());
     expect(useGlobalSessionsStore.getState().status).toBe('loading');
     expect(useGlobalSessionsStore.getState().hasLoaded).toBe(true);
     expect(clock.pending.size).toBe(0);
-    list.mockResolvedValue(session('new-runtime'));
-    await act(async () => switchRuntimeEndpoint({ apiBaseUrl: 'http://sessions.test', runtimeKey: 'startup-b' }));
+    const switched = subscribeToNextReady();
+    await act(async () => { switchRuntimeEndpoint({ apiBaseUrl: 'http://sessions.test', runtimeKey: 'startup-b' }); await switched; });
     expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['new-runtime']);
     expect(clock.pending.size).toBe(1);
-    const seedsBeforeOldCompletion = host.mock.calls.length;
-    await act(async () => resolveOldPage(session('stale')));
+    await act(async () => { resolveOldPage(session('stale')); await settlePromises(); });
     expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['new-runtime']);
-    expect(host.mock.calls.length).toBe(seedsBeforeOldCompletion);
     expect(clock.pending.size).toBe(1);
     // The app may reset stores when the endpoint changes but runtime identity stays the same.
+    const reconnected = subscribeToNextReady();
     list.mockResolvedValue(session('reconnected'));
-    await act(async () => switchRuntimeEndpoint({ apiBaseUrl: 'http://reconnected.test', runtimeKey: 'startup-b' }));
+    await act(async () => { switchRuntimeEndpoint({ apiBaseUrl: 'http://reconnected.test', runtimeKey: 'startup-b' }); await reconnected; });
     expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['reconnected']);
     expect(clock.pending.size).toBe(1);
     await act(async () => root.render(React.createElement(Harness, { enabled: false })));
     expect(clock.pending.size).toBe(0);
   } finally {
-    resolveOldPage({ sessions: [], cursor: {} });
+    resolveOldPage(session('stale'));
     await act(async () => root.unmount());
     reset();
-    for (const spy of [fetch, home, host, list, timeout, clear]) spy.mockRestore();
+    for (const spy of [fetch, home, workspace, subagents, list, timeout, clear]) spy.mockRestore();
     await dom.happyDOM.close();
     for (const [name, descriptor] of originals) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);

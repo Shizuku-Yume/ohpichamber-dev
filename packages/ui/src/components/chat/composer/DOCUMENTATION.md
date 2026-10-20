@@ -125,11 +125,11 @@ copy.
   punctuation, not part of the file being referenced. Mentions are plain
   editable text: deleting a character edits the token and reopens the mention
   picker, the same way `/skill` tokens behave — not an atomic delete.
-- `prefixTokens.ts` — `/command`, `/skill`, `#snippet`. Scanning is deliberately
-  generous; **membership in the command, skill or snippet registry is the
-  authority**, not the pattern. An unknown `/token` stays plain prose.
-- `triggers.ts` — which picker a caret position asks for. Exactly one can be
-  active, with precedence `command > skill > snippet > mention`.
+- `prefixTokens.ts` — native `/command`, `/template`, and `$skill` names, including grouped relative slash names. Scanning is deliberately generous; catalog membership, not syntax, determines the highlighted identity. An unknown `/token` stays prose. Legacy `#snippet` syntax is not interpreted.
+- `triggers.ts` — exactly one picker is active, with precedence `command > skill > mention`. Native templates share the leading-slash command palette; comment-only fields offer a leading-slash template picker.
+- Expansion and argument substitution are worker-owned. `api/fileResourceExpansion.ts` forwards raw input to the shared native command-then-template pipeline once, preserving canonical agent/model bindings and authoritative command/template/text classification.
+  Goal preparation reuses its delivery expansion; queued primary/additional text carries capture provenance so native output is not expanded twice.
+  Comment fields support leading `/template` invocation before context capture; quoted code remains verbatim and failed expansion restores the submission.
 - `tokenize.ts` — one pass producing every highlight range. Adding a construct
   to the language means adding it here, once.
 
@@ -221,12 +221,13 @@ and the send path reading the same grammar.
   drawn caret through a class it only writes while applying an update, so the
   selection has to be the update that follows the focus.
 - `submit/buildOutgoingMessage.ts` flattens queued messages, the composer text,
-  context drafts and linked references into OpenCode's one-primary-plus-parts
-  shape. The oldest queued message becomes primary. **Every attached context
-  item (inline comments, terminal selections, browser annotations, PR context,
-  linked issue/PR) becomes its own synthetic text part carrying structured
-  metadata** built by `lib/messages/contextParts.ts`; the timeline reads that
-  metadata back to render context blocks. PR instructions precede the PR diff.
+  context drafts and linked references into the local outgoing-message shape.
+  The oldest queued message becomes primary. Every attached context item
+  (inline comments, terminal selections, browser annotations, PR context,
+  linked issue/PR) retains local text and structured metadata built by
+  `lib/messages/contextParts.ts`. Canonical prompt capture formats this
+  context before delivery; transcript `Part` records expose `content`, not
+  local composer metadata. PR instructions precede the PR diff.
   The same module's `buildComposerContext` captures that context when a message
   is **queued** instead of sent: the chips leave the composer with the message
   (as `QueuedContextPart`s on the queue item), the server delivers them through

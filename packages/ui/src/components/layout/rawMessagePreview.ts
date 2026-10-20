@@ -1,47 +1,22 @@
-import type { Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
 import type { TimeFormatPreference } from '@/stores/useUIStore';
 
 /**
  * Helpers for the Raw Messages preview row in the context sidebar.
  *
- * Each collapsed entry shows a role label, parts summary (e.g. "bash",
- * "text + todowrite"), I/O token counters (assistant only), a content
- * snippet, an 8-char message id suffix, and a locale-aware timestamp.
- *
- * Note: we surface the **suffix** of the message id (last 8 chars), not the
- * prefix. OpenCode ids share a long common prefix (e.g. `msg_e39e98d…`); the
- * tail is what actually differentiates them.
+ * Each collapsed entry shows a role label, native part/tool summary, I/O
+ * token counters (assistant only), a content snippet, an 8-character message
+ * id suffix, and a locale-aware timestamp.
  *
  * Helpers here are pure and DOM-free so they can be unit tested.
  */
 
 const PREVIEW_ID_LENGTH = 8;
 
-const partRecord = (part: Part): Record<string, unknown> => part as unknown as Record<string, unknown>;
-
-const partTypeOf = (part: Part): string => {
-  const value = partRecord(part).type;
-  return typeof value === 'string' ? value : '';
-};
-
-const partToolOf = (part: Part): string => {
-  const value = partRecord(part).tool;
-  return typeof value === 'string' ? value : '';
-};
-
-const partTextOf = (part: Part): string => {
-  const value = partRecord(part).text;
-  return typeof value === 'string' ? value : '';
-};
-
-const labelForPart = (part: Part): string => {
-  const type = partTypeOf(part);
-  if (type === 'tool') {
-    const tool = partToolOf(part).trim().toLowerCase();
-    return tool || 'tool';
-  }
-  return type || 'unknown';
-};
+const labelForPart = (part: Part): string =>
+  part.type === 'tool_call' || part.type === 'tool_result'
+    ? part.toolName
+    : part.type;
 
 export const derivePartsLabel = (parts: Part[]): string => {
   if (parts.length === 0) return '';
@@ -85,13 +60,13 @@ const collapseWhitespace = (text: string): string =>
  */
 export const deriveUserSnippet = (parts: Part[]): string => {
   for (const part of parts) {
-    if (partTypeOf(part) === 'text') {
-      const cleaned = collapseWhitespace(partTextOf(part));
+    if (part.type === 'text') {
+      const cleaned = collapseWhitespace(part.content);
       if (cleaned.length === 0) continue;
       return cleaned;
     }
   }
-  const nonTextCount = parts.filter((part) => partTypeOf(part) !== 'text').length;
+  const nonTextCount = parts.filter((part) => part.type === 'attachment').length;
   if (nonTextCount === 0) return '';
   return `${nonTextCount} attachment${nonTextCount === 1 ? '' : 's'}`;
 };

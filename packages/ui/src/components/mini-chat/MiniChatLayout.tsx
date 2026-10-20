@@ -141,18 +141,15 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
       const message = currentSessionMessages[i];
       if (message.role !== 'assistant') continue;
       if (!message.providerId || !message.modelId) continue;
-      const provider = providers.find((entry) => entry.id === message.providerId);
-      const model = provider?.models.find((entry) => entry.id === message.modelId);
+      const provider = providers.find((entry) => entry.providerId === message.providerId);
+      const model = provider?.models.find((entry) => entry.modelId === message.modelId);
       if (model) return model;
     }
     return undefined;
   }, [currentSessionMessages, providers]);
-  const modelForLimits = currentModel?.limit ? currentModel : latestAssistantModel;
-  const limit = modelForLimits && typeof modelForLimits.limit === 'object' && modelForLimits.limit !== null
-    ? (modelForLimits.limit as Record<string, unknown>)
-    : null;
-  const contextLimit = limit && typeof limit.context === 'number' ? limit.context : 0;
-  const outputLimit = limit && typeof limit.output === 'number' ? limit.output : 0;
+  const modelForLimits = currentModel ?? latestAssistantModel;
+  const contextLimit = modelForLimits?.contextWindow ?? 0;
+  const outputLimit = modelForLimits?.maxOutputTokens ?? 0;
   const contextUsage = React.useMemo<SessionContextUsage | null>(() => (
     currentSessionId ? buildSessionContextUsage(currentSessionMessages, contextLimit, outputLimit) : null
   ), [contextLimit, currentSessionId, currentSessionMessages, outputLimit]);

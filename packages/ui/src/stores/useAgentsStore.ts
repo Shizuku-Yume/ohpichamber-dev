@@ -4,45 +4,13 @@ import { devtools, persist } from "zustand/middleware";
 import type { Agent, AgentCatalog, AgentMutationResult as NativeAgentMutationResult } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { hostFilesystem } from '@/lib/host-filesystem';
-import { emitConfigChange, scopeMatches, subscribeToConfigChanges, type ConfigChangeScope } from "@/lib/configSync";
-import {
-  startConfigUpdate,
-  finishConfigUpdate,
-  updateConfigUpdateMessage,
-} from "@/lib/configUpdate";
-import { waitForOpenCodeConnection } from "@/stores/waitForOpenCodeConnection";
+import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
 import { useConfigStore } from "@/stores/useConfigStore";
-import { invalidateCommandsLoadCache, useCommandsStore } from "@/stores/useCommandsStore";
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useProjectsStore } from "@/stores/useProjectsStore";
-import { useSkillsCatalogStore } from "@/stores/useSkillsCatalogStore";
-import { invalidateSkillsLoadCache, useSkillsStore } from "@/stores/useSkillsStore";
-import { runtimeFetch } from "@/lib/runtime-fetch";
-import { z } from "zod";
 import { compareCounters } from '@/sync/event-reducer';
 import { getRuntimeKey } from "@/lib/runtime-switch";
-
-// Note: useDirectoryStore cannot be imported at top level to avoid circular dependency
-// useDirectoryStore -> useAgentsStore (for refreshAfterOpenCodeRestart)
-// useAgentsStore -> useDirectoryStore (for currentDirectory)
-const getCurrentDirectory = (): string | null => {
-  const opencodeDirectory = hostFilesystem.getDirectory();
-  if (typeof opencodeDirectory === 'string' && opencodeDirectory.trim().length > 0) {
-    return opencodeDirectory;
-  }
-
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = (window as any).__zustand_directory_store__;
-    if (store) {
-      return store.getState().currentDirectory;
-    }
-  } catch {
-    // ignore
-  }
-
-  return null;
-};
 
 /**
  * Directory a call operates on. Settings can browse another project without
@@ -101,17 +69,6 @@ export const invalidateAgentsLoadCache = (directory: string | null = getConfigDi
   // Retire reads started before a catalog mutation or notification.
 };
 
-export type PermissionEffect = 'allow' | 'ask' | 'deny';
-export interface PermissionRule { action: string; resource: string; effect: PermissionEffect }
-const PermissionRuleSchema = z.object({ action: z.string(), resource: z.string(), effect: z.enum(['allow', 'ask', 'deny']) });
-const HostAgentPermissionsSchema = z.object({
-  global: z.array(PermissionRuleSchema),
-  agent: z.array(PermissionRuleSchema),
-  effective: z.array(PermissionRuleSchema.extend({ source: z.enum(['global', 'agent']) })),
-  source: z.enum(['md', 'json', 'none']),
-  path: z.string().nullable(),
-});
-type HostAgentPermissions = z.infer<typeof HostAgentPermissionsSchema>;
 export interface AgentMutationResult { ok: boolean; error?: string; revision?: string }
 interface AgentsStore {
   selectedAgentName: string | null;
@@ -129,20 +86,24 @@ interface AgentsStore {
   updateAgent: (agent: Agent, directory?: string | null, expectedRevision?: string) => Promise<AgentMutationResult>;
   deleteAgent: (agentId: string, directory?: string | null, expectedRevision?: string) => Promise<AgentMutationResult>;
   getAgentByName: (name: string, directory?: string | null) => Agent | undefined;
-  /** Host-owned ordered rules, not native Agent fields or execution policy. */
-  fetchAgentPermissions: (name: string, directory?: string | null) => Promise<HostAgentPermissions | null>;
-  saveHostAgentPermissions: (name: string, rules: PermissionRule[], directory?: string | null) => Promise<AgentMutationResult>;
 }
 declare global {
   interface Window { __zustand_agents_store__?: UseBoundStore<StoreApi<AgentsStore>> }
 }
 const EMPTY_AGENTS: Agent[] = [];
 const CONFIG_EVENT_SOURCE = 'useAgentsStore';
-const sleep = (ms: number): Promise<void> => new Promise<void>((resolve) => {
-  setTimeout(resolve, ms);
-});
 export const selectAgentsForDirectory = (state: Pick<AgentsStore, 'agentsByDirectory'>, directory?: string | null): Agent[] =>
   state.agentsByDirectory[getAgentsCacheKey(resolveDirectory(directory))] ?? EMPTY_AGENTS;
+
+export type AgentCatalogStatus = 'loading' | 'ready' | 'error';
+export const selectAgentCatalogStatus = (
+  state: Pick<AgentsStore, 'revisionsByDirectory' | 'errorsByDirectory'>,
+  directory?: string | null,
+): AgentCatalogStatus => {
+  const key = getAgentsCacheKey(resolveDirectory(directory));
+  if (state.errorsByDirectory[key]) return 'error';
+  return state.revisionsByDirectory[key] === undefined ? 'loading' : 'ready';
+};
 
 export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<AgentsStore>()(devtools(persist((set, get) => {
   const fail = (key: string, error: unknown): AgentMutationResult => {
@@ -162,6 +123,13 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
         ...(directory === getConfigDirectory() ? { agents: catalog.agents } : {}),
       };
     });
+    const config = useConfigStore.getState();
+    if (config.activeDirectoryKey === directory
+        && !useSessionUIStore.getState().currentSessionId
+        && config.selectionSource === 'auto' && config.agentSelectionSource === 'auto'
+        && config.currentVariantSelection.override === undefined) {
+      config.applyDefaultModelAgentSelection();
+    }
   };
   const mutate = async (
     directory: string | null | undefined,
@@ -257,29 +225,6 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
     updateAgent: (agent, directory, revision) => mutate(directory, revision, (workspaceId, expectedRevision) => canonicalClient.updateAgent(workspaceId, { expectedRevision, agent })),
     deleteAgent: (agentId, directory, revision) => mutate(directory, revision, (workspaceId, expectedRevision) => canonicalClient.deleteAgent(workspaceId, { expectedRevision, agentId })),
     getAgentByName: (name, directory) => selectAgentsForDirectory(get(), directory).find((agent) => agent.name === name),
-    fetchAgentPermissions: async (name, requestedDirectory) => {
-      const directory = resolveDirectory(requestedDirectory);
-      const query = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-      try {
-        const response = await runtimeFetch(`/api/config/agents/${encodeURIComponent(name)}/permissions${query}`, {
-          headers: { 'Cache-Control': 'no-cache', ...(directory ? { 'x-opencode-directory': directory } : {}) },
-        });
-        if (!response.ok) return null;
-        const parsed = HostAgentPermissionsSchema.safeParse(await response.json());
-        return parsed.success ? parsed.data : null;
-      } catch { return null; }
-    },
-    saveHostAgentPermissions: async (name, rules, requestedDirectory) => {
-      const directory = resolveDirectory(requestedDirectory);
-      const query = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-      try {
-        const response = await runtimeFetch(`/api/config/agents/${encodeURIComponent(name)}${query}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(directory ? { 'x-opencode-directory': directory } : {}) },
-          body: JSON.stringify({ permissions: rules }),
-        });
-        return { ok: response.ok };
-      } catch { return { ok: false }; }
-    },
   };
 }, {
   name: 'agents-store', storage: createDeferredSafeJSONStorage(),
@@ -288,175 +233,6 @@ export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<Agent
 
 if (typeof window !== "undefined") {
   window.__zustand_agents_store__ = useAgentsStore;
-}
-
-type ConfigRefreshMode = "active" | "projects";
-
-const normalizeRefreshScopes = (scopes?: ConfigChangeScope[]): ConfigChangeScope[] => {
-  if (!scopes || scopes.length === 0) {
-    return ["all"];
-  }
-
-  const unique = Array.from(new Set(scopes));
-  if (unique.includes("all")) {
-    return ["all"];
-  }
-
-  return unique;
-};
-
-async function performConfigRefresh(options: {
-  message?: string;
-  delayMs?: number;
-  scopes?: ConfigChangeScope[];
-  mode?: ConfigRefreshMode;
-} = {}) {
-  const { message, delayMs } = options;
-  const scopes = normalizeRefreshScopes(options.scopes);
-  const mode: ConfigRefreshMode = options.mode ?? (scopes.includes("all") ? "projects" : "active");
-
-  try {
-    updateConfigUpdateMessage(message || "Refreshing configuration…");
-  } catch {
-    // ignore
-  }
-
-  try {
-    await waitForOpenCodeConnection(delayMs);
-
-    const configStore = useConfigStore.getState();
-    const agentConfigStore = useAgentsStore.getState();
-    const commandsStore = useCommandsStore.getState();
-    const skillsStore = useSkillsStore.getState();
-    const skillsCatalogStore = useSkillsCatalogStore.getState();
-
-    const refreshProviders = scopes.includes("all") || scopes.includes("providers");
-    const refreshSdkAgents = scopes.includes("all") || scopes.includes("agents");
-    const refreshAgentConfigs = scopes.includes("all") || scopes.includes("agents");
-    const refreshCommands = scopes.includes("all") || scopes.includes("commands");
-    const refreshSkills = scopes.includes("all") || scopes.includes("skills");
-
-    const currentDirectory = getCurrentDirectory();
-    const projects = mode === "projects" ? useProjectsStore.getState().projects : [];
-    const directoriesToRefresh = Array.from(
-      new Set([
-        ...(currentDirectory ? [currentDirectory] : []),
-        ...projects.map((project) => project.path).filter(Boolean),
-      ]),
-    );
-
-    if (scopes.includes("all") && mode === "projects") {
-      useConfigStore.setState({ directoryScoped: {} });
-    }
-
-    if (refreshProviders) {
-      useConfigStore.getState().invalidateModelMetadataCache();
-      useConfigStore.getState().invalidateProviderCache(mode === "active" ? currentDirectory : undefined);
-    }
-
-    const sdkRefreshTasks: Promise<void>[] = [];
-    for (const directory of directoriesToRefresh) {
-      if (refreshProviders) {
-        sdkRefreshTasks.push(configStore.loadProviders({ directory, source: 'agentsStore:refreshConfig' }).then(() => undefined));
-      }
-      if (refreshSdkAgents) {
-        sdkRefreshTasks.push(configStore.loadAgents({ directory, source: 'agentsStore:refreshConfig' }).then(() => undefined));
-      }
-    }
-
-    const uiRefreshTasks: Promise<void>[] = [];
-    if (refreshAgentConfigs) {
-      invalidateAgentsLoadCache(currentDirectory);
-      uiRefreshTasks.push(agentConfigStore.loadAgents().then(() => undefined));
-    }
-    if (refreshCommands) {
-      invalidateCommandsLoadCache(currentDirectory);
-      uiRefreshTasks.push(commandsStore.loadCommands().then(() => undefined));
-    }
-    if (refreshSkills) {
-      // Match loadSkills cache key (active-project-first). Passing client/directory-store
-      // path here misses the key when those diverge after getRequestDirectory().
-      invalidateSkillsLoadCache();
-      uiRefreshTasks.push(skillsStore.loadSkills().then(() => undefined));
-      uiRefreshTasks.push(skillsCatalogStore.loadCatalog({ refresh: true }).then(() => undefined));
-    }
-
-    updateConfigUpdateMessage("Refreshing configuration…");
-    await Promise.all([...sdkRefreshTasks, ...uiRefreshTasks]);
-  } catch (error) {
-    updateConfigUpdateMessage("OpenCode refresh failed. Please retry.");
-    await sleep(1500);
-    throw error;
-  } finally {
-    finishConfigUpdate();
-  }
-}
-
-export async function refreshAfterOpenCodeRestart(options?: {
-  message?: string;
-  delayMs?: number;
-  scopes?: ConfigChangeScope[];
-  mode?: ConfigRefreshMode;
-}) {
-  await performConfigRefresh(options);
-}
-
-export async function reloadOpenCodeConfiguration(options?: {
-  message?: string;
-  delayMs?: number;
-  scopes?: ConfigChangeScope[];
-  mode?: ConfigRefreshMode;
-}) {
-  startConfigUpdate(options?.message || "Reloading OpenCode configuration…");
-
-  try {
-
-    const response = await runtimeFetch('/api/config/reload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    const payload = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      const message = payload?.error || 'Failed to reload configuration';
-      throw new Error(message);
-    }
-
-    if (payload?.requiresManualRestart) {
-      finishConfigUpdate();
-      const error = new Error(
-        payload?.message || 'Restart your connected OpenCode server to apply the changes.',
-      );
-      (error as Error & { requiresManualRestart?: boolean }).requiresManualRestart = true;
-      throw error;
-    }
-
-    const refreshOptions = {
-      ...options,
-      scopes: options?.scopes ?? ["all"],
-      mode: options?.mode ?? "projects",
-    };
-
-    if (payload?.requiresReload) {
-      await refreshAfterOpenCodeRestart({
-        ...refreshOptions,
-        message: payload.message,
-        delayMs: payload.reloadDelayMs,
-      });
-    } else {
-      await refreshAfterOpenCodeRestart(refreshOptions);
-    }
-  } catch (error) {
-    console.error('[reloadOpenCodeConfiguration] Failed:', error);
-    if ((error as Error & { requiresManualRestart?: boolean })?.requiresManualRestart) {
-      throw error;
-    }
-    updateConfigUpdateMessage('Failed to reload configuration. Please try again.');
-    await sleep(2000);
-    finishConfigUpdate();
-    throw error;
-  }
 }
 
 let unsubscribeAgentsConfigChanges: (() => void) | null = null;

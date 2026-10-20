@@ -134,7 +134,6 @@ const MarkdownImageThumbnail: React.FC<{
       open: true,
       title: candidate.filename,
       content: '',
-      metadata: { tool: 'markdown-image-preview', filename: candidate.filename },
       image: { url: image.url, filename: candidate.filename },
     });
   }, [candidate.filename, image, onShowPopup, t]);

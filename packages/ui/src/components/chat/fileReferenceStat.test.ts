@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { fileReferenceExists } from './fileReferenceStat';
+import { fileReferenceExists, findUniqueFileByName } from './fileReferenceStat';
 
 const originalFetch = globalThis.fetch;
 
@@ -30,8 +30,8 @@ describe('fileReferenceExists directory scoping (issue 3019)', () => {
 
     expect(exists).toBe(true);
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe('/api/fs/stat?path=%2Frepo-b%2Fsrc%2Findex.ts&optional=true');
-    expect(calls[0].headers.get('x-opencode-directory')).toBe('/repo-b');
+    expect(calls[0].url).toBe('/api/fs/stat?path=%2Frepo-b%2Fsrc%2Findex.ts&optional=true&directory=%2Frepo-b');
+    expect(calls[0].headers.has('x-opencode-directory')).toBe(false);
   });
 
   test('treats a workspace rejection under one directory as unknown under another directory', async () => {
@@ -40,7 +40,7 @@ describe('fileReferenceExists directory scoping (issue 3019)', () => {
     // and resolves false. The same path probed under B itself must issue a
     // fresh request rather than reuse A's cached rejection.
     stubFetchWith(() => {
-      const directoryHint = calls[calls.length - 1]?.headers.get('x-opencode-directory') ?? null;
+      const directoryHint = new URL(calls[calls.length - 1]?.url ?? '', 'http://localhost').searchParams.get('directory');
       if (directoryHint !== '/repo-b') {
         return new Response(JSON.stringify({ error: 'Path is outside of active workspace' }), { status: 400 });
       }
@@ -63,5 +63,17 @@ describe('fileReferenceExists directory scoping (issue 3019)', () => {
 
     expect(warm).toBe(true);
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe('findUniqueFileByName directory scoping', () => {
+  test('sends the directory as the query and never an engine header', async () => {
+    stubFetchWith(() => new Response(JSON.stringify({ paths: ['src/Renderer.tsx'] }), { status: 200 }));
+
+    await expect(findUniqueFileByName('Renderer.tsx', '/repo-b')).resolves.toBe('src/Renderer.tsx');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('/api/fs/find-by-name?name=Renderer.tsx&directory=%2Frepo-b');
+    expect(calls[0].headers.has('x-opencode-directory')).toBe(false);
   });
 });

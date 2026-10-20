@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { installRuntimeEndpointReset } from './runtimeEndpointReset';
-import { opencodeClient } from '@/lib/opencode/client';
-import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import { getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { useConfigStore } from '@/stores/useConfigStore';
 
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -37,30 +36,21 @@ afterEach(() => {
 });
 
 describe('installRuntimeEndpointReset', () => {
-  // #4219: the login screen unmounts App, so a host switch made from it must
-  // still move the SDK client; otherwise App mounts against Local with a client
-  // that keeps calling the remote and the startup overlay never lifts.
-  test('rebinds the SDK client and resets init state without any mounted UI', () => {
+  test('resets canonical runtime state when the selected endpoint changes', () => {
     installWindow();
     stubFetch();
     const uninstall = installRuntimeEndpointReset();
     try {
-      switchRuntimeEndpoint({ apiBaseUrl: 'https://remote.example', runtimeKey: 'remote' });
-      expect(opencodeClient.getBaseUrl().startsWith('https://remote.example')).toBe(true);
-
       useConfigStore.setState({ isInitialized: true, isConnected: true });
-      switchRuntimeEndpoint({ apiBaseUrl: 'http://127.0.0.1:4100', runtimeKey: 'local' });
+      switchRuntimeEndpoint({ apiBaseUrl: 'https://remote.example', runtimeKey: 'remote' });
 
-      expect(opencodeClient.getBaseUrl().startsWith('http://127.0.0.1:4100')).toBe(true);
-      expect(useConfigStore.getState().isInitialized).toBe(false);
-      expect(useConfigStore.getState().isConnected).toBe(false);
+      expect(getRuntimeKey()).toBe('remote');
+      expect(useConfigStore.getState()).toMatchObject({ isInitialized: false, isConnected: false, connectionPhase: 'connecting' });
     } finally {
       uninstall();
     }
   });
 
-  // The login gate re-applies the same endpoint with a fresh client token after
-  // sign-in, while App is unmounted. That must not wipe the host's state.
   test('leaves a same-runtime credential change to App', () => {
     installWindow();
     stubFetch();
@@ -70,8 +60,7 @@ describe('installRuntimeEndpointReset', () => {
       useConfigStore.setState({ isInitialized: true, isConnected: true });
       switchRuntimeEndpoint({ apiBaseUrl: 'https://remote.example', clientToken: 'fresh-token', runtimeKey: 'remote' });
 
-      expect(useConfigStore.getState().isInitialized).toBe(true);
-      expect(useConfigStore.getState().isConnected).toBe(true);
+      expect(useConfigStore.getState()).toMatchObject({ isInitialized: true, isConnected: true });
     } finally {
       uninstall();
     }
@@ -83,9 +72,10 @@ describe('installRuntimeEndpointReset', () => {
     const uninstall = installRuntimeEndpointReset();
     switchRuntimeEndpoint({ apiBaseUrl: 'https://first.example', runtimeKey: 'first' });
     uninstall();
+    useConfigStore.setState({ isInitialized: true, isConnected: true });
 
     switchRuntimeEndpoint({ apiBaseUrl: 'https://second.example', runtimeKey: 'second' });
 
-    expect(opencodeClient.getBaseUrl().startsWith('https://first.example')).toBe(true);
+    expect(useConfigStore.getState()).toMatchObject({ isInitialized: true, isConnected: true });
   });
 });

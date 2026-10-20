@@ -21,6 +21,8 @@ import { getDirectoryState, getSyncMessages, registerSessionDirectory } from '@/
 import { markPendingUserSendAnimation } from '@/lib/userSendAnimation';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { fetchSessionKnowledge, reportSessionKnowledgeDelivered } from '@/lib/sessionKnowledgeApi';
+import { expandNativeFileResource } from '@/api/fileResourceExpansion';
+import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
 
 const HANDOFF_TIMEOUT_MS = 180_000;
 const HANDOFF_POLL_MS = 400;
@@ -339,9 +341,21 @@ const sendPlainMessage = async (
   context?: Array<{ text: string }>,
   expectedRuntimeKey?: string,
 ): Promise<string> => {
-  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
-  const resolved = modelContext ?? resolveModelContext(sessionID);
-  if (!resolved) throw new Error('Select a model before sending review flow messages');
+  const runtimeKey = expectedRuntimeKey ?? getRuntimeKey();
+  const session = useGlobalSessionsStore.getState().entityById.get(sessionID);
+  const directoryOwner = session ? resolveWorkspaceDirectory(session.workspaceId) : undefined;
+  const assertCurrent = () => {
+    assertAutoReviewRuntimeStillCurrent(runtimeKey);
+    const current = useGlobalSessionsStore.getState().entityById.get(sessionID);
+    if (session && (!current || current.workspaceId !== session.workspaceId || current.epoch !== session.epoch || resolveWorkspaceDirectory(session.workspaceId) !== directoryOwner)) throw new Error('Review prompt scope changed');
+  };
+  assertCurrent();
+  const captured = modelContext ?? resolveModelContext(sessionID);
+  if (!captured) throw new Error('Select a model before sending review flow messages');
+  const expanded = await expandNativeFileResource(text, directory);
+  assertCurrent();
+  text = expanded?.content ?? text;
+  const resolved = { ...captured, ...expanded?.modelSelection, agentId: expanded?.agentId ?? captured.agentId };
   const selection = useSelectionStore.getState();
   selection.saveSessionModelSelection(sessionID, resolved.providerId, resolved.modelId);
   if (resolved.agentId) {
@@ -352,7 +366,7 @@ const sendPlainMessage = async (
   // Review sessions are real work sessions, so they carry the project's
   // standing context (pinned notes, memory) exactly as a composer send would.
   const knowledge = await fetchSessionKnowledge(directory, sessionID);
-  assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
+  assertCurrent();
   const sendContext = knowledge.text ? [{ text: knowledge.text }, ...(context ?? [])] : context;
   markPendingUserSendAnimation(sessionID);
   let sentMessageID: string | null = null;
@@ -364,13 +378,13 @@ const sendPlainMessage = async (
     onMessageID: (messageID) => {
       sentMessageID = messageID;
     },
-    beforeOptimisticInsert: () => assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey),
+    beforeOptimisticInsert: assertCurrent,
     onOptimisticInsert: () => requestChatForceScrollBottom(sessionID),
     send: (_messageID, promptContext) => {
-      assertAutoReviewRuntimeStillCurrent(expectedRuntimeKey);
+      assertCurrent();
       return sendMessage({
         sessionId: sessionID,
-        runtimeKey: expectedRuntimeKey,
+        runtimeKey,
         request: {
           input: { text, attachments: [], context: promptContext.map((item) => ({ kind: 'synthetic' as const, text: item.text })) },
           options: { providerId: resolved.providerId, modelId: resolved.modelId, agentId: resolved.agentId ?? null, variant: resolved.variant ?? null, reasoningEffort: null },
@@ -378,6 +392,7 @@ const sendPlainMessage = async (
       });
     },
   });
+  assertCurrent();
   if (!sentMessageID) throw new Error('Failed to prepare review flow message');
   if (knowledge.text) {
     void reportSessionKnowledgeDelivered(directory, sessionID, knowledge.signature);

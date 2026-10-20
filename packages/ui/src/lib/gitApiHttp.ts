@@ -169,9 +169,9 @@ const checkoutTrustSchema = z.object({
   state: z.literal('awaiting-trust'),
   digest: fingerprintSchema,
   actions: z.array(z.object({
-    kind: z.enum(['post-checkout-hook', 'project-start-command', 'setup-command']),
+    kind: z.enum(['post-checkout-hook', 'setup-command']),
     label: z.string().max(65536),
-  }).strict()).max(3),
+  }).strict()).max(2),
 }).strict();
 
 type NetworkOperationTracking = {
@@ -793,6 +793,16 @@ function buildUrl(
 
   // A directory inside an isolated space addresses that space's git.
   return getRuntimeUrlResolver().api(spaceApiPath(path, directory), query);
+}
+
+export async function initializeGit(directory: string): Promise<void> {
+  const response = await runtimeFetch(buildUrl(`${API_BASE}/init`, directory), { method: 'POST' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message = body && typeof body.error === 'string' ? body.error : `Failed to initialize Git: ${response.statusText}`;
+    throw new Error(message);
+  }
+  invalidateGitStatusCache(directory);
 }
 
 export async function checkIsGitRepository(directory: string): Promise<boolean> {

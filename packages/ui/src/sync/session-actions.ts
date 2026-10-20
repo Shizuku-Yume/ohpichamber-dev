@@ -8,8 +8,8 @@
 import { useSessionUIStore } from "./session-ui-store"
 import type { ChildStoreManager } from "./child-store"
 import { computeSubtreeIds } from "./scoped-blocking-requests"
-import type { SyntheticContextInput } from "@/lib/opencode/client"
-import { ascendingId } from "@/lib/opencode/ids"
+import type { ContextPartMetadata } from '@/lib/messages/contextParts'
+type SyntheticContextInput = { id?: string; text: string; metadata?: ContextPartMetadata }
 import { mergeSessionDirectoryMetadata, resolveGlobalSessionDirectory, useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { registerSessionDirectory } from "./sync-refs"
@@ -29,7 +29,6 @@ import { dropSessionCaches } from "./session-cache"
 import { useInputStore } from "./input-store"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
 import { requestSessionArchiveBatch, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
-import { registerBulkArchiveEchoes, releaseBulkArchiveEchoes } from "./bulk-archive-echo"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { isRelayModeActive } from "@/lib/relay/runtime-tunnel"
 import { getErrorStatus, isAmbiguousSendFailure } from "./send-failure-classification"
@@ -1277,10 +1276,6 @@ export async function archiveSessions(
     }
 
     const archivedAt = Date.now()
-    registerBulkArchiveEchoes(
-      expectedRuntimeKey,
-      batchIds.map((id) => ({ id, archivedAt })),
-    )
     const result = await requestSessionArchiveBatch(directory, batchIds, archivedAt)
     if (isStaleRuntime(expectedRuntimeKey)) {
       failedIds.push(...batchIds)
@@ -1288,11 +1283,6 @@ export async function archiveSessions(
     }
 
     if (result.outcome === "archived") {
-      releaseBulkArchiveEchoes(expectedRuntimeKey, batchIds)
-      registerBulkArchiveEchoes(
-        expectedRuntimeKey,
-        result.archived,
-      )
       commitArchivedSessions(result.archived, directory)
       archivedIds.push(...result.archived.map((entry) => entry.id))
       failedIds.push(...result.failedIds)
@@ -1304,7 +1294,6 @@ export async function archiveSessions(
     // same state, and re-archiving a session the server already archived writes
     // the same field again.
     console.warn("[session-actions] archive batch unavailable, archiving one by one", result.reason)
-    releaseBulkArchiveEchoes(expectedRuntimeKey, batchIds)
     plan.individualIds.push(...batchIds)
   }
 
@@ -1636,7 +1625,7 @@ export async function optimisticSend(input: {
   if (leading?.text.trim()) context.unshift(leading)
   // This is the existing callback's transport correlation token, not a native
   // message identity. The native service allocates all message/turn/part IDs.
-  const correlationId = ascendingId("msg")
+  const correlationId = `msg_${globalThis.crypto.randomUUID()}`
   input.onMessageID?.(correlationId)
   input.appendSubmissions?.()
   try {

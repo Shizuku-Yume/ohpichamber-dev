@@ -4,7 +4,7 @@ import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { ErrorResponseDetails } from '@/components/chat/ErrorResponseDetails';
 import { useI18n } from '@/lib/i18n';
-import { showOpenCodeStatus } from '@/lib/openCodeStatus';
+import { showRuntimeStatus } from '@/lib/runtimeStatus';
 import { useLatestSessionError } from '@/sync/notification-store';
 import { useDirectoryStore, useSessionStatus, useSessionStatusSnapshotReady } from '@/sync/sync-context';
 import { refetchSessionMessages } from '@/sync/session-actions';
@@ -154,10 +154,10 @@ export const SessionErrorNotice: React.FC<SessionErrorNoticeProps> = ({ sessionI
             <Button
               variant="link"
               size="xs"
-              onClick={() => { void showOpenCodeStatus(); }}
+              onClick={() => { void showRuntimeStatus(); }}
               className="-ml-2 normal-case"
             >
-              {t('chat.sessionError.showStatus')}
+              {t('chat.sessionError.showRuntimeStatus')}
             </Button>
           </div>
         ) : null}

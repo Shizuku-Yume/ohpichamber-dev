@@ -311,10 +311,6 @@ export const stopSpace = (spaceId: string): Promise<SpaceEntry> =>
 export const restartSpace = (spaceId: string): Promise<SpaceEntry> =>
   request(`${SPACES_ROUTE}/${spaceId}/restart`, spaceEntrySchema, { method: 'POST' });
 
-/** Restarts OpenCode inside a running space and answers once it is ready again. */
-export const restartSpaceOpenCode = (spaceId: string): Promise<SpaceEntry> =>
-  request(`${SPACES_ROUTE}/${spaceId}/restart-opencode`, spaceEntrySchema, { method: 'POST' });
-
 // The idle stop (decision 11): on or off, and after how many whole hours with no session working.
 export const SPACE_IDLE_STOP_MIN_HOURS = 1;
 export const SPACE_IDLE_STOP_MAX_HOURS = 168;

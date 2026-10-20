@@ -36,7 +36,6 @@ export type State = {
   project: string
   projectMeta: ProjectMeta | undefined
   icon: string | undefined
-  config: Record<string, unknown>
   path: Path
   workspace: Workspace | undefined
   models?: ModelCatalog
@@ -73,7 +72,6 @@ export type GlobalState = {
   projects: Project[]
   workspaces: Workspace[]
   discoveryErrors: Record<string, string>
-  config: Record<string, unknown>
   reload: undefined | "pending" | "complete"
 }
 
@@ -112,7 +110,6 @@ export const INITIAL_STATE: State = {
   project: "",
   projectMeta: undefined,
   icon: undefined,
-  config: {},
   path: EMPTY_PATH,
   workspace: undefined,
   status: "loading",
@@ -143,7 +140,6 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
   projects: [],
   workspaces: [],
   discoveryErrors: {},
-  config: {},
   reload: undefined,
 }
 

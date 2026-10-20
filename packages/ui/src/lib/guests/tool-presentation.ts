@@ -206,10 +206,11 @@ export const renderGuestToolHeader = (
 };
 
 /** Rows for `output: "table"`: the parsed output array, or its `items` array. `null` when neither. */
-export const guestToolTableRows = (output: TemplateValue): JsonValue[] | null => {
-  if (isJsonArray(output)) return output;
-  if (isJsonObject(output)) {
-    const items = output.items;
+export const guestToolTableRows = (output: string | undefined): JsonValue[] | null => {
+  const value = templateOutputValue(output);
+  if (isJsonArray(value)) return value;
+  if (isJsonObject(value)) {
+    const items = value.items;
     if (isJsonArray(items)) return items;
   }
   return null;

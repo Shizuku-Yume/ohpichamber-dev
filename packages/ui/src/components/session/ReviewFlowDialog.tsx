@@ -13,11 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 
 export type ReviewFlowExecution = {
   providerId: string;
@@ -59,7 +57,6 @@ function ReviewFlowDialogView({
 }: ReviewFlowDialogProps) {
   const { t } = useI18n();
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadConfigAgents = useConfigStore((state) => state.loadAgents);
   const loadAgentsStoreAgents = useAgentsStore((state) => state.loadAgents);
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
@@ -77,9 +74,8 @@ function ReviewFlowDialogView({
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'reviewFlowDialog' });
-    void loadConfigAgents({ directory: projectDirectory });
-    void loadAgentsStoreAgents();
-  }, [open, loadProviders, loadConfigAgents, loadAgentsStoreAgents, projectDirectory]);
+    void loadAgentsStoreAgents(projectDirectory);
+  }, [open, loadProviders, loadAgentsStoreAgents, projectDirectory]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -94,27 +90,19 @@ function ReviewFlowDialogView({
   React.useEffect(() => {
     if (!open || providers.length === 0) return;
 
-    const provider = providers.find((item) => item.id === execution.providerId) ?? providers[0];
+    const provider = providers.find((item) => item.providerId === execution.providerId) ?? providers[0];
     const models = Array.isArray(provider?.models) ? provider.models : [];
-    const hasModel = models.some((item) => item.id === execution.modelId);
-    const fallbackModelId = models[0]?.id ?? '';
-
-    if (provider?.id === execution.providerId && hasModel) return;
-
-    setExecution((prev) => ({
-      ...prev,
-      providerId: provider?.id ?? '',
-      modelId: hasModel ? prev.modelId : fallbackModelId,
-      variant: '',
-    }));
+    const hasModel = models.some((item) => item.modelId === execution.modelId);
+    const fallbackModelId = models[0]?.modelId ?? '';
+    if (provider?.providerId === execution.providerId && hasModel) return;
+    setExecution((prev) => ({ ...prev, providerId: provider?.providerId ?? '', modelId: hasModel ? prev.modelId : fallbackModelId, variant: '' }));
   }, [open, providers, execution.providerId, execution.modelId]);
 
-  const agentFilter = React.useCallback((agent: { mode?: string }) => isPrimaryMode(agent.mode), []);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === execution.providerId);
-    const model = provider?.models?.find((item) => item.id === execution.modelId) as { variants?: ModelVariantSource } | undefined;
-    return listModelVariantIds(model?.variants);
+    const provider = providers.find((item) => item.providerId === execution.providerId);
+    const model = provider?.models?.find((item) => item.modelId === execution.modelId);
+    return model?.variants.map((entry) => entry.variant) ?? [];
   }, [providers, execution.providerId, execution.modelId]);
 
   const hasVariantOptions = variantOptions.length > 0;
@@ -204,8 +192,8 @@ function ReviewFlowDialogView({
           <div className="flex flex-col gap-1.5">
             <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
             <AgentSelector
-              agentName={execution.agentId}
-              filter={agentFilter}
+              agentId={execution.agentId}
+              directory={projectDirectory ?? undefined}
               dropdownPortalToBody
               onChange={(agent) => setExecution((prev) => ({ ...prev, agentId: agent }))}
             />

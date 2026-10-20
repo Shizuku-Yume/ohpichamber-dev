@@ -7,8 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import type { I18nKey } from '@/lib/i18n';
-import { getProviderModelDisplayName } from '@/lib/modelDisplay';
-import type { UsageModel, UsageStats } from '@/lib/opencode/session-stats';
+import type { UsageModel, UsageStats } from '@openchamber/agent-contract';
 import { formatDateTimeForPreference, formatTimeForPreference } from '@/lib/timeFormat';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -175,6 +174,8 @@ export function UsageStatsView({ className }: { className?: string }): React.Rea
           </div>
         </div>
 
+        {stats?.partial ? <PartialUsageNotice errors={stats.errors} /> : null}
+
         {stats ? (
           isEmptyReport(stats) ? (
             <div className="flex flex-col items-center gap-1 py-16 text-center">
@@ -224,6 +225,16 @@ type Formats = {
 
 type ToolsState = { entry: UsageToolsEntry | undefined; load: () => void };
 
+function PartialUsageNotice({ errors }: { errors?: Record<string, string> }): React.ReactNode {
+  const { t } = useI18n();
+  return (
+    <div role="status" className="rounded-lg border border-border/60 px-3 py-2 typography-micro text-muted-foreground">
+      <p>{t('usageStats.partial')}</p>
+      {errors ? <ul>{Object.entries(errors).map(([sessionId, error]) => <li key={sessionId} className="break-words">{sessionId}: {error}</li>)}</ul> : null}
+    </div>
+  );
+}
+
 function UsageReport({ stats, formats, tools }: { stats: UsageStats; formats: Formats; tools: ToolsState }): React.ReactNode {
   const { t } = useI18n();
   const cache = stats.tokens.cacheRead + stats.tokens.cacheWrite;
@@ -241,7 +252,7 @@ function UsageReport({ stats, formats, tools }: { stats: UsageStats; formats: Fo
           value={formats.compact.format(stats.tokens.total)}
           hint={t('usageStats.metric.tokensBreakdown', {
             input: formats.compact.format(stats.tokens.input),
-            output: formats.compact.format(stats.tokens.output + stats.tokens.reasoning),
+            output: formats.compact.format(stats.tokens.output + (stats.tokens.reasoning ?? 0)),
             cache: formats.compact.format(cache),
           })}
         />
@@ -474,7 +485,7 @@ function formatDuration(ms: number, formats: Formats): string {
 function ToolsSection({ state, formats }: { state: ToolsState; formats: Formats }): React.ReactNode {
   const { t } = useI18n();
   const tools = state.entry?.tools ?? null;
-  if (!tools || tools.mode === 'none') {
+  if (!tools) {
     const loading = state.entry?.loading ?? false;
     const error = state.entry?.error ?? null;
     return (
@@ -500,10 +511,18 @@ function ToolsSection({ state, formats }: { state: ToolsState; formats: Formats 
   }
   // Asked for and answered: zero calls is a real result, shown as such.
   const successRate = toolSuccessRate(tools.totals);
-  // OpenCode returns detail rows sorted by calls; keep the page light past a toolbox.
-  const rows = tools.mode === 'detail' ? tools.usage.filter((tool) => tool.calls > 0).slice(0, 8) : [];
+  // Canonical detail rows are sorted by calls; keep the page light past a toolbox.
+  const rows = tools.usage.filter((tool) => tool.calls > 0).slice(0, 8);
   return (
     <Section title={t('usageStats.tools.title')}>
+      {tools.partial ? <PartialUsageNotice errors={tools.errors} /> : null}
+      {state.entry?.error ? (
+        <div role="alert" className="typography-micro text-muted-foreground">
+          <p>{t('usageStats.tools.loadFailed')}</p>
+          <p className="break-words">{state.entry.error}</p>
+          <Button type="button" variant="outline" size="sm" onClick={state.load} disabled={state.entry.loading}>{t('usageStats.error.retry')}</Button>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <StatTile label={t('usageStats.tools.calls')} value={formats.integer.format(tools.totals.calls)} />
         <StatTile label={t('usageStats.tools.successRate')} value={successRate === null ? '—' : formats.percent.format(successRate)} />
@@ -595,15 +614,15 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
       ) : (
         <ul className="flex flex-col gap-3">
           {ranked.map((model) => {
-            const provider = providers.find((entry) => entry.id === model.providerID);
-            const providerName = provider?.name || model.providerID;
-            const name = getProviderModelDisplayName(provider, model.modelID) || model.modelID;
+            const provider = providers.find((entry) => entry.providerId === model.providerId);
+            const providerName = provider?.name || model.providerId;
+            const name = provider?.models.find((entry) => entry.modelId === model.modelId)?.name || model.modelId;
             const share = max > 0 ? (valueOf(model) / max) * 100 : 0;
             return (
-              <li key={`${model.providerID}/${model.modelID}#${model.variant ?? ''}`} className="flex min-w-0 flex-col gap-1">
+              <li key={`${model.providerId}/${model.modelId}#${model.variant ?? ''}`} className="flex min-w-0 flex-col gap-1">
                 <div className="flex min-w-0 items-center gap-2">
-                  <ProviderLogo providerId={model.providerID} alt={providerName} className="size-4 shrink-0" />
-                  <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate" title={`${providerName} · ${model.providerID}/${model.modelID}`}>
+                  <ProviderLogo providerId={model.providerId} alt={providerName} className="size-4 shrink-0" />
+                  <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate" title={`${providerName} · ${model.providerId}/${model.modelId}`}>
                     <span className="truncate typography-ui-label text-foreground">{name}</span>
                     {model.variant ? <span className="shrink-0 typography-micro text-muted-foreground">{model.variant}</span> : null}
                     {/* Phones keep the row for the model name; the logo names the provider there. */}

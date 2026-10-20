@@ -2,7 +2,6 @@ import React from 'react';
 
 import { AboutSettings } from '@/components/sections/openchamber/AboutSettings';
 import { MobileAppUpdateToast } from '@/components/update/MobileAppUpdateToast';
-import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
 import { Button } from '@/components/ui/button';
 import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { AppStartupOverlay } from '@/components/ui/AppStartupOverlay';
@@ -43,6 +42,7 @@ import { useAuthoritativeSessionCleanup } from '@/components/session/sidebar/lis
 import { restoreLastActiveSession } from '@/sync/last-session-restore';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
@@ -750,10 +750,9 @@ function MobileAppContent({ apis }: MobileAppProps) {
   const isInitialized = useConfigStore((state) => state.isInitialized);
   const isConnected = useConfigStore((state) => state.isConnected);
   const connectionPhase = useConfigStore((state) => state.connectionPhase);
-  const providersCount = useConfigStore((state) => state.providers.length);
-  const agentsCount = useConfigStore((state) => state.agents.length);
+  const providersLoaded = useConfigStore((state) => state.providersLoaded);
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgents = useConfigStore((state) => state.loadAgents);
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const error = useSessionUIStore((state) => state.error);
   const clearError = useSessionUIStore((state) => state.clearError);
@@ -819,8 +818,8 @@ function MobileAppContent({ apis }: MobileAppProps) {
       void initializeApp();
       void refreshSourceControlAuth(apis.sourceControl, { force: true });
       void refreshLinearAuthStatus(apis.linear, { force: true });
-      if (providersCount === 0) void loadProviders({ source: 'mobileApp:nativeResume' });
-      if (agentsCount === 0) void loadAgents({ source: 'mobileApp:nativeResume' });
+      if (!providersLoaded) void loadProviders({ source: 'mobileApp:nativeResume' });
+      void loadAgents(useDirectoryStore.getState().currentDirectory);
     };
     const disconnect = (reason: string) => {
       logMobileConnectEvent('resume:disconnect', { reason });
@@ -887,7 +886,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
       lastNativeResumeSyncEventAtRef.current = now;
       window.dispatchEvent(new Event('openchamber:system-resume'));
     }
-  }, [agentsCount, apis.sourceControl, apis.linear, initializeApp, loadAgents, loadProviders, providersCount, refreshSourceControlAuth, refreshLinearAuthStatus]);
+  }, [apis.sourceControl, apis.linear, initializeApp, loadAgents, loadProviders, providersLoaded, refreshSourceControlAuth, refreshLinearAuthStatus]);
 
   useNativeMobileChrome();
   useNativeMobileLifecycle(handleNativeResume);
@@ -1092,9 +1091,9 @@ function MobileAppContent({ apis }: MobileAppProps) {
 
   React.useEffect(() => {
     if (!isConnected) return;
-    if (providersCount === 0) void loadProviders({ source: 'mobileApp:recovery' });
-    if (agentsCount === 0) void loadAgents({ source: 'mobileApp:recovery' });
-  }, [agentsCount, isConnected, loadAgents, loadProviders, providersCount]);
+    if (!providersLoaded) void loadProviders({ source: 'mobileApp:recovery' });
+    void loadAgents(currentDirectory);
+  }, [currentDirectory, isConnected, loadAgents, loadProviders, providersLoaded]);
 
   // Cold-launch continuity: after the launch instance connects, reopen the
   // session that was open on this instance last time — but only after an
@@ -1405,7 +1404,6 @@ function MobileAppContent({ apis }: MobileAppProps) {
               <SharedTrustConfirmDialog />
               {isolatedSpacesEnabled ? <><SpaceAccessDialog /><SpaceActionsSheet /><SpaceApplyDialog /><SpaceDeleteDialog /><SpaceSetupOutputDialog /></> : null}
               <Toaster position="top-center" offset="calc(var(--oc-safe-area-top, 0px) + 16px)" />
-              {isInitialized ? <ConfigUpdateOverlay /> : null}
             </div>
           </TooltipProvider>
         </RuntimeAPIProvider>

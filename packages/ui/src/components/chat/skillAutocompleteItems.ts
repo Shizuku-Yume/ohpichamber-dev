@@ -26,7 +26,7 @@ export function rankSkillAutocompleteItems<T extends SkillAutocompleteSearchItem
   };
 
   return [
-    ...rankGroup(matches.filter((skill) => skill.scope === 'project')),
-    ...rankGroup(matches.filter((skill) => skill.scope !== 'project')),
+    ...rankGroup(matches.filter((skill) => skill.scope === 'workspace')),
+    ...rankGroup(matches.filter((skill) => skill.scope !== 'workspace')),
   ];
 }

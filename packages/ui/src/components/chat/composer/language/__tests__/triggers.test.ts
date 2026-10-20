@@ -68,12 +68,13 @@ describe('skill picker', () => {
 });
 
 describe('snippet picker', () => {
-    test('a hash after whitespace opens the snippet picker', () => {
-        expect(at('use #sig|')).toEqual({ kind: 'snippet', query: 'sig' });
+    test('legacy hashes stay ordinary text', () => {
+        expect(at('use #sig|')).toBeNull();
+        expect(at('#sig|')).toBeNull();
     });
 
-    test('a hash at the start of the text opens it', () => {
-        expect(at('#sig|')).toEqual({ kind: 'snippet', query: 'sig' });
+    test('native templates use the slash command palette', () => {
+        expect(at('/sig|')).toEqual({ kind: 'command', query: 'sig' });
     });
 
     test('an issue reference does not open it', () => {
@@ -143,20 +144,21 @@ test('BTW leaves file and agent references as text while retaining other pickers
     const btw: TriggerContext = { inputMode: 'normal', mentionsEnabled: false };
     expect(at('@src/file|', btw)).toBeNull();
     expect(at('@plan|', btw)).toBeNull();
-    expect(at('#snippet|', btw)).toEqual({ kind: 'snippet', query: 'snippet' });
+    expect(at('/snippet|', btw)).toEqual({ kind: 'command', query: 'snippet' });
     expect(at('@plan|')?.kind).toBe('mention');
 });
 
 describe('matchSnippetTrigger', () => {
     const snippetAt = (text: string) => matchSnippetTrigger(text.replace('|', ''), text.indexOf('|'));
 
-    test('reads the query after a # at a word boundary', () => {
-        expect(snippetAt('please #rev|')).toBe('rev');
-        expect(snippetAt('#|')).toBe('');
+    test('reads a leading native template query', () => {
+        expect(snippetAt('/rev|')).toBe('rev');
+        expect(snippetAt('/|')).toBe('');
     });
 
-    test('ignores a # inside a word or a finished token', () => {
-        expect(snippetAt('issue#12|')).toBeNull();
-        expect(snippetAt('#review done|')).toBeNull();
+    test('ignores legacy hashes, inline slashes and completed invocations', () => {
+        expect(snippetAt('#review|')).toBeNull();
+        expect(snippetAt('please /review|')).toBeNull();
+        expect(snippetAt('/review done|')).toBeNull();
     });
 });

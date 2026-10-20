@@ -202,11 +202,11 @@ describe('composerLanguage — attachment citations', () => {
     });
 
     test('chips file and agent mentions and snippets; commands keep their color only', () => {
-        const state = stateWith('ask @build about @docs/README.md with #sig then /review x');
+        const state = stateWith('ask @build about @docs/README.md with /sig then /review x');
         expect(citationChips(state)).toEqual([
             ['@build', 'build'],
             ['@docs/README.md', 'README.md'],
-            ['#sig', 'sig'],
+            ['/sig', 'sig'],
         ]);
     });
 

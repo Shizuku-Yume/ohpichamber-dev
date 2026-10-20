@@ -1,138 +1,46 @@
-import type { Part } from '@/lib/opencode/model';
-
+import type { Part } from '@openchamber/agent-contract';
 import type { I18nKey, I18nParams } from '@/lib/i18n';
-import { readContextPart, type ContextPartPayload } from '@/lib/messages/contextParts';
+import { extractTerminalContexts } from '@/lib/messages/terminalContext';
 
 type Translate = (key: I18nKey, params?: I18nParams) => string;
 
-type TextPartLike = Part & { type: 'text'; text: string };
-
-const isTextPart = (part: Part): part is TextPartLike => part.type === 'text' && typeof part.text === 'string';
-
-export function getFullText(parts: Part[]): string {
-    return parts
-        .filter(isTextPart)
-        .map((p) => p.text)
-        .join('\n');
+/** Transcript text comes only from native text content, never tool output. */
+export function getFullText(parts: readonly Part[]): string {
+    const text: string[] = [];
+    for (const part of parts) {
+        if (part.type === 'text') text.push(part.content);
+    }
+    return text.join('\n');
 }
 
-const basename = (path: string): string => {
-    const segments = path.split('/').filter(Boolean);
-    return segments[segments.length - 1] ?? path;
-};
-
-/** The caption a context attachment shows in the bubble, reused as a preview prefix. */
-const contextSummary = (payload: ContextPartPayload, t: Translate): string => {
-    switch (payload.kind) {
-        case 'code-comment': {
-            const file = basename(payload.fileLabel);
-            return payload.startLine === payload.endLine
-                ? t('chat.message.context.codeCommentLine', { file, line: payload.startLine })
-                : t('chat.message.context.codeComment', { file, start: payload.startLine, end: payload.endLine });
+/** Mirror the user renderer's terminal context without inventing part metadata. */
+export function getPromptPreviewText(parts: readonly Part[], t?: Translate): string {
+    const typed: string[] = [];
+    const context: string[] = [];
+    const attachments: string[] = [];
+    for (const part of parts) {
+        if (part.type === 'attachment') {
+            attachments.push(part.name);
+            continue;
         }
-        case 'terminal':
-            return t('chat.message.terminalContext', {
-                terminal: payload.terminalLabel,
-                start: payload.startLine,
-                end: payload.endLine,
-            });
-        case 'browser-annotation':
-            return t('chat.message.context.browserAnnotation', { page: payload.pageUrl });
-        case 'pr-comment':
-            return t(payload.provider === 'gitlab' ? 'chat.message.context.mrComment' : 'chat.message.context.prComment', { label: payload.label });
-        case 'pr-check':
-            return t(payload.provider === 'gitlab' ? 'chat.message.context.mrCheck' : 'chat.message.context.prCheck', { label: payload.label });
-        case 'file-quote': {
-            const file = basename(payload.fileLabel);
-            if (payload.startLine == null || payload.endLine == null) {
-                return t('chat.message.context.fileQuote', { file });
-            }
-            return payload.startLine === payload.endLine
-                ? t('chat.message.context.codeCommentLine', { file, line: payload.startLine })
-                : t('chat.message.context.codeComment', { file, start: payload.startLine, end: payload.endLine });
-        }
-        case 'chat-quote':
-            return t('chat.message.context.chatQuote');
-        case 'repository-issue':
-            return `#${payload.number} ${payload.title}`;
-        case 'change-request':
-            return `#${payload.number} ${payload.title}`;
-        case 'linear-issue':
-            return `${payload.identifier} ${payload.title}`;
-        case 'guest-issue':
-        case 'guest-pr':
-            return `${payload.id} ${payload.title}`;
-    }
-};
-
-/** The quoted material behind a context attachment. */
-const contextBody = (payload: ContextPartPayload): string => {
-    switch (payload.kind) {
-        case 'code-comment':
-            return payload.code;
-        case 'terminal':
-            return payload.output;
-        case 'browser-annotation':
-            return payload.prompt;
-        case 'pr-comment':
-            return payload.body;
-        case 'pr-check':
-            return payload.output;
-        case 'file-quote':
-        case 'chat-quote':
-            return payload.quote;
-        case 'repository-issue':
-        case 'change-request':
-        case 'linear-issue':
-        case 'guest-issue':
-        case 'guest-pr':
-            return '';
-    }
-};
-
-/**
- * One preview line for a context attachment, mirroring the collapsed bubble:
- * the caption, then the user's comment when there is one, otherwise the quote.
- */
-const contextPreview = (payload: ContextPartPayload, t: Translate): string => {
-    const summary = contextSummary(payload, t);
-    const comment = 'text' in payload ? payload.text.trim() : '';
-    const detail = comment.length > 0 ? comment : contextBody(payload).trim();
-    return detail.length > 0 ? `${summary}: ${detail}` : summary;
-};
-
-/**
- * The text a user prompt shows in navigators: what the user typed, and — for
- * messages that are only attached context (a quoted message, a terminal
- * selection) — a label derived from that context, so such turns are never
- * label-less. Without a translator it falls back to the raw part text.
- */
-export function getPromptPreviewText(parts: Part[], t?: Translate): string {
-    const typed = parts
-        .filter(isTextPart)
-        .filter((p) => readContextPart(p) === null)
-        .map((p) => p.text.trim())
-        .filter((text) => text.length > 0);
-    if (typed.length > 0) {
-        return typed.join('\n');
-    }
-
-    if (t) {
-        const contextLines = parts
-            .map((part) => readContextPart(part))
-            .filter((payload): payload is ContextPartPayload => payload !== null)
-            .map((payload) => contextPreview(payload, t))
-            .filter((line) => line.length > 0);
-        if (contextLines.length > 0) {
-            return contextLines.join(' · ');
+        if (part.type !== 'text') continue;
+        const parsed = extractTerminalContexts(part.content);
+        if (parsed.visibleText.trim()) typed.push(parsed.visibleText.trim());
+        for (const item of parsed.contexts) {
+            const label = t?.('chat.message.terminalContext', {
+                terminal: item.terminalLabel,
+                start: item.startLine,
+                end: item.endLine,
+            }) ?? `${item.terminalLabel} ${item.startLine}-${item.endLine}`;
+            context.push(item.text.trim() ? `${label}: ${item.text.trim()}` : label);
         }
     }
-
-    return getFullText(parts);
+    if (typed.length > 0) return typed.join('\n');
+    if (context.length > 0) return context.join(' · ');
+    return attachments.join(', ');
 }
 
-export function getMessagePreview(parts: Part[], maxLength = 80, t?: Translate): string {
-    const full = getPromptPreviewText(parts, t);
-    const singleLine = full.replace(/\n/g, ' ');
+export function getMessagePreview(parts: readonly Part[], maxLength = 80, t?: Translate): string {
+    const singleLine = getPromptPreviewText(parts, t).replace(/\n/g, ' ');
     return singleLine.length > maxLength ? `${singleLine.slice(0, maxLength)}…` : singleLine;
 }

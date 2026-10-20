@@ -38,13 +38,13 @@ const placePicker = (rect: DOMRect): React.CSSProperties => {
 type PickerKeyEvent = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'preventDefault' | 'stopPropagation'>;
 
 /**
- * The composer's `#snippet` picker for a comment field. The host reports every
+ * The native `/template` picker for a comment field. The host reports every
  * text or caret change through `sync`, gives its keydown to `handleKeyDown`
  * first, and renders `picker` inside the field's wrapper. The list itself is
  * portalled to the body with a fixed position: comment fields sit in glass
  * popovers (a nested backdrop filter renders transparent) and near window
- * edges, so it opens above or below the wrapper, wherever it fits. Choosing a snippet writes `#trigger ` over the typed query, the way
- * the composer does; expansion happens when the message is sent.
+ * edges, so it opens above or below the wrapper, wherever it fits. Choosing a template writes `/name ` over the typed query;
+ * native expansion happens when the message is sent.
  */
 export function useCommentSnippetPicker({
   text,
@@ -88,8 +88,8 @@ export function useCommentSnippetPicker({
 
   const select = React.useCallback((_snippet: Snippet, trigger: string) => {
     const caret = getCaret();
-    const hashIndex = text.slice(0, caret).lastIndexOf('#');
-    replaceRange(hashIndex === -1 ? caret : hashIndex, caret, `#${trigger} `);
+    const slashIndex = text.slice(0, caret).lastIndexOf('/');
+    replaceRange(slashIndex === -1 ? caret : slashIndex, caret, `/${trigger} `);
     setQuery(null);
   }, [getCaret, replaceRange, text]);
 

@@ -31,6 +31,7 @@ mock.module('@/lib/openchamberConfig', () => ({
       setupWorktree: [],
       setupWorktreeWait: null,
       setupWorktreeMode: 'append',
+      worktreeDirectory: null,
       projectActions: [{ id: 'build', name: 'Build', command: 'echo build', icon: 'build' }],
       projectActionsPrimaryId: null,
       draftStarters: [],

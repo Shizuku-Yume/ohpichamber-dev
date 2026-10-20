@@ -38,11 +38,17 @@ Runtime changes stop later requests, publication and delivery; cleanup never
 moves into another runtime. A pending session is not an eligible member.
 
 Model, variant, reasoning effort and agent ID are captured before asynchronous
-setup. Native attachments remain attached to their prompt variant. Dispatch
-expands snippets, reads standing session knowledge and sends a native
-`PromptRequest` through `sendMessage`; it does not re-read mutable composer
-selection after setup. Knowledge is reported delivered only after guarded send
-completion. Isolated worktree creation retains the existing setup/wait ordering.
+setup. Native attachments remain attached to their prompt variant. Lane and
+fusion primary prompts use the shared worker-owned combined command/template
+expansion once, without catalog lookups or renderer argument parsing. Matched
+native model and agent bindings override the captured values; variant and
+reasoning effort remain captured. A no-match preserves the raw prompt. Expansion
+failure or a stale runtime/directory owner prevents dispatch, never falls back to
+the original invocation. Generated context and source transcripts remain literal.
+Dispatch reads standing session knowledge and sends a native `PromptRequest`
+through `sendMessage`; it does not re-read mutable composer selection after setup.
+Knowledge is reported delivered only after guarded send completion. Isolated
+worktree creation retains the existing setup/wait ordering.
 
 Before sending either a lane or a fusion run, `observation.ts` uses the existing
 canonical message loader to materialize its snapshot and attach replay-backed

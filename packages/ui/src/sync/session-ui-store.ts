@@ -18,7 +18,7 @@ export type CanonicalSkillMentions = {
 import type { ContextPartMetadata } from "@/lib/messages/contextParts"
 import { create } from "zustand"
 import type { StoreApi, UseBoundStore } from "zustand"
-import type { PromptAttachment, PromptContext, PromptRequest, Session, SessionMetadata } from "@openchamber/agent-contract"
+import type { FileResourceExpandResult, PromptAttachment, PromptContext, PromptRequest, Session, SessionMetadata } from "@openchamber/agent-contract"
 import type { AttachedFile, SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
 import type { WorktreeMetadata } from "@/types/worktree"
 import { runtimeFetch } from "@/lib/runtime-fetch"
@@ -31,7 +31,7 @@ import { fetchSessionKnowledge, reportSessionKnowledgeDelivered } from "@/lib/se
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from "@/stores/useGlobalSessionsStore"
 import { isDirectoryUnknown, useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
-import { selectCommandsForDirectory, useCommandsStore } from "@/stores/useCommandsStore"
+import { expandNativeFileResource } from '@/api/fileResourceExpansion'
 import { selectSkillsForDirectory, useSkillsStore } from "@/stores/useSkillsStore"
 import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
@@ -100,33 +100,6 @@ import {
 
 export type { AttachedFile }
 
-type GoalCommand = { name: string; template?: string }
-
-export function expandSlashCommandGoalObjective(content: string, commands: GoalCommand[]): string {
-  if (!content.startsWith("/")) return content
-  const [head, ...tail] = content.split(" ")
-  const command = commands.find((candidate) => candidate.name === head.slice(1))
-  if (!command?.template?.trim()) return content
-  const argumentsText = tail.join(" ")
-  if (command.template.includes("$ARGUMENTS")) {
-    return command.template.replaceAll("$ARGUMENTS", argumentsText)
-  }
-
-  const positions = [...command.template.matchAll(/\$(\d+)/g)].map((match) => Number(match[1]))
-  if (positions.length > 0) {
-    const parsedArguments = [...argumentsText.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)]
-      .map((match) => match[1] ?? match[2] ?? match[3] ?? "")
-    const lastPosition = Math.max(...positions)
-    return command.template.replace(/\$(\d+)/g, (_match, value: string) => {
-      const position = Number(value)
-      return position === lastPosition
-        ? parsedArguments.slice(position - 1).join(" ")
-        : (parsedArguments[position - 1] ?? "")
-    })
-  }
-
-  return argumentsText ? `${command.template}\n\n${argumentsText}` : command.template
-}
 
 // ---------------------------------------------------------------------------
 // Send routing — shell mode, slash commands, or normal prompt
@@ -221,6 +194,10 @@ export async function routeMessage(params: {
   commandId?: string
   skills?: CanonicalSkillMentions
   sessionKnowledge?: Promise<string>
+  /** Queue capture already ran the native pipeline and preserved the resulting selection. */
+  fileResourcesExpanded?: boolean
+  /** Goal preparation reuses its authoritative expansion when the prompt is delivered. */
+  fileResourceExpansion?: FileResourceExpandResult | null
 }): Promise<'command' | 'prompt' | 'shell'> {
   const runtimeKey = params.runtimeKey ?? getRuntimeKey()
   assertSendRuntime(runtimeKey)
@@ -278,23 +255,24 @@ export async function routeMessage(params: {
     return 'shell'
   }
 
-  if (params.content.startsWith("/")) {
-    const [head] = params.content.split(" ")
-    const cmdName = head.slice(1)
-    let matchedCommand = selectCommandsForDirectory(useCommandsStore.getState(), requestDirectory)
-      .find((command) => command.name === cmdName)
-    let matchedSkill = selectSkillsForDirectory(useSkillsStore.getState(), requestDirectory)
-      .find((skill) => skill.name === cmdName)
-    if (matchedCommand) {
-      request.input.text = expandSlashCommandGoalObjective(params.content, [matchedCommand])
+  if (!params.fileResourcesExpanded && params.content.startsWith('/')) {
+    const expanded = params.fileResourceExpansion === undefined
+      ? await expandNativeFileResource(params.content, requestDirectory)
+      : params.fileResourceExpansion
+    assertSendRuntime(runtimeKey)
+    if (expanded) {
+      request.input.text = expanded.content
+      if (expanded.modelSelection) request.options = { ...request.options, ...expanded.modelSelection }
+      if (expanded.agentId) request.options.agentId = expanded.agentId
       await dispatchPrompt()
       return 'command'
     }
+    const invocation = /^\/([^\s]+)(?:\s([\s\S]*))?$/.exec(params.content)
+    const matchedSkill = selectSkillsForDirectory(useSkillsStore.getState(), requestDirectory)
+      .find(skill => skill.name === invocation?.[1])
     if (matchedSkill) {
-      const [, ...tail] = params.content.split(" ")
-      const names = [matchedSkill.name]
-      const expanded = await expandCanonicalSkills(params.sessionId, names, tail.join(" "))
-      if (expanded) request.input.context = [...request.input.context, { kind: 'instruction', text: expanded }]
+      const expandedSkill = await expandCanonicalSkills(params.sessionId, [matchedSkill.name], invocation?.[2] ?? '')
+      if (expandedSkill) request.input.context = [...request.input.context, { kind: 'instruction', text: expandedSkill }]
     }
   }
 
@@ -401,6 +379,7 @@ type SendMessageOptions = {
   reasoningEffort?: string
   /** Skills named inline, attached to the prompt once the session exists. */
   skills?: CanonicalSkillMentions
+  fileResourcesExpanded?: boolean
 }
 
 type AssistantMessageSessionExecution = {
@@ -494,7 +473,6 @@ export type SessionUIState = {
   clearError: () => void
   markSessionAsOpenChamberCreated: (sessionId: string) => void
   isOpenChamberCreatedSession: (sessionId: string) => boolean
-  initializeNewOpenChamberSession: (sessionId: string, agents: unknown[]) => void
   setWorktreeMetadata: (sessionId: string, metadata: WorktreeMetadata | null) => void
   overrideNewSessionDraftTarget: (options: Record<string, unknown>) => void
   resolvePendingDraftWorktreeTarget: (requestId: string, directory: string | null, options?: Record<string, unknown>) => void
@@ -1144,7 +1122,6 @@ export async function materializeOpenDraftSession(selection: {
     useSelectionStore.getState().saveAgentModelVariantForSession(created.sessionId, effectiveDraftAgent, selection.providerId, selection.modelId, variantOverride)
   }
 
-  store.initializeNewOpenChamberSession(created.sessionId, configState.agents ?? [])
 
   // Without a choice in the draft the server writes the default mode itself.
   if (draftPermissionMode) {
@@ -1709,9 +1686,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
   isOpenChamberCreatedSession: (sessionId) => get().webUICreatedSessions.has(sessionId),
 
-  initializeNewOpenChamberSession: () => {
-    // Stub — was a no-op in old store
-  },
 
   setWorktreeMetadata: (sessionId, metadata) => {
     // Write to authoritative session-worktree-store
@@ -1874,6 +1848,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       }
       markPendingUserSendAnimation(sessionId)
 
+      let fileResourceExpansion: FileResourceExpandResult | null | undefined
       if (goalArm.armed) {
         const budgetLine = tokenBudget !== null ? ` A token budget of ${tokenBudget} tokens applies to this goal.` : ""
         const goalIntro = wrapSystemReminder(
@@ -1883,8 +1858,10 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
           + budgetLine,
         )
         parts = [...(parts ?? []), { text: goalIntro, synthetic: true }]
-        const objective = goalArm.objectiveOverride?.trim()
-          || expandSlashCommandGoalObjective(content, selectCommandsForDirectory(useCommandsStore.getState(), directory))
+        if (!goalArm.objectiveOverride?.trim() && !options?.fileResourcesExpanded && inputMode !== 'shell') {
+          fileResourceExpansion = await expandNativeFileResource(content, directory)
+        }
+        const objective = goalArm.objectiveOverride?.trim() || fileResourceExpansion?.content || content
         assertSendRuntime(capturedRuntimeKey)
         await setSessionGoal(sessionId, directory ?? undefined, { objective, tokenBudget }, null)
         assertSendRuntime(capturedRuntimeKey)
@@ -1932,6 +1909,8 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
         delivery,
         commandId,
         skills,
+        fileResourcesExpanded: options?.fileResourcesExpanded,
+        fileResourceExpansion,
         sessionKnowledge: knowledgeRequest?.then((knowledge) => knowledge.text),
         additionalParts: additionalContext,
       })

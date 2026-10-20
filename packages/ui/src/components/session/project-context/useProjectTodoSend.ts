@@ -6,7 +6,6 @@ import { useI18n } from '@/lib/i18n';
 import { renderMagicPrompt } from '@/lib/magicPrompts';
 import type { ProjectRef } from '@/lib/projectContextApi';
 import { createWorktreeSessionForNewBranch } from '@/lib/worktreeSessionCreator';
-import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useInputStore } from '@/sync/input-store';
 import { useSelectionStore } from '@/sync/selection-store';
@@ -40,7 +39,6 @@ export const useProjectTodoSend = (options: {
 
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const createSession = useSessionUIStore((state) => state.createSession);
-  const initializeNewOpenChamberSession = useSessionUIStore((state) => state.initializeNewOpenChamberSession);
   const sendMessage = useSessionUIStore((state) => state.sendMessage);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const setPendingInputText = useInputStore((state) => state.setPendingInputText);
@@ -135,7 +133,6 @@ export const useProjectTodoSend = (options: {
           }
           sessionId = session.sessionId;
           directoryHint = projectRef.path;
-          initializeNewOpenChamberSession(session.sessionId, useConfigStore.getState().agents ?? []);
         }
 
         if (!sessionId) {
@@ -183,7 +180,7 @@ export const useProjectTodoSend = (options: {
         setSendingTodoId(null);
       }
     },
-    [canCreateWorktree, createSession, initializeNewOpenChamberSession, onActionComplete, pendingSendTarget, projectRef, routeToChat, sendMessage, setCurrentSession, t]
+    [canCreateWorktree, createSession, onActionComplete, pendingSendTarget, projectRef, routeToChat, sendMessage, setCurrentSession, t]
   );
 
   const closeDialog = React.useCallback(() => {

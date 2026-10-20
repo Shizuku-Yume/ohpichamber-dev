@@ -35,7 +35,7 @@ import { getModelDisplayName } from '@/lib/modelDisplay';
 import { agentLabel } from '@/lib/agentLabel';
 import { useAgentColors } from '@/hooks/useAgentColors';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
-import { useConfigStore } from '@/stores/useConfigStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 
@@ -53,16 +53,16 @@ const scheduleTimes = (task: ScheduledTask): string[] => {
  * composer's agent icon in that agent's colour. Tasks that follow the session
  * defaults say so instead.
  */
-const TaskModelLine: React.FC<{ task: ScheduledTask }> = ({ task }) => {
+const TaskModelLine: React.FC<{ task: ScheduledTask; directory: string | null }> = ({ task, directory }) => {
   const { t } = useI18n();
-  const getAgentColor = useAgentColors();
-  const agents = useConfigStore((state) => state.agents);
+  const getAgentColor = useAgentColors(directory);
+  const agents = useAgentsStore((state) => selectAgentsForDirectory(state, directory));
   const { providerID, modelID, variant, agent, useDefaults } = task.execution;
   if (useDefaults || !providerID || !modelID) {
     return <span className="truncate">{t('sessions.scheduledTasks.dialog.usesDefaults')}</span>;
   }
   const agentName = agent?.trim();
-  const knownAgent = agentName ? agents.find((entry) => entry.name === agentName) : undefined;
+  const knownAgent = agentName ? agents.find((entry) => entry.agentId === agentName) : undefined;
   return (
     <>
       <ProviderLogo providerId={providerID} alt={providerID} className="h-3 w-3 shrink-0" />
@@ -74,7 +74,7 @@ const TaskModelLine: React.FC<{ task: ScheduledTask }> = ({ task }) => {
           <span aria-hidden="true">·</span>
           <Icon name="ai-agent" className="h-3 w-3 shrink-0" style={{ color: getAgentColor(agentName).color }} />
           <span className="shrink-0 truncate" style={{ color: getAgentColor(agentName).color }}>
-            {agentLabel(knownAgent ?? { name: agentName, displayName: '' })}
+            {agentLabel(knownAgent ?? { name: agentName })}
           </span>
         </>
       ) : null}
@@ -601,7 +601,7 @@ export function ScheduledTasksView({ layout, onLeave }: {
                     {formatSchedule(task, t)}
                   </div>
                   <div className="typography-micro flex min-w-0 items-center gap-1 text-muted-foreground/70" title={task.execution.useDefaults ? undefined : `${task.execution.providerID ?? ''}/${task.execution.modelID ?? ''}`}>
-                    <TaskModelLine task={task} />
+                    <TaskModelLine task={task} directory={selectedProject?.path ?? null} />
                   </div>
                   {task.targetSessionId ? <TaskTargetLine sessionId={task.targetSessionId} /> : null}
                   {task.loopFile ? (

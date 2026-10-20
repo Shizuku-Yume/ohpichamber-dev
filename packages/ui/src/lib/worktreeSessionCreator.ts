@@ -8,6 +8,7 @@ import { toast } from '@/components/ui';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { checkIsGitRepository } from '@/lib/gitApi';
@@ -90,20 +91,18 @@ let isCreatingWorktreeSession = false;
 
 const applyDefaultAgentAndModelSelection = (sessionId: string, configState = useConfigStore.getState()) => {
   try {
-    const visibleAgents = configState.getVisibleAgents();
+    const visibleAgents = selectAgentsForDirectory(useAgentsStore.getState(), configState.activeDirectoryKey);
     let agentName: string | undefined;
 
     if (configState.settingsDefaultAgent) {
-      const settingsAgent = visibleAgents.find((a) => a.name === configState.settingsDefaultAgent);
+      const settingsAgent = visibleAgents.find((a) => a.agentId === configState.settingsDefaultAgent);
       if (settingsAgent) {
-        agentName = settingsAgent.name;
+        agentName = settingsAgent.agentId;
       }
     }
 
     if (!agentName) {
-      agentName =
-        visibleAgents.find((agent) => agent.name === 'build')?.name ||
-        visibleAgents[0]?.name;
+      agentName = visibleAgents[0]?.agentId;
     }
 
     if (!agentName) {
@@ -137,13 +136,11 @@ const applyDefaultAgentAndModelSelection = (sessionId: string, configState = use
       return;
     }
 
-    const provider = configState.providers.find((p) => p.id === providerId);
-    const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === modelId) as
-      | { variants?: Record<string, unknown> }
-      | undefined;
-    const variants = model?.variants;
+    const provider = configState.providers.find((entry) => entry.providerId === providerId);
+    const model = provider?.models.find((entry) => entry.modelId === modelId);
+    const variants = model?.variants.map((entry) => entry.variant) ?? [];
 
-    if (variants && Object.prototype.hasOwnProperty.call(variants, settingsDefaultVariant)) {
+    if (variants.includes(settingsDefaultVariant)) {
       configState.setCurrentVariant(settingsDefaultVariant);
       useContextStore
         .getState()
@@ -165,7 +162,6 @@ const initializeSessionForWorktree = (sessionId: string, metadata: {
 }) => {
   const sessionStore = useSessionUIStore.getState();
   const configState = useConfigStore.getState();
-  sessionStore.initializeNewOpenChamberSession(sessionId, configState.agents);
   sessionStore.setSessionDirectory(sessionId, metadata.path);
   sessionStore.setWorktreeMetadata(sessionId, metadata);
   applyDefaultAgentAndModelSelection(sessionId, configState);

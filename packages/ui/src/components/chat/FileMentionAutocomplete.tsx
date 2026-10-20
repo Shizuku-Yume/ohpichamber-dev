@@ -1,8 +1,7 @@
 import React from 'react';
 import { cn, truncatePathMiddle } from '@/lib/utils';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { filterVisibleAgents } from '@/lib/opencode/model';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -31,9 +30,7 @@ const AGENTS_SHOWN_WITHOUT_QUERY = 6;
 type FileInfo = ProjectFileSearchHit;
 type AgentInfo = {
   name: string;
-  displayName: string;
   description?: string;
-  mode?: string | null;
 };
 
 export interface FileMentionHandle {
@@ -78,28 +75,20 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const removeUnselectedOpenPath = useFilesViewTabsStore((state) => state.removeUnselectedOpenPath);
   const [staleRecentPaths, setStaleRecentPaths] = React.useState<ReadonlySet<string>>(() => new Set());
   const verifiedPathsRef = React.useRef<Set<string>>(new Set());
-  // Subscribed, not read once: the session's directory may still be loading its agents.
-  const configAgents = useConfigStore((state) => state.agents);
+  // Subagents listed here are the enabled native profiles in this directory.
+  const agentsForDirectory = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
   const debouncedQuery = useDebouncedValue(searchQuery, 180);
   const showHidden = useDirectoryShowHidden();
   const showGitignored = useFilesViewShowGitignored();
   const [files, setFiles] = React.useState<FileInfo[]>([]);
   const [directories, setDirectories] = React.useState<FileInfo[]>([]);
-  // Derived, not stored: the subagent list follows the registry, and only the
-  // ranking follows the query, in the same render as the keystroke.
-  const subagents = React.useMemo<AgentInfo[]>(() => filterVisibleAgents(configAgents)
-    .filter((agent) => agent.mode && agent.mode !== 'primary')
-    .map((agent) => ({
-      name: agent.name,
-      displayName: agent.displayName,
-      description: agent.description,
-      mode: agent.mode,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name)), [configAgents]);
+  const availableAgents = React.useMemo<AgentInfo[]>(() => agentsForDirectory
+    .map((agent) => ({ name: agent.name, description: agent.description }))
+    .sort((a, b) => a.name.localeCompare(b.name)), [agentsForDirectory]);
   const agents = React.useMemo(
-    () => rankByQuery(subagents, searchQuery ?? '', (agent) => [agent.name, agent.displayName, agent.description]),
-    [searchQuery, subagents],
+    () => rankByQuery(availableAgents, searchQuery ?? '', (agent) => [agent.name, agent.description]),
+    [availableAgents, searchQuery],
   );
   const [loading, setLoading] = React.useState(false);
   const pendingSearchRef = React.useRef(0);

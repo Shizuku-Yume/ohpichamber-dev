@@ -1,16 +1,18 @@
 import type { Agent } from '@openchamber/agent-contract';
 import type { Theme } from '@/types/theme';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
-import { useAgentsStore } from '@/stores/useAgentsStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { createAgentColorResolver } from '@/lib/agentColors';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 
 // Message footers share one allocation with the composer. Immutable theme and
 // roster identities invalidate it; weak keys release obsolete snapshots.
 const resolvers = new WeakMap<Theme, WeakMap<Agent[], ReturnType<typeof createAgentColorResolver>>>();
 
-export function useAgentColors() {
+export function useAgentColors(directory?: string | null) {
   const { currentTheme } = useThemeSystem();
-  const agents = useAgentsStore((state) => state.agents);
+  const effectiveDirectory = useEffectiveDirectory();
+  const agents = useAgentsStore((state) => selectAgentsForDirectory(state, directory === undefined ? effectiveDirectory ?? null : directory));
   let byRoster = resolvers.get(currentTheme);
   if (!byRoster) {
     byRoster = new WeakMap();

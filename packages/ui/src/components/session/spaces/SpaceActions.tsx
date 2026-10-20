@@ -1,6 +1,6 @@
 /**
  * The actions of an isolated space: apply its work (user journey step 6) above the repair actions
- * (step 8), from soft to hard: restart OpenCode, restart the container, stop or start, and delete
+ * (step 8), from soft to hard: restart the container, stop or start, and delete
  * after a confirmation, which offers to apply first. The
  * desktop has them in a menu on the space's group; the phone opens the same list as a sheet from
  * the group's swipe actions. Delete never runs from the list itself: it opens the confirmation,
@@ -36,7 +36,6 @@ import { SPACE_ACTION_TEXT } from './spaceActionText';
 const ACTION_ICON = {
   start: 'play',
   stop: 'stop',
-  restart_opencode: 'refresh',
   restart: 'restart',
   setup: 'terminal-box',
   remove: 'delete-bin',

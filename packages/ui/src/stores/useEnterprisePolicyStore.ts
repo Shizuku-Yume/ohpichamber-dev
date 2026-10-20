@@ -18,8 +18,6 @@ const enterprisePolicySchema = z.object({
   policyError: z.string().min(1).nullable(),
   // Servers from before the network rule never blocked it.
   networkAccessBlocked: z.boolean().default(false),
-  // OpenCode CLI path the administrator pinned; servers from before the pin have none.
-  opencodeBinary: z.string().min(1).nullable().default(null),
 });
 
 type EnterprisePolicy = z.infer<typeof enterprisePolicySchema>;
@@ -30,7 +28,6 @@ const NO_POLICY: EnterprisePolicy = {
   organization: null,
   policyError: null,
   networkAccessBlocked: false,
-  opencodeBinary: null,
 };
 
 /**

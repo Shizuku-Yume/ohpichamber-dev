@@ -1,180 +1,90 @@
 import { describe, expect, test } from 'bun:test';
-import type { Part } from '@/lib/opencode/model';
-
+import type { Part } from '@openchamber/agent-contract';
 import {
-  derivePartsLabel,
-  deriveUserSnippet,
-  formatAssistantTokens,
-  formatMessagePreviewTime,
-  truncateMessageId,
+  derivePartsLabel, deriveUserSnippet, formatAssistantTokens,
+  formatMessagePreviewTime, truncateMessageId,
 } from '../rawMessagePreview';
 
-const part = (data: Record<string, unknown>): Part => data as unknown as Part;
+const text = (content: string): Part => ({ type: 'text', partId: 'text', content });
+const attachment: Part = {
+  type: 'attachment', partId: 'attachment', attachmentId: 'upload', name: 'image.png',
+  mediaType: 'image/png', size: 42, uri: 'attachment://upload',
+};
+const call: Part = {
+  type: 'tool_call', partId: 'call', toolCallId: 'tool', toolName: 'bash', input: {}, status: 'running',
+};
+const result: Part = {
+  type: 'tool_result', partId: 'result', toolCallId: 'tool', toolName: 'bash', output: 'ok', isError: false,
+};
 
 describe('truncateMessageId', () => {
-  test('returns trailing 8 chars (suffix, not prefix)', () => {
-    // OpenCode ids share a long common prefix (msg_e39e98d…); the suffix is
-    // the only distinguishing region, so we surface the tail.
-    const id = 'msg_e39e98d86001xA2wMRcvRuL5HT';
-    expect(truncateMessageId(id)).toBe(id.slice(-8));
+  test('shows distinguishing suffixes', () => {
+    const id = 'message-long-prefix-12345678';
+    expect(truncateMessageId(id)).toBe('12345678');
+    expect(truncateMessageId('message-long-prefix-abcdefgh')).toBe('abcdefgh');
   });
-
-  test('distinguishes two ids that differ only in suffix', () => {
-    const a = 'msg_e39e98d86001xA2wMRcvRuL5HT';
-    const b = 'msg_e39e98d0e001kmHn6dH5r3IHfs';
-    expect(truncateMessageId(a)).not.toBe(truncateMessageId(b));
-  });
-
-  test('returns last 8 chars when longer', () => {
-    expect(truncateMessageId('abcdefghij')).toBe('cdefghij');
-  });
-
-  test('returns id as-is when shorter than or equal to limit', () => {
+  test('keeps short and empty ids', () => {
     expect(truncateMessageId('abc')).toBe('abc');
     expect(truncateMessageId('12345678')).toBe('12345678');
-  });
-
-  test('handles empty string', () => {
     expect(truncateMessageId('')).toBe('');
   });
-
-  test('respects custom length', () => {
+  test('supports a custom suffix length', () => {
     expect(truncateMessageId('abcdefghij', 4)).toBe('ghij');
   });
 });
 
 describe('derivePartsLabel', () => {
-  test('returns empty for no parts', () => {
-    expect(derivePartsLabel([])).toBe('');
+  test('returns empty for no parts', () => expect(derivePartsLabel([])).toBe(''));
+  test('names native calls and results without duplicate tool labels', () => {
+    expect(derivePartsLabel([text('a'), call, result, text('b')])).toBe('text + bash');
   });
-
-  test('uses tool name for tool parts', () => {
-    expect(derivePartsLabel([part({ type: 'tool', tool: 'bash' })])).toBe('bash');
+  test('preserves native tool names', () => {
+    expect(derivePartsLabel([{ ...call, toolName: 'CustomTool' }])).toBe('CustomTool');
   });
-
-  test('joins multiple distinct parts with " + "', () => {
-    expect(
-      derivePartsLabel([
-        part({ type: 'text', text: 'hi' }),
-        part({ type: 'tool', tool: 'bash' }),
-      ]),
-    ).toBe('text + bash');
-  });
-
-  test('deduplicates labels', () => {
-    expect(
-      derivePartsLabel([
-        part({ type: 'text', text: 'a' }),
-        part({ type: 'text', text: 'b' }),
-        part({ type: 'tool', tool: 'bash' }),
-      ]),
-    ).toBe('text + bash');
-  });
-
-  test('lowercases tool names', () => {
-    expect(derivePartsLabel([part({ type: 'tool', tool: 'Bash' })])).toBe('bash');
-  });
-
-  test('falls back to "tool" for tool parts without a tool name', () => {
-    expect(derivePartsLabel([part({ type: 'tool' })])).toBe('tool');
-  });
-
-  test('falls back to "unknown" for parts without a type', () => {
-    expect(derivePartsLabel([part({})])).toBe('unknown');
-  });
-});
-
-describe('formatMessagePreviewTime', () => {
-  // Fixed timestamp: 2024-01-15 14:35:00 UTC. Local rendering will vary; we
-  // only assert structural properties (no AM/PM in 24h mode, presence in 12h).
-  const ts = Date.UTC(2024, 0, 15, 14, 35, 0);
-
-  test('returns "-" for null', () => {
-    expect(formatMessagePreviewTime(null, '24h')).toBe('-');
-  });
-
-  test('returns "-" for non-finite', () => {
-    expect(formatMessagePreviewTime(Number.NaN, '24h')).toBe('-');
-  });
-
-  test('24h mode omits AM/PM markers', () => {
-    const result = formatMessagePreviewTime(ts, '24h');
-    expect(/AM|PM/i.test(result)).toBe(false);
-  });
-
-  test('12h mode includes AM or PM marker', () => {
-    const result = formatMessagePreviewTime(ts, '12h');
-    expect(/AM|PM/i.test(result)).toBe(true);
-  });
-
-  test('auto mode is non-empty', () => {
-    expect(formatMessagePreviewTime(ts, 'auto').length > 0).toBe(true);
+  test('labels attachments, reasoning and step summaries directly', () => {
+    expect(derivePartsLabel([attachment, { type: 'reasoning', partId: 'r', content: 'thinking' },
+      { type: 'step_summary', partId: 's', title: 'Done' }])).toBe('attachment + reasoning + step_summary');
   });
 });
 
 describe('deriveUserSnippet', () => {
-  test('returns the first text part verbatim (no length cap)', () => {
-    // CSS handles the visual truncation at column width; the helper just
-    // returns the cleaned full string so consumers can decide what to do.
-    expect(
-      deriveUserSnippet([part({ type: 'text', text: 'hello world this is long' })]),
-    ).toBe('hello world this is long');
+  test('keeps full text, punctuation and Unicode while collapsing whitespace', () => {
+    expect(deriveUserSnippet([text('  olá,\n\n mundo!\t123  ')])).toBe('olá, mundo! 123');
+    expect(deriveUserSnippet([text('hello world this is long')])).toBe('hello world this is long');
   });
-
-  test('preserves punctuation, accents, and unicode (React escapes at render)', () => {
-    expect(
-      deriveUserSnippet([part({ type: 'text', text: 'olá, mundo! 123' })]),
-    ).toBe('olá, mundo! 123');
+  test('skips empty text and uses the first non-empty content', () => {
+    expect(deriveUserSnippet([text('  '), text('next'), text('last')])).toBe('next');
   });
-
-  test('collapses whitespace runs and trims ends', () => {
-    expect(
-      deriveUserSnippet([part({ type: 'text', text: '  a\n\n  b\t\tc  ' })]),
-    ).toBe('a b c');
+  test('counts only native attachments', () => {
+    expect(deriveUserSnippet([attachment])).toBe('1 attachment');
+    expect(deriveUserSnippet([attachment, attachment, call, result])).toBe('2 attachments');
   });
-
-  test('uses attachment count fallback when no text part exists', () => {
-    expect(deriveUserSnippet([part({ type: 'file' })])).toBe('1 attachment');
-    expect(
-      deriveUserSnippet([part({ type: 'file' }), part({ type: 'file' })]),
-    ).toBe('2 attachments');
+  test('never displays tool output or reasoning as prompt text', () => {
+    expect(deriveUserSnippet([call, result, { type: 'reasoning', partId: 'r', content: 'secret' }])).toBe('');
   });
-
-  test('skips empty text parts and falls through to next text part', () => {
-    expect(
-      deriveUserSnippet([
-        part({ type: 'text', text: '   ' }),
-        part({ type: 'text', text: 'next' }),
-      ]),
-    ).toBe('next');
-  });
-
-  test('returns empty string when there are no parts at all', () => {
+  test('returns empty for no readable content', () => {
     expect(deriveUserSnippet([])).toBe('');
+    expect(deriveUserSnippet([text('  '), text('')])).toBe('');
   });
+});
 
-  test('returns empty string when all parts are whitespace-only text (not attachments)', () => {
-    expect(
-      deriveUserSnippet([
-        part({ type: 'text', text: '   ' }),
-        part({ type: 'text', text: '' }),
-      ]),
-    ).toBe('');
+describe('formatMessagePreviewTime', () => {
+  const timestamp = Date.UTC(2024, 0, 15, 14, 35);
+  test('handles missing and invalid timestamps', () => {
+    expect(formatMessagePreviewTime(null, '24h')).toBe('-');
+    expect(formatMessagePreviewTime(Number.NaN, '24h')).toBe('-');
+  });
+  test('respects explicit and automatic clock preferences', () => {
+    expect(/AM|PM/i.test(formatMessagePreviewTime(timestamp, '24h'))).toBe(false);
+    expect(/AM|PM/i.test(formatMessagePreviewTime(timestamp, '12h'))).toBe(true);
+    expect(formatMessagePreviewTime(timestamp, 'auto').length).toBeGreaterThan(0);
   });
 });
 
 describe('formatAssistantTokens', () => {
-  const fmt = (n: number) => n.toLocaleString('en-US');
-
-  test('renders input and output separated by " / "', () => {
-    expect(formatAssistantTokens(340, 1205, fmt)).toBe('340 / 1,205');
-  });
-
-  test('renders both zeros explicitly (does not hide 0/0)', () => {
-    expect(formatAssistantTokens(0, 0, fmt)).toBe('0 / 0');
-  });
-
-  test('honors the caller-provided number formatter', () => {
-    expect(formatAssistantTokens(1234, 5678, (n) => String(n))).toBe('1234 / 5678');
+  test('formats both counters, including zero', () => {
+    expect(formatAssistantTokens(340, 1205, n => n.toLocaleString('en-US'))).toBe('340 / 1,205');
+    expect(formatAssistantTokens(0, 0, String)).toBe('0 / 0');
+    expect(formatAssistantTokens(1234, 5678, String)).toBe('1234 / 5678');
   });
 });

@@ -1,8 +1,10 @@
 import React from 'react';
+import type { ModelSelection } from '@openchamber/agent-contract';
 import { cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useChatSessionSelection } from './chatColumnSession';
 import { selectCommandsForDirectory, useCommandsStore } from '@/stores/useCommandsStore';
+import { selectSnippetsForDirectory, useSnippetsStore } from '@/stores/useSnippetsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from "@/components/icon/Icon";
@@ -14,7 +16,7 @@ import { useGuestCommands } from '@/hooks/useGuestSurfaces';
 import { AutocompleteRowTooltip } from './composer/ui/AutocompleteRowTooltip';
 
 // Skills are not here: they have their own `$` picker.
-type CommandSource = 'openchamber' | 'opencode' | 'extension';
+type CommandSource = 'openchamber' | 'native' | 'extension';
 
 export interface CommandInfo {
   id: string;
@@ -22,11 +24,14 @@ export interface CommandInfo {
   source: CommandSource;
   description?: string;
   searchAliases?: string[];
-  agent?: string;
-  model?: string;
+  agentId?: string;
+  modelSelection?: ModelSelection;
   isBuiltIn?: boolean;
   isOpenChamber?: boolean;
   scope?: string;
+  resourceSource?: string;
+  group?: string;
+  argumentHint?: string;
   /** Name of the extension that contributed the command; shown as its badge. */
   extensionName?: string;
 }
@@ -88,6 +93,9 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   const commandsWithMetadata = useCommandsStore((s) => selectCommandsForDirectory(s, effectiveDirectory));
   const loadCommandsForDirectory = useCommandsStore((s) => s.loadCommands);
   const refreshCommands = React.useCallback(() => loadCommandsForDirectory(effectiveDirectory), [effectiveDirectory, loadCommandsForDirectory]);
+  const templates = useSnippetsStore(state => selectSnippetsForDirectory(state, effectiveDirectory));
+  const loadTemplates = useSnippetsStore(state => state.loadSnippets);
+  React.useEffect(() => { void loadTemplates(effectiveDirectory); }, [effectiveDirectory, loadTemplates]);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const selectedIndexRef = React.useRef(0);
   const keyboardNavigationRef = React.useRef(false);
@@ -124,23 +132,27 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   const reservedCommandNames = React.useMemo(() => {
     const names = new Set<string>(LOCAL_COMMAND_NAMES);
     for (const command of commandsWithMetadata) names.add(command.name.toLowerCase());
+    for (const template of templates) names.add(template.name.toLowerCase());
     return names;
-  }, [commandsWithMetadata]);
+  }, [commandsWithMetadata, templates]);
   const guestCommands = useGuestCommands(reservedCommandNames);
 
   // The list depends on the registries, not on what is typed: it is built
   // once per registry change, and only the ranking follows the query.
   const allCommands = React.useMemo<CommandInfo[]>(() => {
-    const customCommands: CommandInfo[] = commandsWithMetadata.map((cmd, index) => ({
-      id: `opencode:${cmd.scope ?? 'global'}:${cmd.name}:${cmd.agent ?? ''}:${cmd.model ?? ''}:${index}`,
-      name: cmd.name,
-      source: 'opencode',
-      description: cmd.description,
-      agent: cmd.agent ?? undefined,
-      model: cmd.model ?? undefined,
-      isBuiltIn: cmd.name === 'init' || cmd.name === 'review',
-      scope: cmd.scope,
+    const customCommands: CommandInfo[] = commandsWithMetadata.map(cmd => ({
+      id: cmd.commandId, name: cmd.name, source: 'native', description: cmd.description,
+      agentId: cmd.agentId, modelSelection: cmd.modelSelection,
+      scope: cmd.scope, resourceSource: cmd.source, group: cmd.group, argumentHint: cmd.argumentHint,
     }));
+    const commandNames = new Set(customCommands.map(command => command.name));
+    for (const template of templates) {
+      if (!commandNames.has(template.name)) customCommands.push({
+        id: template.templateId, name: template.name, source: 'native', description: template.description,
+        agentId: template.agentId, modelSelection: template.modelSelection,
+        scope: template.scope, resourceSource: template.source, group: template.group,
+      });
+    }
 
     const builtInCommands: CommandInfo[] = [
       ...(hasSession
@@ -216,7 +228,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       ...mergeCommandAutocompleteItems(builtInCommands, customCommands),
       ...extensionCommands,
     ];
-  }, [hasSession, canStartSessionCommand, canUseReviewHandoffFlow, commandsWithMetadata, guestCommands, t]);
+  }, [hasSession, canStartSessionCommand, canUseReviewHandoffFlow, commandsWithMetadata, templates, guestCommands, t]);
   const commands = React.useMemo(
     () => rankCommandAutocompleteItems(allCommands, searchQuery),
     [allCommands, searchQuery],
@@ -380,6 +392,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="typography-ui-label font-medium">/{command.name}</span>
+                      {command.argumentHint && <span className="typography-meta text-muted-foreground truncate">{command.argumentHint}</span>}
                       <span className={TYPE_BADGE_CLASS}>
                         {t('chat.commandAutocomplete.badge.command')}
                       </span>
@@ -396,13 +409,14 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                           {t('chat.commandAutocomplete.badge.system')}
                         </span>
                       ) : command.scope ? (
-                        <span className={command.scope === 'project' ? PROJECT_BADGE_CLASS : USER_BADGE_CLASS}>
-                          {command.scope}
+                        <span className={command.scope === 'workspace' ? PROJECT_BADGE_CLASS : USER_BADGE_CLASS}>
+                          {command.scope}{command.group ? ` / ${command.group}` : ''}
                         </span>
                       ) : null}
-                      {command.agent && (
+                      {command.resourceSource && <span className={NEUTRAL_BADGE_CLASS}>{command.resourceSource}</span>}
+                      {command.agentId && (
                         <span className={NEUTRAL_BADGE_CLASS}>
-                          {command.agent}
+                          {command.agentId}
                         </span>
                       )}
                     </div>

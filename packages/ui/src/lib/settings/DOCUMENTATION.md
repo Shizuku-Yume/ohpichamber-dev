@@ -9,7 +9,7 @@
 - `registry.ts` — the settings registry. One `SETTINGS_REGISTRY` table plus two key lists (`LOCAL_DEVICE_KEYS`, `DESKTOP_SHELL_KEYS`) and the derived helpers other modules use: `DesktopSettings` (the document type), `parseSettingsDocument`, `applySettingsToStores`, `AUTO_SAVE_KEYS` / `readAutoSaveSnapshot`, `MIRRORED_KEYS`, `buildSettingsRegistrySnapshot`.
 - `parsers.ts` — value-level boundary parsers (zod schemas wrapped as `SettingsParser<T>`). `undefined` means "reject", never "default".
 - `registry-snapshot.ts` — writes the plain-JSON snapshot for the Host consumer (`packages/web/server/lib/host/settings-registry.json`). Regenerate with `bun run settings-registry:generate`; validate the generated asset together with the Host settings behavior.
-- The server-side settings helper owns validation and persistence of host settings; Electron's main process owns native shell settings that are deliberately outside the HTTP settings document. This registry is host-owned, not an agent runtime contract. The current application still uses the inherited OpenCode integration until the planned OMP cutover.
+- The server-side settings helper owns validation and persistence of Host settings; Electron's main process owns native shell settings outside the HTTP settings document. This registry is a Host settings contract, separate from OMP agent and provider resources, which use Canonical APIs.
 - `metadata.ts`, `search.ts` — Settings page metadata and the search index (unchanged by the registry; see the [Settings search contract](../../components/sections/references/search.md)).
 
 ## Invariants

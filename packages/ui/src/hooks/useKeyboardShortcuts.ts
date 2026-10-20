@@ -12,6 +12,7 @@ import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { useKeybinds } from '@/hooks/useKeybind';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { canUseElectronDesktopIPC, invokeDesktop } from '@/lib/desktop';
 import {
   eventMatchesShortcut,
@@ -35,7 +36,7 @@ import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { getCycledPrimaryAgentName } from '@/components/chat/mobileControlsUtils';
+import { getCycledAgentId } from '@/components/chat/mobileControlsUtils';
 import { focusChatInput } from '@/components/chat/composer/editor/dom';
 import {
   addSelectionToChat,
@@ -245,7 +246,8 @@ export const useKeyboardShortcuts = () => {
       const backward = combo && !combo.includes('shift') ? normalizeCombo(`shift+${combo}`) : '';
       const direction = backward && eventMatchesShortcut(event, backward) ? -1 : 1;
       const config = useConfigStore.getState();
-      const next = getCycledPrimaryAgentName(config.getVisibleAgents(), config.currentAgentName, direction, state.favoriteAgents);
+      const agents = selectAgentsForDirectory(useAgentsStore.getState(), useDirectoryStore.getState().currentDirectory);
+      const next = getCycledAgentId(agents, config.currentAgentName, direction, state.favoriteAgents);
       if (!next) return false;
       config.setAgent(next);
       state.addRecentAgent(next);

@@ -15,7 +15,7 @@ import { normalizePath as normalizePathImpl } from '@/lib/pathNormalization';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { useDirectoryStore } from './useDirectoryStore';
 import { useProjectsStore } from './useProjectsStore';
-import { useSnippetsStore } from './useSnippetsStore';
+import { expandNativeFileResource } from '@/api/fileResourceExpansion';
 import { useGlobalSessionsStore } from './useGlobalSessionsStore';
 import { createMultiRunSession } from '@/lib/multirun/createSession';
 import { multiRunGroupKey, type MultiRunMembership } from '@/lib/multirun/identity';
@@ -99,30 +99,39 @@ export async function dispatchRunPrompt(input: {
   agentId?: string;
   files?: PromptAttachment[];
 }): Promise<void> {
-  input.assertCurrent();
-  useSelectionStore.getState().saveSessionModelSelection(input.sessionId, input.providerId, input.modelId);
-  useSelectionStore.getState().saveSessionAgentSelection(input.sessionId, input.agentId ?? '');
-  await observeLaneSession({ sessionId: input.sessionId, directory: input.directory }, input.assertCurrent);
+  const directoryOwner = resolveWorkspaceDirectory(input.workspaceId);
+  const session = useGlobalSessionsStore.getState().entityById.get(input.sessionId);
+  const assertCurrent = () => {
+    input.assertCurrent();
+    const current = useGlobalSessionsStore.getState().entityById.get(input.sessionId);
+    if (session && (!current || current.workspaceId !== session.workspaceId || current.epoch !== session.epoch)) throw new Error('Multi-run session changed');
+    if (getRuntimeKey() !== input.runtimeKey || resolveWorkspaceDirectory(input.workspaceId) !== directoryOwner) throw new Error('Multi-run prompt scope changed');
+  };
+  assertCurrent();
+  await observeLaneSession({ sessionId: input.sessionId, directory: input.directory }, assertCurrent);
   if (input.files?.length && !input.attachmentWorkspaceId) throw new Error('Attachment source workspace is required');
   const attachments = input.files?.length ? await admitLaneAttachments({
-    files: input.files, sourceWorkspaceId: input.attachmentWorkspaceId!, destinationWorkspaceId: input.workspaceId, assertCurrent: input.assertCurrent,
+    files: input.files, sourceWorkspaceId: input.attachmentWorkspaceId!, destinationWorkspaceId: input.workspaceId, assertCurrent,
   }) : [];
-  input.assertCurrent();
-  const expandText = useSnippetsStore.getState().expandText;
-  const [text, knowledge] = await Promise.all([
-    expandText(input.prompt).catch(() => input.prompt),
+  assertCurrent();
+  const [expanded, knowledge] = await Promise.all([
+    expandNativeFileResource(input.prompt, input.directory),
     fetchSessionKnowledge(input.directory, input.sessionId),
   ]);
-  input.assertCurrent();
+  assertCurrent();
+  const model = expanded?.modelSelection ?? { providerId: input.providerId, modelId: input.modelId };
+  const agentId = expanded?.agentId ?? input.agentId;
+  useSelectionStore.getState().saveSessionModelSelection(input.sessionId, model.providerId, model.modelId);
+  useSelectionStore.getState().saveSessionAgentSelection(input.sessionId, agentId ?? '');
   await sendMessage({
     runtimeKey: input.runtimeKey,
     sessionId: input.sessionId,
     request: {
-      options: { providerId: input.providerId, modelId: input.modelId, variant: input.variant ?? null, agentId: input.agentId ?? null, reasoningEffort: input.reasoningEffort ?? null },
-      input: { text, attachments, context: knowledge.text ? [{ kind: 'instruction', text: knowledge.text }] : [] },
+      options: { ...model, variant: input.variant ?? null, agentId: agentId ?? null, reasoningEffort: input.reasoningEffort ?? null },
+      input: { text: expanded?.content ?? input.prompt, attachments, context: knowledge.text ? [{ kind: 'instruction', text: knowledge.text }] : [] },
     },
   });
-  input.assertCurrent();
+  assertCurrent();
   if (knowledge.text) {
     void reportSessionKnowledgeDelivered(input.directory, input.sessionId, knowledge.signature);
   }

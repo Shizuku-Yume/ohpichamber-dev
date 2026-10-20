@@ -90,7 +90,7 @@ beforeEach(async () => {
   useConfigStore.setState({
     currentAgentName: "agent-default", currentProviderId: "provider", currentModelId: "model",
     currentVariantSelection: { override: undefined, inherited: "high" },
-    selectionSource: "auto", agentSelectionSource: "auto", agents: [],
+    selectionSource: "auto", agentSelectionSource: "auto",
     isConnected: true, hasEverConnected: true,
   })
   useDirectoryStore.setState({ currentDirectory: "", directoryHistory: [], historyIndex: -1, homeDirectory: "/home/test", isHomeReady: true })

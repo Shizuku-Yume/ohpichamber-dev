@@ -9,7 +9,8 @@ import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
-import { showOpenCodeStatus } from '@/lib/openCodeStatus';
+import { useI18n } from '@/lib/i18n';
+import { showRuntimeStatus } from '@/lib/runtimeStatus';
 import { addSelectionToChat } from '@/lib/addSelectionToChat';
 import { navigateSessionHistory } from '@/lib/sessionNavigationHistory';
 
@@ -97,6 +98,7 @@ type MenuAction =
 export const useMenuActions = (
   onToggleMemoryDebug?: () => void
 ) => {
+  const { t } = useI18n();
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
   const toggleCommandPalette = useUIStore((s) => s.toggleCommandPalette);
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
@@ -326,8 +328,8 @@ export const useMenuActions = (
           break;
 
         case 'download-logs': {
-          void showOpenCodeStatus().catch(() => {
-            toast.error('Failed to collect OpenCode status');
+          void showRuntimeStatus().catch(() => {
+            toast.error(t('runtimeStatusDialog.toast.collectFailed'));
           });
           break;
         }
@@ -347,6 +349,7 @@ export const useMenuActions = (
       toggleCommandPalette,
       toggleHelpDialog,
       toggleSidebar,
+      t,
     ]
   );
 

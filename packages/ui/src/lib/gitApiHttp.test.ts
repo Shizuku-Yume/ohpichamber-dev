@@ -13,7 +13,6 @@ import {
   continueRebase,
   createBranch,
   deleteGitBranch,
-  dropGitStash,
   getGitBranches,
   getGitDiff,
   getGitFileDiff,
@@ -27,6 +26,8 @@ import {
   gitRemoteListSchema,
   gitFetch,
   gitNetworkOperationSchema,
+  initializeGit,
+  dropGitStash,
   planNetworkOperation,
   gitPush,
   listGitDirectories,
@@ -410,6 +411,31 @@ test('nested repository discovery scopes the workspace to the requested root', a
   } finally {
     restoreMocks();
   }
+});
+
+describe('gitApiHttp initialization', () => {
+  test('posts the directory-scoped Host init route and invalidates failures', async () => {
+    installWindowMock();
+    const calls = installFetchMock();
+    try {
+      await initializeGit('/repo');
+      expect(calls).toHaveLength(1);
+      expect(String(calls[0].input)).toBe('/api/git/init?directory=%2Frepo');
+      expect(calls[0].init?.method).toBe('POST');
+    } finally {
+      restoreMocks();
+    }
+  });
+
+  test('surfaces the Host error body', async () => {
+    installWindowMock();
+    globalThis.fetch = Object.assign(async () => Response.json({ error: 'refused' }, { status: 400 }), previousFetch);
+    try {
+      await expect(initializeGit('/repo')).rejects.toThrow('refused');
+    } finally {
+      restoreMocks();
+    }
+  });
 });
 
 describe('gitApiHttp index mutations', () => {

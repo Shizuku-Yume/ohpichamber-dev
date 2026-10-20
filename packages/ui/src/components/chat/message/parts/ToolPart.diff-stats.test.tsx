@@ -4,7 +4,7 @@ import { plugin } from 'bun';
 import { pathToFileURL } from 'node:url';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import type { ToolCallPart as ToolPartData } from '@openchamber/agent-contract';
+import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 import { SyncProvider } from '@/sync/sync-context';
 import { I18nProvider } from '@/lib/i18n';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
@@ -45,7 +45,7 @@ const themeContext: ThemeContextValue = {
   setDarkThemePreference: unexpectedThemeChange,
 };
 
-test('edit and patch headers render v2 file diff counts as results arrive', async () => {
+test('native edit results show performed diffs without treating write input as added lines', async () => {
   const happyWindow = new Window({ url: 'http://localhost' });
   const globals = {
     window: happyWindow,
@@ -78,47 +78,39 @@ test('edit and patch headers render v2 file diff counts as results arrive', asyn
 
   try {
     useGuestsStore.setState({ status: 'ready', guests: [], runtimeKey: 'test' });
-    const render = async (tool: string, metadata: { files?: Array<{ file: string; additions?: number; deletions?: number; status?: string }>; diff?: string }, input: Record<string, unknown> = {}) => {
-      const part: ToolPartData = {
-        type: 'tool_call', partId: 'change', toolCallId: 'change', toolName: tool,
-        input: { ...input, _metadata: metadata }, status: 'completed',
-      };
+    const call: ToolCallPart = {
+      type: 'tool_call', partId: 'edit-call', toolCallId: 'edit', toolName: 'edit',
+      input: { path: 'src/example.ts', edits: [{ op: 'update', diff: '@@\n-old\n+new' }] }, status: 'completed',
+    };
+    const render = async (part: ToolCallPart | ToolResultPart, expanded = false) => {
       await act(async () => root.render(
         <SyncProvider directory="">
           <I18nProvider>
             <ThemeSystemContext.Provider value={themeContext}>
-              <ToolPart part={part} isExpanded={false} isMobile={false} onToggle={() => {}} />
+              <ToolPart part={part} pairedCall={call} isExpanded={expanded} isMobile={false} onToggle={() => {}} />
             </ThemeSystemContext.Provider>
           </I18nProvider>
         </SyncProvider>,
       ));
     };
-    for (const tool of ['patch', 'edit']) {
-      await render(tool, {});
-      expect(container.textContent).not.toContain('+7');
-      await render(tool, { files: [{ file: 'src/example.ts', additions: 7, deletions: 3, status: 'modified' }] });
-      expect(container.textContent).toContain('+7/-3');
-      // Canonical counts win even when a legacy diff is also present.
-      await render(tool, { files: [{ file: 'src/example.ts', additions: 0, deletions: 4, status: 'deleted' }], diff: '+wrong' });
-      expect(container.textContent).toContain('+0/-4');
-      expect(container.textContent).not.toContain('+7/-3');
-      await render(tool, { files: [{ file: 'src/example.ts', additions: 0, deletions: 0, status: 'modified' }] });
-      expect(container.textContent).toContain('+0/-0');
-      await render(tool, { files: [{ file: 'src/example.ts', additions: 7 }] });
-      expect(container.textContent).not.toContain('+7');
-    }
-    await render('patch', { files: [
-      { file: 'src/one.ts', additions: 7, deletions: 3 },
-      { file: 'src/two.ts', additions: 2, deletions: 0 },
-    ] });
-    expect(container.textContent).toContain('+7');
-    expect(container.textContent).toContain('-3');
-    expect(container.textContent).toContain('+2');
-
-    await render('edit', { diff: '@@ -1 +1 @@\n-old\n+new\n+another' });
+    await render({
+      type: 'tool_result', partId: 'edit-result', toolCallId: 'edit', toolName: 'edit', isError: false,
+      output: { content: [{ type: 'text', text: 'Updated src/example.ts' }], details: {
+        path: 'src/example.ts', diff: '-1|old\n+1|new\n+2|another',
+      } },
+    }, true);
+    expect(container.textContent).toContain('src/example.ts');
     expect(container.textContent).toContain('+2/-1');
-    await render('write', {}, { path: 'new.ts', content: 'one\ntwo' });
-    expect(container.textContent).toContain('+2');
+    expect([...container.querySelectorAll('pre')].some((element) => element.textContent?.includes('-old'))).toBe(true);
+    expect([...container.querySelectorAll('pre')].some((element) => element.textContent?.includes('+new'))).toBe(true);
+    await render({ type: 'tool_call', partId: 'write-call', toolCallId: 'write', toolName: 'write',
+      input: { path: 'new.ts', content: 'one\ntwo' }, status: 'completed' });
+    expect(container.textContent).not.toContain('+2');
+    await render({ type: 'tool_result', partId: 'edit-error', toolCallId: 'edit', toolName: 'edit',
+      isError: true, error: 'Permission denied', output: { content: [{ type: 'text', text: 'Cannot edit src/example.ts' }] } }, true);
+    expect(container.textContent).toContain('Permission denied');
+    expect(container.textContent).toContain('Cannot edit src/example.ts');
+    expect(container.textContent).not.toContain('+2/-1');
   } finally {
     await act(async () => { root.unmount(); });
     await happyWindow.happyDOM.abort();

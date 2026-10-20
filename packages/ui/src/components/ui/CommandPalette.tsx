@@ -39,7 +39,7 @@ import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import type { Session } from '@openchamber/agent-contract';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo, shortcutRegistry } from '@/lib/shortcuts';
-import { showOpenCodeStatus } from '@/lib/openCodeStatus';
+import { showRuntimeStatus } from '@/lib/runtimeStatus';
 import { canUseElectronDesktopIPC, invokeDesktop, isDesktopShell, isWebRuntime } from '@/lib/desktop';
 import { SETTINGS_PAGE_METADATA, type SettingsRuntimeContext } from '@/lib/settings/metadata';
 
@@ -311,11 +311,11 @@ export const CommandPalette: React.FC = () => {
       {
         id: 'open-status',
         secondary: true,
-        title: t('commandPalette.item.showOpenCodeStatus'),
+        title: t('commandPalette.item.showRuntimeStatus'),
         icon: <Icon name="pulse" className="mr-2 h-4 w-4" />,
-        searchText: t('commandPalette.item.showOpenCodeStatus'),
+        searchText: t('commandPalette.item.showRuntimeStatus'),
         onSelect: run(() => {
-          void showOpenCodeStatus();
+          void showRuntimeStatus();
         }),
       },
       {

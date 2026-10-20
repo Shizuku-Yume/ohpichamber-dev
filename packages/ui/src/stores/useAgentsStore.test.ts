@@ -19,7 +19,7 @@ Object.assign(globalThis, {
 // Import-time system-info probes are unrelated to the canonical agent contract.
 const fetchSpy = spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ data: [] }));
 // Store imports read browser storage during module initialization; install happy-dom first.
-const { useAgentsStore, invalidateAgentsLoadCache, selectAgentsForDirectory } = await import('@/stores/useAgentsStore');
+const { useAgentsStore, invalidateAgentsLoadCache, selectAgentsForDirectory, selectAgentCatalogStatus } = await import('@/stores/useAgentsStore');
 const { useProjectsStore } = await import('./useProjectsStore');
 const DIRECTORY = '/workspace/project';
 const OTHER_DIRECTORY = '/workspace/other';
@@ -70,6 +70,31 @@ afterAll(() => { fetchSpy.mockRestore(); browser.close(); });
 const agents = (directory = DIRECTORY): Agent[] => selectAgentsForDirectory(useAgentsStore.getState(), directory);
 
 describe('native agent catalogs', () => {
+  test('readiness is directory-scoped and a successful empty catalog is ready', async () => {
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('loading');
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(true);
+    expect(agents()).toEqual([]);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('ready');
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), OTHER_DIRECTORY)).toBe('loading');
+    useAgentsStore.getState().resetForRuntimeSwitch();
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('loading');
+  });
+
+  test('a failed refresh is unavailable even with retained data, and recovery clears it', async () => {
+    getAgents.mockResolvedValue(catalog([agent('retained')], '1'));
+    await useAgentsStore.getState().loadAgents(DIRECTORY);
+    invalidateAgentsLoadCache(DIRECTORY);
+    getAgents.mockRejectedValueOnce(new Error('Service unavailable'));
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(false);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('error');
+    expect(agents()).toEqual([agent('retained')]);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), OTHER_DIRECTORY)).toBe('loading');
+    getAgents.mockResolvedValue(catalog([], '2'));
+    expect(await useAgentsStore.getState().loadAgents(DIRECTORY)).toBe(true);
+    expect(selectAgentCatalogStatus(useAgentsStore.getState(), DIRECTORY)).toBe('ready');
+    expect(agents()).toEqual([]);
+  });
+
   test('resolves the directory and retains complete native profiles and revision', async () => {
     const profiles = [agent('build', 'stable-build-id'), agent('deploy')];
     getAgents.mockResolvedValue(catalog(profiles, '17'));
@@ -256,40 +281,5 @@ describe('native agent load generations', () => {
     expect(await second).toBe(true);
     expect(getAgents).toHaveBeenCalledTimes(1);
     expect(agents()).toEqual([agent('build')]);
-  });
-});
-
-describe('Host agent permission boundary', () => {
-  test('malformed Host permission responses are failures rather than empty rules', async () => {
-    fetchSpy.mockResolvedValue(Response.json({ global: [], agent: [], effective: [] }));
-    expect(await useAgentsStore.getState().fetchAgentPermissions('profile', DIRECTORY)).toBeNull();
-    expect(updateAgent).not.toHaveBeenCalled();
-  });
-
-  test('reads ordered Host rules separately from native profile fields', async () => {
-    const rules = [{ action: 'read', resource: '*', effect: 'allow' as const }];
-    const envelope = { global: [], agent: rules, effective: [{ ...rules[0], source: 'agent' }], source: 'json', path: null };
-    fetchSpy.mockResolvedValue(Response.json(envelope));
-    expect(await useAgentsStore.getState().fetchAgentPermissions('profile', DIRECTORY)).toEqual(envelope);
-    expect(getAgents).not.toHaveBeenCalled();
-  });
-
-  test('saves only ordered permissions through the Host PATCH endpoint', async () => {
-    const rules = [{ action: 'edit', resource: '*', effect: 'ask' as const }];
-    const requests: Array<{ url: string; method?: string; body: string | null }> = [];
-    fetchSpy.mockImplementation(async (input, init) => {
-      requests.push({ url: String(input instanceof Request ? input.url : input), method: init?.method, body: typeof init?.body === 'string' ? init.body : null });
-      return Response.json({ ok: true });
-    });
-    expect(await useAgentsStore.getState().saveHostAgentPermissions('profile', rules, OTHER_DIRECTORY)).toEqual({ ok: true });
-    expect(requests).toHaveLength(1);
-    const request = requests[0];
-    const url = new URL(request.url, 'http://localhost');
-    expect(url.pathname).toBe('/api/config/agents/profile');
-    expect(url.searchParams.get('directory')).toBe(OTHER_DIRECTORY);
-    expect(request.method).toBe('PATCH');
-    expect(JSON.parse(request.body ?? 'null')).toEqual({ permissions: rules });
-    expect(updateAgent).not.toHaveBeenCalled();
-    expect(resolveWorkspace).not.toHaveBeenCalled();
   });
 });

@@ -61,7 +61,7 @@ Do not introduce raw `<Tooltip>`-based info icons, direct Remixicon components, 
 
 For ordinary settings persisted through `updateDesktopSettings`, `SettingsPageLayout showSaveStatus` renders the shared quiet indicator: success is silent, "Saving…" appears only past ~500 ms, and failures show "Save failed". These writes report automatically; a page-specific persistence API participating in this ordinary-settings flow reports through `reportSettingsSaveState` from `@/lib/persistence`. Do not add per-page save badges or success toasts.
 
-The inherited OpenCode configuration autosave pages are a different flow: they show no quiet indicator and report failure with the hook's error toast. Keep them out of `reportSettingsSaveState` / `showSaveStatus`; [the owning autosave contract](DOCUMENTATION.md#autosave-on-the-opencode-configuration-pages) defines immediate versus blur saves, serialization and draft reconciliation. Provider connect/remove operations are actions, not ordinary setting writes.
+Settings entity editors use the native Canonical API and follow the autosave contract in [the Settings module documentation](DOCUMENTATION.md#autosave-on-configuration-and-behavior-pages). Project setup values use the Host project config API and the section-specific save behavior in [Project settings](DOCUMENTATION.md#project-settings-and-the-personal-setup-file). Neither flow reads OpenCode configuration files.
 
 ## Settings Search Contract
 

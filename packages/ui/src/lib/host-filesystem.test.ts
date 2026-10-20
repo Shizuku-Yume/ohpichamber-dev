@@ -64,7 +64,6 @@ describe('Host filesystem boundary without an agent SDK', () => {
       path: '/api/fs/search',
       options: {
         query: { directory: '/repo/with space', query: 'sr', type: 'directory', includeHidden: 'true', respectGitignore: 'false' },
-        headers: { 'x-opencode-directory': '%2Frepo%2Fwith%20space' },
       },
     });
     responses.push(Response.json(['legacy-sdk-path']));

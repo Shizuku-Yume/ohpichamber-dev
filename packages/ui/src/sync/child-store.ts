@@ -600,16 +600,35 @@ export class ChildStoreManager {
    * stores are left alone: each directory read starts that directory's
    * location, so only failed ones are worth one.
    *
+   * A workspace admission can still be settling when the connection signal
+   * arrives. Mark that in-flight, workspace-less run for one replacement after
+   * it records its failure; this avoids losing the first recovery attempt to a
+   * promise-settlement race without duplicating a healthy workspace bootstrap.
+   * A failed admission with no remaining demand receives the same bounded
+   * retry, because it has no workspace that a foreground consumer can revisit.
+   *
    * Returns the directories queued now.
    */
   retryFailedBootstraps(): ReadonlySet<string> {
     const queued = new Set<string>()
     if (this.disposed) return queued
     for (const [directory, state] of [...this.bootstrapStates]) {
+      if (state === "running") {
+        const running = this.runningBootstraps.get(directory)
+        const store = this.children.get(directory)
+        if (running && !store?.getState().workspace) running.rerunRequested = true
+        continue
+      }
       if (state !== "failed") continue
       const demand = this.aggregateBootstrapDemand(directory)
+      const store = this.children.get(directory)
       if (demand && demand.priority !== "background") {
         this.queueBootstrap({ ...demand, force: true })
+        queued.add(directory)
+        continue
+      }
+      if (!demand && !store?.getState().workspace) {
+        this.queueBootstrap({ directory, priority: "selected", reason: "server-connected", force: true })
         queued.add(directory)
         continue
       }

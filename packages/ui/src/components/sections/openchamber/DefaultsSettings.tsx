@@ -20,6 +20,8 @@ import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSelectionStore } from '@/sync/selection-store';
@@ -28,8 +30,6 @@ import { useI18n } from '@/lib/i18n';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 
 const getDisplayModel = (
   storedModel: string | undefined
@@ -64,10 +64,12 @@ const getDisplayModel = (
   const agentIsPicked = useConfigStore((state) => state.agentSelectionSource === 'manual');
   // An agent picked for this chat brings the model its config pins, and a pin
   // outranks the global default the same way it does in `setAgent`.
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const agents = useAgentsStore((state) => selectAgentsForDirectory(state, currentDirectory));
   const pickedAgentPinsModel = useConfigStore((state) => {
     if (state.agentSelectionSource !== 'manual') return false;
-    const agent = state.agents.find((candidate) => candidate.name === state.currentAgentName);
-    return Boolean(agent?.model?.providerID && agent.model.id);
+    const agent = agents.find((candidate) => candidate.agentId === state.currentAgentName);
+    return Boolean(agent?.model?.providerId && agent.model.modelId);
   });
   const chatHasOwnModel = Boolean(
     pickedAgentPinsModel
@@ -137,7 +139,7 @@ const getDisplayModel = (
         setCurrentVariant(undefined);
 
         if (providerId && modelId) {
-          const provider = providers.find((p) => p.id === providerId);
+          const provider = providers.find((p) => p.providerId === providerId);
           // Auto is not a provider OpenCode lists; the picker only offers it while the server can honour it.
           if (provider || isAutoModel(providerId, modelId)) {
             setProvider(providerId);
@@ -283,11 +285,9 @@ const getDisplayModel = (
 
   const availableVariants = React.useMemo(() => {
     if (!parsedModel.providerId || !parsedModel.modelId) return [];
-    const provider = providers.find((p) => p.id === parsedModel.providerId);
-    const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === parsedModel.modelId) as
-      | { variants?: ModelVariantSource }
-      | undefined;
-    return listModelVariantIds(model?.variants);
+    const provider = providers.find((p) => p.providerId === parsedModel.providerId);
+    const model = provider?.models.find((m) => m.modelId === parsedModel.modelId);
+    return model?.variants.map((variant) => variant.variant) ?? [];
   }, [parsedModel.modelId, parsedModel.providerId, providers]);
 
   const supportsVariants = availableVariants.length > 0;
@@ -309,7 +309,7 @@ const getDisplayModel = (
                 {supportsVariants ? ` (${defaultVariant ?? t('settings.openchamber.defaults.option.defaultLowercase')})` : ''}
               </span>
             ) : (
-              <span className="text-foreground">{t('settings.openchamber.defaults.summaryOpenCodeDefault')}</span>
+              <span className="text-foreground">{t('settings.openchamber.defaults.summaryRuntimeDefault')}</span>
             )}
             {defaultAgent && (
               <>
@@ -359,9 +359,8 @@ const getDisplayModel = (
               label={t('settings.openchamber.defaults.field.defaultAgent')}
             >
               <AgentSelector
-                agentName={defaultAgent || ''}
+                agentId={defaultAgent || ''}
                 onChange={handleAgentChange}
-                filter={(agent) => isPrimaryMode(agent.mode)}
                 className={SETTINGS_CUSTOM_TRIGGER_CLASS}
               />
             </SettingsFieldRow>

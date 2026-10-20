@@ -9,10 +9,10 @@ interface Item {
 describe('rankSkillAutocompleteItems', () => {
   test('places $apply name matches before fuzzy-only matches', () => {
     const skills: Item[] = [
-      { name: 'apple-design', scope: 'user' },
-      { name: 'openspec-apply-change', scope: 'user' },
-      { name: 'opsx-apply', scope: 'user' },
-      { name: 'zebra', scope: 'user' },
+      { name: 'apple-design', scope: 'agent' },
+      { name: 'openspec-apply-change', scope: 'agent' },
+      { name: 'opsx-apply', scope: 'agent' },
+      { name: 'zebra', scope: 'agent' },
     ];
 
     expect(rankSkillAutocompleteItems(skills, 'apply').map((skill) => skill.name)).toEqual([
@@ -22,10 +22,10 @@ describe('rankSkillAutocompleteItems', () => {
     ]);
   });
 
-  test('keeps project skills above user skills', () => {
+  test('keeps workspace skills above agent skills', () => {
     const skills: Item[] = [
-      { name: 'apply', scope: 'user' },
-      { name: 'apple-design', scope: 'project' },
+      { name: 'apply', scope: 'agent' },
+      { name: 'apple-design', scope: 'workspace' },
     ];
 
     expect(rankSkillAutocompleteItems(skills, 'apply').map((skill) => skill.name)).toEqual([
@@ -34,11 +34,11 @@ describe('rankSkillAutocompleteItems', () => {
     ]);
   });
 
-  test('keeps project first, then alphabetical order, when the query is empty', () => {
+  test('keeps workspace first, then alphabetical order, when the query is empty', () => {
     const skills: Item[] = [
-      { name: 'zebra', scope: 'user' },
-      { name: 'beta', scope: 'project' },
-      { name: 'alpha', scope: 'user' },
+      { name: 'zebra', scope: 'agent' },
+      { name: 'beta', scope: 'workspace' },
+      { name: 'alpha', scope: 'agent' },
     ];
 
     expect(rankSkillAutocompleteItems(skills, '').map((skill) => skill.name)).toEqual([

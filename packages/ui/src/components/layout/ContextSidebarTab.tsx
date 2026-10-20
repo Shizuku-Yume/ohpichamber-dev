@@ -1,6 +1,6 @@
 import React from 'react';
 import type { JsonValue, Message, Part } from '@openchamber/agent-contract';
-import type { Model, Provider } from '@/lib/opencode/model';
+import type { Model, Provider } from '@openchamber/agent-contract';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 
 import { Icon } from "@/components/icon/Icon";
@@ -16,30 +16,12 @@ import type { TimeFormatPreference } from '@/stores/useUIStore';
 import { formatDateTimeForPreference } from '@/lib/timeFormat';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
+  derivePartsLabel,
+  deriveUserSnippet,
   formatAssistantTokens,
   formatMessagePreviewTime,
 } from './rawMessagePreview';
 
-const deriveCanonicalPartsLabel = (parts: Part[]): string => {
-  const labels: string[] = [];
-  for (const part of parts) {
-    const label = part.type === 'tool_call' || part.type === 'tool_result'
-      ? (part.toolName.trim().toLowerCase() || 'tool')
-      : part.type;
-    if (!labels.includes(label)) labels.push(label);
-  }
-  return labels.join(' + ');
-};
-
-const deriveCanonicalUserSnippet = (parts: Part[]): string => {
-  for (const part of parts) {
-    if (part.type !== 'text') continue;
-    const snippet = part.content.replace(/\s+/g, ' ').trim();
-    if (snippet.length > 0) return snippet;
-  }
-  const attachmentCount = parts.filter((part) => part.type !== 'text').length;
-  return attachmentCount === 0 ? '' : `${attachmentCount} attachment${attachmentCount === 1 ? '' : 's'}`;
-};
 
 type SessionMessage = { info: Message; parts: Part[] };
 
@@ -178,13 +160,13 @@ const resolveProviderAndModel = (
   providerID: string,
   modelID: string,
 ): ProviderModelDisplay => {
-  const provider = providers.find((entry) => entry.id === providerID);
-  const model = provider?.models?.find((entry) => entry.id === modelID);
+  const provider = providers.find((entry) => entry.providerId === providerID);
+  const model = provider?.models?.find((entry) => entry.modelId === modelID);
 
   return {
     providerName: provider?.name || providerID || '-',
     modelName: model?.name || modelID || '-',
-    contextLimit: model?.limit?.context ?? null,
+    contextLimit: model?.contextWindow ?? null,
   };
 };
 
@@ -460,9 +442,9 @@ export const ContextPanelContent: React.FC = () => {
               const isExpanded = expandedRawMessages[message.info.messageId] === true;
               const isCopied = copiedRawMessageId === message.info.messageId;
               const messageCreatedAt = message.info.createdAt;
-              const partsLabel = deriveCanonicalPartsLabel(message.parts);
+              const partsLabel = derivePartsLabel(message.parts);
               const tokens = isAssistant ? extractTokenBreakdown({ info: message.info, parts: message.parts }) : null;
-              const userSnippet = isUser ? deriveCanonicalUserSnippet(message.parts) : '';
+              const userSnippet = isUser ? deriveUserSnippet(message.parts) : '';
               const previewTime = formatMessagePreviewTime(messageCreatedAt, timeFormatPreference);
               // Keep token/time columns stable; the message label owns all
               // remaining space and truncates before it can push metrics.

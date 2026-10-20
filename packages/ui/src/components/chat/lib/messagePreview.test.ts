@@ -1,67 +1,51 @@
-import { describe, expect, test } from 'bun:test'
-import type { Part } from '@/lib/opencode/model'
-import { CONTEXT_METADATA_KEY, type ContextPartPayload } from '@/lib/messages/contextParts'
-import { getFullText, getMessagePreview, getPromptPreviewText } from './messagePreview'
+import { describe, expect, test } from 'bun:test';
+import type { Part } from '@openchamber/agent-contract';
+import { appendTerminalContexts } from '@/lib/messages/terminalContext';
+import { getFullText, getMessagePreview, getPromptPreviewText } from './messagePreview';
 
-const textPart = (text: string): Part => ({ type: 'text', text } as Part)
+const text = (content: string): Part => ({ type: 'text', partId: 'text', content });
+const attachment: Part = {
+  type: 'attachment', partId: 'attachment', attachmentId: 'upload', name: 'diagram.png',
+  mediaType: 'image/png', size: 1, uri: 'attachment://upload',
+};
+const terminalText = (prompt: string) => text(appendTerminalContexts(prompt, [{
+  terminalId: 'terminal', terminalLabel: 'Build', startLine: 1, endLine: 2, text: 'first\nsecond',
+}]));
 
-// SAFETY: a synthetic context part as the composer builds it; the preview
-// helpers read only type, text, and metadata.
-const contextPart = (payload: ContextPartPayload, text: string): Part => ({
-  id: 'prt_1',
-  sessionID: 'ses_1',
-  messageID: 'msg_1',
-  type: 'text',
-  text,
-  synthetic: true,
-  metadata: { [CONTEXT_METADATA_KEY]: payload },
-} as Part)
-
-const chatQuote = (quote: string, text = ''): ContextPartPayload => ({ kind: 'chat-quote', quote, text })
-
-const t = (key: string): string => (key === 'chat.message.context.chatQuote' ? 'Quoted from an earlier message' : key)
-
-describe('messagePreview', () => {
-  test('joins text parts for full text', () => {
-    expect(getFullText([textPart('hello'), textPart('world')])).toBe('hello\nworld')
-  })
-
-  test('collapses newlines and truncates previews', () => {
-    expect(getMessagePreview([textPart('line one\nline two')], 80)).toBe('line one line two')
-    expect(getMessagePreview([textPart('abcdefghijklmnopqrstuvwxyz')], 10)).toBe('abcdefghij…')
-  })
-
-  test('returns empty string when there is no text', () => {
-    expect(getMessagePreview([])).toBe('')
-    expect(getFullText([{ type: 'file' } as Part])).toBe('')
-  })
-
-  test('labels a quote-only message from its context part', () => {
-    const parts = [contextPart(chatQuote('the anchored scroll bit'), 'Comment on this fragment...')]
-    expect(getPromptPreviewText(parts, t)).toBe('Quoted from an earlier message: the anchored scroll bit')
-    expect(getMessagePreview(parts, 160, t)).toBe('Quoted from an earlier message: the anchored scroll bit')
-  })
-
-  test('prefers the quote comment over the quote itself', () => {
-    const parts = [contextPart(chatQuote('the anchored scroll bit', 'why this?'), 'raw model text')]
-    expect(getPromptPreviewText(parts, t)).toBe('Quoted from an earlier message: why this?')
-  })
-
-  test('keeps the typed text when a message has both text and quotes', () => {
-    const parts = [contextPart(chatQuote('quoted bit'), 'raw model text'), textPart('please explain')]
-    expect(getPromptPreviewText(parts, t)).toBe('please explain')
-  })
-
-  test('falls back to raw text without a translator', () => {
-    const parts = [contextPart(chatQuote('quoted bit'), 'raw model text')]
-    expect(getPromptPreviewText(parts)).toBe('raw model text')
-  })
-
-  test('labels a Linear issue attachment from its identifier and title', () => {
-    const parts = [contextPart(
-      { kind: 'linear-issue', identifier: 'ENG-12', title: 'Fix login', url: 'https://linear.app/eng-12' },
-      'fetched issue body',
-    )]
-    expect(getPromptPreviewText(parts, t)).toBe('ENG-12 Fix login')
-  })
-})
+describe('native message previews', () => {
+  test('joins only canonical text content for full text', () => {
+    expect(getFullText([text('hello'), attachment, text('world')])).toBe('hello\nworld');
+  });
+  test('collapses newlines and truncates the preview', () => {
+    expect(getMessagePreview([text('line one\nline two')])).toBe('line one line two');
+    expect(getMessagePreview([text('abcdefghijklmnopqrstuvwxyz')], 10)).toBe('abcdefghij…');
+  });
+  test('uses native attachment names for attachment-only messages', () => {
+    expect(getPromptPreviewText([attachment])).toBe('diagram.png');
+    expect(getFullText([attachment])).toBe('');
+    expect(getPromptPreviewText([attachment, text('explain this')])).toBe('explain this');
+  });
+  test('never substitutes tool input, output, errors, or reasoning for user content', () => {
+    const parts: Part[] = [
+      { type: 'tool_call', partId: 'call', toolCallId: 'tool', toolName: 'bash', input: { command: 'echo secret' }, status: 'failed' },
+      { type: 'tool_result', partId: 'result', toolCallId: 'tool', toolName: 'bash', output: 'secret', error: 'failure', isError: true },
+      { type: 'reasoning', partId: 'reasoning', content: 'thinking' },
+    ];
+    expect(getFullText(parts)).toBe('');
+    expect(getMessagePreview(parts)).toBe('');
+    expect(getMessagePreview([])).toBe('');
+  });
+  test('preserves canonical context prompt content without metadata reconstruction', () => {
+    expect(getPromptPreviewText([text('Quoted from an earlier message:\n\n> quoted bit\n\nwhy this?')]))
+      .toBe('Quoted from an earlier message:\n\n> quoted bit\n\nwhy this?');
+  });
+  test('shows typed text before terminal attachment details', () => {
+    expect(getPromptPreviewText([terminalText('please explain')])).toBe('please explain');
+  });
+  test('uses the renderer terminal parser and translated context caption', () => {
+    const preview = getPromptPreviewText([terminalText('')], (key, params) =>
+      key === 'chat.message.terminalContext' ? `Terminal ${params?.terminal} (${params?.start}-${params?.end})` : key);
+    expect(preview).toBe('Terminal Build (1-2): first\nsecond');
+    expect(getPromptPreviewText([terminalText('')])).toBe('Build 1-2: first\nsecond');
+  });
+});

@@ -5,11 +5,15 @@ import { pathToFileURL } from 'node:url';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
+import type { TurnActivityRecord } from '../../lib/turns/types';
 import { SyncProvider } from '@/sync/sync-context';
 import { I18nProvider } from '@/lib/i18n';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { useGuestsStore } from '@/lib/guests/store';
+import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
+import type { RuntimeAPIs } from '@/lib/api/types';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 // Bun does not implement Vite's worker asset-query imports.
 plugin({
@@ -21,8 +25,8 @@ plugin({
     }));
   },
 });
-
-const { default: ToolPart } = await import('./ToolPart');
+import ToolPart from './ToolPart';
+import ProgressiveGroup from './ProgressiveGroup';
 
 const unexpectedThemeChange = (): never => { throw new Error('Rendering must not change the theme'); };
 const theme = getDefaultTheme(false);
@@ -47,23 +51,23 @@ const themeContext: ThemeContextValue = {
 
 const part: ToolCallPart = {
   type: 'tool_call',
-  partId: 'prt_execute',
-  toolCallId: 'call_exec',
-  toolName: 'execute',
-  input: { code: 'const issues = await linear.list_issues({ teamId: "OPE" });\nreturn issues;' },
+  partId: 'prt_bash',
+  toolCallId: 'call_bash',
+  toolName: 'bash',
+  input: { command: 'git status --short', timeout: 30 },
   status: 'completed',
 };
 
 const result: ToolResultPart = {
   type: 'tool_result',
-  partId: 'prt_execute_result',
+  partId: 'prt_bash_result',
   toolCallId: part.toolCallId,
   toolName: part.toolName,
-  output: '{"count":3}',
+  output: { content: [{ type: 'text', text: ' M src/example.ts' }], details: { exitCode: 0 } },
   isError: false,
 };
 
-test('a Code Mode call shows its script, the tools it called, and the truncation note', async () => {
+test('native bash calls and results retain separate identities and paired command context', async () => {
   const happyWindow = new Window({ url: 'http://localhost' });
   const globals = {
     window: happyWindow,
@@ -93,6 +97,8 @@ test('a Code Mode call shows its script, the tools it called, and the truncation
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
+  const toggled: string[] = [];
+  const previousDirectory = useDirectoryStore.getState().currentDirectory;
 
   try {
     useGuestsStore.setState({ status: 'ready', guests: [], runtimeKey: 'test' });
@@ -101,28 +107,79 @@ test('a Code Mode call shows its script, the tools it called, and the truncation
         <SyncProvider directory="">
           <I18nProvider>
             <ThemeSystemContext.Provider value={themeContext}>
-              <ToolPart part={part} isExpanded isMobile={false} onToggle={() => {}} />
+              <ToolPart part={result} pairedCall={part} isExpanded isMobile={false} onToggle={id => toggled.push(id)} />
             </ThemeSystemContext.Provider>
           </I18nProvider>
         </SyncProvider>,
       );
     });
 
-    // The row is named "Script", not "execute", and carries the braces icon.
-    expect(container.textContent).toContain('Script');
-    expect(container.textContent).not.toContain('execute');
-    expect(container.querySelector('use[href="#oc-braces"]')).not.toBeNull();
+    expect(container.textContent).toContain('bash');
+    expect(container.textContent).toContain('git status --short');
+    expect(container.textContent).toContain('M src/example.ts');
+    expect(container.textContent).not.toContain('in progress');
+    const button = container.querySelector<HTMLButtonElement>('button[aria-expanded]');
+    expect(button?.getAttribute('aria-expanded')).toBe('true');
+    await act(async () => { button?.click(); });
+    expect(toggled).toEqual([result.partId]);
 
-    // The description names the called tools, deduplicated and counted.
-    expect(container.textContent).toContain('linear.list_issues \u00d72, linear.get_workspace');
+    const callActivity: TurnActivityRecord = { id: 'call-activity', turnId: 'turn-1', messageId: 'assistant', partIndex: 0, kind: 'tool', part };
+    const resultActivity: TurnActivityRecord = { id: 'result-activity', turnId: 'turn-1', messageId: 'result-message', partIndex: 0, kind: 'tool', part: result };
+    const renderGroup = async (call: ToolCallPart, turnId = 'turn-1') => {
+      await act(async () => root.render(<I18nProvider><ThemeSystemContext.Provider value={themeContext}>
+        <ProgressiveGroup parts={[resultActivity]} contextParts={[{ ...callActivity, part: call, turnId }, resultActivity]}
+          isExpanded onToggle={() => {}} isMobile={false} expandedTools={new Set([result.partId])} onToggleTool={id => toggled.push(id)}
+          onShowPopup={() => {}} streamPhase="completed" showHeader={false} animateRows={false} />
+      </ThemeSystemContext.Provider></I18nProvider>));
+    };
+    await renderGroup(part);
+    expect(container.textContent).toContain('git status --short');
+    await renderGroup({ ...part, input: { command: 'git log -1' } });
+    expect(container.textContent).toContain('git log -1');
+    expect(container.textContent).not.toContain('git status --short');
+    await renderGroup(part, 'different-turn');
+    expect(container.textContent).not.toContain('git status --short');
 
-    // The body lists every call with its input, and reports the truncated output.
-    expect(container.textContent).toContain('Tool calls');
-    expect(container.textContent).toContain('{"teamId":"OPE"}');
-    expect(container.textContent).toContain('Output was truncated');
-    expect(container.textContent).toContain('/tmp/oc-script-output.json');
+    const openedFiles: Array<{ path: string; line?: number }> = [];
+    const unexpectedRuntimeCall = (): never => { throw new Error('Read navigation must only open the requested file'); };
+    const runtime: RuntimeAPIs = {
+      runtime: { platform: 'web', isDesktop: false },
+      get terminal() { return unexpectedRuntimeCall(); },
+      get git() { return unexpectedRuntimeCall(); },
+      get sourceControl() { return unexpectedRuntimeCall(); },
+      get files() { return unexpectedRuntimeCall(); },
+      get settings() { return unexpectedRuntimeCall(); },
+      get permissions() { return unexpectedRuntimeCall(); },
+      get notifications() { return unexpectedRuntimeCall(); },
+      editor: {
+        async openFile(path, line) { openedFiles.push({ path, line }); },
+        openDiff: unexpectedRuntimeCall,
+      },
+    };
+    useDirectoryStore.setState({ currentDirectory: '/project' });
+    const readCases = [
+      { input: 'src/example.ts:50-100', path: '/project/src/example.ts', line: 50 },
+      { input: 'src/example.ts:raw:50-100', path: '/project/src/example.ts', line: 50 },
+      { input: 'C:\\project\\src\\example.ts:50-100', path: 'C:/project/src/example.ts', line: 50 },
+      { input: 'C:\\project\\src\\example.ts', path: 'C:/project/src/example.ts', line: undefined },
+    ];
+    for (const readCase of readCases) {
+      const read: ToolCallPart = { type: 'tool_call', partId: 'read-part', toolCallId: 'read-call',
+        toolName: 'read', status: 'completed', input: { path: readCase.input } };
+      await act(async () => root.render(<I18nProvider><RuntimeAPIContext.Provider value={runtime}>
+        <ProgressiveGroup parts={[{ ...callActivity, part: read }]} isExpanded onToggle={() => {}}
+          isMobile={false} expandedTools={new Set()} onToggleTool={() => {}} onShowPopup={() => {}}
+          streamPhase="completed" showHeader={false} animateRows={false} />
+      </RuntimeAPIContext.Provider></I18nProvider>));
+      const fileButton = container.querySelector<HTMLButtonElement>('.oc-static-tool-row button');
+      expect(fileButton).not.toBeNull();
+      expect(fileButton?.textContent).not.toContain(':50-100');
+      await act(async () => { fileButton?.click(); });
+      expect(openedFiles.at(-1)).toEqual({ path: readCase.path, line: readCase.line });
+    }
   } finally {
     await act(async () => { root.unmount(); });
+    useDirectoryStore.setState({ currentDirectory: previousDirectory });
     await happyWindow.happyDOM.abort();
     for (const [name, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);

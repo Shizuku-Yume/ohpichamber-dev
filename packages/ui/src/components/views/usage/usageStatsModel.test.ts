@@ -109,6 +109,7 @@ describe('reasoningShare', () => {
     expect(reasoningShare({ output: 30, reasoning: 10 })).toEqual(0.25);
     expect(reasoningShare({ output: 0, reasoning: 5 })).toEqual(1);
     expect(reasoningShare({ output: 0, reasoning: 0 })).toBeNull();
+    expect(reasoningShare({ output: 30, reasoning: null })).toBeNull();
   });
 });
 
@@ -127,5 +128,8 @@ describe('tokenSegments', () => {
       'cacheRead',
       'cacheWrite',
     ]);
+  });
+  test('unknown reasoning does not fabricate output tokens', () => {
+    expect(tokenSegments({ input: 1, output: 2, reasoning: null, cacheRead: 0, cacheWrite: 0, total: 3 })[1].value).toBe(2);
   });
 });

@@ -233,7 +233,6 @@ export const SETTINGS_REGISTRY = {
   // ── Workspace pointers and instance facts ──
   lastDirectory: field({ scope: 'instance', adopt: 'bootstrap-only', parse: parseNonEmptyString }),
   homeDirectory: field({ scope: 'instance', parse: parseNonEmptyString }),
-  opencodeBinary: field({ scope: 'instance', parse: parseTrimmedString }),
   projects: field<ProjectEntry[]>({ scope: 'instance', parse: parseProjects }),
   activeProjectId: field({ scope: 'instance', adopt: 'bootstrap-only', parse: parseNonEmptyString }),
   securityScopedBookmarks: field({ scope: 'instance', surfaces: ['desktop'], parse: parseStringList }),
@@ -568,7 +567,6 @@ export const SETTINGS_REGISTRY = {
   usageModelGroups: field<UsageModelGroups>({ scope: 'profile', parse: parseUsageModelGroups }),
 
   // ── Behavior (profile) ──
-  globalBehaviorPrompt: field({ scope: 'profile', parse: parseTextUpTo(1024 * 1024) }),
   responseStyleEnabled: field({ scope: 'profile', parse: parseBoolean }),
   responseStylePreset: field({ scope: 'profile', parse: parseOneOf(RESPONSE_STYLE_PRESETS) }),
   responseStyleCustomInstructions: field({ scope: 'profile', parse: parseTextUpTo(50_000) }),

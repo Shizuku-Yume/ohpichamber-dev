@@ -1,317 +1,130 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { DiscoveredSkill } from './useSkillsStore';
+import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import type { FileResourceSkillEntry, SkillFileCatalogState, SkillFilesState, SkillInstallResult } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import { invalidateSkillsLoadCache, selectSkillsForDirectory, useSkillsStore } from './useSkillsStore';
+import { useProjectsStore } from './useProjectsStore';
 
-const activeProjectPath = '/workspace/project-with-agents-skills';
+const directory = '/native-skills';
+const rawMarkdown = '---\r\nname: native\r\ndescription: "Keep me"\r\ncustom: { arguments: "$@", allowedTools: [read] }\r\n---\r\n\r\n  body $1  \r\n';
+const entry: FileResourceSkillEntry = { skillId: 'native-opaque-id', authoredSkillId: 'folder/native', name: 'native', description: 'Keep me', content: rawMarkdown, scope: 'workspace', source: '.omp/skills', readOnly: false };
+const files: SkillFileCatalogState = { workspaceId: 'workspace', sources: { workspace: '7', agent: '2' }, skills: [{ skillId: 'folder/native', name: 'native', scope: 'workspace', files: ['SKILL.md', 'reference.txt'] }] };
+const detail: SkillFilesState = { workspaceId: 'workspace', skillId: 'folder/native', scope: 'workspace', sourceRevision: '7', files: [{ filePath: 'SKILL.md', content: rawMarkdown }, { filePath: 'reference.txt', content: 'reference\n' }] };
+const committed: SkillInstallResult = { scope: { kind: 'workspace', workspaceId: 'workspace' }, sourceRevision: '8', persistence: 'committed', apply: null };
+const resolve = spyOn(canonicalClient, 'resolveWorkspace');
+const catalog = spyOn(canonicalClient.fileResources, 'getSkills');
+const fileCatalog = spyOn(canonicalClient.fileResources, 'getSkillFileCatalog');
+const read = spyOn(canonicalClient.fileResources, 'getSkillFiles');
+const write = spyOn(canonicalClient.fileResources, 'writeSkillFile');
+const remove = spyOn(canonicalClient.fileResources, 'deleteSkill');
 
-let runtimeFetchCalls: Array<{ url: string; headers?: HeadersInit }> = [];
-let runtimeFetchImpl: (url: string, init?: RequestInit) => Promise<Response> = async () => (
-  new Response(JSON.stringify({ skills: [] }), {
-    headers: { 'Content-Type': 'application/json' },
-  })
-);
+beforeEach(() => {
+  resolve.mockResolvedValue({ workspaceId: 'workspace', projectId: 'project', name: 'Native' });
+  catalog.mockResolvedValue({ workspaceId: 'workspace', skills: [entry] });
+  fileCatalog.mockResolvedValue(files);
+  read.mockResolvedValue(detail);
+  write.mockResolvedValue(committed);
+  remove.mockResolvedValue(committed);
+  useProjectsStore.setState({ projects: [{ id: 'project', path: directory }], activeProjectId: 'project' });
+  useSkillsStore.getState().resetForRuntimeSwitch();
+  write.mockClear(); remove.mockClear(); read.mockClear();
+});
+afterEach(() => {
+  resolve.mockClear(); catalog.mockClear(); fileCatalog.mockClear();
+  useSkillsStore.getState().resetForRuntimeSwitch();
+});
+afterAll(() => {
+  resolve.mockRestore(); catalog.mockRestore(); fileCatalog.mockRestore();
+  read.mockRestore(); write.mockRestore(); remove.mockRestore();
+});
 
-const runtimeFetchMock = async (url: string, init?: RequestInit) => {
-  runtimeFetchCalls.push({ url: String(url), headers: init?.headers });
-  return runtimeFetchImpl(url, init);
-};
-
-
-mock.module('@/stores/useProjectsStore', () => ({
-  useProjectsStore: {
-    getState: () => ({
-      getActiveProject: () => ({ path: activeProjectPath }),
-    }),
-  },
-}));
-
-mock.module('@/lib/runtime-fetch', () => ({
-  runtimeFetch: runtimeFetchMock,
-}));
-
-mock.module('@/lib/background-network', () => ({
-  runBackgroundNetworkTask: async <T,>(task: () => Promise<T>) => task(),
-}));
-
-
-mock.module('@/lib/configSync', () => ({
-  emitConfigChange: mock(() => undefined),
-  scopeMatches: mock(() => false),
-  subscribeToConfigChanges: mock(() => () => undefined),
-}));
-
-mock.module('./utils/safeStorage', () => ({
-  createDeferredSafeJSONStorage: () => ({
-    getItem: async () => null,
-    setItem: async () => undefined,
-    removeItem: async () => undefined,
-  }),
-}));
-
-// Store modules must load after transport/project mocks are registered.
-const { invalidateSkillsLoadCache, useSkillsStore } = await import('./useSkillsStore');
-const { useSkillsCatalogStore } = await import('./useSkillsCatalogStore');
-
-describe('useSkillsStore directory resolution', () => {
-  beforeEach(() => {
-    runtimeFetchCalls = [];
-    runtimeFetchImpl = async () => new Response(JSON.stringify({
-      skills: [{
-        name: 'repo-local-skill',
-        path: `${activeProjectPath}/.agents/skills/repo-local-skill/SKILL.md`,
-        scope: 'project',
-        source: 'agents',
-        sources: { md: { description: 'Repository local' } },
-      }],
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    invalidateSkillsLoadCache(activeProjectPath);
-    invalidateSkillsLoadCache('/workspace/other-project');
-    useSkillsStore.setState({
-      selectedSkillName: null,
-      skills: [],
-      skillsByDirectory: {},
-      isLoading: false,
-      skillDraft: null,
-    });
-  });
-
-  test('loading another project leaves the active project\'s skills alone', async () => {
-    // Settings can browse a project the app is not on. Chat autocompletes read
-    // `skills`, so that list must keep describing the active project.
-    const activeSkills = [
-      {
-        name: 'active-only',
-        path: `${activeProjectPath}/.agents/skills/active-only/SKILL.md`,
-        scope: 'project',
-        source: 'agents',
-        description: 'Active project skill',
-        group: undefined,
-        renamable: false,
-      },
-    ] satisfies DiscoveredSkill[];
-    useSkillsStore.setState({
-      skills: activeSkills,
-      skillsByDirectory: { [activeProjectPath]: activeSkills },
-    });
-
-    const loaded = await useSkillsStore.getState().loadSkills('/workspace/other-project');
-
-    expect(loaded).toBe(true);
-    expect(runtimeFetchCalls[0]?.url).toContain(`directory=${encodeURIComponent('/workspace/other-project')}`);
-    const state = useSkillsStore.getState();
-    expect(state.skills).toEqual(activeSkills);
-    expect(state.skillsByDirectory['/workspace/other-project']?.map((skill) => skill.name)).toEqual(['repo-local-skill']);
-  });
-
-  test('loadSkills scopes discovery to the active project', async () => {
-    const loaded = await useSkillsStore.getState().loadSkills();
-
-    expect(loaded).toBe(true);
-    expect(runtimeFetchCalls.length).toBe(1);
-    expect(runtimeFetchCalls[0]?.url).toContain(`directory=${encodeURIComponent(activeProjectPath)}`);
-    expect(useSkillsStore.getState().skills).toEqual([{
-      name: 'repo-local-skill',
-      path: `${activeProjectPath}/.agents/skills/repo-local-skill/SKILL.md`,
-      scope: 'project',
-      source: 'agents',
-      description: 'Repository local',
-      group: undefined,
-      renamable: false,
-    }]);
-  });
-
-  test('loadSkills maps authoritative renamable from the list response', async () => {
-    runtimeFetchImpl = async () => new Response(JSON.stringify({
-      skills: [
-        {
-          name: 'managed-skill',
-          path: `${activeProjectPath}/.opencode/skills/managed-skill/SKILL.md`,
-          scope: 'project',
-          source: 'opencode',
-          renamable: true,
-          sources: { md: { description: 'Managed' } },
-        },
-        {
-          name: 'cache-skill',
-          path: '/home/ubuntu/.cache/opencode/skills/hash/cache-skill/SKILL.md',
-          scope: 'user',
-          source: 'opencode',
-          renamable: false,
-          sources: { md: { description: 'Cache' } },
-        },
-      ],
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    expect(useSkillsStore.getState().skills).toEqual([
-      {
-        name: 'managed-skill',
-        path: `${activeProjectPath}/.opencode/skills/managed-skill/SKILL.md`,
-        scope: 'project',
-        source: 'opencode',
-        description: 'Managed',
-        group: undefined,
-        renamable: true,
-      },
-      {
-        name: 'cache-skill',
-        path: '/home/ubuntu/.cache/opencode/skills/hash/cache-skill/SKILL.md',
-        scope: 'user',
-        source: 'opencode',
-        description: 'Cache',
-        group: 'hash',
-        renamable: false,
-      },
-    ]);
-  });
-
-  test('renameSkill uses getRequestDirectory query and x-opencode-directory header', async () => {
-    runtimeFetchImpl = async (_url, init) => {
-      if (init?.method === 'PATCH') {
-        return new Response(JSON.stringify({
-          success: true,
-          requiresReload: false,
-        }), {
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      return new Response(JSON.stringify({
-        skills: [{
-          name: 'new-skill',
-          path: `${activeProjectPath}/.opencode/skills/new-skill/SKILL.md`,
-          scope: 'project',
-          source: 'opencode',
-          renamable: true,
-          sources: { md: { description: 'Renamed' } },
-        }],
-      }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
-    };
-
-    const renamed = await useSkillsStore.getState().renameSkill('old-skill', 'new-skill');
-    expect(renamed).toBe(true);
-
-    const renameCall = runtimeFetchCalls.find((call) => String(call.url).includes('/api/config/skills/old-skill'));
-    expect(renameCall).toBeTruthy();
-    expect(renameCall?.url).toContain(`directory=${encodeURIComponent(activeProjectPath)}`);
-
-    const headers = new Headers(renameCall?.headers);
-    expect(headers.get('content-type')).toBe('application/json');
-    expect(headers.get('x-opencode-directory')).toBe(activeProjectPath);
-  });
-
-  test('invalidateSkillsLoadCache() with no argument clears the active-project cache key used by loadSkills', async () => {
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    expect(runtimeFetchCalls.length).toBe(1);
-
-    // A null directory maps to __default__, not the active project.
-    invalidateSkillsLoadCache(null);
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    expect(runtimeFetchCalls.length).toBe(1);
-
-    // Default resolution must match loadSkills (active project first).
-    invalidateSkillsLoadCache();
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    expect(runtimeFetchCalls.length).toBe(2);
-    expect(runtimeFetchCalls[1]?.url).toContain(`directory=${encodeURIComponent(activeProjectPath)}`);
-  });
-  test('an authoritative empty list replaces previous skills and is cached', async () => {
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    invalidateSkillsLoadCache();
-    runtimeFetchImpl = async () => new Response(JSON.stringify({ skills: [] }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    expect(useSkillsStore.getState().skills).toEqual([]);
-    expect(useSkillsStore.getState().skillsByDirectory[activeProjectPath]).toEqual([]);
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    expect(runtimeFetchCalls.length).toBe(2);
-  });
-
-  test('failed discovery preserves the previous directory state', async () => {
-    expect(await useSkillsStore.getState().loadSkills()).toBe(true);
-    const previous = useSkillsStore.getState().skills;
-    invalidateSkillsLoadCache();
-    runtimeFetchImpl = async () => new Response('unavailable', { status: 503 });
-
-    expect(await useSkillsStore.getState().loadSkills()).toBe(false);
-    expect(useSkillsStore.getState().skills).toEqual(previous);
-    expect(useSkillsStore.getState().skillsByDirectory[activeProjectPath]).toEqual(previous);
-  });
-
-  test('runtime switch rejects an obsolete discovery completion', async () => {
-    const { promise, resolve: complete } = Promise.withResolvers<Response>();
-    runtimeFetchImpl = () => promise;
-    const pending = useSkillsStore.getState().loadSkills();
-    useSkillsStore.getState().resetForRuntimeSwitch();
-    complete(new Response(JSON.stringify({ skills: [] }), {
-      headers: { 'Content-Type': 'application/json' },
-    }));
-    expect(await pending).toBe(false);
-    expect(useSkillsStore.getState().skillsByDirectory).toEqual({});
-  });
-
-  test.each(['create', 'update', 'delete'] as const)('%s reloads Host state after CRUD', async (operation) => {
-    runtimeFetchImpl = async (_url, init) => new Response(JSON.stringify(
-      init?.method ? { success: true } : { skills: [] },
-    ), { headers: { 'Content-Type': 'application/json' } });
+describe('native authored skills', () => {
+  test('authored-only files remain repairable without inventing executable discovery IDs', async () => {
+    catalog.mockResolvedValue({ workspaceId: 'workspace', skills: [] });
     const store = useSkillsStore.getState();
-    const saved = operation === 'create'
-      ? await store.createSkill({ name: 'saved', description: 'Saved' })
-      : operation === 'update'
-        ? await store.updateSkill('saved', { description: 'Updated' })
-        : await store.deleteSkill('saved');
-    expect(saved).toBe(true);
-    expect(runtimeFetchCalls.length).toBe(2);
-    expect(runtimeFetchCalls.every((call) => call.url.includes(`directory=${encodeURIComponent(activeProjectPath)}`))).toBe(true);
+    await store.loadSkills(directory);
+    const authored = { scope: 'workspace' as const, authoredSkillId: 'folder/native' };
+    store.setSelectedAuthoredSkill(authored);
+    expect(useSkillsStore.getState().selectedSkillName).toBeNull();
+    expect(useSkillsStore.getState().skills).toEqual([]);
+    expect((await store.getSkillDetail(authored, directory))?.content).toBe(rawMarkdown);
+    expect(await store.updateSkill(authored, rawMarkdown, directory)).toBe(true);
+    expect(write).toHaveBeenCalledWith('workspace', 'folder/native', 'SKILL.md', { scope: 'workspace', expectedSourceRevision: '7', content: rawMarkdown });
     expect(useSkillsStore.getState().skills).toEqual([]);
   });
-
-  test('catalog source and scan use the active project directory', async () => {
-    runtimeFetchImpl = async () => new Response(JSON.stringify({ ok: true, items: [] }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    expect(await useSkillsCatalogStore.getState().loadSource('host-source', { refresh: true })).toBe(true);
-    expect((await useSkillsCatalogStore.getState().scanRepo({ source: 'owner/skills' })).ok).toBe(true);
-    expect(runtimeFetchCalls.length).toBe(2);
-    expect(runtimeFetchCalls.every((call) => call.url.includes(`directory=${encodeURIComponent(activeProjectPath)}`))).toBe(true);
+  test('Host source catalog remains available when native discovery fails', async () => {
+    catalog.mockRejectedValueOnce(new Error('native discovery unavailable'));
+    const store = useSkillsStore.getState();
+    expect(await store.loadSkills(directory)).toBe(false);
+    expect(useSkillsStore.getState().filesByDirectory[directory]).toEqual(files);
+    expect((await store.getSkillDetail({ scope: 'workspace', authoredSkillId: 'folder/native' }, directory))?.content).toBe(rawMarkdown);
   });
-
-  test('catalog install reloads skills in the installation directory and refreshes catalog', async () => {
-    const targetDirectory = '/workspace/other-project';
-    runtimeFetchImpl = async (url) => {
-      const payload = url.includes('/install')
-        ? { ok: true, installed: [], skipped: [] }
-        : url.includes('/catalog')
-          ? { ok: true, sources: [], itemsBySource: {} }
-          : { skills: [] };
-      return new Response(JSON.stringify(payload), { headers: { 'Content-Type': 'application/json' } });
-    };
-    const loadCatalog = useSkillsCatalogStore.getState().loadCatalog;
-    const refreshCatalog = mock(async () => true);
-    useSkillsCatalogStore.setState({ loadCatalog: refreshCatalog });
-    try {
-      const result = await useSkillsCatalogStore.getState().installSkills({
-        source: 'owner/skills',
-        scope: 'project',
-        targetSource: 'agents',
-        selections: [],
-      }, { directory: targetDirectory });
-      expect(result.ok).toBe(true);
-      expect(runtimeFetchCalls.length).toBe(2);
-      expect(runtimeFetchCalls[0]?.url).toContain(`directory=${encodeURIComponent(targetDirectory)}`);
-      expect(runtimeFetchCalls[1]?.url).toBe(`/api/config/skills?directory=${encodeURIComponent(targetDirectory)}`);
-      expect(refreshCatalog).toHaveBeenCalledWith({ refresh: true });
-      expect(useSkillsStore.getState().skillsByDirectory[targetDirectory]).toEqual([]);
-    } finally {
-      useSkillsCatalogStore.setState({ loadCatalog });
-    }
+  test('browsing a different settings directory never replaces ambient skills', async () => {
+    const store = useSkillsStore.getState();
+    expect(await store.loadSkills(directory)).toBe(true);
+    const other = { ...entry, skillId: 'other-native', name: 'other' };
+    catalog.mockResolvedValueOnce({ workspaceId: 'workspace', skills: [other] });
+    expect(await store.loadSkills('/other-settings-project')).toBe(true);
+    expect(useSkillsStore.getState().skills).toEqual([entry]);
+    expect(selectSkillsForDirectory(useSkillsStore.getState(), '/other-settings-project')).toEqual([other]);
+  });
+  test('successful empty discovery clears only the addressed directory and remains cached', async () => {
+    const store = useSkillsStore.getState();
+    expect(await store.loadSkills(directory)).toBe(true);
+    invalidateSkillsLoadCache(directory);
+    catalog.mockResolvedValueOnce({ workspaceId: 'workspace', skills: [] });
+    expect(await store.loadSkills(directory)).toBe(true);
+    const calls = catalog.mock.calls.length;
+    expect(await store.loadSkills(directory)).toBe(true);
+    expect(catalog.mock.calls.length).toBe(calls);
+    expect(useSkillsStore.getState().skills).toEqual([]);
+  });
+  test('failed CAS writes preserve the editor source and do not retry against an unseen revision', async () => {
+    const store = useSkillsStore.getState();
+    await store.loadSkills(directory);
+    await store.getSkillDetail(entry.skillId, directory);
+    write.mockRejectedValueOnce(new Error('REVISION_CONFLICT'));
+    expect(await store.updateSkill(entry.skillId, rawMarkdown + 'edit', directory)).toBe(false);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(useSkillsStore.getState().detailsByDirectory[directory]?.[entry.skillId]?.files[0].content).toBe(rawMarkdown);
+  });
+  test('keeps native selection IDs separate from confined authoring IDs and preserves exact Markdown', async () => {
+    const store = useSkillsStore.getState();
+    expect(await store.loadSkills(directory)).toBe(true);
+    expect((await store.getSkillDetail(entry.skillId, directory))?.content).toBe(rawMarkdown);
+    expect(await store.readSupportingFile(entry.skillId, 'reference.txt', directory)).toBe('reference\n');
+    expect(await store.updateSkill(entry.skillId, rawMarkdown + 'next', directory)).toBe(true);
+    expect(write).toHaveBeenCalledWith('workspace', 'folder/native', 'SKILL.md', { scope: 'workspace', expectedSourceRevision: '7', content: rawMarkdown + 'next' });
+  });
+  test('authoritative discovery failure preserves the previous catalog', async () => {
+    const store = useSkillsStore.getState();
+    expect(await store.loadSkills(directory)).toBe(true);
+    catalog.mockRejectedValueOnce(new Error('offline'));
+    invalidateSkillsLoadCache(directory);
+    expect(await store.loadSkills(directory)).toBe(false);
+    expect(selectSkillsForDirectory(useSkillsStore.getState(), directory)).toEqual([entry]);
+  });
+  test('external native roots remain viewable but never enter authoring mutations', async () => {
+    const external = { ...entry, authoredSkillId: undefined, readOnly: true, scope: 'inherited' as const };
+    catalog.mockResolvedValueOnce({ workspaceId: 'workspace', skills: [external] });
+    const store = useSkillsStore.getState();
+    expect(await store.loadSkills(directory)).toBe(true);
+    expect((await store.getSkillDetail(entry.skillId, directory))?.content).toBe(rawMarkdown);
+    expect(await store.updateSkill(entry.skillId, 'overwrite', directory)).toBe(false);
+    expect(await store.deleteSkill(entry.skillId, directory)).toBe(false);
+    expect(write).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled();
+  });
+  test('runtime switch rejects an older discovery completion', async () => {
+    const pending = Promise.withResolvers<{ workspaceId: string; skills: FileResourceSkillEntry[] }>();
+    const started = Promise.withResolvers<void>();
+    catalog.mockImplementationOnce(() => { started.resolve(); return pending.promise; });
+    const store = useSkillsStore.getState();
+    const loading = store.loadSkills(directory);
+    await started.promise;
+    store.resetForRuntimeSwitch();
+    pending.resolve({ workspaceId: 'workspace', skills: [entry] });
+    expect(await loading).toBe(false);
+    expect(selectSkillsForDirectory(useSkillsStore.getState(), directory)).toEqual([]);
   });
 });

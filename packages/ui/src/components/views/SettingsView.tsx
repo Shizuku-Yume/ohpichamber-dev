@@ -278,7 +278,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       return;
     }
     if (settingsSlug === 'plugins') {
-      void usePluginsStore.getState().loadPlugins();
+      void usePluginsStore.getState().loadPlugins({ directory: settingsDirectory });
       return;
     }
     if (settingsSlug === 'skills.installed' || settingsSlug === 'skills.catalog') {
@@ -410,7 +410,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (result.id.startsWith('commands.')) {
       const store = useCommandsStore.getState();
       const name = nextUniqueName('new-command', store.commands.map((command) => command.name));
-      store.setCommandDraft({ name, scope: 'user' });
+      store.setCommandDraft({ name, scope: 'agent' });
       store.setSelectedCommand(name);
       return result.id === 'commands.create' ? 'commands.name' : result.id;
     }
@@ -429,7 +429,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (result.id.startsWith('snippets.')) {
       const store = useSnippetsStore.getState();
       const name = nextUniqueName('new-snippet', store.snippets.map((snippet) => snippet.name));
-      store.setSnippetDraft({ name, scope: 'global' });
+      store.setSnippetDraft({ name, scope: 'agent' });
       store.setSelectedSnippet(name);
       return result.id === 'snippets.create' ? 'snippets.content' : result.id;
     }
@@ -437,7 +437,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (result.id.startsWith('skills.')) {
       const store = useSkillsStore.getState();
       const name = nextUniqueName('new-skill', store.skills.map((skill) => skill.name));
-      store.setSkillDraft({ name, scope: 'user', source: 'opencode', description: '', instructions: '' });
+      store.setSkillDraft({ name, scope: 'agent', content: `---\nname: ${name}\ndescription: ""\n---\n\n` });
       store.setSelectedSkill(name);
       return result.id === 'skills.create' ? 'skills.basic-information' : result.id;
     }

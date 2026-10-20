@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
+import type { Message, Part } from '@openchamber/agent-contract';
 import type { EditPermissionMode } from "./types/sessionTypes";
 import { getAgentDefaultEditPermission } from "./utils/permissionUtils";
 import { extractTokensFromMessage } from "./utils/tokenUtils";
@@ -51,13 +52,13 @@ interface ContextActions {
     getAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => string | null | undefined;
 
 
-    getContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => ContextUsage | null;
+    getContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: Message; parts: Part[] }[]>) => ContextUsage | null;
 
-    updateSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => void;
+    updateSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: Message; parts: Part[] }[]>) => void;
 
-    initializeSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => void;
+    initializeSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: Message; parts: Part[] }[]>) => void;
 
-    pollForTokenUpdates: (sessionId: string, messageId: string, messages: Map<string, { info: any; parts: any[] }[]>, maxAttempts?: number) => void;
+    pollForTokenUpdates: (sessionId: string, messageId: string, messages: Map<string, { info: Message; parts: Part[] }[]>, maxAttempts?: number) => void;
 
     getCurrentAgent: (sessionId: string) => string | undefined;
 
@@ -201,7 +202,7 @@ export const useContextStore = create<ContextStore>()(
                     return modelMap.get(`${providerId}/${modelId}`);
                 },
  
-                getContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => {
+                getContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: Message; parts: Part[] }[]>) => {
                     if (!sessionId) return null;
 
                     const limitsUsage = calculateContextUsage(0, contextLimit, outputLimit);
@@ -219,7 +220,7 @@ export const useContextStore = create<ContextStore>()(
                     if (assistantMessages.length === 0) return null;
 
                     const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
-                    const lastMessageId = lastAssistantMessage.info.id;
+                    const lastMessageId = lastAssistantMessage.info.messageId;
 
                     const scheduleUsageUpdate = (usage: ContextUsage) => {
                         const runUpdate = () => {
@@ -303,7 +304,7 @@ export const useContextStore = create<ContextStore>()(
                     return result;
                 },
 
-                updateSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => {
+                updateSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: Message; parts: Part[] }[]>) => {
                     const sessionMessages = messages.get(sessionId) || [];
                     const assistantMessages = sessionMessages.filter(m => m.info.role === 'assistant');
 
@@ -325,13 +326,13 @@ export const useContextStore = create<ContextStore>()(
                             outputLimit: usage.outputLimit,
                             normalizedOutput: usage.normalizedOutput,
                             thresholdLimit: usage.thresholdLimit,
-                            lastMessageId: lastAssistantMessage.info.id,
+                            lastMessageId: lastAssistantMessage.info.messageId,
                         });
                         return { sessionContextUsage: newContextUsage };
                     });
                 },
 
-                initializeSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => {
+                initializeSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: Message; parts: Part[] }[]>) => {
                     const state = get();
                     const existingUsage = state.sessionContextUsage.get(sessionId);
 
@@ -340,13 +341,13 @@ export const useContextStore = create<ContextStore>()(
                     }
                 },
 
-                pollForTokenUpdates: (sessionId: string, messageId: string, messages: Map<string, { info: any; parts: any[] }[]>, maxAttempts: number = 10) => {
+                pollForTokenUpdates: (sessionId: string, messageId: string, messages: Map<string, { info: Message; parts: Part[] }[]>, maxAttempts: number = 10) => {
                     let attempts = 0;
 
                     const poll = () => {
                         attempts++;
                         const sessionMessages = messages.get(sessionId) || [];
-                        const message = sessionMessages.find(m => m.info.id === messageId);
+                        const message = sessionMessages.find(m => m.info.messageId === messageId);
 
                         if (message && message.info.role === 'assistant') {
                             const totalTokens = extractTokensFromMessage(message);

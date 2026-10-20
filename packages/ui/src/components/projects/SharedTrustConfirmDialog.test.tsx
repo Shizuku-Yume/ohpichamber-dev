@@ -32,6 +32,7 @@ const setup: ProjectSetup = {
     setupWorktree: [],
     setupWorktreeWait: null,
     setupWorktreeMode: 'append',
+    worktreeDirectory: null,
     projectActions: [],
     projectActionsPrimaryId: null,
     draftStarters: [],

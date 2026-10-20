@@ -72,6 +72,44 @@ afterEach(async () => {
 });
 
 describe('CanonicalClient real HTTP scope boundary', () => {
+  test('usage reads preserve canonical filters, explicit time bounds and honest nullable metrics', async () => {
+    const input: C.UsageQuery = { from: 1, to: 1000, timezone: 'America/New_York', workspaceId, projectId: 'project_expected' };
+    const stats: C.UsageStats = {
+      range: { from: 1, to: 1000 }, sessions: 1, subagents: 0, prompts: 1, steps: 1,
+      tokens: { input: 2, output: 3, reasoning: null, cacheRead: 0, cacheWrite: 0, total: 5 }, cost: 0,
+      tools: { mode: 'none' }, activeDays: 1, streak: 1, activity: [], models: [], partial: true,
+      errors: { session_bad: 'SESSION_READ_FAILED' },
+    };
+    respondWith(stats);
+    expect(await client.getUsageStats(input)).toEqual(stats);
+    const url = new URL(calls[0].slice(4), 'http://localhost');
+    expect(url.pathname).toBe('/api/agent/v1/usage');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ from: '1', to: '1000', timezone: 'America/New_York', workspaceId, projectId: 'project_expected' });
+    const tools: C.UsageToolsResponse = { totals: { calls: 1, succeeded: 0, failed: 0, unfinished: 1 },
+      usage: [{ name: 'read', calls: 1, succeeded: 0, failed: 0, unfinished: 1, durationP50: null }], partial: false };
+    respondWith(tools);
+    expect(await client.getUsageTools(input)).toEqual(tools);
+    expect(calls[1]).toContain('GET /api/agent/v1/usage/tools?');
+    respondWith({ ...stats, tokens: { ...stats.tokens, reasoning: 'unknown' } });
+    await expect(client.getUsageStats(input)).rejects.toThrow();
+  });
+
+  test('usage requests propagate aborts and reject malformed queries before transport', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(client.getUsageStats({ to: 1000, timezone: 'UTC' }, { signal: controller.signal })).rejects.toThrow();
+    expect(calls).toHaveLength(0);
+    expect(() => client.getUsageStats({ from: 10, to: 1, timezone: 'UTC' })).toThrow();
+    expect(calls).toHaveLength(0);
+  });
+  test('validates canonical Agent Service readiness', async () => {
+    respondWith({ ready: true, engine: 'omp', version: '1.0.0' });
+    expect(await client.checkReady()).toBe(true);
+    expect(calls).toEqual(['GET /api/agent/v1/ready']);
+
+    respondWith({ ready: true });
+    expect(await client.checkReady()).toBe(false);
+  });
   test('reads exact attachment bytes with explicit source workspace scope', async () => {
     handler = (_request, response) => {
       response.writeHead(200, { 'Content-Type': 'application/octet-stream' });
@@ -228,6 +266,7 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     respondWith({ kind: 'mcp', status: 'no-active-workers', configuration, workers: [] });
     expect((await client.configureWorkspaceMcp(workspaceId, { expectedPersistedRevision: '0', config: configuration.config })).status).toBe('no-active-workers');
     expect((await client.applyWorkspaceMcp(workspaceId, { persistedRevision: '1' })).workers).toEqual([]);
+    respondWith({ workspaceId, serverId: 'server_expected', persistedRevision: '1', status: 'connected', toolCount: 2 });
     const probe = await client.testWorkspaceMcpServer(workspaceId, 'server_expected', { persistedRevision: '1' });
     expect(probe).toEqual({ workspaceId, serverId: 'server_expected', persistedRevision: '1', status: 'connected', toolCount: 2 });
     expect(calls).toEqual([
@@ -423,5 +462,44 @@ describe('CanonicalClient real SSE protocol boundary', () => {
     });
     expect(events).toEqual([]);
     expect(errors).toHaveLength(1);
+  });
+});
+describe('CanonicalClient native web search boundary', () => {
+  test('validates workspace and exact CAS revision, propagates aborts, and keeps credentials write-only', async () => {
+    const provider: C.WebSearchProviderEntry = { providerId: 'web/tavily', name: 'Tavily', configured: true, requiresCredential: true,
+      isSelfHosted: false, credentialWritable: true, credentialConfigured: true };
+    const state = (revision: string): C.WebSearchConfigState => ({ workspaceId, revision, enabled: true, selectedProviderId: 'web/tavily',
+      fallbackProviderIds: [], timeoutSeconds: 60, providers: [provider] });
+    const mutation = (revision: string): C.WebSearchMutationResult => ({ state: state(revision), status: 'applied', persistence: 'persisted', workers: [] });
+    let seenBody: unknown;
+    respondWith(state('1'));
+    expect(await client.getWebSearch(workspaceId)).toEqual(state('1'));
+    handler = async (request, response) => {
+      let text = '';
+      for await (const chunk of request) text += chunk.toString();
+      seenBody = text ? JSON.parse(text) : undefined;
+      json(response, mutation(request.method === 'PUT' ? '2' : '3'));
+    };
+    await expect(client.updateWebSearch(workspaceId, { expectedRevision: '1', enabled: false })).resolves.toEqual(mutation('2'));
+    expect(calls.at(-1)).toBe('PUT /api/agent/v1/workspaces/workspace_expected/web-search');
+    expect(seenBody).toEqual({ expectedRevision: '1', enabled: false });
+    respondWith(mutation('3'));
+    await expect(client.updateWebSearch(workspaceId, { expectedRevision: '1', enabled: false })).rejects.toThrow();
+    const secret = 'private-web-search-key';
+    handler = async (request, response) => {
+      let text = '';
+      for await (const chunk of request) text += chunk.toString();
+      seenBody = text ? JSON.parse(text) : undefined;
+      json(response, mutation('2'));
+    };
+    const written = await client.writeWebSearchCredential(workspaceId, { expectedRevision: '1', providerId: 'web/tavily', apiKey: secret });
+    expect(written.state.revision).toBe('2');
+    expect(seenBody).toEqual({ expectedRevision: '1', providerId: 'web/tavily', apiKey: secret });
+    expect(JSON.stringify(written)).not.toContain(secret);
+    const controller = new AbortController();
+    controller.abort();
+    const priorCalls = calls.length;
+    await expect(client.getWebSearch(workspaceId, { signal: controller.signal })).rejects.toThrow();
+    expect(calls).toHaveLength(priorCalls);
   });
 });

@@ -1,598 +1,286 @@
-import { create } from "zustand";
-import type { StoreApi, UseBoundStore } from "zustand";
-import { devtools, persist } from "zustand/middleware";
-import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
-import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
-import { runtimeFetch } from "@/lib/runtime-fetch";
-import { runBackgroundNetworkTask } from "@/lib/background-network";
-import { useProjectsStore } from "@/stores/useProjectsStore";
+import { create } from 'zustand';
+import type { StoreApi, UseBoundStore } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
+import type { FileResourceSkillEntry, SkillFileCatalogState, SkillFilesState, SkillInstallResult } from '@openchamber/agent-contract';
+import { SkillInstallResultSchema } from '@openchamber/agent-contract';
+import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
+import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from '@/lib/configSync';
+import { createDeferredSafeJSONStorage } from './utils/safeStorage';
+import { useProjectsStore } from './useProjectsStore';
 
-/**
- * Directory a call operates on. Settings can browse another project without
- * moving the app, so every entry point takes one; omitting it means the project
- * the app is currently on.
- */
-const resolveDirectory = (directory?: string | null): string | null => {
-  if (directory !== undefined) {
-    const trimmed = directory?.trim();
-    return trimmed ? trimmed : null;
-  }
-  return getRequestDirectory();
-};
-
-const getRequestDirectory = (): string | null => {
-  try {
-    const projectsStore = useProjectsStore.getState();
-    const activeProject = projectsStore.getActiveProject?.();
-
-    if (activeProject?.path?.trim()) {
-      return activeProject.path.trim();
-    }
-
-  } catch (err) {
-    console.warn('[SkillsStore] Error resolving config directory:', err);
-  }
-
-  return null;
-};
-
-export type SkillScope = 'user' | 'project';
-export type SkillSource = 'opencode' | 'claude' | 'agents';
-
-export interface SupportingFile {
-  name: string;
-  path: string;
-  fullPath: string;
-}
-
-interface SkillSources {
-  md: {
-    exists: boolean;
-    path: string | null;
-    dir: string | null;
-    fields: string[];
-    scope?: SkillScope | null;
-    source?: SkillSource | null;
-    supportingFiles: SupportingFile[];
-    // Actual content values
-    name?: string;
-    description?: string;
-    instructions?: string;
-    /** The model only loads the skill when asked for it by name. */
-    disableModelInvocation?: boolean;
-  };
-  projectMd?: { exists: boolean; path: string | null };
-  claudeMd?: { exists: boolean; path: string | null };
-  userMd?: { exists: boolean; path: string | null };
-  userClaudeMd?: { exists: boolean; path: string | null };
-  userAgentsMd?: { exists: boolean; path: string | null };
-}
-
-export interface DiscoveredSkill {
-  name: string;
-  path: string;
-  scope: SkillScope;
-  source: SkillSource;
-  description?: string;
-  /** Domain folder parsed from file path, e.g. "automation-ai", "lark-ecosystem" */
-  group?: string;
-  /** Authoritative server flag: skill lives under a managed root and can be renamed in place. */
-  renamable?: boolean;
-}
-
-/** Parse the domain group folder from a skill file path.
- *  e.g. "~/.config/opencode/skills/automation-ai/ai-production/SKILL.md" → "automation-ai"
- *  e.g. "~/.config/opencode/skills/theme-system/SKILL.md"                → undefined (flat)
- */
-function parseSkillGroup(path: string): string | undefined {
-  const normalizedPath = path.replace(/\\/g, '/');
-  const idx = normalizedPath.lastIndexOf('/skills/');
-  if (idx === -1) return undefined;
-  const relative = normalizedPath.substring(idx + '/skills/'.length);
-  const parts = relative.split('/');
-  // Grouped layout: <group>/<name>/SKILL.md → parts.length >= 3
-  // Flat layout:    <name>/SKILL.md         → parts.length == 2
-  return parts.length >= 3 ? parts[0] : undefined;
-}
-
-// Raw skill response from API before transformation
-interface RawSkillResponse {
-  name: string;
-  path: string;
-  scope?: SkillScope;
-  source?: SkillSource;
-  renamable?: boolean;
-  sources?: {
-    md?: {
-      description?: string;
-    };
-  };
-}
-
+export type SkillScope = 'workspace' | 'agent' | 'inherited';
+export type DiscoveredSkill = FileResourceSkillEntry;
+export interface AuthoredSkillReference { scope: 'workspace' | 'agent'; authoredSkillId: string }
+export type SkillReference = string | AuthoredSkillReference;
+export interface SupportingFile { path: string }
+export interface PendingFile { path: string; content: string }
 export interface SkillConfig {
   name: string;
-  description: string;
-  instructions?: string;
-  scope?: SkillScope;
-  source?: SkillSource;
-  targetPath?: string;
-  supportingFiles?: Array<{ path: string; content: string }>;
-  disableModelInvocation?: boolean;
-}
-
-export interface PendingFile {
-  path: string;
+  scope: 'workspace' | 'agent';
   content: string;
+  supportingFiles?: PendingFile[];
 }
-
 interface SkillDraft {
   name: string;
-  scope: SkillScope;
-  source?: SkillSource;
-  description: string;
-  instructions?: string;
+  scope: 'workspace' | 'agent';
+  content: string;
   pendingFiles?: PendingFile[];
 }
-
-interface SkillDetail {
-  name: string;
-  sources: SkillSources;
-  scope?: SkillScope | null;
-  source?: SkillSource | null;
-}
-
+interface SkillDetail { content: string; supportingFiles: SupportingFile[] }
 interface SkillsStore {
   selectedSkillName: string | null;
-  /** Skills of the project the app is on. Chat and autocompletes read this one. */
+  selectedAuthoredSkill: AuthoredSkillReference | null;
+  setSelectedAuthoredSkill: (skill: AuthoredSkillReference | null) => void;
   skills: DiscoveredSkill[];
-  /** Every directory loaded so far, including the ambient one. */
-  skillsByDirectory: Record<string, DiscoveredSkill[]>;
+  skillsByDirectory: { [directory: string]: DiscoveredSkill[] };
+  filesByDirectory: { [directory: string]: SkillFileCatalogState };
+  detailsByDirectory: { [directory: string]: { [skillId: string]: SkillFilesState } };
   isLoading: boolean;
   skillDraft: SkillDraft | null;
-
-  setSelectedSkill: (name: string | null) => void;
+  lastMutationResult: SkillInstallResult | null;
+  lastMutationDirectory: string | null;
+  setSelectedSkill: (skillId: string | null) => void;
   setSkillDraft: (draft: SkillDraft | null) => void;
   loadSkills: (directory?: string | null) => Promise<boolean>;
-  getSkillDetail: (name: string, directory?: string | null) => Promise<SkillDetail | null>;
+  getSkillDetail: (skillId: SkillReference, directory?: string | null) => Promise<SkillDetail | null>;
   createSkill: (config: SkillConfig, directory?: string | null) => Promise<boolean>;
-  updateSkill: (name: string, config: Partial<SkillConfig>, directory?: string | null) => Promise<boolean>;
-  renameSkill: (name: string, newName: string, directory?: string | null) => Promise<boolean>;
-  deleteSkill: (name: string, directory?: string | null) => Promise<boolean>;
-  getSkillByName: (name: string, directory?: string | null) => DiscoveredSkill | undefined;
-  /**
-   * Skills are discovered on the connected instance and cached by directory,
-   * which two instances can share — so a switch must drop the caches rather
-   * than report the previous instance's skills for the new one.
-   */
+  updateSkill: (skillId: SkillReference, content: string, directory?: string | null) => Promise<boolean>;
+  renameSkill: (skillId: SkillReference, name: string, directory?: string | null) => Promise<boolean>;
+  deleteSkill: (skillId: SkillReference, directory?: string | null) => Promise<boolean>;
+  getSkillByName: (skillId: string, directory?: string | null) => DiscoveredSkill | undefined;
   resetForRuntimeSwitch: () => void;
-
-  // Supporting files
-  readSupportingFile: (skillName: string, filePath: string, directory?: string | null) => Promise<string | null>;
-  writeSupportingFile: (skillName: string, filePath: string, content: string, directory?: string | null) => Promise<boolean>;
-  deleteSupportingFile: (skillName: string, filePath: string, directory?: string | null) => Promise<boolean>;
+  readSupportingFile: (skillId: SkillReference, path: string, directory?: string | null) => Promise<string | null>;
+  writeSupportingFile: (skillId: SkillReference, path: string, content: string, directory?: string | null) => Promise<boolean>;
+  deleteSupportingFile: (skillId: SkillReference, path: string, directory?: string | null) => Promise<boolean>;
 }
 
-declare global {
-  interface Window {
-    __zustand_skills_store__?: UseBoundStore<StoreApi<SkillsStore>>;
-  }
-}
+const resolveDirectory = (directory?: string | null): string | null => directory === undefined
+  ? useProjectsStore.getState().getActiveProject()?.path?.trim() || null
+  : directory?.trim() || null;
+const keyFor = (directory: string | null) => directory ?? '__default__';
+const emptySkills: DiscoveredSkill[] = [];
+let generation = 0;
+let mutationRevision = 0;
+const loadedAt = new Map<string, number>();
+const inFlight = new Map<string, Promise<boolean>>();
+const revisions = new Map<string, number>();
+const eventSource = 'useSkillsStore';
+export const invalidateSkillsLoadCache = (directory: string | null = resolveDirectory()) => { loadedAt.delete(keyFor(directory)); };
+export const selectSkillsForDirectory = (state: Pick<SkillsStore, 'skillsByDirectory'>, directory?: string | null): DiscoveredSkill[] => state.skillsByDirectory[keyFor(resolveDirectory(directory))] ?? emptySkills;
+const detailKey = (reference: SkillReference): string => typeof reference === 'string' ? reference : JSON.stringify([reference.scope, reference.authoredSkillId]);
 
-const CONFIG_EVENT_SOURCE = "useSkillsStore";
-const SKILLS_LOAD_CACHE_TTL_MS = 5000;
-const DEFAULT_SKILLS_CACHE_KEY = '__default__';
-const skillsLastLoadedAt = new Map<string, number>();
-const skillsLoadInFlight = new Map<string, Promise<boolean>>();
-// Bumped on every runtime switch. Skills are discovered on the connected
-// instance and cached by directory, which two instances can share, so a load
-// already in flight for the previous instance must not write into the new one.
-let skillsGeneration = 0;
-
-
-const getSkillsCacheKey = (directory: string | null): string => {
-  return directory?.trim() || DEFAULT_SKILLS_CACHE_KEY;
-};
-
-export const invalidateSkillsLoadCache = (directory: string | null = getRequestDirectory()) => {
-  skillsLastLoadedAt.delete(getSkillsCacheKey(directory));
-};
-
-
-const EMPTY_SKILLS: DiscoveredSkill[] = [];
-
-/**
- * Skills of one project. Returns a stored array so components can select it
- * directly; an omitted directory means the project the app is on.
- */
-export const selectSkillsForDirectory = (
-  state: Pick<SkillsStore, 'skillsByDirectory'>,
-  directory?: string | null,
-): DiscoveredSkill[] => {
-  const cacheKey = getSkillsCacheKey(resolveDirectory(directory));
-  return state.skillsByDirectory[cacheKey] ?? EMPTY_SKILLS;
-};
-
-export const useSkillsStore = create<SkillsStore>()(
-  devtools(
-    persist(
-      (set, get) => ({
-        selectedSkillName: null,
-        skills: [],
-        skillsByDirectory: {},
-        isLoading: false,
-        skillDraft: null,
-
-        resetForRuntimeSwitch: () => {
-          skillsGeneration += 1;
-          skillsLastLoadedAt.clear();
-          skillsLoadInFlight.clear();
-          set({ skills: [], skillsByDirectory: {}, isLoading: false });
-        },
-
-        setSelectedSkill: (name: string | null) => {
-          set({ selectedSkillName: name });
-        },
-
-        setSkillDraft: (draft: SkillDraft | null) => {
-          set({ skillDraft: draft });
-        },
-
-        loadSkills: async (requestedDirectory?: string | null) => {
-          const directory = resolveDirectory(requestedDirectory);
-          const cacheKey = getSkillsCacheKey(directory);
-          const isAmbient = cacheKey === getSkillsCacheKey(getRequestDirectory());
-          const now = Date.now();
-          const loadedAt = skillsLastLoadedAt.get(cacheKey) ?? 0;
-          const hasCachedSkills = skillsLastLoadedAt.has(cacheKey);
-
-          if (hasCachedSkills && now - loadedAt < SKILLS_LOAD_CACHE_TTL_MS) {
-            return true;
-          }
-
-          const inFlight = skillsLoadInFlight.get(cacheKey);
-          if (inFlight) {
-            return inFlight;
-          }
-
-          const generation = skillsGeneration;
-          const request = (async () => {
-            set({ isLoading: true });
-            // Failure must never look like an empty project. The mirror is the
-            // fallback so a directory loaded before this map existed still counts.
-            const previousSkills = get().skillsByDirectory[cacheKey] ?? (isAmbient ? get().skills : []);
-            let lastError: unknown = null;
-
-            for (let attempt = 0; attempt < 3; attempt++) {
-              try {
-                const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-
-                const response = await runBackgroundNetworkTask(() => runtimeFetch(`/api/config/skills${queryParams}`, {
-                  priority: 'low',
-                  headers: directory ? { 'x-opencode-directory': directory } : undefined,
-                }));
-                if (!response.ok) {
-                  throw new Error(`Failed to list skills: ${response.status}`);
-                }
-
-                const data = await response.json();
-                const rawSkills: RawSkillResponse[] = data.skills || [];
-                const configSkills: DiscoveredSkill[] = rawSkills.map((s) => ({
-                  name: s.name,
-                  path: s.path,
-                  scope: s.scope ?? 'user',
-                  source: s.source ?? 'opencode',
-                  description: s.sources?.md?.description || '',
-                  group: parseSkillGroup(s.path),
-                  renamable: s.renamable === true,
-                }));
-
-                const visibleSkills = configSkills;
-
-                if (generation !== skillsGeneration) return false;
-                set((state) => {
-                  const next: Partial<SkillsStore> = {
-                    skillsByDirectory: { ...state.skillsByDirectory, [cacheKey]: visibleSkills },
-                    isLoading: false,
-                  };
-                  if (isAmbient) next.skills = visibleSkills;
-                  return next;
-                });
-                skillsLastLoadedAt.set(cacheKey, Date.now());
-                return true;
-              } catch (error) {
-                lastError = error;
-                const waitMs = 200 * (attempt + 1);
-                await new Promise((resolve) => setTimeout(resolve, waitMs));
-              }
-            }
-
-            console.error("Failed to load skills:", lastError);
-            if (generation !== skillsGeneration) return false;
-            set((state) => {
-              const next: Partial<SkillsStore> = {
-                skillsByDirectory: { ...state.skillsByDirectory, [cacheKey]: previousSkills },
-                isLoading: false,
-              };
-              if (isAmbient) next.skills = previousSkills;
-              return next;
-            });
-            return false;
-          })();
-
-          skillsLoadInFlight.set(cacheKey, request);
-          try {
-            return await request;
-          } finally {
-            skillsLoadInFlight.delete(cacheKey);
-          }
-        },
-
-        getSkillDetail: async (name: string, requestedDirectory?: string | null) => {
-          try {
-            const directory = resolveDirectory(requestedDirectory);
-            const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-            
-            const response = await runtimeFetch(`/api/config/skills/${encodeURIComponent(name)}${queryParams}`, {
-              headers: directory ? { 'x-opencode-directory': directory } : undefined,
-            });
-            if (!response.ok) {
-              return null;
-            }
-            
-            return await response.json() as SkillDetail;
-          } catch {
-            return null;
-          }
-        },
-
-        createSkill: async (config: SkillConfig, requestedDirectory?: string | null) => {
-          try {
-            const skillConfig: Record<string, unknown> = {
-              name: config.name,
-              description: config.description,
-            };
-
-            if (config.instructions) skillConfig.instructions = config.instructions;
-            if (config.scope) skillConfig.scope = config.scope;
-            if (config.source) skillConfig.source = config.source;
-            if (config.supportingFiles) skillConfig.supportingFiles = config.supportingFiles;
-            if (config.disableModelInvocation) skillConfig.disableModelInvocation = true;
-
-            const directory = resolveDirectory(requestedDirectory);
-            const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-
-            const response = await runtimeFetch(`/api/config/skills/${encodeURIComponent(config.name)}${queryParams}`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(directory ? { 'x-opencode-directory': directory } : {}),
-              },
-              body: JSON.stringify(skillConfig)
-            });
-
-            const payload = await response.json().catch(() => null);
-            if (!response.ok) {
-              const message = payload?.error || 'Failed to create skill';
-              throw new Error(message);
-            }
-
-            invalidateSkillsLoadCache(directory);
-
-
-            const loaded = await get().loadSkills(directory);
-            if (loaded) {
-              emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
-            }
-            return loaded;
-          } catch {
-            return false;
-          }
-        },
-
-        updateSkill: async (name: string, config: Partial<SkillConfig>, requestedDirectory?: string | null) => {
-          try {
-            const skillConfig: Record<string, unknown> = {};
-
-            if (config.description !== undefined) skillConfig.description = config.description;
-            if (config.instructions !== undefined) skillConfig.instructions = config.instructions;
-            if (config.supportingFiles !== undefined) skillConfig.supportingFiles = config.supportingFiles;
-            if (config.targetPath !== undefined) skillConfig.targetPath = config.targetPath;
-            if (config.disableModelInvocation !== undefined) skillConfig.disableModelInvocation = config.disableModelInvocation;
-
-            const directory = resolveDirectory(requestedDirectory);
-            const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-
-            const response = await runtimeFetch(`/api/config/skills/${encodeURIComponent(name)}${queryParams}`, {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(directory ? { 'x-opencode-directory': directory } : {}),
-              },
-              body: JSON.stringify(skillConfig)
-            });
-
-            const payload = await response.json().catch(() => null);
-            if (!response.ok) {
-              const message = payload?.error || 'Failed to update skill';
-              throw new Error(message);
-            }
-
-            invalidateSkillsLoadCache(directory);
-
-
-            const loaded = await get().loadSkills(directory);
-            if (loaded) {
-              emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
-            }
-            return loaded;
-          } catch {
-            return false;
-          }
-        },
-
-        renameSkill: async (name: string, newName: string, requestedDirectory?: string | null) => {
-          try {
-            const directory = resolveDirectory(requestedDirectory);
-            const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-
-            const response = await runtimeFetch(`/api/config/skills/${encodeURIComponent(name)}${queryParams}`, {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(directory ? { 'x-opencode-directory': directory } : {}),
-              },
-              body: JSON.stringify({ renameTo: newName }),
-            });
-
-            const payload = await response.json().catch(() => null);
-            if (!response.ok) {
-              const message = payload?.error || 'Failed to rename skill';
-              throw new Error(message);
-            }
-
-            invalidateSkillsLoadCache(directory);
-
-            const loaded = await get().loadSkills(directory);
-            if (loaded) {
-              emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
-            }
-            return loaded;
-          } catch {
-            return false;
-          }
-        },
-
-        deleteSkill: async (name: string, requestedDirectory?: string | null) => {
-          try {
-            const directory = resolveDirectory(requestedDirectory);
-            const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-
-            const response = await runtimeFetch(`/api/config/skills/${encodeURIComponent(name)}${queryParams}`, {
-              method: 'DELETE',
-              headers: directory ? { 'x-opencode-directory': directory } : undefined,
-            });
-
-            const payload = await response.json().catch(() => null);
-            if (!response.ok) {
-              const message = payload?.error || 'Failed to delete skill';
-              throw new Error(message);
-            }
-
-            invalidateSkillsLoadCache(directory);
-
-
-            const loaded = await get().loadSkills(directory);
-            if (loaded) {
-              emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
-            }
-
-            if (get().selectedSkillName === name) {
-              set({ selectedSkillName: null });
-            }
-
-            return loaded;
-          } catch {
-            return false;
-          }
-        },
-
-        getSkillByName: (name: string, requestedDirectory?: string | null) => {
-          return selectSkillsForDirectory(get(), requestedDirectory).find((skill) => skill.name === name);
-        },
-
-        readSupportingFile: async (skillName: string, filePath: string, requestedDirectory?: string | null) => {
-          try {
-            const directory = resolveDirectory(requestedDirectory);
-            const queryParams = directory ? `&directory=${encodeURIComponent(directory)}` : '';
-            
-            const response = await runtimeFetch(
-              `/api/config/skills/${encodeURIComponent(skillName)}/files/${encodeURIComponent(filePath)}?${queryParams.slice(1)}`,
-              { headers: directory ? { 'x-opencode-directory': directory } : undefined },
-            );
-            if (!response.ok) {
-              return null;
-            }
-            
-            const data = await response.json();
-            return data.content ?? null;
-          } catch {
-            return null;
-          }
-        },
-
-        writeSupportingFile: async (skillName: string, filePath: string, content: string, requestedDirectory?: string | null) => {
-          try {
-            const directory = resolveDirectory(requestedDirectory);
-            const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-            
-            const response = await runtimeFetch(
-              `/api/config/skills/${encodeURIComponent(skillName)}/files/${encodeURIComponent(filePath)}${queryParams}`,
-              {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(directory ? { 'x-opencode-directory': directory } : {}),
-                },
-                body: JSON.stringify({ content })
-              }
-            );
-            
-            return response.ok;
-          } catch {
-            return false;
-          }
-        },
-
-        deleteSupportingFile: async (skillName: string, filePath: string, requestedDirectory?: string | null) => {
-          try {
-            const directory = resolveDirectory(requestedDirectory);
-            const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : '';
-            
-            const response = await runtimeFetch(
-              `/api/config/skills/${encodeURIComponent(skillName)}/files/${encodeURIComponent(filePath)}${queryParams}`,
-              {
-                method: 'DELETE',
-                headers: directory ? { 'x-opencode-directory': directory } : undefined,
-              }
-            );
-            
-            return response.ok;
-          } catch {
-            return false;
-          }
-        },
-      }),
-      {
-        name: "skills-store",
-        storage: createDeferredSafeJSONStorage(),
-        partialize: (state) => ({
-          selectedSkillName: state.selectedSkillName,
-        }),
-      },
-    ),
-    {
-      name: "skills-store",
+export const useSkillsStore = create<SkillsStore>()(devtools(persist((set, get) => {
+  const requireDirectory = (requested?: string | null) => {
+    const directory = resolveDirectory(requested);
+    if (!directory) throw new Error('Workspace directory is unavailable');
+    return directory;
+  };
+  const writable = (reference: SkillReference, directory: string) => {
+    const catalog = get().filesByDirectory[directory];
+    const native = typeof reference === 'string' ? get().getSkillByName(reference, directory) : null;
+    if (typeof reference === 'string' && (!native || native.readOnly || !native.authoredSkillId || native.scope === 'inherited')) throw new Error('Skill is read-only');
+    const authored = typeof reference === 'string'
+      ? catalog?.skills.find(skill => skill.skillId === native?.authoredSkillId && skill.scope === native?.scope)
+      : catalog?.skills.find(skill => skill.skillId === reference.authoredSkillId && skill.scope === reference.scope);
+    if (!authored) throw new Error('Authored skill is unavailable');
+    const detail = get().detailsByDirectory[directory]?.[detailKey(reference)];
+    const expectedSourceRevision = detail?.sourceRevision ?? catalog?.sources[authored.scope];
+    if (expectedSourceRevision === undefined) throw new Error('Skill source revision is unavailable');
+    return { skillId: authored.skillId, scope: authored.scope, expectedSourceRevision };
+  };
+  const mutate = async (directory: string, operation: (workspaceId: string) => Promise<SkillInstallResult>): Promise<boolean> => {
+    const owner = generation;
+    set({ lastMutationResult: null, lastMutationDirectory: directory });
+    try {
+      const workspace = await canonicalClient.resolveWorkspace(directory);
+      if (owner !== generation) return false;
+      const result = await operation(workspace.workspaceId).catch(error => {
+        if (error instanceof CanonicalApiError && error.problem.code === 'SKILL_APPLY_FAILED') {
+          const committed = SkillInstallResultSchema.safeParse(error.problem.details?.result);
+          if (committed.success) return committed.data;
+        }
+        throw error;
+      });
+      if (owner !== generation) return false;
+      set({ lastMutationResult: result });
+      revisions.set(directory, ++mutationRevision);
+      loadedAt.delete(directory);
+      const scope = result.scope.kind;
+      if (scope === 'workspace' || scope === 'agent') {
+        set(state => {
+          const catalog = state.filesByDirectory[directory];
+          const details = state.detailsByDirectory[directory];
+          return {
+            filesByDirectory: catalog ? { ...state.filesByDirectory, [directory]: { ...catalog, sources: { ...catalog.sources, [scope]: result.sourceRevision } } } : state.filesByDirectory,
+            detailsByDirectory: details ? { ...state.detailsByDirectory, [directory]: Object.fromEntries(Object.entries(details).map(([id, detail]) => [id, detail.scope === scope ? { ...detail, sourceRevision: result.sourceRevision } : detail])) } : state.detailsByDirectory,
+          };
+        });
+      }
+      // A committed source is not proof that every live worker applied it.
+      emitConfigChange('skills', { source: eventSource });
+      const pendingLoad = inFlight.get(directory);
+      if (pendingLoad) await pendingLoad;
+      loadedAt.delete(directory);
+      await get().loadSkills(directory);
+      return result.apply === null || result.apply.status === 'applied' || result.apply.status === 'no-active-workers';
+    } catch (error) {
+      console.error('Skill source mutation failed:', error);
+      if (owner === generation) {
+        revisions.set(directory, ++mutationRevision);
+        const pendingLoad = inFlight.get(directory);
+        if (pendingLoad) await pendingLoad;
+        loadedAt.delete(directory);
+        await get().loadSkills(directory);
+      }
+      return false;
+    }
+  };
+  return {
+    selectedSkillName: null, selectedAuthoredSkill: null, skills: [], skillsByDirectory: {}, filesByDirectory: {}, detailsByDirectory: {}, isLoading: false, skillDraft: null, lastMutationResult: null, lastMutationDirectory: null,
+    setSelectedSkill: selectedSkillName => set({ selectedSkillName, selectedAuthoredSkill: null }),
+    setSelectedAuthoredSkill: selectedAuthoredSkill => set({ selectedAuthoredSkill, selectedSkillName: null, skillDraft: null }),
+    setSkillDraft: skillDraft => set({ skillDraft }),
+    resetForRuntimeSwitch: () => {
+      generation++; loadedAt.clear(); inFlight.clear(); revisions.clear();
+      set({ selectedSkillName: null, selectedAuthoredSkill: null, skillDraft: null, skills: [], skillsByDirectory: {}, filesByDirectory: {}, detailsByDirectory: {}, isLoading: false, lastMutationResult: null, lastMutationDirectory: null });
     },
-  ),
-);
-
-if (typeof window !== "undefined") {
-  window.__zustand_skills_store__ = useSkillsStore;
-}
-
-
-// Subscribe to config changes from other stores
-let unsubscribeSkillsConfigChanges: (() => void) | null = null;
-
-if (!unsubscribeSkillsConfigChanges) {
-  unsubscribeSkillsConfigChanges = subscribeToConfigChanges((event) => {
-    if (event.source === CONFIG_EVENT_SOURCE) {
-      return;
-    }
-
-    if (scopeMatches(event, "skills")) {
-      const { loadSkills } = useSkillsStore.getState();
-      void loadSkills();
-    }
-  });
-}
+    loadSkills: async requested => {
+      const directory = resolveDirectory(requested);
+      if (!directory) return false;
+      if (Date.now() - (loadedAt.get(directory) ?? 0) < 5000) return true;
+      const existing = inFlight.get(directory);
+      if (existing) return existing;
+      const owner = generation;
+      const revision = revisions.get(directory) ?? 0;
+      const request = (async () => {
+        set({ isLoading: true });
+        try {
+          const workspace = await canonicalClient.resolveWorkspace(directory);
+          if (owner !== generation) return false;
+          const [catalog, files] = await Promise.allSettled([
+            canonicalClient.fileResources.getSkills(workspace.workspaceId),
+            canonicalClient.fileResources.getSkillFileCatalog(workspace.workspaceId),
+          ]);
+          if (owner !== generation || revision !== (revisions.get(directory) ?? 0)) return false;
+          set(state => ({
+            ...(catalog.status === 'fulfilled' ? { skillsByDirectory: { ...state.skillsByDirectory, [directory]: catalog.value.skills } } : {}),
+            ...(files.status === 'fulfilled' ? { filesByDirectory: { ...state.filesByDirectory, [directory]: files.value } } : {}),
+            ...(catalog.status === 'fulfilled' && directory === resolveDirectory() ? { skills: catalog.value.skills } : {}),
+          }));
+          if (catalog.status === 'rejected' || files.status === 'rejected') return false;
+          loadedAt.set(directory, Date.now());
+          return true;
+        } catch (error) {
+          console.error('Failed to load skills:', error);
+          return false;
+        } finally {
+          if (owner === generation) set({ isLoading: false });
+        }
+      })();
+      inFlight.set(directory, request);
+      try { return await request; } finally { if (inFlight.get(directory) === request) inFlight.delete(directory); }
+    },
+    getSkillByName: (skillId, directory) => selectSkillsForDirectory(get(), directory).find(skill => skill.skillId === skillId),
+    getSkillDetail: async (skillId, requested) => {
+      const owner = generation;
+      try {
+        const directory = requireDirectory(requested);
+        const revision = revisions.get(directory) ?? 0;
+        if (typeof skillId === 'string') {
+          const skill = get().getSkillByName(skillId, directory);
+          if (!skill) return null;
+          if (skill.readOnly || !skill.authoredSkillId || skill.scope === 'inherited') return { content: skill.content, supportingFiles: [] };
+        }
+        const target = writable(skillId, directory);
+        const workspace = await canonicalClient.resolveWorkspace(directory);
+        if (owner !== generation) return null;
+        const detail = await canonicalClient.fileResources.getSkillFiles(workspace.workspaceId, target.skillId, target.scope);
+        if (owner !== generation || revision !== (revisions.get(directory) ?? 0)) return null;
+        set(state => ({ detailsByDirectory: { ...state.detailsByDirectory, [directory]: { ...state.detailsByDirectory[directory], [detailKey(skillId)]: detail } } }));
+        return { content: detail.files.find(file => file.filePath === 'SKILL.md')?.content ?? '', supportingFiles: detail.files.filter(file => file.filePath !== 'SKILL.md').map(file => ({ path: file.filePath })) };
+      } catch { return null; }
+    },
+    createSkill: async (config, requested) => {
+      try {
+        const directory = requireDirectory(requested);
+        const owner = generation;
+        const revision = get().filesByDirectory[directory]?.sources[config.scope];
+        if (revision === undefined) return false;
+        const success = await mutate(directory, async workspaceId => {
+          let result = await canonicalClient.fileResources.writeSkillFile(workspaceId, config.name, 'SKILL.md', { scope: config.scope, expectedSourceRevision: revision, content: config.content });
+          for (const file of config.supportingFiles ?? []) {
+            if (owner !== generation) throw new Error('Runtime changed before supporting-file write');
+            result = await canonicalClient.fileResources.writeSkillFile(workspaceId, config.name, file.path, { scope: config.scope, expectedSourceRevision: result.sourceRevision, content: file.content });
+          }
+          return result;
+        });
+        if (success) {
+          const created = selectSkillsForDirectory(get(), directory).find(skill => skill.authoredSkillId === config.name && skill.scope === config.scope);
+          set({ selectedSkillName: created?.skillId ?? null, selectedAuthoredSkill: created ? null : { scope: config.scope, authoredSkillId: config.name }, skillDraft: null });
+        }
+        return success;
+      } catch { return false; }
+    },
+    updateSkill: async (skillId, content, requested) => {
+      try {
+        const directory = requireDirectory(requested);
+        const target = writable(skillId, directory);
+        const success = await mutate(directory, workspaceId => canonicalClient.fileResources.writeSkillFile(workspaceId, target.skillId, 'SKILL.md', { scope: target.scope, expectedSourceRevision: target.expectedSourceRevision, content }));
+        if (typeof skillId === 'string' && get().selectedSkillName === skillId && !get().getSkillByName(skillId, directory)) {
+          set({ selectedSkillName: null, selectedAuthoredSkill: { scope: target.scope, authoredSkillId: target.skillId } });
+        }
+        return success;
+      } catch { return false; }
+    },
+    renameSkill: async (skillId, name, requested) => {
+      try {
+        const directory = requireDirectory(requested);
+        const target = writable(skillId, directory);
+        const success = await mutate(directory, workspaceId => canonicalClient.fileResources.renameSkill(workspaceId, target.skillId, { scope: target.scope, expectedSourceRevision: target.expectedSourceRevision, name }));
+        if (success) {
+          const native = selectSkillsForDirectory(get(), directory).find(skill => skill.authoredSkillId === name && skill.scope === target.scope);
+          set({ selectedSkillName: native?.skillId ?? null, selectedAuthoredSkill: native ? null : { scope: target.scope, authoredSkillId: name } });
+        }
+        return success;
+      } catch { return false; }
+    },
+    deleteSkill: async (skillId, requested) => {
+      try {
+        const directory = requireDirectory(requested);
+        const target = writable(skillId, directory);
+        const success = await mutate(directory, workspaceId => canonicalClient.fileResources.deleteSkill(workspaceId, target.skillId, { scope: target.scope, expectedSourceRevision: target.expectedSourceRevision }));
+        if (success) set({ selectedSkillName: null, selectedAuthoredSkill: null });
+        return success;
+      } catch { return false; }
+    },
+    readSupportingFile: async (skillId, path, requested) => {
+      try {
+        const directory = requireDirectory(requested);
+        const detail = get().detailsByDirectory[directory]?.[detailKey(skillId)];
+        return detail?.files.find(file => file.filePath === path)?.content ?? null;
+      } catch { return null; }
+    },
+    writeSupportingFile: async (skillId, path, content, requested) => {
+      try {
+        const directory = requireDirectory(requested);
+        const target = writable(skillId, directory);
+        return await mutate(directory, workspaceId => canonicalClient.fileResources.writeSkillFile(workspaceId, target.skillId, path, { scope: target.scope, expectedSourceRevision: target.expectedSourceRevision, content }));
+      } catch { return false; }
+    },
+    deleteSupportingFile: async (skillId, path, requested) => {
+      try {
+        const directory = requireDirectory(requested);
+        const target = writable(skillId, directory);
+        return await mutate(directory, workspaceId => canonicalClient.fileResources.deleteSkillFile(workspaceId, target.skillId, path, { scope: target.scope, expectedSourceRevision: target.expectedSourceRevision }));
+      } catch { return false; }
+    },
+  };
+}, { name: 'skills-store', storage: createDeferredSafeJSONStorage(), partialize: state => ({ selectedSkillName: state.selectedSkillName }) }), { name: 'skills-store' }));
+declare global { interface Window { __zustand_skills_store__?: UseBoundStore<StoreApi<SkillsStore>> } }
+if (typeof window !== 'undefined') window.__zustand_skills_store__ = useSkillsStore;
+subscribeToConfigChanges(event => {
+  if (event.source !== eventSource && scopeMatches(event, 'skills')) {
+    invalidateSkillsLoadCache();
+    void useSkillsStore.getState().loadSkills();
+  }
+});

@@ -1,6 +1,5 @@
 import React from 'react';
 
-import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { createScrollSpy } from '@/components/chat/lib/scroll/scrollSpy';
 import { cancelWhenLayoutSettled, isLayoutAnimating, onLayoutAnimationStart, runWhenLayoutSettled } from '@/lib/layoutAnimation';
 import { createKeyboardFollowGlide, type KeyboardFollowGlide } from '@/components/chat/lib/scroll/keyboardFollowGlide';
@@ -1135,7 +1134,6 @@ export const useChatTimelineScroll = ({
             return;
         }
         lastSessionKeyRef.current = currentSessionKey;
-        MessageFreshnessDetector.getInstance().recordSessionStart(currentSessionId);
         restoreRef.current?.cancel();
         restoredEntryKeyRef.current = null;
         // Entering another session drops a link request for this one; the

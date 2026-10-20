@@ -1,312 +1,112 @@
-import { normalizeToolName } from '@/lib/opencode/tools';
-import {
-  isEditTool,
-  isPatchTool,
-  isShellTool,
-  isSubagentTool,
-  isWriteTool,
-} from '@/lib/opencode/tools';
+import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 
-/** v2 file tools report `path`; the other keys cover MCP and plugin tools. */
-const readInputPath = (input: Record<string, unknown> | undefined): string | null => {
-  const value = input?.path ?? input?.filePath ?? input?.file_path ?? input?.sourcePath;
-  return typeof value === 'string' && value.length > 0 ? value : null;
-};
+/** Native SDK tool names; custom tools retain their complete identity. */
+export const NATIVE_TOOLS = {
+  bash: 'bash',
+  edit: 'edit',
+  write: 'write',
+  read: 'read',
+  grep: 'grep',
+  glob: 'glob',
+  find: 'find',
+  task: 'task',
+  ask: 'ask',
+  webSearch: 'web_search',
+  fetch: 'fetch',
+} as const;
+
+export type ToolName = string | undefined;
+export function normalizeToolName(toolName: ToolName): string {
+  return toolName?.trim() ?? '';
+}
+
+export const isShellTool = (name: ToolName): boolean => name === NATIVE_TOOLS.bash;
+export const isSubagentTool = (name: ToolName): boolean => name === NATIVE_TOOLS.task;
+export const isQuestionTool = (name: ToolName): boolean => name === NATIVE_TOOLS.ask;
+export const isEditTool = (name: ToolName): boolean => name === NATIVE_TOOLS.edit;
+export const isWriteTool = (name: ToolName): boolean => name === NATIVE_TOOLS.write;
+export const isFileChangeTool = (name: ToolName): boolean => isEditTool(name) || isWriteTool(name);
+export const isExplorationTool = (name: ToolName): boolean => name === NATIVE_TOOLS.read || name === NATIVE_TOOLS.grep || name === NATIVE_TOOLS.glob || name === NATIVE_TOOLS.find;
+export const isWebTool = (name: ToolName): boolean => name === NATIVE_TOOLS.fetch || name === NATIVE_TOOLS.webSearch;
+
+export function toolInputPath(input: ToolCallPart['input'] | undefined): string | null {
+  return typeof input?.path === 'string' && input.path.trim() ? input.path : null;
+}
+
+/** Inline native selectors are presentation instructions, never editor paths. */
+export function parseNativeReadPath(rawPath: string): { path: string; line?: number } {
+  const selectorIndex = rawPath.search(/:(?=\d|-\d|raw(?:$|:)|img$|conflicts$)[^/]*$/);
+  if (selectorIndex < 0) return { path: rawPath };
+  const selector = rawPath.slice(selectorIndex + 1).replace(/^raw:/, '');
+  const firstLine = /^(\d+)(?=$|[-+,:])/.exec(selector);
+  return { path: rawPath.slice(0, selectorIndex), ...(firstLine ? { line: Number(firstLine[1]) } : {}) };
+}
+
+export function toolInputPaths(call: ToolCallPart): string[] {
+  const path = toolInputPath(call.input);
+  const paths = path ? [path] : [];
+  if (isEditTool(call.toolName) && Array.isArray(call.input.edits)) {
+    for (const edit of call.input.edits) {
+      if (edit && typeof edit === 'object' && !Array.isArray(edit) && typeof edit.rename === 'string' && !paths.includes(edit.rename)) paths.push(edit.rename);
+    }
+  }
+  // Raw edit modes carry a native program, not a path field. Their resolved
+  // targets come from the result's details, not a guessed client-side parser.
+  return paths;
+}
 
 export interface ToolMetadata {
   displayName: string;
-  icon?: string;
-  outputLanguage?: string;
-  inputFields?: {
-    key: string;
-    label: string;
-    type: 'command' | 'file' | 'pattern' | 'text' | 'code';
-    language?: string;
-  }[];
+  outputLanguage: string;
   category: 'file' | 'search' | 'code' | 'system' | 'ai' | 'web';
 }
 
-const TOOL_METADATA: Record<string, ToolMetadata> = {
-
-  read: {
-    displayName: 'Read File',
-    category: 'file',
-    outputLanguage: 'auto',
-    inputFields: [
-      { key: 'path', label: 'File Path', type: 'file' },
-      { key: 'offset', label: 'Start Line', type: 'text' },
-      { key: 'limit', label: 'Lines to Read', type: 'text' }
-    ]
-  },
-  write: {
-    displayName: 'Write File',
-    category: 'file',
-    outputLanguage: 'auto',
-    inputFields: [
-      { key: 'path', label: 'File Path', type: 'file' },
-      { key: 'content', label: 'Content', type: 'code' }
-    ]
-  },
-  edit: {
-    displayName: 'Edit File',
-    category: 'file',
-    outputLanguage: 'diff',
-    inputFields: [
-      { key: 'path', label: 'File Path', type: 'file' },
-      { key: 'oldString', label: 'Find', type: 'code' },
-      { key: 'newString', label: 'Replace', type: 'code' },
-      { key: 'replaceAll', label: 'Replace All', type: 'text' }
-    ]
-  },
-  patch: {
-    displayName: 'Apply Patch',
-    category: 'file',
-    outputLanguage: 'diff',
-    inputFields: [
-      { key: 'patchText', label: 'Patch', type: 'code', language: 'diff' }
-    ]
-  },
-
-  // OpenCode 2 Code Mode: one tool whose input is a short JS script that calls
-  // the MCP and integration tools as functions.
-  execute: {
-    displayName: 'Script',
-    category: 'code',
-    outputLanguage: 'json',
-    inputFields: [
-      { key: 'code', label: 'Script', type: 'code', language: 'javascript' }
-    ]
-  },
-
-  shell: {
-    displayName: 'Shell Command',
-    category: 'system',
-    outputLanguage: 'text',
-    inputFields: [
-      { key: 'command', label: 'Command', type: 'command', language: 'bash' },
-      { key: 'description', label: 'Description', type: 'text' },
-      { key: 'timeout', label: 'Timeout (ms)', type: 'text' },
-      { key: 'background', label: 'Background', type: 'text' }
-    ]
-  },
-
-  grep: {
-    displayName: 'Search Files',
-    category: 'search',
-    outputLanguage: 'text',
-    inputFields: [
-      { key: 'pattern', label: 'Pattern', type: 'pattern' },
-      { key: 'path', label: 'Directory', type: 'file' },
-      { key: 'include', label: 'Include Pattern', type: 'pattern' },
-      { key: 'literal', label: 'Literal Match', type: 'text' },
-      { key: 'caseSensitive', label: 'Case Sensitive', type: 'text' }
-    ]
-  },
-  glob: {
-    displayName: 'Find Files',
-    category: 'search',
-    outputLanguage: 'text',
-    inputFields: [
-      { key: 'pattern', label: 'Pattern', type: 'pattern' },
-      { key: 'path', label: 'Directory', type: 'file' }
-    ]
-  },
-  subagent: {
-    displayName: 'Agent Task',
-    category: 'ai',
-    outputLanguage: 'markdown',
-    inputFields: [
-      { key: 'description', label: 'Task', type: 'text' },
-      { key: 'prompt', label: 'Instructions', type: 'text' },
-      { key: 'agent', label: 'Agent', type: 'text' }
-    ]
-  },
-
-  webfetch: {
-    displayName: 'Fetch URL',
-    category: 'web',
-    outputLanguage: 'auto',
-    inputFields: [
-      { key: 'url', label: 'URL', type: 'text' },
-      { key: 'format', label: 'Format', type: 'text' },
-      { key: 'timeout', label: 'Timeout', type: 'text' }
-    ]
-  },
-
-   websearch: {
-     displayName: 'Web Search',
-     category: 'web',
-     outputLanguage: 'markdown',
-     inputFields: [
-       { key: 'query', label: 'Search Query', type: 'text' },
-       { key: 'numResults', label: 'Results Count', type: 'text' },
-       { key: 'type', label: 'Search Type', type: 'text' }
-     ]
-   },
-   codesearch: {
-     displayName: 'Code Search',
-     category: 'web',
-     outputLanguage: 'markdown',
-     inputFields: [
-       { key: 'query', label: 'Search Query', type: 'text' },
-       { key: 'tokensNum', label: 'Tokens', type: 'text' }
-     ]
-   },
-
-   skill: {
-     displayName: 'Load Skill',
-     category: 'ai',
-     outputLanguage: 'markdown',
-     inputFields: [
-       { key: 'id', label: 'Skill', type: 'text' }
-     ]
-   },
-   // The `opencode` namespace: OpenCode managing itself.
-   session_rename: {
-     displayName: 'Rename Session',
-     category: 'system',
-     outputLanguage: 'json',
-     inputFields: [
-       { key: 'title', label: 'Title', type: 'text' },
-       { key: 'sessionID', label: 'Session', type: 'text' }
-     ]
-   },
-   session_move: {
-     displayName: 'Move Session',
-     category: 'system',
-     outputLanguage: 'json',
-     inputFields: [
-       { key: 'directory', label: 'Directory', type: 'file' },
-       { key: 'sessionID', label: 'Session', type: 'text' }
-     ]
-   },
-   models: {
-     displayName: 'Search Models',
-     category: 'system',
-     outputLanguage: 'json',
-     inputFields: [
-       { key: 'search', label: 'Search', type: 'text' },
-       { key: 'provider', label: 'Provider', type: 'text' }
-     ]
-   },
-    question: {
-       displayName: 'Question',
-       category: 'ai',
-       outputLanguage: 'text',
-       inputFields: [
-         { key: 'questions', label: 'Questions', type: 'code', language: 'json' }
-       ]
-     },
-
-    openchamber: {
-      displayName: 'OpenChamber',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_web: {
-      displayName: 'OpenChamber Web',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_memory: {
-      displayName: 'OpenChamber Memory',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    openchamber_notify: {
-      displayName: 'OpenChamber Notify',
-      category: 'system',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    plan_enter: {
-      displayName: 'Plan Mode',
-      category: 'ai',
-      outputLanguage: 'text',
-      inputFields: []
-    },
-
-    plan_exit: {
-      displayName: 'Build Mode',
-      category: 'ai',
-      outputLanguage: 'text',
-      inputFields: []
-    },
-
-    StructuredOutput: {
-      displayName: 'Structured Output',
-      category: 'ai',
-      outputLanguage: 'json',
-      inputFields: []
-    },
-
-    structuredoutput: {
-      displayName: 'Structured Output',
-      category: 'ai',
-      outputLanguage: 'json',
-      inputFields: []
-    }
-  };
-
-function formatUnknownToolDisplayName(toolName: string): string {
-  return toolName
-    .trim()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/^./, (char) => char.toUpperCase());
-}
-
 export function getToolMetadata(toolName: string): ToolMetadata {
-  // Namespaced tools (`opencode.session_rename`) are keyed by their last segment.
-  return TOOL_METADATA[toolName] || TOOL_METADATA[normalizeToolName(toolName)] || {
-    displayName: formatUnknownToolDisplayName(toolName),
-    category: 'system',
-    outputLanguage: 'text',
-    inputFields: []
-  };
+  const category = isFileChangeTool(toolName) || toolName === NATIVE_TOOLS.read ? 'file'
+    : isSubagentTool(toolName) || isQuestionTool(toolName) ? 'ai'
+    : isWebTool(toolName) ? 'web'
+    : isExplorationTool(toolName) ? 'search' : 'system';
+  const outputLanguage = isEditTool(toolName) ? 'diff'
+    : toolName === NATIVE_TOOLS.read || isWriteTool(toolName) ? 'auto' : 'text';
+  return { displayName: toolName, category, outputLanguage };
 }
 
-export function detectToolOutputLanguage(
-  toolName: string,
-  output: string,
-  input?: Record<string, unknown>
-): string {
-  const metadata = getToolMetadata(toolName);
+export type ToolDescription =
+  | { kind: 'path'; value: string }
+  | { kind: 'text'; value: string }
+  | { kind: 'files'; count: number; files: string[] }
+  | { kind: 'questions'; count: number };
 
-  if (metadata.outputLanguage === 'auto') {
-
-    const filePath = readInputPath(input);
-    if (filePath) {
-      const language = getLanguageFromExtension(filePath);
-      if (language) return language;
-    }
-
-    if (toolName === 'webfetch') {
-      if (output.trim().startsWith('{') || output.trim().startsWith('[')) {
-        try {
-          JSON.parse(output);
-          return 'json';
-        } catch { /* ignored */ }
-      }
-      if (output.trim().startsWith('<')) {
-        return 'html';
-      }
-      if (output.includes('```')) {
-        return 'markdown';
-      }
-    }
-
-    return 'text';
+/** A result may borrow input only from its exact native call identity. */
+export function toolDescription(part: ToolCallPart | ToolResultPart, pairedCall?: ToolCallPart): ToolDescription | null {
+  const call = part.type === 'tool_call' ? part
+    : pairedCall?.toolCallId === part.toolCallId && pairedCall.toolName === part.toolName ? pairedCall : undefined;
+  if (!call) return part.type === 'tool_result' && part.error ? { kind: 'text', value: part.error } : null;
+  if (isFileChangeTool(call.toolName) || call.toolName === NATIVE_TOOLS.read) {
+    const paths = toolInputPaths(call);
+    return paths.length > 1 ? { kind: 'files', count: paths.length, files: paths }
+      : paths[0] ? { kind: 'path', value: paths[0] } : null;
   }
+  const input = call.input;
+  if (isQuestionTool(call.toolName) && Array.isArray(call.input.questions) && call.input.questions.length) {
+    return { kind: 'questions', count: call.input.questions.length };
+  }
+  const value = isShellTool(call.toolName) ? input.command
+    : call.toolName === NATIVE_TOOLS.grep ? input.pattern
+    : call.toolName === NATIVE_TOOLS.glob ? input.path
+    : call.toolName === NATIVE_TOOLS.find ? input.query
+    : call.toolName === NATIVE_TOOLS.webSearch ? input.query
+    : call.toolName === NATIVE_TOOLS.fetch ? input.url
+    : isSubagentTool(call.toolName) ? input.name ?? input.task : undefined;
+  return typeof value === 'string' && value ? { kind: 'text', value: value.split('\n')[0].slice(0, 160) } : null;
+}
 
-  return metadata.outputLanguage || 'text';
+export function detectToolOutputLanguage(toolName: string, _output: string, input?: ToolCallPart['input']): string {
+  const language = getToolMetadata(toolName).outputLanguage;
+  if (language !== 'auto') return language;
+  const path = toolInputPath(input);
+  if (path) return getLanguageFromExtension(toolName === NATIVE_TOOLS.read ? parseNativeReadPath(path).path : path) ?? 'text';
+  return 'text';
 }
 
 export function getLanguageFromExtension(filePath: string): string | null {
@@ -891,69 +691,9 @@ export function getImageMimeType(filePath: string): string {
   return mimeMap[ext || ''] || 'image/png';
 }
 
-export function formatToolInput(input: Record<string, unknown>, toolName: string): string {
-  if (!input) return '';
-
-  const getString = (key: string): string | null => {
-    const val = input[key];
-    return typeof val === 'string' ? val : (typeof val === 'number' ? String(val) : null);
-  };
-
-  if (isShellTool(toolName)) {
-    const cmd = getString('command');
-    if (cmd) return cmd;
-  }
-
-  if (isSubagentTool(toolName)) {
-    const prompt = getString('prompt');
-    if (prompt) return prompt;
-    const desc = getString('description');
-    if (desc) return desc;
-  }
-
-  if (isPatchTool(toolName) && typeof input === 'object') {
-    const patchText = getString('patchText') || getString('patch_text') || getString('patch');
-    if (patchText) {
-      return patchText;
-    }
-  }
-
-  if (isEditTool(toolName) && typeof input === 'object') {
-    const filePath = readInputPath(input);
-    if (filePath) {
-      return `File path: ${filePath}`;
-    }
-  }
-
-  if (isWriteTool(toolName) && typeof input === 'object') {
-
-    const content = getString('content');
-    if (content) {
-      return content;
-    }
-  }
-
-  if (typeof input === 'object') {
-    const entries = Object.entries(input)
-      .filter(([, value]) => value !== undefined && value !== null && value !== '')
-      .map(([key, value]) => {
-
-        const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')
-          .toLowerCase()
-          .replace(/^./, str => str.toUpperCase());
-
-        let formattedValue = value;
-        if (typeof value === 'object') {
-          formattedValue = JSON.stringify(value, null, 2);
-        } else if (typeof value === 'boolean') {
-          formattedValue = value ? 'Yes' : 'No';
-        }
-
-        return `${formattedKey}: ${formattedValue}`;
-      });
-
-    return entries.join('\n');
-  }
-
-  return String(input);
+export function formatToolInput(input: ToolCallPart['input'], toolName: string): string {
+  if (isShellTool(toolName) && typeof input.command === 'string') return input.command;
+  if (isWriteTool(toolName) && typeof input.content === 'string') return input.content;
+  // Keep complete structured native edit/task/custom-tool inputs visible.
+  return JSON.stringify(input, null, 2);
 }

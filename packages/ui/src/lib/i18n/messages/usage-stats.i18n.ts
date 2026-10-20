@@ -1,4 +1,4 @@
-/** Stats page strings (OpenCode session statistics) — merged into each locale's main dictionary. */
+/** Native historical usage strings — merged into each locale’s main dictionary. */
 export const usageStatsI18n = {
   en: {
     'usageStats.openAction': 'Stats',
@@ -61,6 +61,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': 'Counting them reads every message in the period, so they load on request.',
     'usageStats.tools.load': 'Show tool calls',
     'usageStats.tools.loadFailed': 'Could not load tool calls',
+    'usageStats.partial': 'Some sessions could not be read. These statistics are incomplete.',
   },
   nl: {
     'usageStats.openAction': 'Statistieken',
@@ -123,6 +124,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': 'Om ze te tellen wordt elk bericht in de periode gelezen, dus ze worden op aanvraag geladen.',
     'usageStats.tools.load': 'Toolaanroepen tonen',
     'usageStats.tools.loadFailed': 'Kan toolaanroepen niet laden',
+    'usageStats.partial': 'Sommige sessies konden niet worden gelezen. Deze statistieken zijn onvolledig.',
   },
   de: {
     'usageStats.openAction': 'Statistik',
@@ -185,6 +187,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': 'Dafür wird jede Nachricht im Zeitraum gelesen, deshalb werden sie auf Anfrage geladen.',
     'usageStats.tools.load': 'Werkzeugaufrufe anzeigen',
     'usageStats.tools.loadFailed': 'Werkzeugaufrufe konnten nicht geladen werden',
+    'usageStats.partial': 'Einige Sitzungen konnten nicht gelesen werden. Diese Statistik ist unvollständig.',
   },
   es: {
     'usageStats.openAction': 'Estadísticas',
@@ -247,6 +250,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': 'Contarlas requiere leer cada mensaje del periodo, por eso se cargan bajo demanda.',
     'usageStats.tools.load': 'Mostrar llamadas a herramientas',
     'usageStats.tools.loadFailed': 'No se pudieron cargar las llamadas a herramientas',
+    'usageStats.partial': 'No se pudieron leer algunas sesiones. Estas estadísticas están incompletas.',
   },
   fr: {
     'usageStats.openAction': 'Statistiques',
@@ -309,6 +313,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': 'Les compter demande de lire chaque message de la période ; ils se chargent donc à la demande.',
     'usageStats.tools.load': 'Afficher les appels d’outils',
     'usageStats.tools.loadFailed': 'Impossible de charger les appels d’outils',
+    'usageStats.partial': 'Certaines sessions n’ont pas pu être lues. Ces statistiques sont incomplètes.',
   },
   ja: {
     'usageStats.openAction': '統計',
@@ -371,6 +376,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': '集計には期間内のすべてのメッセージを読むため、必要なときに読み込みます。',
     'usageStats.tools.load': 'ツール呼び出しを表示',
     'usageStats.tools.loadFailed': 'ツール呼び出しを読み込めませんでした',
+    'usageStats.partial': '一部のセッションを読み込めませんでした。この統計は不完全です。',
   },
   ko: {
     'usageStats.openAction': '통계',
@@ -433,6 +439,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': '집계하려면 기간 내 모든 메시지를 읽어야 하므로 요청 시 불러옵니다.',
     'usageStats.tools.load': '도구 호출 보기',
     'usageStats.tools.loadFailed': '도구 호출을 불러오지 못했습니다',
+    'usageStats.partial': '일부 세션을 읽지 못했습니다. 이 통계는 불완전합니다.',
   },
   pl: {
     'usageStats.openAction': 'Statystyki',
@@ -495,6 +502,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': 'Zliczenie ich wymaga odczytu każdej wiadomości z okresu, dlatego ładują się na żądanie.',
     'usageStats.tools.load': 'Pokaż wywołania narzędzi',
     'usageStats.tools.loadFailed': 'Nie udało się wczytać wywołań narzędzi',
+    'usageStats.partial': 'Nie udało się odczytać niektórych sesji. Te statystyki są niepełne.',
   },
   'pt-BR': {
     'usageStats.openAction': 'Estatísticas',
@@ -557,6 +565,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': 'Contá-las exige ler cada mensagem do período, por isso carregam sob demanda.',
     'usageStats.tools.load': 'Mostrar chamadas de ferramentas',
     'usageStats.tools.loadFailed': 'Não foi possível carregar as chamadas de ferramentas',
+    'usageStats.partial': 'Não foi possível ler algumas sessões. Estas estatísticas estão incompletas.',
   },
   tr: {
     'usageStats.openAction': 'İstatistikler',
@@ -619,6 +628,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': 'Saymak için dönemdeki her mesajın okunması gerekir, bu yüzden istek üzerine yüklenir.',
     'usageStats.tools.load': 'Araç çağrılarını göster',
     'usageStats.tools.loadFailed': 'Araç çağrıları yüklenemedi',
+    'usageStats.partial': 'Bazı oturumlar okunamadı. Bu istatistikler eksik.',
   },
   uk: {
     'usageStats.openAction': 'Статистика',
@@ -681,6 +691,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': 'Щоб їх порахувати, треба прочитати кожне повідомлення за період, тому вони завантажуються на вимогу.',
     'usageStats.tools.load': 'Показати виклики інструментів',
     'usageStats.tools.loadFailed': 'Не вдалося завантажити виклики інструментів',
+    'usageStats.partial': 'Не вдалося прочитати деякі сеанси. Ця статистика неповна.',
   },
   'zh-CN': {
     'usageStats.openAction': '统计',
@@ -743,6 +754,7 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': '统计需要读取该时段内的每条消息，因此按需加载。',
     'usageStats.tools.load': '显示工具调用',
     'usageStats.tools.loadFailed': '无法加载工具调用',
+    'usageStats.partial': '部分会话无法读取。这些统计数据不完整。',
   },
   'zh-TW': {
     'usageStats.openAction': '統計',
@@ -805,5 +817,6 @@ export const usageStatsI18n = {
     'usageStats.tools.caption': '統計需要讀取該期間內的每則訊息，因此按需載入。',
     'usageStats.tools.load': '顯示工具呼叫',
     'usageStats.tools.loadFailed': '無法載入工具呼叫',
+    'usageStats.partial': '部分工作階段無法讀取。這些統計資料不完整。',
   },
 } as const;

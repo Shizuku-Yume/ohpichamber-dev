@@ -8,7 +8,7 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { Icon } from '@/components/icon/Icon';
 import { useModelLists } from '@/hooks/useModelLists';
-import { useOpenCodeReadiness } from '@/hooks/useOpenCodeReadiness';
+import { useCatalogReadiness } from '@/hooks/useCatalogReadiness';
 import { useDeviceInfo } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -62,10 +62,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const { t } = useI18n();
     const autoReady = useRoutingStore(selectAutoReady);
     const autoEntry = React.useMemo<ModelPickerEntry | null>(() => (offerAuto && autoReady
-        ? { providerID: AUTO_PROVIDER_ID, modelID: AUTO_MODEL_ID, model: { id: AUTO_MODEL_ID, name: t('chat.modelControls.autoModel') } }
+        ? { providerId: AUTO_PROVIDER_ID, modelId: AUTO_MODEL_ID, model: { modelId: AUTO_MODEL_ID, provider: AUTO_PROVIDER_ID, name: t('chat.modelControls.autoModel'), modalities: ['text'], contextWindow: 1, maxOutputTokens: 1, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null } }
         : null), [autoReady, offerAuto, t]);
     const isAutoSelected = isAutoModel(providerId, modelId);
-    const { isReady, isUnavailable } = useOpenCodeReadiness('models', directory);
+    const { isReady, isUnavailable } = useCatalogReadiness('models', directory);
     const providers: ModelPickerProvider[] = useConfigStore((state) => directory === undefined
         ? state.providers : selectProvidersForDirectory(state, directory));
     const loadProviders = useConfigStore((state) => state.loadProviders);
@@ -93,9 +93,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }, []);
 
     const handleSelect = React.useCallback((entry: ModelPickerEntry) => {
-        onChange(entry.providerID, entry.modelID);
+        onChange(entry.providerId, entry.modelId);
         // Auto has its own pinned row; it does not belong in Recent.
-        if (!isAutoModel(entry.providerID, entry.modelID)) addRecentModel(entry.providerID, entry.modelID);
+        if (!isAutoModel(entry.providerId, entry.modelId)) addRecentModel(entry.providerId, entry.modelId);
         closePicker();
     }, [addRecentModel, closePicker, onChange]);
 
@@ -129,8 +129,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             return placeholder || t('settings.agents.modelSelector.notSelected');
         }
         if (isAutoSelected) return t('chat.modelControls.autoModel');
-        const provider = providers.find((entry) => entry.id === providerId);
-        const model = provider?.models?.find((entry) => entry.id === modelId);
+        const provider = providers.find((entry) => entry.providerId === providerId);
+        const model = provider?.models?.find((entry) => entry.modelId === modelId);
         return (typeof model?.name === 'string' && model.name.trim()) || modelId;
     }, [isAutoSelected, modelId, placeholder, providerId, providers, t]);
 
@@ -153,8 +153,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             onSelectNone={handleSelectNone}
             onEscape={closePicker}
             tooltipsEnabled={tooltipsEnabled && (isActuallyMobile ? isMobilePanelOpen : isDropdownOpen)}
-            isFavorite={(entry) => isFavoriteModel(entry.providerID, entry.modelID)}
-            onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerID, entry.modelID)}
+            isFavorite={(entry) => isFavoriteModel(entry.providerId, entry.modelId)}
+            onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerId, entry.modelId)}
         />
     );
 

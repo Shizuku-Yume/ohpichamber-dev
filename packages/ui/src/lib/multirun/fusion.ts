@@ -18,6 +18,8 @@ import { getMultiRunIdentity, type MultiRunIdentity } from './identity';
 import { resolveRunMemberLocation, runSnapshotRef, type RunMemberLocation } from './keep';
 import { loadLaneDiffStat, loadLaneFirstPrompt, loadLaneLastReply, type LaneDiffStat } from './laneData';
 import { multiRunVariantLabel, type MultiRunSummary } from './runs';
+import { expandNativeFileResource } from '@/api/fileResourceExpansion';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 
 export type FusionJudge = ModelSelection & {
   variant?: string;
@@ -252,12 +254,19 @@ export async function startRunFusion(input: {
 
   assertCurrent();
   await observeLaneSession({ sessionId: fusionSession.sessionId, directory }, assertCurrent);
+  const directoryOwner = resolveWorkspaceDirectory(fusionSession.workspaceId);
+  const sessionOwner = useGlobalSessionsStore.getState().entityById.get(fusionSession.sessionId);
+  const expanded = await expandNativeFileResource(visiblePrompt, directory);
+  assertCurrent();
+  if (resolveWorkspaceDirectory(fusionSession.workspaceId) !== directoryOwner) throw new Error('Fusion prompt scope changed');
+  const currentSession = useGlobalSessionsStore.getState().entityById.get(fusionSession.sessionId);
+  if (sessionOwner && (!currentSession || currentSession.workspaceId !== sessionOwner.workspaceId || currentSession.epoch !== sessionOwner.epoch)) throw new Error('Fusion session changed');
   await sendMessage({
     runtimeKey,
     sessionId: fusionSession.sessionId,
     request: {
-      options: { providerId: judge.providerId, modelId: judge.modelId, variant: judge.variant ?? null, agentId: judge.agent ?? null, reasoningEffort: null },
-      input: { text: visiblePrompt, attachments: [], context: context.map((part) => ({ kind: 'instruction', text: part.text })) },
+      options: { ...(expanded?.modelSelection ?? { providerId: judge.providerId, modelId: judge.modelId }), variant: judge.variant ?? null, agentId: expanded?.agentId ?? judge.agent ?? null, reasoningEffort: null },
+      input: { text: expanded?.content ?? visiblePrompt, attachments: [], context: context.map((part) => ({ kind: 'instruction', text: part.text })) },
     },
   });
   assertCurrent();

@@ -3,7 +3,7 @@ import { commandMatchesSearch, mergeCommandAutocompleteItems, rankCommandAutocom
 
 interface Item {
   name: string;
-  source: 'openchamber' | 'opencode';
+  source: 'openchamber' | 'native';
   description?: string;
   searchAliases?: string[];
   isBuiltIn?: boolean;
@@ -19,7 +19,7 @@ describe('mergeCommandAutocompleteItems', () => {
     };
     const command: Item = {
       name: 'summary',
-      source: 'opencode',
+      source: 'native',
       description: 'Plugin session digest',
     };
 
@@ -32,11 +32,11 @@ describe('mergeCommandAutocompleteItems', () => {
     expect(commandMatchesSearch(merged[0], 'plugin digest')).toBe(true);
   });
 
-  test('OpenCode built-ins win collisions with custom commands', () => {
-    const custom: Item = { name: 'review', source: 'opencode', description: 'Custom review' };
+  test('actionable built-ins win collisions with native custom commands', () => {
+    const custom: Item = { name: 'review', source: 'native', description: 'Custom review' };
     const builtIn: Item = {
       name: 'review',
-      source: 'opencode',
+      source: 'native',
       description: 'Review workspace changes',
       isBuiltIn: true,
     };
@@ -49,7 +49,7 @@ describe('mergeCommandAutocompleteItems', () => {
 
   test('keeps a case-distinct command when the built-in is disabled', () => {
     const builtIn: Item = { name: 'init', source: 'openchamber', isBuiltIn: true };
-    const command: Item = { name: 'Init', source: 'opencode', description: 'Custom init' };
+    const command: Item = { name: 'Init', source: 'native', description: 'Custom init' };
     const merged = mergeCommandAutocompleteItems([builtIn], [command]);
 
     expect(merged).toEqual([builtIn, command]);
@@ -59,8 +59,8 @@ describe('mergeCommandAutocompleteItems', () => {
   test('keeps first-seen ordering and unrelated commands', () => {
     const builtIns: Item[] = [{ name: 'undo', source: 'openchamber' }];
     const commands: Item[] = [
-      { name: 'test', source: 'opencode' },
-      { name: 'deploy', source: 'opencode' },
+      { name: 'test', source: 'native' },
+      { name: 'deploy', source: 'native' },
     ];
 
     const merged = mergeCommandAutocompleteItems(builtIns, commands);
@@ -70,8 +70,8 @@ describe('mergeCommandAutocompleteItems', () => {
   });
 
   test('deduplicates repeated entries within each source without mutating inputs', () => {
-    const first: Item = { name: 'test', source: 'opencode', description: 'First' };
-    const duplicate: Item = { name: 'test', source: 'opencode', description: 'Second' };
+    const first: Item = { name: 'test', source: 'native', description: 'First' };
+    const duplicate: Item = { name: 'test', source: 'native', description: 'Second' };
 
     expect(mergeCommandAutocompleteItems([], [first, duplicate])).toEqual([{
       ...first,
@@ -88,13 +88,13 @@ describe('mergeCommandAutocompleteItems', () => {
 describe('rankCommandAutocompleteItems', () => {
   test('places /apply name matches before fuzzy, description, and alias matches', () => {
     const commands: Item[] = [
-      { name: 'apple-design', source: 'opencode', description: 'Apply a design' },
-      { name: 'review', source: 'opencode', searchAliases: ['apply changes'] },
-      { name: 'openspec-apply-change', source: 'opencode' },
-      { name: 'opsx-apply', source: 'opencode' },
-      { name: 'apply', source: 'opencode' },
-      { name: 'draft-notes', source: 'opencode', description: 'Apply notes' },
-      { name: 'zebra', source: 'opencode' },
+      { name: 'apple-design', source: 'native', description: 'Apply a design' },
+      { name: 'review', source: 'native', searchAliases: ['apply changes'] },
+      { name: 'openspec-apply-change', source: 'native' },
+      { name: 'opsx-apply', source: 'native' },
+      { name: 'apply', source: 'native' },
+      { name: 'draft-notes', source: 'native', description: 'Apply notes' },
+      { name: 'zebra', source: 'native' },
     ];
 
     expect(rankCommandAutocompleteItems(commands, 'apply').map((command) => command.name)).toEqual([
@@ -109,8 +109,8 @@ describe('rankCommandAutocompleteItems', () => {
 
   test('keeps alphabetical order when the query is empty', () => {
     const commands: Item[] = [
-      { name: 'opsx-apply', source: 'opencode' },
-      { name: 'apple-design', source: 'opencode' },
+      { name: 'opsx-apply', source: 'native' },
+      { name: 'apple-design', source: 'native' },
     ];
 
     expect(rankCommandAutocompleteItems(commands, '').map((command) => command.name)).toEqual([

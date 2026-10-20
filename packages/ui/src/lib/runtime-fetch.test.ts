@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { createRuntimeOpencodeClient } from '@/lib/opencode/client';
 import { addRuntimeProxyHeaders, buildRuntimeFetchUrl, isLatin1Safe, runtimeFetch, sanitizeHeadersForBrowser } from './runtime-fetch';
 import { clearRuntimeAuthCredentialProvider, setRuntimeBearerToken } from './runtime-auth';
 import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from './runtime-url';
@@ -81,76 +80,6 @@ describe('runtimeFetch transport contract', () => {
     }
   });
 
-  test('preserves bodies from actual SDK mutation requests on same-origin runtimes', async () => {
-    const previous = getRuntimeUrlResolver();
-    const originalWindow = globalThis.window;
-    const calls: Array<{ url: string; method: string; body: string; headers: Headers }> = [];
-
-    try {
-      configureRuntimeUrlResolver({});
-      Object.defineProperty(globalThis, 'window', {
-        configurable: true,
-        value: { location: { origin: 'https://app.example', href: 'https://app.example/' } },
-      });
-
-      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const request = input instanceof Request ? input : new Request(input, init);
-        calls.push({
-          url: request.url,
-          method: request.method,
-          body: await request.clone().text(),
-          headers: request.headers,
-        });
-        // The generated client checks each route's declared success status:
-        // staging a revert answers 200 with a body, the other mutations 204.
-        if (request.url.endsWith('/revert/stage')) {
-          return new Response(JSON.stringify({ ok: true, id: 'ses_1', time: { created: 1 } }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          });
-        }
-        return new Response(null, { status: 204 });
-      }) as typeof fetch;
-
-      const client = createRuntimeOpencodeClient({ baseUrl: 'https://app.example/api', directory: '/repo' });
-
-      await client.session.revert.stage({ sessionID: 'ses_1', messageID: 'msg_1' });
-      await client.session.shell({ sessionID: 'ses_1', command: 'ls' });
-      await client.session.update({ sessionID: 'ses_1', title: 'Renamed' });
-      await client.permission.reply({ sessionID: 'ses_1', requestID: 'perm_1', decision: 'once' });
-      await client.session.form.reply({ sessionID: 'ses_1', formID: 'form_1', answer: { confirm: true } });
-
-      expect(calls.map((call) => call.url)).toEqual([
-        'https://app.example/api/session/ses_1/revert/stage',
-        'https://app.example/api/session/ses_1/shell',
-        'https://app.example/api/session/ses_1',
-        'https://app.example/api/session/ses_1/permission/perm_1/reply',
-        'https://app.example/api/session/ses_1/form/form_1/reply',
-      ]);
-      expect(calls.map((call) => call.method)).toEqual(['POST', 'POST', 'PATCH', 'POST', 'POST']);
-      expect(calls.map((call) => call.headers.get('content-type'))).toEqual([
-        'application/json',
-        'application/json',
-        'application/json',
-        'application/json',
-        'application/json',
-      ]);
-      // Every request carries the directory as a header, not a query parameter.
-      expect(new Set(calls.map((call) => call.headers.get('x-opencode-directory')))).toEqual(new Set(['%2Frepo']));
-      expect(calls.map((call) => JSON.parse(call.body))).toEqual([
-        { messageID: 'msg_1' },
-        { command: 'ls' },
-        { title: 'Renamed' },
-        { decision: 'once' },
-        { answer: { confirm: true } },
-      ]);
-    } finally {
-      setRuntimeUrlResolver(previous);
-      Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
-      globalThis.fetch = originalFetch;
-      clearRuntimeAuthCredentialProvider();
-    }
-  });
 
   test('preserves SDK-style Request method, JSON body, signal, path, query, and merges auth headers', async () => {
     const previous = getRuntimeUrlResolver();

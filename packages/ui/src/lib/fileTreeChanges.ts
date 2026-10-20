@@ -1,22 +1,7 @@
-/**
- * Tells file browsers which listings may be out of date, from signals the
- * client already receives. There is no watcher and no timer: OpenCode 2.x
- * reports no file events (its `filesystem.changed` covers the repository HEAD
- * only), so the agent's own activity is the source.
- *
- * - A finished `write` or `patch` names its files: their directories change.
- * - A finished `shell`, `execute`, MCP or plugin call could touch anything.
- *   Its session is remembered until the step ends; the step's snapshot then
- *   says whether any file changed. A step that changed nothing costs nothing,
- *   which is the common case for read-only commands.
- * - A finished user shell command and a revert are unknown changes.
- *
- * Changes outside the agent (an editor, a terminal) are not seen here.
- */
-
+/** Native tool mutations invalidate Host file listings independently of mounted chat parts. */
+import type { Part } from '@openchamber/agent-contract';
 import { getNormalizedParentDirectory, normalizePath } from '@/lib/pathNormalization';
-import { isFinalToolStatus, type Part } from '@/lib/opencode/model';
-import { toolListingChanges } from '@/lib/opencode/tools';
+import { isExplorationTool, isWebTool } from '@/lib/toolHelpers';
 
 /**
  * `paths` are absolute, normalized files whose parent listings changed.
@@ -27,8 +12,9 @@ export type FileTreeChange = { directory: string; paths?: string[] };
 type FileTreeChangeListener = (change: FileTreeChange) => void;
 
 const listeners = new Set<FileTreeChangeListener>();
-/** Sessions with a finished call that could have touched any file, until their step ends. */
-const sessionsAwaitingStep = new Set<string>();
+/** Unknown targets are coalesced until their native run ends. */
+const sessionsAwaitingRun = new Map<string, Set<string>>();
+const completedToolCalls = new Map<string, Set<string>>();
 
 export const subscribeFileTreeChanges = (listener: FileTreeChangeListener): (() => void) => {
   listeners.add(listener);
@@ -65,32 +51,49 @@ const resolveAgainst = (directory: string, path: string): string | null => {
 };
 
 export const fileTreeChanges = {
-  toolTransition(directory: string, previousPart: Part | undefined, nextPart: Part): void {
-    if (nextPart.type !== 'tool' || !isFinalToolStatus(nextPart.state.status)) return;
-    if (previousPart?.type === 'tool' && isFinalToolStatus(previousPart.state.status)) return;
-    const state = nextPart.state;
-    const metadata = state.status === 'completed' || state.status === 'error' ? state.metadata : undefined;
-    const named = toolListingChanges(nextPart.tool, state.input, metadata);
-    if (named === null) {
-      sessionsAwaitingStep.add(nextPart.sessionID);
+  toolTransition(directory: string, sessionId: string, previousPart: Part | undefined, nextPart: Part): void {
+    if (nextPart.type !== 'tool_call' && nextPart.type !== 'tool_result') return;
+    if (nextPart.type === 'tool_call' && !['completed', 'failed', 'cancelled'].includes(nextPart.status)) return;
+    if (previousPart?.type === 'tool_call' && previousPart.toolCallId === nextPart.toolCallId && previousPart.status === 'denied') return;
+    if (nextPart.type === 'tool_call' && previousPart?.type === 'tool_call'
+      && previousPart.toolCallId === nextPart.toolCallId
+      && ['completed', 'failed', 'cancelled', 'denied'].includes(previousPart.status)) return;
+    if (previousPart?.type === 'tool_result' && previousPart.toolCallId === nextPart.toolCallId) return;
+    const root = normalizePath(directory);
+    if (!root) return;
+    const key = `${root}\n${sessionId}`;
+    const completed = completedToolCalls.get(key) ?? new Set<string>();
+    if (completed.has(nextPart.toolCallId)) return;
+    completed.add(nextPart.toolCallId);
+    completedToolCalls.set(key, completed);
+    if (isExplorationTool(nextPart.toolName) || isWebTool(nextPart.toolName)) return;
+    const call = nextPart.type === 'tool_call' ? nextPart
+      : previousPart?.type === 'tool_call' && previousPart.toolCallId === nextPart.toolCallId ? previousPart : undefined;
+    // write has one native path. edit's grammar depends on the worker's editMode;
+    // do not guess its rename/delete targets from a legacy patch or metadata shape.
+    if (nextPart.toolName === 'write' && typeof call?.input.path === 'string') {
+      const rawPath = call.input.path.replace(/^\[(.*)#[0-9a-fA-F]+\]$/, '$1');
+      const path = resolveAgainst(root, rawPath);
+      if (path) notifyFileTreeChanged({ directory: root, paths: [path] });
       return;
     }
-    const root = normalizePath(directory);
-    if (!root || named.length === 0) return;
-    const paths = named
-      .map((path) => resolveAgainst(root, path))
-      .filter((path): path is string => path !== null);
-    if (paths.length > 0) notifyFileTreeChanged({ directory: root, paths });
+    const pending = sessionsAwaitingRun.get(sessionId) ?? new Set<string>();
+    pending.add(root);
+    sessionsAwaitingRun.set(sessionId, pending);
   },
 
-  /**
-   * A step ended. `files` is its snapshot's changed files, or undefined when
-   * there is no snapshot (snapshots off, not a Git repository, a failed step).
-   */
-  stepCompleted(directory: string, sessionID: string, files: readonly string[] | undefined): void {
-    if (!sessionsAwaitingStep.delete(sessionID)) return;
-    if (files && files.length === 0) return;
-    notifyFileTreeChanged({ directory });
+  runCompleted(directory: string, sessionId: string): void {
+    const root = normalizePath(directory);
+    if (!root) return;
+    const pending = sessionsAwaitingRun.get(sessionId);
+    if (!pending?.delete(root)) return;
+    if (pending.size === 0) sessionsAwaitingRun.delete(sessionId);
+    notifyFileTreeChanged({ directory: root });
+  },
+
+  reset(): void {
+    sessionsAwaitingRun.clear();
+    completedToolCalls.clear();
   },
 
   unknownChange(directory: string): void {

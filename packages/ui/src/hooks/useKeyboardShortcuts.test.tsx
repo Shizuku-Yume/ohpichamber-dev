@@ -4,7 +4,6 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { ThemeSystemProvider } from '@/contexts/ThemeSystemContext';
-import { opencodeClient } from '@/lib/opencode/client';
 import { useInputStore } from '@/sync/input-store';
 import { SyncProvider } from '@/sync/sync-context';
 import { useUIStore } from '@/stores/useUIStore';
@@ -38,7 +37,6 @@ test('Ctrl+L adds a selection outside chat and yields to a sequence without one'
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   }
 
-  opencodeClient.reconnectToRuntimeBaseUrl();
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -107,7 +105,6 @@ test('Ctrl+L adds a selection outside chat and yields to a sequence without one'
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
       else Reflect.deleteProperty(globalThis, name);
     }
-    opencodeClient.reconnectToRuntimeBaseUrl();
     await dom.happyDOM.close();
   }
 });

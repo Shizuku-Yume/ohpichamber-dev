@@ -13,20 +13,18 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { toast } from '@/components/ui';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from '@/components/chat/CommandAutocomplete';
 import { FileMentionAutocomplete, type FileMentionHandle } from '@/components/chat/FileMentionAutocomplete';
-import { SnippetAutocomplete, type SnippetAutocompleteHandle } from '@/components/chat/SnippetAutocomplete';
 import { Icon } from "@/components/icon/Icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import type { ScheduledTask } from '@/lib/scheduledTasksApi';
 import { useI18n } from '@/lib/i18n';
 import { isValidCronExpression, getNextRuns, CRON_EXAMPLES } from '@/lib/cron';
 import { canonicalizeTimezone } from '@/lib/timezones';
-import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore, refreshGlobalSessions } from '@/stores/useGlobalSessionsStore';
 import { useAllLiveSessions } from '@/sync/sync-context';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -771,7 +769,8 @@ export function ScheduledTaskEditorDialog(props: {
     if (open) void refreshGlobalSessions().catch(() => undefined);
   }, [open]);
   const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgents = useConfigStore((state) => state.loadAgents);
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
+  const projectDirectory = projects.find((project) => project.id === props.projectId)?.path ?? null;
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
   const currentModelID = useConfigStore((state) => state.currentModelId);
@@ -795,8 +794,6 @@ export function ScheduledTaskEditorDialog(props: {
   const [mentionQuery, setMentionQuery] = React.useState('');
   const [showCommandAutocomplete, setShowCommandAutocomplete] = React.useState(false);
   const [commandQuery, setCommandQuery] = React.useState('');
-  const [showSnippetAutocomplete, setShowSnippetAutocomplete] = React.useState(false);
-  const [snippetQuery, setSnippetQuery] = React.useState('');
   const [calendarMonth, setCalendarMonth] = React.useState<Date>(() => {
     const initialDate = parseISODateToLocal(task?.schedule?.date || '') || new Date();
     return new Date(initialDate.getFullYear(), initialDate.getMonth(), 1);
@@ -805,7 +802,6 @@ export function ScheduledTaskEditorDialog(props: {
   const promptTextareaRef = React.useRef<HTMLTextAreaElement>(null);
   const mentionRef = React.useRef<FileMentionHandle>(null);
   const commandRef = React.useRef<CommandAutocompleteHandle>(null);
-  const snippetRef = React.useRef<SnippetAutocompleteHandle>(null);
   const localeUse24Hour = React.useMemo(() => getUses24Hour(locale), [locale]);
   const localeWeekStartsOn = React.useMemo(() => getWeekStartsOn(locale), [locale]);
   const use24Hour = React.useMemo(() => {
@@ -839,8 +835,8 @@ export function ScheduledTaskEditorDialog(props: {
       return;
     }
     void loadProviders({ source: 'scheduledTaskEditor' });
-    void loadAgents({ source: 'scheduledTaskEditor' });
-  }, [open, loadProviders, loadAgents]);
+    void loadAgents(projectDirectory);
+  }, [open, loadProviders, loadAgents, projectDirectory]);
 
   React.useEffect(() => {
     if (!open) {
@@ -881,9 +877,9 @@ export function ScheduledTaskEditorDialog(props: {
   }, [isDatePickerOpen]);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === draft.execution.providerID);
-    const model = provider?.models?.find((item) => item.id === draft.execution.modelID) as { variants?: ModelVariantSource } | undefined;
-    return listModelVariantIds(model?.variants);
+    const provider = providers.find((item) => item.providerId === draft.execution.providerID);
+    const model = provider?.models?.find((item) => item.modelId === draft.execution.modelID);
+    return model?.variants.map((entry) => entry.variant) ?? [];
   }, [providers, draft.execution.providerID, draft.execution.modelID]);
   const hasVariantOptions = variantOptions.length > 0;
   const selectedVariantValue = React.useMemo(() => {
@@ -1008,7 +1004,6 @@ export function ScheduledTaskEditorDialog(props: {
         setCommandQuery(value.substring(1, commandEnd));
         setShowCommandAutocomplete(true);
         setShowFileMention(false);
-        setShowSnippetAutocomplete(false);
         return;
       }
     }
@@ -1016,20 +1011,6 @@ export function ScheduledTaskEditorDialog(props: {
     setShowCommandAutocomplete(false);
 
     const textBeforeCursor = value.substring(0, cursorPosition);
-    const lastHashSymbol = textBeforeCursor.lastIndexOf('#');
-    if (lastHashSymbol !== -1) {
-      const charBefore = lastHashSymbol > 0 ? textBeforeCursor[lastHashSymbol - 1] : null;
-      const textAfterHash = textBeforeCursor.substring(lastHashSymbol + 1);
-      const isWordBoundary = !charBefore || /\s/.test(charBefore);
-      if (isWordBoundary && !textAfterHash.includes(' ') && !textAfterHash.includes('\n')) {
-        setSnippetQuery(textAfterHash);
-        setShowSnippetAutocomplete(true);
-        setShowFileMention(false);
-        return;
-      }
-    }
-
-    setShowSnippetAutocomplete(false);
 
     const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
     if (lastAtSymbol !== -1) {
@@ -1117,7 +1098,6 @@ export function ScheduledTaskEditorDialog(props: {
     setPromptValue(nextPrompt);
     setShowCommandAutocomplete(false);
     setCommandQuery('');
-    setShowSnippetAutocomplete(false);
 
     requestAnimationFrame(() => {
       const currentTextarea = promptTextareaRef.current;
@@ -1130,30 +1110,6 @@ export function ScheduledTaskEditorDialog(props: {
     });
   }, [setPromptValue, updateAutocompleteState]);
 
-  const handleSnippetSelect = React.useCallback((_snippet: unknown, trigger: string) => {
-    const promptValue = draft.execution.prompt;
-    const textarea = promptTextareaRef.current;
-    const cursorPosition = textarea?.selectionStart ?? promptValue.length;
-    const textBeforeCursor = promptValue.substring(0, cursorPosition);
-    const lastHashSymbol = textBeforeCursor.lastIndexOf('#');
-    const startIndex = lastHashSymbol !== -1 ? lastHashSymbol : cursorPosition;
-    const nextPrompt = `${promptValue.substring(0, startIndex)}#${trigger} ${promptValue.substring(cursorPosition)}`;
-    const nextCursor = startIndex + trigger.length + 2;
-
-    setPromptValue(nextPrompt);
-    setShowSnippetAutocomplete(false);
-    setSnippetQuery('');
-
-    requestAnimationFrame(() => {
-      const currentTextarea = promptTextareaRef.current;
-      if (currentTextarea) {
-        currentTextarea.selectionStart = nextCursor;
-        currentTextarea.selectionEnd = nextCursor;
-        currentTextarea.focus();
-      }
-      updateAutocompleteState(nextPrompt, nextCursor);
-    });
-  }, [draft.execution.prompt, setPromptValue, updateAutocompleteState]);
 
   const handlePromptKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (showCommandAutocomplete && commandRef.current) {
@@ -1171,13 +1127,7 @@ export function ScheduledTaskEditorDialog(props: {
       }
     }
 
-    if (showSnippetAutocomplete && snippetRef.current) {
-      if (event.key === 'Enter' || event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Escape' || event.key === 'Tab') {
-        event.preventDefault();
-        snippetRef.current.handleKeyDown(event.key);
-      }
-    }
-  }, [showCommandAutocomplete, showFileMention, showSnippetAutocomplete]);
+  }, [showCommandAutocomplete, showFileMention]);
 
   const handleSubmit = React.useCallback(async () => {
     const validationError = validateDraft(draft, t);
@@ -1631,8 +1581,8 @@ export function ScheduledTaskEditorDialog(props: {
           <div className="flex min-w-0 flex-col gap-1">
             <FieldLabel>{t('sessions.scheduledTasks.editor.agent.label')}</FieldLabel>
             <AgentSelector
-              agentName={draft.execution.agent}
-              filter={(agent) => isPrimaryMode(agent.mode)}
+              agentId={draft.execution.agent}
+              directory={projectDirectory ?? undefined}
               onChange={(agent) => setDraft((prev) => ({
                 ...prev,
                 execution: {
@@ -1697,21 +1647,6 @@ export function ScheduledTaskEditorDialog(props: {
                 />
               ) : null}
 
-              {showSnippetAutocomplete ? (
-                <SnippetAutocomplete
-                  ref={snippetRef}
-                  searchQuery={snippetQuery}
-                  onSnippetSelect={handleSnippetSelect}
-                  onClose={() => setShowSnippetAutocomplete(false)}
-                  style={{
-                    left: 0,
-                    top: 'auto',
-                    bottom: 'calc(100% + 6px)',
-                    marginBottom: 0,
-                    maxWidth: '100%',
-                  }}
-                />
-              ) : null}
             </div>
           </div>
 

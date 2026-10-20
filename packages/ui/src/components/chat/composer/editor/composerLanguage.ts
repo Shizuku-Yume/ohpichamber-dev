@@ -181,8 +181,8 @@ function referenceChips(text: string, context: ComposerLanguageContext, typingEn
         }
     }
 
-    for (const token of filterKnownTokens(scanPrefixTokens(text, '#'), context.knownSnippetTriggers)) {
-        addToken(token.start, token.end, new ReferenceChipWidget(token.name, `#${token.name}`, SNIPPET_CHIP_ICON_HREF));
+    for (const token of filterKnownTokens(scanPrefixTokens(text, '/'), context.knownSnippetTriggers)) {
+        addToken(token.start, token.end, new ReferenceChipWidget(token.name, `/${token.name}`, SNIPPET_CHIP_ICON_HREF));
     }
 
     chips.sort((a, b) => a.start - b.start);

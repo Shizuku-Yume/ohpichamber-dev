@@ -5,6 +5,13 @@ import * as keep from './keep';
 import { withMultiRunMembership } from './identity';
 import { buildMultiRunIndex } from './runs';
 import { fusionModeFor, NoFusionOutputsError, shouldInlineDiffs, startRunFusion } from './fusion';
+import * as laneData from './laneData';
+import * as creation from './createSession';
+import * as observation from './observation';
+import * as prompts from '@/lib/magicPrompts';
+import * as actions from '@/sync/session-actions';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
+import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
 
 describe('fusionModeFor', () => {
   const changed = { files: 3, insertions: 10, deletions: 2 };
@@ -89,5 +96,48 @@ describe('canonical fusion source authority', () => {
     spies.push(spyOn(canonicalClient, 'getHistory').mockRejectedValue(new Error('History failed')));
     await expect(startRunFusion(api.input)).rejects.toThrow('History failed');
     expect(api.create.mock.calls.length).toBe(0);
+  });
+});
+
+describe('fusion native primary delivery', () => {
+  test.each(['command', 'template', 'text', 'failure', 'stale', 'plain'] as const)('expands generated primary once without touching context: %s', async (mode) => {
+    switchRuntimeEndpoint({ apiBaseUrl: 'http://fusion.test', runtimeKey: 'fusion-test' });
+    registerWorkspaceDirectory('workspace', '/repo');
+    const api = sourceFixture();
+    spies.push(spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: api.sessions, errors: {} }));
+    spies.push(spyOn(laneData, 'loadLaneLastReply').mockResolvedValue('Source reply /literal'));
+    spies.push(spyOn(laneData, 'loadLaneFirstPrompt').mockResolvedValue({ messageId: 'user', turnId: 'turn', text: '/original task', files: [] }));
+    const text = mode === 'plain' ? 'Fuse the answers\n#literal' : '/fusion "two words"\n trailing  ';
+    spies.push(spyOn(prompts, 'renderMagicPrompt').mockImplementation(async (key) => key === 'session.fusion.visible' ? text : 'Generated instructions /literal'));
+    const fusion = { ...sessionFixture('fusion'), metadata: null };
+    spies.push(spyOn(creation, 'createMultiRunSession').mockResolvedValue(fusion));
+    spies.push(spyOn(observation, 'observeLaneSession').mockResolvedValue(undefined));
+    spies.push(spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ projectId: 'project', workspaceId: 'workspace', name: 'repo' }));
+    const send = spyOn(actions, 'sendMessage').mockResolvedValue(undefined);
+    spies.push(send);
+    const requests: Request[] = [];
+    spies.push(spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const request = new Request(new URL(url instanceof Request ? url.url : String(url), 'http://test'), init);
+      requests.push(request);
+      expect(new URL(request.url).pathname).toBe('/api/agent/v1/workspaces/workspace/commands/expand-text');
+      expect(await request.json()).toEqual({ text });
+      if (mode === 'failure') return new Response('unavailable', { status: 503 });
+      if (mode === 'stale') registerWorkspaceDirectory('workspace', '/moved');
+      return Response.json(mode === 'command' || mode === 'template' ? { kind: mode, content: '/expanded once', modelSelection: { providerId: 'bound', modelId: 'bound-model' }, agentId: 'bound-agent' } : { kind: 'text', content: text });
+    }));
+    const result = startRunFusion({ ...api.input, judge: { ...api.input.judge, variant: 'high', agent: 'judge-agent' } });
+    if (mode === 'failure' || mode === 'stale') {
+      await expect(result).rejects.toThrow();
+      expect(send).not.toHaveBeenCalled();
+      return;
+    }
+    expect(await result).toMatchObject({ sessionId: 'fusion', directory: '/repo', mode: 'answers' });
+    expect(requests).toHaveLength(mode === 'plain' ? 0 : 1);
+    const matched = mode === 'command' || mode === 'template';
+    const request = send.mock.calls[0][0].request;
+    expect(request.options).toEqual({ providerId: matched ? 'bound' : 'judge', modelId: matched ? 'bound-model' : 'model', agentId: matched ? 'bound-agent' : 'judge-agent', variant: 'high', reasoningEffort: null });
+    expect(request.input.text).toBe(matched ? '/expanded once' : text);
+    expect(request.input.context.some(part => part.text.includes('/original task'))).toBe(true);
+    expect(request.input.context.some(part => part.text.includes('Source reply /literal'))).toBe(true);
   });
 });

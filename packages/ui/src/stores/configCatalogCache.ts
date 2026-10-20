@@ -1,39 +1,21 @@
 import { z } from 'zod';
-import type { Agent, Model, Provider } from '@/lib/opencode/model';
-
-/**
- * Last known provider/model and agent catalogs, per runtime and config
- * directory, so the model and agent pickers render at once on the next start
- * while OpenCode is still starting. The stored catalog is display continuity
- * only: the live load always revalidates it, and nothing destructive ever
- * reads it.
- *
- * IndexedDB avoids broadcasting catalog payloads to other windows through
- * localStorage StorageEvents carrying the old and new value.
- *
- * Only what the pickers and the composer show is stored. Provider, model and
- * variant `settings`/`headers`/`body` and an agent's request carry API keys and
- * authorization headers, and an agent's system prompt is user content; none of
- * them is ever written. Records are built field by field from an allowlist and
- * read back through strict schemas, so a record holding anything else is
- * dropped.
- */
-
+import type { Model, Provider } from '@openchamber/agent-contract';
 export type CachedProvider = Provider & { models: Model[] };
 
 export type CachedCatalog = {
   providers?: CachedProvider[];
   defaultProviders?: Record<string, string>;
-  agents?: Agent[];
 };
 
 const DATABASE = 'openchamber-config-catalog';
 const DATABASE_VERSION = 1;
 const STORE = 'catalogs';
 const SAVED_AT_INDEX = 'savedAt';
-/** Bump when the stored provider, model or agent shape changes; older records are dropped. */
-export const CATALOG_CACHE_SCHEMA = 2;
-/** Directories kept across all runtimes; the least recently saved go first. */
+/** Bump when the stored provider/model shape changes; older records are dropped. */
+export const CATALOG_CACHE_SCHEMA = 4;
+
+/** Display-only provider/model continuity, scoped by runtime and directory. */
+
 export const CATALOG_CACHE_MAX_RECORDS = 24;
 
 const recordKey = (runtimeKey: string, directoryKey: string): string => `${runtimeKey}\n${directoryKey}`;
@@ -68,146 +50,48 @@ const openDatabase = (): Promise<IDBDatabase | null> => {
 };
 
 const storedModelSchema = z.strictObject({
-  id: z.string(),
-  modelID: z.string(),
-  providerID: z.string(),
-  canonical: z.string().optional(),
-  family: z.string().optional(),
-  name: z.string(),
-  compatibility: z.strictObject({
-    reasoningField: z.string().optional(),
-    requireReasoning: z.boolean().optional(),
-  }).optional(),
-  capabilities: z.strictObject({ tools: z.boolean(), input: z.array(z.string()), output: z.array(z.string()) }),
-  variants: z.array(z.strictObject({ id: z.string() })),
-  time: z.strictObject({ released: z.number() }),
-  cost: z.array(z.strictObject({
-    tier: z.strictObject({ type: z.literal('context'), size: z.number() }).optional(),
-    input: z.number(),
-    output: z.number(),
-    cache: z.strictObject({ read: z.number(), write: z.number() }),
-  })),
-  status: z.enum(['alpha', 'beta', 'deprecated', 'active']),
-  enabled: z.boolean(),
-  limit: z.strictObject({ context: z.number(), input: z.number().optional(), output: z.number() }),
+  modelId: z.string(), provider: z.string(), name: z.string(),
+  modalities: z.array(z.enum(['text', 'image', 'audio', 'embedding'])), contextWindow: z.number(), maxOutputTokens: z.number(),
+  reasoningEffortSupported: z.boolean(),
+  reasoningOptions: z.array(z.strictObject({ reasoningEffort: z.string(), label: z.string(), budgetTokens: z.number().nullable() })),
+  variants: z.array(z.strictObject({ variant: z.string(), label: z.string(), reasoningEffort: z.string().nullable() })),
+  toolsSupported: z.boolean().optional(), enabled: z.boolean().optional(), status: z.enum(['alpha', 'beta', 'deprecated', 'active']).optional(),
+  pricing: z.strictObject({ inputPerMillionTokens: z.number(), outputPerMillionTokens: z.number(), cacheReadPerMillionTokens: z.number().nullable(), cacheWritePerMillionTokens: z.number().nullable() }).nullable(),
 });
 
 const storedProviderSchema = z.strictObject({
-  id: z.string(),
-  canonical: z.string().optional(),
-  integrationID: z.string().optional(),
-  name: z.string(),
-  activation: z.enum(['auto', 'enabled', 'disabled']),
-  package: z.string(),
+  providerId: z.string(), name: z.string(), endpoint: z.string().url().nullable(),
+  protocol: z.enum(['chat-completions', 'responses', 'messages', 'generate-content']).nullable(),
+  authMethods: z.array(z.enum(['api-key', 'oauth'])),
+  auth: z.discriminatedUnion('status', [
+    z.strictObject({ status: z.literal('missing') }),
+    z.strictObject({ status: z.literal('configured'), credentialRef: z.string(), method: z.enum(['api-key', 'oauth']), source: z.enum(['stored-credential', 'managed-environment', 'external-environment']) }),
+  ]),
   models: z.array(storedModelSchema),
 });
 
-/** An agent without its request and system prompt; only the sampling values the composer shows. */
-const storedAgentSchema = z.strictObject({
-  id: z.string(),
-  name: z.string(),
-  displayName: z.string(),
-  model: z.strictObject({ id: z.string(), providerID: z.string(), variant: z.string().optional() }).optional(),
-  description: z.string().optional(),
-  mode: z.enum(['subagent', 'primary', 'all']),
-  hidden: z.boolean(),
-  color: z.string().optional(),
-  steps: z.number().optional(),
-  permissions: z.array(z.strictObject({
-    action: z.string(),
-    resource: z.string(),
-    effect: z.enum(['allow', 'deny', 'ask']),
-  })),
-  sampling: z.strictObject({ temperature: z.number().optional(), topP: z.number().optional() }),
-});
 
-const storedRecordSchema = z.strictObject({
-  key: z.string(),
-  schema: z.number(),
-  runtimeKey: z.string(),
-  directoryKey: z.string(),
-  savedAt: z.number(),
-  providers: z.array(storedProviderSchema).optional(),
-  defaultProviders: z.record(z.string(), z.string()).optional(),
-  agents: z.array(storedAgentSchema).optional(),
-});
-
+const storedRecordSchema = z.strictObject({ key: z.string(), schema: z.number(), runtimeKey: z.string(), directoryKey: z.string(), savedAt: z.number(), providers: z.array(storedProviderSchema).optional(), defaultProviders: z.record(z.string(), z.string()).optional() });
 type StoredRecord = z.infer<typeof storedRecordSchema>;
 type StoredProvider = z.infer<typeof storedProviderSchema>;
 type StoredModel = z.infer<typeof storedModelSchema>;
-type StoredAgent = z.infer<typeof storedAgentSchema>;
-type StoredCatalog = Pick<StoredRecord, 'providers' | 'defaultProviders' | 'agents'>;
+type StoredCatalog = Pick<StoredRecord, 'providers' | 'defaultProviders'>;
 
 const toStoredModel = (model: Model): StoredModel => ({
-  id: model.id,
-  modelID: model.modelID,
-  providerID: model.providerID,
-  canonical: model.canonical,
-  family: model.family,
-  name: model.name,
-  compatibility: model.compatibility && {
-    reasoningField: model.compatibility.reasoningField,
-    requireReasoning: model.compatibility.requireReasoning,
-  },
-  capabilities: {
-    tools: model.capabilities.tools,
-    input: [...model.capabilities.input],
-    output: [...model.capabilities.output],
-  },
-  variants: model.variants.map((variant) => ({ id: variant.id })),
-  time: { released: model.time.released },
-  cost: model.cost.map((entry) => ({
-    tier: entry.tier && { type: entry.tier.type, size: entry.tier.size },
-    input: entry.input,
-    output: entry.output,
-    cache: { read: entry.cache.read, write: entry.cache.write },
-  })),
-  status: model.status,
-  enabled: model.enabled,
-  limit: { context: model.limit.context, input: model.limit.input, output: model.limit.output },
+  modelId: model.modelId, provider: model.provider, name: model.name, modalities: [...model.modalities], contextWindow: model.contextWindow, maxOutputTokens: model.maxOutputTokens,
+  reasoningEffortSupported: model.reasoningEffortSupported, reasoningOptions: model.reasoningOptions.map((option) => ({ ...option })), variants: model.variants.map((variant) => ({ ...variant })),
+  toolsSupported: model.toolsSupported, enabled: model.enabled, status: model.status, pricing: model.pricing && { ...model.pricing },
 });
 
 const toStoredProvider = (provider: CachedProvider): StoredProvider => ({
-  id: provider.id,
-  canonical: provider.canonical,
-  integrationID: provider.integrationID,
-  name: provider.name,
-  activation: provider.activation,
-  package: provider.package,
-  models: provider.models.map(toStoredModel),
+  providerId: provider.providerId, name: provider.name, endpoint: provider.endpoint, protocol: provider.protocol, authMethods: [...provider.authMethods], auth: { ...provider.auth }, models: provider.models.map(toStoredModel),
 });
 
-// The request body is free-form JSON; a sampling value is kept only when it is a number.
-const samplingValue = z.number();
-
-const toStoredAgent = (agent: Agent): StoredAgent => ({
-  id: agent.id,
-  name: agent.name,
-  displayName: agent.displayName,
-  model: agent.model && { id: agent.model.id, providerID: agent.model.providerID, variant: agent.model.variant },
-  description: agent.description,
-  mode: agent.mode,
-  hidden: agent.hidden,
-  color: agent.color,
-  steps: agent.steps,
-  permissions: agent.permissions.map((rule) => ({ action: rule.action, resource: rule.resource, effect: rule.effect })),
-  sampling: {
-    temperature: samplingValue.safeParse(agent.request.body.temperature).data,
-    topP: samplingValue.safeParse(agent.request.body.topP).data,
-  },
-});
-
-/** The cached agent as the store holds agents: an empty request apart from its sampling values. */
-const fromStoredAgent = ({ sampling, ...agent }: StoredAgent): Agent => ({
-  ...agent,
-  request: { settings: {}, headers: {}, body: { ...sampling } },
-});
 
 const toStoredCatalog = (catalog: CachedCatalog): StoredCatalog => {
   const stored: StoredCatalog = {};
   if (catalog.providers) stored.providers = catalog.providers.map(toStoredProvider);
   if (catalog.defaultProviders) stored.defaultProviders = { ...catalog.defaultProviders };
-  if (catalog.agents) stored.agents = catalog.agents.map(toStoredAgent);
   return stored;
 };
 
@@ -223,7 +107,6 @@ const toCachedCatalog = (record: StoredRecord): CachedCatalog => {
   const catalog: CachedCatalog = {};
   if (record.providers) catalog.providers = record.providers;
   if (record.defaultProviders) catalog.defaultProviders = record.defaultProviders;
-  if (record.agents) catalog.agents = record.agents.map(fromStoredAgent);
   return catalog;
 };
 
@@ -262,8 +145,7 @@ export const readCachedCatalog = async (runtimeKey: string, directoryKey: string
   }
 };
 
-// Writes for one record are serialized, so a provider write and an agent write
-// landing together cannot drop each other's half of the record.
+// Serialize writes so newer provider/model snapshots cannot be overtaken.
 let writeChain: Promise<void> = Promise.resolve();
 
 /**
@@ -278,7 +160,7 @@ export const writeCachedCatalog = (runtimeKey: string, directoryKey: string, upd
     const stored = await readStoredRecord(database, key).catch(() => 'missing' as const);
     const previous: StoredCatalog = stored === 'missing' || stored === 'corrupt' || !isRecordFor(stored, runtimeKey, directoryKey)
       ? {}
-      : { providers: stored.providers, defaultProviders: stored.defaultProviders, agents: stored.agents };
+      : { providers: stored.providers, defaultProviders: stored.defaultProviders };
     const record: StoredRecord = {
       ...previous,
       ...toStoredCatalog(update),
@@ -340,15 +222,6 @@ const pruneCachedCatalogs = (database: IDBDatabase): Promise<void> => new Promis
   };
 });
 
-/**
- * Whether a freshly loaded catalog may replace one shown from the cache on
- * its first load. A location OpenCode is still starting answers empty, then
- * partial (no plugin providers or agents), and complete about two seconds
- * later; a first answer with fewer entries than the cache is held back once
- * and re-read, and the re-read replaces the cache whatever it holds.
- */
-export const shouldHoldFirstLoadAgainstCache = (cachedCount: number, loadedCount: number): boolean =>
-  cachedCount > 0 && loadedCount < cachedCount;
 
 export const resetCatalogCacheForTests = (): void => {
   databasePromise = null;

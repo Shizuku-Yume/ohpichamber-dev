@@ -7,6 +7,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getAllSyncSessionMap, getDirectoryState, getSyncChildStores } from '@/sync/sync-refs';
 import { normalizePath } from '@/lib/pathNormalization';
+import { getLinkedIssues } from '@/lib/linkedIssues';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useUIStore } from '@/stores/useUIStore';
 import type { WorktreeMetadata } from '@/types/worktree';
@@ -27,7 +28,17 @@ const toWorktree = (entry: WorktreeMetadata): GuestWorktree => ({
 });
 const combinedState = (states: GuestLoadState[]): GuestLoadState => states.includes('error') ? 'error' : states.includes('loading') ? 'loading' : 'ready';
 
-const projectSession = (session: CanonicalSession, worktrees: ReadonlyMap<string, GuestWorktree>): GuestSessionRecord => {
+const guestItems = (session: CanonicalSession, guestId: string): GuestSessionRecord['items'] => {
+  const items: GuestSessionRecord['items'] = [];
+  for (const entry of getLinkedIssues(session)) {
+    // Only this extension's links are guest data; the host id never leaves the host.
+    if (entry.kind !== 'guest' || entry.providerId !== guestId) continue;
+    items.push(entry.data === undefined ? { id: entry.identifier } : { id: entry.identifier, data: entry.data });
+  }
+  return items;
+};
+
+const projectSession = (session: CanonicalSession, worktrees: ReadonlyMap<string, GuestWorktree>, guestId: string): GuestSessionRecord => {
   const id = session.sessionId;
   const child = getDirectoryState(session.displayPath);
   const live = useGlobalSessionStatusStore.getState();
@@ -47,11 +58,11 @@ const projectSession = (session: CanonicalSession, worktrees: ReadonlyMap<string
   }
   // The guest SDK has no cancelled outcome; do not label cancellation a failure.
   const outcome = observed?.outcome;
-  return { id, title: session.metadata?.title ?? id, projectId: session.projectId, directory: session.displayPath, parentId: session.parentSessionId ?? null, createdAt: session.createdAt, updatedAt: session.updatedAt, archivedAt: session.archivedAt ?? null, worktree, activity, outcome: activity === 'idle' && (outcome === 'completed' || outcome === 'failed') ? outcome : null, items: [] };
+  return { id, title: session.metadata?.title ?? id, projectId: session.projectId, directory: session.displayPath, parentId: session.parentSessionId ?? null, createdAt: session.createdAt, updatedAt: session.updatedAt, archivedAt: session.archivedAt ?? null, worktree, activity, outcome: activity === 'idle' && (outcome === 'completed' || outcome === 'failed') ? outcome : null, items: guestItems(session, guestId) };
 };
 
 /** Store projection only. Layout-owned sync and topology discovery supply hydration. */
-export const readGuestWorkspace = (query: GuestWorkspaceQuery, _guestId: string): GuestWorkspaceSnapshot => {
+export const readGuestWorkspace = (query: GuestWorkspaceQuery, guestId: string): GuestWorkspaceSnapshot => {
   const projects = useProjectsStore.getState();
   if (query.kind === 'projects') return {
     kind: 'projects', state: projects.serverSnapshotFailed ? 'error' : projects.hasServerSnapshot ? 'ready' : 'loading',
@@ -74,7 +85,7 @@ export const readGuestWorkspace = (query: GuestWorkspaceQuery, _guestId: string)
   const records = new Map<string, CanonicalSession>();
   for (const session of getAllSyncSessionMap().values()) if (session.projectId === query.projectId) records.set(session.sessionId, session);
   const worktreeByPath = new Map(worktrees.map((worktree) => [normalizePath(worktree.directory) ?? worktree.directory, worktree]));
-  return { ...query, state: combinedState([topologyState, ...coverage.map((entry) => entry.state)]), coverage, sessions: [...records.values()].map((session) => projectSession(session, worktreeByPath)) };
+  return { ...query, state: combinedState([topologyState, ...coverage.map((entry) => entry.state)]), coverage, sessions: [...records.values()].map((session) => projectSession(session, worktreeByPath, guestId)) };
 };
 
 type Observer = { listeners: Set<(snapshot: GuestWorkspaceSnapshot) => void>; snapshot: GuestWorkspaceSnapshot; dispose: () => void };

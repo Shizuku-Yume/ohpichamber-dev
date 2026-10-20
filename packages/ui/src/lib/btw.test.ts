@@ -50,7 +50,10 @@ describe('native btw fork and delivery', () => {
     useBtwStore.setState({ byParent: {} });
   });
 
-  test.each([false, true])('keeps completed parent scope and captured selection; send fails=%s', async (fails) => {
+  test.each(['plain', 'command', 'template', 'text', 'failure', 'stale', 'queued', 'send-failure'] as const)('keeps captured Btw scope and native expansion: %s', async (mode) => {
+    const fails = mode === 'send-failure';
+    const question = mode === 'plain' || fails ? 'Side question' : '/side "two words"\n trailing  ';
+    const expanded = mode === 'command' || mode === 'template';
     setSyncRefs(new ChildStoreManager(), '/repo');
     const parent: Session = {
       sessionId: 'parent', rootSessionId: 'parent', workspaceId: 'workspace_parent', projectId: 'project_parent',
@@ -88,21 +91,40 @@ describe('native btw fork and delivery', () => {
     const agentModel = spyOn(selection, 'saveAgentModelForSession').mockImplementation(() => undefined);
     const variant = spyOn(selection, 'saveAgentModelVariantForSession').mockImplementation(() => undefined);
     for (const mock of [ready, read, forkSession, history, patch, title, send, remove, model, agent, agentModel, variant]) restorers.push(() => mock.mockRestore());
+    const requests: Request[] = [];
+    const resolve = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ projectId: 'project_parent', workspaceId: 'workspace_parent', name: 'repo' });
+    const http = spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const request = new Request(new URL(url instanceof Request ? url.url : String(url), 'http://test'), init);
+      requests.push(request);
+      expect(new URL(request.url).pathname).toBe('/api/agent/v1/workspaces/workspace_parent/commands/expand-text');
+      expect(await request.json()).toEqual({ text: question });
+      if (mode === 'failure') return new Response('unavailable', { status: 503 });
+      if (mode === 'stale') useBtwStore.getState().clearPanelState(parent.sessionId);
+      return Response.json(expanded ? { kind: mode, content: '/expanded body\n', modelSelection: { providerId: 'bound', modelId: 'bound-model' }, agentId: 'bound-agent' } : { kind: 'text', content: question });
+    });
+    restorers.push(() => resolve.mockRestore(), () => http.mockRestore());
     const runtimeKey = getRuntimeKey();
     const result = startBtwSession({
-      parentSessionId: parent.sessionId, directory: '/repo', expectedRuntimeKey: runtimeKey, question: 'Side question',
+      parentSessionId: parent.sessionId, directory: '/repo', expectedRuntimeKey: runtimeKey, question, fileResourcesExpanded: mode === 'queued',
       providerId: 'provider_captured', modelId: 'model_captured', agentId: 'agent_captured', variant: 'variant_captured',
       additionalParts: [{ text: 'Requested context' }],
     });
+    if (mode === 'failure' || mode === 'stale') {
+      await expect(result).rejects.toThrow();
+      expect(forkSession).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+      return;
+    }
     if (fails) await expect(result).rejects.toThrow('native delivery failed');
     else expect(await result).toEqual(fork);
+    expect(requests).toHaveLength(mode === 'plain' || fails || mode === 'queued' ? 0 : 1);
     expect(read).toHaveBeenCalledWith(parent.sessionId);
     expect(forkSession).toHaveBeenCalledWith(parent, { messageId: 'assistant_completed', mode: 'selected' });
-    expect(model).toHaveBeenCalledWith(fork.sessionId, 'provider_captured', 'model_captured');
-    expect(agent).toHaveBeenCalledWith(fork.sessionId, 'agent_captured');
+    expect(model).toHaveBeenCalledWith(fork.sessionId, expanded ? 'bound' : 'provider_captured', expanded ? 'bound-model' : 'model_captured');
+    expect(agent).toHaveBeenCalledWith(fork.sessionId, expanded ? 'bound-agent' : 'agent_captured');
     expect(send).toHaveBeenCalledWith({ sessionId: fork.sessionId, runtimeKey, request: {
-      input: { text: 'Side question', attachments: [], context: [{ kind: 'synthetic', text: BTW_BOUNDARY_INSTRUCTION }, { kind: 'instruction', text: 'Requested context' }] },
-      options: { providerId: 'provider_captured', modelId: 'model_captured', agentId: 'agent_captured', variant: 'variant_captured', reasoningEffort: null },
+      input: { text: expanded ? '/expanded body\n' : question, attachments: [], context: [{ kind: 'synthetic', text: BTW_BOUNDARY_INSTRUCTION }, { kind: 'instruction', text: 'Requested context' }] },
+      options: { providerId: expanded ? 'bound' : 'provider_captured', modelId: expanded ? 'bound-model' : 'model_captured', agentId: expanded ? 'bound-agent' : 'agent_captured', variant: 'variant_captured', reasoningEffort: null },
     } });
     expect(metadata.get(fork.sessionId)?.openchamber?.btwBoundaryMessageID).toBe('assistant_completed');
     expect(metadata.get(parent.sessionId)?.openchamber?.btwSessionID).toBe(fails ? undefined : fork.sessionId);

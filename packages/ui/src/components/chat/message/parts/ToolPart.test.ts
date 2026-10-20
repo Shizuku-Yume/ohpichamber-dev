@@ -1,42 +1,30 @@
 import { describe, expect, test } from 'bun:test';
+import type { ToolResultPart } from '@openchamber/agent-contract';
 
-import { getStreamingOutputAppend, getToolOutput, renderTerminalOutput } from './toolOutput';
-import { parseDiffToUnified, tryParseJsonOutput } from '../toolRenderers';
+import { renderTerminalOutput } from './toolOutput';
+import { nativeToolResultContent, parseDiffToUnified, tryParseJsonOutput } from '../toolRenderers';
 import { getStreamingThrottleText } from '../../hooks/useStreamingTextThrottle';
 
-describe('getToolOutput', () => {
-    test('prefers state.output for completed tools', () => {
-        expect(getToolOutput('shell', 'final output', 'partial output', 'completed')).toBe('final output');
+describe('canonical native result content', () => {
+    const result = (output: ToolResultPart['output']): ToolResultPart => ({
+        type: 'tool_result' as const, partId: 'result', toolCallId: 'call', toolName: 'read', isError: false, output,
     });
 
-    test('normalizes completed shell state output while preserving final-output precedence', () => {
-        expect(getToolOutput('shell', '\u001B[32mFinal output\u001B[0m', 'partial output', 'completed')).toBe('Final output');
+    test('decodes SDK text and preserves structured details', () => {
+        expect(nativeToolResultContent(result({ content: [{ type: 'text', text: 'first' }, { type: 'text', text: 'second' }], details: { path: 'src/a.ts' } })))
+            .toEqual({ text: 'first\nsecond', images: [], details: { path: 'src/a.ts' } });
     });
 
-    test('falls back to metadata.output for shell tools without state output', () => {
-        expect(getToolOutput('shell', undefined, 'partial output', 'completed')).toBe('partial output');
+    test('retains image attachments without turning them into text JSON', () => {
+        expect(nativeToolResultContent(result({ content: [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }] })))
+            .toEqual({ text: '', images: [{ mediaType: 'image/png', data: 'aGVsbG8=' }], details: undefined });
     });
 
-    test('normalizes shell metadata output for completed state', () => {
-        expect(getToolOutput('shell', undefined, 'Progress 10%\r\u001B[2KProgress 90%', 'completed')).toBe('Progress 90%');
-    });
-
-    test('does not normalize shell output while running', () => {
-        expect(getToolOutput('shell', '\u001B[32mRunning\u001B[0m', undefined, 'running')).toBe('\u001B[32mRunning\u001B[0m');
-        expect(getToolOutput('shell', undefined, 'Progress\r\u001B[2K', 'running')).toBe('Progress\r\u001B[2K');
-    });
-
-    test('ignores metadata.output for non-shell tools', () => {
-        expect(getToolOutput('read', undefined, 'partial output', 'completed')).toBe(undefined);
-        expect(getToolOutput('read', 'final output', 'partial output', 'completed')).toBe('final output');
-    });
-
-    test('returns undefined when shell has no output', () => {
-        expect(getToolOutput('shell', undefined, undefined, 'completed')).toBe(undefined);
-    });
-
-    test('ignores empty metadata.output for shell', () => {
-        expect(getToolOutput('shell', undefined, '', 'completed')).toBe(undefined);
+    test('preserves unknown content blocks and generic JSON instead of discarding results', () => {
+        expect(nativeToolResultContent(result({ content: [{ type: 'custom', value: 'kept' }] })).text).toContain('kept');
+        expect(nativeToolResultContent(result({ count: 0 })).text).toBe('{"count":0}');
+        expect(nativeToolResultContent(result(null)).text).toBe('null');
+        expect(nativeToolResultContent(result(undefined)).text).toBe('');
     });
 });
 
@@ -128,16 +116,6 @@ describe('renderTerminalOutput', () => {
     });
 });
 
-describe('getStreamingOutputAppend', () => {
-    test('returns only newly appended output', () => {
-        expect(getStreamingOutputAppend('first\n', 'first\nsecond\n')).toBe('second\n');
-    });
-
-    test('requires replacement when output is rewritten or shortened', () => {
-        expect(getStreamingOutputAppend('progress 10%', 'progress 20%')).toBe(undefined);
-        expect(getStreamingOutputAppend('long output', 'short')).toBe(undefined);
-    });
-});
 
 describe('streaming output transitions', () => {
     test('allows shell snapshots to be rewritten or shortened while running', () => {

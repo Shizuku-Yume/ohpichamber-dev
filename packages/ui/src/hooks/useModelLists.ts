@@ -1,9 +1,7 @@
 import React from 'react';
 import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { findCatalogModel, type Model, type Provider } from '@/lib/opencode/model';
-
-// The config store regroups OpenCode v2's flat model list under its provider.
+import type { Model, Provider } from '@openchamber/agent-contract';
 type ProviderModel = Model;
 type ProviderWithModelList = Provider & { models: ProviderModel[] };
 
@@ -31,10 +29,9 @@ export const useModelLists = (directory?: string) => {
   const favoriteModelsList = React.useMemo(() => {
     return favoriteModels
       .map(({ providerID, modelID }) => {
-        const provider = providers.find((p) => p.id === providerID);
-        if (!provider) return null;
-        const model = findCatalogModel(provider.models, modelID);
-        if (!model) return null;
+        const provider = providers.find((p) => p.providerId === providerID);
+        const model = provider?.models.find((entry) => entry.modelId === modelID);
+        if (!provider || !model) return null;
         if (isHidden(providerID, modelID)) return null;
         return { provider, model, providerID, modelID };
       })
@@ -44,10 +41,9 @@ export const useModelLists = (directory?: string) => {
   const recentModelsList = React.useMemo(() => {
     return recentModels
       .map(({ providerID, modelID }) => {
-        const provider = providers.find((p) => p.id === providerID);
-        if (!provider) return null;
-        const model = findCatalogModel(provider.models, modelID);
-        if (!model) return null;
+        const provider = providers.find((p) => p.providerId === providerID);
+        const model = provider?.models.find((entry) => entry.modelId === modelID);
+        if (!provider || !model) return null;
         if (isHidden(providerID, modelID)) return null;
         return { provider, model, providerID, modelID };
       })

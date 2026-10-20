@@ -18,7 +18,6 @@ import {
   SettingsSection, SettingsFieldRow, SettingsStackedField, SETTINGS_CUSTOM_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Icon } from '@/components/icon/Icon';
-import { AgentPermissionsEditor } from './AgentPermissionsEditor';
 
 interface FormState {
   name: string;
@@ -81,10 +80,6 @@ export const AgentsPage: React.FC = () => {
   formRef.current = form;
   const [isCreating, setIsCreating] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
-  const permissionsSaveRef = React.useRef<(() => Promise<AutosaveResult>) | null>(null);
-  const registerPermissionsSave = React.useCallback((routine: (() => Promise<AutosaveResult>) | null) => {
-    permissionsSaveRef.current = routine;
-  }, []);
 
   React.useEffect(() => { void loadAgents(settingsDirectory); }, [loadAgents, settingsDirectory]);
 
@@ -135,9 +130,7 @@ export const AgentsPage: React.FC = () => {
   const save = React.useCallback(async (): Promise<AutosaveResult> => {
     const saved = savedRef.current;
     if (isNewAgent || !selectedAgent || !saved || hydratedSelectionRef.current !== selectionKey) return AUTOSAVE_UNCHANGED;
-    const permissionsResult = permissionsSaveRef.current ? await permissionsSaveRef.current() : AUTOSAVE_UNCHANGED;
-    if (selectionRef.current !== selectionKey) return AUTOSAVE_UNCHANGED;
-    if (!permissionsResult.ok || fieldsEqual(form, saved)) return permissionsResult;
+    if (fieldsEqual(form, saved)) return AUTOSAVE_UNCHANGED;
     const agent = buildAgent(selectedAgent.name);
     const expectedRevision = revisionRef.current;
     if (!agent || expectedRevision === undefined) return autosaveFailed(t('common.unavailable'));
@@ -242,7 +235,7 @@ export const AgentsPage: React.FC = () => {
           placeholder={t('settings.agents.page.field.systemPromptPlaceholder')} rows={8}
           className="w-full font-mono typography-meta min-h-[120px] max-h-[60vh] bg-transparent" />
       </SettingsSection>
-      <SettingsSection title={t('settings.agents.page.section.toolPermissions')} contentClassName="space-y-3">
+      <SettingsSection title={t('settings.agents.page.section.toolPermissions')} settingsItem="agents.permissions" contentClassName="space-y-3">
         <SettingsStackedField label={t('settings.agents.page.field.allowedTools')}>
           <Textarea value={form.allowedTools}
             aria-label={t('settings.agents.page.field.allowedTools')}
@@ -257,9 +250,6 @@ export const AgentsPage: React.FC = () => {
             className="h-8 w-64 px-2" />
         </SettingsFieldRow>
       </SettingsSection>
-      {/* Host config rules remain separate from native allowedTools/presets; W9 execution-policy gap. */}
-      {!isNewAgent && selectedAgent && <AgentPermissionsEditor agent={selectedAgent}
-        registerSave={registerPermissionsSave} requestSave={requestSave} />}
       {isNewAgent && <div className="flex items-center gap-2 pb-8">
         <Button onClick={() => void handleCreate()} disabled={isCreating || !form.name.trim()} size="xs" className="!font-normal">
           {isCreating ? t('settings.common.actions.saving') : t('settings.common.actions.create')}

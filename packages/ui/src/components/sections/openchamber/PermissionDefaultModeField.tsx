@@ -24,18 +24,18 @@ const MODE_ICON = {
 } satisfies Record<PermissionMode, { icon: IconName; color: string | undefined }>;
 
 interface PermissionDefaultModeFieldProps {
-  /** The default agent on this page; its permissions decide what "Ask" covers. */
+  /** The default agent on this page; following the links opens its tool permissions. */
   agentName?: string;
 }
 
 /**
  * The permission mode the server writes onto each new top-level session, as
  * three chips. Each explains itself on hover and the chosen one below the
- * row, with a link to where its behaviour is configured: agent permissions for
- * Ask and Accept, classification providers for the safety net. The safety net
- * chip is disabled while no classification provider can run it, and a saved
- * `safety` default then shows as Ask, which is what such a session does. VS
- * Code has no server to apply a default, so this row is not shown there.
+ * row, with a link to where that mode applies: the default agent's tool
+ * permissions for Ask and Accept, classification providers for the safety net.
+ * The safety net chip is disabled while no classification provider can run it,
+ * and a saved `safety` default then shows as Ask, which is what such a session
+ * does. VS Code has no server to apply a default, so this row is not shown there.
  */
 export const PermissionDefaultModeField: React.FC<PermissionDefaultModeFieldProps> = ({ agentName }) => {
   const { t } = useI18n();
@@ -50,7 +50,7 @@ export const PermissionDefaultModeField: React.FC<PermissionDefaultModeFieldProp
     void updateDesktopSettings({ permissionDefaultMode: value });
   }, [setMode]);
 
-  const openAgentPermissions = React.useCallback(() => {
+  const openToolPermissions = React.useCallback(() => {
     const agent = agentName ?? useConfigStore.getState().currentAgentName;
     if (agent) useAgentsStore.getState().setSelectedAgent(agent);
     useUIStore.getState().requestSettingsJump('agents', 'agents.permissions');
@@ -82,7 +82,7 @@ export const PermissionDefaultModeField: React.FC<PermissionDefaultModeFieldProp
       <>
         {value === 'auto' ? t('settings.sessions.permissions.explain.auto') : t('settings.sessions.permissions.explain.ask')}
         {' '}
-        <SettingsInlineLink onClick={openAgentPermissions}>{t('settings.sessions.permissions.agentPermissionsLink')}</SettingsInlineLink>
+        <SettingsInlineLink onClick={openToolPermissions}>{t('settings.agents.page.section.toolPermissions')}</SettingsInlineLink>
       </>
     );
   };

@@ -122,10 +122,10 @@ describe('renderGuestToolHeader', () => {
 });
 
 describe('guestToolTableRows', () => {
-  test('takes the array itself or its items', () => {
-    expect(guestToolTableRows([{ id: 1 }])).toEqual([{ id: 1 }]);
-    expect(guestToolTableRows({ items: [{ id: 1 }], total: 1 })).toEqual([{ id: 1 }]);
-    expect(guestToolTableRows({ rows: [] })).toBeNull();
+  test('parses JSON text for the array itself or its items', () => {
+    expect(guestToolTableRows('[{"id":1}]')).toEqual([{ id: 1 }]);
+    expect(guestToolTableRows('{"items":[{"id":1}],"total":1}')).toEqual([{ id: 1 }]);
+    expect(guestToolTableRows('{"rows":[]}')).toBeNull();
     expect(guestToolTableRows('text')).toBeNull();
-  });
+   });
 });

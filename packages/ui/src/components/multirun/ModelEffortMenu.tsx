@@ -3,8 +3,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import { listModelVariantIds } from '@/lib/modelVariants';
-import { findCatalogModel } from '@/lib/opencode/model';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 
@@ -23,8 +21,8 @@ export function ModelEffortMenu({ providerId, modelId, variant, onChange, appear
 }): React.ReactNode {
   const { t } = useI18n();
   const variants = useConfigStore(React.useCallback((state) => {
-    const model = findCatalogModel(state.providers.find((provider) => provider.id === providerId)?.models, modelId);
-    return listModelVariantIds(model?.variants).join('\n');
+    const model = state.providers.find((provider) => provider.providerId === providerId)?.models.find((entry) => entry.modelId === modelId);
+    return model?.variants.map((entry) => entry.variant).join('\n') ?? '';
   }, [modelId, providerId]));
   if (!variants) return null;
   const label = variant ?? t('multirun.modelMultiSelect.variant.default');

@@ -30,44 +30,39 @@ export const SnippetsPage: React.FC = () => {
 
   const selectedSnippet = React.useMemo(
     () => selectedSnippetName
-      ? snippets.find((snippet) => snippet.name === selectedSnippetName || snippet.aliases.includes(selectedSnippetName)) ?? null
+      ? snippets.find((snippet) => snippet.templateId === selectedSnippetName) ?? null
       : null,
     [selectedSnippetName, snippets],
   );
   const isNew = Boolean(snippetDraft && snippetDraft.name === selectedSnippetName && !selectedSnippet);
   const [draftName, setDraftName] = React.useState('');
-  const [draftScope, setDraftScope] = React.useState<SnippetScope>('global');
+  const [draftScope, setDraftScope] = React.useState<SnippetScope>('agent');
   const [description, setDescription] = React.useState('');
-  const [aliases, setAliases] = React.useState('');
   const [content, setContent] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
-  const initialStateRef = React.useRef<{ draftName: string; draftScope: SnippetScope; description: string; aliases: string; content: string } | null>(null);
+  const initialStateRef = React.useRef<{ draftName: string; draftScope: SnippetScope; description: string; content: string } | null>(null);
 
   React.useEffect(() => {
     if (isNew && snippetDraft) {
       const next = {
         draftName: snippetDraft.name || '',
-        draftScope: snippetDraft.scope || 'global',
+        draftScope: snippetDraft.scope,
         description: snippetDraft.description || '',
-        aliases: (snippetDraft.aliases || []).join(', '),
         content: snippetDraft.content || '',
       };
       setDraftName(next.draftName);
       setDraftScope(next.draftScope);
       setDescription(next.description);
-      setAliases(next.aliases);
       setContent(next.content);
       initialStateRef.current = next;
     } else if (selectedSnippet) {
       const next = {
         draftName: '',
-        draftScope: 'global' as SnippetScope,
-        description: selectedSnippet.description ?? '',
-        aliases: selectedSnippet.aliases.join(', '),
+        draftScope: selectedSnippet.scope === 'workspace' ? 'workspace' as const : 'agent' as const,
+        description: selectedSnippet.description,
         content: selectedSnippet.content,
       };
       setDescription(next.description);
-      setAliases(next.aliases);
       setContent(next.content);
       initialStateRef.current = next;
     }
@@ -78,8 +73,8 @@ export const SnippetsPage: React.FC = () => {
     if (!initial) return false;
     if (isNew && draftName !== initial.draftName) return true;
     if (isNew && draftScope !== initial.draftScope) return true;
-    return description !== initial.description || aliases !== initial.aliases || content !== initial.content;
-  }, [aliases, content, description, draftName, draftScope, isNew]);
+    return description !== initial.description || content !== initial.content;
+  }, [content, description, draftName, draftScope, isNew]);
 
   const handleSave = async () => {
     const snippetName = isNew ? draftName.trim().replace(/\s+/g, '-') : selectedSnippetName?.trim();
@@ -93,13 +88,12 @@ export const SnippetsPage: React.FC = () => {
       return;
     }
 
-    const parsedAliases = aliases.split(',').map((alias) => alias.trim()).filter(Boolean);
 
     setIsSaving(true);
     try {
       const success = isNew
-        ? await createSnippet(snippetName, content, { aliases: parsedAliases, description, scope: draftScope })
-        : await updateSnippet(snippetName, { content, aliases: parsedAliases, description });
+        ? await createSnippet(snippetName, content, { description, scope: draftScope })
+        : await updateSnippet(snippetName, { content, description });
       if (!success) {
         toast.error(t('settings.snippets.page.toast.saveFailed'));
         return;
@@ -125,13 +119,13 @@ export const SnippetsPage: React.FC = () => {
 
   return (
     <SettingsPageLayout
-      title={isNew ? t('settings.snippets.page.title.new') : `#${selectedSnippetName}`}
-      description={selectedSnippet ? selectedSnippet.filePath : undefined}
+      title={isNew ? t('settings.snippets.page.title.new') : `/${selectedSnippet?.name ?? ''}`}
+      description={selectedSnippet?.source}
       showSaveStatus={false}
     >
       <SettingsSection divider={false} contentClassName="space-y-0">
         {isNew ? (
-          <SettingsFieldRow label="#">
+          <SettingsFieldRow label="/">
             <Input
               value={draftName}
               onChange={(e) => setDraftName(e.target.value)}
@@ -143,8 +137,8 @@ export const SnippetsPage: React.FC = () => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent align="end">
-                <SelectItem value="global">{t('settings.common.scope.global')}</SelectItem>
-                <SelectItem value="project">{t('settings.common.scope.project')}</SelectItem>
+                <SelectItem value="agent">{t('settings.common.scope.global')}</SelectItem>
+                <SelectItem value="workspace">{t('settings.common.scope.project')}</SelectItem>
               </SelectContent>
             </Select>
           </SettingsFieldRow>
@@ -152,16 +146,9 @@ export const SnippetsPage: React.FC = () => {
         <SettingsStackedField label={t('settings.common.field.description')}>
           <Input
             value={description}
+            readOnly={!isNew && !selectedSnippet?.editable}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('settings.snippets.page.field.descriptionPlaceholder')}
-            className="h-7 w-full max-w-sm px-2"
-          />
-        </SettingsStackedField>
-        <SettingsStackedField label={t('settings.snippets.page.field.aliases')}>
-          <Input
-            value={aliases}
-            onChange={(e) => setAliases(e.target.value)}
-            placeholder={t('settings.snippets.page.field.aliasesPlaceholder')}
             className="h-7 w-full max-w-sm px-2"
           />
         </SettingsStackedField>
@@ -172,9 +159,9 @@ export const SnippetsPage: React.FC = () => {
           <span className="typography-ui-label text-foreground">{t('settings.snippets.page.field.content')}</span>
           <SettingsInfoHint>{t('settings.snippets.page.hint')}</SettingsInfoHint>
         </div>
-        <Textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('settings.snippets.page.field.contentPlaceholder')} rows={12} className="mt-1.5 w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent" />
+        <Textarea readOnly={!isNew && !selectedSnippet?.editable} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('settings.snippets.page.field.contentPlaceholder')} rows={12} className="mt-1.5 w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent" />
         <div className="pt-3">
-          <Button onClick={handleSave} disabled={isSaving || !isDirty} size="xs" className="!font-normal">
+          <Button onClick={handleSave} disabled={isSaving || !isDirty || (!isNew && !selectedSnippet?.editable)} size="xs" className="!font-normal">
             {isSaving ? t('settings.common.actions.saving') : t('settings.common.actions.saveChanges')}
           </Button>
         </div>

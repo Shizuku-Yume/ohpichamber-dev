@@ -1,8 +1,3 @@
-export interface Snippet {
-  name: string;
-  content: string;
-  aliases: string[];
-  description?: string;
-  filePath: string;
-  source: 'global' | 'project';
-}
+import type { PromptTemplateEntry } from '@openchamber/agent-contract';
+
+export type Snippet = PromptTemplateEntry;

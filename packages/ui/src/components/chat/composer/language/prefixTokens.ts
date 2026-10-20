@@ -1,5 +1,5 @@
 /**
- * The composer's prefix-token grammar: `/command`, `$skill` and `#snippet`.
+ * The composer's prefix-token grammar: native `/command`, `/template` and `$skill`.
  *
  * Structurally these are the same construct — a sigil at a word boundary
  * followed by an identifier — and they were previously scanned by three
@@ -17,14 +17,13 @@
  */
 
 /**
- * Identifier body shared by all prefix tokens: starts alphanumeric, then
- * alphanumerics, `-` and `_`. Kept in one place so the sigils cannot drift
- * apart again.
+ * Native identifiers include Unicode names, dot/hyphen/underscore and grouped
+ * relative slash names. Catalog membership, not syntax, determines existence.
  */
-const TOKEN_NAME = '[A-Za-z0-9][A-Za-z0-9_-]*';
+const TOKEN_NAME = '[\\p{L}\\p{N}_][\\p{L}\\p{N}_.-]*(?:/[\\p{L}\\p{N}_][\\p{L}\\p{N}_.-]*)*';
 
 /** Sigils that introduce a prefix token: commands, skills, snippets. */
-export type TokenPrefix = '/' | '$' | '#';
+export type TokenPrefix = '/' | '$';
 
 export interface PrefixToken {
     /** Offset of the sigil. */
@@ -38,9 +37,8 @@ export interface PrefixToken {
 }
 
 const SCANNERS: Record<TokenPrefix, RegExp> = {
-    '/': new RegExp(`(^|\\s)\\/(${TOKEN_NAME})`, 'g'),
-    '$': new RegExp(`(^|\\s)\\$(${TOKEN_NAME})`, 'g'),
-    '#': new RegExp(`(^|\\s)#(${TOKEN_NAME})`, 'g'),
+    '/': new RegExp(`(^|\\s)\\/(${TOKEN_NAME})`, 'gu'),
+    '$': new RegExp(`(^|\\s)\\$(${TOKEN_NAME})`, 'gu'),
 };
 
 /**

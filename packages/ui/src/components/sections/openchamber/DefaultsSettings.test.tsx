@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { DesktopSettings } from '@/lib/desktop';
+import type { Agent } from '@openchamber/agent-contract';
 
 type ProviderState = {
   id: string;
@@ -24,7 +25,6 @@ type ConfigState = {
   setSettingsDefaultAgent: () => void;
   selectionSource: 'auto';
   agentSelectionSource: 'auto';
-  agents: Array<{ name: string; model?: { providerID: string; id: string } }>;
   currentAgentName: string | undefined;
 };
 
@@ -41,9 +41,11 @@ const configState: ConfigState = {
   setSettingsDefaultAgent: () => undefined,
   selectionSource: 'auto',
   agentSelectionSource: 'auto',
-  agents: [],
   currentAgentName: undefined,
 };
+
+const agents: Agent[] = [];
+const agentState: { agentsByDirectory: Record<string, Agent[]> } = { agentsByDirectory: {} };
 
 const settingsState = {
   showDeletionDialog: false,
@@ -59,11 +61,18 @@ const sessionState = { currentSessionId: null } satisfies { currentSessionId: st
 let savedSettings: DesktopSettings | null = null;
 const updateCalls: Array<Partial<DesktopSettings>> = [];
 
+mock.module('@/stores/useAgentsStore', () => ({
+  selectAgentsForDirectory: (state: typeof agentState, directory?: string | null) => state.agentsByDirectory[directory ?? '__default__'] ?? agents,
+  useAgentsStore: <T,>(selector: (state: typeof agentState) => T): T => selector(agentState),
+}));
 mock.module('@/stores/useConfigStore', () => ({
   useConfigStore: <T,>(selector: (state: ConfigState) => T): T => selector(configState),
 }));
 mock.module('@/stores/useUIStore', () => ({
   useUIStore: <T,>(selector: (state: typeof settingsState) => T): T => selector(settingsState),
+}));
+mock.module('@/stores/useSessionDisplayStore', () => ({
+  useSessionDisplayStore: <T,>(selector: (state: typeof settingsState) => T): T => selector(settingsState),
 }));
 mock.module('@/sync/selection-store', () => ({
   useSelectionStore: <T,>(selector: (state: typeof selectionState) => T): T => selector(selectionState),
@@ -78,6 +87,7 @@ mock.module('@/api/canonicalClient', () => ({
       canonicalProviderCalls.push(workspaceId);
       return { workspaceId, revision: '1', providers: canonicalProviders };
     },
+    readCacheWarming: async (workspaceId: string) => ({ workspaceId, revision: '1', mode: 'off' }),
   },
 }));
 mock.module('@/hooks/useSettingsDirectory', () => ({ useSettingsDirectory: () => '/settings/project' }));
@@ -91,16 +101,8 @@ mock.module('@/lib/persistence', () => ({
   },
   reportSettingsSaveState: () => {},
 }));
-const opencodeModule = await import('@/lib/opencode/client');
-mock.module('@/lib/opencode/client', () => ({
-  ...opencodeModule,
-  opencodeClient: { getConfig: async () => ({ warming: false }) },
-}));
 mock.module('@/lib/i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
-}));
-mock.module('@/components/chat/mobileControlsUtils', () => ({
-  isPrimaryMode: (mode: string | undefined) => mode === 'primary',
 }));
 mock.module('@/components/sections/agents/ModelSelector', () => ({
   ModelSelector: () => <button type="button">model</button>,

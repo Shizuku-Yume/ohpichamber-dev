@@ -10,6 +10,7 @@ import { setSyncRefs } from '@/sync/sync-refs';
 import { applyGlobalSessionStatusEvent, replaceGlobalSessionStatusById } from '@/sync/global-session-status';
 import { readGuestWorkspace, observeGuestWorkspace } from './workspace';
 import { guestMay } from './capabilities';
+import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedLinearIssue } from '@/lib/linkedIssues';
 
 const session = (sessionId: string, displayPath: string, projectId: string): Session => ({
   sessionId, projectId, workspaceId: `workspace-${projectId}`, displayPath, rootSessionId: sessionId,
@@ -57,6 +58,28 @@ describe('extension workspace projection', () => {
       }
       expect(fetch.mock.calls.length).toBe(0);
     } finally { fetch.mockRestore(); }
+  });
+  test('projects only the subscribing guest linked items with guest-visible ids and data', () => {
+    const linkedIssues: NonNullable<NonNullable<Session['metadata']>['openchamber']>['linked_issues'] = [
+      buildLinkedGuestIssue({ providerId: 'board', identifier: 'ITEM-1', title: 'Mine', url: 'https://guest.example/1', data: { column: 'todo', labels: ['a'] }, linkedAt: 2 }),
+      buildLinkedGuestIssue({ providerId: 'other', identifier: 'ITEM-2', title: 'Theirs', url: 'https://guest.example/2', data: { secret: true }, linkedAt: 3 }),
+      buildLinkedIssue({ number: 7, title: 'Issue', url: 'https://github.com/acme/widgets/issues/7', kind: 'issue', linkedAt: 4 }),
+      buildLinkedLinearIssue({ identifier: 'ENG-1', title: 'Linear', url: 'https://linear.app/acme/ENG-1', linkedAt: 5 }),
+      buildLinkedGuestIssue({ providerId: 'board', identifier: 'ITEM-3', title: 'No data', url: 'https://guest.example/3', linkedAt: 6 }),
+    ];
+    const bSession = { ...session('b-session', '/b-tree', 'b'), metadata: { title: 'b-session', openchamber: { linked_issues: linkedIssues } } };
+    manager.ensureChild('/b-tree', { bootstrap: false }).setState({ session: [bSession] });
+
+    const own = readB().sessions[0].items;
+    expect(own).toEqual([
+      { id: 'ITEM-1', data: { column: 'todo', labels: ['a'] } },
+      { id: 'ITEM-3' },
+    ]);
+    expect('data' in own[1]).toBe(false);
+
+    const other = readGuestWorkspace({ kind: 'sessions', projectId: 'b' }, 'other');
+    if (other.kind !== 'sessions') throw new Error('Expected sessions');
+    expect(other.sessions[0].items).toEqual([{ id: 'ITEM-2', data: { secret: true } }]);
   });
   test('live outcomes work with canonical status events and distinguish turn outcomes', () => {
     useConfigStore.setState({ isConnected: true });

@@ -1,12 +1,14 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useChatSessionSelection } from './chatColumnSession';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useSelectionStore } from '@/sync/selection-store';
+import { useChatSessionSelection } from './chatColumnSession';
 import { getAgentDisplayName } from './mobileControlsUtils';
 import { useAgentColors } from '@/hooks/useAgentColors';
 import { isAutoModel } from '@/lib/routing/autoModel';
-
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useI18n } from '@/lib/i18n';
 interface MobileAgentButtonProps {
     onCycleAgent: () => void;
     onOpenAgentPanel: () => void;
@@ -17,19 +19,20 @@ const LONG_PRESS_MS = 500;
 
 // NOTE: Use pointer events instead of onClick to keep soft keyboard open on mobile
 export const MobileAgentButton: React.FC<MobileAgentButtonProps> = ({ onCycleAgent, onOpenAgentPanel, className }) => {
-    const getAgentColor = useAgentColors();
+    const { t } = useI18n();
+    const directory = useEffectiveDirectory();
+    const getAgentColor = useAgentColors(directory);
     const currentAgentName = useConfigStore((state) => state.currentAgentName);
     const currentProviderId = useConfigStore((state) => state.currentProviderId);
     const currentModelId = useConfigStore((state) => state.currentModelId);
-    const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
+    const agents = useAgentsStore((state) => selectAgentsForDirectory(state, directory ?? null));
     const currentSessionId = useChatSessionSelection().sessionId;
     const sessionAgentName = useSelectionStore((state) =>
         currentSessionId ? state.getSessionAgentSelection(currentSessionId) : null
     );
 
-    const agents = getVisibleAgents();
     const uiAgentName = currentSessionId ? (sessionAgentName || currentAgentName) : currentAgentName;
-    const agentLabel = getAgentDisplayName(agents, uiAgentName);
+    const agentLabel = getAgentDisplayName(agents, uiAgentName, t('chat.modelControls.selectAgent'));
     const agentColor = getAgentColor(uiAgentName);
 
     const longPressTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);

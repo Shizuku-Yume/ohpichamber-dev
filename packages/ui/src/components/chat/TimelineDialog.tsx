@@ -14,11 +14,10 @@ import { useChatSessionSelection } from './chatColumnSession';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
-import type { Part } from '@openchamber/agent-contract';
+import { getFullText, getPromptPreviewText } from './lib/messagePreview';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 
-const getFullText = (parts: Part[]): string => parts.filter((part) => part.type === 'text').map((part) => part.content).join('\n');
 
 interface TimelineDialogProps {
     open: boolean;
@@ -350,7 +349,7 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                         </div>
                     ) : (
                         filteredMessages.map(({ message }, index) => {
-                            const preview = getFullText(message.parts) || message.parts.filter((part) => part.type === 'attachment').map((part) => part.name).join(', ');
+                            const preview = getPromptPreviewText(message.parts, t);
                             const timestamp = message.createdAt;
                             const dateGroup = formatDateGroup(timestamp);
                             const previous = filteredMessages[index - 1];

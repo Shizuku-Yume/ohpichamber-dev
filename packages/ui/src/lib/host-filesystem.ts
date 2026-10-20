@@ -368,7 +368,6 @@ class HostFilesystem {
           includeHidden: String(options?.includeHidden ?? false),
           respectGitignore: String(options?.respectGitignore ?? true),
         },
-        headers: directory ? { 'x-opencode-directory': encodeURIComponent(directory) } : undefined,
         signal: controller.signal,
       })
       if (!response.ok) throw new Error(errorSchema.safeParse(await response.json().catch(() => null)).data?.error || 'Failed to search files')

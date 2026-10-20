@@ -3,7 +3,7 @@ import type { Message, Part, StepSummaryPart } from '@openchamber/agent-contract
 import { useSessionUIStore, getRememberedSessionDirectory } from '@/sync/session-ui-store';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { opencodeClient } from '@/lib/opencode/client';
+import { canonicalClient } from '@/api/canonicalClient';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
@@ -18,14 +18,29 @@ import {
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 import { getRecentSendFailures, type SendFailureRecord } from '@/sync/send-failure-log';
 import { getRecentSessionErrors, type SessionErrorRecord } from '@/sync/session-error-log';
-import { buildOpenCodeStatusReport } from '@/lib/openCodeStatus';
+import { buildRuntimeStatusReport } from '@/lib/runtimeStatus';
 import { getAttachedSessionDirectory } from '@/sync/session-worktree-contract';
 import { useStreamingStore } from '@/sync/streaming';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
 const DebugLocationSchema = z.object({ directory: z.string().optional(), worktree: z.string().optional() });
-const DebugHealthSchema = z.record(z.string(), z.unknown());
+const DebugHostHealthSchema = z.object({
+  status: z.string(),
+  openchamberVersion: z.string().optional(),
+  runtime: z.string().optional(),
+  agentService: z.object({ phase: z.string(), pid: z.number().nullable(), port: z.number().nullable() }).optional(),
+});
+type DebugHostHealthReport =
+  | {
+      status: number;
+      ok: boolean;
+      hostStatus: string | null;
+      version: string | null;
+      runtime: string | null;
+      agentService: z.infer<typeof DebugHostHealthSchema>['agentService'] | null;
+    }
+  | { error: string };
 
 
 type SessionDirectoryReport = {
@@ -43,7 +58,7 @@ type SessionDirectoryReport = {
     rememberedForRuntime: string | null;
     persistedAcrossRestarts: string | null;
     activeDirectory: string | null;
-    opencodeClientDirectory: string | null;
+    hostDirectory: string | null;
   };
 };
 
@@ -69,7 +84,8 @@ type AppStatusReport = {
   worktrees: Record<string, unknown>;
   git: { isGitRepo: boolean | null; error?: string };
   localStorage: Record<string, unknown>;
-  opencode: Record<string, unknown>;
+  host: Record<string, unknown>;
+  agentService: Record<string, unknown>;
   openchamber: Record<string, unknown>;
   recentSendFailures: SendFailureRecord[];
   recentSessionErrors: SessionErrorRecord[];
@@ -241,7 +257,7 @@ export const debugUtils = {
     const sessionState = useSessionUIStore.getState();
     const projectsState = useProjectsStore.getState();
     const currentDirectory = directoryState.currentDirectory || null;
-    const opencodeDirectory = hostFilesystem.getDirectory() ?? null;
+    const hostDirectory = hostFilesystem.getDirectory() ?? null;
 
     const sessions = getSyncSessions();
     const sessionDirectories = new Set<string>();
@@ -286,13 +302,6 @@ export const debugUtils = {
       }
     };
 
-    const safeText = async (resp: Response) => {
-      try {
-        return await resp.text();
-      } catch {
-        return null;
-      }
-    };
 
     const safeFetchJson = async (url: string): Promise<unknown> => {
       try {
@@ -306,55 +315,49 @@ export const debugUtils = {
     let pathInfo: unknown = null;
     let projectInfo: unknown = null;
     let settingsInfo: unknown = null;
-    let opencodeHealth: unknown = null;
+    let hostHealth: DebugHostHealthReport | null = null;
+    let agentServiceReadiness: { ready: boolean; error?: string } = { ready: false };
 
-    try {
-      pathInfo = await opencodeClient.getLocation(currentDirectory);
-    } catch (error) {
-      pathInfo = { error: error instanceof Error ? error.message : String(error) };
+    if (currentDirectory) {
+      try {
+        const workspace = await canonicalClient.resolveWorkspace(currentDirectory);
+        pathInfo = {
+          directory: currentDirectory,
+          worktree: workspace.displayPath,
+          workspaceId: workspace.workspaceId,
+          projectId: workspace.projectId,
+        };
+      } catch (error) {
+        pathInfo = { error: error instanceof Error ? error.message : String(error) };
+      }
+    } else {
+      pathInfo = { error: 'No active workspace directory' };
     }
     const locationInfo = DebugLocationSchema.safeParse(pathInfo).data;
-
-    try {
-      projectInfo = await opencodeClient.getCurrentProject(currentDirectory);
-    } catch (error) {
-      projectInfo = { error: error instanceof Error ? error.message : String(error) };
-    }
+    projectInfo = projectsState.getActiveProject();
 
     settingsInfo = await safeFetchJson('/api/config/settings');
 
     try {
-      // OpenChamber's own health route. Every field read below
-      // (`openCodePort`, `openCodeRunning`, `isOpenCodeReady`, ...) is
-      // OpenChamber's; OpenCode 2.0.8 removed `/api/health` entirely.
       const resp = await runtimeFetch('/health');
-      const contentType = resp.headers.get('content-type') || '';
-      const body = await safeText(resp);
-      const isJson = contentType.toLowerCase().includes('application/json');
-      let parsed: Record<string, unknown> | null = null;
-      if (isJson && body) {
-        try {
-          const candidate: unknown = JSON.parse(body);
-          parsed = DebugHealthSchema.safeParse(candidate).data ?? null;
-        } catch {
-          parsed = null;
-        }
-      }
-      opencodeHealth = {
+      const body = await safeJson(resp);
+      const health = DebugHostHealthSchema.safeParse(body).data;
+      hostHealth = {
         status: resp.status,
         ok: resp.ok,
-        contentType,
-        type: isJson ? 'json' : 'html',
-        openCodePort: parsed?.openCodePort ?? null,
-        openCodeRunning: parsed?.openCodeRunning ?? null,
-        openCodeSecureConnection: parsed?.openCodeSecureConnection ?? null,
-        openCodeAuthSource: parsed?.openCodeAuthSource ?? null,
-        isOpenCodeReady: parsed?.isOpenCodeReady ?? null,
-        lastOpenCodeError: parsed?.lastOpenCodeError ?? null,
-        preview: body ? body.slice(0, 120) : null,
+        hostStatus: health?.status ?? null,
+        version: health?.openchamberVersion ?? null,
+        runtime: health?.runtime ?? null,
+        agentService: health?.agentService ?? null,
       };
     } catch (error) {
-      opencodeHealth = { error: error instanceof Error ? error.message : String(error) };
+      hostHealth = { error: error instanceof Error ? error.message : String(error) };
+    }
+
+    try {
+      agentServiceReadiness = { ready: await canonicalClient.checkReady() };
+    } catch {
+      agentServiceReadiness = { ready: false, error: 'readiness request failed' };
     }
 
     let gitCheck: { isGitRepo: boolean | null; error?: string } = { isGitRepo: null };
@@ -390,9 +393,9 @@ export const debugUtils = {
         : null,
       directories: {
         currentDirectory,
-        opencodeDirectory: locationInfo?.directory
+        hostDirectory: locationInfo?.directory
           || locationInfo?.worktree
-          || opencodeDirectory,
+          || hostDirectory,
         homeDirectory: directoryState.homeDirectory || null,
         isHomeReady: directoryState.isHomeReady,
         hasPersistedDirectory: directoryState.hasPersistedDirectory,
@@ -417,11 +420,12 @@ export const debugUtils = {
       },
       git: gitCheck,
       localStorage: localStorageSnapshot,
-      opencode: {
+      host: {
         pathInfo,
         projectInfo,
-        health: opencodeHealth,
+        health: hostHealth,
       },
+      agentService: agentServiceReadiness,
       openchamber: {
         settingsInfo,
       },
@@ -429,8 +433,7 @@ export const debugUtils = {
       // this session, so a "my message disappeared" report is not a rejected
       // send and needs a different explanation.
       recentSendFailures: getRecentSendFailures(),
-      // Same reasoning: empty means OpenCode reported no failed turn in this
-      // app session.
+      // Same reasoning: empty means this app session recorded no session error.
       recentSessionErrors: getRecentSessionErrors(),
       currentSessionDirectoryResolution: sessionState.currentSessionId
         ? this.diagnoseSessionDirectory(sessionState.currentSessionId)
@@ -442,11 +445,11 @@ export const debugUtils = {
   },
 
   /**
-   * The same text the status report dialog ("Show OpenCode status") shows, for a
-   * console or remote session that cannot press the shortcut.
+   * The same text the Runtime Status dialog shows, for a console or remote
+   * session that cannot open the dialog.
    */
   async statusReport(): Promise<string> {
-    const text = await buildOpenCodeStatusReport();
+    const text = await buildRuntimeStatusReport();
     console.log(text);
     return text;
   },
@@ -520,7 +523,7 @@ export const debugUtils = {
         rememberedForRuntime: remembered.runtime,
         persistedAcrossRestarts: remembered.persisted,
         activeDirectory: useDirectoryStore.getState().currentDirectory ?? null,
-        opencodeClientDirectory: hostFilesystem.getDirectory() ?? null,
+        hostDirectory: hostFilesystem.getDirectory() ?? null,
       },
     };
 

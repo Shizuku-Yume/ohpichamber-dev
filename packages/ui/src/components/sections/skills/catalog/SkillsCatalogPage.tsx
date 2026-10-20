@@ -23,7 +23,7 @@ import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { toast } from '@/components/ui';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
-import type { SkillsCatalogItem, SkillsCatalogSource } from '@/lib/api/types';
+import type { SkillsCatalogItem, SkillsCatalogSource } from '@/stores/useSkillsCatalogStore';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 
@@ -205,8 +205,11 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
   const settingsDirectory = useSettingsDirectory();
 
   React.useEffect(() => {
+    setSelectedSkillKeys(new Set());
+    setUninstallItems([]);
+    setInstallDialogOpen(false);
     void loadCatalog();
-  }, [loadCatalog]);
+  }, [loadCatalog, settingsDirectory]);
 
   // Load every source in the background so global search covers all of them.
   React.useEffect(() => {
@@ -324,9 +327,9 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     const remaining: SkillsCatalogItem[] = [];
     const refreshedSources = new Set<string>();
     for (const item of uninstallItems) {
-      const directory = item.installed?.scope === 'project' ? settingsDirectory : null;
-      const success = (item.installed?.scope !== 'project' || Boolean(directory))
-        && await deleteSkill(item.skillName, directory);
+      const directory = settingsDirectory;
+      const badge = item.installed;
+      const success = directory && badge.isInstalled ? await deleteSkill({ scope: badge.scope, authoredSkillId: badge.authoredSkillId }, directory) : false;
       if (success) {
         refreshedSources.add(item.sourceId);
         setSelectedSkillKeys((current) => {
@@ -616,7 +619,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
               <div className="divide-y divide-[var(--surface-subtle)]">
                 {filtered.map((item) => {
                   const installed = item.installed?.isInstalled;
-                  const installedScope = item.installed?.scope;
+                  const installedScope = item.installed.isInstalled ? t(item.installed.scope === 'workspace' ? 'settings.skills.sidebar.section.project' : 'settings.skills.sidebar.section.user') : null;
                   const skillUrl = getSkillUrl(item);
 
                   return (

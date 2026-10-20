@@ -9,6 +9,7 @@ const emptyPersonal = {
   setupWorktree: [],
   setupWorktreeWait: null,
   setupWorktreeMode: 'append',
+  worktreeDirectory: null,
   projectActions: [],
   projectActionsPrimaryId: null,
   draftStarters: [],
@@ -86,6 +87,7 @@ const {
   getWorktreeSetupCommands,
   getWorktreeSetupWaitEnabled,
   saveProjectActionsState,
+  saveProjectWorktreeDirectory,
   saveWorktreeSetupCommands,
   updateSharedProjectSetup,
 } = await import('./openchamberConfig');
@@ -156,6 +158,19 @@ describe('project config client', () => {
     expect(await getWorktreeSetupCommands(project)).toEqual(['bun install']);
   });
 
+  test('keeps the personal worktree directory as typed and clears it when emptied', async () => {
+    stored = { ...emptyPersonal, worktreeDirectory: '~/code/worktrees' };
+    expect((await getProjectSetup(project)).personal.worktreeDirectory).toBe('~/code/worktrees');
+
+    expect(await saveProjectWorktreeDirectory(project, '../team worktrees')).toBe(true);
+    expect(requests[0].body).toEqual({ worktreeDirectory: '../team worktrees', projectPath: project.path });
+    expect((await getProjectSetup(project)).personal.worktreeDirectory).toBe('../team worktrees');
+
+    expect(await saveProjectWorktreeDirectory(project, '   ')).toBe(true);
+    expect(requests[2].body).toEqual({ worktreeDirectory: null, projectPath: project.path });
+    expect((await getProjectSetup(project)).personal.worktreeDirectory).toBeNull();
+  });
+
   test('parses the personal starters defensively from the response', async () => {
     stored = { ...emptyPersonal, draftStarters: [{ type: 'skill', name: 'triage-prs' }, { type: 'bogus', name: 'x' }] };
     expect((await getProjectSetup(project)).personal.draftStarters).toEqual([{ type: 'skill', name: 'triage-prs' }]);
@@ -183,6 +198,7 @@ describe('project config client', () => {
     expect(await getWorktreeSetupWaitEnabled(project)).toBe(false);
     expect(await getProjectActionsState(project)).toEqual({ actions: [], primaryActionId: null });
     expect(await saveWorktreeSetupCommands(project, ['x'])).toBe(false);
+    expect(await saveProjectWorktreeDirectory(project, '~/worktrees')).toBe(false);
   });
 
   test('a response with an unexpected shape is not trusted', async () => {

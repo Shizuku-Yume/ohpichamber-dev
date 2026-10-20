@@ -866,8 +866,8 @@ interface UIStore {
   isCommandPaletteOpen: boolean;
   isHelpDialogOpen: boolean;
   isAboutDialogOpen: boolean;
-  isOpenCodeStatusDialogOpen: boolean;
-  openCodeStatusText: string;
+  isRuntimeStatusDialogOpen: boolean;
+  runtimeStatusText: string;
   isSessionCreateDialogOpen: boolean;
   isScheduledTasksDialogOpen: boolean;
   isArchivePageOpen: boolean;
@@ -1153,8 +1153,8 @@ interface UIStore {
   toggleHelpDialog: () => void;
   setHelpDialogOpen: (open: boolean) => void;
   setAboutDialogOpen: (open: boolean) => void;
-  setOpenCodeStatusDialogOpen: (open: boolean) => void;
-  setOpenCodeStatusText: (text: string) => void;
+  setRuntimeStatusDialogOpen: (open: boolean) => void;
+  setRuntimeStatusText: (text: string) => void;
   setSessionCreateDialogOpen: (open: boolean) => void;
   setScheduledTasksDialogOpen: (open: boolean) => void;
   /** `search` fills the page's search field, for a sidebar search that found nothing. */
@@ -1369,8 +1369,8 @@ export const useUIStore = create<UIStore>()(
         isCommandPaletteOpen: false,
         isHelpDialogOpen: false,
         isAboutDialogOpen: false,
-        isOpenCodeStatusDialogOpen: false,
-        openCodeStatusText: '',
+        isRuntimeStatusDialogOpen: false,
+        runtimeStatusText: '',
         isSessionCreateDialogOpen: false,
         isScheduledTasksDialogOpen: false,
         isArchivePageOpen: false,
@@ -2208,12 +2208,12 @@ export const useUIStore = create<UIStore>()(
           set({ isAboutDialogOpen: open });
         },
 
-        setOpenCodeStatusDialogOpen: (open) => {
-          set({ isOpenCodeStatusDialogOpen: open });
+        setRuntimeStatusDialogOpen: (open) => {
+          set({ isRuntimeStatusDialogOpen: open });
         },
 
-        setOpenCodeStatusText: (text) => {
-          set({ openCodeStatusText: text });
+        setRuntimeStatusText: (text) => {
+          set({ runtimeStatusText: text });
         },
 
         setSessionCreateDialogOpen: (open) => {

@@ -124,7 +124,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     title: 'Behavior',
     group: 'opencode',
     kind: 'single',
-    keywords: ['behavior', 'agents.md', 'system prompt', 'global rules', 'instructions', 'override'],
+    keywords: ['behavior', 'response style', 'tone', 'instructions', 'custom instructions'],
   },
   {
     slug: 'commands',

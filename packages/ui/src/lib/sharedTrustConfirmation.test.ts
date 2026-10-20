@@ -44,6 +44,7 @@ const baseSetup = (): ProjectSetup => ({
     setupWorktree: ['cp .env.example .env'],
     setupWorktreeWait: null,
     setupWorktreeMode: 'append',
+    worktreeDirectory: null,
     projectActions: [],
     projectActionsPrimaryId: null,
     draftStarters: [],
