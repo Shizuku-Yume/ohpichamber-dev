@@ -22,11 +22,12 @@
 
 **Acceptance:**
 
-- [ ] Web and packaged Electron both complete the applicable W7-W10 scenario steps.
-- [ ] Receipts include exact artifact paths or explicitly state that no durable receipt was retained.
-- [ ] W8 recovery proves no duplicate parts and stale prior-runtime data cannot mutate the selected runtime.
-- [ ] W9 checks cover sidebar/catalog, Board, Guest, and retained utility paths without unrelated host-service changes.
-- [ ] W10 records old-client reachability and lifecycle-owner findings from the assembled source.
+- [ ] Web and packaged Electron both complete the applicable W7-W10 scenario steps. Web steps pass; packaged Board new-session draft is unconfirmed (renderer stopped responding), so this remains open.
+- [x] Receipts include exact artifact paths or explicitly state that no durable receipt was retained. New receipt `.workflow/omp-migration/m3/task36-connected-acceptance-2026-10-21.json` records the Web run, artifact hashes and the packaged gap; Task55/62 and recovery receipts are cited.
+- [x] W8 recovery proves no duplicate parts and stale prior-runtime data cannot mutate the selected runtime. Web stream reload had 0 duplicate part IDs; the recovery receipt records mid-run disconnect/epoch resync; an old cursor after worker restart returned 410 `RESYNC_REQUIRED`.
+- [ ] W9 checks cover sidebar/catalog, Board, Guest, and retained utility paths without unrelated host-service changes. Web sidebar/catalog, real GitHub Board #5304 draft, installed test guest panel and Host generate all passed; packaged Board draft remains unconfirmed.
+- [x] W10 records old-client reachability and lifecycle-owner findings from the assembled source. Production searches for `opencodeClient`, `@opencode/client`, `@opencode/schema`, `lib/opencode/*`, and old lifecycle/proxy/config/auth composition names returned 0 matches.
+
 ## 2026-10-16 connected acceptance investigation
 
 Investigation status: **blocked; no connected Web or packaged Electron success is claimed.** The repository documents the intended entrypoints (`bun run electron:dev:bundled` for bundled Electron development and `bun run electron:build` / `bun run --cwd packages/electron package` for packaging), but this investigation could not execute an actual connected scenario or retain launch output. The available shell execution route rejected the launch/check invocation before execution with `Service mode does not accept async or timeout`; therefore no Web/Electron process, authentication, session, or artifact receipt was observed. The durable blocker record is `.workflow/omp-migration/m3/task36-connected-acceptance-blocked.json` (receipt field: `none`).
@@ -89,3 +90,15 @@ The same package then configured the fixture provider through supported canonica
 Board, Guest Shell, snapshot-plus-cursor recovery and stale-runtime protection remain open; no W7-W10 pass is claimed.
 
 The final UI-proofed artifact is AppImage `0a1886923e2549bf6058ff4847a02d7f0f542698f374a6cd18b9168e7cf9bddd` (606,838,429 B, built 00:52), bundling Web index `42170a97…` and Agent Service `2f025477…`/`90f6bf5e…`. Its final2 proofs reran only one operation card for an edit, the Commands delete modal (PASS), and ask completion plus reload (completed; message-level retry remains unproven). Keyboard abort, attachment upload/download, cold start, the OMP label, and other settings were not rerun on it; those packaged observations remain historical evidence from the superseded `7b7f99ee…` artifact. After Task44's Host commit `cacbaf042`, the current on-disk AppImage is the Task55 rebundle `598bf5823785ccf5b3f36d4e49bb950638e77b3eff35a5b3fc7b3e3259eabad9` (606,838,421 B, built 01:35), whose receipt records packaged auth plus Stop/Escape cancellation; it did not rerun the final2 UI proofs. Task44 closed after the pidfd correction (see `.workflow/done/omp-through-m3/44-host-composition-retirement.md` and task44 receipt).
+
+## 2026-10-21 connected acceptance run
+
+Receipt: `.workflow/omp-migration/m3/task36-connected-acceptance-2026-10-21.json`.
+
+Reused unchanged W1-W6, Task55 packaged auth/session/Stop/keyboard, Task62 Web/packaged Stop evidence, the recovery receipt for mid-run disconnect/epoch resync, and the connected-web receipt for Host filesystem moves. Current Web dist index `42170a97…`; current packaged artifact `598bf58…`.
+
+Web run on `127.0.0.1:3160` with an isolated HOME and fixture `127.0.0.1:4601`: readiness `200` (`ready:true`, `engine:omp`), unauthenticated sessions `401`, workspace resolve `200`, fixture catalog `m3fixture/stream-300cps|think-30s|agent-20tools-300cps`, session stream completed with 2 snapshot/2 history messages and 0 duplicate part IDs after reload. A long stream run was interrupted by killing its worker; the old cursor `8824092e…:1` was rejected with HTTP `410 RESYNC_REQUIRED` after the new epoch `f2791ad4…` (headSequence 0), while a prior recovery receipt already records real mid-run disconnect and epoch-gap resync without duplicate parts. Board activated the real GitHub CLI account, listed real `openchamber/openchamber` issues/pulls, selected `#5304`, and opened a new-session draft in `ohpi-task36-board-repo` (master) with the linked issue chip. A locally installed test guest (`task36-guest`) served its panel and Host `/generate` returned fixture text through the small-model caller; sidebar/catalog rendered the project, sessions and fixture models. Production-source searches found 0 old-client, old lifecycle/proxy/config/auth composition, or retained execution-module composition imports.
+
+Packaged Electron run under Xvfb with the final AppImage reused Task55/62 auth, session stream/reload, Stop click and Escape cancellation. Real GitHub Board items and the installed test guest panel/generate also passed. Gap: selecting Board "Attach to session" -> "New session" made the packaged renderer stop responding to CDP `Runtime.evaluate`/screenshot for ~30s; the page target remained listed, Host readiness stayed `200`, and no main-log exception appeared. No Board draft was observed on packaged Electron.
+
+This run does not pass Task36: the packaged Board new-session draft gap keeps item 1 and W9 open. No M3 claim. Next action: repeat the packaged Board draft once on a fresh launch; if reproducible, create a focused UI/desktop Board-transition bugfix before closing Task36. Cleanup stopped Web Host, Chrome, packaged app, Xvfb and fixture; ports `3160/9232/9233/4601/57123` closed and temporary repos/HOMEs were removed.

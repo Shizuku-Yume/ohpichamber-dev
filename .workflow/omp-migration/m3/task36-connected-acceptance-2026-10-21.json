@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/36",
+  "observedAt": "2026-10-21",
+  "status": "partial-connected-acceptance-web-pass-packaged-board-draft-gap",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "branch": "omp-through-m3/recovery-20261013",
+    "platform": "Linux x64, 7.2.8-200.fc44.x86_64",
+    "webDist": {
+      "indexSha256": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+      "uiSourceNewerThanDist": 0
+    },
+    "electronAppImage": {
+      "path": "packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage",
+      "sha256": "598bf5823785ccf5b3f36d4e49bb950638e77b3eff35a5b3fc7b3e3259eabad9"
+    },
+    "webHost": "http://127.0.0.1:3160 (isolated HOME)",
+    "webBrowser": "Chrome headless, CDP 9232",
+    "packagedCdp": 9233,
+    "packagedHostPort": 57123,
+    "fixtureProvider": "http://127.0.0.1:4601/v1 (deterministic repo fixture)"
+  },
+  "reusedEvidence": {
+    "w1ToW6": "Accepted M0/M1/M2 and focused W1-W6 evidence reused; not rerun.",
+    "task55": ".workflow/omp-migration/m3/task55-packaged-electron-2026-10-21.json: packaged auth, session stream/reload, Stop click, Escape abort, cleanup.",
+    "task62": ".workflow/omp-migration/m3/task62-web-stop-2026-10-21.json and Task55 receipt: Web/packaged Stop and keyboard abort.",
+    "w8Recovery": ".workflow/omp-migration/m3/task36-recovery-guest-2026-10-20.json: real mid-run transport disconnect and epoch-gap resync with no duplicate parts.",
+    "hostFilesystemMove": ".workflow/omp-migration/m3/task36-connected-web-2026-10-20.json: admitted Host mkdir/write/rename/read/delete; old path 404; temporary directory removed."
+  },
+  "web": {
+    "readiness": {
+      "ready": "200 {ready:true,engine:omp,version:1.0.0}",
+      "unauthenticatedCanonicalSessions": 401
+    },
+    "projectAndWorkspace": {
+      "projectPath": "/tmp/ohpi-task36-board-repo (real git repo with upstream github.com/openchamber/openchamber origin; removed after run)",
+      "workspaceId": "ws_9b97385a-94d9-4806-87fc-8f87713e038b",
+      "workspaceResolve": "200 ohpi-task36-board-repo",
+      "fixtureModels": ["m3fixture/stream-300cps", "m3fixture/think-30s", "m3fixture/agent-20tools-300cps"],
+      "sessionCount": 2,
+      "guestCount": 1
+    },
+    "sessionStreamReload": {
+      "sessionId": "34baf7bd-c4bb-453b-9a4f-0da8a0b86510",
+      "runId": "612d5c07-c7c9-4d03-9f02-4663a714a49f",
+      "terminalTurnStatus": "completed",
+      "snapshotMessages": 2,
+      "historyMessages": 2,
+      "duplicatePartIdsAfterReload": 0,
+      "fixtureHeadingRendered": true
+    },
+    "w8StaleRuntimeRejection": {
+      "sessionId": "0c40650b-f26b-4f1c-9057-79f83b5d2752",
+      "runId": "7a264c9e-7572-46b0-a3cd-48f74ec40d11",
+      "oldCursor": "8824092e-f0be-446e-8dbf-b85b05d44359:1",
+      "oldEpoch": "8824092e-f0be-446e-8dbf-b85b05d44359",
+      "action": "killed the newest Agent Service worker during an active stream run",
+      "newEpoch": "f2791ad4-bca5-4cc2-9d65-486bcd5e79a4",
+      "newHeadSequence": "0",
+      "runtimeStatusAfter": "idle",
+      "oldCursorEvents": {
+        "status": 410,
+        "code": "RESYNC_REQUIRED",
+        "detail": "Replay is unavailable for this cursor"
+      },
+      "result": "The old-runtime cursor was rejected at the canonical boundary after the epoch changed; no stale response mutated the new runtime state."
+    },
+    "boardLaunch": {
+      "provider": "GitHub CLI account activated through Host source-control auth (real authorized account; no mutation performed)",
+      "listedItems": "real openchamber/openchamber issues and pull requests rendered",
+      "selectedItem": "openchamber/openchamber#5304 Mobile Tree promotes subagent sessions to top-level rows when parent is in another worktree",
+      "action": "Attach to session -> New session",
+      "draft": "new-session draft opened in project ohpi-task36-board-repo, branch master, with linked issue #5304 chip and project label",
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/t36-board-draft2.png"
+    },
+    "guestAndUtility": {
+      "guest": "task36-guest installed from a local test extension path; panel served; model capability granted",
+      "panelStatus": 200,
+      "panelText": "Task36 Guest Shell / registered test guest panel",
+      "generateStatus": 200,
+      "generateResult": "fixture document text returned through the Host small-model caller",
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/t36-guest-panel.png",
+      "note": "This is a real registered test guest, not a mocked catalog row. It was removed after the run."
+    },
+    "sidebarCatalog": "Sidebar showed chats, project ohpi-task36-board-repo, sessions and Board entry; canonical workspace models included all three fixture models.",
+    "w10": {
+      "productionOldClientRefs": 0,
+      "oldLifecycleProxyConfigAuthCompositionRefs": 0,
+      "retainedExecutionModuleImportsInComposition": 0,
+      "scope": "packages/ui/src, packages/web/src, packages/electron production source; packages/web/server and packages/electron composition roots"
+    }
+  },
+  "packagedElectron": {
+    "reused": "Auth, canonical catalog/workspace, session stream/reload, Stop click and keyboard abort from Task55/Task62 receipts.",
+    "projectAndWorkspace": {
+      "workspaceId": "ws_a77384a3-cfd7-4144-9501-07462dc69a21",
+      "resolve": "200 ohpi-task36-board-repo",
+      "provider": "m3fixture config revision 1, credential revision 2"
+    },
+    "board": {
+      "activation": "GitHub CLI account activated; real issues/pulls rendered",
+      "selectedItem": "openchamber/openchamber#5304",
+      "gap": "Selecting Attach to session -> New session caused the packaged renderer to stop responding to CDP Runtime.evaluate and captureScreenshot within a 30s window. The page target remained listed and the Host answered readiness, but no draft result could be observed. No main-log exception was emitted.",
+      "classification": "unconfirmed product or harness gap; not reported as a Board launch pass"
+    },
+    "guestAndUtility": {
+      "guest": "task36-guest installed from the same local test extension path; panel served; model capability granted",
+      "generateStatus": 200,
+      "generateResult": "fixture document text returned through the Host small-model caller"
+    },
+    "sidebarCatalog": "Sidebar showed chats, project ohpi-task36-board-repo and start-session state; canonical provider/workspace reads succeeded."
+  },
+  "gaps": [
+    "Packaged Board new-session draft did not complete: renderer stopped responding after the menu selection. Web Board draft succeeded. Needs one fresh packaged confirmation before assigning an owning implementation task; Task36 remains open.",
+    "Board linked-provider launch used a real GitHub CLI account and real upstream items; no GitHub mutation (comment/merge/close) was performed.",
+    "The Guest evidence is a real installed local test extension panel plus Host generate utility, not a built-in app guest.",
+    "Linux x64 packaged artifact only; no official provider/OAuth or macOS/Windows run."
+  ],
+  "cleanup": "Web Host, Chrome, packaged Electron, Xvfb, fixture provider and isolated HOME profiles were stopped/removed; ports 3160, 9232, 9233, 4601 and 57123 closed; the temporary Board repo and test guest folder were removed.",
+  "qualification": "Partial W7-W10 acceptance. W8 duplicate suppression and stale-cursor rejection are observed; Web Board and Guest/utility are observed; packaged auth/session/Stop are reused from Task55/62. The packaged Board draft gap keeps Task36 open. No M3 gate claim."
+}
