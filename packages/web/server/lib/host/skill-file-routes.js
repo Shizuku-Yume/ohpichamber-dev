@@ -5,7 +5,9 @@ import { SkillFileError } from './skill-file-owner.js';
 const Query = z.strictObject({ scope: C.FileResourceScopeSchema });
 
 export function registerSkillFileRoutes(router, { express, owner, resolveWorkspaceScope }) {
-  router.use(/^\/workspaces\/[^/]+\/skills\/files(?:\/|$)/, express.json({ limit: '1mb', strict: true }));
+  const json = express.json({ limit: '1mb', strict: true });
+  const skillFilesPath = /^\/workspaces\/[^/]+\/skills\/files(?:\/|$)/;
+  router.use((req, res, next) => skillFilesPath.test(req.path) ? json(req, res, next) : next());
   router.use(async (req, res, next) => {
     const match = /^\/workspaces\/([^/]+)\/skills\/files(?:\/([^/]+)(?:\/(.*))?)?$/.exec(req.path);
     if (!match) return next();
@@ -58,11 +60,13 @@ export function registerSkillFileRoutes(router, { express, owner, resolveWorkspa
       const missing = error.code === 'ENOENT';
       const status = error instanceof SkillFileError ? error.status : invalid ? 400 : missing ? 404 : 503;
       const code = error instanceof SkillFileError ? error.code : invalid ? 'INVALID_REQUEST' : missing ? 'NOT_FOUND' : 'SKILL_INSTALL_FAILED';
-      return res.status(status).type('application/problem+json').json(C.ProblemDetailsSchema.parse({
+      const problem = {
         type: `urn:ohpichamber:problem:${code}`, title: status >= 500 ? 'Skill source operation incomplete' : 'Skill source request refused',
         status, code, detail: error instanceof SkillFileError ? error.message : invalid ? 'The skill file request is invalid.' : missing ? 'The skill file does not exist.' : 'The skill source could not be read or committed.',
-        retryable: status >= 500, ...(error.details === undefined ? {} : { details: error.details }),
-      }));
+        retryable: status >= 500,
+      };
+      if (error.details !== undefined) problem.details = error.details;
+      return res.status(status).type('application/problem+json').json(C.ProblemDetailsSchema.parse(problem));
     }
   });
 }

@@ -80,15 +80,14 @@ export const useSkillsCatalogStore = create<CatalogState>((set, get) => {
       if (existing && !options?.refresh) return existing;
       const epoch = catalogEpoch;
       let resolvePending!: (value: boolean | PromiseLike<boolean>) => void;
-      let rejectPending!: (reason?: unknown) => void;
-      const pending = new Promise<boolean>((resolve, reject) => { resolvePending = resolve; rejectPending = reject; });
+      const pending = new Promise<boolean>(resolve => { resolvePending = resolve; });
       void (async () => {
         set({ isLoadingSource: true, lastCatalogError: null });
         try {
           const workspace = await canonicalClient.resolveWorkspace(scope.directory);
-          if (scope.owner !== generation || epoch !== catalogEpoch || sourceLoads.get(sourceId) !== pending) return false;
+          if (scope.owner !== generation || epoch !== catalogEpoch || sourceLoads.get(sourceId) !== pending) { resolvePending(false); return; }
           const result = await canonicalClient.skillRepositories.source(workspace.workspaceId, { sourceId, refresh: options?.refresh });
-          if (scope.owner !== generation || epoch !== catalogEpoch || sourceLoads.get(sourceId) !== pending) return false;
+          if (scope.owner !== generation || epoch !== catalogEpoch || sourceLoads.get(sourceId) !== pending) { resolvePending(false); return; }
           set(state => ({ itemsBySource: { ...state.itemsBySource, [sourceId]: result.items }, loadedSourceIds: { ...state.loadedSourceIds, [sourceId]: true } }));
           resolvePending(true);
         } catch (error) {

@@ -1107,7 +1107,6 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
     } else if (
       req.path.startsWith('/api/config/agents') ||
       req.path.startsWith('/api/config/settings') ||
-      req.path.startsWith('/api/config/skills') ||
       req.path.startsWith('/api/projects') ||
       req.path.startsWith('/api/fs') ||
       req.path.startsWith('/api/git') ||

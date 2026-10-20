@@ -21,7 +21,7 @@ async function fixture({ hideBuiltins = false, denyIdentity = false, failApply =
   const ids = { projectId: scope.projectId, workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId };
   const problem = code => {
     const status = { CATALOG_CONFLICT: 409, UNAUTHORIZED: 403, INVALID_REQUEST: 400, NOT_FOUND: 404 }[code] ?? 503;
-    return Response.json({ type: 'urn:test:skill-source', title: 'Skill source operation failed', status, code, detail: 'The skill source operation could not finish.', retryable: status === 503 }, { status });
+    return Response.json({ type: `urn:ohpichamber:problem:${code}`, title: 'Skill source operation failed', status, code, detail: 'The skill source operation could not finish.', retryable: status === 503 }, { status });
   };
   const owner = createSkillFileOwner({ service: { async request(endpoint, options) {
     const input = JSON.parse(options.body);

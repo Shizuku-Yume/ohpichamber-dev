@@ -3,7 +3,9 @@ import * as C from '@openchamber/agent-contract';
 import { SkillFileError } from './skill-file-owner.js';
 
 export function registerSkillRepositoryRoutes(router, { express, catalogOwner, resolveWorkspaceScope }) {
-  router.use(/^\/workspaces\/[^/]+\/skills\/repositories(?:\/|$)/, express.json({ limit: '1mb', strict: true }));
+  const json = express.json({ limit: '1mb', strict: true });
+  const repositoryPath = /^\/workspaces\/[^/]+\/skills\/repositories(?:\/|$)/;
+  router.use((req, res, next) => repositoryPath.test(req.path) ? json(req, res, next) : next());
   router.use(async (req, res, next) => {
     const match = /^\/workspaces\/([^/]+)\/skills\/repositories(?:\/(source|scan|install))?$/.exec(req.path);
     if (!match) return next();
@@ -22,11 +24,13 @@ export function registerSkillRepositoryRoutes(router, { express, catalogOwner, r
       const invalid = error instanceof z.ZodError || error instanceof URIError;
       const status = error instanceof SkillFileError ? error.status : invalid ? 400 : 503;
       const code = error instanceof SkillFileError ? error.code : invalid ? 'INVALID_REQUEST' : 'SKILL_INSTALL_FAILED';
-      return res.status(status).type('application/problem+json').json(C.ProblemDetailsSchema.parse({
+      const problem = {
         type: `urn:ohpichamber:problem:${code}`, title: 'Skill repository request incomplete', status, code,
         detail: error instanceof SkillFileError ? error.message : invalid ? 'The skill repository request is invalid.' : 'The skill repository operation failed.',
-        retryable: status >= 500, ...(error.details === undefined ? {} : { details: error.details }),
-      }));
+        retryable: status >= 500,
+      };
+      if (error.details !== undefined) problem.details = error.details;
+      return res.status(status).type('application/problem+json').json(C.ProblemDetailsSchema.parse(problem));
     }
   });
 }
