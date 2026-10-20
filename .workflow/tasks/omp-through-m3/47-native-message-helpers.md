@@ -2,7 +2,8 @@
 
 **Effort:** omp-through-m3
 **Task type:** feature
-**Base commit:** <commit-sha>
+**Base commit:** 93d519221527e15cf52a5dde0d6ddf011c7527bb
+**Status:** active
 
 **Delivers:** Complete cutover of residual message preview, freshness, session events, file-tree changes, background shell, context parts, and tool descriptions to canonical `Part` / `Message` contracts and Host Git/file-tree invalidation. Migrates callers off `@/lib/opencode/model` legacy part and tool imports without shims, aliases, or compatibility fields.
 
@@ -26,9 +27,12 @@
 
 - [x] Residual message helpers consume canonical `Part` and `Message` contracts directly without compatibility shims.
 - [x] Tool descriptions in `ToolPart` and `ProgressiveGroup` reflect native tool names and outcomes.
-- [x] File-tree invalidation and Host Git change detection operate cleanly on native tool results without legacy part adapters.
+- [ ] File-tree invalidation and Host Git change detection operate cleanly on native tool results without legacy part adapters. Host Git saw the new file, but the connected Files tree did not invalidate.
 - [x] Batching and runtime-reset behaviors are preserved.
 - [x] Focused tests pass, UI build passes, and UI test-project type-check exits 0.
+
 ## Progress
 
 The existing integration changes already cut the named message/session/file-tree/tool helpers to `@openchamber/agent-contract` Part fields and `toolHelpers`. A native Guest table regression exposed that the renderer passed canonical result text to a parser that only accepted pre-parsed JSON; the parser now owns JSON text parsing at its boundary. A diff-rendering regression assertion now checks all rendered `<pre>` blocks because the result output and native diff are separate bodies. `sessionEvents.test.ts` and `fileTreeChanges.test.ts` pass (15 tests / 36 assertions); `toolHelpers.test.ts` passes (4 tests / 35 assertions); Guest/tool rendering tests pass (11 tests / 58 assertions); the native diff test passes (1 test / 8 assertions). Touched-source oxlint passes, UI test-project type-check exits 0, and the UI build exits 0. The focused render tests exercise actual `ToolPart` output and Guest table rendering under Happy DOM; the integrated browser run separately confirmed canonical startup and profile selection. Connected W7–W10 acceptance and Host retirement remain open.
+
+2026-10-21 connected file-invalidation attempt: one isolated Web run on HEAD `d798d456e`, current Web dist `42170a97…`, temporary workspace `/tmp/ohpi-task47-workdir`, fixture port 4605, model `m3write/native-write`, agent `writeonly`. The prompt "Create TASK47_NEW.md using the native write tool." completed and the chat rendered the native `write TASK47_NEW.md` tool row with "Created TASK47_NEW.md with the native write tool." The file exists with the expected content, and Host `git status` reported `?? TASK47_NEW.md`; direct Host `/api/fs/list` returned it. The Files tree still showed only `.git`, `.omp`, and `NOTES.md`; no `/api/fs/list` request followed the completed tool transition, so `TASK47_NEW.md` never appeared in the visible tree. Receipt: `.workflow/omp-migration/m3/task47-file-invalidation-2026-10-21.json`; screenshot: `/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task47-after-write.png`. This is one focused attempt, not a root-cause diagnosis. The file-tree acceptance remains unchecked and Task47 stays open.

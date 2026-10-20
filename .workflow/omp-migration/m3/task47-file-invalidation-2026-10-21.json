@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/47",
+  "observedAt": "2026-10-21",
+  "status": "connected-file-tree-invalidation-not-observed",
+  "baseCommit": "93d519221527e15cf52a5dde0d6ddf011c7527bb",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "branch": "omp-through-m3/recovery-20261013",
+    "head": "d798d456e",
+    "webHost": "http://127.0.0.1:3164 (isolated HOME /tmp/ohpi-task47-home)",
+    "browser": "Chrome headless, CDP 9236",
+    "workspace": "/tmp/ohpi-task47-workdir",
+    "fixture": "http://127.0.0.1:4605/v1 model native-write",
+    "webDist": {
+      "indexSha256": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+      "uiSourceNewerThanDist": 0
+    }
+  },
+  "setup": {
+    "agent": "writeonly (workspace .omp/agents/profile_writeonly.md; allowedTools read,write)",
+    "model": "m3write/native-write",
+    "prompt": "Create TASK47_NEW.md using the native write tool.",
+    "commands": [
+      "cd packages/web && HOME=/tmp/ohpi-task47-home XDG_CONFIG_HOME=/tmp/ohpi-task47-home/.config OPENCHAMBER_RELAY_HOST=off OPENCHAMBER_ALLOW_DEV_ORIGINS=1 bun server/index.js --port 3164",
+      "node /tmp/ohpi-task47-write-fixture.mjs",
+      "google-chrome --headless=new --remote-debugging-port=9236 --user-data-dir=/tmp/ohpi-task47-chrome --no-sandbox --disable-gpu --window-size=1600,1000"
+    ]
+  },
+  "observed": {
+    "sessionId": "0d2e8512-b924-4be1-8745-328873c7d908",
+    "terminalStatus": "idle",
+    "chatToolRow": "write TASK47_NEW.md; assistant text: Created TASK47_NEW.md with the native write tool.",
+    "canonicalParts": "snapshot listed no parts at the first idle poll; the rendered chat tool row and the workspace file prove the native write executed.",
+    "workspaceFile": {
+      "path": "/tmp/ohpi-task47-workdir/TASK47_NEW.md",
+      "exists": true,
+      "content": "# Task47 native write\n\nCreated by the canonical native write tool.\n"
+    },
+    "gitStatus": "?? .omp/\n?? TASK47_NEW.md",
+    "hostFsList": {
+      "status": 200,
+      "entries": [
+        "TASK47_NEW.md",
+        "NOTES.md",
+        ".git",
+        ".omp"
+      ]
+    },
+    "uiFilesTree": {
+      "before": [
+        ".git",
+        ".omp",
+        "NOTES.md"
+      ],
+      "after": [
+        ".git",
+        ".omp",
+        "NOTES.md"
+      ],
+      "newFileVisible": false,
+      "fsListRequestsObserved": 0,
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task47-after-write.png"
+    }
+  },
+  "limitation": "One focused connected Web attempt created the file through the native write tool and rendered its tool row, but no /api/fs/list request followed the completed tool transition and the visible Files tree did not show TASK47_NEW.md. The exact fileTreeChanges invalidation effect is therefore not proven. This is not a Task47 pass and no root cause is claimed from this single observation.",
+  "sourceState": "The named message/session/file-tree helpers are unchanged since 66fbdec99; ToolPart.tsx and ProgressiveGroup.tsx changed later in 6f1fe19fe, so only the current tool rendering was observed, not the older focused tool-rendering receipt.",
+  "cleanup": "Completed: Host 3164, Chrome CDP 9236, fixture 4605 and child processes stopped; isolated HOME, temporary workspace and Chrome profile removed; ports 3164/9236/4605 closed."
+}
