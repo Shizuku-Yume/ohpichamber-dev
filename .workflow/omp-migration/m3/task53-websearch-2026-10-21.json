@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/53",
+  "observedAt": "2026-10-21",
+  "status": "connected-settings-verified-search-execution-blocked",
+  "baseCommit": "93d519221527e15cf52a5dde0d6ddf011c7527bb",
+  "startEvidence": "Task file was first added in 55d9a4f60 already Status active with Base 93d5192 (real start, not placeholder); the later placeholder was stale. Restored the real start base.",
+  "implementationCommit": "55d9a4f60 feat: migrate native web search configuration and consumers; later canonical integration commits",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "head": "0b3a1caad",
+    "webHost": "http://127.0.0.1:3164 (isolated HOME /tmp/ohpi-task53-home)",
+    "browser": "Google Chrome headless CDP 9236",
+    "webDist": {
+      "path": "packages/web/dist",
+      "indexSha256": "c438247e7abd698759fc8fe55e50a4b08ed147a86d213906732d9789fdfa478e"
+    },
+    "workspace": "/tmp/ohpi-task53/ws",
+    "agentFixture": "http://127.0.0.1:4610/v1 model agent-model, local loopback only",
+    "searchFixture": "http://127.0.0.1:4620/search, local loopback SearXNG JSON endpoint"
+  },
+  "observed": {
+    "settingsUI": {
+      "selectedProviderId": "web/searxng",
+      "fallbackProviderIds": [
+        "web/tavily"
+      ],
+      "timeoutSeconds": 3,
+      "searxng": {
+        "configured": true,
+        "endpoint": "http://127.0.0.1:4620"
+      },
+      "tavily": {
+        "configured": true,
+        "credentialConfigured": true
+      },
+      "revision": "6",
+      "actions": [
+        "selected SearXNG primary",
+        "removed Parallel from fallbacks",
+        "set timeout 3 seconds and saved",
+        "saved Tavily key through the password input"
+      ],
+      "credentialChecks": {
+        "secretInDom": false,
+        "secretInWebSearchGet": false,
+        "secretInSettingsConfig": false,
+        "secretInWorkspaceConfig": false,
+        "secretInHostLog": false,
+        "secretInSearchRequestLog": false,
+        "keyInputRemovedAfterSave": true,
+        "keySavedLabelVisible": true,
+        "passwordInputsRemainingEmpty": true,
+        "storageNote": "The test secret exists only in the native AuthStorage SQLite WAL under the isolated HOME, as expected for a stored credential; it was not present in any GET response, settings file, workspace config, or log."
+      },
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task53-websearch-settings.png"
+    },
+    "searchExecution": {
+      "sessionId": "41365da1-5390-4d67-801b-d985c483e369",
+      "toolCall": {
+        "name": "web_search",
+        "input": {
+          "query": "task53 loopback",
+          "num_results": 3
+        },
+        "status": "failed"
+      },
+      "toolResult": {
+        "isError": true,
+        "error": "Tool execution failed",
+        "content": "Host policy refused the tool operation"
+      },
+      "loopbackSearchRequests": 0,
+      "networkNote": "The search fixture logged no request, so refusal happened before any native provider search.",
+      "cause": "The native tool event is authorized as generic tool 'web_search'. session.ts authorizeTool -> Host worker-operation-authorizer.js only admits names in the nativeTool list (read/write/edit/grep/glob/bash/provider.use) or an exact policy.toolRequests entry. 'web_search' is neither, so the Host denies it before NativeWebSearch can call its own authorize({type:'web-search'}) egress check.",
+      "owner": "Host tool-authorization boundary, outside Task53's listed files: packages/web/server/lib/host/worker-operation-authorizer.js and packages/agent-service/src/worker/session.ts (Task44/Task17 or a focused follow-up). Not a provider/credential/settings-store defect.",
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task53-websearch-chat-blocked.png"
+    }
+  },
+  "reusedEvidence": {
+    "focused": "29 tests / 147 assertions; Host boundary 5 tests; unchanged and not rerun",
+    "loopback": "Prior successful direct native searchSearXNG loopback proof retained; not rerun",
+    "authEnterprise": "Host 401/403/enterprise web-search boundary tests retained; not rerun"
+  },
+  "limitations": [
+    "The Settings UI path is connected-verified, but the agent-visible web_search tool is blocked by Host tool authorization before the native provider runs; a loopback search through chat is therefore not observed in this run.",
+    "Task53 remains open pending the Host authorization fix; no source change was made because the defect is outside Task53's file ownership."
+  ],
+  "cleanup": "Completed: Host 3164, Chrome CDP 9236, agent fixture 4610, search fixture 4620 stopped; isolated HOME, workspace, profile and scripts removed; ports closed.",
+  "screenshots": [
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task53-websearch-settings.png",
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task53-websearch-chat-blocked.png"
+  ]
+}
