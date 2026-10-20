@@ -551,10 +551,14 @@ export class WorkerSession {
         await this.session.abort();
         await this.promptTask;
         await this.bind();
-        this.emit(this.projection.cancelRun(Date.now()));
-        const settled = this.projection.settledRun(operation.runId);
+        this.emit(this.projection.cancelRun(Date.now(), operation.runId));
         this.cancellingRunId = undefined;
-        if (!settled) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Run cancellation did not settle');
+        // finish() mutates this exact record; a newer run may have started, but this settled record stays detached.
+        if (run.finishedAt === undefined || run.status === 'running' || run.status === 'pending') {
+          throw new ProjectionError(503, 'INTERNAL_ERROR', 'Run cancellation did not settle');
+        }
+        const settled: Run = { runId: run.runId, sessionId: run.sessionId, status: run.status, createdAt: run.createdAt, finishedAt: run.finishedAt };
+        if (run.error !== undefined) settled.error = run.error;
         return { type: 'abort', run: settled };
       }
       case 'approval.resolve':

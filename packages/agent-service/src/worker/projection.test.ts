@@ -376,11 +376,10 @@ test('an abort latch settles turn_end and agent_end cancelled without an aborted
     expect(snapshot.activeRun).toBeNull();
     expect(snapshot.session).toMatchObject({ runtimeStatus: 'idle', activeRunId: null });
     expect(projection.history({ sessionId: 'session' }).turns.at(-1)).toMatchObject({ status: 'cancelled' });
-    expect(projection.settledRun('run')).toMatchObject({ runId: 'run', status: 'cancelled' });
+    expect(projection.activeRun()).toBeNull();
     expect(projection.consume({ type: 'agent_end', isTerminal: true })).toEqual([]);
 
     journal.append(projection.beginRun('next', 10));
-    expect(projection.settledRun('run')).toBeNull();
     projection.requestCancel('run');
     deliver({ role: 'user', content: 'A later run.', timestamp: 10 });
     const reply = assistant([{ type: 'text', text: 'Done.' }], 'stop', 11);
@@ -455,3 +454,75 @@ test('native history applies recovered retries and terminal outcomes', async () 
     await rm(root, { recursive: true, force: true });
   }
 }, 30000);
+
+test('a scoped cancellation cannot settle a newer run', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-scoped-cancel-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('old', 1));
+    const oldUser = { role: 'user' as const, content: 'First run.', timestamp: 1 };
+    journal.append(projection.consume({ type: 'message_start', message: oldUser }));
+    manager.appendMessage(oldUser);
+    journal.append(projection.consume({ type: 'message_end', message: oldUser }));
+    projection.bindPending();
+    projection.requestCancel('old');
+    const oldTerminal = projection.cancelRun(2, 'old');
+    journal.append(oldTerminal);
+    expect(oldTerminal.map(({ event }) => event.type)).toContain('run.cancelled');
+
+    journal.append(projection.beginRun('new', 10));
+    const newUser = { role: 'user' as const, content: 'Second run.', timestamp: 10 };
+    journal.append(projection.consume({ type: 'message_start', message: newUser }));
+    manager.appendMessage(newUser);
+    journal.append(projection.consume({ type: 'message_end', message: newUser }));
+    projection.bindPending();
+    expect(projection.cancelRun(11, 'old')).toEqual([]);
+    expect(projection.activeRun()).toMatchObject({ runId: 'new', status: 'running' });
+    expect(projection.history({ sessionId: 'session' }).turns.at(-1)).toMatchObject({ runId: 'new', status: 'running' });
+    expect(projection.completeRun(12).map(({ event }) => event.type)).toContain('run.completed');
+    expect(projection.history({ sessionId: 'session' }).turns.at(-1)).toMatchObject({ runId: 'new', status: 'completed' });
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('history keeps an earlier terminal-less turn untouched when a new run opens before binding', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-live-offset-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    manager.appendMessage({ role: 'user', content: 'Legacy open turn.', timestamp: 1 });
+    const projection = new WorkerProjection(manager, 'session');
+    expect(projection.history({ sessionId: 'session' }).turns[0]).toMatchObject({ status: 'completed' });
+
+    projection.beginRun('next', 10);
+    const nextUser = { role: 'user' as const, content: 'New run.', timestamp: 11 };
+    projection.consume({ type: 'message_start', message: nextUser });
+    const openedOnly = projection.history({ sessionId: 'session' });
+    expect(openedOnly.turns).toHaveLength(1);
+    expect(openedOnly.turns[0]).toMatchObject({ status: 'completed' });
+
+    manager.appendMessage(nextUser);
+    const unbound = projection.history({ sessionId: 'session' });
+    expect(unbound.turns).toHaveLength(2);
+    expect(unbound.turns[0]).toMatchObject({ status: 'completed' });
+    expect(unbound.turns[1]).toMatchObject({ status: 'running' });
+    expect(unbound.turns[1]?.finishedAt).toBeUndefined();
+
+    projection.bindPending();
+    const bound = projection.history({ sessionId: 'session' });
+    expect(bound.turns[0]).toMatchObject({ status: 'completed' });
+    expect(bound.turns[1]).toMatchObject({ runId: 'next', status: 'running' });
+    projection.cancelRun(12, 'next');
+    const settled = projection.history({ sessionId: 'session' });
+    expect(settled.turns[0]).toMatchObject({ status: 'completed' });
+    expect(settled.turns[1]).toMatchObject({ runId: 'next', status: 'cancelled' });
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

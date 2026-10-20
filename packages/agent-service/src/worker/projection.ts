@@ -158,7 +158,6 @@ export class WorkerProjection {
   private entryOffset: number;
   private stopReason: 'error' | 'aborted' | undefined;
   private cancelRequestedRunId: string | undefined;
-  private lastSettledRun: Run | null = null;
   private readonly privateRoots: PrivateRoot[];
   private readonly textSuffixes = new Map<string, { suffix: string; context: string }>();
 
@@ -284,15 +283,10 @@ export class WorkerProjection {
   requestCancel(runId: string): void {
     if (this.run?.runId === runId) this.cancelRequestedRunId = runId;
   }
-  settledRun(runId: string): Run | null {
-    const run = this.run?.runId === runId ? this.run : this.lastSettledRun?.runId === runId ? this.lastSettledRun : null;
-    return run === null ? null : { ...run };
-  }
 
   beginRun(runId: string, timestamp: number, attachments: PromptAttachment[] = []): ProjectionInput[] {
     if (this.run) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
     this.cancelRequestedRunId = undefined;
-    this.lastSettledRun = null;
     this.run = { runId, sessionId: this.sessionId, status: 'running', createdAt: timestamp };
     this.turn = undefined;
     this.message = undefined;
@@ -441,7 +435,11 @@ export class WorkerProjection {
   }
 
   failRun(error: string, timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicEvents(this.finish('failed', timestamp, error)); }
-  cancelRun(timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicEvents(this.finish('cancelled', timestamp)); }
+  cancelRun(timestamp: number, runId?: string): ProjectionInput[] {
+    if (runId !== undefined && this.run?.runId !== runId) return [];
+    this.textSuffixes.clear();
+    return this.publicEvents(this.finish('cancelled', timestamp));
+  }
   completeRun(timestamp: number): ProjectionInput[] { this.textSuffixes.clear(); return this.publicEvents(this.finish('completed', timestamp)); }
 
   private recordTurn(status: 'completed' | 'failed' | 'cancelled', finishedAt: number, error?: string): void {
@@ -469,7 +467,6 @@ export class WorkerProjection {
     run.finishedAt = timestamp;
     if (error !== undefined) run.error = error;
     this.manager.appendCustomEntry(RUN_TYPE, { runId: run.runId, status: settled, finishedAt: timestamp, error });
-    this.lastSettledRun = { ...run };
     this.run = null;
     return result;
   }
@@ -551,10 +548,11 @@ export class WorkerProjection {
     const turns: Turn[] = [];
     const messages: Message[] = [];
     const turnById = new Map<string, Turn>();
+    const liveTurnIds = new Set<string>();
     const activeRunId = this.run?.runId;
     let current: Turn | undefined;
     let leafMessageId: string | null = null;
-    for (const entry of entries) {
+    for (const [entryIndex, entry] of entries.entries()) {
       if (entry.type !== 'message' || !visible(entry.message)) continue;
       const native = entry.message;
       const reference = references.get(entry.id);
@@ -567,7 +565,10 @@ export class WorkerProjection {
         const userMessageId = reference?.userMessageId ?? messageId;
         const runId = reference?.runId ?? opaqueNativeId('run', this.sessionId, entry.id);
         const terminal = turnTerminals.get(turnId);
-        const live = activeRunId !== undefined && runId === activeRunId;
+        // Bound messages identify the run; an unbound message belongs to the open turn only after the last binding point.
+        const live = activeRunId !== undefined && (reference?.runId === activeRunId
+          || (this.turn?.open === true && entryIndex >= this.entryOffset));
+        if (live) liveTurnIds.add(turnId);
         turn = { turnId, sessionId: this.sessionId, runId, userMessageId, assistantMessageIds: [],
           status: terminal?.status ?? (live ? 'running' : 'completed'), startedAt: terminal?.startedAt ?? timestamp,
           ...(terminal?.finishedAt !== undefined ? { finishedAt: terminal.finishedAt } : live ? {} : { finishedAt: timestamp }),
@@ -584,7 +585,7 @@ export class WorkerProjection {
       });
       if (native.role === 'assistant') turn.assistantMessageIds.push(messageId);
       if (!turnTerminals.has(turn.turnId)) {
-        if (this.run?.runId === turn.runId) {
+        if (liveTurnIds.has(turn.turnId) || this.run?.runId === turn.runId) {
           turn.status = 'running';
           delete turn.finishedAt;
         } else {
@@ -606,12 +607,6 @@ export class WorkerProjection {
       turn.status = terminal.status;
       turn.finishedAt = terminal.finishedAt;
       if (terminal.error !== undefined) turn.error = terminal.error;
-    }
-    // A history read may race message binding; the open turn is still the live turn.
-    const openTurn = this.turn?.open ? turns.at(-1) : undefined;
-    if (openTurn && !turnTerminals.has(openTurn.turnId)) {
-      openTurn.status = 'running';
-      delete openTurn.finishedAt;
     }
     const header = this.manager.getHeader();
     const createdAt = header ? Date.parse(header.timestamp) : Date.now();
