@@ -1,0 +1,91 @@
+{
+  "task": "42",
+  "effort": "omp-through-m3",
+  "date": "2026-10-18",
+  "scope": "non-test production packages/ui/src callers reaching opencodeClient or lib/opencode/*, excluding completed Task40 debug and Task41 Git initialization",
+  "classification": {
+    "safeCanonicalOwner": [
+      "chat and timeline part/tool presentation helpers",
+      "model/catalog selection consumers",
+      "agent label/color presentation",
+      "token/message/permission primitives",
+      "session-actions canonical run submission"
+    ],
+    "hostOwned": [
+      "runtimeEndpointReset transport bridge until legacy client retirement",
+      "openCodeStatus diagnostics",
+      "fileTreeChanges and sessionEvents Host invalidation"
+    ],
+    "missingCanonicalContract": [
+      "ModelControls permission/sampling/mode/pinned-model presentation (Task39)",
+      "provider OAuth, multi-account, custom integration forms and policy filtering",
+      "session warming keep-alive",
+      "plugin management",
+      "web search configuration",
+      "aggregated usage statistics",
+      "slash command catalog"
+    ],
+    "orphanedDeadWeight": [
+      "components/chat/formCardState.ts",
+      "components/chat/formSerializers.ts",
+      "lib/opencode/dispatched-session.ts",
+      "lib/opencode/subagent-run.ts"
+    ]
+  },
+  "nextSlices": [
+    {
+      "id": "42.1",
+      "scope": "pure chat/timeline tool predicates and canonical Part types",
+      "files": ["packages/ui/src/components/chat", "packages/ui/src/components/layout/rawMessagePreview.ts", "packages/ui/src/lib/toolHelpers.ts"],
+      "check": "focused chat tests, UI build, strict UI test-project type-check, touched oxlint"
+    },
+    {
+      "id": "42.2",
+      "scope": "canonical Model/Provider catalog selection consumers",
+      "files": ["packages/ui/src/components/multirun", "packages/ui/src/hooks/useModelLists.ts", "packages/ui/src/stores/configCatalogCache.ts", "packages/ui/src/components/layout/ContextSidebarTab.tsx"],
+      "check": "focused multirun/model tests, UI build, strict UI test-project type-check"
+    },
+    {
+      "id": "42.3",
+      "scope": "agent presentation and token/message primitives",
+      "files": ["packages/ui/src/lib/agentLabel.ts", "packages/ui/src/lib/agentColors.ts", "packages/ui/src/stores/utils/tokenUtils.ts", "packages/ui/src/types/permission.ts"],
+      "check": "focused primitive tests, UI build, strict UI test-project type-check"
+    },
+    {
+      "id": "42.4",
+      "scope": "Host diagnostics and filesystem/Git invalidation",
+      "files": ["packages/ui/src/lib/openCodeStatus.ts", "packages/ui/src/lib/fileTreeChanges.ts", "packages/ui/src/lib/sessionEvents.ts"],
+      "check": "focused event/helper tests, UI build, strict UI test-project type-check"
+    },
+    {
+      "id": "42.5",
+      "scope": "sync action/event imports and correlation token ownership",
+      "files": ["packages/ui/src/sync/session-actions.ts", "packages/ui/src/sync/bulk-archive-echo.ts", "packages/ui/src/stores/messageQueueStore.ts", "packages/ui/src/stores/catalogRefresh.ts"],
+      "check": "focused sync/store tests, UI build, strict UI test-project type-check"
+    }
+  ],
+  "closureEvidence": {
+    "toolHelpersCutover": "Tool predicates, tool constants, and isFinalToolStatus now live in packages/ui/src/lib/toolHelpers.ts",
+    "retainedBlockedShapes": {
+      "sessionEvents": ["legacy Part shape", "legacy toolListingChanges shape"],
+      "fileTreeChanges": ["legacy Part shape", "legacy toolListingChanges shape"]
+    },
+    "deletedOrphans": [
+      "components/chat/formCardState.ts",
+      "components/chat/formSerializers.ts",
+      "lib/opencode/dispatched-session.ts"
+    ],
+    "retainedModule": "lib/opencode/subagent-run.ts retained because client.ts imports its cancellation helper",
+    "checks": {
+      "uiTypeCheck": "passed",
+      "sessionEventsTests": "passed",
+      "fileTreeChangesTests": "passed",
+      "deadCode": "exit 1; known nonblocking baseline"
+    },
+    "classificationAndBlockers": "Existing classifications and Task39/Task43 blockers unchanged",
+    "completion": "No W7-W10 or M3 completion claimed"
+  },
+  "blockers": ["Task39", "Task43"],
+  "connectedAcceptance": "Not claimed; W7-W10 remain open",
+  "source": "ResidualCallerInventory scout report, current source and canonical contract files"
+}

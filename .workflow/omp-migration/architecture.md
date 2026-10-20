@@ -676,7 +676,8 @@ These pure OpenCode owners are deleted at coordinated M3 task 17, only after M1 
 - `proxy.js`, `proxy.test.js`: Reverse proxy routing requests to OpenCode HTTP ports.
 - `opencode-resolution-runtime.js`: Resolves system OpenCode binary paths.
 - `routes-directory.test.js`: Tests for OpenCode directory-scoped proxies.
-- `config-entity-routes.js`, `config-mutation-response.js`: OpenCode JSON configuration routes.
+- `config-mutation-response.js`: legacy OpenCode JSON configuration response helpers.
+`config-entity-routes.js` was removed in M3 task 17 after a repository-wide search found no production registration or caller.
 
 ---
 

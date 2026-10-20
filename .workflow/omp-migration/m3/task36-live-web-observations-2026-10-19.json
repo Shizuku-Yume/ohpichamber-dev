@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-19",
+  "environment": {
+    "surface": "Web",
+    "host": "http://127.0.0.1:3147",
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "workspaceId": "ws_39aa44cf-d54e-4909-9a32-a05b6f36c009",
+    "projectId": "pro_77361a50-4a0b-4554-a636-86b3b2355460",
+    "fixtureProvider": "m3-local/fixture-model",
+    "fixtureEndpoint": "127.0.0.1:4141"
+  },
+  "observed": {
+    "hostReady": { "status": 200, "body": { "ready": true, "engine": "omp", "version": "1.0.0" } },
+    "authenticatedUI": "Chrome DevTools page 5 displayed the project composer, sessions sidebar, work status, panel navigation, and model catalog.",
+    "catalogs": "Canonical providers/models/agents, shell jobs, commands, skills catalog/files, and session MCP config requests returned 200. The picker rendered m3-local/fixture-model and selected it in the composer.",
+    "webProfileStream": {
+      "sessionId": "7aba5dfe-8560-412a-a688-f10d275d915f",
+      "ui": "Submitted prompt 'Reply with the exact phrase: WEB_PROFILE_STREAM_PASS' from the authenticated project composer; POST /api/agent/v1/sessions returned 200 and POST /api/agent/v1/sessions/:id/runs returned 200.",
+      "history": "Canonical snapshot/history after run: headSequence 12, runtime idle, turn status completed, user prompt persisted and assistant message 'M3 local canonical service acceptance.' persisted.",
+      "reload": "Reloaded page retained the session route and rendered the user prompt and assistant response from canonical history.",
+      "cursor": "Snapshot reported epoch 5703b6f9-aca2-4580-a2a7-c59b1c06b883 and cursor :12; earlier cursorless events request returned 410 RESYNC_REQUIRED; authenticated UI reconnect used /events and returned 200 after reload."
+    },
+    "boardSurface": "Authenticated Web sidebar Issues and PRs opened the board. GitHub, pull-request and Linear tabs rendered; GitHub and Linear tabs showed explicit connect prompts and did not offer an item to launch as a session. No linked GitHub or Linear account was available in this environment.",
+    "guestSurface": "Authenticated Web composer Add attachment menu showed Attach files, Link GitHub Issue or PR, and Link Linear Issue; no Guest action or registered Guest page was exposed. Guest Shell interaction was not observed.",
+    "abort": "Separate canonical fixture session cb175a6a-755c-4da9-bed6-acc4474413a0: run 525edae2-43af-4ea4-8dea-25273f9f6ef7 accepted, control abort returned 200 with terminal status cancelled."
+  },
+  "not_observed": [
+    "Web UI abort of an active long-running turn; current fixture completes immediately. Abort was verified via canonical control route, not through an active UI button.",
+    "Snapshot-plus-cursor recovery proving duplicate suppression and stale prior-runtime mutation rejection across restart.",
+    "Connected sidebar subagent hierarchy, Board launch, Guest Shell interaction, and settings workflows.",
+    "Packaged Electron authenticated UI scenario, startup lifecycle and child cleanup.",
+    "Full M3 W1-W10 acceptance matrix and final workspace gates."
+  ],
+  "temporaryTestState": {
+    "workspaceProfileOverride": "Removed test-only Scout project override using revision-checked DELETE; bundled profile is authoritative again.",
+    "providerFixture": "Temporary HTTP fixture at 127.0.0.1:4141 may still be running."
+  },
+  "artifacts": {
+    "durableFullAcceptanceReceipt": "none; this JSON records partial observed Web evidence only and is not a W7-W10 pass.",
+    "logs": ["/tmp/m3-final-web-restarted.log", "/tmp/m3-fixture-provider.log"],
+    "chromePage": 5
+  },
+  "qualification": "Partial connected Web evidence. W7-W10 and M3 remain open. Worktree has substantial pre-existing changes; do not reset/revert."
+}

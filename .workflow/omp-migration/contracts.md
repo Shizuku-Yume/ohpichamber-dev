@@ -70,6 +70,57 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `DELETE` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/models/:modelId` | Delete model configuration | Required | Yes (Revision) | JSON |
 | `PUT` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/credential` | Explicit credential write | Required | Yes (Revision) | JSON |
 | `DELETE` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/credential/:credentialRef` | Explicit credential deletion | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/providers/oauth-methods` | Native provider login methods and their stored-provider identity | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/providers/discover` | Discover models from a custom provider endpoint | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/accounts` | Non-secret stored credential roster | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/accounts` | Select, remove or label a stored account | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/oauth` | Start, read, advance, cancel or commit a native provider OAuth flow | Required | Yes (Revision/Generation) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/providers/:providerId/config` | Custom provider configuration, header names and models | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/cache-warming` | Workspace prompt-cache warming state | Required | Yes | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/cache-warming` | Persist warming mode, then apply it to active roots | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/web-search` | Web search configuration and provider catalog | Required | Yes | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/web-search` | Persist web search configuration | Required | Yes (Revision) | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/web-search/credentials/:providerId` | Write one write-only provider credential | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/web-search/credentials/:providerId` | Remove one provider credential | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/usage` | Authorized historical usage summary | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/usage/tools` | Authorized historical tool execution report | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/commands` | Workspace and selected-agent command catalog | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/commands` | Create a command file | Required | Yes (Revision) | JSON |
+| `PATCH` | `/api/agent/v1/workspaces/:workspaceId/commands/:commandId` | Replace a command file | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/commands/:commandId` | Remove a command file | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/commands/expand` | Expand a command with user arguments | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/commands/expand-text` | Prepare raw composer input through the native command-then-template pipeline | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates` | Workspace and selected-agent prompt template catalog | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates` | Create a prompt template file | Required | Yes (Revision) | JSON |
+| `PATCH` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates/:templateId` | Replace a prompt template file | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates/:templateId` | Remove a prompt template file | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates/expand` | Expand a prompt template with user arguments | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/prompt-templates/expand-text` | Expand raw text through the native template loader | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/skills/catalog` | Native discovered skill catalog for expansion | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/expand` | Expand a discovered skill prompt | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/skills/files` | Host-owned authored skill source catalog | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId` | Authored skill files and their source revision | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId/:filePath` | One authored skill file | Required | Yes | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId/:filePath` | Write one authored skill file | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId` | Remove an authored skill | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId/:filePath` | Remove one authored skill file | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/files/apply` | Apply the current Host skill source revision to active roots | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/files/:skillId/rename` | Rename an authored skill | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/skills/repositories` | Trusted skill repository catalog | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/repositories/source` | Scan a curated repository source | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/repositories/scan` | Scan an explicit repository source | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/skills/repositories/install` | Install selected repository skills through Host source commit | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/plugins` | Plugin, marketplace and local extension catalog | Required | Yes | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/plugins/install` | Install a native package or marketplace plugin | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/plugins/uninstall` | Uninstall a native plugin | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/plugins/apply` | Apply the committed plugin revision by restarting idle roots | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/plugins/marketplace` | Refresh and read native marketplace inventory | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/plugins/doctor` | Native plugin diagnostics | Required | Yes | JSON |
+| `PATCH` | `/api/agent/v1/workspaces/:workspaceId/plugins/:pluginName` | Enable, disable or write global plugin settings | Required | Yes (Revision) | JSON |
+| `POST` | `/api/agent/v1/workspaces/:workspaceId/plugins/:pluginName/update` | Update an installed plugin | Required | Yes (Revision) | JSON |
+| `GET` | `/api/agent/v1/workspaces/:workspaceId/plugins/local/:extensionId` | Read confined local extension source | Required | Yes | JSON |
+| `PUT` | `/api/agent/v1/workspaces/:workspaceId/plugins/local/:extensionId` | Write confined local extension source | Required | Yes (Revision) | JSON |
+| `DELETE` | `/api/agent/v1/workspaces/:workspaceId/plugins/local/:extensionId` | Delete confined local extension source | Required | Yes (Revision) | JSON |
 | `GET` | `/api/agent/v1/sessions` | List sessions for an authorized opaque workspace identity | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions` | Create a new session | Required | Yes (Key) | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId` | Get session metadata and status | Required | Yes | JSON |
@@ -101,7 +152,6 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `GET` | `/api/agent/v1/sessions/:sessionId/mcp/servers/:serverId/oauth` | Read MCP server OAuth status and any active pending flow for the addressed root worker | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/mcp/servers/:serverId/oauth` | Start, complete, cancel or disconnect MCP server OAuth in the addressed root worker | Required | Yes (Revision/Generation) | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/skills/catalog` | Addressed root worker's installed-source revisions and active skill catalog | Required | Yes | JSON |
-| `POST` | `/api/agent/v1/sessions/:sessionId/skills/install` | Host source commit plus scoped root-worker discovery outcomes | Required | Yes (Key) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/skills/apply` | Apply installed workspace or selected-agent source revision across affected roots | Required | Yes (Revision) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/skills/expand` | Expand from addressed root worker's generation/catalog; does not submit a prompt | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/shell/jobs` | Start a worker-local Shell job | Required | No | JSON |
@@ -220,6 +270,13 @@ Standard error codes:
 | Atomic recovery and pages | `snapshot.ts`, `pagination.ts` | Runtime snapshot/cursor/active-run identity; complete pending replacement; branch-aware history and model/session pages |
 | Durable delivery | `queue.ts` | Host revision and ordered queued/leased items; immutable captured delivery configuration |
 | Provider, model, MCP and skill catalogs | `catalogs.ts` | Configuration/source revisions separate from per-root applied revisions; explicit mutation and partial-failure results |
+| Provider accounts, OAuth and custom discovery | `provider-management.ts` | Non-secret account roster and labels; native login-method identity; private OAuth flow/generation; custom header names and model discovery |
+| Cache warming | `warming.ts` | Workspace mode and revision; generation-qualified per-root outcomes; typed partial-write details |
+| Commands, prompt templates and authored skills | `file-resources.ts` | Selected-agent catalog revision; independent Host skill source revision; exact Markdown and canonical bindings |
+| Skill repositories | `skill-repositories.ts` | Trusted source catalog; authorized scan selections; committed install outcomes and structured conflicts |
+| Plugins and local extensions | `plugins.ts` | Native plugin-root revision; package/marketplace targets; global settings; explicit idle-restart outcomes |
+| Web search | `websearch.ts` | Native settings-owner revision; write-only credentials; persistence and per-worker outcomes |
+| Historical usage | `usage.ts` | Date/timezone-scoped reports; authorized opaque scopes; partial failures and unavailable metrics |
 | Guest Shell | `shell.ts` | Scope-qualified jobs, observed termination, bounded UTF-8 output cursors and restart invalidation |
 | Stateless completion | `completion.ts` | Explicit selected model; text/JSON format; distinct completed, cancelled and failed results |
 | Events | `events.ts` | Positive data-event sequence and unsequenced stream invalidation |
@@ -230,6 +287,63 @@ The Host privately maps `projectId` and `workspaceId` to validated cwd roots and
 
 Agent profile mutations replace the complete profile at an expected owning revision. Omitted `systemPromptOverride` and `permissionPresetId` use the default prompt and policy; a preset ID selects an owning policy, not an unvalidated allow-mode shortcut. Provider/model mutations likewise carry their owning revision. Credential values occur only in an authenticated `ProviderCredentialWriteRequest`; catalogs, mutation results and events expose non-secret credential presence/references, never those values. Configured presence does not prove provider reachability.
 
+## Workspace configuration and resource ownership
+
+These route families are present in current source. They share Host authentication and workspace authorization with the rest of Canonical v1; worker-backed operations use private loopback dispatch. The named contract modules remain field-level authority; this section records ownership, revision boundaries and failure semantics only. Source implementation is not acceptance: Task 18 owns final checks and Task 36 owns connected W6-W10 evidence.
+
+| Area | Route family | Contract modules | Implementation owner |
+|---|---|---|---|
+| Native agent controls | `/workspaces/:workspaceId/agents` | `session.ts`, `catalogs.ts` | Task 46 |
+| Provider accounts, OAuth, custom configuration | `/workspaces/:workspaceId/providers/...` | `provider-management.ts`, `catalogs.ts` | Task 49 |
+| Cache warming | `/workspaces/:workspaceId/cache-warming` | `warming.ts` | Task 50 |
+| Commands, prompt templates, authored skills, skill repositories | `/workspaces/:workspaceId/{commands,prompt-templates,skills/...}` | `file-resources.ts`, `skill-repositories.ts`, `catalogs.ts` | Task 51 |
+| Plugins and local extensions | `/workspaces/:workspaceId/plugins/...` | `plugins.ts` | Task 52 |
+| Web search | `/workspaces/:workspaceId/web-search...` | `websearch.ts` | Task 53 |
+| Historical usage | `/usage`, `/usage/tools` | `usage.ts` | Task 54 |
+
+### Agent roster and profile controls
+
+`AgentCatalog` is the only selectable native roster. Each `Agent` binds `model` to canonical `providerId`/`modelId`, and exposes `allowedTools` plus optional `permissionPresetId`. `allowedTools` is tool availability, not authorization; the native SDK and Host approval path remain the authorization owners. `permissionPresetId` identifies an owning policy, not an allow-mode shortcut. Create, replace and delete use `AgentCreateRequest`, `AgentUpdateRequest`, `AgentDeleteRequest` and `AgentMutationResult` at the selected-agent catalog revision; the UI selects by native `agentId`/`name` and keeps favorites and cycling as client preferences. There is no second agent catalog or server-side selection mutation. Legacy `mode`, `hidden` and `displayName` are not canonical profile fields, and legacy sampling tooltip metadata has no canonical replacement; native per-profile model/variant selection remains the control surface. A successful empty roster is distinct from discovery or parse failure (`SERVICE_UNAVAILABLE`).
+
+### Provider accounts, OAuth and custom configuration
+
+`GET .../providers/oauth-methods` returns `ProviderOAuthMethods`. Each method carries the native `methodId` and the `providerId`/`storeCredentialsAs` under which its credentials are stored. `POST .../providers/:providerId/oauth` uses the login-method identity in the path and accepts `ProviderOAuthRequest`: `start` requires `expectedRevision`; `status`, `input` and `cancel` require `flowId` plus the worker `generation`; `commit` additionally requires `expectedRevision` and is the only action that writes a credential. `ProviderOAuthResult` reports flow/generation, stored provider, revision and `status` (`pending`, `ready`, `authenticated`, `cancelled`, `failed`), always reports the manual-input flag, and while pending may carry the authorization URL, instructions, prompt and browser cookie names. Grants, tokens and cookies never appear in public records. Flows are worker-private and generation-bound; disconnect, worker close and explicit cancel abort them, and unrenewed pending/ready resources expire after a 60-second lease. Stale flow/generation is `WORKER_GENERATION_CONFLICT`, revision or lifecycle mismatch is `CATALOG_CONFLICT`, and a failed grant reports `error: OAUTH_FAILED` without raw provider errors. Enterprise mode refuses `start`, `input` and `commit` with `enterprise_mode`; status, cancel, account selection/removal/labels and the method read remain available.
+
+`GET/POST .../providers/:providerId/accounts` reads or mutates `ProviderAccounts`. `ProviderAccountMutationRequest` supports `select`, `remove` and `label` under `expectedRevision`; an empty label clears it. Accounts expose an opaque `credentialRef`, method, optional label/email/accountId, active and disabled state. Labels are private application metadata, removal is per credential, and the selected account binds native model resolution. Secrets are never part of the roster.
+
+Custom providers use `GET/PUT .../providers/:providerId/config` with `ProviderConfigurationRead` and `ProviderConfigureRequest`: name, HTTP(S) endpoint, protocol, nullable `credentialRef`, write-only `headers` and optional `models`. Readback exposes only `headerNames`, never header values or secrets. `POST .../providers/discover` accepts `ProviderModelDiscoveryRequest` and returns `ProviderModelDiscoveryResult`; endpoints reject embedded credentials, query strings and fragments. Provider entry, model/credential writes and discovery are refused in enterprise mode; existing account read/select/remove/label remains.
+
+### Cache warming
+
+`GET/PUT .../cache-warming` use `CacheWarmingState`, `CacheWarmingUpdateRequest` and `CacheWarmingApplyResult` at the catalog revision owned by the workspace's selected agent directory. `mode` is `off`, `streaming` or `idle`. `PUT` persists the mode first, then applies it to live root workers and reports generation-qualified `applied`/`failed` outcomes with aggregate `applied`, `partial`, `failed` or `no-active-workers`. Stopped roots are not started for fanout, and a stateless configuration worker is not execution proof. Configured mode is not proof that a request ran or a cache entry was reused. Session startup reapplies the latest effective workspace mode; live application uses a session override and does not rewrite configuration. Native scheduling and provider traffic stay in the SDK; no Host or UI keep-alive loop exists. If the native settings flush succeeds but the service revision commit fails, the response is HTTP 503 `SERVICE_UNAVAILABLE` with `CacheWarmingPartialWriteDetails`: the native configuration remains saved, the previous service revision is retained, and live application is `not-started`. The system does not claim atomic rollback across those two files.
+
+### Commands, prompt templates and authored skills
+
+Commands and prompt templates share the selected-agent catalog revision. `GET/POST /commands` and `PATCH/DELETE /commands/:commandId` use `CommandCatalogState`, `CommandCreateRequest`, `CommandUpdateRequest` and `CommandDeleteRequest`; templates use the matching `PromptTemplate*` schemas. Creates and updates write complete native Markdown files, typed `modelSelection`/`agentId`/`group` metadata lives in `openchamber` frontmatter, and unrelated frontmatter survives updates. The public `content` is the Markdown body, not a second frontmatter format. `POST /commands/expand` and `/prompt-templates/expand` return `FileResourceExpandResult` with canonical bindings. `POST /commands/expand-text` returns `FileResourcePromptInputResult` after the native command-then-template pipeline runs once; a no-match returns unchanged text, and prepared input is not expanded again at session dispatch.
+
+Writable command and template files are confined to workspace `.omp/commands`/`.omp/prompts` or the selected agent directory's `commands`/`prompts`; inherited and external layers are read-only. The service never accepts a client filesystem path. Listing and expansion create no conversation and invoke no model.
+
+Authoring skills is separate from execution catalogs. `GET .../skills/catalog` returns `FileResourceSkillCatalog` from native discovery, including content, scope, read-only/source state and an optional `authoredSkillId` that maps a managed file to the authoring catalog; `POST .../skills/expand` returns `FileResourceExpandResult`. These never grant write authority from a discovered name. `GET .../skills/files` returns `SkillFileCatalogState`; `GET .../skills/files/:skillId` returns `SkillFilesState`; a file read returns `SkillFileRead`. Per-skill state and file reads require an explicit `scope=workspace|agent` query selecting the Host source. `PUT .../skills/files/:skillId/:filePath`, `DELETE .../skills/files/:skillId[/:filePath]`, `POST .../skills/files/:skillId/rename` and `POST .../skills/files/apply` carry `expectedSourceRevision` and return `SkillInstallResult`. The Host owns the source revision and atomic filesystem commit; a write or rename advances it, while `apply` reapplies the current revision without writing. Mutations fan out to captured active roots. A committed source with incomplete application returns `SKILL_APPLY_FAILED` and retains the committed `SkillInstallResult`; active application is never inferred from the source revision.
+
+`GET .../skills/repositories` returns `SkillRepositoryCatalog`; `POST .../skills/repositories/source` and `/scan` return `SkillRepositoryItems`; `POST .../skills/repositories/install` returns `SkillRepositoryInstallResult`. Install selections must match the curated repository's authorized scan results and are submitted by repository identity, not client filesystem paths. Conflict policy/decisions resolve existing names without silent overwrite, and a successful install carries the committed `SkillInstallResult` in `commit`; a structured `ok:false` error reports conflicts or source failures. Repository installation uses the same Host source commit and root fanout as authored files. The session-scoped `.../skills/catalog`, `.../skills/apply` and `.../skills/expand` routes remain the execution-catalog boundary and use `SkillsCatalogState`/`SkillsApplyResult`; they do not replace workspace authoring routes.
+
+### Plugins and local extensions
+
+`GET .../plugins` returns `PluginCatalogState` with installed plugins, cached marketplace entries, confined local extension entries and per-root runtime states. Revision ownership is the actual native plugin/profile root, not a workspace or provider catalog revision; roots sharing that native owner share CAS and fanout. `PluginInstallRequest` distinguishes global package specs from marketplace `user`/`project` installs. `PluginUninstallRequest`, `PluginConfigureRequest` and `PluginUpdateRequest` address a package or marketplace target under `expectedRevision`. Settings writes explicitly target native global scope and replace declared nonsecret global values while omitted secrets remain private; project override files are read-only inputs. `PATCH` can also enable or disable. `LocalExtensionSource`, `LocalExtensionWriteRequest` and `LocalExtensionDeleteRequest` manage flat `.ts`/`.js`/`.mts`/`.mjs` files strictly under workspace `.omp/extensions/`, with syntax validation before atomic replacement. `PluginDoctorResult` reports typed checks and `PluginMarketplaceState` is an explicit cache refresh.
+
+`PluginMutationResult` separates committed persistence from active outcomes (`applied`, `partial`, `failed`, `no-active-workers`). Ordinary mutations do not restart active sessions; a root that needs newly loaded modules reports `RELOAD_REQUIRED` rather than fake success. `PluginApplyRequest` with `strategy: "restart-idle-sessions"` reuses the committed revision without incrementing it, refuses the whole preflight if any selected root is busy or has pending control work, and reports actual new worker generations. Package install/update/uninstall and marketplace refresh are refused in enterprise mode; catalog reads, enable/disable, diagnostics, settings and confined local authoring remain available.
+
+### Web search
+
+`GET/PUT .../web-search` use `WebSearchConfigState` and `WebSearchUpdateRequest`; `PUT/DELETE .../web-search/credentials/:providerId` use `WebSearchCredentialWriteRequest` and `WebSearchCredentialDeleteRequest`. All mutations return `WebSearchMutationResult` with `WebSearchConfigState`, persistence status and `WebSearchWorkerApplyOutcome` entries. Configuration edits never carry API keys: credentials are write-only through their dedicated route and are never read back; the public provider catalog exposes configured/writable booleans, provider identity and non-secret endpoint/option fields only. Provider options are typed to the native providers that support them, and the primary provider cannot also appear in the fallback chain.
+
+Revision ownership is the native settings owner (selected agent directory), so a mutation fans out to every active root sharing that owner, including roots in other workspaces. Persistence failure returns `failed` without applying uncommitted settings. A persisted mutation with any worker failure returns `partial`; a persisted mutation with no failures, including zero live roots, returns `applied`. A revision conflict is `CATALOG_CONFLICT` with the current authorized state. Configuration edits do not themselves perform egress; credential writes are refused in enterprise mode while credential removal remains available, and every native search transport asks the Host to authorize `web-search` immediately before provider traffic.
+
+### Historical usage
+
+`GET /usage` returns `UsageStats`; `GET /usage/tools` returns `UsageToolsResponse`. Both accept `from` (inclusive) and `to` (exclusive) epoch-millisecond bounds with `from < to`, an omitted `to` meaning now, an explicit viewer IANA timezone, and optional canonical `workspaceId`/`projectId` filters. The Host supplies only the authorized opaque scope set over private transport; the supervisor intersects it with registered root and child session references. "All" means that intersection, never native home-directory discovery, and no client path or process-global statistics database participates. The cold worker reads exact registered transcripts and branch lineage without constructing an agent, provider registry or model loop.
+
+`UsageStats` carries the range, session/subagent/prompt/step counts, tokens and cost, tool mode (`none`/`summary`/`detail`), activity days and per-day steps, per-model usage, and a `partial`/`errors` failure projection. `UsageToolsResponse` carries totals and detailed per-tool outcomes for the same window. `UsageTokens.reasoning` and `UsageToolUsage.durationP50` are `null` when persistence cannot supply them; tool outcomes account for successful, failed and unfinished calls. A failure of every selected source is an error, not an empty report; valid siblings survive with `partial` and sanitized per-source codes. Historical activity never establishes current runtime status.
 
 ## Streaming protocol and catch-up
 
@@ -563,7 +677,7 @@ Global installation targets the selected OMP agent directory's `skills/`, defaul
 
 ### Catalog records and operations
 
-Every catalog route is authorized against the path session's opaque workspace and private selected agent-directory mapping. A subagent resolves to its root's worker; it is not a separate apply target. One service-owned `MCPConfigurationState` persists config/revision per workspace. Applied catalogs/revisions belong to each root worker generation, including separate roots sharing one workspace; there is no workspace-wide applied-success flag. The service handles MCP operations and skill catalog/discovery/expansion. Host `skills/install` owns source trust/download/filesystem commits, then requests service discovery across the affected roots. Session-scoped paths identify the authorization/source context, not permission to leave sibling root workers stale.
+Every catalog route is authorized against the path session's opaque workspace and private selected agent-directory mapping. A subagent resolves to its root's worker; it is not a separate apply target. One service-owned `MCPConfigurationState` persists config/revision per workspace. Applied catalogs/revisions belong to each root worker generation, including separate roots sharing one workspace; there is no workspace-wide applied-success flag. The service handles MCP operations and skill catalog/discovery/expansion. The Host owns trusted source download and filesystem commits through the workspace skill file and repository routes below, then requests service discovery across the affected roots. Session-scoped paths identify the authorization/source context, not permission to leave sibling root workers stale.
 
 ```typescript
 export type MCPTransport =
@@ -732,7 +846,7 @@ The aggregate reports failure, root A keeps its applied revision/event, and root
 
 #### Skill operations
 
-`GET .../skills/catalog` returns the addressed root's `SkillsCatalogState`. `POST .../skills/install` accepts `{sourceId: EntityId, skillId: EntityId, scope: "workspace" | "agent", expectedSourceRevision: Counter}` plus `Idempotency-Key`. Host-authorized IDs identify the trusted catalog/source, not arbitrary URLs or client filesystem paths. Host commits installation atomically and advances only the selected source's revision, then requests workspace or selected-agent-directory fan-out as above. The resulting `SkillInstallResult` always identifies that source commit separately from per-root apply results. Install failure preserves source files/revision and returns `SKILL_INSTALL_FAILED`; partial/failed discovery returns `SKILL_APPLY_FAILED` with `details: {result: SkillInstallResult}` retaining the committed source and all outcomes. Service absence after commit returns the same committed result with `apply:null` and explicit unavailability. No source commit masquerades as applied runtime success.
+`GET .../skills/catalog` returns the addressed root's `SkillsCatalogState`. Installation is not a session route: the Host commits trusted sources through the workspace `/skills/files` and `/skills/repositories/install` routes, advances only the selected source's revision, then requests workspace or selected-agent-directory fan-out as above; session `.../skills/apply` only reapplies an existing source revision. Host-authorized IDs identify the trusted catalog/source, not arbitrary URLs or client filesystem paths. The resulting `SkillInstallResult` always identifies that source commit separately from per-root apply results. Install failure preserves source files/revision and returns `SKILL_INSTALL_FAILED`; partial/failed discovery returns `SKILL_APPLY_FAILED` with `details: {result: SkillInstallResult}` retaining the committed source and all outcomes. Service absence after commit returns the same committed result with `apply:null` and explicit unavailability. No source commit masquerades as applied runtime success.
 
 `POST .../skills/apply` accepts `{scope: "workspace" | "agent", sourceRevision: Counter}`. The authorized path session determines that source identity; service verifies the current Host source revision, captures affected roots and each root's own current source pair, then returns `SkillsApplyResult`. Each successful root atomically publishes its filtered skill list, sets `appliedSources` to its captured pair and advances its catalog revision. A failed root preserves its previous valid applied pair/catalog; first-apply failure has `appliedSources:null` and is unavailable, not an empty success. Other successful roots remain applied.
 

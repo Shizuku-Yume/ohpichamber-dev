@@ -1,0 +1,18 @@
+{
+  "status": "resolved",
+  "observedAt": "2026-10-18",
+  "task": "37-m3-chat-agent-callers",
+  "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+  "result": "resolved-by-decision",
+  "canonicalAgentSchema": "packages/agent-contract/src/session.ts",
+  "canonicalFields": ["agentId", "name", "description", "model", "allowedTools", "systemPromptOverride", "permissionPresetId"],
+  "legacyPresentationFields": ["hidden", "mode", "displayName"],
+  "decision": "Every enabled native Agent in the directory-scoped catalog is the selectable UI roster. Shared UI uses Agent.name as the label and Agent.description as supporting text; no legacy presentation fields are recreated.",
+  "decisionReference": "decisions.md: 2026-10-18 - Canonical agent profiles are the selectable UI roster",
+  "implementationScope": [
+    "packages/ui/src/components/chat/ChatInput.tsx",
+    "packages/ui/src/components/chat/FileMentionAutocomplete.tsx",
+    "packages/ui/src/lib/messages/agentMentions.ts"
+  ],
+  "receipt": "pending-focused-verification"
+}

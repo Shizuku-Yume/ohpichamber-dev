@@ -1,0 +1,18 @@
+{
+  "status": "blocked",
+  "observedAt": "2026-10-18",
+  "task": "39-m3-modelcontrols-contract",
+  "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+  "result": "blocked",
+  "legacyFields": {
+    "permissionRules": "Agent.permissions and PermissionRuleset",
+    "sampling": "Agent.request.body.temperature/topP",
+    "mode": "Agent.mode",
+    "pinnedModel": "Agent.model.providerID/id/variant"
+  },
+  "canonicalAgentFields": ["agentId", "name", "description", "model", "allowedTools", "systemPromptOverride", "permissionPresetId"],
+  "missingCanonicalOwners": ["permissionRules", "sampling", "mode", "pinnedModel presentation shape"],
+  "affectedSource": "packages/ui/src/components/chat/ModelControls.tsx",
+  "decision": "Do not infer native values, silently remove visible details, or add an adapter. Keep ModelControls on its current owner until an intentional canonical contract is settled.",
+  "receipt": "none"
+}

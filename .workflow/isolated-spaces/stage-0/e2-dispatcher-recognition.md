@@ -17,8 +17,8 @@ Method: code reading only, 2026-09-19. Nothing was run. Paths are relative to th
 | SDK unscoped client with per-call `directory` | about 40 sites in `client.ts` (for example `:639-641`, `:1265-1268`), `ui/sync/session-actions.ts:501,571,1639,2393` | Best effort: `requestDirectory ?? currentDirectory`, omitted when both are empty | `?directory=` query |
 | SDK calls with no directory parameter | `auth.set/remove`, `global.*`, `experimental.controlPlane.moveSession` (`session-actions.ts:380`), provider pages (`ProvidersPage.tsx:225,260,477`) | No | nothing |
 | Git | `ui/lib/gitApiHttp.ts:135-141` (one `buildUrl` helper, 68 calls) | Always | `?directory=` |
-| Files (web RuntimeAPI) | `packages/web/src/api/files.ts:64-67` and each method | Path always. Header is the ambient current directory (`packages/web/src/api/index.ts:47`) | `?path=` or JSON body `path`, plus raw (not encoded) `x-opencode-directory` |
-| File upload | `files.ts:233-246` | Yes | `?path=`, body is a streamed `application/octet-stream` blob |
+| Files (web RuntimeAPI) | `packages/web/src/api/files.ts` and each method | Path always. The ambient current directory comes from `packages/web/src/api/index.ts` | `?path=` or JSON body `path`, plus the ambient directory in `?directory=` |
+| File upload | `files.ts:233-246` | Yes | `?path=` and `?directory=`, body is a streamed `application/octet-stream` blob |
 | Terminal HTTP | `ui/lib/terminalApi.ts:468` (create, body `cwd`), `:476` (list, `?cwd=`), `:518-525` (`/api/terminal/:id/...`), `:492` (`touch`, body is a list of ids) | UI store is keyed by directory (`ui/stores/useTerminalStore.ts:84-99`) | mixed: body, query, id only |
 | Terminal WebSocket | `terminalApi.ts:185`, singleton `:465` | No | one socket, terminal id inside each frame (`:205`, `:239`) |
 | Global event WebSocket and SSE | `ui/sync/event-pipeline.ts:215-240`, `:565` | n/a | one stream for all directories, each event carries its directory (`:168-190`) |
@@ -52,7 +52,7 @@ Totals: 378 `runtimeFetch(` calls in 107 files. Openers that use the resolver di
 - The terminal socket cannot be forwarded whole. One socket carries frames for host and space terminals. The dispatcher would have to split frames by terminal id and keep a terminal-to-space index.
 - Session-keyed and terminal-keyed routes need a host index from id to space. That index is a cache of untrusted space data. When it is stale or missing, the dispatcher guesses. A malicious space can also claim another space's session id.
 - The dev tunnel and `/api/dev-servers` carry nothing to sniff. They need a new parameter, which is already design B.
-- Ambiguous cases: the files header is the ambient directory and can disagree with `path` (`files.ts:64-67`). The header arrives URI-encoded from the SDK, raw from the files API, and marker-encoded for non-Latin-1 (`ui/lib/runtime-fetch.ts:131-158`, `server/lib/opencode/proxy.js:132-149`). With no directory the host falls back to `settings.lastDirectory` (`server/lib/opencode/project-directory-runtime.js:65-100`), so "no directory" silently means "whatever was browsed last".
+- Ambiguous cases: a legacy files request header is the ambient directory and can disagree with `path`. The header arrives URI-encoded from the SDK, raw from a legacy client, and marker-encoded for non-Latin-1 (`ui/lib/runtime-fetch.ts:131-158`, `server/lib/opencode/proxy.js:132-149`). With no directory the host falls back to `settings.lastDirectory` (`server/lib/opencode/project-directory-runtime.js:65-100`), so "no directory" silently means "whatever was browsed last".
 - Places that would need sniffing: the HTTP entry before `validateDirectoryPath` (9 call sites in 6 files), and four separate upgrade handlers (`server/lib/terminal/runtime.js:431`, `dev-tunnel/runtime.js:177`, `dictation/runtime.js:262`, `realtime-proxy.js:273`).
 
 ## Design B cost
