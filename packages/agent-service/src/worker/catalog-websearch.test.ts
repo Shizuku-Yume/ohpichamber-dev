@@ -96,6 +96,7 @@ test('legacy chat web-role selections survive non-selection updates and unknown 
   const runtime = await openNativeRuntime(bootstrap);
   const primary = 'anthropic/claude-3-5-sonnet-20240620';
   const fallback = 'anthropic/claude-3-5-sonnet-20241022';
+  const freshChat = 'anthropic/claude-3-haiku-20240307';
   try {
     await runtime.authStorage.credentials.set('anthropic', { type: 'api_key', key: 'fixture-credential', source: 'login' });
     runtime.settings.setModelRole('web', primary);
@@ -121,8 +122,8 @@ test('legacy chat web-role selections survive non-selection updates and unknown 
       revision: '2', selectedProviderId: primary, fallbackProviderIds: [fallback],
     } } });
 
-    const switched = await search.operation({ type: 'update', request: { expectedRevision: '2', selectedProviderId: fallback, fallbackProviderIds: [] } });
-    expect(switched).toMatchObject({ type: 'mutated', result: { state: { revision: '3', selectedProviderId: fallback, fallbackProviderIds: [] } } });
+    const switched = await search.operation({ type: 'update', request: { expectedRevision: '2', selectedProviderId: freshChat, fallbackProviderIds: [] } });
+    expect(switched).toMatchObject({ type: 'mutated', result: { state: { revision: '3', selectedProviderId: freshChat, fallbackProviderIds: [] } } });
     await expect(search.operation({ type: 'update', request: { expectedRevision: '3', selectedProviderId: 'vendor/unknown-model', fallbackProviderIds: [] } }))
       .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
     await expect(search.operation({ type: 'update', request: { expectedRevision: '3', fallbackProviderIds: ['vendor/unknown-model'] } }))
@@ -137,11 +138,11 @@ test('legacy chat web-role selections survive non-selection updates and unknown 
     const disabled = await search.operation({ type: 'read' });
     if (disabled.type !== 'state') throw new Error('Expected disabled native search state');
     expect(disabled.state.providers).toEqual([]);
-    expect(disabled.state.selectedProviderId).toBe(fallback);
+    expect(disabled.state.selectedProviderId).toBe(freshChat);
     expect(disabled.state.fallbackProviderIds).toEqual([]);
     const disabledUpdate = await search.operation({ type: 'update', request: { expectedRevision: '3', timeoutSeconds: 34 } });
     expect(disabledUpdate).toMatchObject({ type: 'mutated', result: { persistence: 'persisted', state: {
-      revision: '4', timeoutSeconds: 34, selectedProviderId: fallback, fallbackProviderIds: [], providers: [],
+      revision: '4', timeoutSeconds: 34, selectedProviderId: freshChat, fallbackProviderIds: [], providers: [],
     } } });
     await expect(search.operation({ type: 'update', request: { expectedRevision: '4', selectedProviderId: 'vendor/unknown-model', fallbackProviderIds: [] } }))
       .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
