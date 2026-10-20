@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/62",
+  "observedAt": "2026-10-20T17:47:47.118Z",
+  "status": "web-pointer-stop-pass",
+  "surface": "Web",
+  "host": "http://127.0.0.1:3157",
+  "artifact": {
+    "webDistIndexSha256": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+    "sourceCommit": "6d642762d",
+    "sourceNewerThanDist": 0
+  },
+  "workspace": {
+    "workspaceId": "ws_14eaf1e3-5d20-4ddb-8c5d-57d043721761",
+    "projectId": "pro_cf4c5532-3e6f-4a4c-af26-83390da55bd2",
+    "name": "Chats",
+    "displayPath": "."
+  },
+  "sessionId": "3603b4c6-8dc4-4c01-b143-047be64adadc",
+  "runId": "02983246-1ae3-4b85-be1a-f297c2db81eb",
+  "stopObserved": true,
+  "stopButton": {
+    "aria": "Stop generating",
+    "width": 24,
+    "height": 24,
+    "disabled": false
+  },
+  "clicked": true,
+  "after": {
+    "activeRun": null,
+    "runtimeStatus": "idle",
+    "turns": [
+      {
+        "status": "cancelled",
+        "runId": "02983246-1ae3-4b85-be1a-f297c2db81eb"
+      }
+    ],
+    "stopPresent": false,
+    "sendPresent": true
+  },
+  "keyboardAbortReused": "/home/shizuku/.cache/ohpi-acceptance/evidence/125-abort-receipt.json",
+  "screenshots": [
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/t62-web-stop-before.png",
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/t62-web-stop-after.png"
+  ],
+  "cleanup": "Web Host and Chrome are stopped after this receipt; no fixture or listener is retained."
+}
