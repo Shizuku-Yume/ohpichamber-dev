@@ -177,6 +177,8 @@ The directory event reducer (`applyDirectoryEvent` in `event-reducer.ts`) enforc
 
 Accepted live events in `sync-context.tsx` feed canonical tool parts to `sessionEvents` and `fileTreeChanges`. Calls and results keep separate `partId` identities and pair by native `toolCallId`; a call's terminal status and its later result produce one completion hint. Duplicate or sequence-gapped events do not invalidate Host state, and historical snapshot installation does not replay tool completion side effects.
 
+An authoritative recovery snapshot that advances the addressed session's epoch or `headSequence` requests one directory-scoped file-tree invalidation after the snapshot commits, because the abandoned live event may have hidden a native write/edit. Initial hydration and unchanged recovery snapshots do not invalidate. The recovery path does not replay historical tool side effects; mounted file surfaces coalesce the notification with their normal 2 s directory batch.
+
 Native `bash`, `edit`, and `write` completion hints invalidate Host Git status with a 250 ms per-directory debounce. Denied and read-only calls do not produce mutation hints. File-tree writes use their native `path`; raw edit modes and commands may touch unnamed paths, so their whole-tree hints coalesce until `run.completed`, `run.failed`, or `run.cancelled`. Native transcripts have no legacy step file-list snapshot. Runtime endpoint reset cancels pending refresh timers and clears file-tree pending/deduplication state, so old-runtime paths cannot refresh the new Host.
 
 

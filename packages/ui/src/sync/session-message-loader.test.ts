@@ -71,6 +71,28 @@ describe("canonical session snapshot loading", () => {
     expect(loader.getSnapshot(target).cursor).toBeUndefined()
   })
 
+  test("keeps a recovery refresh behind an in-flight initial snapshot load", async () => {
+    const initial = nativeSnapshot()
+    const recovered = { ...initial, session: { ...initial.session, headSequence: "5" }, cursor: `${initial.session.epoch}:5` }
+    const pending = deferred<SessionSnapshot>()
+    let calls = 0
+    const seen: Array<{ previous?: string; current: string }> = []
+    const { loader, store } = setup({
+      client: nativeClient({ getSnapshot: async () => (++calls === 1 ? pending.promise : recovered) }),
+      onSnapshot: (_target, snapshot, previous) => {
+        seen.push({ previous: previous?.session.headSequence, current: snapshot.session.headSequence })
+      },
+    })
+    const initialLoad = loader.ensure(target)
+    const recovery = loader.refresh(target, undefined, { recovered: true })
+    expect(recovery).not.toBe(initialLoad)
+    pending.resolve(initial)
+    await initialLoad
+    await recovery
+    expect(seen).toEqual([{ previous: undefined, current: "4" }, { previous: "4", current: "5" }])
+    expect(store.getState().snapshot[target.sessionId]?.session.headSequence).toBe("5")
+  })
+
   test("snapshot failure preserves authoritative state and reports one load failure without retry", async () => {
     let calls = 0
     const error = new Error("Host unavailable")

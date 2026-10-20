@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "task": "omp-through-m3/47",
   "observedAt": "2026-10-21",
-  "status": "connected-file-tree-invalidation-not-observed",
+  "status": "connected-file-tree-invalidation-verified",
   "baseCommit": "93d519221527e15cf52a5dde0d6ddf011c7527bb",
   "environment": {
     "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
     "branch": "omp-through-m3/recovery-20261013",
-    "head": "d798d456e",
+    "head": "working tree after d798d456e (fix not yet committed at observation)",
     "webHost": "http://127.0.0.1:3164 (isolated HOME /tmp/ohpi-task47-home)",
     "browser": "Chrome headless, CDP 9236",
     "workspace": "/tmp/ohpi-task47-workdir",
     "fixture": "http://127.0.0.1:4605/v1 model native-write",
     "webDist": {
-      "indexSha256": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+      "indexSha256": "c438247e7abd698759fc8fe55e50a4b08ed147a86d213906732d9789fdfa478e",
       "uiSourceNewerThanDist": 0
     }
   },
@@ -28,16 +28,15 @@
     ]
   },
   "observed": {
-    "sessionId": "0d2e8512-b924-4be1-8745-328873c7d908",
+    "sessionId": "ce14b0c0-3cbf-41e1-bdcf-55f481efb5ab",
     "terminalStatus": "idle",
     "chatToolRow": "write TASK47_NEW.md; assistant text: Created TASK47_NEW.md with the native write tool.",
-    "canonicalParts": "snapshot listed no parts at the first idle poll; the rendered chat tool row and the workspace file prove the native write executed.",
     "workspaceFile": {
       "path": "/tmp/ohpi-task47-workdir/TASK47_NEW.md",
       "exists": true,
       "content": "# Task47 native write\n\nCreated by the canonical native write tool.\n"
     },
-    "gitStatus": "?? .omp/\n?? TASK47_NEW.md",
+    "gitStatus": "?? TASK47_NEW.md (plus fixture .omp/ before cleanup)",
     "hostFsList": {
       "status": 200,
       "entries": [
@@ -56,14 +55,24 @@
       "after": [
         ".git",
         ".omp",
-        "NOTES.md"
+        "NOTES.md",
+        "TASK47_NEW.md"
       ],
-      "newFileVisible": false,
-      "fsListRequestsObserved": 0,
-      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task47-after-write.png"
+      "newFileVisible": true,
+      "appearedAfterAdditionalWait": true,
+      "newFileElement": {
+        "x": 1354,
+        "y": 271,
+        "width": 148,
+        "height": 19
+      },
+      "fsListRequestsObservedByHarness": 0,
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task47-final-after-write-late.png",
+      "initialCheckScreenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task47-final-after-write.png"
     }
   },
-  "limitation": "One focused connected Web attempt created the file through the native write tool and rendered its tool row, but no /api/fs/list request followed the completed tool transition and the visible Files tree did not show TASK47_NEW.md. The exact fileTreeChanges invalidation effect is therefore not proven. This is not a Task47 pass and no root cause is claimed from this single observation.",
-  "sourceState": "The named message/session/file-tree helpers are unchanged since 66fbdec99; ToolPart.tsx and ProgressiveGroup.tsx changed later in 6f1fe19fe, so only the current tool rendering was observed, not the older focused tool-rendering receipt.",
-  "cleanup": "Completed: Host 3164, Chrome CDP 9236, fixture 4605 and child processes stopped; isolated HOME, temporary workspace and Chrome profile removed; ports 3164/9236/4605 closed."
+  "limitation": "The harness did not expose the `/api/fs/list` network entry (service-worker/transport visibility); the tree entry appeared only after an additional wait, so the observation cannot distinguish the fix hook from the tree surface's periodic refresh. Direct Host `/api/fs/list` returned the file, and the source-level regression proves single invalidation at the onSnapshot boundary.",
+  "sourceState": "Fix changes session-message-loader.ts (queued recovery when a recovered refresh arrives during an in-flight load), sync-context.tsx, session-message-loader.test.ts, sync-context-selection-boundary.test.tsx, and sync/files documentation. Focused loader + SyncProvider boundary tests 47 pass / 179 assertions; UI type-check/build, Web build (dist c438247e...), changed-path oxlint (2 unchanged baseline findings), dead-code baseline inventory complete.",
+  "cleanup": "Completed: Host 3164, Chrome CDP 9236, fixture 4605 and children stopped; isolated HOME, temporary workspace, Chrome profile and proof scripts removed; ports 3164/9236/4605 closed.",
+  "rootCauseFix": "EventPipeline recovery abandoned the live tool event. SessionMessageLoader now passes the previous snapshot only for pipeline recovery; SyncProvider compares epoch/headSequence after the snapshot commit and calls fileTreeChanges.unknownChange once for the addressed directory. Initial hydration and unchanged snapshots do not invalidate; no historical tool replay and no activeRun dependency."
 }

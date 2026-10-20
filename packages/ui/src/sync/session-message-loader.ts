@@ -37,7 +37,7 @@ export type SessionMessageLoadState = {
 export type LoaderConfiguration = {
   client: CanonicalClient
   runtimeKey: string
-  onSnapshot?: (target: SessionMessageTarget, snapshot: SessionSnapshot) => void
+  onSnapshot?: (target: SessionMessageTarget, snapshot: SessionSnapshot, recoveryPrevious?: SessionSnapshot) => void
   isCurrent?: () => boolean
 }
 type LoaderEntry = {
@@ -45,6 +45,7 @@ type LoaderEntry = {
   listeners: Set<() => void>
   inflight: Promise<void> | null
   queuedRefresh: Promise<void> | null
+  queuedRecovery: Promise<void> | null
   optimistic: Map<string, OptimisticItem>
   evicted: boolean
   historyBranch?: Branch
@@ -99,6 +100,7 @@ export class SessionMessageLoader {
       }
       entry.inflight = null
       entry.queuedRefresh = null
+      entry.queuedRecovery = null
       this.notify(entry)
     }
   }
@@ -208,12 +210,27 @@ export class SessionMessageLoader {
     return this.ensure(normalized, { reason: "prefetch" })
   }
 
-  refresh(target: SessionMessageTarget, snapshot?: SessionSnapshot): Promise<void> {
+  refresh(target: SessionMessageTarget, snapshot?: SessionSnapshot, options?: { recovered?: boolean }): Promise<void> {
     const normalized = this.normalizeTarget(target)
     if (!normalized || this.disposed) return Promise.resolve()
     if (snapshot) this.invalidateSession(normalized)
     const entry = this.getEntry(normalized)
     if (entry.inflight) {
+      if (options?.recovered) {
+        if (entry.queuedRecovery) return entry.queuedRecovery
+        const generation = entry.snapshot.generation
+        const configurationGeneration = this.configurationGeneration
+        const key = this.keyFor(normalized)
+        const queued = entry.inflight.then(() => {
+          if (this.disposed || configurationGeneration !== this.configurationGeneration
+            || generation !== entry.snapshot.generation || this.entries.get(key) !== entry) return
+          return this.refresh(normalized, undefined, { recovered: true })
+        })
+        entry.queuedRecovery = queued
+        const clear = () => { if (entry.queuedRecovery === queued) entry.queuedRecovery = null }
+        void queued.then(clear, clear)
+        return queued
+      }
       if (entry.snapshot.loadingKind !== "older") return entry.inflight
       if (entry.queuedRefresh) return entry.queuedRefresh
       const generation = entry.snapshot.generation
@@ -229,7 +246,7 @@ export class SessionMessageLoader {
       return queued
     }
     const store = this.childStores.ensureChild(normalized.directory, { bootstrap: false })
-    return this.startSnapshotLoad(normalized, entry, store, "refresh", snapshot)
+    return this.startSnapshotLoad(normalized, entry, store, "refresh", snapshot, options?.recovered === true)
   }
 
   loadOlder(target: SessionMessageTarget): Promise<void> {
@@ -391,6 +408,7 @@ export class SessionMessageLoader {
     entry.snapshot = createDefaultState(entry.snapshot.generation + 1)
     entry.inflight = null
     entry.queuedRefresh = null
+    entry.queuedRecovery = null
     const preserved = new Set(preservedMessages.map(message => message.messageId))
     for (const messageId of entry.optimistic.keys()) if (!preserved.has(messageId)) entry.optimistic.delete(messageId)
     this.notify(entry)
@@ -405,6 +423,7 @@ export class SessionMessageLoader {
       entry.snapshot = createDefaultState(entry.snapshot.generation + 1)
       entry.inflight = null
       entry.queuedRefresh = null
+      entry.queuedRecovery = null
       entry.optimistic.clear()
       this.entries.delete(key)
       this.notify(entry)
@@ -422,6 +441,7 @@ export class SessionMessageLoader {
       entry.snapshot = createDefaultState(entry.snapshot.generation + 1)
       entry.inflight = null
       entry.queuedRefresh = null
+      entry.queuedRecovery = null
       entry.optimistic.clear()
       this.notify(entry)
     }
@@ -451,7 +471,7 @@ export class SessionMessageLoader {
         ...createDefaultState(), status: "ready", resolved: true, limit: prefetched.limit,
         cursor: prefetched.cursor, complete: prefetched.complete, updatedAt: prefetched.at,
       } : createDefaultState(),
-      listeners: new Set(), inflight: null, queuedRefresh: null, optimistic: new Map(), evicted: false,
+      listeners: new Set(), inflight: null, queuedRefresh: null, queuedRecovery: null, optimistic: new Map(), evicted: false,
     }
     this.entries.set(key, entry)
     return entry
@@ -527,7 +547,7 @@ export class SessionMessageLoader {
     })
   }
 
-  private startSnapshotLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: "initial" | "refresh" | "prefetch", suppliedSnapshot?: SessionSnapshot): Promise<void> {
+  private startSnapshotLoad(target: SessionMessageTarget, entry: LoaderEntry, store: ChildStore, kind: "initial" | "refresh" | "prefetch", suppliedSnapshot?: SessionSnapshot, recovered = false): Promise<void> {
     if (this.knownChild(target, store)) return this.startChildHistoryLoad(target, entry, store, kind)
     const client = this.configuration.client
     const onSnapshot = this.configuration.onSnapshot
@@ -564,7 +584,7 @@ export class SessionMessageLoader {
       })
       // Recovery, requests, runtime and the SSE cursor are visible before attaching SSE.
       if (!isCurrent()) return
-      onSnapshot?.(target, snapshot)
+      onSnapshot?.(target, snapshot, recovered ? old : undefined)
       if (!isCurrent()) return
       const hostReads = this.loadHostState(target, store, snapshot, client, isCurrent)
       // The runtime snapshot has no pagination cursor. Read native history to establish one.

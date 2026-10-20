@@ -3,7 +3,7 @@ import React, { act } from "react"
 import { createRoot } from "react-dom/client"
 import type { CanonicalClient } from "@/api/canonicalClient"
 import type { Message, Session, SessionSnapshot, ShellSnapshot, Workspace } from '@openchamber/agent-contract'
-import { SyncProvider, useChildStoreManager, useSyncDirectory, handleEvents } from "./sync-context"
+import { SyncProvider, useChildStoreManager, useSyncDirectory, useSyncRuntime, handleEvents } from "./sync-context"
 import { useGlobalSessionStatusStore, applyGlobalSessionStatusEvents } from "./global-session-status"
 import { installSessionSnapshot } from "./event-reducer"
 import { usePrefetchSessionMessages } from "./use-sync"
@@ -12,6 +12,7 @@ import { installHookTestDom } from "../components/session/sidebar/test-utils/tes
 import { useSessionUIStore } from "./session-ui-store"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { deferred, nativeClient as createCanonicalClient, nativeSnapshot } from './session-message-loader-test-fixtures'
+import { fileTreeChanges, subscribeFileTreeChanges } from "@/lib/fileTreeChanges"
 
 const workspace = (directory: string): Workspace => ({ workspaceId: `workspace-${directory.slice(1).replaceAll('/', '-')}`, projectId: 'project-1', name: 'Workspace', displayPath: '.' })
 const shellSnapshot = (workspaceId: string): ShellSnapshot => ({ scope: { kind: 'workspace', workspaceId }, epoch: 'shell-epoch', revision: '0', running: [], ended: [], recovery: { priorEpochs: 'invalidated' } })
@@ -194,6 +195,67 @@ describe("SyncProvider native scope and selection boundaries", () => {
       expect(useGlobalSessionStatusStore.getState().activeSessionIds.has(listed.sessionId)).toBe(false)
     } finally {
       interval.mockRestore()
+      await act(async () => root.unmount())
+      dom.restore()
+    }
+  })
+
+  test("recovery snapshot invalidates the file tree once only after runtime advances", async () => {
+    const dom = installHookTestDom()
+    const root = createRoot(dom.container)
+    const directory = "/workspace/file-tree-recovery"
+    const target = { directory, sessionId: "tree-session" }
+    const client = createNativeClient()
+    const resolved = workspace(directory)
+    client.getSnapshot = async (sessionId) => {
+      const snapshot = nativeSnapshot(sessionId)
+      return { ...snapshot, session: { ...snapshot.session, workspaceId: resolved.workspaceId, projectId: resolved.projectId } }
+    }
+    let runtime: ReturnType<typeof useSyncRuntime> | undefined
+    const Probe = () => { runtime = useSyncRuntime(); return null }
+    const changes: Array<{ directory: string; paths?: string[] }> = []
+    const stopChanges = subscribeFileTreeChanges((change) => changes.push(change))
+    try {
+      await act(async () => root.render(<SyncProvider client={client} directory={directory}><Probe /></SyncProvider>))
+      if (!runtime) throw new Error("Sync runtime was not mounted")
+      const store = runtime.childStores.ensureChild(directory, { bootstrap: false })
+      store.setState({ workspace: resolved, project: resolved.projectId })
+      fileTreeChanges.reset()
+      changes.length = 0
+
+      await act(async () => { await runtime!.messageLoader.ensure(target) })
+      const initial = store.getState().snapshot[target.sessionId]
+      if (!initial) throw new Error("Initial snapshot was not installed")
+      expect(changes).toEqual([])
+
+      await act(async () => { await runtime!.messageLoader.refresh(target, initial, { recovered: true }) })
+      expect(changes).toEqual([])
+
+      const gap = {
+        type: "part.completed" as const,
+        sessionId: target.sessionId,
+        epoch: initial.session.epoch,
+        sequence: "6",
+        timestamp: 3,
+        messageId: "message-a",
+        part: {
+          type: "tool_call" as const, partId: "call-write", toolCallId: "write-1",
+          toolName: "write", input: { path: "new.ts" }, status: "completed" as const,
+        },
+      }
+      expect(handleEvents(target, [gap], runtime.childStores)).toBe(false)
+      expect(changes).toEqual([])
+
+      const changed = {
+        ...initial,
+        session: { ...initial.session, headSequence: "6", runtimeStatus: "idle" as const, activeRunId: null },
+        cursor: `${initial.session.epoch}:6`,
+      }
+      await act(async () => { await runtime!.messageLoader.refresh(target, changed, { recovered: true }) })
+      expect(changes).toEqual([{ directory }])
+    } finally {
+      stopChanges()
+      fileTreeChanges.reset()
       await act(async () => root.unmount())
       dom.restore()
     }

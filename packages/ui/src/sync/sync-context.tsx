@@ -12,7 +12,7 @@ import { ChildStoreManager, markDirectorySessionPartChanged, subscribeDirectoryS
 import { bootstrapDirectory, bootstrapGlobal } from "./bootstrap"
 import { notifyFirstCanonicalBootstrap } from "./first-server-connect"
 import { useGlobalSyncStore } from "./global-sync-store"
-import { applyDirectoryEvent, mergeHostSession } from "./event-reducer"
+import { applyDirectoryEvent, compareCounters, mergeHostSession } from "./event-reducer"
 import { createEventPipeline, type EventPipeline } from "./event-pipeline"
 import { SessionMessageLoader, getImperativeSessionMessageLoader, setImperativeSessionMessageLoader, type SessionMessageLoadState, type SessionMessageTarget } from "./session-message-loader"
 import { setSyncRefs } from "./sync-refs"
@@ -182,7 +182,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
   if (!childStoresRef.current) childStoresRef.current = new ChildStoreManager()
   const childStores = childStoresRef.current
   const isCurrent = useCallback(() => currentRef.current && getRuntimeKey() === props.runtimeKey, [props.runtimeKey])
-  const onSnapshot = useCallback((target: SessionMessageTarget, snapshot: SessionSnapshot) => {
+  const onSnapshot = useCallback((target: SessionMessageTarget, snapshot: SessionSnapshot, recoveryPrevious?: SessionSnapshot) => {
     if (!isCurrent()) return
     const store = childStores.getChild(target.directory)
     if (!store || store.getState().snapshot[target.sessionId]?.cursor !== snapshot.cursor) return
@@ -194,6 +194,16 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     const session = store.getState().session.find((item) => item.sessionId === target.sessionId)
     if (session) useGlobalSessionsStore.getState().upsertSession(session)
     pipelineRef.current?.attach(target, snapshot)
+    const previous = recoveryPrevious?.session
+    if (previous && (
+      previous.epoch !== snapshot.session.epoch
+      || compareCounters(snapshot.session.headSequence, previous.headSequence) > 0
+    )) {
+      // A gap can abandon the live tool event that would have invalidated the
+      // tree. The adopted snapshot is the authority, so ask mounted file
+      // surfaces to re-list the addressed directory once; they coalesce it.
+      fileTreeChanges.unknownChange(target.directory)
+    }
   }, [childStores, isCurrent])
   const messageLoaderRef = useRef<SessionMessageLoader | null>(null)
   if (!messageLoaderRef.current) messageLoaderRef.current = new SessionMessageLoader(childStores, { client, runtimeKey: props.runtimeKey, isCurrent, onSnapshot })
@@ -282,7 +292,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
         }
         return contiguous
       },
-      recover: (target) => messageLoader.refresh(target),
+      recover: (target) => messageLoader.refresh(target, undefined, { recovered: true }),
       onDisconnect(target) {
         const store = childStores.getChild(target.directory)
         if (store && isCurrent()) {

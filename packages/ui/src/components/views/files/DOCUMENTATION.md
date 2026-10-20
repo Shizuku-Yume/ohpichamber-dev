@@ -23,6 +23,12 @@ Background polling never supersedes an in-flight directory read. Explicit
 refresh after file mutations does. Each directory failure remains local and
 preserves its previous successful snapshot.
 
+An authoritative recovery snapshot that advances the session epoch or
+`headSequence` also requests one directory-scoped invalidation, because the
+abandoned live event may have hidden an agent write or edit. Initial hydration
+and unchanged recovery snapshots do not invalidate. The normal 2 s batching
+below coalesces this with any other file changes.
+
 Opening a file outside the workspace reads it directly through the active
 runtime, in both editor-only and full Files modes. Chat navigation and file
 loading do not request native file grants. Server-backed text reads and metadata
