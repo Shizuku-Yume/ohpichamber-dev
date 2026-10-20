@@ -1,8 +1,23 @@
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { getProviderDefinition, getOAuthProvider, getOAuthProviders, type OAuthCredentials, type OAuthController } from '@oh-my-pi/pi-ai';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { ProviderOAuthMethodsSchema, ProviderOAuthRequestSchema, ProviderOAuthResultSchema, type ProviderOAuthMethods, type ProviderOAuthRequest, type ProviderOAuthResult } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
+
+const OAuthCredentialsSchema: z.ZodType<OAuthCredentials> = z.object({
+  refresh: z.string(), access: z.string(), expires: z.number(),
+  enterpriseUrl: z.string().optional(), projectId: z.string().optional(), email: z.string().optional(),
+  accountId: z.string().optional(), apiEndpoint: z.string().optional(), orgId: z.string().optional(),
+  orgName: z.string().optional(), region: z.string().optional(),
+  inferenceRegion: z.enum(['global', 'eu', 'us']).optional(), activeOrganizationId: z.string().optional(),
+  authorizedAt: z.number().optional(),
+});
+const ProviderOAuthGrantSchema = z.union([
+  z.string().min(1).transform(key => ({ kind: 'api-key' as const, key })),
+  OAuthCredentialsSchema.transform(credentials => ({ kind: 'oauth' as const, credentials })),
+]);
+type ProviderOAuthGrant = z.infer<typeof ProviderOAuthGrantSchema>;
 
 type Flow = {
   flowId: string; generation: string; methodId: string; providerId: string; expectedRevision: string;
@@ -10,7 +25,7 @@ type Flow = {
   authorizationUrl?: string; instructions?: string; prompt?: string;
   browserCookieNames?: string[];
   input?: { resolve(value: string): void; reject(error: Error): void; dispose(): void };
-  tokens?: OAuthCredentials | string;
+  grant?: ProviderOAuthGrant;
   lease?: NodeJS.Timeout;
 };
 
@@ -62,10 +77,10 @@ export class NativeProviderOAuth {
       };
       flow.task = Promise.resolve().then(() => login(callbacks)).then(tokens => {
         if (flow.controller.signal.aborted || this.closed) return;
-        if (typeof tokens === 'string' && !tokens) throw new Error('Login returned no credential');
-        flow.tokens = tokens; flow.status = 'ready'; this.clearInput(flow);
+        flow.grant = ProviderOAuthGrantSchema.parse(tokens);
+        flow.status = 'ready'; this.clearInput(flow);
       }).catch(() => {
-        flow.tokens = undefined;
+        flow.grant = undefined;
         if (flow.status !== 'cancelled') flow.status = 'failed';
         this.clearInput(flow);
       });
@@ -88,14 +103,14 @@ export class NativeProviderOAuth {
       // The enclosing coordinator has already serialized and CAS-checked this mutation.
       if (BigInt(revision) !== BigInt(request.expectedRevision) + 1n || request.expectedRevision !== flow.expectedRevision)
         throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Provider catalog changed during login');
-      if (flow.status !== 'ready' || flow.tokens === undefined) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Provider login has no completed grant');
+      if (flow.status !== 'ready' || flow.grant === undefined) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Provider login has no completed grant');
       try {
-        await this.authStorage.credentials.upsert(flow.providerId, typeof flow.tokens === 'string'
-          ? { type: 'api_key', key: flow.tokens, source: 'login' }
-          : { type: 'oauth', ...flow.tokens, authorizedAt: Date.now() });
+        await this.authStorage.credentials.upsert(flow.providerId, flow.grant.kind === 'api-key'
+          ? { type: 'api_key', key: flow.grant.key, source: 'login' }
+          : { type: 'oauth', ...flow.grant.credentials, authorizedAt: Date.now() });
         await this.authStorage.credentials.reload();
       } catch { throw new ProjectionError(503, 'CREDENTIAL_WRITE_FAILED', 'Provider login could not be saved'); }
-      flow.tokens = undefined; flow.status = 'authenticated'; flow.controller.abort(); this.clearInput(flow);
+      flow.grant = undefined; flow.status = 'authenticated'; flow.controller.abort(); this.clearInput(flow);
     }
     return this.result(flow, revision);
   }
@@ -110,10 +125,16 @@ export class NativeProviderOAuth {
       }, 60_000);
       flow.lease.unref();
     }
-    return ProviderOAuthResultSchema.parse({ flowId: flow.flowId, generation: flow.generation, providerId: flow.providerId,
-      revision, status: flow.status, ...(flow.status === 'pending' ? { authorizationUrl: flow.authorizationUrl,
-        instructions: flow.instructions, prompt: flow.prompt, browserCookieNames: flow.browserCookieNames } : {}), manualInput: flow.input !== undefined,
-      ...(flow.status === 'failed' ? { error: 'OAUTH_FAILED' } : {}) });
+    const result: ProviderOAuthResult = { flowId: flow.flowId, generation: flow.generation, providerId: flow.providerId,
+      revision, status: flow.status, manualInput: flow.input !== undefined };
+    if (flow.status === 'pending') {
+      result.authorizationUrl = flow.authorizationUrl;
+      result.instructions = flow.instructions;
+      result.prompt = flow.prompt;
+      result.browserCookieNames = flow.browserCookieNames;
+    }
+    if (flow.status === 'failed') result.error = 'OAUTH_FAILED';
+    return ProviderOAuthResultSchema.parse(result);
   }
   private waitInput(flow: Flow, prompt?: string, signal?: AbortSignal): Promise<string> {
     if (flow.controller.signal.aborted || signal?.aborted) return Promise.reject(new Error('Login cancelled'));
@@ -132,7 +153,7 @@ export class NativeProviderOAuth {
   }
   private dispose(flow: Flow): void {
     clearTimeout(flow.lease);
-    flow.status = 'cancelled'; flow.tokens = undefined; flow.controller.abort(); this.clearInput(flow);
+    flow.status = 'cancelled'; flow.grant = undefined; flow.controller.abort(); this.clearInput(flow);
   }
   cancelProvider(providerId: string): void {
     for (const flow of this.flows.values()) if (flow.providerId === providerId) this.dispose(flow);

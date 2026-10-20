@@ -1,0 +1,65 @@
+# 49: Native provider management, OAuth lifecycle, and custom provider discovery
+
+**Effort:** omp-through-m3
+**Task type:** feature
+**Base commit:** 93d519221527e15cf52a5dde0d6ddf011c7527bb
+**Started:** 2026-10-18
+**Finished:** 2026-10-20T19:53:12Z
+
+**Delivers:** End-to-end native provider management across canonical contracts, Agent Service, Host Gateway, and UI: non-secret account roster, account labels, default account selection, native OAuth flow lifecycle (start, status, input, cancel) backed by the native SDK provider registry, and custom provider configuration, persistence, and model discovery.
+
+**Blocked by:** None
+**Files:** `packages/agent-contract/src/catalogs.ts`, `packages/agent-service/src/worker/catalog-models.ts`, `packages/agent-service/src/worker/catalog-credentials.ts`, `packages/ui/src/components/sections/providers/`, `packages/web/server/lib/`, `.workflow/development.md`, `.workflow/specs/omp-through-m3.md`
+**Read first:** `.workflow/specs/omp-through-m3.md` W6, W9, W10; `packages/agent-contract/src/catalogs.ts`; `packages/agent-service/src/worker/catalog-credentials.ts`; `packages/agent-service/src/worker/catalog-models.ts`; installed native OMP SDK provider registry and `AuthStorage` APIs; Host enterprise boundaries
+**Covers:** W6, W9, W10
+
+**Architecture & Boundaries:**
+
+- **Worker ownership:** Dedicated Bun Agent Service worker owns `AuthStorage`, OAuth secrets, and the native models file. All native resources reside in the Bun SDK worker, accessed through Canonical Client and Host Gateway. Node Host and UI never import or run the native SDK.
+- **Enterprise policy & Host gate:** Host enforces authentication and preserves existing native provider-entry Host authorization/enterprise gates on all provider and credential routes. Do not invent legacy `provider.use` / `integration.use` policy checks on native endpoints.
+- **Opaque non-secret public contract:** Public records expose opaque `credentialRef` tokens (never internal storage row IDs or filesystem paths). Tokens and secret headers are write-only; error messages are sanitized before client exposure.
+- **Transactional native OAuth flows:** Native OAuth flows use in-memory token return via SDK `getProviderDefinition` / `getOAuthProvider.login` callbacks. Credentials commit only through serialized coordinator mutations after checking `expectedRevision` CAS to prevent out-of-band persistence by async `AuthStorage.oauth.login`.
+- **Flow lifecycle & binding:** Each flow binds `workspaceId`, `agentDirectory`, `providerId`, worker generation, and a unique `flowId`. Abort, disconnect, and worker restart cleanly dispose in-flight flows. A manual callback/authorization-code entry prompt is provided for remote or non-loopback environments; no external network authentication is required for local controlled verification.
+- **Account labeling & multi-account:** Native `AuthStorage` does not natively store account labels. Canonical application labels in private configuration keyed by `credentialRef` provide intentional application metadata. Default account selection binds to existing native model resolution.
+- **Identity separation:** Separate native login method ID from stored provider ID (`storeCredentialsAs`).
+- **Retained functionality:** Native implementation replaces legacy OpenCode integration form fields without deleting OAuth, multi-account, or custom provider capabilities.
+- **Schema extension:** Intentionally extend existing canonical Provider/Model mutation schemas in `catalogs.ts`; do not build OpenCode-shaped adapters or pass-through shims. Do not rewrite native SDK fields to cater to legacy UI expectations.
+
+**Check:** Unit and integration tests covering native storage, service restart/reopen, account selection, and controlled loopback OAuth callback / mock discovery; verification that real official third-party grants remain explicitly unexercised.
+
+**Acceptance:**
+
+- [x] Canonical provider schemas support non-secret account rosters, opaque `credentialRef`s, and custom provider definitions.
+- [x] In-memory OAuth flow lifecycle (start, status, input, cancel) integrates with native SDK provider registry under coordinator revision CAS.
+- [x] Custom provider definitions support endpoint configuration, custom headers, and model discovery without OpenCode shims.
+- [x] Enterprise policy and Host authentication guard all provider routes.
+- [x] Node Host and UI remain free of SDK imports.
+- [x] Focused provider tests pass; actual native storage/reopen/selection is verified.
+
+## Progress
+
+- Implementation branch: `m3-native/providers-20261018`; isolated worktree: `/home/shizuku/Project/ohpichamber-worktrees/m3-native-providers`. The initial alternate-index worktree setup was corrected with parent-authorized `git read-tree HEAD` without modifying working files.
+- Added intentional native provider-management contracts and authenticated canonical transport for account rosters/labels/default selection/removal, native OAuth method identity versus stored provider identity, explicit OAuth lifecycle and CAS commit, custom provider configuration readback and discovery.
+- Native Bun workers own SDK storage and flow memory. Native registry login callbacks return grants into private memory; start/status/input/cancel do not advance catalog revision. Only explicit serialized `commit` writes credentials after retained starting revision and generation/flow checks. Disconnect and worker close abort flows.
+- Pending/ready OAuth resources use a worker-owned 60-second lease renewed by active status/input calls. Browser departure or a lost start response therefore aborts callback resources and discards private grants rather than retaining them indefinitely. This is abandonment cleanup only; the native SDK still owns login protocol lifetime.
+- Account labels are private app metadata keyed by opaque credential references, not native database IDs or OpenCode settings. Default selected credentials bind actual native model resolution; source-owned authentication remains source-owned. Custom header values are literal, private, write-only configuration; public readback exposes names only.
+- Runtime surfaces: Web/PWA, Electron, hosted mobile and Capacitor all use the same Canonical Client → authenticated Host → Bun worker path. Remote/mobile browser OAuth supports manual callback/code input; browser-session cookie prompts use masked manual entry. Enterprise mode refuses provider entry/discovery while retaining account selection/removal/labels and cancellation/status.
+- Added focused deterministic contract, coordinator, Host/client, native persistence/selection, OAuth lifecycle and loopback discovery regressions. Official third-party grants remain unexercised.
+- Verification intentionally NOT run: no builds, tests, type-checks, lint or formatters during parallel implementation. Parent must run focused regressions and integrated checks once after landing all slices. Acceptance boxes remain unchecked and this task stays unarchived pending actual proof.
+
+### Verification on integration HEAD (2026-10-21)
+
+- Resumed on `omp-through-m3/recovery-20261013` at HEAD `1067fd2fc`. Recorded Base `93d519221527e15cf52a5dde0d6ddf011c7527bb` resolves to a commit but is a sibling snapshot, not an ancestor of HEAD; the implementation branch `m3-native/providers-20261018` is built from that Base. Core Task49 files (`provider-management.ts`/test, `provider-oauth.ts`/test, `provider-accounts.test.ts`, `catalog-credentials.ts`, `catalog-models.ts`/test) are byte-identical between current HEAD and that branch; integration files (`catalogs.ts`, `protocol.ts`, `workspaces.ts`, `workspace-routes.ts`, `canonicalClient.ts`, Host `canonical-routes.js`/test) were reviewed at current HEAD.
+- Dirty at start (resume/landing; preserved, never staged): `packages/agent-service/src/sessions/registry-native.test.ts`, `packages/agent-service/src/sessions/registry.ts`, `packages/agent-service/src/supervisor/service.ts`, `packages/ui/src/sync/DOCUMENTATION.md`, `packages/ui/src/sync/bootstrap.test.ts`, `packages/ui/src/sync/bootstrap.ts`, `packages/ui/src/sync/child-store.test.ts`, `packages/ui/src/sync/child-store.ts`, `packages/ui/src/sync/retry.ts`, `packages/ui/src/sync/session-message-loader.ts`, `packages/ui/src/sync/sync-context.tsx`, `.workflow/omp-migration/m3/task36-recovery-guest-2026-10-20.json`.
+- Check before: not previously run; the task record explicitly recorded no tests/type-checks/lint.
+- Check after (exactly the focused provider suites):
+  - `bun test packages/agent-contract/src/provider-management.test.ts` — 4 pass, 0 fail, 115 expectations.
+  - `bun test packages/agent-service/src/catalogs/protocol-providers.test.ts packages/agent-service/src/supervisor/workspaces-providers.test.ts packages/agent-service/src/worker/catalog-credentials.test.ts packages/agent-service/src/worker/catalog-models.test.ts packages/agent-service/src/worker/provider-accounts.test.ts packages/agent-service/src/worker/provider-oauth.test.ts --timeout 60000` — 47 pass, 0 fail, 293 expectations across 6 files.
+  - `bun test packages/ui/src/api/canonicalClient-providers.test.ts packages/ui/src/components/sections/providers/ProvidersPage.test.ts packages/ui/src/components/sections/providers/custom-provider-form.test.ts packages/ui/src/components/sections/providers/ProviderOAuthMethods.test.tsx` (run in `packages/ui`) — 19 pass, 0 fail, 45 expectations.
+  - `bun test packages/web/server/lib/ui-auth/canonical-host-routes.test.js --timeout 60000` — 20 pass, 3 fail. The three failures are the pre-existing Task54 usage tests (`/usage?range=...` rejected `400 INVALID_REQUEST` because the Host query allowlist omits `range`); they do not touch provider routes. Filtered provider/OAuth Host tests (`-t "provider management|gates OAuth|search with real client"`) passed 3/3 with 82 expectations.
+- Actual behavior exercised by those suites: real native SQLite `AuthStorage` write → close → cold reopen; two API-key accounts with distinct opaque `credential_*` refs; label/select/remove persistence and CAS conflicts; selected account changing the actual `ModelRegistry` API key and resolver; custom provider endpoint plus literal private headers and canonical models saved/reopened (mode `0600`); real loopback `/models` discovery for `chat-completions`, `responses`, `messages` and `generate-content`, including write-only auth headers, pagination, redirect/credential non-forwarding, opaque stored refs and key cascade; controlled loopback/manual-code OAuth start → pending/status → input → ready → CAS commit under `storeCredentialsAs`, plus stale revision/generation rejection, cancel/replacement/provider-cancel/worker-close disposal, 60 s abandoned-flow lease expiry, sanitized failures and reopen of the committed grant. No official third-party grant was requested or exercised.
+- Type/lint (focused, non-overlapping): `packages/agent-contract` type-check passed; `packages/web` type-check passed; targeted `tsc` of the three changed non-test provider files passed with prepared source-derived SDK declarations; focused ESLint on the UI provider surface and focused `oxlint` on the Task49 agent-service/Host files passed. The package-wide `agent-service` and `ui` type-checks were intentionally omitted because their dirty at-start files (`sessions/registry*.ts`, `supervisor/service.ts`, `ui/src/sync/*`) overlap those projects and are not Task49 work.
+- Anti-slop cleanup: changed the OAuth callback boundary to parse the SDK login result into a `kind`-tagged grant (`api-key` or `oauth`) with Zod, removing two runtime `typeof` branches and ensuring only a non-empty string or a validated credential object can become ready; removed conditional object spreads in account projection, OAuth result, discovery models and two test fixtures. Behavior is unchanged for valid SDK results; invalid/empty grants now fail closed into the sanitized `OAUTH_FAILED` path.
+- Static boundary: no `@oh-my-pi/pi-*` import exists under `packages/ui/src` or `packages/web/server`; Node Host and UI remain SDK-free.
+- Docs/limitations: `development.md` records this verification. Official provider grants, real external provider endpoints, and non-Linux/macOS runtime behavior remain outside this evidence. The three unrelated Host usage failures remain open under Task54/Task18 ownership; no aggregate workspace check was run (Task18 owns it).
+- Review boundary: comparison point `93d5192` (Task49 Base via `m3-native/providers-20261018`) plus current HEAD `1067fd2fc` for integration files; paths are the Task49 contract, Agent Service provider modules, Host provider routes and provider UI; trust boundaries are credentials/OAuth secrets and Host enterprise/workspace authorization. Own quality pass found no blocking correctness defects after the lint fixes; own security pass found no blocking credential, secret-return, SSRF/redirect or enterprise-gate defect. Advisory brief-A/quality/security subagent reviews: pending at record time; their results are not claimed here.

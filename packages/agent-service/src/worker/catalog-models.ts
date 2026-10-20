@@ -337,9 +337,11 @@ export class NativeModels {
           seen.add(modelId);
           const contextWindow = row.inputTokenLimit ?? row.context_window;
           const maxOutputTokens = row.outputTokenLimit ?? row.max_output_tokens;
-          models.push({ modelId, name: row.displayName ?? row.display_name ?? row.name ?? modelId,
-            ...(contextWindow ? { contextWindow } : {}), ...(maxOutputTokens ? { maxOutputTokens } : {}),
-          });
+          const discoveredModel: ProviderModelDiscoveryResult['models'][number] = { modelId,
+            name: row.displayName ?? row.display_name ?? row.name ?? modelId };
+          if (contextWindow) discoveredModel.contextWindow = contextWindow;
+          if (maxOutputTokens) discoveredModel.maxOutputTokens = maxOutputTokens;
+          models.push(discoveredModel);
         }
         if (request.protocol === 'generate-content' && payload.nextPageToken) url.searchParams.set('pageToken', payload.nextPageToken);
         else if (request.protocol === 'messages' && payload.has_more) {

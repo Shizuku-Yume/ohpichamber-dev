@@ -218,8 +218,10 @@ for (const protocol of ['chat-completions', 'responses', 'messages', 'generate-c
     try {
       const discovered = await fixture.reader.models.discoverProviderModels({ endpoint: `http://127.0.0.1:${server.port}/v1`, protocol,
         apiKey: 'write-only-secret', headers: { 'x-private': 'write-only-header' } });
-      expect(discovered).toEqual({ models: [{ modelId: 'loopback-model', name: 'Loopback',
-        ...(protocol === 'generate-content' ? { contextWindow: 8192, maxOutputTokens: 1024 } : {}) }] });
+      const expectedModel = protocol === 'generate-content'
+        ? { modelId: 'loopback-model', name: 'Loopback', contextWindow: 8192, maxOutputTokens: 1024 }
+        : { modelId: 'loopback-model', name: 'Loopback' };
+      expect(discovered).toEqual({ models: [expectedModel] });
       expect(requests).toHaveLength(1);
       expect(new URL(requests[0]!.url).pathname).toBe('/v1/models');
       const headerName = protocol === 'messages' ? 'x-api-key' : protocol === 'generate-content' ? 'x-goog-api-key' : 'authorization';
@@ -328,7 +330,8 @@ for (const protocol of ['messages', 'generate-content'] as const) {
       const second = url.search !== '';
       return Response.json(protocol === 'messages'
         ? { data: second ? [{ id: 'model-one' }, { id: 'model-two' }] : [{ id: 'model-one' }], has_more: !second, last_id: 'model-one' }
-        : { models: second ? [{ name: 'models/model-one' }, { name: 'models/model-two' }] : [{ name: 'models/model-one' }], ...(!second ? { nextPageToken: 'page-two' } : {}) });
+        : second ? { models: [{ name: 'models/model-one' }, { name: 'models/model-two' }] }
+          : { models: [{ name: 'models/model-one' }], nextPageToken: 'page-two' });
     } });
     const fixture = await openCatalogFixture();
     try {

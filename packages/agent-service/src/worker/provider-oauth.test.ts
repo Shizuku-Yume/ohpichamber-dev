@@ -48,7 +48,7 @@ async function ready(oauth: NativeProviderOAuth, flow: ProviderOAuthResult, revi
   return result;
 }
 
-function expectNoSecrets(value: unknown) {
+function expectNoSecrets(value: ProviderOAuthResult) {
   const serialized = JSON.stringify(value);
   expect(serialized).not.toContain(tokens.access);
   expect(serialized).not.toContain(tokens.refresh);

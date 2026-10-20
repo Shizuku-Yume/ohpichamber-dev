@@ -40,9 +40,10 @@ export class NativeCredentials {
     const active = selected ?? (provider.auth.status === 'configured' && provider.auth.source === 'stored-credential' ? provider.auth.credentialRef : null);
     return ProviderAccountsSchema.parse({ revision, providerId, accounts: this.authStorage.credentials.list(providerId).map(row => {
       const credentialRef = credentialReference(providerId, row.id);
-      return { credentialRef, method: row.credential.type === 'oauth' ? 'oauth' : 'api-key',
-        label: labels[credentialRef], active: credentialRef === active, disabled: row.disabledCause !== null,
-        ...(row.credential.type === 'oauth' ? { email: row.credential.email, accountId: row.credential.accountId } : {}) };
+      const account = { credentialRef, method: row.credential.type === 'oauth' ? 'oauth' : 'api-key',
+        label: labels[credentialRef], active: credentialRef === active, disabled: row.disabledCause !== null };
+      if (row.credential.type !== 'oauth') return account;
+      return { ...account, email: row.credential.email, accountId: row.credential.accountId };
     }) });
   }
 
