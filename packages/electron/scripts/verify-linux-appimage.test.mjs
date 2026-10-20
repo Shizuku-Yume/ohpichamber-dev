@@ -40,6 +40,22 @@ const createPayload = () => {
   return root;
 };
 
+const addAgentNative = (root, relativePath, architecture) => {
+  const agent = path.join(root, 'resources/agent-runtime');
+  const file = path.join(agent, relativePath);
+  writeElf(file, architecture);
+  const manifestPath = path.join(agent, 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.files.push({ path: relativePath, sha256: createHash('sha256').update(fs.readFileSync(file)).digest('hex') });
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+};
+
+const addUnpackedNative = (root, relativePath, architecture) => {
+  const file = path.join(root, 'resources/app.asar.unpacked/node_modules', relativePath);
+  writeElf(file, architecture);
+  return file;
+};
+
 test('reads supported ELF architectures', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-elf-test-'));
   try {
@@ -66,6 +82,79 @@ test('verifies identity, version, and native payload architecture', () => {
       runBunVersion: () => '1.4.2',
     });
     assert.equal(result.nativeModuleCount, 2);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('checks the selected ONNX addon for every Native ABI and skips foreign targets', () => {
+  const root = createPayload();
+  try {
+    addAgentNative(root, 'packages/1/bin/napi-v3/darwin/arm64/onnxruntime_binding.node', 'x64');
+    addAgentNative(root, 'packages/2/bin/napi-v3/win32/x64/onnxruntime_binding.node', 'x64');
+    addAgentNative(root, 'packages/3/bin/napi-v3/linux/arm64/onnxruntime_binding.node', 'arm64');
+    addAgentNative(root, 'packages/4/bin/napi-v3/linux/x64/onnxruntime_binding.node', 'x64');
+    addAgentNative(root, 'packages/5/bin/napi-v6/darwin/arm64/onnxruntime_binding.node', 'arm64');
+    const result = verifyExtractedPayload({
+      root,
+      targetArchitecture: 'x64',
+      runBunVersion: () => '1.4.2',
+    });
+    assert.equal(result.nativeModuleCount, 2);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('fails when a selected ONNX addon has the wrong architecture for every ABI', () => {
+  for (const abi of ['napi-v3', 'napi-v6']) {
+    const root = createPayload();
+    try {
+      addAgentNative(root, `packages/1/bin/${abi}/linux/x64/onnxruntime_binding.node`, 'arm64');
+      assert.throws(() => verifyExtractedPayload({
+        root,
+        targetArchitecture: 'x64',
+        runBunVersion: () => '1.4.2',
+      }), /Agent native module architecture mismatch/);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test('fails when the selected ONNX addon is missing', () => {
+  const root = createPayload();
+  try {
+    addAgentNative(root, 'packages/1/bin/napi-v3/linux/x64/onnxruntime_binding.node', 'x64');
+    fs.rmSync(path.join(root, 'resources/agent-runtime/packages/1/bin/napi-v3/linux/x64/onnxruntime_binding.node'));
+    assert.throws(() => verifyExtractedPayload({
+      root,
+      targetArchitecture: 'x64',
+      runBunVersion: () => '1.4.2',
+    }), /ENOENT/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('skips foreign ONNX addons in unpacked host modules and checks the selected one', () => {
+  const root = createPayload();
+  try {
+    addUnpackedNative(root, 'onnxruntime-node/bin/napi-v6/darwin/arm64/onnxruntime_binding.node', 'arm64');
+    addUnpackedNative(root, 'onnxruntime-node/bin/napi-v3/win32/x64/onnxruntime_binding.node', 'x64');
+    const selected = addUnpackedNative(root, 'onnxruntime-node/bin/napi-v6/linux/x64/onnxruntime_binding.node', 'x64');
+    const result = verifyExtractedPayload({
+      root,
+      targetArchitecture: 'x64',
+      runBunVersion: () => '1.4.2',
+    });
+    assert.equal(result.nativeModuleCount, 5);
+    writeElf(selected, 'arm64');
+    assert.throws(() => verifyExtractedPayload({
+      root,
+      targetArchitecture: 'x64',
+      runBunVersion: () => '1.4.2',
+    }), /Native module architecture mismatch/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

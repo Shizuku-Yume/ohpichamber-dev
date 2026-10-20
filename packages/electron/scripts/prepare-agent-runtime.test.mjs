@@ -51,6 +51,38 @@ test('links platform N-API assets beside the loader package in the relocated clo
   assert.equal(fs.readFileSync(link, 'utf8'), 'native-bytes');
 });
 
+test('prunes non-target ONNX bindings for every N-API ABI and keeps the selected Linux target', t => {
+  const { pkg, source, output } = fixture(t);
+  pkg(source, { name: 'service', version: '1', dependencies: { 'onnxruntime-node': '1', other: '1' } });
+  const onnx = path.join(source, 'node_modules/onnxruntime-node');
+  pkg(onnx, { name: 'onnxruntime-node', version: '1' });
+  const bindings = [
+    'bin/napi-v3/darwin/x64/onnxruntime_binding.node',
+    'bin/napi-v3/linux/arm64/onnxruntime_binding.node',
+    'bin/napi-v3/linux/x64/onnxruntime_binding.node',
+    'bin/napi-v6/darwin/arm64/onnxruntime_binding.node',
+    'bin/napi-v6/linux/x64/onnxruntime_binding.node',
+  ];
+  for (const binding of bindings) {
+    fs.mkdirSync(path.dirname(path.join(onnx, binding)), { recursive: true });
+    fs.writeFileSync(path.join(onnx, binding), binding);
+  }
+  const other = path.join(source, 'node_modules/other');
+  pkg(other, { name: 'other', version: '1' });
+  fs.mkdirSync(path.join(other, 'bin/napi-v3/darwin/x64'), { recursive: true });
+  fs.writeFileSync(path.join(other, 'bin/napi-v3/darwin/x64/keep.node'), 'keep');
+  const packages = stageDependencyClosure(source, output, { platform: 'linux', architecture: 'x64' });
+  const staged = path.join(output, packages.find(item => item.name === 'onnxruntime-node').path);
+  for (const foreign of bindings.filter(binding => !binding.includes('/linux/x64/'))) {
+    assert.equal(fs.existsSync(path.join(staged, foreign)), false, foreign);
+  }
+  for (const selected of bindings.filter(binding => binding.includes('/linux/x64/'))) {
+    assert.equal(fs.readFileSync(path.join(staged, selected), 'utf8'), selected);
+  }
+  const stagedOther = path.join(output, packages.find(item => item.name === 'other').path);
+  assert.equal(fs.readFileSync(path.join(stagedOther, 'bin/napi-v3/darwin/x64/keep.node'), 'utf8'), 'keep');
+});
+
 test('fails on missing required runtime dependencies rather than emitting a partial success', t => {
   const { pkg, source, output } = fixture(t);
   pkg(source, { name: 'service', version: '1', dependencies: { absent: '1' } });

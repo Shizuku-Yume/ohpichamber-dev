@@ -1,0 +1,51 @@
+# 55: Repair packaged Electron canonical authentication bootstrap
+
+**Effort:** omp-through-m3
+**Task type:** bugfix
+**Base commit:** e848504602333955b1d134bba3345d8bbc2ed065
+**Started:** 2026-10-20
+**Finished:** 2026-10-21T01:40:38+08:00
+
+**Delivers:** A packaged Electron window preserves the local authenticated Host transport for `openchamber-ui://app`, so canonical session and workspace requests succeed after startup instead of returning `401` while `/auth/session` reports `authenticated: true`.
+
+**Blocked by:** 44
+**Files:** `packages/electron/`, `packages/web/server/lib/ui-auth/`, `packages/ui/src/lib/runtime-auth*`, packaged runtime/auth tests and owning documentation
+
+**Read first:** `.workflow/tasks/omp-through-m3/36-m3-connected-acceptance.md`; `packages/electron/README.md`; `packages/electron/main.mjs`; `packages/electron/preload.mjs`; `packages/web/server/lib/ui-auth/`; runtime authentication and URL helpers; desktop-shell and ui-api-decoupling skills
+**Covers:** W7, W10
+
+**Check:** Build and launch the Linux packaged AppImage under Xvfb with an isolated HOME → `/auth/session` is authenticated and renderer `GET /api/agent/v1/sessions` plus workspace resolve return `200`; the packaged UI renders a usable session catalog without the refresh-failure state. Run focused Electron/auth tests and package type-check.
+
+ - [x] Preserve authenticated local Host transport for the packaged `openchamber-ui://app` origin.
+ - [x] Keep remote pages and non-local runtime switches from receiving local desktop credentials.
+ - [x] Prove canonical session catalog and workspace resolution from the packaged renderer.
+ - [x] Record cleanup and platform limitations in the Task36 receipt.
+
+## Progress
+
+- 2026-10-20 Task36 packaged receipt `.workflow/omp-migration/m3/task36-packaged-electron-2026-10-20.json` reproduces the failure: `/auth/session` returned `{ authenticated: true, disabled: true }`, while renderer canonical sessions and workspace resolution returned `401`; the packaged UI showed `无法刷新会话。` and the model picker stayed unavailable.
+- This is an owning implementation task, not an acceptance waiver. Task36 remains open until the repaired packaged renderer completes its connected scenario.
+- Diagnosis: the passwordless `/auth/session` cookie is cross-origin to `openchamber-ui://app`, and canonical routes refuse anonymous-session synthesis. A clean desktop profile also has no stored local client bearer, so renderer requests carry neither accepted credential. The source trace is in `packages/electron/main.mjs` (`resolveInitialUrl`, `readDesktopLocalClientToken`, `activateMainWindow`), `packages/web/src/runtimeConfig.ts`, and `packages/web/server/lib/host/canonical-routes.js`.
+- Implementation: `desktop-local-auth.mjs` obtains a credential only after app-origin + local-Host + packaged-UI checks, using the passwordless Host client-create route with cookies omitted. Main persists the returned `desktop-local` token before first window navigation/config release. Existing tokens are reused; remote host tokens remain per-host and no local token is minted for non-packaged/external pages. Focused unit coverage is in `desktop-local-auth.test.mjs`.
+
+## Checks
+
+- Origin repair: `ensurePackagedLocalRuntimeAuth` no longer compares `new URL(uiUrl).origin` with `openchamber-ui://app` (a custom scheme's WHATWG origin is `null`). `isPackagedUiDocumentUrl` in `packaged-ui-routing.mjs` matches scheme + hostname, matching the existing `isLocalSender` convention; `shouldBootstrapPackagedLocalAuth` additionally requires packaged UI and the embedded local Host.
+- `node --test packages/electron/desktop-local-auth.test.mjs packages/electron/packaged-ui-routing.test.mjs` → 12 pass, 0 fail (mint/omit-cookies/persist/defaults/coalescing/denial/malformed response, and origin/remote-host exclusion).
+- `bun test packages/web/server/lib/opencode/desktop-client-bootstrap.test.js` and `bunx vitest run server/lib/opencode/desktop-client-bootstrap.test.js` (cwd `packages/web`) → 4 pass each, against the real `registerAuthAndAccessRoutes` + real `createUiAuth` + real client store: cookie-less create 201 under a passwordless Host; 401 under client-auth-required and password-protected Hosts; non-`desktop-local` clients cannot mint (403); minted bearer authenticates a later request.
+- `bun run type-check:electron` passed. `bunx oxlint` is clean on the authored helper, tests, and `packaged-ui-routing.mjs`; `main.mjs` retains pre-existing repo-wide anti-slop findings outside this change. `bun run dead-code` reports no findings for the authored files (the command still exits 1 for pre-existing repo findings).
+- Packaged proof (final assembled inputs after Task44's Host fix): `bun run bundle:main` + `bun x electron-builder --publish never --x64`, AppImage sha256 `71f97b41b9e4b2615556d04fb33ec32f8dab89ebfeee23610b95ed1264711935`, 2026-10-20 15:55, `managed-process-registry` present in the packaged asar. A prior exact-source-only package (`c45be729…`) produced the same auth outcomes before the Host fix landed.
+- Fresh HOME `/tmp/ohpi-m3-electron-t55f` under `xvfb-run`, CDP 9223: renderer origin `openchamber-ui://app`, injected token present (53 chars, `oc_client_`), `/auth/session` 200 `{authenticated:true,disabled:true}`, canonical `GET /api/agent/v1/sessions` 200, `POST /api/agent/v1/workspaces/resolve` 200 `Chats`, `/api/client-auth/clients` 200 with exactly one `desktop-local` client; raw `curl` without credentials to canonical sessions 401; settings stores the desktop token and a restart reused the same single client. UI rendered the composer with a model picker and no `无法刷新会话。` state.
+- Credential exclusion (same AppImage, `OPENCHAMBER_SERVER_URL=http://127.0.0.1:4618`, fresh HOME): renderer `__OPENCHAMBER_CLIENT_TOKEN__` absent, 93 requests to the remote target all carried no `Authorization`, settings had no desktop token, no local client store was created, renderer canonical sessions 401.
+- Packaged connected follow-up (same artifact): the fixture provider was configured through the canonical workspace provider/credential APIs; the composer created and streamed `m3fixture/stream-300cps` (2 messages, survives reload without duplicate parts). Abort was exercised through the canonical run abort (200, run cancelled, turn cancelled, no duplicate parts after reload) because that earlier artifact's packaged UI rendered **no Stop control during the active run** — superseded by the 2026-10-21 final rebundle below, which renders Stop and cancels through it. Details and remaining Board/Guest/recovery gaps are in the Task36 receipt.
+- Cleanup: both AppImages, the fixture/stub processes, and CDP sessions were stopped; ports 9223/9224/4601/4618/57123 closed, no AppImage/bun children remained, and both isolated HOME profiles (which held the bearer values) were deleted. The Task44ProcessCleanup Host plugin regression for this source passed afterward (canonical plugins 5/5 vitest at 115.2s, focused registry/supervisor 32/32, Web type-check, real Bun orphan-reap proof). Limits of that earlier artifact: the packaged UI showed no Stop control during an active canonical run; the final 2026-10-21 rebundle below closes that observation. Board, Guests, and snapshot-plus-cursor stale-runtime recovery remain open for Task36. On the final launch the first-run chooser appeared before `use local` was chosen; the prior exact-source package booted straight to the app.
+
+## 2026-10-21 final rebundle and connected receipt
+
+Rebuilt the packaged artifact after Task44's Host commit `cacbaf042` without rebuilding unchanged Web/Agent inputs: `bun run --cwd packages/electron bundle:main`, then `bun x electron-builder --publish never --x64`, then `node packages/electron/scripts/verify-linux-appimage.mjs packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage`. The final AppImage is SHA-256 `598bf5823785ccf5b3f36d4e49bb950638e77b3eff35a5b3fc7b3e3259eabad9` (606,838,421 bytes, built 01:35), bundling Web dist index `42170a97…` and Agent Service `2f025477…`/`90f6bf5e…`. Payload verification passed with Bun 1.4.2, 158 Agent packages and 29 Host native modules. Durable receipt: `.workflow/omp-migration/m3/task55-packaged-electron-2026-10-21.json`.
+
+The fresh isolated packaged run observed injected `oc_client_` token, `/auth/session` 200 `{authenticated:true,disabled:true}`, canonical sessions 200 (3), workspaces 200 (1) and workspace resolve 200 `Chats`; raw unauthenticated canonical sessions returned 401. Exactly one `desktop-local` client existed, the UI composer/catalog rendered without `无法刷新会话。`, and no local token was stored for a remote-target profile (18/18 remote requests carried no Authorization, no settings token, no client store).
+
+Session/run proof: `m3fixture/stream-300cps` session `986e0063-7469-407a-8b51-09ad5ba29bdf` completed with 2 snapshot/2 history messages and 0 duplicate part IDs after reload; the 5,742-character fixture document remained rendered. Stop/keyboard proof (owned by Task62; its file was not modified or staged): running session `39950efe-7e04-4e93-9172-77ecd65d5419` rendered `button[aria-label="Stop generating"]`; clicking it set `activeRun:null`, runtime `idle`, turn `cancelled`. A second running session `4945a980-3356-48b7-b5c8-bd6167bbf4ba` cancelled through Escape twice with the same idle/cancelled result. Screenshots are under `/home/shizuku/.cache/ohpi-acceptance/evidence-electron/t55-final-*.png`.
+
+Reused unchanged checks: 12 Electron auth/routing tests, 4 desktop bootstrap route tests under both Bun and Vitest, and Electron type-check. Cleanup stopped both packaged apps, the fixture, remote stub and Xvfb sessions; ports 57123/4601/4618/9223/9224 closed, no AppImage/Agent Service child remained, and both isolated HOME profiles were removed. Limits: Linux x64 packaged artifact only, deterministic local fixture rather than an official provider/OAuth, and Board/Guest/snapshot-cursor recovery remain Task36. Task36 and Task18 remain open; no M3 gate claim.

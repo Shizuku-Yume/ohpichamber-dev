@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/55",
+  "observedAt": "2026-10-21",
+  "status": "packaged-final-rebundle-auth-pass",
+  "environment": {
+    "surface": "Packaged Electron",
+    "platform": "Linux x64, 7.2.8-200.fc44.x86_64",
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "baseCommit": "e848504602333955b1d134bba3345d8bbc2ed065",
+    "task44CommitIncluded": "cacbaf042",
+    "artifact": "packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage",
+    "artifactSha256": "598bf5823785ccf5b3f36d4e49bb950638e77b3eff35a5b3fc7b3e3259eabad9",
+    "artifactSizeBytes": 606838421,
+    "artifactBuiltAt": "2026-10-21T01:35:19+08:00",
+    "electronVersion": "43.7.0",
+    "display": "xvfb-run -a -s '-screen 0 1600x1000x24'",
+    "webDistIndexSha256": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+    "agentServiceDistIndexSha256": "2f025477d8eb5018a18e5c41f39df90215a7703b786f4dfb6baf7a2ed6bb9a63",
+    "agentServiceDistWorkerSha256": "90f6bf5e67000e505645b883364b416bd7eb4008e48594747d503e3f0d552ef8",
+    "isolatedHome": "/tmp/ohpi-m3-electron-t55-final (removed after capture)",
+    "hostPort": 57123,
+    "remoteDebuggingPort": 9223,
+    "remoteExclusionHome": "/tmp/ohpi-m3-electron-t55-remote-final (removed after capture)",
+    "remoteExclusionDebuggingPort": 9224,
+    "remoteExclusionTarget": "http://127.0.0.1:4618",
+    "fixtureProvider": "http://127.0.0.1:4601/v1"
+  },
+  "build": {
+    "commands": [
+      "bun run --cwd packages/electron bundle:main",
+      "bun x electron-builder --publish never --x64",
+      "node packages/electron/scripts/verify-linux-appimage.mjs packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage"
+    ],
+    "status": "passed",
+    "verifyResult": "Bun 1.4.2, 158 Agent packages, 29 Host native modules",
+    "reusedStagedInputs": "packages/web/dist (index 42170a...; no UI/web source newer than the dist) and resources/agent-runtime (manifest 2026-10-21T00:51:53+08:00, agent-service dist 2f025.../90f6...). No web or agent-runtime rebuild was needed for the Task44 Host change.",
+    "unitChecksReused": {
+      "electronAuthAndRouting": "node --test desktop-local-auth.test.mjs packaged-ui-routing.test.mjs -> 12 pass",
+      "desktopBootstrapRoutes": "real registerAuthAndAccessRoutes/createUiAuth/client store -> 4 pass each under Bun and Vitest",
+      "typeCheck": "bun run type-check:electron passed"
+    }
+  },
+  "auth": {
+    "uiDocument": "openchamber-ui://app/index.html",
+    "injectedToken": {
+      "present": true,
+      "prefix": "oc_client_",
+      "length": 53
+    },
+    "authSession": {
+      "status": 200,
+      "body": {
+        "authenticated": true,
+        "disabled": true
+      }
+    },
+    "canonicalSessions": {
+      "status": 200,
+      "count": 3
+    },
+    "workspaces": {
+      "status": 200,
+      "count": 1
+    },
+    "workspaceResolve": {
+      "status": 200,
+      "name": "Chats",
+      "workspaceId": "ws_51014860-e9f4-49be-ba58-80abe4bc8d28"
+    },
+    "clientAuthList": {
+      "status": 200,
+      "count": 1,
+      "kinds": [
+        "desktop-local"
+      ]
+    },
+    "rawUnauthenticatedCanonicalSessions": {
+      "status": 401,
+      "code": "UNAUTHORIZED"
+    },
+    "refreshFailureAbsent": true,
+    "firstLaunch": "The packaged shell showed the first-run chooser; 'Use Local' completed onboarding and the composer/session catalog rendered."
+  },
+  "remoteCredentialExclusion": {
+    "target": "http://127.0.0.1:4618",
+    "rendererToken": {
+      "present": false
+    },
+    "requestsObserved": 18,
+    "requestsWithAuthorization": 0,
+    "settingsDesktopToken": "absent",
+    "remoteClientsFile": "absent",
+    "localClientStore": "not created",
+    "result": "Remote pages and a remote runtime target received no local desktop credential."
+  },
+  "sessionRun": {
+    "streamSessionId": "986e0063-7469-407a-8b51-09ad5ba29bdf",
+    "model": "m3fixture/stream-300cps",
+    "runId": "0c7c7404-1c4c-439b-813d-2598e34d025f",
+    "terminalTurnStatus": "completed",
+    "snapshotMessages": 2,
+    "historyMessages": 2,
+    "duplicatePartIdsAfterReload": 0,
+    "fixtureHeadingRendered": true,
+    "reload": "The prompt and the 5742-character fixture response survived reload; no duplicate parts."
+  },
+  "stopControl": {
+    "sessionId": "39950efe-7e04-4e93-9172-77ecd65d5419",
+    "runId": "fc090b23-070a-4c66-8a11-985a3f9e9aa2",
+    "stopSelector": "button[aria-label=\"Stop generating\"]",
+    "stopRendered": true,
+    "clicked": true,
+    "activeRunAfter": null,
+    "runtimeStatusAfter": "idle",
+    "turnStatusAfter": "cancelled",
+    "screenshots": [
+      "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/t55-final-stop-before.png",
+      "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/t55-final-stop-clicked.png",
+      "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/t55-final-stop-after.png"
+    ]
+  },
+  "keyboardAbort": {
+    "sessionId": "4945a980-3356-48b7-b5c8-bd6167bbf4ba",
+    "runId": "29b3ef7b-8e30-477f-8d78-8f458a1ab966",
+    "action": "document.activeElement.blur(); Escape; 300ms; Escape",
+    "activeRunAfter": null,
+    "runtimeStatusAfter": "idle",
+    "turnStatusAfter": "cancelled",
+    "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/t55-final-keyboard-abort.png"
+  },
+  "task62Observation": {
+    "owner": "omp-through-m3/62",
+    "result": "On this final AppImage the running canonical session rendered the Stop control (aria-label 'Stop generating'); clicking it cancelled the exact run and settled the turn to cancelled. Escape twice cancelled a second running run and settled idle. Task62 owns the UI implementation/archive; its task file was not modified or staged by Task55."
+  },
+  "cleanup": {
+    "result": "Both packaged app instances, the remote stub, fixture provider and Xvfb sessions were stopped. Ports 57123, 4601, 4618, 9223 and 9224 closed; no AppImage, Agent Service or Bun child remained; both isolated HOME profiles were removed."
+  },
+  "limitations": [
+    "Linux x64 packaged artifact only; no macOS/Windows package was exercised.",
+    "The connected scenario used a deterministic local OpenAI-compatible fixture, not an official provider or OAuth flow.",
+    "Board linked-account launch, Guest Shell and snapshot-plus-cursor stale-runtime recovery remain Task36 scenarios.",
+    "This receipt is Task55 auth/packaging evidence and does not constitute Task36 or Task18 acceptance."
+  ]
+}

@@ -46,7 +46,7 @@ export function stageDependencyClosure(source, destination, { platform = process
       filter: file => {
         const relative = path.relative(real, file).split(path.sep);
         if (relative[0] === 'node_modules') return false;
-        if (manifest.name === 'onnxruntime-node' && relative[0] === 'bin' && relative[1] === 'napi-v6') {
+        if (manifest.name === 'onnxruntime-node' && relative[0] === 'bin' && /^napi-v\d+$/.test(relative[1] ?? '')) {
           if (relative[2] && relative[2] !== platform) return false;
           if (relative[3] && relative[3] !== architecture) return false;
         }

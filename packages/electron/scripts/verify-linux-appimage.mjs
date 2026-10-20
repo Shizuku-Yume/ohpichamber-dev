@@ -65,6 +65,8 @@ const collectFiles = (root, predicate) => {
   return matches;
 };
 
+const ONNX_ADDON_TARGET = /(?:^|\/)bin\/napi-v\d+\/([^/]+)\/([^/]+)\/onnxruntime_binding\.node$/;
+
 export const verifyExtractedPayload = ({
   root,
   targetArchitecture,
@@ -86,8 +88,11 @@ export const verifyExtractedPayload = ({
   const agentNativeModules = manifest.files.filter(item => item.path.endsWith('.node'));
   if (!agentNativeModules.length) throw new Error('Agent native payload is empty');
   for (const item of agentNativeModules) {
-    // ONNX ships multiple platforms; only the selected platform is executable.
-    if (item.path.includes('/bin/napi-v6/') && !item.path.includes(`/linux/${targetArchitecture}/`)) continue;
+    // ONNX ships one addon per Native ABI, platform, and architecture, and the
+    // runtime loads only the selected target's binding. Enforce ELF architecture
+    // for that binding; skip the copies this host cannot execute.
+    const onnxTarget = ONNX_ADDON_TARGET.exec(item.path);
+    if (onnxTarget && (onnxTarget[1] !== 'linux' || onnxTarget[2] !== targetArchitecture)) continue;
     assertElfArchitecture(path.join(agentRoot, item.path), targetArchitecture, 'Agent native module');
   }
 
@@ -104,7 +109,12 @@ export const verifyExtractedPayload = ({
       throw new Error(`Missing packaged native module: ${requiredName}`);
     }
   }
-  for (const modulePath of nativeModules) assertElfArchitecture(modulePath, targetArchitecture, 'Native module');
+  for (const modulePath of nativeModules) {
+    const normalizedPath = modulePath.split(path.sep).join('/');
+    const onnxTarget = ONNX_ADDON_TARGET.exec(normalizedPath);
+    if (onnxTarget && (onnxTarget[1] !== 'linux' || onnxTarget[2] !== targetArchitecture)) continue;
+    assertElfArchitecture(modulePath, targetArchitecture, 'Native module');
+  }
   return { nativeModuleCount: nativeModules.length, ...agent };
 };
 

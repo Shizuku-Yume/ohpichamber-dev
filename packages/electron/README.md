@@ -74,6 +74,18 @@ so no application code runs before the values are set. Remote, SSH,
 environment-target, HMR and background launches keep the previous order:
 resolve, then navigate, with the splash reporting the connection attempt.
 
+After the embedded Host is ready, a packaged UI using the local Host reuses its
+stored `desktop-local` client credential or asks the local client-auth route to
+issue one with cookies omitted, then persists it before releasing the runtime
+config script. Passwordless session cookies do not cross the
+`openchamber-ui://app` to loopback origin boundary, and canonical routes never
+synthesize an anonymous session. The window is recognized as the packaged shell
+by its scheme and host, because a custom scheme's WHATWG origin is opaque. This
+bootstrap runs only for the packaged app shell and a Host on this machine;
+remote Hosts keep their own saved credential, external pages never receive the
+local token, and a Host that requires a session or client authentication is
+left unauthenticated rather than bypassed.
+
 `bun run profile:startup` measures a packaged build's launch in an isolated
 profile; see `scripts/perf/DOCUMENTATION.md`.
 
@@ -126,6 +138,7 @@ is served at `/api/agent/v1/ready`.
 | `entry.mjs` | What Electron loads: pre-`ready` configuration, single-instance lock, the first window, then a dynamic import of `main.mjs` |
 | `compile-cache.mjs` | Node's V8 code cache for the packaged main process: enabling it under userData, keeping it out of child environments, flushing and pruning after startup |
 | `packaged-runtime-config.mjs` | Runtime values for packaged application documents: inline injection, and the blocking script and gate used while the first navigation runs ahead of the local server |
+| `desktop-local-auth.mjs` | Whether a window may receive the embedded Host's local credential, and the stored-or-minted `desktop-local` client token before the runtime config script is released |
 | `early-startup.mjs` | Settings and window-state reading, splash markup, main-window options, the early window handoff and buffered app events; shared by both bundles |
 | `main.mjs` | Electron main process, app lifecycle, windows, menus, deep links, native IPC handlers, updates, local server startup |
 | `electron-host-probe.mjs` | Chromium direct-host probes, identity checks, attempt deadlines, and response cleanup |

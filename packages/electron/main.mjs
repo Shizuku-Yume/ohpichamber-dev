@@ -57,12 +57,13 @@ import { sanitizeRuntimeRequestHeaders } from './runtime-request-headers.mjs';
 import { isRemoteSafeCommand, isSplashColor, redactHostsConfigForRemote } from './remote-page-policy.mjs';
 import { connectDefaultSshInstanceAtStartup, resolveDefaultSshInstanceId } from './startup-ssh.mjs';
 import { normalizeNotificationInput, readTrimmedString, resolveHostEntryForRuntimeKey, stampForwardedNotification } from './notification-host-routing.mjs';
-import { isPackagedUiRuntimeRequest } from './packaged-ui-routing.mjs';
+import { isPackagedUiDocumentUrl, isPackagedUiRuntimeRequest } from './packaged-ui-routing.mjs';
 import { RUNTIME_CONFIG_SCRIPT_PATHNAME, claimRuntimeConfigScriptRequest, createRuntimeConfigGate, injectRuntimeConfig } from './packaged-runtime-config.mjs';
 import { settleMainProcessCompileCache } from './compile-cache.mjs';
 import { probeDirectHostWithRetry } from './host-probe-policy.mjs';
 import { probeElectronHostWithDeadline } from './electron-host-probe.mjs';
 import { requestRemoteHostUpdate } from './remote-host-update.mjs';
+import { ensureDesktopLocalClientToken, shouldBootstrapPackagedLocalAuth } from './desktop-local-auth.mjs';
 import { assertUpdaterCapability } from './updater-capability.mjs';
 import { checkForDesktopUpdate } from './updater-check.mjs';
 import { resolveUpdaterChannel } from './updater-channel.mjs';
@@ -132,9 +133,9 @@ log.transports.console.level = isDev ? 'debug' : 'warn';
 // The in-process web server runs in this same Node process and uses plain
 // `console.log/warn/error`. Without piping console through electron-log,
 // that output never lands in ~/Library/Logs/OpenChamber/main.log and we
-// can't diagnose issues (e.g. OpenCode lifecycle, SSE disconnects) after
-// the fact. Route all console calls through electron-log so server-side
-// diagnostics are persisted.
+// can't diagnose issues (e.g. server and Agent Service lifecycle, SSE
+// disconnects) after the fact. Route all console calls through electron-log so
+// server-side diagnostics are persisted.
 Object.assign(console, log.functions);
 
 // Node prints process warnings through console.error, so Electron's per-attempt
@@ -500,9 +501,9 @@ const performConfirmedQuit = async ({ relaunch = false } = {}) => {
 
 // Hard-stop signals (`Ctrl+C` on `electron:dev`, an external `kill`/SIGTERM,
 // terminal close) bypass the normal app-quit flow — which would orphan the
-// in-process web server's managed OpenCode child. Run the same background
-// teardown the quit path uses (which kills the sidecar), then exit. The startup
-// reaper remains the backstop for an unhandled hard crash (SIGKILL).
+// in-process web server and its supervised Agent Service child. Run the same
+// background teardown the quit path uses (which stops the server), then exit.
+// The startup reaper remains the backstop for an unhandled hard crash (SIGKILL).
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
   process.on(signal, () => {
     void performConfirmedQuit();
@@ -2749,11 +2750,39 @@ const showMainWindowWithSplash = () => {
   });
 };
 
+const ensurePackagedLocalRuntimeAuth = async (uiUrl, apiBaseUrl, clientToken) => {
+  const shouldBootstrap = shouldBootstrapPackagedLocalAuth({
+    uiUrl,
+    packagedUi: shouldUsePackagedUi(),
+    isLocalRuntime: isLocalRuntimeUrl(apiBaseUrl),
+  });
+  if (!shouldBootstrap) return clientToken;
+
+  const existingToken = clientToken || readDesktopLocalClientToken() || '';
+  const result = await ensureDesktopLocalClientToken({
+    apiBaseUrl,
+    existingToken,
+    fetchImpl: fetch,
+    persistToken: (token) => mutateSettingsRoot((root) => {
+      root.desktopLocalClientToken = token;
+    }),
+  });
+  if (result.status === 'unavailable') {
+    const details = { reason: result.reason };
+    if (result.httpStatus !== undefined) details.status = result.httpStatus;
+    log.warn('[electron] packaged local authentication unavailable', details);
+  }
+  return result.status === 'created' || result.status === 'existing' ? result.token : existingToken;
+};
+
 const activateMainWindow = async (url, localOrigin, bootOutcome, runtimeConfig = {}) => {
+  const apiBaseUrl = typeof runtimeConfig.apiBaseUrl === 'string' ? runtimeConfig.apiBaseUrl : (state.apiBaseUrl || '');
+  const requestedToken = typeof runtimeConfig.clientToken === 'string' ? runtimeConfig.clientToken : '';
+  const clientToken = await ensurePackagedLocalRuntimeAuth(url, apiBaseUrl, requestedToken);
   state.startupResolved = true;
   state.localOrigin = localOrigin;
-  state.apiBaseUrl = typeof runtimeConfig.apiBaseUrl === 'string' ? runtimeConfig.apiBaseUrl : state.apiBaseUrl;
-  state.clientToken = typeof runtimeConfig.clientToken === 'string' ? runtimeConfig.clientToken : '';
+  state.apiBaseUrl = apiBaseUrl;
+  state.clientToken = clientToken;
   state.requestHeaders = sanitizeRuntimeRequestHeaders(runtimeConfig.requestHeaders || {});
   state.bootOutcome = bootOutcome ?? null;
   const rendererRuntimeConfig = buildRendererRuntimeConfig(url, {
@@ -2946,11 +2975,14 @@ const createAdditionalWindow = async (url, runtimeConfig = {}) => {
   if (!state.startupResolved || !url) {
     return null;
   }
+  const apiBaseUrl = typeof runtimeConfig.apiBaseUrl === 'string' ? runtimeConfig.apiBaseUrl : (state.apiBaseUrl || '');
+  const requestedToken = typeof runtimeConfig.clientToken === 'string' ? runtimeConfig.clientToken : '';
+  const clientToken = await ensurePackagedLocalRuntimeAuth(url, apiBaseUrl, requestedToken);
   const browserWindow = createBrowserWindow({
     label: nextWindowLabel(),
     restoreGeometry: false,
     url,
-    runtimeConfig,
+    runtimeConfig: { ...runtimeConfig, apiBaseUrl, clientToken },
   });
   return browserWindow;
 };
@@ -2997,6 +3029,12 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
     clientToken: sanitizeClientTokenForStorage(runtimeConfig.clientToken || state.clientToken || ''),
     requestHeaders: sanitizeRuntimeRequestHeaders(runtimeConfig.requestHeaders || state.requestHeaders || {}),
   };
+  const miniChatUrl = buildMiniChatUrl({ mode, sessionId, directory, projectId });
+  effectiveRuntimeConfig.clientToken = await ensurePackagedLocalRuntimeAuth(
+    miniChatUrl,
+    effectiveRuntimeConfig.apiBaseUrl,
+    effectiveRuntimeConfig.clientToken,
+  );
   const sessionWindowKey = mode === 'session' && sessionId ? miniChatSessionWindowKey(effectiveRuntimeConfig, sessionId) : '';
   if (mode === 'session' && sessionId) {
     const existing = state.miniChatWindowsBySession.get(sessionWindowKey);
@@ -3117,7 +3155,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
     }
   });
 
-  await navigateWindow(browserWindow, buildMiniChatUrl({ mode, sessionId, directory, projectId }));
+  await navigateWindow(browserWindow, miniChatUrl);
   return browserWindow;
 };
 
@@ -3411,7 +3449,7 @@ const setupAutoUpdater = () => {
 // either take the app down or report why it did not.
 const UPDATE_INSTALL_GRACE_MS = 15_000;
 
-// Releasing terminals, the managed OpenCode child, and SSH sessions must not
+// Releasing terminals, the supervised Agent Service, and SSH sessions must not
 // hold the installer hostage: a stuck session would otherwise keep the app on
 // the old version forever. The backend's own stop() is already bounded; this
 // bounds everything the install path waits on, beyond the backend's 35s limit.
