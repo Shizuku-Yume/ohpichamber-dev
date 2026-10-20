@@ -421,19 +421,6 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     return Object.keys(result).length > 0 ? result : undefined;
   };
 
-  const isUnsafeSkillRelativePath = (value) => {
-    if (typeof value !== 'string' || value.length === 0) {
-      return true;
-    }
-
-    const normalized = value.replace(/\\/g, '/');
-    if (path.posix.isAbsolute(normalized)) {
-      return true;
-    }
-
-    return normalized.split('/').some((segment) => segment === '..');
-  };
-
   const sanitizeTypographySizesPartial = (input) => {
     if (!input || typeof input !== 'object') {
       return undefined;
@@ -524,7 +511,6 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     normalizeManagedRemoteTunnelHostname,
     normalizeManagedRemoteTunnelPresets,
     normalizeManagedRemoteTunnelPresetTokens,
-    isUnsafeSkillRelativePath,
     sanitizeTypographySizesPartial,
     normalizeStringArray,
     sanitizeModelRefs,

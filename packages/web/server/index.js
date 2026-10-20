@@ -308,7 +308,6 @@ const normalizeManagedRemoteTunnelPresets = (...args) =>
   settingsNormalizationRuntime.normalizeManagedRemoteTunnelPresets(...args);
 const normalizeManagedRemoteTunnelPresetTokens = (...args) =>
   settingsNormalizationRuntime.normalizeManagedRemoteTunnelPresetTokens(...args);
-const isUnsafeSkillRelativePath = (...args) => settingsNormalizationRuntime.isUnsafeSkillRelativePath(...args);
 const normalizeStringArray = (...args) => settingsNormalizationRuntime.normalizeStringArray(...args);
 const sanitizeModelRefs = (...args) => settingsNormalizationRuntime.sanitizeModelRefs(...args);
 const sanitizeSkillCatalogs = (...args) => settingsNormalizationRuntime.sanitizeSkillCatalogs(...args);
@@ -1986,7 +1985,6 @@ async function main(options = {}) {
     persistSettings,
     sanitizeProjects,
     sanitizeSkillCatalogs,
-    isUnsafeSkillRelativePath,
     getActivePort: () => {
       const address = server?.address?.();
       return address && Number.isInteger(address.port) ? address.port : null;
