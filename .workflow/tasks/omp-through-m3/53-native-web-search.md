@@ -7,7 +7,7 @@
 
 **Delivers:** Canonical workspace web search configuration wired to the native search subsystem in the Bun Agent Service worker. Exposes canonical `/api/agent/v1/workspaces/:workspaceId/web-search` endpoints for web search provider catalog discovery, active provider selection, fallback chains, timeouts, and write-only credential storage via native `AuthStorage` and settings. Enforces Host enterprise egress controls and authentication, retires legacy `/api/config/websearch` and `/api/websearch/provider` routes, and migrates `useWebSearchStore` to `CanonicalClient` without OpenCode compatibility adapters.
 
-**Blocked by:** None
+**Blocked by:** 63
 **Files:** `packages/agent-contract/src/catalogs.ts`, `packages/agent-contract/src/websearch.ts`, `packages/agent-service/src/worker/catalog-websearch.ts`, `packages/agent-service/src/worker/catalogs.ts`, `packages/agent-service/src/supervisor/workspace-routes.ts`, `packages/web/server/lib/host/canonical-routes.js`, `packages/ui/src/api/canonicalClient.ts`, `packages/ui/src/stores/useWebSearchStore.ts`, `packages/ui/src/components/sections/websearch/`, `.workflow/development.md`, `.workflow/specs/omp-through-m3.md`
 **Read first:** `.workflow/specs/omp-through-m3.md` W6, W9, W10; `packages/agent-contract/src/catalogs.ts`; installed native SDK `@oh-my-pi/pi-coding-agent/src/web/settings.ts`, `src/web/search/query.ts`, and `src/web/search/types.ts`; `packages/ui/src/stores/useWebSearchStore.ts`; Host enterprise network boundary policies
 **Covers:** W6, W9, W10
