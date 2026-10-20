@@ -37,6 +37,17 @@ A passing run proves the update installed on **the platform you ran it on**. It 
 
 macOS cannot reproduce the class of defect where closing a window ends the app, because the quit-on-last-window-closed paths are guarded to non-darwin. Linux and Windows share that arbitration and differ only in the installer, so a Linux run is a real result for the logic and Windows still owns NSIS and the unsigned artifact.
 
+A passing run proves:
+- the platform installer replaced the running artifact with the N+1 payload;
+- the app relaunches and executes main from the updated location or mount;
+- the embedded Node Host initializes and starts its supervised Bun Agent Service from the staged `resources/agent-runtime` payload;
+- quit arbitration handles normal shutdown or window closure during installation handover without leaving processes behind.
+
+A passing run does not prove:
+- updater behavior on unexercised platforms or target architectures (for example, testing x64 says nothing about arm64 packaging);
+- agent functional execution: supervisor startup and readiness confirm the child process spawned and bound its port, but do not exercise session streaming, model routing, or tool execution;
+- automated runtime verification: the updater fixture script (`packages/electron/scripts/updater-e2e-fixture.mjs`) only stages feed files and launches the binary. It has no built-in post-update assertion suite, leaving post-restart checks to manual operator observation.
+
 ## Prepare The Builds
 
 Usually one build is enough. The compile-time marker is only needed in the app that **runs**; the newer artifact is just a file the updater downloads and executes. So build N from your branch at a version below a published release, and use that published installer as N+1, taking its size and checksum from the published manifest. Build both only when the newer side also has to carry your change.
@@ -81,9 +92,8 @@ Published release artifacts can never be used as N: they carry no build-time mar
 The update does not need a human clicking Update. The running app's own server exposes the same operation, which is what makes this testable over SSH on a headless host:
 
 - `POST /api/openchamber/update-install` requests the install and reports `updateOwner: electron-updater`.
-- `POST /api/config/reload` exercises Restart OpenCode afterwards.
 
-Check the current route contract and authentication before relying on either; they are product routes, not a test harness.
+Check the current route contract and authentication before relying on it; it is a product route, not a test harness.
 
 Launching and closing the window is the part that differs per platform. On Windows an SSH shell lands in session 0 while the desktop is session 1, so an app started from SSH has no visible window: launch it into the interactive session with `schtasks`, and confirm it really is in session 1 before trusting anything you see. To close it, `taskkill /PID <pid>` **without** `/F` posts a normal close request, which is what you want; `/F` kills the process and proves nothing. On Linux, drive the close on the live display.
 
@@ -91,15 +101,25 @@ Launching and closing the window is the part that differs per platform. On Windo
 
 A version bump is the weakest possible evidence. Record each of these:
 
-- the restarted app reports N+1;
-- the AppImage at the run path was replaced, and its checksum matches the prepared N+1 artifact;
-- the new app process runs from the new mount;
-- **the live OpenCode process executable, read through `/proc`, runs from the new mount**, including after Restart OpenCode;
-- the OpenCode API reports `source: bundled` and `upgrade.reason: bundled`, and offers no separate OpenCode update.
+- the restarted app reports N+1 over HTTP via `GET /health` (`openchamberVersion: "<N+1>"`);
+- the binary artifact (such as the AppImage) at the run path was replaced, and its checksum matches the prepared N+1 artifact;
+- the new Electron main process runs from the new mount path, verified through `/proc/<pid>/exe`;
+- the live Bun Agent Service child process runs from the new mount:
+  - Host `GET /health` reports `agentService.phase: "ready"` and `agentService.pid`;
+  - `/proc/<agentService.pid>/exe` on Linux verifies the process executable points to the staged Bun runtime in the new mount (`<mount>/resources/agent-runtime/bun`);
+  - `/proc/<agentService.pid>/cmdline` verifies the entrypoint resolves to the staged service entrypoint under the new mount (`<mount>/resources/agent-runtime/service/dist/index.js`);
+- the Host and Agent Service report readiness over HTTP:
+  - `GET /health` returns HTTP 200 with `status: "ok"` and `agentService: { phase: "ready", pid: <number>, port: <number> }`;
+  - `GET /api/agent/v1/health` returns HTTP 200 with `status: "ok"`, `engine: "omp"`, and `agent: { status: "ready", ready: true }`;
+  - `GET /api/agent/v1/ready` returns HTTP 200 with `ready: true`, `engine: "omp"`, and `version: "<version>"`.
 
 A screenshot of a version string is the weakest of these. The reported version over HTTP and the artifact checksum say more, and cost less to capture on a headless host. Do not spend the run chasing a rendered number.
 
-That fourth check exists because of a real regression: the app exported an auto-resolved bundled path through `OPENCODE_BINARY`, the replacement process inherited it, and treated the old path as a deliberate user override. Everything looked correct except the running binary.
+The check on the child process executable exists because of an inherited packaging hazard: when the parent process resolves staged runtime paths into environment variables (`OHPICHAMBER_BUN` and `OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT`), an inherited stale environment across restarts could cause the replacement app to spawn the old mount's binaries. OpenCode lifecycle is retired and no longer in production: there is no `OPENCODE_BINARY` variable, no OpenCode executable, no "Restart OpenCode" action, and legacy OpenCode health endpoints like `/api/opencode/health` return 404. The supervised Bun Agent Service replaces those legacy checks.
+
+### Missing Verification Prerequisites in the Fixture
+
+The loopback updater fixture (`packages/electron/scripts/updater-e2e-fixture.mjs`) provides `stage`, `serve`, and `run` commands to serve local update manifests and launch the initial AppImage. It does not contain an automated runtime check command or post-restart assertion hook. Testing must manually query the Host HTTP endpoints (`/health`, `/api/agent/v1/health`, `/api/agent/v1/ready`) and inspect `/proc/<pid>/exe` on Linux. Automated validation of the restarted process tree and Agent Service health is a missing verification prerequisite in the test harness.
 
 ## Exercise The Failure, Not Only The Happy Path
 

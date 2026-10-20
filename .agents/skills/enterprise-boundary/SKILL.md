@@ -1,11 +1,11 @@
 ---
 name: enterprise-boundary
-description: "Use when a change sends conversation content somewhere other than the session's OpenCode provider or this machine, opens a way into this machine (listening address, tunnel, relay, pairing, share link), adds a way to enter model providers, keys or endpoints, reports usage, or touches enterprise mode, the policy file or `enterprise-mode.js`."
+description: "Use when a change sends conversation content somewhere other than the session's Host provider or this machine, opens a way into this machine (listening address, tunnel, relay, pairing, share link), adds a way to enter model providers, keys or endpoints, reports usage, or touches enterprise mode, the policy file or `enterprise-mode.js`."
 ---
 
 # Enterprise Boundary
 
-Enterprise mode is an administrator's promise: conversation content reaches only the model providers configured in OpenCode, and nothing opens this machine to others without the administrator's say. The user is not trusted to keep the promise; they may edit their environment, Settings, or install the npm server themselves. Every feature either keeps the promise by construction or answers to the mode.
+Enterprise mode is an administrator's promise: conversation content reaches only the model providers configured in the Host/Agent Service, and nothing opens this machine to others without the administrator's say. The user is not trusted to keep the promise; they may edit their environment, Settings, or install the npm server themselves. Every feature either keeps the promise by construction or answers to the mode.
 
 The mechanism, its sources and the list of gated features live in the header of `packages/web/server/lib/enterprise-mode.js`; the admin-facing contract is the *Enterprise mode* section of `packages/docs/content/docs/security.mdx`. Read both before editing.
 
@@ -15,13 +15,13 @@ Name each way the change can cross the boundary. The classification is complete 
 
 | Class | What it is | Behavior outside enterprise mode | In enterprise mode |
 |---|---|---|---|
-| **Egress** | Conversation content (messages, turn excerpts, file contents, model output, session names, speech) leaves for any destination other than the session's OpenCode provider or this machine | Off until the user turns it on | Off, unless the administrator pins an in-house destination or the destination is this machine |
+| **Egress** | Conversation content (messages, turn excerpts, file contents, model output, session names, speech) leaves for any destination other than the session's Host provider or this machine | Off until the user turns it on | Off, unless the administrator pins an in-house destination or the destination is this machine |
 | **Metadata egress** | A message leaves without content (a push notification, a status ping) | As designed | Content stripped: generic text, no message text, no session name |
 | **Exposure** | Another machine can reach this server or its data: a non-loopback listener, tunnel, relay, pairing candidate, share link | As designed, behind UI auth | Loopback only, unless the administrator allows network access; relay only on a pinned self-hosted endpoint; public tunnels off |
-| **Provider entry** | The app adds a model provider, key, endpoint or custom provider | As designed | Refused; removing or switching existing accounts stays allowed. OpenCode's `provider.use` policy is the real lock |
+| **Provider entry** | The app adds a model provider, key, endpoint or custom provider | As designed | Refused at the Host Canonical route boundary; removing or switching existing accounts stays allowed |
 | **Telemetry** | Usage or install identifiers are reported | As designed | The essential function stays (security update checks); usage and identifiers are dropped |
 
-Inside the boundary, with no gate: work that reaches only the session's provider through OpenCode, work that stays on this machine, and the small model on the user's own provider (never another connected one). A user-initiated action toward a service the user connected themselves (GitHub, Linear) sits outside the mode today; when such an action carries conversation content, raise it with the maintainer.
+Inside the boundary, with no gate: work that reaches only the session's provider through the Host/Agent Service, work that stays on this machine, and the small model on the user's own provider (never another connected one). A user-initiated action toward a service the user connected themselves (GitHub, Linear) sits outside the mode today; when such an action carries conversation content, raise it with the maintainer.
 
 Whether a flow belongs to a class, and whether an in-house pin should exist, are product decisions. When either is unclear, ask before building.
 
