@@ -182,7 +182,7 @@ export class NativeWebSearch {
   }
 
   private async readCurrent(settings: Settings): Promise<WebSearchConfigState> {
-    const models = this.runtime.modelRegistry.getAll('all').filter(getRoleInfo('web', settings).accepts);
+    const models = this.runtime.modelRegistry.getAvailable('search');
     const providers: WebSearchProviderEntry[] = await Promise.all(models.map(async model => {
       const provider = await providerFor(model);
       const engine = modelKind(model) === 'search' && model.provider === 'web' && model.id !== 'hosted';

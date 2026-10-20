@@ -2,6 +2,9 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { modelKind } from '@oh-my-pi/pi-catalog/types';
+import { getRoleInfo } from '@oh-my-pi/pi-coding-agent/config/model-roles';
+import { formatModelStringWithRouting as selector } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { runSearchQuery } from '@oh-my-pi/pi-coding-agent/web/search/index';
 import { cfgWebSearchEnabled } from '@oh-my-pi/pi-coding-agent/tools/settings';
@@ -55,6 +58,31 @@ test('native worker CAS serializes competing mutations and survives a cold setti
     expect(reopenedRead.result.state.providers.find(provider => provider.providerId === 'web/exa')?.options).toEqual({ exa: { enabled: false } });
     await expect(worker.operation({ type: 'web-search', operation: { type: 'update', request: { expectedRevision: '0', enabled: true } } })).rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
   } finally { await worker.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('provider catalog equals the native search-model pool and excludes chat grounding selectors', async () => {
+  const { directory, bootstrap } = await fixture();
+  const runtime = await openNativeRuntime(bootstrap);
+  try {
+    const state = await new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {}).operation({ type: 'read' });
+    if (state.type !== 'state') throw new Error('Expected native search state');
+    const providerIds = state.state.providers.map(provider => provider.providerId);
+    const nativeSearchPool = runtime.modelRegistry.getAvailable('search').map(model => selector(model));
+    expect(nativeSearchPool).toContain('web/hosted');
+    expect(providerIds).toEqual(nativeSearchPool);
+    expect(providerIds.every(id => id.startsWith('web/'))).toBe(true);
+
+    const webRoleModels = runtime.modelRegistry.getAll('all').filter(getRoleInfo('web', runtime.settings).accepts);
+    const chatSelectors = webRoleModels.filter(model => modelKind(model) !== 'search').map(model => selector(model));
+    expect(chatSelectors.some(id => id.startsWith('anthropic/'))).toBe(true);
+    expect(chatSelectors.some(id => id.startsWith('openai/'))).toBe(true);
+    expect(providerIds.filter(id => chatSelectors.includes(id))).toEqual([]);
+
+    const providerSet = new Set(providerIds);
+    if (state.state.selectedProviderId !== null) expect(providerSet.has(state.state.selectedProviderId)).toBe(true);
+    expect(state.state.fallbackProviderIds.every(id => providerSet.has(id))).toBe(true);
+    expect(WebSearchConfigStateSchema.parse(state.state)).toEqual(state.state);
+  } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
 test('project settings remain authoritative when native search updates would override them', async () => {
