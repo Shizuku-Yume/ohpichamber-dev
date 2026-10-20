@@ -4,7 +4,7 @@
 **Task type:** spike
 **Base commit:** 0a56f63a18d3b2bbab34ba44612afaef4e223740
 **Started:** 2026-10-18
-**Status:** active
+**Finished:** 2026-10-20
 
 **Delivers:** Contract decisions for the retained UI mutations that cannot be migrated by the current read/catalog owners: session warming, provider OAuth and multi-account operations, custom provider integration fields, command configuration, and ModelControls permission/sampling/mode/pinned-model presentation. Each decision names the service/Host owner, public request/result shape, authorization and failure semantics, or records why the caller remains blocked.
 
@@ -68,7 +68,6 @@ Existing blockers remain open: Tasks 17, 36, 39, and 18 are not closed. No W7–
 
 ## Findings
 
-**Question:** Which missing canonical owners are required to retire the remaining OpenCode SDK callers, and what exact behavior must each owner expose?
 
 **Answer (2026-10-20):** No additional implementation owner is missing. The installed native SDK and the Agent Service/Host boundary already own every area this task compared. The canonical contract now records each current route family, revision boundary and failure semantics, so the remaining work is verification and caller evidence, not contract invention.
 

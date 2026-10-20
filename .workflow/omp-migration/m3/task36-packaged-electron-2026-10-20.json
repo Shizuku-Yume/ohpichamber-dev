@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/36",
+  "observedAt": "2026-10-20",
+  "status": "packaged-electron-startup-partial-auth-failure",
+  "environment": {
+    "surface": "Packaged Electron",
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "artifact": "packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage",
+    "display": "xvfb-run",
+    "isolatedHome": "/tmp/ohpi-m3-electron",
+    "remoteDebuggingPort": 9223,
+    "observedHostPort": 57123
+  },
+  "build": {
+    "command": "bun x electron-builder --publish never --x64",
+    "status": "passed",
+    "result": "AppImage packaged successfully after the repository package wrapper's CI publish detection failed without GH_TOKEN; direct --publish never invocation completed."
+  },
+  "observed": {
+    "process": "AppImage launched under Xvfb and rendered an Electron window with openchamber-ui://app/index.html. Electron child processes were stopped and verified absent after the run.",
+    "hostHealth": { "status": 200, "port": 57123, "runtime": "desktop" },
+    "canonicalReadiness": { "status": 200, "body": { "ready": true, "engine": "omp", "version": "1.0.0" } },
+    "unauthenticatedCanonicalSessions": { "status": 401, "code": "UNAUTHORIZED" },
+    "ui": "DevTools attached to Electron page 1; the localized composer, sidebar, work-status panel, panel navigation, and native window controls rendered.",
+    "auth": {
+      "sessionEndpoint": { "status": 304, "body": { "authenticated": true, "disabled": true } },
+      "canonicalSessionsFromRenderer": { "status": 401, "count": 3 },
+      "workspaceResolveFromRenderer": { "status": 401 },
+      "visibleFailure": "Sidebar showed 无法刷新会话。 and a Retry button; model picker remained Loading/Unavailable.",
+      "consoleErrors": "Three 401 resource errors."
+    }
+  },
+  "qualification": "Packaged Electron startup, native window rendering, Host health/readiness and unauthenticated boundary passed. Authenticated canonical UI session bootstrap did not pass: the renderer received authenticated:true/disabled:true from /auth/session but its canonical requests were 401. No session create/stream/abort/reopen or W7-W10 Electron pass is claimed.",
+  "nextOwner": "Electron packaged auth/runtime bootstrap must preserve the local UI session cookie or equivalent authenticated transport for openchamber-ui://app before Task36 can certify connected Electron behavior.",
+  "artifacts": {
+    "receipt": ".workflow/omp-migration/m3/task36-packaged-electron-2026-10-20.json",
+    "buildOutput": "artifact://8148",
+    "initialWrapperFailure": "artifact://8146"
+  }
+}

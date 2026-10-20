@@ -6,7 +6,7 @@
 
 **Delivers:** One current, non-duplicative connected acceptance packet proves the remaining M3 Web/Electron behavior and preserves exact receipts for every observed result.
 
-**Blocked by:** 17, 44
+**Blocked by:** 44, 55
 **Files:** `.workflow/omp-migration/m3/`, `.workflow/development.md`, `.workflow/tasks/omp-through-m3/36-m3-connected-acceptance.md`
 **Read first:** `.workflow/specs/omp-through-m3.md` W7-W10; Tasks 15, 17, 32-35; package READMEs and runtime docs; the current acceptance records and receipt policy
 **Covers:** W7, W8, W9, W10
@@ -65,3 +65,21 @@ Continuation status: **pre-fix discovery recorded; W7–W10 acceptance remains u
 ## 2026-10-20 source/acceptance sequencing
 
 Task15 source cutovers are integrated, but their new regression tests have not run. Task36 now owns connected Board/Guest/sidebar/Host-filesystem observation and waits for Task17/44 source closure, not Task15 archive. Task39's contract decision is resolved by Task46 and does not block this packet; Task39 remains paused for archive after this connected evidence.
+
+## 2026-10-20 connected Web run
+
+Receipt: `.workflow/omp-migration/m3/task36-connected-web-2026-10-20.json`.
+
+The rebuilt Web surface was launched on `127.0.0.1:3127` with an isolated HOME and a local deterministic OpenAI-compatible fixture at `127.0.0.1:4601`. The run observed canonical readiness `200` (`ready:true`, `engine:omp`), unauthenticated canonical sessions `401` (`UNAUTHORIZED`), Host health `200`, and the retired legacy routes `/api/agent`, `/api/command`, `/api/integration`, `/api/websearch/provider`, `/api/config/websearch`, and `/api/opencode/health` all `404`.
+
+The authenticated composer configured and selected `m3fixture/stream-300cps`, created a canonical session, streamed the fixture response, and retained the user/assistant history after reload. A separate browser-authenticated canonical run against `m3fixture/think-30s` entered `running`, then `POST .../runs/:runId/abort` returned `200` with terminal `cancelled`. Host filesystem admission and directory-scoped move were exercised in the admitted Web project: mkdir/write/rename/read/delete returned `200`, the old path returned `404`, and the temporary directory was removed.
+
+Board navigation opened the Issues and PRs surface, but no linked provider account or item was available. `/api/guests` returned `200` with zero registered guests, so Guest Shell interaction was not observable. Snapshot-plus-cursor stale-runtime rejection and packaged Electron acceptance remain unobserved. This is partial connected Web evidence, not a W7-W10 or M3 pass; Task44 and the Electron lane remain open.
+
+## 2026-10-20 packaged Electron run
+
+Receipt: `.workflow/omp-migration/m3/task36-packaged-electron-2026-10-20.json`.
+
+The Linux x64 AppImage was packaged with `bun x electron-builder --publish never --x64`, launched under Xvfb, and rendered the `openchamber-ui://app/index.html` window. The packaged Host answered `/health` with `200`, `/api/agent/v1/ready` with `200` and `{ ready: true, engine: "omp", version: "1.0.0" }`, and unauthenticated canonical sessions with `401`.
+
+The authenticated UI bootstrap did not pass. `/auth/session` returned `{ authenticated: true, disabled: true }`, but renderer requests to canonical sessions and workspace resolution returned `401`; the packaged UI displayed the session refresh failure and the model picker remained unavailable. Electron child processes were stopped and verified absent after the run. No packaged session create/stream/abort/reopen or W7-W10 pass is claimed; the remaining owner is the Electron `openchamber-ui://app` authenticated transport/bootstrap.

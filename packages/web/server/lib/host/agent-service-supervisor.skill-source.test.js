@@ -17,7 +17,7 @@ afterEach(async () => {
 const ownerIds = { projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'agent' };
 const unavailable = { status: 'failed', code: 'SERVICE_UNAVAILABLE' };
 const reconcile = { action: 'reconcile', ...ownerIds };
-const reconciled = { status: 'reconciled', sources: { workspace: 0, agent: 0 } };
+const reconciled = { status: 'reconciled', sources: { workspace: '0', agent: '0' } };
 
 async function scenario(handleSkillSource, { beforeReady } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'skill-source-supervisor-'));
@@ -53,7 +53,7 @@ async function scenario(handleSkillSource, { beforeReady } = {}) {
         await beforeReady?.(children.at(-1));
         return Response.json({ ready: true, engine: 'omp', version: '1.0.0' });
       }
-      if (pathname === '/internal/workspaces/workspace') return Response.json({ ...ownerIds, authorizationRootId: 'authorization-root', catalogRevision: 0 });
+      if (pathname === '/internal/workspaces/workspace') return Response.json({ ...ownerIds, authorizationRootId: 'authorization-root', catalogRevision: '0' });
       throw new Error('Unexpected service request');
     },
   });
@@ -110,11 +110,11 @@ describe('supervised private skill source IPC boundary', () => {
 
   it('delivers opaque commit IDs and validated committed results without extra service calls', async () => {
     const received = [];
-    const test = await scenario(async (operation, scope) => { received.push({ operation, scope }); return { status: 'committed', sourceRevision: 8 }; });
+    const test = await scenario(async (operation, scope) => { received.push({ operation, scope }); return { status: 'committed', sourceRevision: '8' }; });
     await test.admit();
-    const operation = { action: 'commit', ...ownerIds, scope: 'agent', expectedSourceRevision: 7, operationId: 'operation-opaque' };
+    const operation = { action: 'commit', ...ownerIds, scope: 'agent', expectedSourceRevision: '7', operationId: 'operation-opaque' };
     const reply = await test.request(operation);
-    expect(reply).toMatchObject({ type: 'host.skill-source.result', result: { status: 'committed', sourceRevision: 8 } });
+    expect(reply).toMatchObject({ type: 'host.skill-source.result', result: { status: 'committed', sourceRevision: '8' } });
     expect(received).toHaveLength(1);
     expect(received[0].operation).toEqual(operation);
     expect(test.fetches).toHaveLength(2);
@@ -177,7 +177,7 @@ describe('supervised private skill source IPC boundary', () => {
   it.each(['throw', 'malformed'])('returns a safe failure for %s callback output without leaking private details', async kind => {
     const test = await scenario(async () => {
       if (kind === 'throw') throw new Error('/private/secret token=do-not-expose');
-      return { status: 'reconciled', sources: { workspace: 0, agent: 0 }, secret: 'do-not-expose' };
+      return { status: 'reconciled', sources: { workspace: '0', agent: '0' }, secret: 'do-not-expose' };
     });
     await test.admit();
     const reply = await test.request(reconcile);
@@ -187,7 +187,7 @@ describe('supervised private skill source IPC boundary', () => {
   });
 
   it('preserves typed conflict failures rather than replacing them with a success', async () => {
-    const failure = { status: 'failed', code: 'CATALOG_CONFLICT', currentRevision: 9 };
+    const failure = { status: 'failed', code: 'CATALOG_CONFLICT', currentRevision: '9' };
     const test = await scenario(async () => failure);
     await test.admit();
     expect((await test.request(reconcile)).result).toEqual(failure);

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/36",
+  "observedAt": "2026-10-20",
+  "status": "partial-connected-web-evidence",
+  "environment": {
+    "surface": "Web",
+    "host": "http://127.0.0.1:3127",
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "browserPage": 6,
+    "isolatedHome": "/tmp/ohpi-m3-connected",
+    "fixtureProvider": "http://127.0.0.1:4601/v1",
+    "fixtureModels": ["stream-300cps", "think-30s", "agent-20tools-300cps"]
+  },
+  "checks": {
+    "buildWeb": { "command": "bun run build:web", "status": "passed", "result": "Vite build completed; 56.81s wall time; chunk-size warning only" },
+    "focusedWebTests": { "command": "bunx vitest run --root packages/web server/lib/git/worktree-creation.test.js server/lib/source-control/change-request-worktree.test.js server/lib/opencode/core-routes.test.js server/lib/opencode/openchamber-routes.test.js", "status": "passed", "files": 4, "tests": 64 },
+    "task15WebTests": { "command": "bunx vitest run --root packages/web server/lib/host/settings-routes.test.js src/api/files.test.ts", "status": "passed", "files": 2, "tests": 21 },
+    "task15UiTests": { "command": "bun test packages/ui/src/lib/host-filesystem.test.ts packages/ui/src/components/chat/fileReferenceStat.test.ts packages/ui/src/lib/contextFileOpenGuard.test.ts packages/ui/src/lib/guests/files.test.ts", "status": "passed", "files": 4, "tests": 19, "note": "Each file was run independently; the combined same-process invocation has singleton leakage and is not used as the result." },
+    "workflowValidation": { "command": ".workflow/bin/workflow validate --format text", "status": "passed", "result": "Workflow is valid (64 task files)." }
+  },
+  "observed": {
+    "hostReadiness": { "status": 200, "body": { "ready": true, "engine": "omp", "version": "1.0.0" } },
+    "unauthenticatedCanonicalSessions": { "status": 401, "problemCode": "UNAUTHORIZED" },
+    "health": { "status": 200 },
+    "retiredRoutes": { "status": 404, "paths": ["/api/agent", "/api/command", "/api/integration", "/api/websearch/provider", "/api/config/websearch", "/api/opencode/health"] },
+    "catalogs": { "projects": 200, "workspaces": 200, "workspaceResolve": 200, "models": 200, "providers": 200, "agents": 200 },
+    "fixtureProviderSetup": { "configureStatus": 200, "configureRevision": "1", "credentialWriteStatus": 200, "credentialRevision": "2" },
+    "webSessionStream": {
+      "sessionId": "6a6230ce-2b46-4d77-8919-9d16f469cc57",
+      "workspaceId": "ws_4425a6f4-90fd-479f-b640-005e787b4cd9",
+      "model": "m3fixture/stream-300cps",
+      "ui": "Prompt submitted from the authenticated composer; the UI rendered the streamed fixture response.",
+      "history": "Canonical history returned user and assistant messages; the assistant text was present in the rendered page.",
+      "reload": "Reloaded http://127.0.0.1:3127/?session=... and verified the prompt and streamed response remained rendered."
+    },
+    "canonicalAbort": {
+      "sessionId": "f6af7d7d-c123-45fb-9fc5-3b8851b9a9af",
+      "runId": "edb558d1-7ee8-48ef-9219-a9f2fc3fbfc2",
+      "model": "m3fixture/think-30s",
+      "runCreateStatus": 200,
+      "runInitialStatus": "running",
+      "abortStatus": 200,
+      "terminalStatus": "cancelled",
+      "qualification": "Canonical browser control route; an active UI Stop button was not retained in this run."
+    },
+    "board": { "navigation": "Issues and PRs route opened", "linkedItems": "not observed; no connected GitHub/Linear account in isolated environment" },
+    "guest": { "guestsEndpointStatus": 200, "registeredGuests": 0, "guestShell": "not observed because no registered guest surface was available" },
+    "hostFilesystemMove": {
+      "directory": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration/packages/web",
+      "mkdirStatus": 200,
+      "writeStatus": 200,
+      "renameStatus": 200,
+      "readMovedStatus": 200,
+      "readMovedBody": "M3_FS_MOVE_PASS",
+      "oldPathStatStatus": 404,
+      "deleteStatus": 200,
+      "cleanup": "temporary .m3-fs directory removed; verified absent"
+    }
+  },
+  "runtimeObservations": {
+    "consoleErrors": [
+      "422 /api/source-control/binding for isolated non-Git chats directory: UNSUPPORTED_SOURCE_CONTROL_REPOSITORY / not-a-git-repository",
+      "503 /api/quota/* requests because isolated HOME has no provider credentials"
+    ],
+    "qualification": "Both are environment limitations, not canonical session failures. No credentials or response secrets were recorded."
+  },
+  "notObserved": [
+    "Snapshot-plus-cursor duplicate suppression and stale prior-runtime mutation rejection across a worker restart",
+    "Packaged Electron authenticated UI/session/lifecycle scenario",
+    "Board item launch with linked GitHub/Linear data",
+    "Guest Shell interaction with a registered Guest",
+    "Full W7-W10 acceptance and M3 completion"
+  ],
+  "artifacts": {
+    "receipt": ".workflow/omp-migration/m3/task36-connected-web-2026-10-20.json",
+    "hostProcess": "proc://m3-web-host",
+    "fixtureProcess": "proc://m3-fixture-provider",
+    "priorPartialObservation": ".workflow/omp-migration/m3/task36-live-web-observations-2026-10-19.json"
+  }
+}

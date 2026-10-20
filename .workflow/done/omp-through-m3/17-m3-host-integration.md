@@ -2,7 +2,7 @@
 
 **Effort:** omp-through-m3
 **Task type:** feature
-**Base commit:** 3f4afa751888da3e0b6b795ad31534fa6c8a9c6b
+**Finished:** 2026-10-20
 
 **Delivers:** Web and Electron launch paths proxy the same authenticated `/api/agent/v1` boundary, host lifecycle owns Agent Service supervision, and obsolete OpenCode agent integration files/routes/config readers are removed after caller cutover.
 
@@ -244,3 +244,13 @@ Checks passed: `node --test ./packages/electron/scripts/prepare-agent-runtime.te
 **2026-10-20 Host session-created callback cleanup:** Removed the orphaned `emitSessionCreatedEvent` callback from `server/index.js` and its unused `feature-routes-runtime.js` dependency. Exhaustive repository search showed only the helper definition, wiring, and destructure; live session creation emits canonical `openchamber:session-created` from `openchamber-sessions/routes.js`, while `event-client` and `writeSseEvent` remain used by other event producers. No routes, events, or behavior intentionally changed; no tests or validation ran; Task18 owns checks and no gates advanced.
 
 **2026-10-20 Host stall timeout callback cleanup:** `packages/web/server/index.js` no longer imports the retired OpenCode upstream stall timeout constants or defines `getActiveSessionCount`/`getUpstreamStallTimeoutMs`. Source search showed those local bindings were only connected to an upstream proxy/session stall path that no longer has live callers; isolated-space SSE reader uses of `DEFAULT_UPSTREAM_STALL_TIMEOUT_MS` remain unchanged. No active routes/events/behavior changed intentionally; no tests or validation ran; Task18 owns checks and no gates advanced.
+
+## 2026-10-20 closure split
+
+Task17 is a coordination umbrella, not an additional validation gate. Its remaining acceptance work is now independently owned:
+
+- Task44 owns removal of obsolete Host composition registrations and the remaining lifecycle/proxy/config ownership after caller cutover.
+- Task36 owns connected Web/Electron W7-W10 behavior, including session UI flows, recovery, Board, Guest, and Host filesystem observations.
+- Task18 owns the single integrated workspace gate and final M3 decision.
+
+This task is archived as superseded by those independently closable slices. The archive does not claim Task44, Task36, Task18, packaged Electron certification, or M3 completion; their task files and receipts remain authoritative.

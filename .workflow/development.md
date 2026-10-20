@@ -414,3 +414,11 @@ Removed the orphaned `emitSessionCreatedEvent` callback from `server/index.js` a
 ### Host stall timeout callback cleanup (2026-10-20)
 
 `packages/web/server/index.js` no longer imports the retired OpenCode upstream stall timeout constants or defines `getActiveSessionCount`/`getUpstreamStallTimeoutMs`. Source search showed those local bindings were only connected to an upstream proxy/session stall path that no longer has live callers; isolated-space SSE reader uses of `DEFAULT_UPSTREAM_STALL_TIMEOUT_MS` remain unchanged. No active routes/events/behavior changed intentionally; no tests or validation ran; Task18 owns checks and no gates advanced.
+
+### M3 split-slice receipts (2026-10-20)
+
+Task43's canonical mutation contract comparison is archived at `.workflow/done/omp-through-m3/43-canonical-mutation-contracts.md`; Task17 is archived as a coordination umbrella split across Task44 (Host composition), Task36 (connected Web/Electron behavior), and Task18 (the single integrated gate). Workflow validation passes with 64 task files.
+
+Task36 now has two current receipts: `.workflow/omp-migration/m3/task36-connected-web-2026-10-20.json` records authenticated Web catalog/session creation, fixture streaming, reload persistence, canonical abort, Board navigation, Host filesystem move, and explicit Guest/Board/recovery limitations; `.workflow/omp-migration/m3/task36-packaged-electron-2026-10-20.json` records packaged AppImage startup, desktop Host health/readiness, unauthenticated boundary, and the authenticated renderer failure. The packaged renderer reported `authenticated: true` from `/auth/session` but canonical sessions/workspace resolve returned `401`, so W7-W10 and M3 remain open. Task55 owns that repair.
+
+Task44 slice checks: Web type-check, Electron syntax/type-check, Electron package tests (`43/43` files), Web build, Agent Service build, packaged Agent Runtime preparation/verification, and live Web readiness/auth passed. The focused skill-source Host packet passes `16/16` after aligning stale numeric revision fixtures with `CounterSchema`; the canonical plugin Host packet still fails because its supervised service exits before listening and subsequent requests return `503`. Task44 remains open; no M3 gate was advanced by partial evidence.
