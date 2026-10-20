@@ -6,7 +6,7 @@ This package owns the native shell: windows, menus, deep links, native notificat
 
 ### Migration status
 
-Electron is retained in OhPiChamber. It embeds the Node.js Host Gateway; the shared Web startup pipeline now starts the separate supervised Bun Agent Service behind `/api/agent/v1`. The inherited OpenCode lifecycle and packaging remain for unmigrated consumers, so this is not the final OMP-only cutover. Packaged Bun/Agent Service staging remains outstanding. See [migration architecture](../../.workflow/omp-migration/architecture.md).
+Electron is retained in OhPiChamber. It embeds the Node.js Host Gateway; the shared Web startup pipeline now starts the separate supervised Bun Agent Service behind `/api/agent/v1`. The inherited OpenCode lifecycle and packaging remain for unmigrated consumers, so this is not the final OMP-only cutover. Packaged Agent Runtime staging has landed via `prepare:agent-runtime` and `verify:agent-runtime` (staging pinned Bun, Agent Service bundles, and native assets); full packaged UI and runtime certification remains open. See [migration architecture](../../.workflow/omp-migration/architecture.md).
 
 ## How It Runs
 
@@ -48,8 +48,8 @@ server's module graph from cached bytecode (`compile-cache.mjs`). The entry's
 own static imports compile before it runs and stay outside the cache.
 Development and AppImage launches skip it (an AppImage mounts at a new path
 every launch, and entries are keyed by path). `NODE_COMPILE_CACHE` is kept out
-of the environment, so OpenCode, terminals and git hooks never write into the
-app profile. Five seconds after startup main flushes the cache and removes the
+of the environment, so terminals, child processes and git hooks never write into
+the app profile. Five seconds after startup main flushes the cache and removes the
 subdirectories of other Node versions left by an Electron upgrade. Removal is
 confined to `<userData>/v8-compile-cache`, a root computed from userData and
 never from the directory Node reports; when Node's active directory is not a
@@ -79,11 +79,9 @@ profile; see `scripts/perf/DOCUMENTATION.md`.
 
 Quit, relaunch, and update installation await the in-process server's `stop()`
 before exiting Electron. This lets the backend release its terminals, supervised
-Bun Agent Service, managed OpenCode process, and guest services. `server-shutdown.mjs` bounds the server
+Bun Agent Service, and guest services. `server-shutdown.mjs` bounds the server
 wait to 35 seconds, allowing the terminal runtime's 20-second grace plus the
-remaining backend cleanup. It uses the detached OpenCode killer only if normal
-shutdown fails or times out. An external OpenCode server remains externally
-owned. Closing to the tray does not stop the backend.
+remaining backend cleanup. Closing to the tray does not stop the backend.
 
 Update installation bounds the full background-service shutdown, including SSH,
 to 40 seconds. This outer deadline leaves the backend's 35-second wait intact;
@@ -109,23 +107,17 @@ command and the OS protocol handler. `external-url-policy.mjs` validates schemes
 again in main, with the same exclusions as the shared UI classifier. Native
 opening failures do not fall back to a browser window for application links.
 
-The shared application no longer probes or gates startup on an OpenCode CLI
+The shared application does not probe or gate startup on an OpenCode CLI
 version, and the `desktop_managed_opencode_compatible` IPC command is retired.
 Web/PWA, Electron, hosted mobile and Capacitor mount the canonical client through
 the existing authentication, bootstrap and connection-recovery flow. Agent
 availability comes from the authenticated `/api/agent/v1` boundary, not a native
 CLI preflight. Capacitor can still mount connection selection without a Host.
-The inherited backend lifecycle preflight remains only for unmigrated legacy
-consumers; its presence is not an OMP readiness signal. Packaged Bun/Agent Service
-staging and final lifecycle/proxy/config/auth retirement remain Task 17 blockers.
 
-The shared production startup pipeline no longer bootstraps an OpenCode process
-or schedules legacy API detection. It registers retained Host capabilities,
+The shared production startup pipeline registers retained Host capabilities,
 publishes the listener and Git credential-helper endpoint, attaches shutdown
 handlers, then starts the supervised Bun Agent Service. Its canonical readiness
-is independent of the inherited legacy lifecycle state. OpenCode packaging and
-explicit legacy controls remain retirement blockers; startup is not release
-certification for those consumers or for packaged Bun staging.
+is served at `/api/agent/v1/ready`.
 
 ## Main Files
 
@@ -257,17 +249,17 @@ macOS packaging needs Xcode/build tools for notarized builds and icon asset comp
 
 Windows packaging needs NSIS support through `electron-builder`. If no Windows signing env is set, `package.mjs` disables code signing and builds an unsigned installer. Windows updates use `latest.yml` for x64 and the `latest-arm64.yml` channel for ARM64 so each installation resolves an architecture-matching installer.
 
-Linux AppImages must be built natively. Set `OPENCHAMBER_TARGET_ARCH=x64` or `OPENCHAMBER_TARGET_ARCH=arm64` when packaging; the build rejects a target that does not match the Linux host. The same target selects the bundled OpenCode CLI, native Electron rebuild, and Electron Builder architecture. Linux identity is stable across architectures: executable `openchamber`, desktop file `openchamber.desktop`, icon `openchamber`, and `StartupWMClass=openchamber`.
+Linux AppImages must be built natively. Set `OPENCHAMBER_TARGET_ARCH=x64` or `OPENCHAMBER_TARGET_ARCH=arm64` when packaging; the build rejects a target that does not match the Linux host. The same target selects native Electron rebuild and Electron Builder architecture. Linux identity is stable across architectures: executable `openchamber`, desktop file `openchamber.desktop`, icon `openchamber`, and `StartupWMClass=openchamber`.
 
-After packaging, run `bun run --cwd packages/electron verify:linux-appimage`. The verifier extracts the final AppImage and checks its ELF architecture, desktop identity, Electron executable, pinned OpenCode CLI version and architecture, and all packaged native `.node` modules.
+After packaging, run `bun run --cwd packages/electron verify:linux-appimage`. The verifier extracts the final AppImage and checks its ELF architecture, desktop identity, Electron executable, staged Bun runtime and Agent payload, and all packaged native `.node` modules.
 
 Running a packaged Linux AppImage requires FUSE (`libfuse.so.2`, typically `libfuse2` / `libfuse2t64` on Debian/Ubuntu). Without FUSE, start with `APPIMAGE_EXTRACT_AND_RUN=1`. Keep the AppImage on a writable path so in-app updates can replace it.
 
-Desktop clears AppImage `ARGV0` from `process.env` before probing the login shell and starting the in-process server. Leaving it set makes zsh rewrite argv[0] for integrated-terminal and managed-OpenCode child commands to the AppImage path.
+Desktop clears AppImage `ARGV0` from `process.env` before probing the login shell and starting the in-process server. Leaving it set makes zsh rewrite argv[0] for integrated-terminal and agent child commands to the AppImage path.
 
 The variables Desktop sets for the in-process server (`OPENCHAMBER_RUNTIME`, `OPENCHAMBER_HOST`, the UI password, and the rest in `main.mjs`) go through `assignInjectedEnv` (`packages/web/server/lib/injected-env.js`), which records their names in `OPENCHAMBER_INJECTED_ENV`. The integrated terminal and agent shells inherit the record, so `openchamber startup enable` run from them keeps Desktop's configuration out of the startup service (#4604). Add a new variable the same way; a bare `process.env.X = ...` would leak into the service again.
 
-The AppImage launcher also prepends its own directories to `PATH`, `LD_LIBRARY_PATH`, `GSETTINGS_SCHEMA_DIR` and `XDG_DATA_DIRS`, leaving a trailing `:` when a variable was unset. Desktop keeps them in its own process and removes them only from the integrated terminal, the managed OpenCode server, and the git environment the server builds (`stripAppImageLauncherEnv` in `packages/web/server/lib/inherited-env.js`), so user tools, agent commands and git hooks started from those paths see the user's values (#4177). `XDG_DATA_DIRS` keeps the standard system directories the launcher adds around the user's value.
+The AppImage launcher also prepends its own directories to `PATH`, `LD_LIBRARY_PATH`, `GSETTINGS_SCHEMA_DIR` and `XDG_DATA_DIRS`, leaving a trailing `:` when a variable was unset. Desktop keeps them in its own process and removes them only from the integrated terminal and the git environment the server builds (`stripAppImageLauncherEnv` in `packages/web/server/lib/inherited-env.js`), so user tools, agent commands and git hooks started from those paths see the user's values (#4177). `XDG_DATA_DIRS` keeps the standard system directories the launcher adds around the user's value.
 
 Linux updates are supported only when the packaged app is running from a writable AppImage. Update checks, downloads, and installation report an actionable error when `APPIMAGE` is missing, invalid, or read-only; a missing release feed (`latest-linux.yml` 404 before the first Linux publish) is treated as “no update available”. Authenticated Web clients connected to the embedded Desktop Host use this same `electron-updater` check, download, and restart flow rather than a package-manager command. macOS and Windows updater behavior is unchanged. Release builds keep `latest-linux.yml` (x64) and `latest-linux-arm64.yml` separate and validate each manifest against its AppImage before upload. Linux AppImages download full updates (no `.blockmap` differential channel yet).
 
@@ -287,7 +279,7 @@ The macOS menu bar item is enabled by default and can be disabled in General set
 
 Packaged Desktop builds carry their own Bun runtime and agent service. `prepare:agent-runtime` stages them into `resources/agent-runtime` with a `manifest.json` naming the platform, architecture, staged Bun version and every file digest; `agent-runtime.mjs` resolves the Bun binary and the agent-service entrypoint from there for the Host. The payload has to stay outside the ASAR archive because Bun reads physical files. `verify:agent-runtime` re-checks the manifest, the digests and the platform/architecture match before packaging.
 
-The verified Desktop startup path no longer discovers, downloads or requires an OpenCode binary. The Host starts the staged Bun agent service and reaches it through the authenticated `/api/agent/v1` namespace; remaining legacy consumers and full packaged OpenCode-free certification are tracked in Task 17 and Task 18.
+The verified Desktop startup path does not require an OpenCode binary. The Host starts the staged Bun agent service and reaches it through the authenticated `/api/agent/v1` namespace.
 
 ## Common Env Vars
 

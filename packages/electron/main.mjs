@@ -1454,7 +1454,7 @@ const mapUpdaterProgressEvent = (payload) => ({
   data: payload.data,
 });
 
-import { pathLooksUserConfigured, mergePathValues } from '@openchamber/web/server/lib/opencode/path-utils.js';
+import { pathLooksUserConfigured, mergePathValues } from '@openchamber/web/server/lib/host/path-utils.js';
 import { provideLoginShellEnvSnapshot } from '@openchamber/web/server/lib/host/login-shell-env.js';
 
 // Merge the user's login-shell env (PATH, etc.) into this process before we

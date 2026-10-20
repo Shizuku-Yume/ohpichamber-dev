@@ -8,12 +8,12 @@ Node runtime. Its Git commands use Node `child_process` and `simple-git`, not
 
 | Owner | Children and workload | End of ownership |
 |---|---|---|
-| `web/server/lib/opencode/lifecycle.js` | One managed `opencode serve`; Windows package-manager shims are resolved by `env-runtime.js` | Failed startup, restart, or backend shutdown closes the owned process tree. An explicit external OpenCode is not stopped. |
-| OpenCode | Agent shell tools, MCP servers, repository discovery, snapshots, and other upstream work | OpenCode owns command completion and cancellation. Managed server teardown also stops its descendants. |
+| `web/server/lib/host/agent-service-supervisor.js` | Supervised Bun Agent Service process (`packages/agent-service/src/index.ts`) | Host close or backend shutdown terminates the supervisor and child service processes. |
+| Bun Workers | Agent execution, tools, MCP, and workspace catalogs | Worker processes run under Bun scoped to workspace cwd; termination on session deletion or backend stop. |
 | `web/server/lib/git/service.js` | Git status, diff, branch and worktree reads plus explicit mutations | Command completion. Status includes several subprocesses and runs at most once per directory at a time (see the git module documentation); branch discovery can contact remotes. Git never waits on a terminal prompt: `GIT_TERMINAL_PROMPT=0` makes an unanswerable credential prompt fail instead of holding a hidden console open. These commands are independent of the selected terminal shell. |
 | `web/server/lib/fs/` | `git check-ignore` during file listing and search; explicit background exec jobs | Ignore checks finish with the command. Exec jobs have their own deadline. |
 | `web/server/lib/terminal/runtime.js` | `node-pty` on Electron, with ConPTY on Windows; interactive shells and command-mode project actions | Exit, explicit close, force-kill, idle cleanup, or backend shutdown. Pending creates and restarts retain ownership until cleanup finishes. |
-| `electron/main.mjs` | In-process backend and native SSH lifecycle | Quit, relaunch, and update installation await backend cleanup. A detached OpenCode killer remains a bounded-failure fallback. |
+| `electron/main.mjs` | In-process backend and native SSH lifecycle | Quit, relaunch, and update installation await backend cleanup (`stop()`). |
 
 Git refreshes also follow completed agent tools, visible repository views, and
 sidebar status requests. Client-side coalescing does not own server subprocess
@@ -30,10 +30,11 @@ parent PIDs, or an exit timeline. The screenshots cannot attribute those
 processes to one launch path. The reported growth over normal use and the
 standalone OpenCode comparison remain important observations.
 
-Desktop 1.23.2 pins OpenCode 1.18.31. Binary selection can override that pin
+### Historical investigation baseline (Desktop 1.23.2):
+Desktop 1.23.2 pinned OpenCode 1.18.31. Binary selection could override that pin
 through settings or environment before considering the bundled CLI. The
-controlled macOS run verified the staged CLI reports 1.18.31 and used Electron
-43.7.0 with Node 24.21.0. The OpenCode release source pins Bun 1.3.14; this is
+controlled macOS run verified the staged CLI reported 1.18.31 and used Electron
+43.7.0 with Node 24.21.0. The OpenCode release source pinned Bun 1.3.14; this was
 not the version of Node executing OpenChamber's own Git launches.
 
 The referenced OpenCode issues 30495 and 11527 were closed for inactivity.
@@ -66,8 +67,8 @@ liveness; neither establishes that children exit.
 - Desktop exited without calling the embedded backend's `stop()`. In real
   macOS Electron, three terminal commands ignoring SIGHUP and SIGTERM stayed
   alive and exit failed to finish within ten seconds. Awaiting backend teardown
-  closed all three and the managed OpenCode before Electron exited. This was
-  checked with both HMR and bundled UI, the same CLI, isolated profiles, and
+  closed all three and managed backend processes before Electron exited. This was
+  checked with both HMR and bundled UI, isolated profiles, and
   ten successful status reads plus ten directory listings per run. Ordinary
   commands accepting SIGHUP exited in both versions; that control alone did not
   expose the missing cleanup.

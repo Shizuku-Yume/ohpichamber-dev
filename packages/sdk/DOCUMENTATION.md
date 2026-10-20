@@ -91,7 +91,7 @@ Catalog loading and installation retain typed request diagnostics in `lib/guests
 
 `guestFramePolicy` restricts scripts, styles, images, fonts, media, workers, and nested frames to package files or `data:`/`blob:` URLs. `connect-src` allows only the guest's own package path, plus origins the user approved through `contributes.origins`; relay documents have no direct connection source. External requests without that grant go through the host's declared integration request.
 
-File calls go through `POST /api/guests/:id/files` with the `x-opencode-directory` header of the open project (`lib/guests/files.ts`). `PluginPane` answers `NOT_GRANTED` and `NO_DIRECTORY` itself, mirroring the server, so a refused call costs no round trip; the server is still the authority.
+File calls go through `POST /api/guests/:id/files` with the open project in the `directory` query (`lib/guests/files.ts`). `PluginPane` answers `NOT_GRANTED` and `NO_DIRECTORY` itself, mirroring the server, so a refused call costs no round trip; the server is still the authority.
 
 Clipboard writes run in the host (`copyTextToClipboard`). Compose uses `useInputStore.setPendingInputText`. Attach writes the composer chip. The iframe has no clipboard, no composer, and no chip. The + menu and the attach window chrome are host. Guest JS is not in that React tree.
 
