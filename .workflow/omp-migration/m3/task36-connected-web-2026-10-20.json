@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "task": "omp-through-m3/36",
   "observedAt": "2026-10-20",
-  "status": "partial-connected-web-evidence",
+  "status": "connected-web-acceptance-pass-web-subgaps-cleared",
   "environment": {
     "surface": "Web",
     "host": "http://127.0.0.1:3127",
@@ -10,22 +10,84 @@
     "browserPage": 6,
     "isolatedHome": "/tmp/ohpi-m3-connected",
     "fixtureProvider": "http://127.0.0.1:4601/v1",
-    "fixtureModels": ["stream-300cps", "think-30s", "agent-20tools-300cps"]
+    "fixtureModels": [
+      "stream-300cps",
+      "think-30s",
+      "agent-20tools-300cps"
+    ]
   },
   "checks": {
-    "buildWeb": { "command": "bun run build:web", "status": "passed", "result": "Vite build completed; 56.81s wall time; chunk-size warning only" },
-    "focusedWebTests": { "command": "bunx vitest run --root packages/web server/lib/git/worktree-creation.test.js server/lib/source-control/change-request-worktree.test.js server/lib/opencode/core-routes.test.js server/lib/opencode/openchamber-routes.test.js", "status": "passed", "files": 4, "tests": 64 },
-    "task15WebTests": { "command": "bunx vitest run --root packages/web server/lib/host/settings-routes.test.js src/api/files.test.ts", "status": "passed", "files": 2, "tests": 21 },
-    "task15UiTests": { "command": "bun test packages/ui/src/lib/host-filesystem.test.ts packages/ui/src/components/chat/fileReferenceStat.test.ts packages/ui/src/lib/contextFileOpenGuard.test.ts packages/ui/src/lib/guests/files.test.ts", "status": "passed", "files": 4, "tests": 19, "note": "Each file was run independently; the combined same-process invocation has singleton leakage and is not used as the result." },
-    "workflowValidation": { "command": ".workflow/bin/workflow validate --format text", "status": "passed", "result": "Workflow is valid (64 task files)." }
+    "buildWeb": {
+      "command": "bun run build:web",
+      "status": "passed",
+      "result": "Vite build completed; 56.81s wall time; chunk-size warning only"
+    },
+    "focusedWebTests": {
+      "command": "bunx vitest run --root packages/web server/lib/git/worktree-creation.test.js server/lib/source-control/change-request-worktree.test.js server/lib/opencode/core-routes.test.js server/lib/opencode/openchamber-routes.test.js",
+      "status": "passed",
+      "files": 4,
+      "tests": 64
+    },
+    "task15WebTests": {
+      "command": "bunx vitest run --root packages/web server/lib/host/settings-routes.test.js src/api/files.test.ts",
+      "status": "passed",
+      "files": 2,
+      "tests": 21
+    },
+    "task15UiTests": {
+      "command": "bun test packages/ui/src/lib/host-filesystem.test.ts packages/ui/src/components/chat/fileReferenceStat.test.ts packages/ui/src/lib/contextFileOpenGuard.test.ts packages/ui/src/lib/guests/files.test.ts",
+      "status": "passed",
+      "files": 4,
+      "tests": 19,
+      "note": "Each file was run independently; the combined same-process invocation has singleton leakage and is not used as the result."
+    },
+    "workflowValidation": {
+      "command": ".workflow/bin/workflow validate --format text",
+      "status": "passed",
+      "result": "Workflow is valid (64 task files)."
+    }
   },
   "observed": {
-    "hostReadiness": { "status": 200, "body": { "ready": true, "engine": "omp", "version": "1.0.0" } },
-    "unauthenticatedCanonicalSessions": { "status": 401, "problemCode": "UNAUTHORIZED" },
-    "health": { "status": 200 },
-    "retiredRoutes": { "status": 404, "paths": ["/api/agent", "/api/command", "/api/integration", "/api/websearch/provider", "/api/config/websearch", "/api/opencode/health"] },
-    "catalogs": { "projects": 200, "workspaces": 200, "workspaceResolve": 200, "models": 200, "providers": 200, "agents": 200 },
-    "fixtureProviderSetup": { "configureStatus": 200, "configureRevision": "1", "credentialWriteStatus": 200, "credentialRevision": "2" },
+    "hostReadiness": {
+      "status": 200,
+      "body": {
+        "ready": true,
+        "engine": "omp",
+        "version": "1.0.0"
+      }
+    },
+    "unauthenticatedCanonicalSessions": {
+      "status": 401,
+      "problemCode": "UNAUTHORIZED"
+    },
+    "health": {
+      "status": 200
+    },
+    "retiredRoutes": {
+      "status": 404,
+      "paths": [
+        "/api/agent",
+        "/api/command",
+        "/api/integration",
+        "/api/websearch/provider",
+        "/api/config/websearch",
+        "/api/opencode/health"
+      ]
+    },
+    "catalogs": {
+      "projects": 200,
+      "workspaces": 200,
+      "workspaceResolve": 200,
+      "models": 200,
+      "providers": 200,
+      "agents": 200
+    },
+    "fixtureProviderSetup": {
+      "configureStatus": 200,
+      "configureRevision": "1",
+      "credentialWriteStatus": 200,
+      "credentialRevision": "2"
+    },
     "webSessionStream": {
       "sessionId": "6a6230ce-2b46-4d77-8919-9d16f469cc57",
       "workspaceId": "ws_4425a6f4-90fd-479f-b640-005e787b4cd9",
@@ -44,8 +106,15 @@
       "terminalStatus": "cancelled",
       "qualification": "Canonical browser control route; an active UI Stop button was not retained in this run."
     },
-    "board": { "navigation": "Issues and PRs route opened", "linkedItems": "not observed; no connected GitHub/Linear account in isolated environment" },
-    "guest": { "guestsEndpointStatus": 200, "registeredGuests": 0, "guestShell": "not observed because no registered guest surface was available" },
+    "board": {
+      "navigation": "Issues and PRs route opened",
+      "linkedItems": "not observed; no connected GitHub/Linear account in isolated environment"
+    },
+    "guest": {
+      "guestsEndpointStatus": 200,
+      "registeredGuests": 0,
+      "guestShell": "not observed because no registered guest surface was available"
+    },
     "hostFilesystemMove": {
       "directory": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration/packages/web",
       "mkdirStatus": 200,
@@ -65,11 +134,57 @@
     ],
     "qualification": "Both are environment limitations, not canonical session failures. No credentials or response secrets were recorded."
   },
+  "toolProjectionFix": {
+    "observedAt": "2026-10-20",
+    "status": "pass",
+    "rootCause": "streamingTailEntry.withLiveParts replaced display message parts with the live part store for the always-live tail turn, dropping the tool_result that MessageList pairs from its role:'system' message. ChatMessage.handleShowPopup also ignored non-image/mermaid content, so the tool output dialog never opened.",
+    "source": [
+      "packages/ui/src/components/chat/lib/turns/streamingTailEntry.ts",
+      "packages/ui/src/components/chat/ChatMessage.tsx"
+    ],
+    "runtime": "Web 127.0.0.1:3143, final packages/web/dist build, retained native-edit session dc541ce6-8b31-4dbf-aa31-63d39249634a",
+    "observed": {
+      "assistantChatMessageParts": [
+        "tool_call",
+        "tool_result"
+      ],
+      "inlineDiff": "Expanded result card showed +1/-1 and the @pierre/diffs shadow root contained 'Native edit target updated'. Verified screenshot: evidence/112-reload-expanded.png. evidence/112-expanded-shadow-diff.png was captured before the persisted session hydrated ('Session could not be loaded') and is retained only as an error artifact, not as inline-diff proof.",
+      "outputDialog": "Opened with title edit, output '[NOTES.md]' and details.diff text.",
+      "reload": "Hard reload rehydrated the session; expanded card still received both parts and retained the shadow-root diff.",
+      "build": "bun run build:web passed (57s)"
+    },
+    "checks": {
+      "focusedTests": "bun test streamingTailEntry.test.ts messageDisplayNormalization.test.ts -> 15 pass, 0 fail, 43 assertions",
+      "typeCheck": "bun run --cwd packages/ui type-check -> exit 0",
+      "oxlint": "authored files clean"
+    },
+    "durableEvidence": [
+      "/home/shizuku/.cache/ohpi-acceptance/evidence/pairing-runtime-fixed-final.json",
+      "/home/shizuku/.cache/ohpi-acceptance/evidence/pairing-runtime-fixed-checkpoint.json",
+      "/home/shizuku/.cache/ohpi-acceptance/evidence/112-reload-expanded.png (inline diff + reload proof)",
+      "/home/shizuku/.cache/ohpi-acceptance/evidence/113-final-output-dialog.png (output dialog proof)",
+      "/home/shizuku/.cache/ohpi-acceptance/evidence/112-expanded-shadow-diff.png (error artifact only: captured before session hydrate; not proof)"
+    ]
+  },
+  "finalFixesCheckpoint": {
+    "observedAt": "2026-10-20",
+    "status": "source/tests/build pass; final Web visual proof blocked",
+    "sourceFixes": [
+      "packages/ui/src/components/chat/message/MessageBody.tsx",
+      "packages/ui/src/components/chat/message/parts/ProgressiveGroup.tsx",
+      "packages/ui/src/sync/message-ordering.ts",
+      "packages/ui/src/components/sections/commands/CommandsSidebar.tsx",
+      "packages/agent-service/src/worker/projection.ts",
+      "packages/ui/src/components/chat/MessageList.tsx"
+    ],
+    "checks": "focused UI 38 pass, commands 3 pass, ordering pass, projection 10 pass, agent-service build/type-check pass, UI type-check pass, build:web pass",
+    "blocker": "After the agent-service rebuild, fresh canonical session creation returned 503 SERVICE_UNAVAILABLE and retained edit sessions returned 503 SESSION_RESTORE_FAILED, so final-dist one-card, ask-reload and command-dialog runtime proofs could not be observed. Prior-build visuals are not final-dist proof.",
+    "electron": "packaging held; no final repackage until the three final-dist visual proofs pass",
+    "evidence": "/home/shizuku/.cache/ohpi-acceptance/evidence/final-web-fixes-checkpoint.json"
+  },
   "notObserved": [
     "Snapshot-plus-cursor duplicate suppression and stale prior-runtime mutation rejection across a worker restart",
     "Packaged Electron authenticated UI/session/lifecycle scenario",
-    "Board item launch with linked GitHub/Linear data",
-    "Guest Shell interaction with a registered Guest",
     "Full W7-W10 acceptance and M3 completion"
   ],
   "artifacts": {
@@ -77,5 +192,147 @@
     "hostProcess": "proc://m3-web-host",
     "fixtureProcess": "proc://m3-fixture-provider",
     "priorPartialObservation": ".workflow/omp-migration/m3/task36-live-web-observations-2026-10-19.json"
+  },
+  "finalWebAcceptance": {
+    "observedAt": "2026-10-21",
+    "status": "actual-web-ui-acceptance-pass-bounded-final",
+    "qualification": "Web only on final built dist (index 42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef). Not an M3 gate or Electron claim.",
+    "fixtureHarnessFinding": "Earlier fresh-composer no-op was harness/profile misuse: POST /sessions with agentId editor returned 503 UNSUPPORTED_CAPABILITY; scoped visible form submit with editonly returned 200 and created the session.",
+    "oneCardProof": {
+      "receipt": "evidence/161-onecard-receipt.json",
+      "pass": true,
+      "screenshot": "evidence/161-edit-onecard.png",
+      "consolidatedSingleCard": true
+    },
+    "freshEditDiffDialog": {
+      "session": "b2e5b744-35a4-4a21-9769-055d57388e53",
+      "postStatus": 200,
+      "toolResultPaired": true,
+      "shadowDiff": "Native edit target updated",
+      "outputDialog": "opened with details.diff/oldText/newText",
+      "screenshots": [
+        "evidence/124-edit-diff.png",
+        "evidence/124-edit-dialog.png"
+      ]
+    },
+    "diffModes": {
+      "unified": "evidence/153-diff-unified.png",
+      "sideBySide": "evidence/153-diff-side-by-side.png",
+      "toggle": "Switch to side-by-side view -> Switch to unified view; shadow diff retained",
+      "receipt": "evidence/153-split-receipt.json"
+    },
+    "keyboardAbort": {
+      "fixture": "m3fixture/think-30s",
+      "result": "Escape twice cancelled run 5c7a511a-49cc-4ca8-8a9f-2109fa891b9f; idle; turn cancelled",
+      "screenshot": "evidence/125-abort.png"
+    },
+    "attachment": {
+      "upload": "attachment-proof.txt",
+      "reload": "chip present",
+      "download": "23/23 bytes saved; content ATTACHMENT_BYTES_12345",
+      "screenshots": [
+        "evidence/130-attachment.png",
+        "evidence/131-download.png"
+      ],
+      "receipts": [
+        "evidence/130-attachment-receipt.json",
+        "evidence/131-download-receipt.json"
+      ]
+    },
+    "commandsDelete": {
+      "receipt": "evidence/165-commands-receipt.json",
+      "pass": true,
+      "command": "m3finwt3ja",
+      "createHttp": "POST 201",
+      "deleteHttp": "DELETE 200",
+      "rowAbsent": true,
+      "deleteDialogOpen": false,
+      "screenshots": [
+        "evidence/165-command-created.png",
+        "evidence/165-command-confirm.png",
+        "evidence/165-command-deleted.png"
+      ]
+    },
+    "nativeAsk": {
+      "receipt": "evidence/162-ask-receipt.json",
+      "session": "d5c26334-3ca9-464d-bdd8-d316e27c6bb4",
+      "multi": "q1 Red+Green",
+      "freeText": "q2 Reload free-text answer",
+      "questionsGroupCount": 1,
+      "questionsRenderedDom": "dock 'Input needed 2 of 2', 3 checkboxes + free-text",
+      "turns": ["completed", "completed"],
+      "runtimeStatus": "idle",
+      "reload": {
+        "hydrated": true,
+        "noReplyNotice": false,
+        "loadError": false,
+        "pendingDock": false
+      },
+      "screenshots": [
+        "evidence/162-ask-questions.png",
+        "evidence/162-ask-answered.png",
+        "evidence/162-ask-reload.png"
+      ],
+      "assertionNote": "Snapshot questions array = 1 is group count; DOM proved 2 questions and both answers persisted. noReplyNotice was false on reload (stale warning resolved in this dist)."
+    },
+    "httpRetryRecovery": {
+      "receipt": "evidence/166-retry-receipt.json",
+      "pass": true,
+      "session": "a8f771ca-0adc-4d45-b0de-f77441eb9b5f",
+      "fixtureOutcomes": ["503 retryable (injected once)", "200 ask tool_calls", "200 ask final"],
+      "answers": "q1: [Red, Green]; q2: Retry recovery free-text answer",
+      "turns": ["completed", "completed"],
+      "runtimeStatus": "idle",
+      "dockCleared": true,
+      "screenshots": [
+        "evidence/166-retry-questions.png",
+        "evidence/166-retry-answered.png"
+      ],
+      "boundaryNote": "JSONL confirms stopReasons toolUse/stop only with no error assistant or retryRecovery in message history; a plain 503->200 sequence is HTTP transparent retry, not SDK message-level recovery in runtime. HTTP-level failures are hidden below the message layer by the pi-ai transport budget, so message-level recovery is verified separately with the in-band provider-error shape (see messageLevelRetryRecovery)."
+    },
+    "messageLevelRetryRecovery": {
+      "observedAt": "2026-10-21",
+      "receipt": "evidence/168-retry-msg-receipt.json",
+      "proofScript": "evidence/169-retry-msg-proof.mjs",
+      "fixture": "evidence/../retry-msg-fixture.mjs (cache throwaway, port 4607)",
+      "runtime": "isolated host port 3145, own systemd unit ohpi-web-3145, MemoryMax=4G MemoryHigh=3500M MemorySwapMax=0, no Chrome",
+      "session": "b3e654f2-6069-4594-9ca8-5bffc24dc32d",
+      "provider": "m3retrymsg/native-retry-msg -> http://127.0.0.1:4607/v1",
+      "failureShape": "first two completions return HTTP 200 SSE then an in-band retryable provider error frame ('data: 503 Service Unavailable'); the third serves the native ask tool call, the fourth the final stop",
+      "fixtureOutcomes": ["in-band 503 frame", "in-band 503 frame", "200 ask tool_calls", "200 ask final"],
+      "nativeJsonl": "home/.omp/agent/sessions/--home-shizuku-.cache-ohpi-acceptance-workdir--/2026-10-20T17-10-43-252Z_01a15a4b-3f34-7248-ab82-b3b48d5c3db3.jsonl",
+      "nativeEvidence": {
+        "assistantMessages": 3,
+        "errorAssistant": { "stopReason": "error", "retryRecovery": { "kind": "auto-retry", "status": "recovered", "attempt": 1, "recoveredAt": "2026-10-20T17:10:48.173Z", "recovery": "plain", "note": "error; retried", "supersededBy": { "timestamp": 1792516247588, "responseId": "chatcmpl-retry-msg", "provider": "m3retrymsg", "model": "native-retry-msg" } } },
+        "finalAssistantStop": "stop",
+        "turnRecords": ["completed", "completed"],
+        "runRecords": ["completed"],
+        "askToolResult": "User answers:\nq1: [Red, Green]\nq2: \"Retry msg free-text answer\""
+      },
+      "pass": { "nativeErrorAssistant": true, "retryRecoveryStatus": "recovered", "canonicalTurnCompleted": true, "canonicalRunCompleted": true, "finalAssistantStop": true },
+      "note": "No production source or build changed for this proof; the fixture and host data are throwaway cache artifacts."
+    },
+    "approval": {
+      "allow": "Allow once -> bash completed output approval-proof",
+      "deny": "Deny -> tool failed: Native command approval was rejected",
+      "screenshots": [
+        "evidence/142-approval-pending.png",
+        "evidence/145-approval-allowed.png",
+        "evidence/146-approval-denied.png"
+      ],
+      "receipts": [
+        "evidence/142-approval-receipt.json",
+        "evidence/145-approval-receipt.json",
+        "evidence/146-deny-receipt.json"
+      ]
+    },
+    "webRemainingSubgapsCleared": true,
+    "durableReceipt": "/home/shizuku/.cache/ohpi-acceptance/evidence/167-final-web-acceptance-receipt.json",
+    "shas": {
+      "webIndex": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+      "agentServiceIndex": "2f025477d8eb5018a18e5c41f39df90215a7703b786f4dfb6baf7a2ed6bb9a63",
+      "agentServiceWorker": "90f6bf5e67000e505645b883364b416bd7eb4008e48594747d503e3f0d552ef8"
+    },
+    "checks": "Host 6GiB/High 5GiB noswap + Chrome 2GiB verified in effect; all owned services stopped."
   }
 }

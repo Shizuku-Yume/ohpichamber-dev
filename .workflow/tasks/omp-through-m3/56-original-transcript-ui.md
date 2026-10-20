@@ -28,3 +28,7 @@ This task restores the core conversation transcript:
 - **`MessageBody` & Rich Parts:** Reconnects structured part rendering across assistant turns, ensuring streaming deltas append smoothly to active parts without flickering or DOM recreation.
 - **Turn Activity & Collapse:** Restores turn progression states (`TurnActivity`, `LiveActivityCollapse`), allowing long tool-call sequences and thinking blocks to collapse cleanly while preserving user visibility into ongoing progress.
 - **Contract Decoupling:** Binds UI components strictly to canonical message state via directory sync and native message loaders, without legacy OpenCode session adapters.
+
+## Progress
+
+The original transcript composition and native canonical bindings are integrated. The actual Web receipt `/tmp/ui-restored-web-proof.json` confirms a real submitted session rendered a user bubble plus assistant heading, table, three-item list, blockquote, fenced code block, and inline link; history contained text and reasoning parts. The packaged Electron proof `/tmp/ui-restored-electron-proof.json` confirmed rich composer DOM inspection and screenshot verification. Web/Electron turn-streaming, full reload persistence, and complete action coverage remain unverified, so this task stays open.

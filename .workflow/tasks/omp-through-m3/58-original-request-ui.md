@@ -28,3 +28,7 @@ This task restores interactive question and permission approval surfaces:
 - **Permission Cards & Docks:** Restores the styled floating dock (`PermissionDock`) and embedded cards (`PermissionCard`) presenting the tool name, target paths/commands, justification reasons, and decisive action triggers (Allow Once, Always Allow in Session, Deny).
 - **CAS and stale protection:** Submit the exact request `version`, `epoch` and `workerGeneration`; concurrent resolution or restart must not execute an obsolete response.
 - **Keyboard & IME Ergonomics:** Ensures Enter submits valid single-line inputs without breaking multi-line textareas, prevents accidental submission during active IME composition, and maintains focus flow.
+
+## Progress
+
+The original question and approval presentation is integrated against native interaction records; the focused question regression passed 12/12. Host authorization in `worker-operation-authorizer.js` admits exact native `omp.ask` operations after scope, containment, profile, preset, and policy checks (Host 18/18 tests passed, Web tsc/syntax/oxlint clean). Live Web interaction verified the native pending question dock visible at snapshot 200 with 1 question; selecting the radio option "Original panel" and clicking Submit dismissed the dock and emitted the history tool result. Approval cards, CAS-stale protection, keyboard/IME shortcuts, and Electron question interactions remain unverified. This task stays open.

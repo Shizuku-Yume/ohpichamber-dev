@@ -2,40 +2,600 @@
   "schemaVersion": 1,
   "task": "omp-through-m3/36",
   "observedAt": "2026-10-20",
-  "status": "packaged-electron-startup-partial-auth-failure",
+  "status": "packaged-final-go-pass",
   "environment": {
     "surface": "Packaged Electron",
     "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
     "artifact": "packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage",
-    "display": "xvfb-run",
-    "isolatedHome": "/tmp/ohpi-m3-electron",
+    "artifactSha256": "0a1886923e2549bf6058ff4847a02d7f0f542698f374a6cd18b9168e7cf9bddd",
+    "artifactBuiltAt": "2026-10-21T00:52+08:00",
+    "artifactNote": "Final UI-proofed AppImage: bundled Web dist index 42170a97… and Agent Service 2f025477…/90f6bf5e…; verified payload Bun 1.4.2, 158 Agent packages, 29 Host native modules. The isolated-home/port fields in this block belong to the earlier superseded 7b7f99ee… run; final2 proofs used their own homes. The current on-disk AppImage is the later Task55 rebundle 598bf582… (latestRebundle).",
+    "electronVersion": "43.7.0",
+    "display": "xvfb-run -a -s '-screen 0 1600x1000x24'",
+    "isolatedHome": "/tmp/ohpi-m3-electron-t55f",
     "remoteDebuggingPort": 9223,
-    "observedHostPort": 57123
-  },
-  "build": {
-    "command": "bun x electron-builder --publish never --x64",
-    "status": "passed",
-    "result": "AppImage packaged successfully after the repository package wrapper's CI publish detection failed without GH_TOKEN; direct --publish never invocation completed."
-  },
-  "observed": {
-    "process": "AppImage launched under Xvfb and rendered an Electron window with openchamber-ui://app/index.html. Electron child processes were stopped and verified absent after the run.",
-    "hostHealth": { "status": 200, "port": 57123, "runtime": "desktop" },
-    "canonicalReadiness": { "status": 200, "body": { "ready": true, "engine": "omp", "version": "1.0.0" } },
-    "unauthenticatedCanonicalSessions": { "status": 401, "code": "UNAUTHORIZED" },
-    "ui": "DevTools attached to Electron page 1; the localized composer, sidebar, work-status panel, panel navigation, and native window controls rendered.",
-    "auth": {
-      "sessionEndpoint": { "status": 304, "body": { "authenticated": true, "disabled": true } },
-      "canonicalSessionsFromRenderer": { "status": 401, "count": 3 },
-      "workspaceResolveFromRenderer": { "status": 401 },
-      "visibleFailure": "Sidebar showed 无法刷新会话。 and a Retry button; model picker remained Loading/Unavailable.",
-      "consoleErrors": "Three 401 resource errors."
+    "observedHostPort": 57123,
+    "remoteExclusionHome": "/tmp/ohpi-m3-electron-t55f-remote",
+    "remoteExclusionPort": 9224,
+    "remoteExclusionTarget": "http://127.0.0.1:4618",
+    "artifactSizeBytes": 606838429,
+    "webDist": {
+      "indexSha256": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+      "packaging": "copied packages/web/dist unchanged; no Web rebuild",
+      "historicalObservation": {
+        "indexSha256": "d29186da64abd552c4038731b62dc80e3963c1f0a4002a20509b41173ead9083",
+        "builtAt": "2026-10-20T22:49:11+08:00",
+        "ompLabelOccurrences": 13,
+        "artifact": "superseded 7b7f99ee… AppImage; the 13-locale OMP label was proven there and was not rerun on the final artifacts"
+      }
+    },
+    "supersededArtifacts": [
+      {
+        "sha256": "7b7f99eeec8cf5d66f951e1d315b3c419f1ed12a45a0e32aeb2ff3d0190782b9",
+        "note": "GO-final precursor built from Web dist d29186da…; the gap evidence recorded later in this receipt (keyboard abort, attachment, cold start, OMP label, commands-modal failure) was observed on this artifact and is historical only. Superseded by 0a188692… and 598bf582…; not final.",
+        "availability": "historical-not-final"
+      },
+      {
+        "sha256": "cda2cf4b7ae32153092e4bd4b35a130ee688963609c01c6f2a77262f2fe2de6f",
+        "note": "superseded by GO-final; not available",
+        "availability": "not-available"
+      },
+      {
+        "sha256": "7528f0c9307d86cf21c2316284dc7073271f95100f4985a286e652e3ceb8460b",
+        "note": "intermediate frozen artifact built from the 22:19 dist; removed by an aborted hold-time build; superseded, not available",
+        "availability": "not-available"
+      }
+    ],
+    "latestRebundle": {
+      "sha256": "598bf5823785ccf5b3f36d4e49bb950638e77b3eff35a5b3fc7b3e3259eabad9",
+      "sizeBytes": 606838421,
+      "builtAt": "2026-10-21T01:35+08:00",
+      "webDistIndexSha256": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+      "receipt": ".workflow/omp-migration/m3/task55-packaged-electron-2026-10-21.json",
+      "note": "Current on-disk AppImage, rebuilt after Task44 Host commit cacbaf042. Task55 verified packaged auth and observed Stop/Escape cancellation there; it did not rerun this receipt's final2 UI proofs."
     }
   },
-  "qualification": "Packaged Electron startup, native window rendering, Host health/readiness and unauthenticated boundary passed. Authenticated canonical UI session bootstrap did not pass: the renderer received authenticated:true/disabled:true from /auth/session but its canonical requests were 401. No session create/stream/abort/reopen or W7-W10 Electron pass is claimed.",
-  "nextOwner": "Electron packaged auth/runtime bootstrap must preserve the local UI session cookie or equivalent authenticated transport for openchamber-ui://app before Task36 can certify connected Electron behavior.",
-  "artifacts": {
-    "receipt": ".workflow/omp-migration/m3/task36-packaged-electron-2026-10-20.json",
-    "buildOutput": "artifact://8148",
-    "initialWrapperFailure": "artifact://8146"
-  }
+  "build": {
+    "artifactRole": "Historical build of the superseded 7b7f99ee… artifact. The final artifact build sequence is finalBuildSequence; the current on-disk rebundle is environment.latestRebundle.",
+    "commands": [
+      "bun run bundle:main",
+      "bun x electron-builder --publish never --x64"
+    ],
+    "status": "passed",
+    "stagedInputs": "resources/web-dist (2026-10-20 12:53) and resources/agent-runtime were reused because no web/UI source was newer than the staged build; verify:agent-runtime reported ready with Bun 1.4.2.",
+    "hostFixIncluded": "Task44ProcessCleanup registry/supervisor edits landed before this package; 'managed-process-registry' occurs in the packaged app.asar.",
+    "priorArtifact": {
+      "sha256": "c45be7297ea7d6bcc176a5393f5a0b2f54d51adb3f56fee39d7bcc5280a6edeb",
+      "note": "Same auth outcomes before the Task44 Host fix landed; superseded by the assembled artifact above."
+    }
+  },
+  "checks": {
+    "electronTests": {
+      "command": "node --test packages/electron/desktop-local-auth.test.mjs packages/electron/packaged-ui-routing.test.mjs",
+      "status": "passed",
+      "tests": 12
+    },
+    "desktopBootstrapRouteTests": {
+      "command": "bun test packages/web/server/lib/opencode/desktop-client-bootstrap.test.js && bunx vitest run server/lib/opencode/desktop-client-bootstrap.test.js",
+      "status": "passed",
+      "tests": 4,
+      "note": "Real registerAuthAndAccessRoutes, real createUiAuth (passwordless, requireClientAuth, password), real remote-client store."
+    },
+    "typeCheck": {
+      "command": "bun run type-check:electron",
+      "status": "passed"
+    },
+    "lint": {
+      "command": "bunx oxlint packages/electron/desktop-local-auth.mjs packages/electron/desktop-local-auth.test.mjs packages/electron/packaged-ui-routing.mjs packages/electron/packaged-ui-routing.test.mjs packages/web/server/lib/opencode/desktop-client-bootstrap.test.js",
+      "status": "passed",
+      "note": "main.mjs keeps pre-existing repo-wide anti-slop findings outside this change."
+    },
+    "deadCode": {
+      "command": "bun run dead-code",
+      "status": "no findings for authored files",
+      "note": "The command exits 1 for pre-existing repo findings; none name the authored files."
+    },
+    "hostRegression": {
+      "reportedBy": "Task44ProcessCleanup",
+      "status": "passed",
+      "canonicalPlugins": "packages/web/server/lib/host/canonical-plugins.test.js 5/5 under vitest (115.2s)",
+      "focusedRegistrySupervisor": "32/32",
+      "webTypeCheck": "passed",
+      "realBunProcessProof": "normal start/stop and parent-SIGKILL orphan reap passed; 3 unrelated siblings survived",
+      "note": "This is the Host-side result for the source packaged above, not an Electron connected-scenario result."
+    }
+  },
+  "observed": {
+    "window": "openchamber-ui://app/index.html rendered under Xvfb; CDP attached to the packaged page.",
+    "hostHealth": {
+      "status": 200
+    },
+    "canonicalReadiness": {
+      "status": 200,
+      "body": {
+        "ready": true,
+        "engine": "omp",
+        "version": "1.0.0"
+      }
+    },
+    "unauthenticatedRawCanonicalSessions": {
+      "status": 401,
+      "method": "curl without credentials",
+      "bodyCode": "UNAUTHORIZED"
+    },
+    "rendererAuth": {
+      "sessionEndpoint": {
+        "status": 200,
+        "body": {
+          "authenticated": true,
+          "disabled": true
+        }
+      },
+      "injectedToken": {
+        "present": true,
+        "prefix": "oc_client_",
+        "length": 53
+      },
+      "canonicalSessions": {
+        "status": 200,
+        "count": 0
+      },
+      "workspaceResolve": {
+        "status": 200,
+        "name": "Chats",
+        "workspaceId": "ws_30a9df95-ecb1-4d35-9f9f-061cc185568a"
+      },
+      "clientAuthList": {
+        "status": 200,
+        "count": 1,
+        "kinds": [
+          "desktop-local"
+        ],
+        "label": "OpenChamber Desktop"
+      }
+    },
+    "credentialPersistence": {
+      "settingsTokenStored": true,
+      "clientStore": "one desktop-local record",
+      "restartReuse": "After restarting the same profile the client store still held exactly one desktop-local record; no rotation."
+    },
+    "ui": {
+      "composer": "Rendered with a model picker (Claude Haiku 5.5) and the chats project.",
+      "sessionRefreshFailure": "absent (0 occurrences of 无法刷新会话。)",
+      "console": "no application console errors on the fresh run; one /api/source-control/binding 422 for the non-git chats directory and quota 503s from the credential-less isolated HOME; one 404 came from a stale harness probe path.",
+      "firstLaunch": "The final launch showed the first-run connection chooser; choosing 'use local' completed onboarding (initialHostChoiceCompleted=true, defaultHostId=local) and the healthy composer above. The prior exact-source package booted directly to the app."
+    },
+    "connectedScenario": {
+      "providerSetup": "Supported canonical workspace provider APIs on the packaged workspace ws_1c575320-5cf2-4a97-9f3f-a8f47374312f: GET providers revision 0, PUT providers/m3fixture/config 200 -> revision 1, PUT providers/m3fixture/credential (api-key) 200 -> revision 2; workspace model catalog then listed stream-300cps, think-30s, agent-20tools-300cps and the UI model picker showed 'Fixture stream 300cps'.",
+      "composerCreateStream": {
+        "sessionId": "d84fea2b-af77-4856-be58-d77ace0f3031",
+        "model": "m3fixture/stream-300cps",
+        "submit": "Prompt typed into the packaged CodeMirror composer and sent with the composer Send button; URL moved to ?session=...",
+        "stream": "Stop control was no longer visible after completion; the fixture document rendered in the conversation.",
+        "history": "GET sessions/:id/history 200 with 2 messages [user, assistant]; session detail showed turn completed, user message 1 text part, assistant 1 text part.",
+        "reload": "Reload kept 2 history messages, 1+1 parts, and the fixture document in the DOM; no duplicate parts."
+      },
+      "composerAbort": {
+        "sessionId": "cdaf1d5d-5264-46f9-8924-2cb31fa73c3d",
+        "model": "m3fixture/think-30s",
+        "submit": "Prompt sent with the composer Send button for the silent fixture model.",
+        "activeRun": "24855b78-d7b6-4b27-9ddd-d4047b3b8bcb status running",
+        "stopControl": "not rendered in the packaged UI (no aria/text matching stop); the canonical abort route was used, matching the Web proof's qualification",
+        "abort": "POST /api/agent/v1/sessions/cdaf1d5d.../runs/24855b78.../abort 200; run status cancelled with finishedAt; session turn status cancelled and activeRun null.",
+        "reload": "After reload the canonical session returned 2 messages [user, assistant] with turn cancelled; user 1 text part, assistant 0 parts, no duplicate parts and the prompt stayed rendered."
+      },
+      "transientObservations": [
+        "One GET /sessions/:id/snapshot returned 503 immediately after a reload; history and the rendered DOM were correct.",
+        "One session-detail GET immediately after reload returned empty messages/turns for about 2s, then settled to the correct cancelled turn with 2 messages."
+      ]
+    },
+    "readinessLaunchOnFinalArtifact": {
+      "sha256": "cda2cf4b7ae32153092e4bd4b35a130ee688963609c01c6f2a77262f2fe2de6f",
+      "isolatedHome": "/tmp/ohpi-m3-electron-t55g",
+      "authSession": {
+        "status": 200,
+        "body": {
+          "authenticated": true,
+          "disabled": true
+        }
+      },
+      "canonicalSessions": {
+        "status": 200,
+        "count": 0
+      },
+      "projects": {
+        "status": 200,
+        "count": 1
+      },
+      "workspaces": {
+        "status": 200,
+        "names": [
+          "Chats"
+        ]
+      },
+      "workspaceModels": {
+        "status": 200,
+        "count": 4629
+      },
+      "clientAuthList": {
+        "count": 1,
+        "kinds": [
+          "desktop-local"
+        ]
+      },
+      "rawUnauthenticatedSessions": 401,
+      "ui": "composer visible, no 无法刷新会话。; the first-launch chooser appeared and 'use local' completed onboarding",
+      "cleanup": "process stopped; no Agent Service or Electron child remained and 9227/57123 closed (pidfd-corrected cleanup)"
+    },
+    "stopControlGap": {
+      "observation": {
+        "proven": "During the active canonical run 24855b78 on session cdaf1d5d, GET /api/agent/v1/sessions/:id returned 200 with activeRun.status 'running' while a DOM scan found no Stop control (no button aria/title/text/svg use-id matched stop/停止) and the composer's Send button was disabled only because the composer was empty. Observed together in one captured probe.",
+        "weaker": "On the stream run d84fea2b, stopVisible was false at ~8s (still '加载中...') and again at ~14s with the fixture text present, but whether that run was still active at 14s was not captured.",
+        "snapshot503": "The single /snapshot 503 (service.open -> packages/web/server/lib/openchamber-sessions/routes.js:373-379,481) was observed after reloading the already-completed stream session, never during an active run."
+      },
+      "sourceFacts": [
+        "Stop/abort visibility reads only the per-directory session_status: packages/ui/src/hooks/useSessionActivity.ts:43-63, consumed by ChatInput.tsx:1323, ChatContainer.tsx:905,1865, useKeyboardShortcuts.ts:322-324,459-460, and MobilePillComposer.tsx.",
+        "useSessionStatus returns 'unavailable' for invalidated sessions (packages/ui/src/sync/sync-context.tsx:445).",
+        "onDisconnect writes sessionStatusInvalidated=true and session_status 'unavailable', then applies a global snapshot for the same session (sync-context.tsx:285-295); global-session-status.ts:223-255 deletes activeRunIdBySession for that non-live status, publishes statusById 'unavailable', and removes it from activeSessionIds.",
+        "getSessionLiveActivity returns 'unknown' for an 'unavailable' entry (session-actions.ts:409-411), and the same module documents that unavailable/absence is not proof of idleness (session-actions.ts:399-408), while useSessionActivity maps every non-'running' status to idle.",
+        "A global-index-only fallback therefore cannot repair the onDisconnect case: both the directory status and the global active index are cleared for that session."
+      ],
+      "hypothesis": "If onDisconnect fired during the active run, the directory status was 'unavailable' and the composer mapped it to idle, hiding Stop even though the Host still reported activeRun 'running'. An alternative possibility is a missing or idle directory status from snapshot timing rather than a disconnect. Neither is confirmed by captured state.",
+      "notObserved": [
+        "No captured read of session_status, sessionStatusInvalidated, sessionStatusReady, activeSessionIds, or statusById during any run.",
+        "No captured SSE connect/disconnect event or stream state during the run.",
+        "No captured during-run /snapshot failure; the 503 was on a completed-session reload only."
+      ],
+      "boundedFixCandidates": [
+        "Treat stale/unknown coverage as abortable (render Stop) instead of idle.",
+        "Preserve the last known active status across onDisconnect until a Host status confirms idle.",
+        "Re-read Host activeRun (session detail) before deciding abortability when coverage is stale."
+      ],
+      "candidatesAreInvestigationOnly": "Task62 owns the actual native-authority diagnosis and the decision; these are candidates, not the chosen fix, and any of them must cover onDisconnect clearing both indexes.",
+      "affectedConsumers": [
+        "packages/ui/src/components/chat/ChatInput.tsx:1323 canAbort",
+        "packages/ui/src/components/chat/ChatContainer.tsx:905,1865 onStop",
+        "packages/ui/src/hooks/useKeyboardShortcuts.ts:322-324,459-460 abort shortcut",
+        "packages/ui/src/components/chat/composer/ui/MobilePillComposer.tsx (same visibility rule)"
+      ],
+      "regressionSeam": "simulate onDisconnect (directory invalidated + global active index cleared) while the Host activeRun is still running, and assert the composer renders Stop; plus a ComposerActionButtons test that canAbort renders Stop"
+    },
+    "hmrDevelopmentSurface": {
+      "priorEvidence": "None: .workflow/omp-migration/m3 receipts and the Task36 record only document the electron:dev:bundled entrypoint; the 2026-10-16 investigation recorded a rejected launch and no window output.",
+      "launch": "Isolated HOME /tmp/ohpi-m3-electron-t55hmr; scripts/dev-web-hmr.mjs on 127.0.0.1:5173 (UI) and 127.0.0.1:3901 (API), then electron . with --remote-debugging-port=9226 under xvfb-run.",
+      "observed": "Renderer origin http://127.0.0.1:5173 with empty injected apiBaseUrl (same-origin dev proxy) and no injected client token; /auth/session 200 authenticated, canonical GET sessions 200, POST workspaces/resolve 200 Chats; no desktopLocalClientToken written and no remote-clients store created (non-packaged surface stays outside the local credential bootstrap). The first-launch chooser rendered; choosing 'use local' relaunched the dev app, so the composer/model-catalog step was not retained in this dev run.",
+      "cleanup": "Electron exited on the relaunch, the dev server and its Vite/Agent Service children were stopped, 5173/3901 closed, and the profile was deleted."
+    },
+    "credentialExclusion": {
+      "scenario": "Same AppImage launched with OPENCHAMBER_SERVER_URL=http://127.0.0.1:4618 and a fresh HOME.",
+      "rendererToken": "absent (length 0)",
+      "remoteRequests": "93 requests observed at the remote target; 0 carried an Authorization header.",
+      "settingsTokenStored": false,
+      "localClientStore": "absent",
+      "rendererCanonicalSessions": {
+        "status": 401,
+        "code": "UNAUTHORIZED"
+      }
+    },
+    "cleanup": {
+      "processes": "Both AppImage instances, the fixture/stub servers, and the CDP connection were stopped; no AppImage, mount, or bun children remained.",
+      "ports": "9223, 9224, 4601, 4618, and 57123 closed.",
+      "profiles": "Both isolated HOME profiles were deleted because they held the bearer value; no bearer value appears in this receipt."
+    }
+  },
+  "qualification": "The packaged Electron auth repair passes its task-scoped proof (authenticated local transport for openchamber-ui://app, canonical sessions and workspace resolution 200, usable composer/model catalog without the refresh-failure state, raw unauthenticated 401, no local credential on a remote runtime target). Through the actual composer the packaged app created and streamed a fixture response that survived reload without duplicate parts. Abort was observed through the canonical run abort route (200, run cancelled, turn cancelled, no duplicate parts after reload) because the packaged UI rendered no Stop control during the active run; that missing consumer-visible Stop is an open W7 gap, so no UI-abort pass is claimed. The Task44ProcessCleanup Host regression for this source passed (canonical plugins 5/5 vitest, focused 32/32, Web type-check, real Bun orphan-reap proof); a final rebundle is still required for the later pidfd cleanup correction. This is NOT a blanket Task36 W7-W10 pass: Board, Guests, and snapshot-plus-cursor stale-runtime recovery remain unobserved.",
+  "history": {
+    "originalFailureObservedAt": "2026-10-20",
+    "status": "packaged-electron-startup-partial-auth-failure",
+    "cause": "Passwordless /auth/session cookie cannot authenticate cross-origin from openchamber-ui://app, a clean profile had no local client bearer, and the packaged bootstrap gate compared the opaque custom-scheme origin ('null') to 'openchamber-ui://app' so it never minted one.",
+    "priorObserved": {
+      "authSession": {
+        "status": 304,
+        "body": {
+          "authenticated": true,
+          "disabled": true
+        }
+      },
+      "canonicalSessionsFromRenderer": {
+        "status": 401
+      },
+      "workspaceResolveFromRenderer": {
+        "status": 401
+      },
+      "visibleFailure": "Sidebar showed 无法刷新会话。; model picker stayed unavailable."
+    },
+    "priorBuild": "bun x electron-builder --publish never --x64 (the package wrapper's CI publish detection failed without GH_TOKEN)."
+  },
+  "nextOwner": "Task62 owns the composer Stop control, which is restored in source and was verified on the final rebundle 598bf582… (Stop click and Escape cancellation). Remaining Task36 packaged scenarios: Board, Guests, and snapshot-plus-cursor stale-runtime recovery.",
+  "previousStatus": "packaged-auth-and-composer-connected-verified",
+  "statusNote": "Historical GO-final artifact 7b7f99ee… was built from the Web worker dist (2026-10-20 22:49:11, index d29186da…). It is superseded by the final UI-proofed artifact 0a188692… (Web index 42170a…) and the Task55 auth rebundle 598bf582… (environment.latestRebundle). Earlier cda2cf4b/7528f0c9 artifacts are also superseded; the 7528f0c9 file is no longer available on disk.",
+  "finalGoAcceptance": {
+    "cgroup": {
+      "memoryHighBytes": 5368709120,
+      "memoryMaxBytes": 6442450944,
+      "swapMaxBytes": 0,
+      "note": "peaks are kernel memory.peak in bytes, not RSS"
+    },
+    "commands": [
+      {
+        "command": "stage packages/web/dist -> packages/electron/resources/web-dist",
+        "exit": 0,
+        "memoryPeakBytes": 53940224,
+        "files": 1038,
+        "ompLabels": 13
+      },
+      {
+        "command": "node scripts/package.mjs --linux AppImage --publish never",
+        "exit": 0,
+        "memoryPeakBytes": 5300469760
+      },
+      {
+        "command": "node scripts/verify-linux-appimage.mjs final AppImage",
+        "exit": 0,
+        "memoryPeakBytes": 2827382784,
+        "result": "verified Linux x64 AppImage; Bun 1.4.2, 158 Agent packages, 29 Host native modules"
+      },
+      {
+        "command": "node --test scripts/verify-linux-appimage.test.mjs",
+        "exit": 0,
+        "tests": "9 pass 0 fail",
+        "memoryPeakBytes": 39022592
+      },
+      {
+        "command": "node --test scripts/prepare-agent-runtime.test.mjs",
+        "exit": 0,
+        "tests": "6 pass 0 fail",
+        "memoryPeakBytes": 38227968
+      },
+      {
+        "command": "scoped oxlint on the four changed Electron script/test files",
+        "exit": 0,
+        "findings": "none"
+      }
+    ],
+    "coldStart": {
+      "freshProfile": true,
+      "manualReload": false,
+      "samples": [
+        {
+          "tMs": 2133,
+          "failed": false
+        }
+      ],
+      "finalBody": "Start a session",
+      "initializationErrorAbsent": true,
+      "warmup503RecoveredAutomatically": true,
+      "appMemoryPeakBytes": 1186131968,
+      "evidence": [
+        "evidence-electron/cold-go.json",
+        "evidence-electron/cold-go.png"
+      ]
+    },
+    "retainedNativeEdit": {
+      "sessionId": "dc541ce6-8b31-4dbf-aa31-63d39249634a",
+      "workspaceId": "ws_c4fc7014-27a5-4c7d-bd33-205fecfea2fc",
+      "prompt": "Edit NOTES.md using the native edit tool.",
+      "options": {
+        "providerId": "m3edit",
+        "modelId": "native-edit",
+        "agentId": "editonly"
+      },
+      "dataDir": "/home/shizuku/.cache/ohpi-acceptance/data",
+      "home": "/home/shizuku/.cache/ohpi-acceptance/home",
+      "appMemoryPeakBytes": 1880211456,
+      "inlineDiff": {
+        "screenshot": "evidence-electron/go-03-expanded-diff.png",
+        "verified": "red \"Native edit target.\" + green \"Native edit target updated.\" (+1/-1); shadow root contains updated text"
+      },
+      "diffModal": {
+        "screenshot": "evidence-electron/go-04-diff-dialog.png",
+        "title": "[workspace]/NOTES.md",
+        "verified": "file-diff modal with visible red/green lines"
+      },
+      "toolOutputDialog": {
+        "screenshot": "evidence-electron/go-06-tool-output-dialog.png",
+        "trigger": "edit card external-link (#oc-external-link)",
+        "settleMs": 900,
+        "verified": "raw edit output and JSON diff details; distinct from the diff modal"
+      }
+    },
+    "ompLabel": {
+      "screenshot": "evidence-electron/go-07-settings-omp.png",
+      "groups": [
+        "OPENCHAMBER",
+        "WORKSPACE",
+        "OMP",
+        "LIBRARY"
+      ]
+    },
+    "receipt": "evidence-electron/ACCEPTANCE-RECEIPT.md",
+    "sourceChanges": [
+      "packages/electron/scripts/verify-linux-appimage.mjs",
+      "packages/electron/scripts/verify-linux-appimage.test.mjs",
+      "packages/electron/scripts/prepare-agent-runtime.mjs",
+      "packages/electron/scripts/prepare-agent-runtime.test.mjs"
+    ],
+    "sourceFixSummary": "ONNX addon handling made ABI-agnostic in the verifier (selected linux architecture still enforced in agent payload and app.asar.unpacked) and in staging (foreign napi-v3/v6 bindings pruned, selected target kept, non-ONNX untouched).",
+    "cleanup": "AppImage, bundled Agent runtime, watcher, and CDP 9223 stopped; transient units reset; no packaged processes remain."
+  },
+  "qualificationFinalGo": "Historical GO-final packaged PASS on the superseded 7b7f99ee… artifact (Web dist d29186da…, not the final artifact): package and verifier exited 0 under the 6 GiB cgroup cap with swap 0; fresh-profile cold start recovered automatically with no manual reload; packaged retained native-edit session produced inline diff, file-diff modal, and a distinct raw ToolOutputDialog; OMP label present. These flows were not rerun on the final artifacts (0a188692…/598bf582…). Historical cda2cf4b/7528f0c9 artifacts are also superseded and not available.",
+  "remainingGaps": [
+    "Message-level SDK retry remains unproven: the six injected failures equal the transport budget, so only transparent HTTP retry was exercised (finalProofs.askRetry).",
+    "Keyboard abort and attachment upload/download were not rerun on the final UI-proofed AppImage 0a188692…; their packaged PASS observations are historical (gapVerification, superseded 7b7f99ee…). The Task55 rebundle 598bf582… separately exercised Stop and Escape cancellation, not attachments.",
+    "Cold start, the OMP label, and other settings were not rerun on the final UI-proofed AppImage; they are historical observations from the superseded 7b7f99ee… artifact.",
+    "The final artifacts are Linux x64 only; no macOS/Windows package was exercised."
+  ],
+  "gapVerification": {
+    "observedAt": "2026-10-20",
+    "artifactSha256": "7b7f99eeec8cf5d66f951e1d315b3c419f1ed12a45a0e32aeb2ff3d0190782b9",
+    "artifactRole": "Superseded historical artifact, not final. These gap observations were captured on it; the final artifact 0a188692… reran only the finalProofs flows.",
+    "artifactNote": "Historical AppImage (Web dist d29186da) that predates the one-operation-card fix; no source/build/repackage was made for this gap round. Not current, not final.",
+    "nativeAsk": {
+      "status": "PASS",
+      "sessionId": "099ed031-8028-4543-bff9-e66fb347fc5e",
+      "q1": "multi select Red + Green (aria-checked true,false,true)",
+      "q2": "textarea 'Your answer' = Q2 free-text answer",
+      "toolResult": "User answers:\nq1: [Red, Green]\nq2: \"Q2 free-text answer\"",
+      "finalText": "Ask answers received.",
+      "turnStatusObserved": "failed",
+      "screenshots": [
+        "gaps-01-ask.png",
+        "gaps-03-ask-q2.png",
+        "gaps-04-ask-complete.png"
+      ],
+      "diagnosis": "terminal turn status failed despite correct tool_result and final text; visible stale failure warning pending diagnosis",
+      "defect": {
+        "confirmedBy": "recorded packaged ask journal",
+        "rootCause": "Native Agent Service projection latches the first connection error stopReason='error'; SDK auto-retry recovered and the final assistant/ask/tool_result all succeeded, but agent_end records a failed run/turn and readHistory derives failed from any earlier error.",
+        "classification": "product Agent Service defect, not a harness-only warning",
+        "owner": "ToolProjectionDiagnosis (authorized minimal Agent Service fix + true-retry regression)"
+      },
+      "classification": "PASS for answer delivery but terminal failed due to confirmed Agent Service projection latch defect"
+    },
+    "keyboardAbort": {
+      "status": "PASS",
+      "sessionId": "39e04153-2490-4767-b4ae-e9e1ff24e714",
+      "runningPrecondition": {
+        "runId": "749ca29d-c4d7-497d-a35e-63b4b485a3bd",
+        "status": "running"
+      },
+      "action": "document.activeElement.blur(); Escape; 250ms; Escape",
+      "result": {
+        "run": null,
+        "runtimeStatus": "idle",
+        "turnStatus": "cancelled"
+      },
+      "screenshot": "gaps-05-abort-confirmed.png"
+    },
+    "attachment": {
+      "status": "PASS",
+      "sessionId": "39e04153-2490-4767-b4ae-e9e1ff24e714",
+      "file": "/home/shizuku/.cache/ohpi-acceptance/workdir/attachment-proof.txt",
+      "download": {
+        "events": "Page.downloadWillBegin + downloadProgress totalBytes 23 / receivedBytes 23",
+        "saved": "gaps-downloads/attachment-proof.txt",
+        "sizeBytes": 23,
+        "content": "ATTACHMENT_BYTES_12345\n"
+      },
+      "screenshot": "gaps-06-attachment-download.png"
+    },
+    "commandsModal": {
+      "status": "FAIL",
+      "created": [
+        "gap-command",
+        "gap-command2"
+      ],
+      "deleteOutcome": "row removed and Total 2 -> 1 at t=1250ms after confirm",
+      "modalBehavior": "Delete Command modal remained open with empty command name for the full 6000ms sample window; only closed after clicking Close",
+      "note": "Known Commands delete-modal defect observed on the superseded 7b7f99ee… artifact; Web owns the UI fix.",
+      "finalArtifactOutcome": "PASS on the final UI-proofed AppImage 0a188692…: created /gap-final (Total 2), delete removed the row, and the modal unmounted by t=1000ms (see finalProofs.commandsDeleteModal; final-package-receipt.json).",
+      "screenshots": [
+        "gaps-07-command-delete-modal-closed.png",
+        "gaps-09-command-modal-timing.png",
+        "gaps-10-commands-clean.png"
+      ]
+    },
+    "receipt": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/gaps-packaged-receipt.json",
+    "notClaimed": "On this historical artifact, full UI restoration was not claimed: two ToolPart cards per call/result was an open display defect. The final UI-proofed artifact 0a188692… later proved exactly one operation card (finalProofs.oneOperationCardEdit); full Task36/M3 acceptance is still not claimed."
+  },
+  "nextPackaging": "Completed: the final repack happened after the Agent Service projection, Web one-card, and Commands-modal fixes. UI-proofed artifact 0a188692… (606,838,429 B) passed finalProofs; the current on-disk Task55 rebundle 598bf582… (606,838,421 B) added Task44's Host fix and its auth/Stop receipt. Do not repackage for this receipt.",
+  "packagingGate": {
+    "status": "passed for final artifact",
+    "requires": [],
+    "currentArtifactScope": "final UI-proofed AppImage 0a188692… built from web index 42170a… and Agent Service index 2f025477…/worker 90f6bf5e…; one-card, raw output, Commands modal, and ask completed/reload checks passed; message-level retry remains unproven pending a >6-failure fixture run owned by the retry worker. The later 598bf582… rebundle added Task44's Host fix and Task55 auth/Stop evidence; it did not rerun these UI proofs."
+  },
+  "finalArtifact": {
+    "path": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration/packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage",
+    "artifactRole": "final UI-proofed artifact; the current on-disk file is the later 598bf582… rebundle (environment.latestRebundle)",
+    "sizeBytes": 606838429,
+    "sha256": "0a1886923e2549bf6058ff4847a02d7f0f542698f374a6cd18b9168e7cf9bddd",
+    "webDistIndexSha256": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+    "agentService": {
+      "distIndexSha256": "2f025477d8eb5018a18e5c41f39df90215a7703b786f4dfb6baf7a2ed6bb9a63",
+      "distWorkerIndexSha256": "90f6bf5e67000e505645b883364b416bd7eb4008e48594747d503e3f0d552ef8",
+      "stagedRuntimeIndexSha256": "2f025477d8eb5018a18e5c41f39df90215a7703b786f4dfb6baf7a2ed6bb9a63",
+      "stagedRuntimeWorkerIndexSha256": "90f6bf5e67000e505645b883364b416bd7eb4008e48594747d503e3f0d552ef8",
+      "onnxAbiFilter": "retained; only packages/81/bin/napi-v3/linux/x64/onnxruntime_binding.node"
+    },
+    "builtAt": "2026-10-21T00:52+08:00"
+  },
+  "finalProofs": {
+    "artifactSha256": "0a1886923e2549bf6058ff4847a02d7f0f542698f374a6cd18b9168e7cf9bddd",
+    "receipt": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/final-package-receipt.json",
+    "rerunScope": "Only these flows were rerun on the final UI-proofed artifact: one-operation-card edit, ask completion/retry, and the Commands delete modal. Keyboard abort, attachments, cold start, the OMP label, and other settings were not rerun (see remainingGaps).",
+    "oneOperationCardEdit": {
+      "sessionId": "bd73ea5b-744d-409d-a336-28b2f46918f2",
+      "status": "PASS",
+      "observed": "exactly 1 group/tool card for the edit call/result; turn completed; tool_call completed; inline diff shadow contains 'Native edit target updated.'; raw output dialog shows edit [NOTES.md] plus JSON diff",
+      "screenshots": [
+        "final2-03-edit-single-card.png",
+        "final2-04-edit-inline-diff.png",
+        "final2-05-edit-raw-output.png"
+      ]
+    },
+    "askRetry": {
+      "sessionId": "671e87f6-440e-4d98-89c8-5ca41a6a4640",
+      "model": "m3retrymsg/native-retry-msg",
+      "status": "PASS for completed terminal + reload without false warning; message-level retry NOT proven",
+      "fixtureLog": "168-retry-msg-fixture.log: requests 1-6 '503 transport-terminal', request 7-8 '200 ask tool_calls', request 9 '200 ask final'",
+      "canonical": "turns [completed, completed]; ask tool_call completed; tool_result 'q1: [Red, Green] q2: \"Retry recovery free-text answer\"'; final 'Ask answers received.'; runtime idle",
+      "reload": "no false warning/noReply; final text retained",
+      "nativeJournal": "final2-home/.omp/agent/sessions/.../2026-10-20T17-04-36-967Z_*.jsonl: 0 '\"stopReason\":\"error\"', no retryRecovery metadata, run status completed",
+      "sdkProtocolExplanation": "The 503 was retried inside the pi-ai/OpenAI-compatible transport (DEFAULT_MAX_ATTEMPTS=6) and surfaced only after the transport budget; because the 7th request succeeded, the engine never received a failed assistant message. A native message-level retry proof requires the transport budget to be exhausted (more than 6 injected failures, e.g. 7) so the first engine attempt records an assistant stopReason:error and TurnRecovery retries it; the current FAIL_REQUESTS=6 equals the transport budget and therefore only proves transparent transport retry.",
+      "screenshots": [
+        "final2-06-ask-retry-complete.png",
+        "final2-07-ask-reload.png"
+      ]
+    },
+    "commandsDeleteModal": {
+      "status": "PASS",
+      "observed": "created /gap-final (Total 2); delete removed the row and the Delete Command modal unmounted by t=1000ms (modal:false, row:false, Total 1)",
+      "screenshot": "final2-08-command-delete-modal.png"
+    }
+  },
+  "finalBuildSequence": [
+    {
+      "step": "prepare:agent-runtime (fresh Agent Service stage, not web-only copy)",
+      "exit": 0,
+      "memoryPeakBytes": 1184845824
+    },
+    {
+      "step": "stage web dist copy (index 42170a)",
+      "exit": 0,
+      "memoryPeakBytes": 5517312,
+      "files": 1038
+    },
+    {
+      "step": "package --linux AppImage --publish never",
+      "exit": 0,
+      "memoryPeakBytes": 3128705024
+    },
+    {
+      "step": "verify-linux-appimage final",
+      "exit": 0,
+      "memoryPeakBytes": 2828517376,
+      "result": "Bun 1.4.2, 158 Agent packages, 29 Host native modules"
+    }
+  ],
+  "finalCgroup": {
+    "memoryHighBytes": 5368709120,
+    "memoryMaxBytes": 6442450944,
+    "swapMaxBytes": 0
+  },
+  "finalAppRun": {
+    "memoryPeakBytes": 3070779392,
+    "memoryMaxBytes": 6442450944,
+    "swapMaxBytes": 0,
+    "viewport": "1600x1000 via Emulation.setDeviceMetricsOverride"
+  },
+  "retryWorkerHandoff": {
+    "note": "No further fixture use on 4606 by Electron.",
+    "recordedPids": [
+      "stale fixture pid 98476 killed by Electron at ~01:02",
+      "Electron restart attempt pid 99895 exited 143 (SIGTERM)"
+    ],
+    "unit": "retry-msg-4606",
+    "recommendation": "retry worker restarts 4606 exactly once with FAIL_REQUESTS > transport budget (7+) so the native error assistant and TurnRecovery metadata appear; remove stale fixture by exact recorded PID/unit only, no pkill patterns"
+  },
+  "cleanup": "Electron app, own fixtures 4605/4602 stopped; CDP 9223 down; 4606 left to retry worker; no packaged processes remain"
 }
