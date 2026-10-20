@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "task": "omp-through-m3/36",
   "observedAt": "2026-10-21",
-  "status": "partial-connected-acceptance-web-pass-packaged-board-draft-gap",
+  "status": "connected-acceptance-pass-packaged-board-draft-confirmed",
   "environment": {
     "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
     "branch": "omp-through-m3/recovery-20261013",
@@ -37,7 +37,11 @@
       "projectPath": "/tmp/ohpi-task36-board-repo (real git repo with upstream github.com/openchamber/openchamber origin; removed after run)",
       "workspaceId": "ws_9b97385a-94d9-4806-87fc-8f87713e038b",
       "workspaceResolve": "200 ohpi-task36-board-repo",
-      "fixtureModels": ["m3fixture/stream-300cps", "m3fixture/think-30s", "m3fixture/agent-20tools-300cps"],
+      "fixtureModels": [
+        "m3fixture/stream-300cps",
+        "m3fixture/think-30s",
+        "m3fixture/agent-20tools-300cps"
+      ],
       "sessionCount": 2,
       "guestCount": 1
     },
@@ -101,8 +105,42 @@
     "board": {
       "activation": "GitHub CLI account activated; real issues/pulls rendered",
       "selectedItem": "openchamber/openchamber#5304",
-      "gap": "Selecting Attach to session -> New session caused the packaged renderer to stop responding to CDP Runtime.evaluate and captureScreenshot within a 30s window. The page target remained listed and the Host answered readiness, but no draft result could be observed. No main-log exception was emitted.",
-      "classification": "unconfirmed product or harness gap; not reported as a Board launch pass"
+      "status": "pass",
+      "priorAttempt": {
+        "observation": "On an earlier packaged launch, selecting Attach to session -> New session did not return a CDP Runtime.evaluate or captureScreenshot response within ~30s. The page target remained listed, Host readiness stayed 200, and the main log had no exception.",
+        "classification": "Not reproduced; not attributed to a persistent product failure."
+      },
+      "reproduction": {
+        "artifact": "packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage sha256 598bf5823785ccf5b3f36d4e49bb950638e77b3eff35a5b3fc7b3e3259eabad9",
+        "environment": "Fresh isolated HOME=/tmp/ohpi-t36-repro, local git repo /tmp/ohpi-t36-repro-board with upstream origin github.com/openchamber/openchamber, Xvfb :88, packaged CDP 9240, packaged Host 57123",
+        "board": "GitHub CLI account activated; real openchamber/openchamber issues rendered; selected #5304",
+        "action": "Attach to session -> New session. The menu was opened with a DOM click; the New session item was clicked with CDP Input.dispatchMouseEvent, then the event client was closed without waiting on a renderer response.",
+        "postClickProbe": "Two independent fresh CDP WebSocket clients; Page.enable, Runtime.evaluate, Page.getFrameTree and Page.captureScreenshot were attempted.",
+        "runtimeEvaluate": "6 (client 1) and 8 (client 2)",
+        "pageFrameTree": "returned the openchamber-ui://app/index.html frame",
+        "screenshot": {
+          "base64Chars": 129428,
+          "pngBytes": 97071,
+          "path": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/t36-repro-after-cdp.png",
+          "content": "New-session draft with project ohpi-t36-repro-board, branch master, #5304 issue chip and composer"
+        },
+        "dom": "New-session draft: project ohpi-t36-repro-board, branch master, linked #5304 chip, composer placeholder and starter prompts; no Board-frozen state",
+        "renderer": {
+          "pid": 133939,
+          "state": "R (running)",
+          "threads": 28,
+          "rssKb": 472896,
+          "cpuPercentAverage": 8.6,
+          "cpuTicksDelta": 27,
+          "sampleWindowSeconds": 2.6
+        },
+        "host": {
+          "health": 200,
+          "ready": 200
+        },
+        "mainLog": "No click-time exception; only the pre-existing Gtk scale-factor assertion and unrelated GitHub /user/emails 404s.",
+        "result": "The exact transition completed and the renderer remained responsive. The earlier 30s timeout was not reproduced and is not accepted as evidence of a packaged Board failure."
+      }
     },
     "guestAndUtility": {
       "guest": "task36-guest installed from the same local test extension path; panel served; model capability granted",
@@ -112,11 +150,12 @@
     "sidebarCatalog": "Sidebar showed chats, project ohpi-task36-board-repo and start-session state; canonical provider/workspace reads succeeded."
   },
   "gaps": [
-    "Packaged Board new-session draft did not complete: renderer stopped responding after the menu selection. Web Board draft succeeded. Needs one fresh packaged confirmation before assigning an owning implementation task; Task36 remains open.",
+    "The earlier packaged 30s CDP timeout was not reproduced on a fresh launch; post-click fresh-client probes returned immediately and rendered the draft. No product bugfix or regression test was created because there is no reproducible product failure. The prior harness/client state was not retained, so a transient renderer pause versus CDP-client timeout cannot be distinguished.",
     "Board linked-provider launch used a real GitHub CLI account and real upstream items; no GitHub mutation (comment/merge/close) was performed.",
-    "The Guest evidence is a real installed local test extension panel plus Host generate utility, not a built-in app guest.",
+    "The Guest evidence is a real installed local test extension panel plus Host generate utility, not a built-in app guest; no shell-job output/stop was exercised.",
     "Linux x64 packaged artifact only; no official provider/OAuth or macOS/Windows run."
   ],
-  "cleanup": "Web Host, Chrome, packaged Electron, Xvfb, fixture provider and isolated HOME profiles were stopped/removed; ports 3160, 9232, 9233, 4601 and 57123 closed; the temporary Board repo and test guest folder were removed.",
-  "qualification": "Partial W7-W10 acceptance. W8 duplicate suppression and stale-cursor rejection are observed; Web Board and Guest/utility are observed; packaged auth/session/Stop are reused from Task55/62. The packaged Board draft gap keeps Task36 open. No M3 gate claim."
+  "cleanup": "Web Host, Chrome, packaged Electron, Xvfb, fixture provider and isolated HOME profiles were stopped/removed; ports 3160, 9232, 9233, 4601 and 57123 closed; the temporary Board repo and test guest folder were removed. The Board reproduction also stopped packaged CDP 9240/Xvfb :88 and removed /tmp/ohpi-t36-repro and /tmp/ohpi-t36-repro-board.",
+  "qualification": "Task36 connected W7-W10 acceptance is met. W8 duplicate suppression and stale-cursor rejection are observed; Web and packaged Board drafts are observed; packaged auth/session/Stop and Guest/utility are covered by the cited receipts. This is not an M3 gate claim; Task18 remains the final gate.",
+  "finishedAt": "2026-10-21T02:06:49+08:00"
 }

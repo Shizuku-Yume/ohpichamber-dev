@@ -3,6 +3,7 @@
 **Effort:** omp-through-m3
 **Task type:** feature
 **Base commit:** e1be47c36
+**Finished:** 2026-10-21T02:06:49+08:00
 
 **Delivers:** One current, non-duplicative connected acceptance packet proves the remaining M3 Web/Electron behavior and preserves exact receipts for every observed result.
 
@@ -22,10 +23,10 @@
 
 **Acceptance:**
 
-- [ ] Web and packaged Electron both complete the applicable W7-W10 scenario steps. Web steps pass; packaged Board new-session draft is unconfirmed (renderer stopped responding), so this remains open.
+- [x] Web and packaged Electron both complete the applicable W7-W10 scenario steps. Web steps pass; packaged Board new-session draft was confirmed on a fresh isolated launch after the earlier CDP timeout was not reproduced.
 - [x] Receipts include exact artifact paths or explicitly state that no durable receipt was retained. New receipt `.workflow/omp-migration/m3/task36-connected-acceptance-2026-10-21.json` records the Web run, artifact hashes and the packaged gap; Task55/62 and recovery receipts are cited.
 - [x] W8 recovery proves no duplicate parts and stale prior-runtime data cannot mutate the selected runtime. Web stream reload had 0 duplicate part IDs; the recovery receipt records mid-run disconnect/epoch resync; an old cursor after worker restart returned 410 `RESYNC_REQUIRED`.
-- [ ] W9 checks cover sidebar/catalog, Board, Guest, and retained utility paths without unrelated host-service changes. Web sidebar/catalog, real GitHub Board #5304 draft, installed test guest panel and Host generate all passed; packaged Board draft remains unconfirmed.
+- [x] W9 checks cover sidebar/catalog, Board, Guest, and retained utility paths without unrelated host-service changes. Web sidebar/catalog, real GitHub Board #5304 draft, installed test guest panel and Host generate all passed; packaged Board draft now passes on a fresh launch.
 - [x] W10 records old-client reachability and lifecycle-owner findings from the assembled source. Production searches for `opencodeClient`, `@opencode/client`, `@opencode/schema`, `lib/opencode/*`, and old lifecycle/proxy/config/auth composition names returned 0 matches.
 
 ## 2026-10-16 connected acceptance investigation
@@ -101,4 +102,12 @@ Web run on `127.0.0.1:3160` with an isolated HOME and fixture `127.0.0.1:4601`: 
 
 Packaged Electron run under Xvfb with the final AppImage reused Task55/62 auth, session stream/reload, Stop click and Escape cancellation. Real GitHub Board items and the installed test guest panel/generate also passed. Gap: selecting Board "Attach to session" -> "New session" made the packaged renderer stop responding to CDP `Runtime.evaluate`/screenshot for ~30s; the page target remained listed, Host readiness stayed `200`, and no main-log exception appeared. No Board draft was observed on packaged Electron.
 
-This run does not pass Task36: the packaged Board new-session draft gap keeps item 1 and W9 open. No M3 claim. Next action: repeat the packaged Board draft once on a fresh launch; if reproducible, create a focused UI/desktop Board-transition bugfix before closing Task36. Cleanup stopped Web Host, Chrome, packaged app, Xvfb and fixture; ports `3160/9232/9233/4601/57123` closed and temporary repos/HOMEs were removed.
+## 2026-10-21 packaged Board reproduction follow-up
+
+The earlier packaged Board gap was retested once on the same final AppImage `598bf58…` with a fresh isolated HOME, a local git repo whose `origin` was the real `openchamber/openchamber` upstream, Xvfb `:88`, packaged CDP `9240`, and packaged Host `57123`. The real GitHub CLI account was activated, real issue `#5304` was selected, and the exact `Attach to session` -> `New session` transition was dispatched. The CDP event client was closed immediately after dispatch; two independent fresh CDP clients then probed the page.
+
+Post-click evidence: `Runtime.evaluate` returned `6` and `8`; `Page.getFrameTree` returned the app frame; `Page.captureScreenshot` returned 129,428 base64 characters (97,071-byte PNG) showing the new-session draft with project `ohpi-t36-repro-board`, branch `master`, linked `#5304` chip and composer. DOM text matched the draft. Renderer pid `133939` remained alive in state `R`, 28 threads, 472,896 kB RSS, with 27 CPU ticks over a ~2.6 s sample (8.6% `ps` average over 1:20). Host `/health` and `/api/agent/v1/ready` stayed `200`; the main log had no click-time exception (only the pre-existing Gtk scale-factor assertion and unrelated GitHub `/user/emails` 404s). Artifacts: `t36-repro-result.json`, `t36-repro-setup.json`, and `t36-repro-after-cdp.png` under `/home/shizuku/.cache/ohpi-acceptance/evidence-electron/`.
+
+The earlier ~30 s timeout was not reproduced. It is therefore not accepted as evidence of a persistent packaged Board failure. The prior harness/client state was not retained, so a CDP-client timeout cannot be distinguished from a transient renderer pause; no product bugfix or product regression test was created. If the harness needs one, the smallest guard is a fresh-client post-click `Runtime.evaluate` plus draft-DOM assertion, but that tests acceptance tooling rather than product behavior.
+
+Task36 W7-W10 acceptance is met; the task is closed. No M3 gate claim is made and Task18 remains the final gate. Cleanup stopped Web Host, Chrome, packaged app, packaged CDP, Xvfb and fixture; ports `3160/9232/9233/4601/57123/9240` closed and temporary repos/HOMEs were removed.
