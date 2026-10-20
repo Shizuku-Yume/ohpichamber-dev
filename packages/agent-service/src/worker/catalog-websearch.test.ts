@@ -124,9 +124,13 @@ test('legacy chat web-role selections survive non-selection updates and unknown 
 
     const switched = await search.operation({ type: 'update', request: { expectedRevision: '2', selectedProviderId: freshChat, fallbackProviderIds: [] } });
     expect(switched).toMatchObject({ type: 'mutated', result: { state: { revision: '3', selectedProviderId: freshChat, fallbackProviderIds: [] } } });
-    await expect(search.operation({ type: 'update', request: { expectedRevision: '3', selectedProviderId: 'vendor/unknown-model', fallbackProviderIds: [] } }))
+    const restoredFallback = await search.operation({ type: 'update', request: { expectedRevision: '3', fallbackProviderIds: [fallback] } });
+    expect(restoredFallback).toMatchObject({ type: 'mutated', result: { state: {
+      revision: '4', selectedProviderId: freshChat, fallbackProviderIds: [fallback],
+    } } });
+    await expect(search.operation({ type: 'update', request: { expectedRevision: '4', selectedProviderId: 'vendor/unknown-model', fallbackProviderIds: [fallback] } }))
       .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
-    await expect(search.operation({ type: 'update', request: { expectedRevision: '3', fallbackProviderIds: ['vendor/unknown-model'] } }))
+    await expect(search.operation({ type: 'update', request: { expectedRevision: '4', fallbackProviderIds: ['vendor/unknown-model'] } }))
       .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
     await expect(search.operation({ type: 'update', request: { expectedRevision: '0', timeoutSeconds: 40 } }))
       .rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
@@ -139,12 +143,37 @@ test('legacy chat web-role selections survive non-selection updates and unknown 
     if (disabled.type !== 'state') throw new Error('Expected disabled native search state');
     expect(disabled.state.providers).toEqual([]);
     expect(disabled.state.selectedProviderId).toBe(freshChat);
-    expect(disabled.state.fallbackProviderIds).toEqual([]);
-    const disabledUpdate = await search.operation({ type: 'update', request: { expectedRevision: '3', timeoutSeconds: 34 } });
+    expect(disabled.state.fallbackProviderIds).toEqual([fallback]);
+    const disabledUpdate = await search.operation({ type: 'update', request: { expectedRevision: '4', timeoutSeconds: 34 } });
     expect(disabledUpdate).toMatchObject({ type: 'mutated', result: { persistence: 'persisted', state: {
-      revision: '4', timeoutSeconds: 34, selectedProviderId: freshChat, fallbackProviderIds: [], providers: [],
+      revision: '5', timeoutSeconds: 34, selectedProviderId: freshChat, fallbackProviderIds: [fallback], providers: [],
     } } });
-    await expect(search.operation({ type: 'update', request: { expectedRevision: '4', selectedProviderId: 'vendor/unknown-model', fallbackProviderIds: [] } }))
+    await expect(search.operation({ type: 'update', request: { expectedRevision: '5', selectedProviderId: 'vendor/unknown-model', fallbackProviderIds: [fallback] } }))
+      .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('an empty native web-role pool reports no selection and rejects new selectors', async () => {
+  const { directory, bootstrap } = await fixture();
+  const runtime = await openNativeRuntime(bootstrap);
+  try {
+    cfgDisabledProviders.set(runtime.settings, ['web']);
+    await runtime.settings.flush();
+    await runtime.modelRegistry.refresh('offline');
+    const search = new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {});
+    const initial = await search.operation({ type: 'read' });
+    if (initial.type !== 'state') throw new Error('Expected native search state');
+    expect(initial.state.providers).toEqual([]);
+    expect(initial.state.selectedProviderId).toBeNull();
+    expect(initial.state.fallbackProviderIds).toEqual([]);
+
+    const updated = await search.operation({ type: 'update', request: { expectedRevision: '0', timeoutSeconds: 30 } });
+    expect(updated).toMatchObject({ type: 'mutated', result: { persistence: 'persisted', state: {
+      revision: '1', timeoutSeconds: 30, selectedProviderId: null, fallbackProviderIds: [], providers: [],
+    } } });
+    await expect(search.operation({ type: 'update', request: { expectedRevision: '1', selectedProviderId: 'web/tavily', fallbackProviderIds: [] } }))
+      .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(search.operation({ type: 'update', request: { expectedRevision: '1', fallbackProviderIds: ['vendor/unknown-model'] } }))
       .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
   } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });
