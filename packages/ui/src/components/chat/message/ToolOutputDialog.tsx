@@ -7,17 +7,22 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { toolDisplayStyles } from '@/lib/typography';
+import { isSubagentTool } from '@/lib/toolHelpers';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
-import { renderWebSearchOutput, tryParseJsonOutput } from './toolRenderers';
+import { renderGlobOutput, renderGrepOutput, renderWebSearchOutput, tryParseJsonOutput } from './toolRenderers';
 import type { ToolPopupContent, DiffViewMode } from './types';
 import { DiffViewToggle } from './DiffViewToggle';
 import { JsonTreeView } from '@/components/ui/JsonTreeView';
 import { Icon } from "@/components/icon/Icon";
+import { getToolIcon } from './parts/toolPresentation';
+import { useGuestToolPresentation } from '@/lib/guests/tool-presentation';
 import { useI18n, type I18nKey, type I18nParams } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { MermaidLoadFailure, getMermaidDataUrlSourcePromise, isCurrentMermaidLoadRequest, isMermaidLoadFailure, nextMermaidLoadRequestId } from './toolOutputDialogMermaid';
+import { MediaArtifact } from '@/components/views/files/previews/MediaArtifact';
+import { formatFileSize } from '@/lib/fileSize';
 
 interface ToolOutputDialogProps {
     popup: ToolPopupContent;
@@ -95,8 +100,8 @@ const usePierreThemeConfig = (): PierreThemeConfig => {
 type ViewportSize = { width: number; height: number };
 
 const getWindowViewport = (): ViewportSize => ({
-    width: typeof window !== 'undefined' ? window.innerWidth : 0,
-    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+    width: window.innerWidth,
+    height: window.innerHeight,
 });
 
 const PREVIEW_VIEWPORT_LIMITS = {
@@ -178,10 +183,6 @@ const usePreviewOverlayState = (open: boolean) => {
         if (open) {
             setIsRendered(true);
             setIsTransitioning(true);
-            if (typeof window === 'undefined') {
-                setIsVisible(true);
-                return;
-            }
 
             const raf = window.requestAnimationFrame(() => {
                 setIsVisible(true);
@@ -199,10 +200,6 @@ const usePreviewOverlayState = (open: boolean) => {
 
         setIsVisible(false);
         setIsTransitioning(true);
-        if (typeof window === 'undefined') {
-            setIsRendered(false);
-            return;
-        }
 
         const timeoutId = window.setTimeout(() => {
             setIsRendered(false);
@@ -221,7 +218,7 @@ const usePreviewViewport = (open: boolean) => {
     const [viewport, setViewport] = React.useState<ViewportSize>(getWindowViewport);
 
     React.useEffect(() => {
-        if (!open || typeof window === 'undefined') {
+        if (!open) {
             return;
         }
 
@@ -239,17 +236,48 @@ const usePreviewViewport = (open: boolean) => {
     return viewport;
 };
 
-const ImagePreviewDialog: React.FC<{
+type PreviewMediaKind = 'image' | 'pdf' | 'audio' | 'video';
+
+/**
+ * Attachments forward their native MIME type. Browsers can render PDFs inline
+ * and play audio/video with their own controls; anything else keeps the image
+ * viewer it had before.
+ */
+const getPreviewMediaKind = (mimeType: string | undefined, filename: string | undefined): PreviewMediaKind => {
+    const mime = (mimeType ?? '').toLowerCase().split(';', 1)[0]?.trim() ?? '';
+    if (mime.startsWith('audio/')) return 'audio';
+    if (mime.startsWith('video/')) return 'video';
+    if (mime === 'application/pdf' || mime === 'application/x-pdf') return 'pdf';
+    if (mime.startsWith('image/')) return 'image';
+
+    const extension = filename?.split('.').pop()?.toLowerCase() ?? '';
+    if (extension === 'pdf') return 'pdf';
+    if (extension === 'mp3' || extension === 'wav' || extension === 'ogg' || extension === 'm4a'
+        || extension === 'aac' || extension === 'flac' || extension === 'opus') return 'audio';
+    if (extension === 'mp4' || extension === 'webm' || extension === 'mov' || extension === 'm4v'
+        || extension === 'ogv' || extension === 'mkv') return 'video';
+    return 'image';
+};
+
+interface PreviewGalleryItem {
+    url: string;
+    mimeType?: string;
+    filename?: string;
+    size?: number;
+}
+
+const MediaPreviewDialog: React.FC<{
     popup: ToolPopupContent;
     onOpenChange: (open: boolean) => void;
     isMobile: boolean;
 }> = ({ popup, onOpenChange, isMobile }) => {
     const { t } = useI18n();
-    const gallery = React.useMemo(() => {
+    const mediaKind = getPreviewMediaKind(popup.image?.mimeType, popup.image?.filename);
+    const gallery = React.useMemo<PreviewGalleryItem[]>(() => {
         const baseImage = popup.image;
-        if (!baseImage) return [] as Array<{ url: string; mimeType?: string; filename?: string; size?: number }>;
+        if (!baseImage || mediaKind !== 'image') return [];
         const fromPopup = Array.isArray(baseImage.gallery)
-            ? baseImage.gallery.filter((item): item is { url: string; mimeType?: string; filename?: string; size?: number } => Boolean(item?.url))
+            ? baseImage.gallery.filter((item): item is PreviewGalleryItem => Boolean(item?.url))
             : [];
 
         if (fromPopup.length > 0) {
@@ -262,10 +290,10 @@ const ImagePreviewDialog: React.FC<{
             filename: baseImage.filename,
             size: baseImage.size,
         }];
-    }, [popup.image]);
+    }, [mediaKind, popup.image]);
 
     const [currentIndex, setCurrentIndex] = React.useState(0);
-    const [imageNaturalSize, setImageNaturalSize] = React.useState<{ url: string; width: number; height: number } | null>(null);
+    const [mediaNaturalSize, setMediaNaturalSize] = React.useState<{ url: string; width: number; height: number } | null>(null);
     const { isRendered, isVisible, isTransitioning } = usePreviewOverlayState(popup.open);
     const viewport = usePreviewViewport(popup.open);
 
@@ -274,7 +302,7 @@ const ImagePreviewDialog: React.FC<{
             return;
         }
 
-        const requestedIndex = typeof popup.image?.index === 'number' ? popup.image.index : -1;
+        const requestedIndex = popup.image?.index ?? -1;
         if (requestedIndex >= 0 && requestedIndex < gallery.length) {
             setCurrentIndex(requestedIndex);
             return;
@@ -286,9 +314,16 @@ const ImagePreviewDialog: React.FC<{
         setCurrentIndex(matchingIndex >= 0 ? matchingIndex : 0);
     }, [gallery, popup.image?.index, popup.image?.url, popup.open]);
 
-    const currentImage = gallery[currentIndex] ?? gallery[0] ?? popup.image;
-    const imageTitle = currentImage?.filename || popup.title || 'Image preview';
-    const hasMultipleImages = gallery.length > 1;
+    const currentMedia = mediaKind === 'image'
+        ? gallery[currentIndex] ?? gallery[0] ?? popup.image
+        : popup.image;
+    const titleFallback = mediaKind === 'image' ? 'Image preview'
+        : mediaKind === 'pdf' ? 'PDF preview'
+        : mediaKind === 'audio' ? 'Audio preview'
+        : 'Video preview';
+    const mediaTitle = currentMedia?.filename || popup.title || titleFallback;
+    const hasMultipleImages = mediaKind === 'image' && gallery.length > 1;
+    const mediaSizeLabel = formatFileSize(currentMedia?.size);
 
     const showPrevious = React.useCallback(() => {
         if (gallery.length <= 1) return;
@@ -332,9 +367,9 @@ const ImagePreviewDialog: React.FC<{
     // The measured size belongs to one URL. Resetting it in an effect on URL
     // change raced the load event of an already-cached image, which left the
     // viewer stuck at its maximum box with wide dead margins around the image.
-    const currentImageUrl = currentImage?.url;
-    const currentNaturalSize = imageNaturalSize && imageNaturalSize.url === currentImageUrl
-        ? imageNaturalSize
+    const currentMediaUrl = currentMedia?.url;
+    const currentNaturalSize = mediaNaturalSize && mediaNaturalSize.url === currentMediaUrl
+        ? mediaNaturalSize
         : null;
 
     const imageDisplaySize = React.useMemo(() => {
@@ -358,7 +393,27 @@ const ImagePreviewDialog: React.FC<{
         };
     }, [currentNaturalSize, isMobile, viewport.height, viewport.width]);
 
-    if (!isRendered || !currentImage || typeof document === 'undefined') {
+    const mediaDisplaySize = React.useMemo(() => {
+        if (mediaKind === 'image') return imageDisplaySize;
+
+        const bounds = getPreviewViewportBounds(viewport, isMobile);
+        if (mediaKind === 'audio') {
+            return { width: Math.round(Math.min(480, bounds.maxWidth)), height: 220 };
+        }
+        if (mediaKind === 'pdf') {
+            return {
+                width: Math.round(Math.min(bounds.maxWidth, 1024)),
+                height: Math.round(Math.min(bounds.maxHeight, 900)),
+            };
+        }
+        const width = Math.round(bounds.maxWidth);
+        return {
+            width,
+            height: Math.round(Math.min(bounds.maxHeight, Math.max(180, width * 9 / 16))),
+        };
+    }, [imageDisplaySize, isMobile, mediaKind, viewport]);
+
+    if (!isRendered || !currentMedia) {
         return null;
     }
 
@@ -411,12 +466,15 @@ const ImagePreviewDialog: React.FC<{
                         isTransitioning && 'transition-opacity duration-150 ease-out',
                         isVisible ? 'opacity-100' : 'opacity-0'
                     )}
-                    style={{ width: `${imageDisplaySize.width}px` }}
+                    style={{ width: `${mediaDisplaySize.width}px` }}
                 >
                     <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0 flex-1 text-foreground typography-ui-header font-semibold truncate" title={imageTitle}>
-                            {imageTitle}
+                        <div className="min-w-0 flex-1 text-foreground typography-ui-header font-semibold truncate" title={mediaTitle}>
+                            {mediaTitle}
                         </div>
+                        {mediaSizeLabel ? (
+                            <span className="shrink-0 typography-meta text-muted-foreground">{mediaSizeLabel}</span>
+                        ) : null}
                         <button
                             type="button"
                             className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground/80 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -427,27 +485,60 @@ const ImagePreviewDialog: React.FC<{
                         </button>
                     </div>
 
-                    <img
-                        src={currentImage.url}
-                        alt={imageTitle}
-                        className="block object-contain"
-                        style={{ width: `${imageDisplaySize.width}px`, height: `${imageDisplaySize.height}px` }}
-                        loading="lazy"
-                        onLoad={(event) => {
-                            const element = event.currentTarget;
-                            const width = element.naturalWidth;
-                            const height = element.naturalHeight;
-                            const url = element.getAttribute('src') ?? '';
-                            if (width > 0 && height > 0) {
-                                setImageNaturalSize((previous) => {
-                                    if (previous && previous.url === url && previous.width === width && previous.height === height) {
-                                        return previous;
-                                    }
-                                    return { url, width, height };
-                                });
-                            }
-                        }}
-                    />
+                    {mediaKind === 'pdf' ? (
+                        <iframe
+                            src={currentMedia.url}
+                            title={mediaTitle}
+                            className="block w-full rounded-lg border border-border/30 bg-white"
+                            style={{ height: `${mediaDisplaySize.height ?? 480}px` }}
+                        />
+                    ) : mediaKind === 'audio' ? (
+                        <div
+                            className="w-full overflow-hidden rounded-lg border border-border/30 bg-[var(--surface-elevated)]"
+                            style={{ height: `${mediaDisplaySize.height ?? 220}px` }}
+                        >
+                            <MediaArtifact
+                                kind="audio"
+                                src={currentMedia.url}
+                                name={mediaTitle}
+                                sizeBytes={currentMedia.size ?? null}
+                            />
+                        </div>
+                    ) : mediaKind === 'video' ? (
+                        <div
+                            className="w-full overflow-hidden rounded-lg border border-border/30 bg-[var(--surface-background)]"
+                            style={{ height: `${mediaDisplaySize.height ?? 320}px` }}
+                        >
+                            <MediaArtifact
+                                kind="video"
+                                src={currentMedia.url}
+                                name={mediaTitle}
+                                sizeBytes={currentMedia.size ?? null}
+                            />
+                        </div>
+                    ) : (
+                        <img
+                            src={currentMedia.url}
+                            alt={mediaTitle}
+                            className="block object-contain"
+                            style={{ width: `${imageDisplaySize.width}px`, height: `${imageDisplaySize.height}px` }}
+                            loading="lazy"
+                            onLoad={(event) => {
+                                const element = event.currentTarget;
+                                const width = element.naturalWidth;
+                                const height = element.naturalHeight;
+                                const url = element.getAttribute('src') ?? '';
+                                if (width > 0 && height > 0) {
+                                    setMediaNaturalSize((previous) => {
+                                        if (previous && previous.url === url && previous.width === width && previous.height === height) {
+                                            return previous;
+                                        }
+                                        return { url, width, height };
+                                    });
+                                }
+                            }}
+                        />
+                    )}
                 </div>
             </div>
         </div>
@@ -537,9 +628,7 @@ const MermaidPreviewDialog: React.FC<{
             });
         };
 
-        const canParse = typeof URL.canParse === 'function'
-            ? URL.canParse(input)
-            : false;
+        const canParse = URL.canParse(input);
 
         if (canParse) {
             let pathname = decodeLoose(new URL(input).pathname || '');
@@ -592,9 +681,7 @@ const MermaidPreviewDialog: React.FC<{
                     });
             }
         } else {
-            const canParse = typeof URL.canParse === 'function'
-                ? URL.canParse(target.url, window.location.origin)
-                : false;
+            const canParse = URL.canParse(target.url, window.location.origin);
             const resolvedUrl = canParse ? new URL(target.url, window.location.origin) : null;
 
             if (!resolvedUrl || (resolvedUrl.protocol !== 'http:' && resolvedUrl.protocol !== 'https:')) {
@@ -664,7 +751,7 @@ const MermaidPreviewDialog: React.FC<{
                 return false;
             }
 
-            const aspectRatio = getSvgAspectRatio(svg as SVGElement);
+            const aspectRatio = getSvgAspectRatio(svg);
             if (!aspectRatio || !Number.isFinite(aspectRatio) || aspectRatio <= 0) {
                 return false;
             }
@@ -712,7 +799,7 @@ const MermaidPreviewDialog: React.FC<{
 
         return () => {
             window.cancelAnimationFrame(rafId);
-            if (typeof timeoutId === 'number') {
+            if (timeoutId !== undefined) {
                 window.clearTimeout(timeoutId);
             }
             observer.disconnect();
@@ -733,7 +820,7 @@ const MermaidPreviewDialog: React.FC<{
         return { width: Math.round(maxWidth), height: Math.round(availableDiagramHeight) };
     }, [diagramAspectRatio, isMobile, viewport]);
 
-    if (!isRendered || typeof document === 'undefined') {
+    if (!isRendered) {
         return null;
     }
 
@@ -840,6 +927,8 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
     const { t } = useI18n();
     const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('unified');
     const pierreThemeConfig = usePierreThemeConfig();
+    const popupToolName = popup.toolResult?.toolName ?? null;
+    const popupToolPresentation = useGuestToolPresentation(popupToolName);
 
     React.useEffect(() => {
         if (!popup.open) return;
@@ -847,7 +936,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
     }, [popup.open, popup.title]);
 
     if (popup.image) {
-        return <ImagePreviewDialog popup={popup} onOpenChange={onOpenChange} isMobile={isMobile} />;
+        return <MediaPreviewDialog popup={popup} onOpenChange={onOpenChange} isMobile={isMobile} />;
     }
 
     if (popup.mermaid) {
@@ -867,7 +956,9 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
             >
                 <div className="flex-shrink-0 pb-1">
                     <div className="flex items-start gap-2 text-foreground typography-ui-header font-semibold">
-                        <Icon name="tools" className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
+                        {popupToolName ? getToolIcon(popupToolName, popupToolPresentation) : (
+                            <Icon name="tools" className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
+                        )}
                         <span className="break-words flex-1 leading-tight">{popup.title}</span>
                         {popup.isDiff && (
                             <DiffViewToggle
@@ -889,9 +980,40 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                         ) : popup.content ? (
                         <div className="p-4">
                             {(() => {
-                                if (popup.toolResult?.toolName === 'web_search') return renderWebSearchOutput(popup.toolResult.output);
+                                if (popupToolName === 'grep') {
+                                    return renderGrepOutput(popup.content, isMobile) ?? (
+                                        <WorkerHighlightedCode
+                                            language={popup.language || 'text'}
+                                            code={popup.content}
+                                            style={toolDisplayStyles.getPopupContainerStyles()}
+                                            codeStyle={DIALOG_CODE_TAG_PROPS.style}
+                                            wrap
+                                        />
+                                    );
+                                }
+
+                                if (popupToolName === 'glob') {
+                                    return renderGlobOutput(popup.content, isMobile) ?? (
+                                        <WorkerHighlightedCode
+                                            language={popup.language || 'text'}
+                                            code={popup.content}
+                                            style={toolDisplayStyles.getPopupContainerStyles()}
+                                            codeStyle={DIALOG_CODE_TAG_PROPS.style}
+                                            wrap
+                                        />
+                                    );
+                                }
+
+                                if (popupToolName && (isSubagentTool(popupToolName) || popupToolName === 'ask')) {
+                                    return <SimpleMarkdownRenderer content={popup.content} variant="tool" />;
+                                }
+
+                                if (popupToolName === 'web_search') {
+                                    return renderWebSearchOutput(popup.toolResult?.output, { unstyled: true });
+                                }
+
                                 // JSON tree viewer for generic JSON outputs
-                                const jsonResult = popup.content ? tryParseJsonOutput(popup.content) : { data: null, isJson: false };
+                                const jsonResult = tryParseJsonOutput(popup.content);
                                 if (jsonResult.isJson) {
                                     return (
                                         <JsonTreeView

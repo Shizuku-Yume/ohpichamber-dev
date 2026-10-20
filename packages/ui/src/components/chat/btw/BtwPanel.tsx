@@ -25,7 +25,7 @@ import type { BtwPanelState } from './useBtwPanelState';
 import { ChatSurfaceProvider } from '../ChatSurfaceContext';
 import { useMobileAutocompleteMaxHeight } from '../useMobileAutocompleteMaxHeight';
 import ChatMessage from '../ChatMessage';
-import { CanonicalApprovalCard } from '../PermissionDock';
+import { PermissionCard } from '../PermissionCard';
 import { FormCard } from '../FormCard';
 import { SessionErrorNotice } from '../SessionErrorNotice';
 
@@ -446,7 +446,7 @@ const BtwMessages: React.FC<{
                         message={record}
                         previousMessage={data.messageRecords[index - 1]}
                         nextMessage={data.messageRecords[index + 1]}
-                        isInActiveTurn={index === data.messageRecords.length - 1}
+                        isInActiveTurn={record.messageId === data.streamingMessageId}
                         activeStreamingPhase={
                             record.messageId === data.streamingMessageId ? data.activeStreamingPhase : null
                         }
@@ -458,7 +458,7 @@ const BtwMessages: React.FC<{
                             <FormCard key={form.questionId} form={form} />
                         ))}
                         {data.sessionPermissions.map((permission) => (
-                            <CanonicalApprovalCard key={permission.approvalId} permission={permission} />
+                            <PermissionCard key={permission.approvalId} permission={permission} />
                         ))}
                     </div>
                 ) : null}

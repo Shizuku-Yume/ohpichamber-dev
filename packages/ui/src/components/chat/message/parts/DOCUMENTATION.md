@@ -22,13 +22,15 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 
 - `ToolPart.tsx`
   - Renders canonical `tool_call` and `tool_result` rows, headers, reported diff counts, errors, images, and output.
+  - Restores the original compact animated tool execution row, hover disclosures, duration labels (from authoritative native records only), and live status feedback.
+  - Integrates structured diff presentations (`ToolPartDiffPreview.tsx` via `@pierre/diffs`, lazy loaded with Shiki theme integration, unified/split modes, and line metrics) with fallback to `PlainDiffFallback.tsx` when diffs exceed size thresholds (`isToolDiffPreviewOversized`).
+  - Opens `ToolOutputDialog.tsx` for deep inspection of full stdout/stderr streams, raw JSON responses via `JsonTreeView`, worker-highlighted code blocks, and dedicated renderers (`toolRenderers.tsx` for bash, glob, grep, websearch, JSON).
   - `TaskToolSessions` queries `canonicalClient.listSubagents(sessionId)` for canonical `task` calls, joining exact `parentSessionId` and `toolCallId` without legacy output parsing.
   - Desktop opens a read-only context tab; pinned columns reuse `openSession`; mobile selects the child in place.
   - Failed child queries preserve known rows and expose retry.
   - `TurnActivity` and `ProgressiveGroup` thread addressed session/directory through `MemoExpandableToolRow`, whose comparator includes both.
   - Calls and results keep separate `partId` keys and toggle identities. Results borrow input only from the same turn's exact `toolCallId` and tool name; complete turn context survives segmented Activity rendering.
   - `toolHelpers.toolDescription(part, pairedCall?)` owns native descriptions. `toolDiffUtils` owns native result paths and numbered edit-diff conversion; input text never proves a performed change.
-
 - `toolPresentation.tsx`
   - Shared icon mapping for tool names (`getToolIcon`).
   - Used by `ProgressiveGroup.tsx` and `ToolPart.tsx`.
@@ -189,6 +191,7 @@ tool patch is parsed while the turn streams.
 - Native `bash` command input and terminal text output remain visible. Final result text normalizes ANSI terminal controls with a bounded synthetic-cell budget; there is no legacy mutable-state/metadata output fallback.
 - Thinking/Justification duration is hidden in `sorted` mode (handled in `ReasoningPart.tsx` + `JustificationBlock.tsx`).
 - Reasoning streaming presentation derives from the live stream phase (`streaming`/`cooldown`), never from missing persisted timing: a cached part without `time.end` is not live, and a part whose `time.end` is set never streams (issue #2020).
+- Tool result display projection and pairing: Canonical tool results arrive in `role: "system"` messages that `MessageList` skips from direct display. Display pairing (`attachToolResultsForDisplay`) joins exact `turnId + toolCallId + toolName` as a display-only copy attached to the assistant tool call, without authoritative transcript mutation. When the streaming tail entry updates with live parts (`streamingTailEntry.ts`), `mergeLiveParts` preserves previously display-paired tool results rather than overwriting them with live assistant parts. Popup inspection (`ChatMessage.handleShowPopup`) preserves non-image output content so `ToolOutputDialog` displays structured diffs and text output.
 
 ## Changing native tool descriptions
 

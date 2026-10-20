@@ -93,7 +93,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     setConfirmActionCommand(command);
   };
 
-
   const closeConfirmActionDialog = () => {
     setConfirmActionCommand(null);
   };
@@ -263,36 +262,38 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
         )}
       </ScrollableOverlay>
 
-      <Dialog
-        open={confirmActionCommand !== null}
-        onOpenChange={(open) => {
-          if (!open && !isConfirmActionPending) {
-            closeConfirmActionDialog();
-          }
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('settings.commands.sidebar.dialog.deleteTitle')}</DialogTitle>
-            <DialogDescription>
-              {t('settings.commands.sidebar.dialog.deleteDescription', { name: confirmActionCommand?.name ?? '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={closeConfirmActionDialog}
-              disabled={isConfirmActionPending}
-            >
-              {t('settings.common.actions.cancel')}
-            </Button>
-            <Button size="sm" onClick={handleConfirmAction} disabled={isConfirmActionPending}>
-              {t('settings.common.actions.delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {confirmActionCommand ? (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open && !isConfirmActionPending) {
+              closeConfirmActionDialog();
+            }
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t('settings.commands.sidebar.dialog.deleteTitle')}</DialogTitle>
+              <DialogDescription>
+                {t('settings.commands.sidebar.dialog.deleteDescription', { name: confirmActionCommand.name })}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={closeConfirmActionDialog}
+                disabled={isConfirmActionPending}
+              >
+                {t('settings.common.actions.cancel')}
+              </Button>
+              <Button size="sm" onClick={handleConfirmAction} disabled={isConfirmActionPending}>
+                {t('settings.common.actions.delete')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogCommand !== null} onOpenChange={(open) => !open && setRenameDialogCommand(null)}>
@@ -389,13 +390,13 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
             <span className="typography-ui-label font-normal truncate text-foreground">
               /{command.name}
             </span>
-            {(command.scope || isCommandBuiltIn(command)) && (
-              <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
-                {command.scope}{command.group ? ` / ${command.group}` : ''}
-              </span>
-            )}
+            <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
+              {isCommandBuiltIn(command)
+                ? t('settings.agents.sidebar.badge.system')
+                : t(command.scope === 'workspace' ? 'settings.common.scope.project' : 'settings.common.scope.global')}
+              {command.group ? ` / ${command.group}` : ''}
+            </span>
           </div>
-          <div className="typography-micro text-muted-foreground/60 truncate">{command.source}</div>
 
           {command.description && (
             <div className="typography-micro text-muted-foreground/60 truncate leading-tight">

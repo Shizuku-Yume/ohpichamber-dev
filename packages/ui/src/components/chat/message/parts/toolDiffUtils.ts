@@ -1,4 +1,5 @@
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
+import { NATIVE_TOOLS, parseNativeReadPath } from '@/lib/toolHelpers';
 import { z } from 'zod';
 
 const editFileSchema = z.object({
@@ -20,6 +21,7 @@ const editResultSchema = z.object({
     }),
 });
 const writeResultSchema = z.object({ details: z.object({ resolvedPath: z.string().min(1) }) });
+const pathValueSchema = z.string();
 
 type ToolPart = ToolCallPart | ToolResultPart;
 export interface ToolFileChange {
@@ -90,8 +92,9 @@ export function getToolFileChanges(part: ToolPart, pairedCall?: ToolCallPart): T
     const call = pairedCall?.toolCallId === part.toolCallId && pairedCall.toolName === part.toolName ? pairedCall : undefined;
     if (part.toolName === 'write') {
         const resolved = writeResultSchema.safeParse(part.output).data?.details.resolvedPath;
+        const inputPath = pathValueSchema.safeParse(call?.input.path).data;
         // Writes to tool devices/coordination URLs do not mutate project files.
-        const path = resolved ?? (typeof call?.input.path === 'string' && !/^[a-z][a-z0-9+.-]*:\/\//i.test(call.input.path) ? call.input.path : undefined);
+        const path = resolved ?? (inputPath && !/^[a-z][a-z0-9+.-]*:\/\//i.test(inputPath) ? inputPath : undefined);
         return path ? [{ path }] : [];
     }
     if (part.toolName !== 'edit') return [];
@@ -115,7 +118,8 @@ export function getToolDiffs(part: ToolPart, pairedCall?: ToolCallPart): ToolDif
 
 export function getPrimaryToolPath(part: ToolPart, pairedCall?: ToolCallPart): string | null {
     if (part.type === 'tool_result') return getToolFileChanges(part, pairedCall).find((file) => file.op !== 'delete')?.path ?? null;
-    return (part.toolName === 'edit' || part.toolName === 'write') && typeof part.input.path === 'string' ? part.input.path : null;
+    const path = pathValueSchema.safeParse(part.input.path).data;
+    return (part.toolName === 'edit' || part.toolName === 'write') && path ? path : null;
 }
 
 export function extractFirstChangedLineFromDiff(diff: string): number | undefined {
@@ -135,6 +139,12 @@ export function extractFirstChangedLineFromDiff(diff: string): number | undefine
 }
 
 export function resolveToolQuickOpenTarget(part: ToolPart, pairedCall?: ToolCallPart): { filePath: string; line?: number } | null {
+    const call = part.type === 'tool_call' ? part : pairedCall?.toolCallId === part.toolCallId && pairedCall.toolName === part.toolName ? pairedCall : undefined;
+    const readPath = pathValueSchema.safeParse(call?.input.path).data;
+    if (call?.toolName === NATIVE_TOOLS.read && readPath) {
+        const parsed = parseNativeReadPath(readPath);
+        return parsed.path ? { filePath: parsed.path, line: parsed.line } : null;
+    }
     const filePath = getPrimaryToolPath(part, pairedCall);
     if (!filePath) return null;
     const diff = getToolDiffs(part, pairedCall).find((file) => file.path === filePath)?.diff;

@@ -65,8 +65,9 @@ const readParts: Part[] = [
     { type: 'tool_result', partId: 'read-result', toolCallId: 'read-call', toolName: 'read', output: 'code', isError: false },
 ];
 const editParts: Part[] = [
-    { type: 'tool_call', partId: 'edit-call-part', toolCallId: 'edit-call', toolName: 'edit', input: { filePath: 'src/source.ts' }, status: 'completed' },
-    { type: 'tool_result', partId: 'edit-result', toolCallId: 'edit-call', toolName: 'edit', output: { file: 'src/source.ts', patch: '@@ -1,1 +1,2 @@\n-old\n+new\n+added' }, isError: false },
+    { type: 'tool_call', partId: 'edit-call-part', toolCallId: 'edit-call', toolName: 'edit', input: { path: 'src/source.ts', old_string: 'old', new_string: 'new' }, status: 'completed' },
+    { type: 'tool_result', partId: 'edit-result', toolCallId: 'edit-call', toolName: 'edit', isError: false,
+      output: { content: [{ type: 'text', text: 'Updated src/source.ts' }], details: { path: '[workspace]/src/source.ts', diff: '-1|old\n+1|new\n+2|added', op: 'update' } } },
 ];
 
 function turn(messages: ChatMessageEntry[]): TurnRecord {
@@ -314,5 +315,45 @@ describe('live Activity with the real message body', () => {
         await act(async () => changedFilesToggle()?.click());
         expect(container.textContent).toContain('file-4.ts');
         expect(container.querySelectorAll('button[aria-label^="Open src/file-"]')).toHaveLength(0);
+    });
+
+    test('renders one operation card for matched, running and failed tool parts', async () => {
+        const editCall: Part = {
+            type: 'tool_call', partId: 'live-edit-call', toolCallId: 'live-edit', toolName: 'edit',
+            input: { path: 'src/source.ts', old_string: 'old', new_string: 'new' }, status: 'completed',
+        };
+        const editResult: Part = {
+            type: 'tool_result', partId: 'live-edit-result', toolCallId: 'live-edit', toolName: 'edit', isError: false,
+            output: {
+                content: [{ type: 'text', text: 'Updated src/source.ts' }],
+                details: { path: '[workspace]/src/source.ts', diff: '-1|old\n+1|new\n+2|added', op: 'update' },
+            },
+        };
+        const progress = assistant('progress', [text('progress-text', 'Editing'), editCall, editResult]);
+        await act(async () => root.render(<Harness record={turn([progress])} />));
+        expect(container.querySelectorAll('[class*="group/tool"]')).toHaveLength(1);
+        expect(container.textContent).toContain('+2/-1');
+
+        const running: Part = {
+            type: 'tool_call', partId: 'running-call', toolCallId: 'running', toolName: 'bash',
+            input: { command: 'sleep 1' }, status: 'running',
+        };
+        await act(async () => root.render(<Harness record={turn([assistant('running-message', [running])])} />));
+        expect(container.querySelectorAll('[class*="group/tool"]')).toHaveLength(1);
+        expect(container.textContent).toContain('sleep 1');
+
+        const failedCall: Part = {
+            type: 'tool_call', partId: 'live-edit-call', toolCallId: 'live-edit', toolName: 'edit',
+            input: { path: 'src/source.ts' }, status: 'failed',
+        };
+        const failedResult: Part = {
+            type: 'tool_result', partId: 'live-edit-error', toolCallId: 'live-edit', toolName: 'edit',
+            isError: true, error: 'Permission denied',
+            output: { content: [{ type: 'text', text: 'Cannot edit src/source.ts' }] },
+        };
+        await act(async () => root.render(
+            <Harness record={turn([assistant('error-message', [failedCall, failedResult])])} />,
+        ));
+        expect(container.querySelectorAll('[class*="group/tool"]')).toHaveLength(1);
     });
 });

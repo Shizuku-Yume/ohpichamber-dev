@@ -4,70 +4,179 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui';
+import { Icon } from '@/components/icon/Icon';
+import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
+import { SettingsStackedField } from '@/components/sections/shared/SettingsSection';
 import { useI18n } from '@/lib/i18n';
 import { CanonicalApiError } from '@/api/canonicalClient';
 import { usePluginsStore } from '@/stores/usePluginsStore';
 
-export const AddPluginDialog: React.FC<{ open: boolean; onOpenChange: (open: boolean) => void }> = ({ open, onOpenChange }) => {
+type TabKey = 'package' | 'local';
+
+interface AddPluginDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export const AddPluginDialog: React.FC<AddPluginDialogProps> = ({ open, onOpenChange }) => {
   const { t } = useI18n();
-  const [mode, setMode] = React.useState<'package' | 'local'>('package');
+  const [tab, setTab] = React.useState<TabKey>('package');
   const [spec, setSpec] = React.useState('');
   const [fileName, setFileName] = React.useState('');
   const [content, setContent] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  const resetForm = React.useCallback(() => {
+    setSpec('');
+    setFileName('');
+    setContent('');
+    setError(null);
+  }, []);
+
   React.useEffect(() => {
     if (!open) return;
-    setMode('package'); setSpec(''); setFileName(''); setContent(''); setError(null);
-  }, [open]);
-  const validFileName = LocalExtensionIdSchema.safeParse(fileName).success;
-  const submit = async () => {
-    setSubmitting(true); setError(null);
+    setTab('package');
+    resetForm();
+  }, [open, resetForm]);
+
+  const handleTabChange = (next: TabKey) => {
+    if (next === tab) return;
+    setTab(next);
+    resetForm();
+  };
+
+  const trimmedFileName = fileName.trim();
+  const fileNameInvalid = tab === 'local' && trimmedFileName !== '' && !LocalExtensionIdSchema.safeParse(trimmedFileName).success;
+  const specEmpty = tab === 'package' && spec.trim() === '';
+  const contentEmpty = tab === 'local' && content.trim() === '';
+
+  const submitDisabled =
+    submitting
+    || (tab === 'package' && specEmpty)
+    || (tab === 'local' && (trimmedFileName === '' || fileNameInvalid || contentEmpty));
+
+  const handleSubmit = async () => {
+    if (submitDisabled) return;
+    setSubmitting(true);
+    setError(null);
     try {
       const store = usePluginsStore.getState();
-      if (mode === 'package') await store.installPlugin({ kind: 'package', spec: spec.trim() });
-      else await store.writeLocalExtension(fileName, content);
+      if (tab === 'package') await store.installPlugin({ kind: 'package', spec: spec.trim() });
+      else await store.writeLocalExtension(trimmedFileName, content);
+      toast.success(t('settings.plugins.toast.created'));
       onOpenChange(false);
     } catch (failure) {
-      setError(failure instanceof CanonicalApiError ? failure.message : t('settings.plugins.error.operation'));
-    } finally { setSubmitting(false); }
+      const message = failure instanceof CanonicalApiError ? failure.message : t('settings.plugins.error.operation');
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const tabs = React.useMemo<SortableTabsStripItem[]>(() => [
+    { id: 'package', label: t('settings.plugins.sidebar.kind.package') },
+    { id: 'local', label: t('settings.plugins.local.title') },
+  ], [t]);
+
   return (
-    <Dialog open={open} onOpenChange={next => { if (!submitting) onOpenChange(next); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && submitting) return;
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>{t('settings.plugins.dialog.add.title')}</DialogTitle>
           <DialogDescription>{t('settings.plugins.grid.description')}</DialogDescription>
         </DialogHeader>
-        <div className="flex gap-2">
-          <Button variant={mode === 'package' ? 'secondary' : 'ghost'} disabled={submitting} onClick={() => setMode('package')}>
-            {t('settings.plugins.sidebar.kind.package')}
-          </Button>
-          <Button variant={mode === 'local' ? 'secondary' : 'ghost'} disabled={submitting} onClick={() => setMode('local')}>
-            {t('settings.plugins.local.title')}
-          </Button>
+
+        <SortableTabsStrip
+          items={tabs}
+          activeId={tab}
+          onSelect={(id) => {
+            if (id === 'package' || id === 'local') handleTabChange(id);
+          }}
+          layoutMode="fit"
+          variant="active-pill"
+          activePillLowercase={false}
+          className="h-10"
+        />
+
+        <div className="flex flex-col gap-4">
+          {tab === 'package' ? (
+            <SettingsStackedField
+              settingsItem="plugins.spec"
+              label={t('settings.plugins.page.field.spec')}
+              controlClassName="w-full max-w-none"
+              description={specEmpty ? t('settings.plugins.validation.specRequired') : t('settings.plugins.scope.global')}
+              descriptionPlacement="after"
+            >
+              <Input
+                id="plugin-spec"
+                value={spec}
+                onChange={(event) => setSpec(event.target.value)}
+                placeholder={t('settings.plugins.page.field.spec.placeholder')}
+                aria-label={t('settings.plugins.page.field.spec')}
+                disabled={submitting}
+              />
+            </SettingsStackedField>
+          ) : (
+            <>
+              <SettingsStackedField
+                settingsItem="plugins.fileName"
+                label={t('settings.plugins.page.field.fileName')}
+                controlClassName="w-full max-w-none"
+                description={fileNameInvalid ? (
+                  t('settings.plugins.validation.fileNameNative')
+                ) : (
+                  <span className="font-mono">.omp/extensions/{trimmedFileName}</span>
+                )}
+                descriptionPlacement="after"
+              >
+                <Input
+                  id="plugin-filename"
+                  value={fileName}
+                  onChange={(event) => setFileName(event.target.value)}
+                  placeholder="my-extension.ts"
+                  aria-label={t('settings.plugins.page.field.fileName')}
+                  aria-invalid={fileNameInvalid || undefined}
+                  disabled={submitting}
+                />
+              </SettingsStackedField>
+
+              <SettingsStackedField
+                settingsItem="plugins.content"
+                label={t('settings.plugins.page.field.content')}
+                controlClassName="w-full max-w-none"
+              >
+                <Textarea
+                  id="plugin-content"
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                  rows={16}
+                  className="font-mono w-full"
+                  aria-label={t('settings.plugins.page.field.content')}
+                  disabled={submitting}
+                />
+              </SettingsStackedField>
+            </>
+          )}
+
+          {error ? <p role="alert" className="typography-meta text-[var(--status-error)]">{error}</p> : null}
         </div>
-        {mode === 'package' ? (
-          <div className="space-y-2">
-            <label htmlFor="native-plugin-spec">{t('settings.plugins.page.field.spec')}</label>
-            <Input id="native-plugin-spec" value={spec} onChange={event => setSpec(event.target.value)} disabled={submitting} />
-            <p className="typography-meta text-muted-foreground">{t('settings.plugins.scope.global')}</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <label htmlFor="native-extension-filename">{t('settings.plugins.page.field.fileName')}</label>
-            <Input id="native-extension-filename" value={fileName} onChange={event => setFileName(event.target.value)} disabled={submitting} aria-invalid={fileName !== '' && !validFileName} />
-            {fileName !== '' && !validFileName ? <p role="alert" className="typography-meta text-[var(--status-error)]">{t('settings.plugins.validation.fileNameNative')}</p> : null}
-            <p className="font-mono typography-meta text-muted-foreground">.omp/extensions/{fileName}</p>
-            <label htmlFor="native-extension-content">{t('settings.plugins.page.field.content')}</label>
-            <Textarea id="native-extension-content" value={content} onChange={event => setContent(event.target.value)} rows={14} className="font-mono" disabled={submitting} />
-          </div>
-        )}
-        {error ? <p role="alert" className="text-[var(--status-error)]">{error}</p> : null}
+
         <DialogFooter>
-          <Button variant="ghost" disabled={submitting} onClick={() => onOpenChange(false)}>{t('settings.common.actions.cancel')}</Button>
-          <Button disabled={submitting || (mode === 'package' ? !spec.trim() : !validFileName)} onClick={() => void submit()}>
-            {mode === 'package' ? t('settings.plugins.action.install') : t('settings.plugins.dialog.add.action.submit')}
+          <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+            {t('settings.plugins.dialog.add.action.cancel')}
+          </Button>
+          <Button size="sm" onClick={() => void handleSubmit()} disabled={submitDisabled}>
+            {submitting ? <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" /> : null}
+            {t('settings.plugins.dialog.add.action.submit')}
           </Button>
         </DialogFooter>
       </DialogContent>

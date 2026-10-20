@@ -15,7 +15,12 @@ import {
   useAutosave, AUTOSAVE_SAVED, AUTOSAVE_UNCHANGED, autosaveFailed,
 } from '@/components/sections/shared/SettingsAutosave';
 import {
-  SettingsSection, SettingsFieldRow, SettingsStackedField, SETTINGS_CUSTOM_TRIGGER_CLASS,
+  SettingsSection,
+  SettingsFieldRow,
+  SettingsStackedField,
+  SETTINGS_CUSTOM_TRIGGER_CLASS,
+  SETTINGS_HELPER_CLASS,
+  SETTINGS_ICON_BUTTON_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Icon } from '@/components/icon/Icon';
 
@@ -24,7 +29,7 @@ interface FormState {
   description: string;
   model: Agent['model'];
   systemPromptOverride: string;
-  allowedTools: string;
+  allowedTools: string[];
   permissionPresetId: string;
 }
 
@@ -33,14 +38,16 @@ const fieldsForAgent = (agent: Agent): FormState => ({
   description: agent.description,
   model: agent.model,
   systemPromptOverride: agent.systemPromptOverride ?? '',
-  allowedTools: agent.allowedTools.join('\n'),
+  allowedTools: [...agent.allowedTools],
   permissionPresetId: agent.permissionPresetId ?? '',
 });
 const fieldsEqual = (left: FormState, right: FormState): boolean =>
   left.name === right.name && left.description === right.description &&
   left.model?.providerId === right.model?.providerId && left.model?.modelId === right.model?.modelId &&
   left.systemPromptOverride === right.systemPromptOverride &&
-  left.allowedTools === right.allowedTools && left.permissionPresetId === right.permissionPresetId;
+  left.allowedTools.length === right.allowedTools.length &&
+  left.allowedTools.every((tool, index) => tool === right.allowedTools[index]) &&
+  left.permissionPresetId === right.permissionPresetId;
 
 export const AgentsPage: React.FC = () => {
   const { t } = useI18n();
@@ -49,13 +56,9 @@ export const AgentsPage: React.FC = () => {
   const {
     selectedAgentName, createAgent, updateAgent, loadAgents, agentDraft, setAgentDraft, setSelectedAgent,
   } = useAgentsStore(useShallow((state) => ({
-    selectedAgentName: state.selectedAgentName,
-    createAgent: state.createAgent,
-    updateAgent: state.updateAgent,
-    loadAgents: state.loadAgents,
-    agentDraft: state.agentDraft,
-    setAgentDraft: state.setAgentDraft,
-    setSelectedAgent: state.setSelectedAgent,
+    selectedAgentName: state.selectedAgentName, createAgent: state.createAgent,
+    updateAgent: state.updateAgent, loadAgents: state.loadAgents,
+    agentDraft: state.agentDraft, setAgentDraft: state.setAgentDraft, setSelectedAgent: state.setSelectedAgent,
   })));
   const agents = useAgentsStore((state) => selectAgentsForDirectory(state, settingsDirectory));
   const revision = useAgentsStore((state) => state.revisionsByDirectory[directoryKey]);
@@ -74,10 +77,12 @@ export const AgentsPage: React.FC = () => {
   const savedRef = React.useRef<FormState | null>(null);
   const savingRef = React.useRef(false);
   const [form, setForm] = React.useState<FormState>({
-    name: '', description: '', model: null, systemPromptOverride: '', allowedTools: '', permissionPresetId: '',
+    name: '', description: '', model: null, systemPromptOverride: '', allowedTools: [], permissionPresetId: '',
   });
   const formRef = React.useRef(form);
   formRef.current = form;
+  const [toolDraft, setToolDraft] = React.useState('');
+  const toolDraftSelectionRef = React.useRef(selectionKey);
   const [isCreating, setIsCreating] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
 
@@ -89,6 +94,8 @@ export const AgentsPage: React.FC = () => {
       entityRef.current = null;
       savedRef.current = null;
       revisionRef.current = undefined;
+      toolDraftSelectionRef.current = selectionKey;
+      setToolDraft('');
       setSaveError(null);
       return;
     }
@@ -102,6 +109,10 @@ export const AgentsPage: React.FC = () => {
     savedRef.current = next;
     hydratedSelectionRef.current = selectionKey;
     setForm(next);
+    if (toolDraftSelectionRef.current !== selectionKey) {
+      toolDraftSelectionRef.current = selectionKey;
+      setToolDraft('');
+    }
     setSaveError(null);
   }, [source, revision, selectionKey]);
 
@@ -113,10 +124,8 @@ export const AgentsPage: React.FC = () => {
       name,
       description: form.description,
       model: form.model,
+      allowedTools: [...form.allowedTools],
     };
-    if (form.allowedTools !== entity.allowedTools.join('\n')) {
-      agent.allowedTools = form.allowedTools.split('\n').map((tool) => tool.trim()).filter(Boolean);
-    }
     // An untouched optional prompt retains its exact native representation.
     if (form.systemPromptOverride !== (entity.systemPromptOverride ?? '')) {
       if (form.systemPromptOverride) agent.systemPromptOverride = form.systemPromptOverride;
@@ -158,6 +167,22 @@ export const AgentsPage: React.FC = () => {
   }, [isNewAgent, selectedAgent, selectionKey, form, buildAgent, updateAgent, settingsDirectory, t]);
   const autosave = useAutosave(save);
   const { requestSave } = autosave;
+
+  const addTool = () => {
+    const tool = toolDraft.trim();
+    if (!tool) return;
+    setToolDraft('');
+    if (formRef.current.allowedTools.includes(tool)) return;
+    setForm((current) => (current.allowedTools.includes(tool)
+      ? current
+      : { ...current, allowedTools: [...current.allowedTools, tool] }));
+    requestSave();
+  };
+
+  const removeTool = (index: number) => {
+    setForm((current) => ({ ...current, allowedTools: current.allowedTools.filter((_, toolIndex) => toolIndex !== index) }));
+    requestSave();
+  };
 
   const handleCreate = async () => {
     const name = form.name.trim().replace(/\s+/g, '-');
@@ -210,8 +235,11 @@ export const AgentsPage: React.FC = () => {
     {!source || (!isNewAgent && revision === undefined) ? <p role="status">{t('common.unavailable')}</p> : <>
       <SettingsSection title={t('settings.agents.page.section.identityRole')} divider={false} contentClassName="space-y-3">
         {isNewAgent && <SettingsFieldRow settingsItem="agents.name" label={t('settings.agents.page.field.agentName')}>
-          <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })}
-            placeholder={t('settings.agents.page.field.agentNamePlaceholder')} className="h-7 w-40 px-2" />
+          <div className="flex items-center">
+            <span className="typography-ui-label text-muted-foreground mr-1">@</span>
+            <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })}
+              placeholder={t('settings.agents.page.field.agentNamePlaceholder')} className="h-7 w-40 px-2" />
+          </div>
         </SettingsFieldRow>}
         <SettingsStackedField label={t('settings.common.field.description')} controlClassName="w-full max-w-none">
           <Textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })}
@@ -219,7 +247,7 @@ export const AgentsPage: React.FC = () => {
             className="w-full resize-none min-h-[60px] bg-transparent" />
         </SettingsStackedField>
       </SettingsSection>
-      <SettingsSection title={t('settings.agents.page.field.overrideModel')} contentClassName="space-y-3">
+      <SettingsSection title={t('settings.agents.page.section.modelParameters')} contentClassName="space-y-3">
         <SettingsFieldRow settingsItem="agents.model" label={t('settings.agents.page.field.overrideModel')}>
           <ModelSelector providerId={form.model?.providerId ?? ''} modelId={form.model?.modelId ?? ''}
             directory={settingsDirectory ?? undefined}
@@ -236,14 +264,61 @@ export const AgentsPage: React.FC = () => {
           className="w-full font-mono typography-meta min-h-[120px] max-h-[60vh] bg-transparent" />
       </SettingsSection>
       <SettingsSection title={t('settings.agents.page.section.toolPermissions')} settingsItem="agents.permissions" contentClassName="space-y-3">
-        <SettingsStackedField label={t('settings.agents.page.field.allowedTools')}>
-          <Textarea value={form.allowedTools}
-            aria-label={t('settings.agents.page.field.allowedTools')}
-            onChange={(event) => setForm({ ...form, allowedTools: event.target.value })}
-            placeholder={t('settings.agents.page.field.allowedToolsHint')} rows={4}
-            className="w-full font-mono typography-meta bg-transparent" />
+        <SettingsStackedField
+          settingsItem="agents.allowed-tools"
+          label={t('settings.agents.page.field.allowedTools')}
+          controlClassName="w-full max-w-none flex-col items-stretch"
+        >
+          {form.allowedTools.length === 0 ? (
+            <p className={SETTINGS_HELPER_CLASS} aria-hidden="true">—</p>
+          ) : (
+            <ul className="w-full">
+              {form.allowedTools.map((tool, index) => (
+                <li key={`${tool}-${index}`} className="flex min-h-8 items-center gap-2 border-t border-border/40 py-2">
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">{tool}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className={SETTINGS_ICON_BUTTON_CLASS}
+                    aria-label={t('settings.environment.editor.removeAria', { name: tool })}
+                    title={t('settings.environment.editor.remove')}
+                    onClick={() => removeTool(index)}
+                  >
+                    <Icon name="close" className="h-3.5 w-3.5" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form
+            className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              addTool();
+            }}
+          >
+            <Input
+              value={toolDraft}
+              onChange={(event) => setToolDraft(event.target.value)}
+              aria-label={t('settings.agents.page.field.allowedTools')}
+              className="h-8 w-full max-w-[16rem] font-mono text-xs"
+            />
+            <Button
+              type="submit"
+              variant="outline"
+              size="xs"
+              disabled={!toolDraft.trim()}
+              className="!font-normal"
+              aria-label={t('settings.environment.editor.add')}
+              title={t('settings.environment.editor.add')}
+            >
+              <Icon name="add" className="mr-1 h-3.5 w-3.5" />
+              {t('settings.environment.editor.add')}
+            </Button>
+          </form>
         </SettingsStackedField>
-        <SettingsFieldRow label={t('settings.agents.page.field.permissionPreset')}>
+        <SettingsFieldRow settingsItem="agents.permission-preset" label={t('settings.agents.page.field.permissionPreset')}>
           <Input value={form.permissionPresetId}
             aria-label={t('settings.agents.page.field.permissionPreset')}
             onChange={(event) => setForm({ ...form, permissionPresetId: event.target.value })}

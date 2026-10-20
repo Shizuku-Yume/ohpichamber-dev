@@ -2277,7 +2277,7 @@ export const settingsDict = {
   'settings.view.search.noResults': 'Aucun paramètre correspondant',
   'settings.view.nav.group.general': 'OpenChamber',
   'settings.view.nav.group.projects': 'Espace de travail',
-  'settings.view.nav.group.opencode': 'OpenCode',
+  'settings.view.nav.group.opencode': 'OMP',
   'settings.view.nav.group.content': 'Bibliothèque',
   'settings.page.about.title': 'À propos',
   'settings.openchamber.tunnel.notAvailable.dependencyNotFound': '{dependency} est introuvable.',

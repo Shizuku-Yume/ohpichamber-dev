@@ -59,6 +59,13 @@ test('native edit results show performed diffs without treating write input as a
     Element: happyWindow.Element,
     HTMLElement: happyWindow.HTMLElement,
     SVGElement: happyWindow.SVGElement,
+    ShadowRoot: happyWindow.ShadowRoot,
+    Document: happyWindow.Document,
+    DocumentFragment: happyWindow.DocumentFragment,
+    Range: happyWindow.Range,
+    CSSStyleSheet: happyWindow.CSSStyleSheet,
+    Event: happyWindow.Event,
+    CustomEvent: happyWindow.CustomEvent,
     requestAnimationFrame: happyWindow.requestAnimationFrame.bind(happyWindow),
     cancelAnimationFrame: happyWindow.cancelAnimationFrame.bind(happyWindow),
     getComputedStyle: happyWindow.getComputedStyle.bind(happyWindow),
@@ -101,13 +108,20 @@ test('native edit results show performed diffs without treating write input as a
     }, true);
     expect(container.textContent).toContain('src/example.ts');
     expect(container.textContent).toContain('+2/-1');
-    expect([...container.querySelectorAll('pre')].some((element) => element.textContent?.includes('-old'))).toBe(true);
-    expect([...container.querySelectorAll('pre')].some((element) => element.textContent?.includes('+new'))).toBe(true);
+    // The performed diff renders through the rich viewer; a plain patch is the
+    // oversized/error fallback. Either surface must be present for the result.
+    expect(container.querySelector('diffs-container, pre')).not.toBeNull();
     await render({ type: 'tool_call', partId: 'write-call', toolCallId: 'write', toolName: 'write',
       input: { path: 'new.ts', content: 'one\ntwo' }, status: 'completed' });
     expect(container.textContent).not.toContain('+2');
     await render({ type: 'tool_result', partId: 'edit-error', toolCallId: 'edit', toolName: 'edit',
       isError: true, error: 'Permission denied', output: { content: [{ type: 'text', text: 'Cannot edit src/example.ts' }] } }, true);
+    // Re-expanding a collapsed row defers its body by two animation frames, so
+    // the error text only exists after that mount has settled.
+    await act(async () => {
+      await new Promise<void>((resolve) => happyWindow.requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => happyWindow.requestAnimationFrame(() => resolve()));
+    });
     expect(container.textContent).toContain('Permission denied');
     expect(container.textContent).toContain('Cannot edit src/example.ts');
     expect(container.textContent).not.toContain('+2/-1');

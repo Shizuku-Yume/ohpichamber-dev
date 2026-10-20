@@ -108,7 +108,7 @@ export const settingsDict = {
   'settings.view.search.noResults': 'No matching settings',
   'settings.view.nav.group.general': 'OpenChamber',
   'settings.view.nav.group.projects': 'Workspace',
-  'settings.view.nav.group.opencode': 'OpenCode',
+  'settings.view.nav.group.opencode': 'OMP',
   'settings.view.nav.group.content': 'Library',
   'settings.page.projects.title': 'Projects',
   'settings.page.remoteInstances.title': 'Remote Instances',

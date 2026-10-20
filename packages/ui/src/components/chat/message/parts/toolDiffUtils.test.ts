@@ -72,6 +72,13 @@ describe('native tool diffs', () => {
         expect(getToolDiffs(call('write'))).toEqual([]);
         expect(extractFirstChangedLineFromDiff('@@ -10,2 +12,3 @@\n context\n-old\n+new\n+extra')).toBe(13);
     });
+    test('read selectors target the file and their first requested line', () => {
+        const read: ToolCallPart = {
+            type: 'tool_call', partId: 'read-part', toolCallId: 'read-call', toolName: 'read',
+            input: { path: 'src/file.ts:50-100' }, status: 'completed',
+        };
+        expect(resolveToolQuickOpenTarget(read)).toEqual({ filePath: 'src/file.ts', line: 50 });
+    });
 });
 
 describe('bounded tool diff previews', () => {

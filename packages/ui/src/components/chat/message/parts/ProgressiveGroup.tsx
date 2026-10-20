@@ -293,7 +293,7 @@ const MemoStaticGroupedToolRow = React.memo(StaticGroupedToolRow, (prev, next) =
  * Expandable tools (edit, bash, write, question) stay as individual rows.
  * Unknown tools stay as individual expandable rows (fallback).
  */
-const aggregateRows = (parts: TurnActivityPart[]): AggregatedRow[] => {
+const aggregateRows = (parts: TurnActivityPart[], pairedResultKeys: ReadonlySet<string>): AggregatedRow[] => {
     const rows: AggregatedRow[] = [];
 
     let i = 0;
@@ -319,6 +319,13 @@ const aggregateRows = (parts: TurnActivityPart[]): AggregatedRow[] => {
             continue;
         }
         const toolName = toolPart.toolName;
+
+        // One operation renders one row: the matched result already carries the
+        // call as paired context, so the call must not also produce a header.
+        if (toolPart.type === 'tool_call' && pairedResultKeys.has(`${activity.turnId}\n${toolPart.toolCallId}\n${toolPart.toolName}`)) {
+            i++;
+            continue;
+        }
 
         // Result bodies and errors remain inspectable even for compact read calls.
         if (toolPart.type === 'tool_result') {
@@ -640,12 +647,22 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
         return sortPartsByTime(parts);
     }, [parts, shouldRenderRows]);
 
+    const pairedResultKeys = React.useMemo(() => {
+        const keys = new Set<string>();
+        for (const activity of contextParts ?? parts) {
+            if (activity.part.type === 'tool_result') {
+                keys.add(`${activity.turnId}\n${activity.part.toolCallId}\n${activity.part.toolName}`);
+            }
+        }
+        return keys;
+    }, [contextParts, parts]);
+
     const rows = React.useMemo(() => {
         if (!shouldRenderRows) {
             return [] as AggregatedRow[];
         }
-        return aggregateRows(sortedParts);
-    }, [shouldRenderRows, sortedParts]);
+        return aggregateRows(sortedParts, pairedResultKeys);
+    }, [shouldRenderRows, sortedParts, pairedResultKeys]);
 
     const callsByTurn = React.useMemo(() => {
         const turns = new Map<string, Map<string, ToolCallPart>>();
@@ -714,7 +731,9 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
             case 'tool-expandable':
                 return (
                     <MemoExpandableToolRow
-                        key={row.activity.part.partId}
+                        key={row.activity.part.type === 'tool_result'
+                            ? callsByTurn.get(row.activity.turnId)?.get(row.activity.part.toolCallId)?.partId ?? row.activity.part.partId
+                            : row.activity.part.partId}
                         activity={row.activity}
                         pairedCall={row.activity.part.type === 'tool_result' ? callsByTurn.get(row.activity.turnId)?.get(row.activity.part.toolCallId) : undefined}
                         sessionId={sessionId}
@@ -740,7 +759,9 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
             case 'tool-fallback':
                 return (
                     <MemoExpandableToolRow
-                        key={row.activity.part.partId}
+                        key={row.activity.part.type === 'tool_result'
+                            ? callsByTurn.get(row.activity.turnId)?.get(row.activity.part.toolCallId)?.partId ?? row.activity.part.partId
+                            : row.activity.part.partId}
                         activity={row.activity}
                         pairedCall={row.activity.part.type === 'tool_result' ? callsByTurn.get(row.activity.turnId)?.get(row.activity.part.toolCallId) : undefined}
                         sessionId={sessionId}

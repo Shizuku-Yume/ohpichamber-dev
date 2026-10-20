@@ -81,7 +81,10 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
       if (directoryRef.current !== action.directory) return;
       if (!result.ok) { toast.error(t('settings.agents.sidebar.toast.renameFailed')); return; }
       if (selectedAgentName === action.agent.name) setSelectedAgent(name);
+      toast.success(t('settings.agents.sidebar.toast.agentRenamed', { name }));
       setRenameAction(null);
+    } catch {
+      toast.error(t('settings.agents.sidebar.toast.renameFailed'));
     } finally { setPendingAction(false); }
   };
 
@@ -96,6 +99,8 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
       if (selectedAgentName === action.agent.name) setSelectedAgent(null);
       toast.success(t('settings.agents.sidebar.toast.agentDeleted', { name: action.agent.name }));
       setDeleteAction(null);
+    } catch {
+      toast.error(t('settings.agents.sidebar.toast.deleteFailed'));
     } finally { setPendingAction(false); }
   };
 
@@ -194,15 +199,25 @@ const AgentListItem: React.FC<AgentListItemProps> = ({ agent, isSelected, onSele
   );
   return (
     <ContextMenu open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
-      <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onClick={onSelect} onContextMenu={!isMobile ? (event) => { event.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
+      <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? (event) => { event.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
         <div className="flex min-w-0 flex-1 items-center">
-          <button className="flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <span className="typography-ui-label font-normal truncate text-foreground">{agent.name}</span>
-            {agent.description && <div className="typography-micro text-muted-foreground/60 truncate leading-tight">{agent.description}</div>}
+          <button
+            type="button"
+            onClick={onSelect}
+            className="flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            tabIndex={0}
+          >
+            <div className="flex items-center gap-1.5">
+              <Icon name="ai-agent" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="typography-ui-label font-normal truncate text-foreground">{agent.name}</span>
+            </div>
+            {agent.description && (
+              <div className="typography-micro text-muted-foreground/60 truncate leading-tight">{agent.description}</div>
+            )}
           </button>
           <DropdownMenu open={isMenuOpen} onOpenChange={(open) => { if (open) setIsContextMenuOpen(false); onMenuOpenChange(open); }}>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-6 w-6 px-0 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100" onClick={(event) => event.stopPropagation()} aria-label={agent.name}>
+              <Button size="sm" variant="ghost" className="h-6 w-6 px-0 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100" aria-label={agent.name}>
                 <Icon name="more-2" className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>

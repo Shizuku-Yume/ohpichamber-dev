@@ -1,6 +1,8 @@
 import React, { useRef, memo } from 'react';
 import type { AttachmentPart, Part } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
+import { isCapacitorMobileApp } from '@/apps/mobileNativeChrome';
+import { shareFileFromNativeApp } from '@/lib/nativeFileShare';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useDraftAttachedFiles, useInputStore } from '@/sync/input-store';
 import type { ChatDraftIdentity } from '@/lib/chatDraftPersistence';
@@ -94,8 +96,7 @@ const ImagePreview = memo(({ file, onRemove, onShowPopup, gallery, index = 0 }: 
   const isLocalImagePreview =
     file.source !== 'server' &&
     file.mimeType.startsWith('image/') &&
-    typeof file.dataUrl === 'string' &&
-    file.dataUrl.startsWith('data:image/');
+    file.dataUrl?.startsWith('data:image/');
 
   const imageUrl = isLocalImagePreview ? file.dataUrl : (file.serverPath || '');
 
@@ -228,12 +229,6 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   return (
     <button
       type="button"
-      onClick={(e) => {
-        // Prevent click from bubbling if clicking the remove button
-        if ((e.target as HTMLElement).closest('[data-remove-button]')) {
-          return;
-        }
-      }}
       className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/80 bg-background pl-2 pr-1 text-xs text-foreground text-left hover:opacity-90 transition-opacity"
       title={displayName}
     >
@@ -317,6 +312,11 @@ export const AttachedFilesList = memo(({ onShowPopup, className, draftIdentity }
 
 AttachedFilesList.displayName = 'AttachedFilesList';
 
+type AttachmentImageState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; url: string }
+  | { kind: 'failed' };
+
 const NativeAttachmentThumbnail = memo(({ part, workspaceId, runtimeKey, compact, onReady, onOpen }: {
   part: AttachmentPart;
   workspaceId: string | undefined;
@@ -326,45 +326,184 @@ const NativeAttachmentThumbnail = memo(({ part, workspaceId, runtimeKey, compact
   onOpen: () => void;
 }) => {
   const { t } = useI18n();
-  const [state, setState] = React.useState<{ kind: 'loading' } | { kind: 'ready'; url: string } | { kind: 'failed' }>({ kind: 'loading' });
+  const [state, setState] = React.useState<AttachmentImageState>({ kind: 'loading' });
+  const objectUrlRef = React.useRef<string | null>(null);
+  const sizeText = formatFileSize(part.size);
+
+  const fail = React.useCallback(() => {
+    const url = objectUrlRef.current;
+    objectUrlRef.current = null;
+    if (url) {
+      onReady(part.attachmentId, null);
+      URL.revokeObjectURL(url);
+    }
+    setState({ kind: 'failed' });
+  }, [onReady, part.attachmentId]);
+
   React.useEffect(() => {
     if (!workspaceId) {
       setState({ kind: 'failed' });
       return;
     }
     let active = true;
-    let objectUrl: string | undefined;
+    setState({ kind: 'loading' });
     void canonicalClient.readAttachment(workspaceId, part.attachmentId).then((blob) => {
       if (!active || getRuntimeKey() !== runtimeKey) return;
-      objectUrl = URL.createObjectURL(blob);
-      setState({ kind: 'ready', url: objectUrl });
-      onReady(part.attachmentId, objectUrl);
+      const url = URL.createObjectURL(blob);
+      objectUrlRef.current = url;
+      setState({ kind: 'ready', url });
+      onReady(part.attachmentId, url);
     }).catch(() => {
       if (active && getRuntimeKey() === runtimeKey) setState({ kind: 'failed' });
     });
     return () => {
       active = false;
-      if (objectUrl) {
+      const url = objectUrlRef.current;
+      objectUrlRef.current = null;
+      if (url) {
         onReady(part.attachmentId, null);
-        URL.revokeObjectURL(objectUrl);
+        URL.revokeObjectURL(url);
       }
     };
   }, [workspaceId, runtimeKey, part.attachmentId, onReady]);
+
+  const failed = state.kind === 'failed';
   return (
-    <button type="button" aria-label={part.name} disabled={state.kind !== 'ready'} onClick={onOpen}
-      title={state.kind === 'failed' ? t('filesView.error.readFileFailed') : part.name}
-      className={cn('relative border border-border/40 bg-muted/10 overflow-hidden rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', compact ? 'flex-none h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16' : 'aspect-video w-full')}>
-      {state.kind === 'ready' ? (
-        <img src={state.url} alt={part.name} className="h-full w-full object-cover" loading="lazy" />
-      ) : (
-        <span className="flex h-full items-center justify-center text-muted-foreground"><Icon name="file-image" className="h-6 w-6" /></span>
-      )}
-      <span className="sr-only">{state.kind === 'failed' ? t('filesView.error.readFileFailed') : part.name}</span>
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={part.name}
+          disabled={state.kind !== 'ready'}
+          onClick={onOpen}
+          title={failed ? t('filesView.error.readFileFailed') : undefined}
+          className={cn(
+            'relative overflow-hidden border border-border/40 bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-ring',
+            compact
+              ? 'flex-none snap-start h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-lg'
+              : 'group aspect-video w-full rounded-lg',
+          )}
+        >
+          {state.kind === 'ready' ? (
+            <img
+              src={state.url}
+              alt={part.name}
+              className="h-full w-full object-cover"
+              loading="lazy"
+              onError={fail}
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center bg-muted/30 text-muted-foreground">
+              <Icon name="file-image" className="h-6 w-6" />
+            </span>
+          )}
+          {!compact && state.kind === 'ready' && (
+            <>
+              <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 p-2 text-left text-white opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="block truncate text-xs font-medium">{part.name}</span>
+                {sizeText && <span className="block text-xs opacity-80">{sizeText}</span>}
+              </span>
+            </>
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6} className="typography-meta px-2 py-1">
+        {failed ? t('filesView.error.readFileFailed') : `${part.name}${sizeText ? ` (${sizeText})` : ''}`}
+      </TooltipContent>
+    </Tooltip>
   );
 });
 
 NativeAttachmentThumbnail.displayName = 'NativeAttachmentThumbnail';
+
+const NativeAttachmentChip = memo(({ part, compact, onOpen, onDownload }: {
+  part: AttachmentPart;
+  compact: boolean;
+  onOpen: (part: AttachmentPart) => void;
+  onDownload: (part: AttachmentPart) => void;
+}) => {
+  const { t } = useI18n();
+  const sizeText = formatFileSize(part.size);
+  const downloadLabel = t('sidebarFilesTree.menu.download');
+  const extension = part.name.split('.').pop() || '';
+  const isPdf = part.mediaType.includes('pdf');
+
+  if (compact) {
+    return (
+      <div className="inline-flex max-w-full items-stretch overflow-hidden rounded-lg border border-border/30 bg-muted/30 typography-meta">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => onOpen(part)}
+              className="inline-flex min-w-0 items-center gap-1 px-2 py-0.5 text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-ring"
+            >
+              {isPdf ? (
+                <Icon name="file-pdf" className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <FileTypeIcon filePath={part.name} extension={extension} className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+              <span className="block max-w-[140px] truncate" title={part.name}>{part.name}</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{part.name}{sizeText ? ` (${sizeText})` : ''}</p>
+          </TooltipContent>
+        </Tooltip>
+        <button
+          type="button"
+          onClick={() => onDownload(part)}
+          aria-label={downloadLabel}
+          title={downloadLabel}
+          className="flex w-5 shrink-0 items-center justify-center border-l border-border/30 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          <Icon name="download" className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/10 text-left text-sm transition-colors hover:bg-muted/20">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => onOpen(part)}
+            className="flex min-w-0 flex-1 items-center gap-2 p-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-ring"
+          >
+            <span className="flex-shrink-0">
+              {isPdf ? (
+                <Icon name="file-pdf" className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <Icon name="file" className="h-4 w-4 text-muted-foreground" />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{part.name}</span>
+              {sizeText && <span className="block text-xs text-muted-foreground">{sizeText}</span>}
+            </span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{part.name}{sizeText ? ` (${sizeText})` : ''}</p>
+        </TooltipContent>
+      </Tooltip>
+      <button
+        type="button"
+        onClick={() => onDownload(part)}
+        aria-label={downloadLabel}
+        title={downloadLabel}
+        className="mr-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Icon name="download" className="h-4 w-4" />
+      </button>
+    </div>
+  );
+});
+
+NativeAttachmentChip.displayName = 'NativeAttachmentChip';
 
 interface MessageFilesDisplayProps {
   files: readonly Part[];
@@ -381,6 +520,8 @@ export const MessageFilesDisplay = memo(({ files, workspaceId, onShowPopup, comp
   const attachments = files.filter((part): part is AttachmentPart => part.type === 'attachment');
   const currentFiles = React.useRef(files);
   currentFiles.current = files;
+  const scopeRef = React.useRef(scope);
+  scopeRef.current = scope;
   const [images, setImages] = React.useState<{ scope: string; urls: Map<string, string> }>(() => ({ scope, urls: new Map() }));
   const popupUrl = React.useRef<{ attachmentId: string; url: string } | null>(null);
   const clearPopupUrl = React.useCallback(() => {
@@ -450,31 +591,86 @@ export const MessageFilesDisplay = memo(({ files, workspaceId, onShowPopup, comp
       if (current()) toast.error(t('filesView.error.readFileFailed'));
     }
   };
+  const downloadAttachment = React.useCallback(async (part: AttachmentPart) => {
+    if (!workspaceId) {
+      toast.error(t('filesView.error.readFileFailed'));
+      return;
+    }
+    const requestScope = scope;
+    const current = () => scopeRef.current === requestScope && getRuntimeKey() === runtimeKey
+      && currentFiles.current.some((item) => item.type === 'attachment' && item.attachmentId === part.attachmentId);
+    let url: string | null = null;
+    try {
+      const blob = await canonicalClient.readAttachment(workspaceId, part.attachmentId);
+      if (!current()) return;
+      if (isCapacitorMobileApp()) {
+        await shareFileFromNativeApp(new File([blob], part.name, { type: part.mediaType || blob.type || 'application/octet-stream' }));
+        return;
+      }
+      url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = part.name;
+      anchor.rel = 'noopener';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch {
+      if (current()) toast.error(t('filesView.toast.saveFailed'));
+    } finally {
+      const createdUrl = url;
+      if (createdUrl) setTimeout(() => URL.revokeObjectURL(createdUrl), 0);
+    }
+  }, [scope, runtimeKey, t, workspaceId]);
   if (attachments.length === 0) return null;
+
+  const renderThumbnail = (part: AttachmentPart) => (
+    <NativeAttachmentThumbnail
+      key={`${scope}:${part.partId}`}
+      part={part}
+      workspaceId={workspaceId}
+      runtimeKey={runtimeKey}
+      compact={compact}
+      onReady={onImageReady}
+      onOpen={() => openImage(part.attachmentId)}
+    />
+  );
+  const renderChip = (part: AttachmentPart) => (
+    <NativeAttachmentChip
+      key={`${scope}:${part.partId}`}
+      part={part}
+      compact={compact}
+      onOpen={(file) => { void showFilePopup(file); }}
+      onDownload={(file) => { void downloadAttachment(file); }}
+    />
+  );
+
+  if (compact) {
+    const imageAttachments = attachments.filter((part) => part.mediaType.startsWith('image/'));
+    const fileAttachments = attachments.filter((part) => !part.mediaType.startsWith('image/'));
+    return (
+      <div className={cn('space-y-1.5', className ?? 'mt-1.5')}>
+        {fileAttachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {fileAttachments.map(renderChip)}
+          </div>
+        )}
+        {imageAttachments.length > 0 && (
+          <div className="overflow-x-auto -mx-1 px-1 py-0.5 scrollbar-thin">
+            <div className="flex snap-x snap-mandatory gap-2">
+              {imageAttachments.map(renderThumbnail)}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className={cn(compact ? 'flex flex-wrap items-center gap-1.5' : 'grid grid-cols-1 sm:grid-cols-2 gap-2', className ?? (compact ? 'mt-1.5' : undefined))}>
-      {attachments.map((part) => {
-        if (part.mediaType.startsWith('image/')) return (
-          <NativeAttachmentThumbnail key={`${scope}:${part.partId}`} part={part} workspaceId={workspaceId} runtimeKey={runtimeKey} compact={compact} onReady={onImageReady} onOpen={() => openImage(part.attachmentId)} />
-        );
-        const isText = part.mediaType.startsWith('text/') || part.mediaType === 'application/json';
-        const content = <>
-          {part.mediaType.includes('pdf') ? <Icon name="file-pdf" className="h-3.5 w-3.5 text-muted-foreground" /> : <FileTypeIcon filePath={part.name} extension={part.name.split('.').pop() || ''} className="h-3.5 w-3.5 text-muted-foreground" />}
-          <span className="max-w-[220px] truncate" title={part.name}>{part.name}</span>
-        </>;
-        return (
-          <Tooltip key={part.partId}>
-            <TooltipTrigger asChild>
-              {compact && !isText ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-border/30 bg-muted/30 typography-meta">{content}</span>
-              ) : (
-                <button type="button" onClick={() => { void showFilePopup(part); }} className={cn('inline-flex items-center gap-1 rounded-lg border border-border/30 bg-muted/30 hover:bg-muted/50', compact ? 'px-2 py-0.5 typography-meta' : 'gap-2 p-2 text-sm')}>{content}</button>
-              )}
-            </TooltipTrigger>
-            <TooltipContent>{part.name} ({formatFileSize(part.size)})</TooltipContent>
-          </Tooltip>
-        );
-      })}
+    <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-2', className)}>
+      {attachments.map((part) => (
+        part.mediaType.startsWith('image/') ? renderThumbnail(part) : renderChip(part)
+      ))}
     </div>
   );
 });

@@ -7,12 +7,19 @@ import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { selectCommandsForDirectory, useCommandsStore, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
 import { ModelSelector } from '../agents/ModelSelector';
-import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
+import { AgentSelector } from './AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { useAutosave, AUTOSAVE_SAVED, AUTOSAVE_UNCHANGED, autosaveFailed, type AutosaveResult } from '@/components/sections/shared/SettingsAutosave';
-import { SettingsSection, SettingsFieldRow, SETTINGS_SELECT_SIZE, SETTINGS_CUSTOM_TRIGGER_CLASS } from '@/components/sections/shared/SettingsSection';
+import {
+  SettingsSection,
+  SettingsFieldRow,
+  SettingsStackedField,
+  SETTINGS_SELECT_SIZE,
+  SETTINGS_CUSTOM_TRIGGER_CLASS,
+} from '@/components/sections/shared/SettingsSection';
 
 interface CommandForm {
   name: string;
@@ -29,13 +36,11 @@ export const CommandsPage: React.FC = () => {
   const directory = useSettingsDirectory();
   const selectedName = useCommandsStore(state => state.selectedCommandName);
   const commands = useCommandsStore(state => selectCommandsForDirectory(state, directory));
-  const agents = useAgentsStore(state => selectAgentsForDirectory(state, directory));
-  const loadAgents = useAgentsStore(state => state.loadAgents);
-  React.useEffect(() => { if (directory) void loadAgents(directory); }, [directory, loadAgents]);
   const draft = useCommandsStore(state => state.commandDraft);
   const entity = commands.find(command => command.name === selectedName);
   const isNew = Boolean(draft && draft.name === selectedName && !entity);
   const readOnly = Boolean(entity && !entity.editable);
+  const group = isNew ? draft?.group : entity?.group;
   const [form, setForm] = React.useState<CommandForm>({ name: '', scope: 'agent', description: '', content: '', argumentHint: '', agentId: '', modelSelection: null });
   const [creating, setCreating] = React.useState(false);
   const identity = JSON.stringify([directory, selectedName]);
@@ -80,62 +85,117 @@ export const CommandsPage: React.FC = () => {
     } finally { if (echo.current === pending) echo.current = null; }
   }, [directory, entity, form, identity, isNew, readOnly, t]);
   const autosave = useAutosave(save);
+  const { requestSave } = autosave;
   const create = async () => {
-    if (!form.name.trim()) { toast.error(t('settings.commands.sidebar.toast.commandNameRequired')); return; }
+    const commandName = form.name.trim().replace(/\s+/g, '-');
+    if (!commandName) { toast.error(t('settings.commands.sidebar.toast.commandNameRequired')); return; }
     if (!form.content.trim()) { toast.error(t('settings.commands.page.toast.templateRequired')); return; }
+    if (commands.some(command => command.name === commandName)) {
+      toast.error(t('settings.commands.sidebar.toast.commandExists'));
+      return;
+    }
     setCreating(true);
     try {
-      const success = await useCommandsStore.getState().createCommand(config, directory);
+      const success = await useCommandsStore.getState().createCommand({ ...config, name: commandName }, directory);
       if (!success) { toast.error(t('settings.commands.page.toast.createFailed')); return; }
       useCommandsStore.getState().setCommandDraft(null);
-      useCommandsStore.getState().setSelectedCommand(form.name);
+      useCommandsStore.getState().setSelectedCommand(commandName);
       toast.success(t('settings.commands.page.toast.created'));
     } finally { setCreating(false); }
   };
-  if (!selectedName) return <div className="p-6 text-muted-foreground">{t('settings.commands.page.empty.title')}</div>;
+  const cancelCreate = () => {
+    useCommandsStore.getState().setCommandDraft(null);
+    useCommandsStore.getState().setSelectedCommand(null);
+  };
+  if (!selectedName) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center text-muted-foreground">
+          <Icon name="terminal-box" className="mx-auto mb-3 h-12 w-12 opacity-50" />
+          <p className="typography-body">{t('settings.commands.page.empty.title')}</p>
+          <p className="typography-meta mt-1 opacity-75">{t('settings.commands.page.empty.description')}</p>
+        </div>
+      </div>
+    );
+  }
   return <SettingsPageLayout title={isNew ? t('settings.commands.page.title.new') : `/${selectedName}`}
-    description={entity?.source} onBlurCapture={autosave.onBlurCapture}>
+    description={isNew ? t('settings.commands.page.subtitle.new') : t('settings.commands.page.subtitle.edit')}
+    onBlurCapture={autosave.onBlurCapture}>
     <fieldset disabled={readOnly} className="min-w-0">
-      <SettingsSection title={t('settings.commands.page.section.identity')} divider={false}>
-        {isNew && <SettingsFieldRow label={t('settings.commands.page.field.commandName')}>
-          <Input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} className="h-7 w-40" />
-          <Select value={form.scope} onValueChange={scope => { if (scope === 'agent' || scope === 'workspace') setForm({ ...form, scope }); }}>
-            <SelectTrigger size={SETTINGS_SELECT_SIZE}><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="agent">{t('settings.common.scope.global')}</SelectItem><SelectItem value="workspace">{t('settings.common.scope.project')}</SelectItem></SelectContent>
-          </Select>
-        </SettingsFieldRow>}
-        <SettingsFieldRow label={t('settings.common.field.description')}>
-          <Textarea value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} rows={2} />
-        </SettingsFieldRow>
-        <SettingsFieldRow label="$ARGUMENTS">
-          <Input value={form.argumentHint} onChange={event => setForm({ ...form, argumentHint: event.target.value })} />
-        </SettingsFieldRow>
-      </SettingsSection>
-      <SettingsSection title={t('settings.commands.page.section.executionContext')}>
-        <SettingsFieldRow label={t('settings.commands.page.field.overrideAgent')}>
-          <Select value={form.agentId || '__none__'} onValueChange={value => { setForm({ ...form, agentId: value === '__none__' ? '' : value }); autosave.requestSave(); }}>
-            <SelectTrigger className={SETTINGS_CUSTOM_TRIGGER_CLASS}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">{t('settings.commands.agentSelector.notSelected')}</SelectItem>
-              {form.agentId && !agents.some(agent => agent.agentId === form.agentId) && <SelectItem value={form.agentId}>{form.agentId}</SelectItem>}
-              {agents.map(agent => <SelectItem key={agent.agentId} value={agent.agentId}>{agent.name}</SelectItem>)}
+      <SettingsSection title={t('settings.commands.page.section.identity')} divider={false} contentClassName="space-y-0">
+        {isNew && <SettingsFieldRow settingsItem="commands.name" label={t('settings.commands.page.field.commandName')}>
+          <div className="flex items-center">
+            <span className="typography-ui-label text-muted-foreground mr-1">/</span>
+            <Input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })}
+              placeholder={t('settings.commands.page.field.commandNamePlaceholder')} className="h-7 w-40 px-2" />
+          </div>
+          <Select value={form.scope} onValueChange={scope => {
+            if (scope === 'agent' || scope === 'workspace') setForm({ ...form, scope });
+          }}>
+            <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-fit min-w-[100px]">
+              <SelectValue placeholder={t('settings.agents.page.field.scopePlaceholder')} />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="agent">
+                <div className="flex items-center gap-2">
+                  <Icon name="user-3" className="h-3.5 w-3.5" />
+                  <span>{t('settings.common.scope.global')}</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="workspace">
+                <div className="flex items-center gap-2">
+                  <Icon name="folder" className="h-3.5 w-3.5" />
+                  <span>{t('settings.common.scope.project')}</span>
+                </div>
+              </SelectItem>
             </SelectContent>
           </Select>
-        </SettingsFieldRow>
-        <SettingsFieldRow label={t('settings.agents.page.field.overrideModel')}>
-          <ModelSelector providerId={form.modelSelection?.providerId ?? ''} modelId={form.modelSelection?.modelId ?? ''}
-            directory={directory ?? undefined} onChange={(providerId, modelId) => {
-              setForm({ ...form, modelSelection: providerId && modelId ? { ...form.modelSelection, providerId, modelId } : null }); autosave.requestSave();
-            }} className={SETTINGS_CUSTOM_TRIGGER_CLASS} />
+        </SettingsFieldRow>}
+        <SettingsStackedField className="py-1.5" label={t('settings.common.field.description')} controlClassName="w-full max-w-none">
+          <Textarea value={form.description} onChange={event => setForm({ ...form, description: event.target.value })}
+            placeholder={t('settings.commands.page.field.descriptionPlaceholder')} rows={2}
+            className="w-full resize-none min-h-[60px] bg-transparent" />
+        </SettingsStackedField>
+        <SettingsFieldRow settingsItem="commands.argument-hint" label={<code className="font-mono">$ARGUMENTS</code>}
+          info={t('settings.commands.page.templateHint.userInput')}>
+          <Input value={form.argumentHint} onChange={event => setForm({ ...form, argumentHint: event.target.value })}
+            aria-label="$ARGUMENTS" className="h-8 w-64 px-2" />
         </SettingsFieldRow>
       </SettingsSection>
-      <SettingsSection title={t('settings.commands.page.section.template')}>
-        <Textarea value={form.content} onChange={event => setForm({ ...form, content: event.target.value })} rows={12}
-          className="w-full font-mono typography-meta min-h-[160px] bg-transparent" />
-        <p className="mt-2 typography-meta text-muted-foreground"><code>$ARGUMENTS</code> {t('settings.commands.page.templateHint.userInput')}</p>
-        {isNew && <div className="flex gap-2 pt-3">
-          <Button size="xs" disabled={creating} onClick={() => void create()}>{t('settings.common.actions.create')}</Button>
-          <Button size="xs" variant="ghost" onClick={() => { useCommandsStore.getState().setCommandDraft(null); useCommandsStore.getState().setSelectedCommand(null); }}>{t('settings.common.actions.cancel')}</Button>
+      <SettingsSection title={t('settings.commands.page.section.executionContext')} contentClassName="space-y-0">
+        <SettingsFieldRow settingsItem="commands.agent" label={t('settings.commands.page.field.overrideAgent')}>
+          <AgentSelector agentId={form.agentId} directory={directory ?? undefined}
+            onChange={agentId => { setForm({ ...form, agentId }); requestSave(); }}
+            className={SETTINGS_CUSTOM_TRIGGER_CLASS} />
+        </SettingsFieldRow>
+        <SettingsFieldRow settingsItem="commands.model" label={t('settings.agents.page.field.overrideModel')}>
+          <ModelSelector providerId={form.modelSelection?.providerId ?? ''} modelId={form.modelSelection?.modelId ?? ''}
+            directory={directory ?? undefined} onChange={(providerId, modelId) => {
+              setForm({ ...form, modelSelection: providerId && modelId ? { providerId, modelId } : null });
+              requestSave();
+            }} className={SETTINGS_CUSTOM_TRIGGER_CLASS} />
+        </SettingsFieldRow>
+        {group ? <SettingsFieldRow settingsItem="commands.group" label={<code className="font-mono">group</code>}>
+          <span className="typography-meta text-muted-foreground truncate">{group}</span>
+        </SettingsFieldRow> : null}
+      </SettingsSection>
+      <SettingsSection title={t('settings.commands.page.section.template')} settingsItem="commands.template">
+        <Textarea value={form.content} onChange={event => setForm({ ...form, content: event.target.value })}
+          placeholder={t('settings.commands.page.field.templatePlaceholder')} rows={12}
+          className="w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent" />
+        <p className="mt-2 typography-meta text-muted-foreground">
+          <code className="text-foreground">$ARGUMENTS</code> {t('settings.commands.page.templateHint.userInput')} &middot;{' '}
+          <code className="text-foreground">!`cmd`</code> {t('settings.commands.page.templateHint.shellOutput')} &middot;{' '}
+          <code className="text-foreground">@file</code> {t('settings.commands.page.templateHint.fileContents')}
+        </p>
+        {isNew && <div className="flex items-center gap-2 pt-3">
+          <Button onClick={() => void create()} disabled={creating || !form.name.trim() || !form.content.trim()}
+            size="xs" className="!font-normal">
+            {creating ? t('settings.common.actions.saving') : t('settings.common.actions.create')}
+          </Button>
+          <Button variant="ghost" onClick={cancelCreate} disabled={creating} size="xs" className="!font-normal">
+            {t('settings.common.actions.cancel')}
+          </Button>
         </div>}
       </SettingsSection>
     </fieldset>

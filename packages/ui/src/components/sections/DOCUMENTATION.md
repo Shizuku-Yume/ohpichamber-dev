@@ -200,12 +200,15 @@ Core ownership rules:
 - **Edit stored canonical entries directly.** Stores read canonical DTOs and
   submit explicit mutation payloads. Pages avoid round-tripping resolved runtime
   defaults back into canonical storage.
-- **MCP server enablement is explicit.** The `enabled` boolean field controls
-  whether the server is active. Setting `enabled: false` leaves the server
-  configuration intact in the catalog while inactive. Sensitive transport
-  headers, URLs, and environment variables store credentials through
-  write-only credential references (`credentialRef`), leaving secrets out of
-  configuration DTOs.
+- **MCP server enablement and per-write runtime guards.** The `enabled` boolean
+  field controls whether the server is active. Setting `enabled: false` leaves the
+  server configuration intact in the catalog while inactive. Mutations enforce
+  per-write runtime guards: transport fields are validated per transport type
+  (`stdio` requires command/args; `http` and `sse` require valid endpoint URLs),
+  sensitive headers, URLs, and environment variables require write-only credential
+  references (`credentialRef`, `headerCredentialRefs`, `envCredentialRefs`), and
+  updates enforce `expectedPersistedRevision` CAS checks to prevent concurrent
+  overwrites. Plaintext secrets are never accepted in configuration DTOs.
 - **Agent allowedTools and execution authorization.** Agent `allowedTools`
   describes tool availability for the profile. Approval authorization belongs to
   Host authorization and native runtime execution policy (`respondApproval`).

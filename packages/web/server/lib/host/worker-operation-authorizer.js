@@ -96,6 +96,8 @@ export const createWorkerOperationAuthorizer = ({
         return request.input.presetId === request.permissionPresetId && isPermissionMode(request.input.presetId)
           && policy.permissionPresetIds.includes(request.input.presetId) ? allowed : denied();
       }
+      // Native ask only opens a scoped, CAS-protected interaction; it grants no machine capability.
+      if (request.toolName === 'ask') return allowed;
       if (nativeTool && descriptor) {
         for (const target of [...descriptor.sourcePaths, ...descriptor.destinationPaths, ...descriptor.fileOps.flatMap(operation => operation.to === undefined ? [operation.path] : [operation.path, operation.to])]) {
           if (!await pathAllowed(target)) return denied();

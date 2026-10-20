@@ -75,6 +75,20 @@ const edit = async (entry: HTMLTextAreaElement, value: string, blur = true) => {
   await act(async () => { setter.call(entry, value); entry.dispatchEvent(new Event('input', { bubbles: true })); });
   if (blur) await act(async () => { entry.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
 };
+const addTool = async (value: string) => {
+  const input = container.querySelector<HTMLInputElement>('input[aria-label="Allowed tools"]');
+  const add = container.querySelector<HTMLButtonElement>('button[aria-label="Add"]');
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  if (!input || !add || !setter) throw new Error('Missing native tool editor');
+  await act(async () => { setter.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })); });
+  await act(async () => { add.click(); });
+};
+const removeTool = async (value: string) => {
+  const row = [...container.querySelectorAll<HTMLLIElement>('li')].find((item) => item.querySelector('span')?.textContent === value);
+  const remove = row?.querySelector<HTMLButtonElement>('button');
+  if (!remove) throw new Error(`Missing native tool row: ${value}`);
+  await act(async () => { remove.click(); });
+};
 
 test('native catalog refresh during save preserves newer draft and advances only acknowledged revision', async () => {
   const writes: Array<{ agent: Agent; revision: string | undefined; finish: () => void }> = [];
@@ -134,7 +148,7 @@ test('clean refresh hydrates native fields, actual preset and optional prompt re
   useAgentsStore.setState({ updateAgent: async (agent) => { writes.push(agent); return { ok: true, revision: '3' }; } });
   await render();
   expect(container.querySelector<HTMLInputElement>('input[aria-label="Permission preset ID"]')?.value).toBe('actual-native-preset');
-  expect(container.querySelectorAll('textarea')).toHaveLength(3);
+  expect(container.querySelectorAll('textarea')).toHaveLength(2);
   await act(async () => { useAgentsStore.setState({
     agentsByDirectory: { __default__: [{ ...initialAgent, description: 'Refreshed description', systemPromptOverride: 'refreshed' }] },
     revisionsByDirectory: { __default__: '2' },
@@ -164,35 +178,39 @@ test('creating native draft preserves its identity, tools and preset without leg
   });
   await render();
   await edit(field('Initial description'), 'New description');
-  await edit(field(initialAgent.allowedTools.join('\n')), ' new-tool \nread');
+  await removeTool('custom-tool');
+  await addTool(' new-tool ');
   expect(writes).toHaveLength(0);
   const create = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Create');
   if (!create) throw new Error('Missing create action');
   await act(async () => { create.click(); });
-  expect(writes).toEqual([{ ...draft, description: 'New description', allowedTools: ['new-tool', 'read'] }]);
+  expect(writes).toEqual([{ ...draft, description: 'New description', allowedTools: ['read', 'new-tool'] }]);
   expect(useAgentsStore.getState().selectedAgentName).toBe(draft.name);
   expect(useAgentsStore.getState().agentDraft).toBeNull();
 });
 
-test('native tools round-trip ordered duplicates and optional preset can be removed', async () => {
+test('native tools trim, add once, remove in order and optional preset can be removed', async () => {
   const writes: Agent[] = [];
   useAgentsStore.setState({ updateAgent: async (agent) => {
     writes.push(agent); return { ok: true, revision: String(writes.length + 1) };
   } });
   await render();
-  const tools = field(initialAgent.allowedTools.join('\n'));
-  await edit(tools, ' custom-tool \n\n read\ncustom-tool ');
-  expect(writes[0].allowedTools).toEqual(['custom-tool', 'read', 'custom-tool']);
+  await addTool(' new-tool ');
+  expect(writes[0].allowedTools).toEqual(['read', 'custom-tool', 'new-tool']);
   expect(writes[0].permissionPresetId).toBe(initialAgent.permissionPresetId);
+  await addTool('new-tool');
+  expect(writes).toHaveLength(1);
+  await removeTool('read');
+  expect(writes[1].allowedTools).toEqual(['custom-tool', 'new-tool']);
   const preset = container.querySelector<HTMLInputElement>('input[aria-label="Permission preset ID"]');
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
   if (!preset || !setter) throw new Error('Missing native preset input');
   await act(async () => { setter.call(preset, 'new-native-preset'); preset.dispatchEvent(new Event('input', { bubbles: true })); });
   await act(async () => { preset.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
-  expect(writes[1].permissionPresetId).toBe('new-native-preset');
-  expect(writes[1].allowedTools).toEqual(['custom-tool', 'read', 'custom-tool']);
+  expect(writes[2].permissionPresetId).toBe('new-native-preset');
+  expect(writes[2].allowedTools).toEqual(['custom-tool', 'new-tool']);
   await act(async () => { setter.call(preset, ''); preset.dispatchEvent(new Event('input', { bubbles: true })); });
   await act(async () => { preset.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
-  expect(writes[2].permissionPresetId).toBeUndefined();
-  expect(Object.hasOwn(writes[2], 'permissionPresetId')).toBe(false);
+  expect(writes[3].permissionPresetId).toBeUndefined();
+  expect(Object.hasOwn(writes[3], 'permissionPresetId')).toBe(false);
 });

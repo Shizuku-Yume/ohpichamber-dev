@@ -1,31 +1,203 @@
 import React from 'react';
+import type { Model } from '@openchamber/agent-contract';
+import {
+  SettingsCheckboxRow,
+  SETTINGS_FIELD_LABEL_CLASS,
+  SETTINGS_HELPER_CLASS,
+  SETTINGS_ICON_BUTTON_CLASS,
+} from '@/components/sections/shared/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import type { ModelRow } from './custom-provider-form';
+import { formatGoalTokens } from '@/lib/sessionGoalMetadata';
+import { cn } from '@/lib/utils';
+import type { ModelFieldErrors, ModelRow } from './custom-provider-form';
 
-export function CustomProviderModelRow({ model, onChange, onRemove, disabled }: {
-  model: ModelRow; onChange: (model: ModelRow) => void; onRemove: () => void; disabled?: boolean;
-}) {
-  const { t } = useI18n();
-  return <fieldset disabled={disabled} className="space-y-3 rounded-lg border p-3">
-    <div className="grid grid-cols-1 gap-3 @xl:grid-cols-2">
-      {(['modelId', 'name', 'contextWindow', 'maxOutputTokens'] as const).map((field) => {
-        const key = { modelId: 'settings.providers.page.custom.models.idLabel', name: 'settings.providers.page.custom.models.nameLabel',
-          contextWindow: 'settings.providers.page.custom.models.contextWindow', maxOutputTokens: 'settings.providers.page.custom.models.maxOutputTokens' } as const;
-        return <label key={field} className="space-y-1 text-sm">{t(key[field])}
-          <Input required value={model[field]} type={field === 'contextWindow' || field === 'maxOutputTokens' ? 'number' : 'text'}
-            min={1} step={1} onChange={(event) => onChange({ ...model, [field]: event.target.value })} />
-        </label>;
-      })}
-    </div>
-    <details>
-      <summary className="cursor-pointer text-sm">{t('settings.providers.native.modelDetails')}</summary>
-      <label className="block space-y-1 text-sm">{t('settings.providers.native.modelDetailsHint')}
-        <textarea className="min-h-48 w-full rounded-md border bg-transparent p-2 font-mono text-xs" value={model.details}
-          spellCheck={false} onChange={(event) => onChange({ ...model, details: event.target.value })} />
-      </label>
-    </details>
-    <Button type="button" size="sm" variant="ghost" onClick={onRemove}>{t('settings.providers.page.custom.models.remove')}</Button>
-  </fieldset>;
+const MODEL_MODALITIES = ['text', 'image', 'audio', 'embedding'] as const;
+
+type ModelTextField = 'modelId' | 'name' | 'contextWindow' | 'maxOutputTokens';
+
+interface CustomProviderModelRowProps {
+  model: ModelRow;
+  errors?: ModelFieldErrors;
+  expanded: boolean;
+  onToggle: () => void;
+  onChange: (key: ModelTextField, value: string) => void;
+  onToggleModality: (modality: Model['modalities'][number]) => void;
+  onToolsChange: (tools: boolean) => void;
+  onRemove?: () => void;
+  disabled?: boolean;
 }
+
+const positive = (value: string): number | null => {
+  const parsed = Number(value.trim());
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+/**
+ * One model of a custom provider. Collapsed, it reads as a single line (name,
+ * id, the limits and anything beyond plain text), so a provider with dozens
+ * of imported models stays scannable; the editor opens on demand.
+ */
+export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
+  model,
+  errors,
+  expanded,
+  onToggle,
+  onChange,
+  onToggleModality,
+  onToolsChange,
+  onRemove,
+  disabled = false,
+}) => {
+  const { t } = useI18n();
+  const editorId = React.useId();
+  const modelId = model.modelId.trim();
+  const name = model.name.trim();
+  const title = name || modelId || t('settings.providers.page.custom.models.untitled');
+  const context = positive(model.contextWindow);
+  const output = positive(model.maxOutputTokens);
+  const extraInputs = model.modalities.filter((modality) => modality !== 'text');
+  const summary = [
+    context ? t('settings.providers.page.custom.discovery.contextValue', { value: formatGoalTokens(context) }) : null,
+    output ? t('settings.providers.page.custom.discovery.outputValue', { value: formatGoalTokens(output) }) : null,
+    extraInputs.length > 0 ? extraInputs.join(', ') : null,
+    model.toolsSupported === false ? t('settings.providers.page.custom.models.toolsOff') : null,
+  ].filter(Boolean).join(' · ');
+
+  const fieldError = (message?: string) => (
+    message ? <p className="mt-1 typography-meta text-[var(--status-error)]">{message}</p> : null
+  );
+
+  return (
+    <div className="border-b border-border/50 last:border-b-0">
+      <div className="flex items-center gap-1 py-1">
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={disabled}
+          aria-expanded={expanded}
+          aria-controls={editorId}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left hover:bg-[var(--interactive-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--interactive-focus-ring)]"
+        >
+          <Icon
+            name="arrow-right-s"
+            className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')}
+            aria-hidden
+          />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span className={cn('truncate', SETTINGS_FIELD_LABEL_CLASS, !name && !modelId && 'text-muted-foreground')}>{title}</span>
+              {name && modelId && name !== modelId ? (
+                <span className="truncate font-mono text-xs text-muted-foreground">{modelId}</span>
+              ) : null}
+            </span>
+            {summary ? <span className={cn('truncate', SETTINGS_HELPER_CLASS)}>{summary}</span> : null}
+          </span>
+        </button>
+        {onRemove ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={SETTINGS_ICON_BUTTON_CLASS}
+            onClick={onRemove}
+            disabled={disabled}
+            aria-label={t('settings.providers.page.custom.models.remove')}
+          >
+            <Icon name="delete-bin" className="size-4" />
+          </Button>
+        ) : null}
+      </div>
+
+      {expanded ? (
+        <div id={editorId} className="space-y-3 pb-4 pl-7 pr-1 pt-1">
+          <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
+            <div>
+              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.idLabel')}</label>
+              <Input
+                value={model.modelId}
+                onChange={(event) => onChange('modelId', event.target.value)}
+                placeholder={t('settings.providers.page.custom.models.idPlaceholder')}
+                className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
+                aria-invalid={Boolean(errors?.modelId)}
+                aria-label={t('settings.providers.page.custom.models.idLabel')}
+                disabled={disabled}
+              />
+              {fieldError(errors?.modelId)}
+            </div>
+            <div>
+              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.nameLabel')}</label>
+              <Input
+                value={model.name}
+                onChange={(event) => onChange('name', event.target.value)}
+                placeholder={t('settings.providers.page.custom.models.namePlaceholder')}
+                className="mt-1 h-8 rounded-md px-3"
+                aria-invalid={Boolean(errors?.name)}
+                aria-label={t('settings.providers.page.custom.models.nameLabel')}
+                disabled={disabled}
+              />
+              {fieldError(errors?.name)}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
+            <div>
+              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.contextWindow')}</label>
+              <Input
+                inputMode="numeric"
+                value={model.contextWindow}
+                onChange={(event) => onChange('contextWindow', event.target.value)}
+                placeholder="128000"
+                className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
+                aria-invalid={Boolean(errors?.contextWindow)}
+                aria-label={t('settings.providers.page.custom.models.contextWindow')}
+                disabled={disabled}
+              />
+              {fieldError(errors?.contextWindow)}
+            </div>
+            <div>
+              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.maxOutputTokens')}</label>
+              <Input
+                inputMode="numeric"
+                value={model.maxOutputTokens}
+                onChange={(event) => onChange('maxOutputTokens', event.target.value)}
+                placeholder="16384"
+                className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
+                aria-invalid={Boolean(errors?.maxOutputTokens)}
+                aria-label={t('settings.providers.page.custom.models.maxOutputTokens')}
+                disabled={disabled}
+              />
+              {fieldError(errors?.maxOutputTokens)}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.inputCapabilities')}</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {MODEL_MODALITIES.map((modality) => (
+                <SettingsCheckboxRow
+                  key={modality}
+                  checked={model.modalities.includes(modality)}
+                  onChange={() => onToggleModality(modality)}
+                  disabled={disabled || (model.modalities.includes(modality) && model.modalities.length === 1)}
+                  label={modality}
+                  ariaLabel={modality}
+                />
+              ))}
+            </div>
+          </div>
+
+          <SettingsCheckboxRow
+            checked={model.toolsSupported === true}
+            onChange={onToolsChange}
+            disabled={disabled}
+            label={t('settings.providers.page.custom.models.tools')}
+            ariaLabel={t('settings.providers.page.custom.models.tools')}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+};

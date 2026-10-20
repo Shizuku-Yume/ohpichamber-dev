@@ -77,18 +77,20 @@ test('header values are written privately and only opaque references reach confi
   const configs: Array<Partial<MCPServerConfig>> = [];
   useMcpConfigStore.setState({ updateMcp: async (_serverId, config) => { configs.push(config); return { ok: true, result: applyResult([{ ...server, ...config }]) }; } });
   await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
+  const addVariable = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Add header');
+  if (!addVariable) throw new Error('Missing add header control');
+  await act(async () => { addVariable.dispatchEvent(new Event('click', { bubbles: true })); });
   const key = container.querySelector<HTMLInputElement>('input[aria-label="Key"]');
-  const value = container.querySelector<HTMLInputElement>('input[type="password"]');
+  const value = container.querySelector<HTMLInputElement>('input[aria-label="Value"]');
   if (!key || !value) throw new Error('Missing private credential fields');
   await edit(key, 'X-Api-Key', false); await edit(value, 'never-in-config', false);
-  const section = value.closest('section');
-  const save = section?.querySelector('button:last-child');
+  const save = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Save Changes');
   if (!save) throw new Error('Missing credential save');
   await act(async () => { save.dispatchEvent(new Event('click', { bubbles: true })); });
   expect(secretWrites).toEqual([{ value: 'never-in-config', persistedRevision: '3' }]);
   expect(configs[0].transport).toEqual({ type: 'http', url: 'https://initial.test', headerCredentialRefs: { 'X-Api-Key': 'private_ref' } });
   expect(JSON.stringify(configs)).not.toContain('never-in-config');
-  expect(value.value).toBe('');
+  expect(container.querySelector<HTMLInputElement>('input[aria-label="Value"]')).toBeNull();
 });
 
 test('worker apply failures remain visible even though persistence succeeded', async () => {

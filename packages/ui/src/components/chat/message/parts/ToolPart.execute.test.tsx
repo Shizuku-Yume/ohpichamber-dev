@@ -125,10 +125,10 @@ test('native bash calls and results retain separate identities and paired comman
 
     const callActivity: TurnActivityRecord = { id: 'call-activity', turnId: 'turn-1', messageId: 'assistant', partIndex: 0, kind: 'tool', part };
     const resultActivity: TurnActivityRecord = { id: 'result-activity', turnId: 'turn-1', messageId: 'result-message', partIndex: 0, kind: 'tool', part: result };
-    const renderGroup = async (call: ToolCallPart, turnId = 'turn-1') => {
+    const renderGroup = async (call: ToolCallPart, turnId = 'turn-1', groupParts = [resultActivity]) => {
       await act(async () => root.render(<I18nProvider><ThemeSystemContext.Provider value={themeContext}>
-        <ProgressiveGroup parts={[resultActivity]} contextParts={[{ ...callActivity, part: call, turnId }, resultActivity]}
-          isExpanded onToggle={() => {}} isMobile={false} expandedTools={new Set([result.partId])} onToggleTool={id => toggled.push(id)}
+        <ProgressiveGroup parts={groupParts} contextParts={[{ ...callActivity, part: call, turnId }, ...groupParts.filter((activity) => activity !== callActivity)]}
+          isExpanded onToggle={() => {}} isMobile={false} expandedTools={new Set(groupParts.map((activity) => activity.part.partId))} onToggleTool={id => toggled.push(id)}
           onShowPopup={() => {}} streamPhase="completed" showHeader={false} animateRows={false} />
       </ThemeSystemContext.Provider></I18nProvider>));
     };
@@ -139,6 +139,28 @@ test('native bash calls and results retain separate identities and paired comman
     expect(container.textContent).not.toContain('git status --short');
     await renderGroup(part, 'different-turn');
     expect(container.textContent).not.toContain('git status --short');
+
+    await renderGroup(part, 'turn-1', [callActivity, resultActivity]);
+    expect(container.querySelectorAll('[class*="group/tool"]')).toHaveLength(1);
+    expect(container.textContent).toContain('git status --short');
+
+    const runningCall: ToolCallPart = {
+      ...part, partId: 'prt_running', toolCallId: 'call_running', status: 'running',
+      input: { command: 'sleep 1' },
+    };
+    const runningActivity: TurnActivityRecord = { ...callActivity, id: 'running-activity', part: runningCall };
+    await renderGroup(runningCall, 'turn-1', [runningActivity]);
+    expect(container.querySelectorAll('[class*="group/tool"]')).toHaveLength(1);
+    expect(container.textContent).toContain('sleep 1');
+
+    const errorResult: ToolResultPart = {
+      ...result, partId: 'prt_bash_error', isError: true, error: 'Permission denied',
+      output: { content: [{ type: 'text', text: 'failed' }] },
+    };
+    const errorActivity: TurnActivityRecord = { ...resultActivity, id: 'error-activity', part: errorResult };
+    await renderGroup(part, 'turn-1', [callActivity, errorActivity]);
+    expect(container.querySelectorAll('[class*="group/tool"]')).toHaveLength(1);
+    expect(container.textContent).toContain('Permission denied');
 
     const openedFiles: Array<{ path: string; line?: number }> = [];
     const unexpectedRuntimeCall = (): never => { throw new Error('Read navigation must only open the requested file'); };

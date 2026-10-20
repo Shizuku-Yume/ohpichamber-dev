@@ -142,6 +142,23 @@ describe('Host-owned native descriptor authority', () => {
       expect(await harness.authorize(harness.scope, request, descriptor)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
   });
+
+  it('admits native questions without granting unknown tools and keeps scope, profile and explicit deny checks', async () => {
+    const input = { questions: [{ id: 'choice', question: 'Choose', options: [{ label: 'One' }, { label: 'Two' }] }] };
+    const request = { type: 'tool', toolName: 'ask', input };
+    const harness = await nativeHarness();
+    try {
+      expect(await harness.authorize(harness.scope, request)).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, { ...request, toolName: 'custom-question' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize({ ...harness.scope, workspaceId: 'foreign' }, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, agentId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, permissionPresetId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await harness.close(); }
+    const denied = await nativeHarness([{ scope: 'workspace', decision: 'deny', target: { toolName: 'ask', pattern: JSON.stringify(input) } }]);
+    try {
+      expect(await denied.authorize(denied.scope, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await denied.close(); }
+  });
 });
 
 describe('native web-search egress authority', () => {

@@ -132,11 +132,82 @@ describe('canonical MessageFilesDisplay attachments', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith(url);
     expect(popups[1].content).toBe('hello pasted world');
   });
-  test('compact PDFs remain display-only chips', async () => {
-    await renderFiles([file({ mediaType: 'application/pdf', name: 'doc.pdf' })], true);
-    expect(namedChip('doc.pdf')).toBeUndefined();
-    expect(container.textContent).toContain('doc.pdf');
-    expect(readAttachment).not.toHaveBeenCalled();
+  test('leaving the attachment view revokes an open file preview object URL', async () => {
+    const pdf = file({ mediaType: 'application/pdf', name: 'doc.pdf' });
+    await renderFiles([pdf], false);
+    await clickChip(namedChip(pdf.name)!);
+    const url = popups[0].image!.url;
+    await renderFiles([], false);
+    expect(revokeObjectURL).toHaveBeenCalledWith(url);
+  });
+  test('full image cards open the authenticated gallery with image metadata', async () => {
+    const first = file({ mediaType: 'image/png', name: 'shot.png' });
+    const second = file({ mediaType: 'image/jpeg', name: 'second.jpg' });
+    await renderFiles([first, second], false);
+    const card = container.querySelector('[aria-label="second.jpg"]');
+    expect(card).not.toBeNull();
+    await clickChip(card!);
+    expect(popups).toHaveLength(1);
+    expect(popups[0].image).toMatchObject({ mimeType: 'image/jpeg', filename: 'second.jpg', index: 1 });
+    expect(popups[0].image?.gallery).toHaveLength(2);
+  });
+  test('compact PDF chips read authenticated native bytes and open the media preview', async () => {
+    const pdf = file({ mediaType: 'application/pdf', name: 'doc.pdf' });
+    await renderFiles([pdf], true);
+    const chip = namedChip(pdf.name);
+    expect(chip).toBeDefined();
+    await clickChip(chip!);
+    expect(readAttachment.mock.calls).toEqual([['workspace-native', pdf.attachmentId]]);
+    expect(popups).toHaveLength(1);
+    expect(popups[0].image).toMatchObject({ filename: 'doc.pdf', mimeType: 'application/pdf' });
+  });
+  test('compact PDF download saves the authenticated bytes under the attachment name', async () => {
+    const pdf = file({ mediaType: 'application/pdf', name: 'doc.pdf' });
+    const saved: Array<{ name: string | null; href: string | null }> = [];
+    const captureDownload = (event: Event) => {
+      const anchor = event.target instanceof Element ? event.target.closest('a[download]') : null;
+      if (!anchor) return;
+      saved.push({ name: anchor.getAttribute('download'), href: anchor.getAttribute('href') });
+      event.preventDefault();
+    };
+    document.addEventListener('click', captureDownload, true);
+    try {
+      await renderFiles([pdf], true);
+      const download = container.querySelector<HTMLButtonElement>('button[aria-label="Download"]');
+      expect(download).not.toBeNull();
+      await clickChip(download!);
+      const flushed = Promise.withResolvers<void>();
+      setTimeout(flushed.resolve, 0);
+      await act(async () => { await flushed.promise; });
+      expect(readAttachment.mock.calls).toEqual([['workspace-native', pdf.attachmentId]]);
+      expect(saved).toHaveLength(1);
+      expect(saved[0].name).toBe('doc.pdf');
+      expect(saved[0].href?.startsWith('blob:attachment-test-')).toBe(true);
+      expect(revokeObjectURL).toHaveBeenCalledWith(saved[0].href!);
+    } finally {
+      document.removeEventListener('click', captureDownload, true);
+    }
+  });
+  test('compact media chips forward the native media type to the preview', async () => {
+    const clip = file({ mediaType: 'audio/mpeg', name: 'clip.mp3' });
+    await renderFiles([clip], true);
+    await clickChip(namedChip(clip.name)!);
+    expect(readAttachment.mock.calls).toEqual([['workspace-native', clip.attachmentId]]);
+    expect(popups[0].image).toMatchObject({ filename: 'clip.mp3', mimeType: 'audio/mpeg' });
+  });
+  test('a failed compact PDF read reports the failure without opening a popup', async () => {
+    const pdf = file({ mediaType: 'application/pdf', name: 'doc.pdf' });
+    const errorToast = spyOn(toast, 'error');
+    try {
+      readAttachment.mockRejectedValueOnce(new Error('denied'));
+      await renderFiles([pdf], true);
+      await clickChip(namedChip(pdf.name)!);
+      expect(popups).toHaveLength(0);
+      expect(createObjectURL).not.toHaveBeenCalled();
+      expect(errorToast).toHaveBeenCalled();
+    } finally {
+      errorToast.mockRestore();
+    }
   });
   test('does not interpret native text or tool results as attachments', async () => {
     await renderFiles([

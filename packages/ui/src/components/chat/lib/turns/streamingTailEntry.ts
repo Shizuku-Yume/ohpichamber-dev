@@ -33,6 +33,31 @@ type BuildLiveStreamingEntryOptions = {
 // message of the turn again, not only the one that streamed.
 const liveMessageByRecord = new WeakMap<ChatMessageEntry, { parts: Part[]; message: ChatMessageEntry }>();
 
+/**
+ * Display-only tool results live on their call's message, but the live part
+ * store still carries them on the separate system message. Overlaying raw
+ * live parts would therefore drop every result from the tail turn. Keep the
+ * results already paired into the record, at their recorded position, and let
+ * live parts own everything else.
+ */
+const mergeLiveParts = (recordParts: readonly Part[], liveParts: readonly Part[]): Part[] => {
+    const liveById = new Map(liveParts.map((part) => [part.partId, part]));
+    const merged: Part[] = [];
+    for (const part of recordParts) {
+        const live = liveById.get(part.partId);
+        if (live) {
+            merged.push(live);
+            liveById.delete(part.partId);
+            continue;
+        }
+        if (part.type === 'tool_result') merged.push(part);
+    }
+    for (const part of liveParts) {
+        if (liveById.has(part.partId)) merged.push(part);
+    }
+    return merged;
+};
+
 const withLiveParts = (
     message: ChatMessageEntry,
     livePartsByMessageId: Readonly<Record<string, Part[]>>,
@@ -46,7 +71,10 @@ const withLiveParts = (
 
     const remembered = liveMessageByRecord.get(message);
     if (remembered?.parts === liveParts) return getNormalizedMessageForDisplay(remembered.message);
-    const merged = { ...message, parts: liveParts };
+    const parts = message.parts.some((part) => part.type === 'tool_result')
+        ? mergeLiveParts(message.parts, liveParts)
+        : liveParts;
+    const merged = { ...message, parts };
     liveMessageByRecord.set(message, { parts: liveParts, message: merged });
     return getNormalizedMessageForDisplay(merged);
 };

@@ -1203,6 +1203,19 @@ const AssistantMessageBody = React.memo(({
         return calls;
     }, [parts, turnGroupingContext?.activityParts]);
 
+    // A canonical result is a separate part appended after its call. Render the
+    // matched result only: it already carries the call as paired context, so
+    // showing the call as well produced two headers for one operation.
+    const pairedResultKeys = React.useMemo(() => {
+        const keys = new Set<string>();
+        for (const part of parts) {
+            if (part.type === 'tool_result') {
+                keys.add(`${turnGroupingContext?.turnId ?? ''}\n${part.toolCallId}\n${part.toolName}`);
+            }
+        }
+        return keys;
+    }, [parts, turnGroupingContext?.turnId]);
+
     const toolRevealStateRef = React.useRef<{
         messageId: string;
         hasCommitted: boolean;
@@ -1983,6 +1996,12 @@ const AssistantMessageBody = React.memo(({
                 const toolPart = part;
                 const toolName = toolPart.toolName.toLowerCase();
                 const toolPartId = toolPart.partId;
+                const pairedCall = toolPart.type === 'tool_result' ? callsForTurn.get(toolPart.toolCallId) : undefined;
+
+                if (toolPart.type === 'tool_call' && pairedResultKeys.has(`${turnGroupingContext?.turnId ?? ''}\n${toolPart.toolCallId}\n${toolPart.toolName}`)) {
+                    i += 1;
+                    continue;
+                }
 
                 if (isSortedRenderMode && !isActivityOwnerMessage) {
                     flushSegmentsAfterTool(toolPartId);
@@ -2006,11 +2025,11 @@ const AssistantMessageBody = React.memo(({
                 // Expandable tools: bash, edit, write, task, question — individual rows
                 if (toolPart.type === 'tool_result' || isExpandableTool(toolName)) {
                     rendered.push(
-                        <FadeInOnReveal key={`tool-${toolPart.partId}`}>
+                        <FadeInOnReveal key={`tool-${pairedCall?.partId ?? toolPart.partId}`}>
                             <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.partId)} wipe>
                                 <ToolPart
                                     part={toolPart}
-                                    pairedCall={toolPart.type === 'tool_result' ? callsForTurn.get(toolPart.toolCallId) : undefined}
+                                    pairedCall={pairedCall}
                                     sessionId={sessionId}
                                     directory={effectiveDirectory}
                                     isExpanded={expandedTools.has(toolPart.partId)}
@@ -2024,6 +2043,9 @@ const AssistantMessageBody = React.memo(({
                         </FadeInOnReveal>
                     );
                     flushSegmentsAfterTool(toolPartId);
+                    if (pairedCall && pairedCall.partId !== toolPartId) {
+                        flushSegmentsAfterTool(pairedCall.partId);
+                    }
                     i++;
                     continue;
                 }
@@ -2098,6 +2120,7 @@ const AssistantMessageBody = React.memo(({
         lastRenderableTextPartIndex,
         messageId,
         messageActionButtons,
+        pairedResultKeys,
         renderJustificationActions,
         sessionId,
         onShowPopup,

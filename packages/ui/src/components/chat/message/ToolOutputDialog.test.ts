@@ -1,9 +1,23 @@
 import { describe, expect, test } from 'bun:test';
+import { plugin } from 'bun';
+import { pathToFileURL } from 'node:url';
 import React, { act } from 'react';
 import { Window } from 'happy-dom';
 import type { ToolPopupContent } from './types';
 
 import { MermaidLoadFailure, getMermaidDataUrlSourcePromise, isCurrentMermaidLoadRequest, nextMermaidLoadRequestId } from './toolOutputDialogMermaid';
+
+// Bun does not implement Vite's worker asset-query imports; the dialog loads
+// the production Markdown renderer through this URL.
+plugin({
+    name: 'tool-dialog-worker-url',
+    setup(build) {
+        build.onLoad({ filter: /markdown-shiki\.worker\.ts\?worker&url$/ }, ({ path }) => ({
+            contents: `export default ${JSON.stringify(pathToFileURL(path.split('?')[0]).href)};`,
+            loader: 'js',
+        }));
+    },
+});
 
 describe('getMermaidDataUrlSourcePromise', () => {
     test('turns malformed data URLs into rejected promises', async () => {
@@ -33,13 +47,16 @@ describe('Mermaid load request ids', () => {
     });
 });
 
-test('native decoded output and image previews need no tool metadata', async () => {
+test('native decoded output and media previews need no tool metadata', async () => {
     const dom = new Window({ url: 'http://localhost/' });
     const originals = new Map<string, PropertyDescriptor | undefined>();
     for (const [name, value] of Object.entries({
         window: dom, document: dom.document, navigator: dom.navigator, localStorage: dom.localStorage,
         Node: dom.Node, Element: dom.Element, HTMLElement: dom.HTMLElement,
-        Event: dom.Event, MouseEvent: dom.MouseEvent, KeyboardEvent: dom.KeyboardEvent,
+        HTMLMediaElement: dom.HTMLMediaElement, HTMLVideoElement: dom.HTMLVideoElement,
+        customElements: dom.customElements, CSSStyleSheet: dom.CSSStyleSheet,
+        ShadowRoot: dom.ShadowRoot, Document: dom.Document, DocumentFragment: dom.DocumentFragment, Range: dom.Range,
+        Event: dom.Event, CustomEvent: dom.CustomEvent, MouseEvent: dom.MouseEvent, KeyboardEvent: dom.KeyboardEvent,
         MutationObserver: dom.MutationObserver, ResizeObserver: dom.ResizeObserver,
         getComputedStyle: dom.getComputedStyle.bind(dom),
         requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
@@ -79,6 +96,30 @@ test('native decoded output and image previews need no tool metadata', async () 
                 image: { url: 'data:image/png;base64,aGVsbG8=', filename: 'shot.png' },
             });
             expect(document.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aGVsbG8=');
+
+            await render({
+                open: true, title: 'doc.pdf', content: '',
+                image: { url: 'data:application/pdf;base64,JVBERi0=', mimeType: 'application/pdf', filename: 'doc.pdf', size: 2048 },
+            });
+            expect(document.querySelector('iframe')?.getAttribute('src')).toBe('data:application/pdf;base64,JVBERi0=');
+            expect(document.querySelector('img')).toBeNull();
+            expect(document.body.textContent).toContain('doc.pdf');
+
+            await render({
+                open: true, title: 'clip.mp3', content: '',
+                image: { url: 'data:audio/mpeg;base64,SUQz', mimeType: 'audio/mpeg', filename: 'clip.mp3', size: 1024 },
+            });
+            expect(document.querySelector('audio')?.getAttribute('src')).toBe('data:audio/mpeg;base64,SUQz');
+            expect(document.querySelector('img')).toBeNull();
+            expect(document.body.textContent).toContain('clip.mp3');
+
+            await render({
+                open: true, title: 'clip.mp4', content: '',
+                image: { url: 'data:video/mp4;base64,AAAA', mimeType: 'video/mp4', filename: 'clip.mp4', size: 4096 },
+            });
+            expect(document.querySelector('video')?.getAttribute('src')).toBe('data:video/mp4;base64,AAAA');
+            expect(document.querySelector('img')).toBeNull();
+            expect(document.body.textContent).toContain('clip.mp4');
         } finally {
             await act(async () => root.unmount());
         }
