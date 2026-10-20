@@ -6,6 +6,7 @@ import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpoin
 import { normalizePath } from "@/lib/pathNormalization"
 import { isSurfaceAttended } from "@/lib/surfaceAttention"
 import { useAuthSessionStore } from "@/lib/runtime-auth-expiry"
+import { useConfigStore } from "@/stores/useConfigStore"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { resolveWorkspaceDirectory, subscribeWorkspaceDirectories } from "@/stores/globalSessions"
 import { ChildStoreManager, markDirectorySessionPartChanged, subscribeDirectorySessionMessages, subscribeDirectoryPermission, subscribeDirectoryForm, type DirectoryStore, type DirectoryBootstrapPriority, type DirectoryBootstrapReason } from "./child-store"
@@ -365,6 +366,13 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     const stopAuthRecovery = useAuthSessionStore.subscribe((state, previous) => {
       if (state.state === "ok" && previous.state !== "ok") resume()
     })
+    // The Host connection is independent of browser online state: a local
+    // server restart drops Web/Electron transport while the browser stays
+    // online. Resume the same recovery startup and the other resume signals
+    // use, once per false-to-true transition.
+    const stopConnectionRecovery = useConfigStore.subscribe((state, previous) => {
+      if (state.isConnected && !previous.isConnected) resume()
+    })
     // Effects only run in a browser document; the provider never registers
     // listeners during server rendering.
     window.addEventListener("online", resume)
@@ -374,7 +382,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     document.addEventListener("visibilitychange", visible)
     return () => {
       currentRef.current = false
-      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer)
+      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer)
       window.removeEventListener("online", resume)
       window.removeEventListener("offline", offline)
       window.removeEventListener("pageshow", pageshow)

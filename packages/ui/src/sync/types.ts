@@ -6,6 +6,7 @@ import type {
   Session,
   SessionRuntimeStatus,
   SessionSnapshot,
+  Run,
   QueueState,
   CatalogUpdate,
   ShellJob,
@@ -47,6 +48,14 @@ export type State = {
   sessionListSource?: "empty" | "persisted" | "live" | "authoritative"
   sessionRevision?: number
   sessionEventRevision?: Record<string, number>
+  /** Bumped only when an accepted run acknowledgement changes run control. */
+  runControlRevision?: Record<string, number>
+  /**
+   * Accepted live run for a session that has no snapshot yet. The projected
+   * session row carries only `activeRunId`; the full run keeps the snapshot
+   * invariant when the first in-flight snapshot is admitted.
+   */
+  runControlActiveRun?: Record<string, Run>
   sessionEpoch: Record<string, string>
   sessionCursor: Record<string, string>
   sessionDeletedRevision?: Record<string, number>
@@ -118,6 +127,8 @@ export const INITIAL_STATE: State = {
   sessionListSource: "empty",
   sessionRevision: 0,
   sessionEventRevision: {},
+  runControlRevision: {},
+  runControlActiveRun: {},
   sessionEpoch: {},
   sessionCursor: {},
   sessionDeletedRevision: {},

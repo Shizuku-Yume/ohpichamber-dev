@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/36",
+  "observedAt": "2026-10-20",
+  "status": "paused-by-user-interruption-partial-w8-recovery",
+  "pauseReason": "Priority user interruption: preserve upstream OpenChamber UI appearance/interaction; pause connected acceptance and any UI/source edits, stop owned services safely, report the viewed UI URL/artifact and known replaced layout/components. No new acceptance runs after the pause. This receipt preserves only observations made before the pause; it does not mark the W8/W9/W10 gate complete.",
+  "environment": {
+    "surface": "Web (authenticated browser)",
+    "viewedUiUrl": "http://127.0.0.1:3132/ (my controllable loopback proxy -> isolated Host on 127.0.0.1:3131)",
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "isolatedHome": "/tmp/ohpi-m3-recovery (copied from the earlier sanitized /tmp/ohpi-m3-connected profile)",
+    "hostCommand": "HOME=/tmp/ohpi-m3-recovery OPENCHAMBER_DATA_DIR=/tmp/ohpi-m3-recovery/data XDG_CONFIG_HOME=/tmp/ohpi-m3-recovery/.config PATH=$HOME/.bun/bin:$PATH node packages/web/bin/cli.js serve --port 3131 --host 127.0.0.1",
+    "fixtureCommand": "node scripts/perf/fixture-provider.mjs 4601",
+    "fixtureProvider": "http://127.0.0.1:4601/v1 (deterministic repo fixture, 5742-character document)",
+    "fixtureModels": ["m3fixture/stream-300cps", "m3fixture/agent-20tools-300cps", "m3fixture/think-30s"],
+    "proxyCommand": "node proxy.mjs 3132 3131 3139 /tmp/ohpi-m3-recovery/proxy.log (controllable drop/resume/hold loopback proxy)",
+    "browser": "google-chrome --headless=new --remote-debugging-port=9333, chrome-devtools daemon restarted with --browser-url=http://127.0.0.1:9333",
+    "networkObserver": "direct CDP Network observer (node cdp-observer.mjs 9333 /tmp/ohpi-m3-recovery/cdp.jsonl 3132)",
+    "sourceHash": "not recorded: Git commands were out of scope for this assignment; the run used the already-built packages/web/dist and packages/agent-service/dist from the integration worktree",
+    "secrets": "none printed or recorded; isolated HOME only, no provider credentials, no GitHub commands"
+  },
+  "checks": {},
+  "observed": {
+    "hostReadiness": {
+      "directHealth": 200,
+      "proxyHealth": 200,
+      "ui": 200,
+      "canonicalReady": { "status": 200, "body": { "ready": true, "engine": "omp", "version": "1.0.0" } }
+    },
+    "w8TransportDisconnectSnapshotCursorRecovery": {
+      "sessionId": "689ae9f6-0cb8-43c7-9c94-8327389d236c",
+      "model": "m3fixture/stream-300cps",
+      "control": "loopback proxy /drop destroyed all browser sockets at 08:08:20Z; /resume at 08:08:26Z",
+      "observed": [
+        "CDP Network: in-flight snapshot request failed with net::ERR_CONNECTION_RESET and the EventSource /api/openchamber/events failed with net::ERR_SOCKET_NOT_CONNECTED while the transport was down",
+        "after /resume the UI re-fetched GET /api/agent/v1/sessions/689ae9f6.../snapshot (200) and then reattached GET /api/agent/v1/sessions/689ae9f6.../events with last-event-id fc90c4e8-aee7-46f6-8c70-e1ae582650ad:2468 (the same epoch, advanced cursor)",
+        "the rendered transcript and canonical snapshot stayed at the completed fixture response with no duplicated content"
+      ],
+      "limit": "the drop landed after the fixture stream had already finished for this session, so this is snapshot-plus-cursor reconnect evidence, not mid-stream duplicate evidence"
+    },
+    "w8MidRunDisconnectNoDuplicateParts": {
+      "sessionId": "f115d1e4-35b8-4554-a277-ffd80f8adbd7",
+      "model": "m3fixture/agent-20tools-300cps",
+      "runWindow": "run created 08:09:45Z; proxy /drop at 08:09:53Z (run still active, 20 glob steps still running); /resume at 08:09:59Z",
+      "observed": [
+        "during the drop the UI showed the session status Unavailable",
+        "after /resume the UI re-fetched the session snapshot (response completed 08:10:32Z after 29.1s) and reattached the session event stream",
+        "canonical snapshot after recovery: 62 messages, 22 assistant text parts, 22 unique partId values, total assistant text 7023 characters",
+        "canonical snapshot containment: 'Step 1 of 20' ... 'Step 20 of 20' each appear exactly once; '## 1.', '## 2.', '## 3.' each appear exactly once",
+        "rendered final assistant message (DOM data-message-id 45352d4e-2e5d-4641-8b61-31700add91c9): 'Executing a call in a bytecode virtual machine' appears 3 times, 'Round 1/2/3 of this document' once each, each sample code block once",
+        "the canonical assistant message text length equals the fixture document length (5742 characters) for the final message"
+      ],
+      "result": "observed no duplicate parts after a real mid-run transport disconnect and reconnect"
+    },
+    "w8EpochGapResync": {
+      "sessionId": "f115d1e4-35b8-4554-a277-ffd80f8adbd7",
+      "trigger": "killed the session worker processes whose cwd was the session directory (children of the isolated Agent Service); the Host restored the session with a new execution epoch",
+      "observed": [
+        "old event cursor before the crash: eb4fe7f2-0116-47ed-9661-f0b43d8dc215:3562",
+        "after the crash the session returned epoch 9ca64f15-6902-4d4c-a137-5c922076befa with headSequence 0 and runtimeStatus idle",
+        "CDP Network after the crash: a snapshot request returned 503, then snapshot requests returned 200, and the session event stream reattached with last-event-id 9ca64f15-6902-4d4c-a137-5c922076befa:0",
+        "after resync the canonical conversation was intact: 20 step lines once each, 3 sections once each, 7023 assistant text characters"
+      ],
+      "result": "observed an epoch gap force a resnapshot and a reattach on the new epoch cursor without losing or duplicating conversation parts"
+    },
+    "w8StalePriorRuntimeResponse": {
+      "status": "not observed before the pause",
+      "notes": [
+        "A controllable hold/release proxy path was prepared but not exercised for this scenario",
+        "The endpoint-level runtime switch (previous Host runtime -> selected Host runtime) is not reachable on the Web surface: the host/remote-instance switcher lives behind the desktop shell (RemoteInstancesPage/DesktopHostSwitcher) and the Web entry has no URL-driven endpoint override",
+        "The reachable same-surface guard for stale responses is the session-loader generation guard (a response from a previous worker/runtime generation must not mutate state); it was not exercised before the pause"
+      ]
+    },
+    "guestShell": { "status": "not observed; no guest was installed before the pause" },
+    "boardLaunch": { "status": "not observed before the pause" },
+    "utilityGeneration": { "status": "not observed before the pause; the canonical fixture model catalog was read successfully in the page" }
+  },
+  "artifacts": {
+    "receipt": ".workflow/omp-migration/m3/task36-recovery-guest-2026-10-20.json",
+    "networkObserverLog": "/tmp/ohpi-m3-recovery/cdp.jsonl (ephemeral; CDP request/response headers including Last-Event-ID)",
+    "proxyLog": "/tmp/ohpi-m3-recovery/proxy.log (ephemeral; drop/resume/hold control events)",
+    "hostLog": "/tmp/ohpi-m3-recovery/host.log (ephemeral)",
+    "ephemeralProfile": "/tmp/ohpi-m3-recovery (isolated HOME and Chrome profile; removed or left disposable)"
+  },
+  "uiSurfaceNotesForRestoration": {
+    "viewedUrl": "http://127.0.0.1:3132/",
+    "observedComponents": [
+      "left session sidebar with an 'Issues and PRs' entry, 'Scheduled tasks', 'Archive', session search, project grouping labelled 'chats', and a 'New session' action",
+      "composer with project chooser, model picker menu (provider-grouped, searchable, 'Add new provider'), agent picker, permissions picker, attachments, dictation and starter cards",
+      "right Work status panel with Session/Usage sections",
+      "panel surfaces rail: Context, Git, Changes, Walkthrough, Files, Terminal, Project knowledge, Browser",
+      "Settings/Stats/Shortcuts/About actions"
+    ],
+    "limitation": "I have no verified upstream baseline comparison from this session, so I cannot assert which layout/components were replaced or simplified; only the components above were directly viewed before the pause"
+  },
+  "qualification": "Partial connected Web evidence only. No W8/W9/W10 or M3 completion is claimed. No source or UI edits were made in this run. All owned services were stopped after the pause."
+}

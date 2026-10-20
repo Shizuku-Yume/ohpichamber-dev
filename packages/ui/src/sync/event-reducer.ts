@@ -155,6 +155,23 @@ export function installRuntimeRun(state: State, run: Run, requestBaseline: RunCo
     const revision = (next.sessionRevision ?? 0) + 1
     next = { ...next, sessionRevision: revision, sessionEventRevision: { ...next.sessionEventRevision, [id]: revision } }
   }
+  // Unrelated session updates also advance sessionEventRevision. This marker
+  // advances only for the accepted acknowledgement above, so an in-flight
+  // snapshot read can identify the exact run-control observation it predates.
+  if (next !== state) {
+    next = { ...next, runControlRevision: { ...next.runControlRevision, [id]: (next.runControlRevision?.[id] ?? 0) + 1 } }
+  }
+  // A session without a snapshot keeps the accepted run here: the projected row
+  // only carries `activeRunId`, and the loader needs the full record to keep the
+  // snapshot's run identity invariant when its first in-flight read lands.
+  const pendingRun = next.runControlActiveRun?.[id]
+  const wantsPendingRun = !terminal && snapshot === undefined
+  if (wantsPendingRun ? !same(pendingRun, activeRun) : pendingRun !== undefined) {
+    const runControlActiveRun = { ...next.runControlActiveRun }
+    if (wantsPendingRun && activeRun) runControlActiveRun[id] = activeRun
+    else delete runControlActiveRun[id]
+    next = { ...next, runControlActiveRun }
+  }
   // Every transition above early-returns when it has nothing to change, so an
   // unchanged ack is already `state` itself.
   return next
@@ -246,6 +263,7 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
         sessionRevision: revision, sessionDeletedRevision,
         snapshot: without(next.snapshot), message: without(next.message), permission: without(next.permission), form: without(next.form),
         queue: without(next.queue), partOwner: without(next.partOwner), session_status: without(next.session_status),
+        runControlActiveRun: next.runControlActiveRun ? without(next.runControlActiveRun) : next.runControlActiveRun,
         sessionCursor: without(next.sessionCursor), sessionEpoch: without(next.sessionEpoch), sessionStatusInvalidated: next.sessionStatusInvalidated ? without(next.sessionStatusInvalidated) : next.sessionStatusInvalidated,
       } }
     }

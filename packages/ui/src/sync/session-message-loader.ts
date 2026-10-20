@@ -1,5 +1,5 @@
 import type { StoreApi } from "zustand"
-import type { HistoryPage, Message, SessionSnapshot, Turn } from "@openchamber/agent-contract"
+import type { HistoryPage, Message, Run, Session, SessionSnapshot, Turn } from "@openchamber/agent-contract"
 import type { CanonicalClient } from "@/api/canonicalClient"
 import type { ChildStoreManager, DirectoryStore } from "./child-store"
 import { compareCounters, installHostSession, installQueue, installSessionMetadata, installSessionSnapshot } from "./event-reducer"
@@ -64,6 +64,41 @@ function partOwners(messages: readonly Message[]): Record<string, string> {
   const owners: Record<string, string> = {}
   for (const message of messages) for (const part of message.parts) owners[part.partId] = message.messageId
   return owners
+}
+
+/**
+ * Run control is a live observation, not transcript history, so a snapshot
+ * read that started before a run acknowledgement cannot release the run that
+ * acknowledgement bound. The exception is deliberately exact: an accepted
+ * acknowledgement changed run control after the read started (`runControlRevision`,
+ * not the broader session event revision), the read belongs to the same epoch,
+ * its head did not advance past the live head, it reports no active run, and
+ * the live state still binds one. A genuinely newer read, an epoch switch, a
+ * settled run, an unrelated session update, or a different bound run keeps the
+ * snapshot authoritative.
+ */
+function preserveInFlightRunControl(
+  previous: SessionSnapshot | undefined,
+  projected: Session | undefined,
+  pendingRun: Run | undefined,
+  snapshot: SessionSnapshot,
+  state: State,
+  requestedRunControlRevision: number,
+): SessionSnapshot {
+  // Before the first snapshot lands, an acknowledgement binds the projected
+  // session row; that row is the previous head and binding for this window.
+  const previousSession = previous?.session ?? projected
+  if (!previousSession
+    || (state.runControlRevision?.[snapshot.session.sessionId] ?? 0) <= requestedRunControlRevision
+    || previousSession.epoch !== snapshot.session.epoch
+    || compareCounters(snapshot.session.headSequence, previousSession.headSequence) > 0
+    || snapshot.session.activeRunId !== null
+    || previousSession.activeRunId === null) return snapshot
+  return {
+    ...snapshot,
+    session: { ...snapshot.session, runtimeStatus: previousSession.runtimeStatus, activeRunId: previousSession.activeRunId },
+    activeRun: previous?.activeRun ?? pendingRun ?? snapshot.activeRun,
+  }
 }
 
 export class SessionMessageLoader {
@@ -165,11 +200,14 @@ export class SessionMessageLoader {
     const store = this.childStores.getChild(target.directory)
     if (!store) return
     const current = store.getState()
+    const runControlActiveRun = current.runControlActiveRun ? { ...current.runControlActiveRun } : undefined
+    if (runControlActiveRun) delete runControlActiveRun[target.sessionId]
     const draft = {
       message: { ...current.message }, snapshot: { ...current.snapshot }, partOwner: { ...current.partOwner },
       session_status: { ...current.session_status }, permission: { ...current.permission }, form: { ...current.form },
       sessionEpoch: { ...current.sessionEpoch }, sessionCursor: { ...current.sessionCursor },
       sessionStatusInvalidated: current.sessionStatusInvalidated ? { ...current.sessionStatusInvalidated } : undefined,
+      runControlActiveRun,
     }
     this.invalidateSession(target)
     this.getEntry(target).evicted = true
@@ -553,6 +591,7 @@ export class SessionMessageLoader {
     const onSnapshot = this.configuration.onSnapshot
     return this.startLoad(target, entry, store, kind, async isCurrent => {
       const requestedRevision = store.getState().sessionRevision ?? 0
+      const requestedRunControlRevision = store.getState().runControlRevision?.[target.sessionId] ?? 0
       const knownWorkspace = store.getState().workspace
       const [snapshot, workspace] = await Promise.all([
         suppliedSnapshot ? Promise.resolve(suppliedSnapshot) : client.getSnapshot(target.sessionId),
@@ -571,25 +610,33 @@ export class SessionMessageLoader {
       registerWorkspaceDirectory(workspace.workspaceId, target.directory)
       const old = current.snapshot[target.sessionId]
       if (old?.session.epoch === snapshot.session.epoch && compareCounters(snapshot.session.headSequence, old.session.headSequence) < 0) throw new Error("Session snapshot is older than the live state")
+      const read = preserveInFlightRunControl(old, current.session.find((item) => item.sessionId === target.sessionId), current.runControlActiveRun?.[target.sessionId], snapshot, current, requestedRunControlRevision)
       const resolved: State = current.workspace ? current : { ...current, workspace, project: workspace.projectId, path: { ...current.path, directory: target.directory, workspaceId: workspace.workspaceId, projectId: workspace.projectId } }
-      let next = installSessionSnapshot(resolved, { ...snapshot, messages: sortMessagesChronologically(snapshot.messages) })
-      const optimistic = mergeOptimisticPage({ session: next.message[target.sessionId] ?? [], complete: !snapshot.window.hasEarlier }, [...entry.optimistic.values()])
+      let next = installSessionSnapshot(resolved, { ...read, messages: sortMessagesChronologically(read.messages) })
+      const optimistic = mergeOptimisticPage({ session: next.message[target.sessionId] ?? [], complete: !read.window.hasEarlier }, [...entry.optimistic.values()])
       for (const messageId of optimistic.confirmed) entry.optimistic.delete(messageId)
       if (entry.optimistic.size > 0) next = { ...next, message: { ...next.message, [target.sessionId]: optimistic.session }, partOwner: { ...next.partOwner, [target.sessionId]: partOwners(optimistic.session) } }
+      // The installed snapshot now owns run control, including any run the
+      // projected-only branch carried over from an acknowledgement.
+      if (next.runControlActiveRun !== undefined && Object.hasOwn(next.runControlActiveRun, target.sessionId)) {
+        const runControlActiveRun = { ...next.runControlActiveRun }
+        delete runControlActiveRun[target.sessionId]
+        next = { ...next, runControlActiveRun }
+      }
       store.setState(next)
       entry.evicted = false
       this.patchEntry(entry, {
-        resolved: true, cursor: undefined, complete: !snapshot.window.hasEarlier,
+        resolved: true, cursor: undefined, complete: !read.window.hasEarlier,
         limit: next.message[target.sessionId]?.length ?? 0, updatedAt: Date.now(),
       })
       // Recovery, requests, runtime and the SSE cursor are visible before attaching SSE.
       if (!isCurrent()) return
-      onSnapshot?.(target, snapshot, recovered ? old : undefined)
+      onSnapshot?.(target, read, recovered ? old : undefined)
       if (!isCurrent()) return
-      const hostReads = this.loadHostState(target, store, snapshot, client, isCurrent)
+      const hostReads = this.loadHostState(target, store, read, client, isCurrent)
       // The runtime snapshot has no pagination cursor. Read native history to establish one.
       try {
-        if (snapshot.window.hasEarlier) await this.loadInitialHistory(target, entry, store, snapshot, client, isCurrent)
+        if (read.window.hasEarlier) await this.loadInitialHistory(target, entry, store, read, client, isCurrent)
         if (!isCurrent()) return
         this.patchEntry(entry, { status: "ready", loadingKind: null, error: null })
         this.persistCoverage(target, entry.snapshot)
