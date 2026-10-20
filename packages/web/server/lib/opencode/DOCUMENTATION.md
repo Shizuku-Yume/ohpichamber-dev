@@ -103,8 +103,6 @@ Only the following modules physically exist in this directory:
 - Returned API:
   - `registerRoutes(app, routeDependencies)`: Wires filesystem, environment, quota, walkthrough, session goal, source control, linear, guest plugins, git, dev server, magic prompts, session folders, project context, agent memory, session knowledge, message search, permission auto-accept, message queue, routing, themes, project icons, scheduled tasks, tracked items, and markdown image grant routes. Host settings routes are not registered here; Host composition registers `GET`/`PUT /api/config/settings` from `lib/host/settings-routes.js` before this method runs.
   - `getSkillRepositoryDependencies()`: Provides Git credential helper dependencies for skill repository operations.
-  - `hydrateBoundCheckout({ directory, parentDirectory, parentRemoteName })`: Hydrates git worktree bindings.
-  - `createChangeRequestWorktree(...)`: Creates worktrees for review and change requests.
   - `publishRepositoryCredentialEndpoint()`: Publishes Git credential helper IPC endpoint.
 
 ### models-metadata.js
