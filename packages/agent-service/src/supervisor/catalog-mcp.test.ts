@@ -164,7 +164,7 @@ test('reconnect finalizes earlier retired generations and holds new worker admis
     const reconnect = coordinator.reconnectWorkspaceMcp('workspace', 'tools', { persistedRevision: '1' }, async () => { throw new Error('A live root remains'); });
     await secondStarted.promise;
     let admitted = false;
-    const admission = coordinator.admit({ workspaceId: 'workspace', agentDirectoryId: 'agent', catalogRevision: '0' }, async bootstrap => { admitted = true; return bootstrap; });
+    const admission = coordinator.admit({ workspaceId: 'workspace', agentDirectoryId: 'agent', catalogRevision: '0' }, async () => ({ workspace: '0', agent: '0' }), async bootstrap => { admitted = true; return bootstrap; });
     expect(admitted).toBe(false);
     first.retire();
     coordinator.retire('first', first.worker.identity.workerGeneration);

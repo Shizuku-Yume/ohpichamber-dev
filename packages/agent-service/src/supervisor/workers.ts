@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { CompletionWorkerBootstrapSchema, WorkerBootstrapSchema, WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema, WorkerPolicyResultSchema } from '../protocol.ts';
+import { isDeepStrictEqual } from 'node:util';
+import { UsageWorkerBootstrapSchema, CompletionWorkerBootstrapSchema, WorkerBootstrapSchema, WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema, WorkerPolicyResultSchema } from '../protocol.ts';
 import type { CompletionWorkerBootstrap, WorkerBootstrap, WorkerApprovalPolicy, WorkerInfo, WorkerOperation, WorkerOperationResult, WorkerPolicyRequest, WorkerPolicyResult, WorkerInteraction } from '../protocol.ts';
 import type { ProjectionSeed, ProjectionInput } from '../projection/protocol.ts';
 import type { NativeOperationDescriptor, HostActionRequest, HostActionResult, HostNativePolicySnapshot } from './host-authorization-protocol.ts';
@@ -24,10 +25,10 @@ export type StatelessWorkerInput = Omit<CompletionWorkerBootstrap, 'type' | 'wor
   rootSessionId: string;
   env?: Record<string, string>;
 };
-export type RegisteredWorkerInfo = WorkerInfo & { kind: 'session' | 'stateless' };
+export type RegisteredWorkerInfo = WorkerInfo & { kind: 'session' | 'stateless' | 'usage' };
 export type WorkerAuthorizationScope = Pick<WorkerBootstrap, 'rootSessionId' | 'projectId' | 'workspaceId' | 'cwd' | 'agentDirectory' | 'agentDirectoryId'> & { workerGeneration: string };
 
-type WorkerInput = { kind: 'session'; input: WorkerBootstrap } | { kind: 'stateless'; input: StatelessWorkerInput };
+type WorkerInput = { kind: 'session'; input: WorkerBootstrap } | { kind: 'stateless'; input: StatelessWorkerInput } | { kind: 'usage'; input: StatelessWorkerInput };
 type WorkerEntry = WorkerInput & {
   info: WorkerInfo;
   child: ChildProcess;
@@ -37,6 +38,7 @@ type WorkerEntry = WorkerInput & {
   stopping?: Promise<boolean>;
   pending: Map<string, { resolve: (result: WorkerOperationResult) => void; reject: (error: Error) => void }>;
   policySnapshot?: HostNativePolicySnapshot;
+  environment: NodeJS.ProcessEnv;
 };
 type ActionHandle = { entry: WorkerEntry; controller: AbortController };
 
@@ -74,6 +76,7 @@ export class WorkerRegistry {
   private readonly entries = new Map<string, WorkerEntry>();
   private readonly mutations = new Map<string, Promise<void>>();
   private readonly actions = new Map<string, ActionHandle>();
+  private readonly restartReservations = new Map<string, string>();
   private closing = false;
 
   constructor(private readonly options: WorkerRegistryOptions) {}
@@ -93,39 +96,80 @@ export class WorkerRegistry {
   }
   authorizationPolicy(workspaceId: string, agentDirectoryId: string, rootSessionId?: string): HostNativePolicySnapshot {
     const candidates = rootSessionId === undefined ? [...this.entries.values()] : [this.entries.get(rootSessionId)];
-    const entry = candidates.find(candidate => candidate?.input.workspaceId === workspaceId && candidate.input.agentDirectoryId === agentDirectoryId && candidate.child.connected && (candidate.info.state === 'starting' || candidate.info.state === 'ready') && candidate.policySnapshot !== undefined);
+    const entry = candidates.find(candidate => candidate?.kind !== 'usage' && candidate?.input.workspaceId === workspaceId && candidate.input.agentDirectoryId === agentDirectoryId && candidate.child.connected && (candidate.info.state === 'starting' || candidate.info.state === 'ready') && candidate.policySnapshot !== undefined);
     if (!entry?.policySnapshot) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
     return structuredClone(entry.policySnapshot);
   }
 
   authorizationScope(rootSessionId: string): WorkerAuthorizationScope | undefined {
     const entry = this.entries.get(rootSessionId);
-    if (this.closing || !entry || !entry.child.connected || (entry.info.state !== 'starting' && entry.info.state !== 'ready')) return undefined;
+    if (this.closing || !entry || entry.kind === 'usage' || !entry.child.connected || (entry.info.state !== 'starting' && entry.info.state !== 'ready')) return undefined;
     const { projectId, workspaceId, cwd, agentDirectory, agentDirectoryId } = entry.input;
     return { rootSessionId, workerGeneration: entry.info.workerGeneration, projectId, workspaceId, cwd, agentDirectory, agentDirectoryId };
+  }
+
+  reserveRestart(rootSessionId: string, generation: string): { release: () => void; assertIdle: () => Promise<void> } {
+    const entry = this.entries.get(rootSessionId);
+    if (this.closing || !entry || entry.kind !== 'session' || entry.info.state !== 'ready' || !entry.child.connected)
+      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    if (entry.info.workerGeneration !== generation) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+    if (this.restartReservations.has(rootSessionId) || this.mutations.has(rootSessionId) || entry.pending.size > 0
+      || [...this.actions.values()].some(action => action.entry === entry))
+      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+    this.restartReservations.set(rootSessionId, generation);
+    return {
+      release: () => {
+        if (this.restartReservations.get(rootSessionId) === generation) this.restartReservations.delete(rootSessionId);
+      },
+      assertIdle: async () => {
+        if (this.entries.get(rootSessionId) !== entry || entry.info.state !== 'ready' || this.restartReservations.get(rootSessionId) !== generation)
+          throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+        const result = await this.dispatch(entry, { type: 'shell', operation: { type: 'snapshot' } });
+        if (this.entries.get(rootSessionId) !== entry || entry.info.state !== 'ready') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+        if (result.type !== 'shell' || result.result.type !== 'snapshot') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        if (result.result.snapshot.running.length > 0 || [...this.actions.values()].some(action => action.entry === entry))
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+      },
+    };
   }
 
   async request(rootSessionId: string, operation: WorkerOperation, expectedGeneration?: string): Promise<WorkerOperationResult> {
     const parsed = WorkerOperationSchema.parse(operation);
     const entry = this.entries.get(rootSessionId);
+    if (entry && this.restartReservations.get(rootSessionId) === entry.info.workerGeneration)
+      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
     if (entry && expectedGeneration !== undefined && expectedGeneration !== entry.info.workerGeneration) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
     if (this.closing || !entry || entry.info.state !== 'ready' || !entry.child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    return this.dispatch(entry, parsed);
+  }
+
+  private dispatch(entry: WorkerEntry, operation: WorkerOperation): Promise<WorkerOperationResult> {
     const commandId = randomUUID();
     const result = new Promise<WorkerOperationResult>((resolve, reject) => entry.pending.set(commandId, { resolve, reject }));
-    entry.child.send({ type: 'operation', workerGeneration: entry.info.workerGeneration, commandId, operation: parsed }, error => {
+    entry.child.send({ type: 'operation', workerGeneration: entry.info.workerGeneration, commandId, operation }, error => {
       if (!error) return;
       const pending = entry.pending.get(commandId); entry.pending.delete(commandId); pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
     });
     return result;
   }
 
-  async start(input: WorkerBootstrap, replace = false, approvalPolicies?: WorkerApprovalPolicy[]): Promise<WorkerInfo> {
+  async start(input: WorkerBootstrap, replace = false, approvalPolicies?: WorkerApprovalPolicy[], restartGeneration?: string): Promise<WorkerInfo> {
     return this.withRoot(input.rootSessionId, async () => {
       if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       const previous = this.entries.get(input.rootSessionId);
-      if (previous?.kind === 'stateless') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      const reserved = this.restartReservations.get(input.rootSessionId);
+      if (reserved !== undefined && (restartGeneration !== reserved || previous?.info.workerGeneration !== reserved))
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+      if (restartGeneration !== undefined && (reserved !== restartGeneration || previous?.info.workerGeneration !== restartGeneration))
+        throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (restartGeneration !== undefined && previous && (previous.pending.size > 0 || [...this.actions.values()].some(action => action.entry === previous)))
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+      if (previous && previous.kind !== 'session') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
       if (previous?.info.state === 'ready' && !replace) return { ...previous.info };
-      if (previous) await this.stopEntry(previous);
+      if (previous) {
+        const clean = await this.stopEntry(previous);
+        if (restartGeneration !== undefined && !clean) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+      }
       if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       const prepared = WorkerBootstrapSchema.parse(this.options.prepareBootstrap ? await this.options.prepareBootstrap(input) : input);
       if (prepared.rootSessionId !== input.rootSessionId) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
@@ -135,20 +179,58 @@ export class WorkerRegistry {
   }
 
   async startStateless(input: StatelessWorkerInput, replace = false): Promise<WorkerInfo> {
+    const environment = this.workerEnvironment(input);
+    const current = this.entries.get(input.rootSessionId);
+    if (current?.kind === 'stateless' && this.mutations.has(input.rootSessionId)
+      && (replace || !this.sameStatelessIdentity(current, input, environment)))
+      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
     return this.withRoot(input.rootSessionId, async () => {
       if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
       const previous = this.entries.get(input.rootSessionId);
-      if (previous?.kind === 'session') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
-      if (previous?.info.state === 'ready' && !replace) return { ...previous.info };
+      if (previous && previous.kind !== 'stateless') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (previous?.info.state === 'ready' && !replace && this.sameStatelessIdentity(previous, input, environment)) return { ...previous.info };
+      if (previous) {
+        if (previous.pending.size > 0 || [...this.actions.values()].some(action => action.entry === previous))
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+        if (!await this.stopEntry(previous)) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      }
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      return this.launch({ kind: 'stateless', input: structuredClone(input) }, undefined, environment);
+    });
+  }
+
+  private sameStatelessIdentity(entry: Extract<WorkerEntry, { kind: 'stateless' }>, input: StatelessWorkerInput, environment: NodeJS.ProcessEnv): boolean {
+    const previous = entry.input;
+    // Revision cursors describe persisted catalogs, not the process's execution identity.
+    return previous.rootSessionId === input.rootSessionId && previous.projectId === input.projectId
+      && previous.workspaceId === input.workspaceId && previous.cwd === input.cwd
+      && previous.agentDirectory === input.agentDirectory && previous.agentDirectoryId === input.agentDirectoryId
+      && previous.mcpConfigPath === input.mcpConfigPath && isDeepStrictEqual(entry.environment, environment);
+  }
+
+  private workerEnvironment(input: WorkerInput['input']): NodeJS.ProcessEnv {
+    const environment: NodeJS.ProcessEnv = { ...process.env, ...input.env, PI_CODING_AGENT_DIR: input.agentDirectory };
+    delete environment.OHPICHAMBER_INTERNAL_SECRET;
+    return environment;
+  }
+
+  async startUsage(input: StatelessWorkerInput): Promise<WorkerInfo> {
+    return this.withRoot(input.rootSessionId, async () => {
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      const previous = this.entries.get(input.rootSessionId);
+      if (previous && previous.kind !== 'usage') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (previous?.info.state === 'ready') return { ...previous.info };
       if (previous) await this.stopEntry(previous);
       if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-      return this.launch({ kind: 'stateless', input: structuredClone(input) });
+      return this.launch({ kind: 'usage', input: structuredClone(input) });
     });
   }
 
   async stop(rootSessionId: string): Promise<boolean> {
     return this.withRoot(rootSessionId, async () => {
       const entry = this.entries.get(rootSessionId);
+      if (entry && this.restartReservations.get(rootSessionId) === entry.info.workerGeneration)
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
       return entry ? this.stopEntry(entry) : true;
     });
   }
@@ -172,23 +254,23 @@ export class WorkerRegistry {
     }
   }
 
-  private async launch(owner: WorkerInput, approvalPolicies?: WorkerApprovalPolicy[]): Promise<WorkerInfo> {
+  private async launch(owner: WorkerInput, approvalPolicies?: WorkerApprovalPolicy[], environment = this.workerEnvironment(owner.input)): Promise<WorkerInfo> {
     const { input } = owner;
     const workerGeneration = randomUUID();
-    const { env: privateEnvironment, ...bootstrap } = input;
+    const { env: _privateEnvironment, ...bootstrap } = input;
     const { rootSessionId: authorizationRootId, ...statelessBootstrap } = bootstrap;
     const command = owner.kind === 'session'
       ? WorkerBootstrapMessageSchema.parse({ ...bootstrap, type: 'bootstrap', workerGeneration, approvalPolicies })
-      : CompletionWorkerBootstrapSchema.parse({ ...statelessBootstrap, authorizationRootId, type: 'completion.bootstrap', workerGeneration });
+      : owner.kind === 'usage'
+        ? UsageWorkerBootstrapSchema.parse({ ...statelessBootstrap, authorizationRootId, type: 'usage.bootstrap', workerGeneration })
+        : CompletionWorkerBootstrapSchema.parse({ ...statelessBootstrap, authorizationRootId, type: 'completion.bootstrap', workerGeneration });
     const ready = Promise.withResolvers<void>();
     const exited = Promise.withResolvers<void>();
-    const env: NodeJS.ProcessEnv = { ...process.env, ...privateEnvironment, PI_CODING_AGENT_DIR: input.agentDirectory };
-    delete env.OHPICHAMBER_INTERNAL_SECRET;
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
     const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
     const child = spawn(workerRuntime, workerArgs, {
       cwd: input.cwd,
-      env,
+      env: environment,
       windowsHide: true,
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     });
@@ -200,6 +282,7 @@ export class WorkerRegistry {
       rejectReady: ready.reject,
       exited: exited.promise,
       pending: new Map(),
+      environment,
     };
     this.entries.set(input.rootSessionId, entry);
     child.on('message', raw => {

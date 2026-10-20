@@ -137,7 +137,10 @@ export type ProviderConfiguration = z.infer<typeof ProviderConfigurationSchema>;
 export const ProviderConfigureRequestSchema = z.strictObject({
   expectedRevision: CounterSchema,
   configuration: ProviderConfigurationSchema,
-});
+  headers: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), z.string().regex(/^[^\r\n]*$/)).optional(),
+  models: z.array(ModelSchema).optional(),
+}).refine(request => request.models === undefined || (request.models.every(model => model.provider === request.configuration.providerId)
+  && new Set(request.models.map(model => model.modelId)).size === request.models.length), 'Provider models have unique matching identities');
 export type ProviderConfigureRequest = z.infer<typeof ProviderConfigureRequestSchema>;
 
 export const ProviderDeleteRequestSchema = z.strictObject({

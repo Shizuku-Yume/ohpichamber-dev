@@ -1,3 +1,5 @@
+import { dirname, join } from 'node:path';
+import { NativeProviderOAuth } from './provider-oauth.ts';
 import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, type MCPConfigurationState } from '@openchamber/agent-contract';
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
 import { CatalogOperationSchema, CatalogResultSchema, type CatalogOperation, type CatalogResult } from '../catalogs/protocol.ts';
@@ -13,6 +15,12 @@ import { nativeExtensionRoots, nativeModelsContext, openNativeRuntime, type Nati
 import type { WorkerAuthorize } from './policy.ts';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
 import type { HostNativePolicySnapshot } from '../native-policy-protocol.ts';
+import { NativePlugins } from './catalog-plugins.ts';
+import { NativePluginOperationSchema } from '../catalogs/plugins.ts';
+import { NativeFileResources } from './catalog-resources.ts';
+import { nativeSkillOptions } from './native-runtime.ts';
+import { NativeCacheWarming } from './catalog-warming.ts';
+import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
 
 /** A workspace process owns native catalogs and completion, never a session or transcript. */
 export class StatelessWorker {
@@ -20,19 +28,30 @@ export class StatelessWorker {
   private readonly models: NativeModels;
   private readonly agents: NativeAgents;
   private readonly credentials: NativeCredentials;
+  private readonly oauth: NativeProviderOAuth;
   private readonly mcp: WorkerMcp | undefined;
   private readonly mcpCredentials: NativeMcpCredentials;
+  private readonly fileResources: NativeFileResources;
+  private readonly warming: NativeCacheWarming;
+  private readonly webSearch: NativeWebSearch;
   private readonly operations = new Set<Promise<WorkerOperationResult>>();
   private credentialScopeId: string;
   private activeCompletionId: string | undefined;
   private closed = false;
   private constructor(private readonly runtime: NativeWorkerRuntime, private readonly input: CompletionWorkerBootstrap, private readonly authorize: WorkerAuthorize) {
     this.credentialScopeId = input.workerGeneration;
+    this.warming = new NativeCacheWarming({ cwd: input.cwd, agentDirectory: input.agentDirectory });
     nativeModelsContext(runtime, () => this.credentialScopeId);
     const models = runtime.models;
     this.models = models;
-    this.credentials = new NativeCredentials(runtime.authStorage, models, input.workspaceId, input.agentDirectoryId);
+    this.credentials = new NativeCredentials(runtime.authStorage, models, input.workspaceId, input.agentDirectoryId,
+      join(dirname(runtime.modelsPath), 'provider-account-labels.json'));
+    this.oauth = new NativeProviderOAuth(runtime.authStorage, input.workerGeneration);
+    this.webSearch = new NativeWebSearch(runtime, input.workspaceId, authorize);
     this.mcpCredentials = new NativeMcpCredentials(runtime.authStorage, input.workspaceId);
+    this.fileResources = new NativeFileResources({ cwd: input.cwd, agentDirectory: input.agentDirectory,
+      get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
+      get skillOptions() { return nativeSkillOptions(runtime.settings); } });
     this.mcp = input.mcpConfigPath ? new WorkerMcp({
       cwd: input.cwd, configPath: input.mcpConfigPath, authStorage: runtime.authStorage,
       worker: { rootSessionId: input.authorizationRootId, workspaceId: input.workspaceId, workerGeneration: input.workerGeneration },
@@ -60,7 +79,10 @@ export class StatelessWorker {
 
   static async open(input: CompletionWorkerBootstrap, authorize: WorkerAuthorize): Promise<StatelessWorker> {
     const runtime = await openNativeRuntime(input);
-    try { return new StatelessWorker(runtime, input, authorize); }
+    try {
+      await installWebSearchAuthorization(runtime, authorize);
+      return new StatelessWorker(runtime, input, authorize);
+    }
     catch (error) { runtime.authStorage.close(); throw error; }
   }
   async authorizationPolicy(): Promise<HostNativePolicySnapshot> {
@@ -77,6 +99,8 @@ export class StatelessWorker {
 
   private async executeOperation(operation: WorkerOperation): Promise<WorkerOperationResult> {
     if (this.closed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Workspace worker is closed');
+    if (operation.type === 'web-search') return { type: 'web-search', result: await this.webSearch.operation(operation.operation) };
+    if (this.webSearch.requiresRestart) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native settings require a fresh workspace worker');
     if (operation.type === 'mcp.configuration.read') return { type: 'mcp.configuration', configuration: await this.readConfiguration() };
     if (operation.type === 'catalog') return { type: 'catalog', result: await this.catalog(operation.operation, operation.revision) };
     if (operation.type === 'mcp' && operation.operation.type === 'persist') {
@@ -136,21 +160,47 @@ export class StatelessWorker {
   private async catalog(input: CatalogOperation, revision: string): Promise<CatalogResult> {
     const operation = CatalogOperationSchema.parse(input);
     CounterSchema.parse(revision);
-    if ('request' in operation && 'expectedRevision' in operation.request) {
+    if ('request' in operation && 'expectedRevision' in operation.request
+      && !(operation.type === 'catalog.provider.oauth' && operation.request.action !== 'commit')) {
       PositiveCounterSchema.parse(revision);
       if (BigInt(revision) !== BigInt(operation.request.expectedRevision) + 1n) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Mutation revision does not follow its expected owning revision');
     }
+    const pluginOperation = NativePluginOperationSchema.safeParse(operation);
+    if (pluginOperation.success) return CatalogResultSchema.parse(await new NativePlugins({ cwd: this.input.cwd,
+      worker: { rootSessionId: this.input.authorizationRootId, workspaceId: this.input.workspaceId, workerGeneration: this.input.workerGeneration },
+    }).operation(pluginOperation.data, revision));
     const providerEntry = () => this.authorize({ type: 'provider-entry' });
     const workspaceId = this.input.workspaceId;
     let result: CatalogResult;
     switch (operation.type) {
+      case 'fileResources':
+        await this.runtime.settings.reloadFromDisk();
+        result = { type: 'fileResources', result: await this.fileResources.operation(operation.operation, workspaceId, revision) }; break;
       case 'catalog.models.read': result = { type: 'catalog.models', catalog: await this.models.readModels(workspaceId, revision) }; break;
       case 'catalog.providers.read': result = { type: 'catalog.providers', catalog: await this.models.readProviders(workspaceId, revision) }; break;
       case 'catalog.agents.read': result = { type: 'catalog.agents', catalog: await this.agents.read(workspaceId, revision) }; break;
+      case 'catalog.warming.read': result = { type: 'catalog.warming', state: await this.warming.read(workspaceId, revision) }; break;
+      case 'catalog.warming.persist': result = { type: 'catalog.warming', state: await this.warming.persist(workspaceId, operation.request.mode, revision) }; break;
+      case 'catalog.warming.apply':
+        throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Cache warming application requires a live session runtime');
+      case 'catalog.provider.accounts.read': result = { type: 'catalog.provider.accounts', result: await this.credentials.accounts(operation.providerId, revision) }; break;
+      case 'catalog.provider.account.mutate':
+        if (operation.request.action === 'remove') this.oauth.cancelProvider(operation.providerId);
+        result = { type: 'catalog.provider.accounts', result: await this.credentials.account(operation.providerId, operation.request, revision) }; break;
+      case 'catalog.provider.oauth.methods': result = { type: 'catalog.provider.oauth.methods', result: this.oauth.methods() }; break;
+      case 'catalog.provider.oauth':
+        if (['start', 'input', 'commit'].includes(operation.request.action)) await providerEntry();
+        result = { type: 'catalog.provider.oauth', result: await this.oauth.execute(operation.providerId, operation.request, revision) }; break;
+      case 'catalog.provider.configuration.read': result = { type: 'catalog.provider.configuration', result: await this.models.readProviderConfiguration(operation.providerId, revision) }; break;
+      case 'catalog.provider.models.discover':
+        await providerEntry();
+        result = { type: 'catalog.provider.models.discovered', result: await this.models.discoverProviderModels(operation.request) }; break;
       case 'catalog.provider.configure':
         await providerEntry();
         result = { type: 'catalog.provider.mutated', result: await this.models.configureProvider(operation.request, revision) }; break;
-      case 'catalog.provider.delete': result = { type: 'catalog.provider.mutated', result: await this.models.deleteProvider(operation.request, revision) }; break;
+      case 'catalog.provider.delete':
+        this.oauth.cancelProvider(operation.request.providerId);
+        result = { type: 'catalog.provider.mutated', result: await this.models.deleteProvider(operation.request, revision) }; break;
       case 'catalog.model.configure':
         await providerEntry();
         result = { type: 'catalog.model.mutated', result: await this.models.configureModel(operation.request, revision) }; break;
@@ -163,7 +213,9 @@ export class StatelessWorker {
       case 'catalog.credential.handoff':
         await providerEntry();
         result = { type: 'catalog.credential.handed-off', result: await this.credentials.handoff(operation.request, revision) }; break;
-      case 'catalog.credential.delete': result = { type: 'catalog.credential.mutated', result: await this.credentials.delete(operation.request, revision) }; break;
+      case 'catalog.credential.delete':
+        this.oauth.cancelProvider(operation.request.providerId);
+        result = { type: 'catalog.credential.mutated', result: await this.credentials.delete(operation.request, revision) }; break;
       case 'catalog.agent.create': result = { type: 'catalog.agent.mutated', result: await this.agents.create(operation.request, revision) }; break;
       case 'catalog.agent.update': result = { type: 'catalog.agent.mutated', result: await this.agents.update(operation.request, revision) }; break;
       case 'catalog.agent.delete': result = { type: 'catalog.agent.mutated', result: await this.agents.delete(operation.request, revision) }; break;
@@ -179,6 +231,7 @@ export class StatelessWorker {
     if (this.closed) return;
     this.closed = true;
     try {
+      await this.oauth.close();
       await this.completion.close();
       await Promise.allSettled(this.operations);
       await this.mcp?.close();

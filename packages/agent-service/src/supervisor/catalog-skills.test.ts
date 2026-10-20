@@ -1,8 +1,9 @@
 import { expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SkillsApplyResult, SkillsCatalogState, SkillsWorkerApplyOutcome } from '@openchamber/agent-contract';
+import { SkillSourceRevisionsSchema } from '@openchamber/agent-contract';
 import { CatalogCoordinator, CatalogCoordinatorError, type CatalogWorker } from './catalog.ts';
 
 for (const scenario of [
@@ -50,7 +51,7 @@ for (const scenario of [
       await coordinator.register(first.worker);
       await coordinator.register(second.worker);
       await coordinator.publishSources('workspace', { scope: 'workspace', sourceRevision: '1', expectedSourceRevision: '0' });
-      const application = coordinator.applySkills('first', { scope: 'workspace', sourceRevision: '1' });
+      const application = coordinator.applySkillsWorkspace('workspace', 'agent-source', { scope: 'workspace', sourceRevision: '1' }, async () => ({ workspace: '1', agent: '0' }));
       // Attach the rejection handler before releasing a failed sibling.
       const result = application.catch(error => {
         if (!(error instanceof CatalogCoordinatorError) || error.code !== 'SKILL_APPLY_FAILED' || error.status !== 503 || error.details.result?.kind !== 'skills') throw error;
@@ -77,3 +78,90 @@ for (const scenario of [
     }
   });
 }
+
+test('Host source publication is durable and idempotent without claiming active application', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'skill-source-publication-'));
+  const options = { readMcpConfiguration: async () => null, commitMcp: async () => { throw new Error('Source publication cannot write MCP configuration'); } };
+  let coordinator = new CatalogCoordinator(directory, options);
+  try {
+    await coordinator.initialize();
+    await coordinator.registerWorkspace('workspace', 'agent-source');
+    const request = { scope: 'workspace' as const, sourceRevision: '2', expectedSourceRevision: '0' };
+    const committed = await coordinator.publishSources('workspace', request);
+    expect(committed).toEqual({ scope: { kind: 'workspace', workspaceId: 'workspace' }, sourceRevision: '2', persistence: 'committed', apply: null });
+    coordinator = new CatalogCoordinator(directory, options);
+    await coordinator.initialize();
+    expect(await coordinator.publishSources('workspace', request)).toEqual(committed);
+    expect(await coordinator.applySkillsWorkspace('workspace', 'agent-source', { scope: 'workspace', sourceRevision: '2' }, async () => ({ workspace: '2', agent: '0' }))).toEqual({ kind: 'skills', status: 'no-active-workers', scope: committed.scope, sourceRevision: '2', workers: [] });
+    await expect(coordinator.applySkillsWorkspace('workspace', 'agent-source', { scope: 'workspace', sourceRevision: '1' }, async () => ({ workspace: '2', agent: '0' }))).rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+    await expect(coordinator.publishSources('workspace', { ...request, sourceRevision: '3' })).rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT', details: { currentRevision: '2' } });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('Host disk commit, source publication and root admission share one lifecycle transaction', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'skill-source-admission-'));
+  const hostFile = join(directory, 'host-sources.json');
+  const skillDirectory = join(directory, 'workspace', '.omp', 'skills', 'review');
+  const skillFile = join(skillDirectory, 'SKILL.md');
+  await mkdir(skillDirectory, { recursive: true });
+  await writeFile(hostFile, JSON.stringify({ workspace: '0', agent: '0' }));
+  await writeFile(skillFile, 'Previous skill');
+  const coordinator = new CatalogCoordinator(join(directory, 'service'), { readMcpConfiguration: async () => null,
+    commitMcp: async () => { throw new Error('Skill transactions cannot configure MCP'); } });
+  const diskCommitted = Promise.withResolvers<void>();
+  const finishCommit = Promise.withResolvers<void>();
+  const reconcile = async () => SkillSourceRevisionsSchema.parse(JSON.parse(await readFile(hostFile, 'utf8')));
+  let admitted = false;
+  try {
+    await coordinator.initialize();
+    await coordinator.registerWorkspace('workspace', 'agent-source');
+    const commit = coordinator.commitSkillFiles('workspace', { scope: 'workspace', agentDirectoryId: 'agent-source', expectedSourceRevision: '0', operationId: 'author-operation' }, {
+      reconcile,
+      commit: async () => {
+        await writeFile(`${skillFile}.tmp`, 'Committed skill');
+        await rename(`${skillFile}.tmp`, skillFile);
+        diskCommitted.resolve();
+        await finishCommit.promise;
+        await writeFile(hostFile, JSON.stringify({ workspace: '1', agent: '0' }));
+        return '1';
+      },
+    });
+    await diskCommitted.promise;
+    const admission = coordinator.admit({ workspaceId: 'workspace', agentDirectoryId: 'agent-source', catalogRevision: '0' }, reconcile, async bootstrap => {
+      admitted = true;
+      return { sources: bootstrap.skillSources, content: await readFile(skillFile, 'utf8') };
+    });
+    const pendingApply = Promise.allSettled([coordinator.applySkillsWorkspace('workspace', 'agent-source', { scope: 'workspace', sourceRevision: '1' }, reconcile)]);
+    expect(admitted).toBe(false);
+    finishCommit.resolve();
+    expect(await commit).toMatchObject({ persistence: 'committed', sourceRevision: '1', apply: { status: 'no-active-workers', workers: [] } });
+    expect(await admission).toEqual({ sources: { workspace: '1', agent: '0' }, content: 'Committed skill' });
+    expect(await pendingApply).toMatchObject([{ status: 'fulfilled', value: { status: 'no-active-workers', sourceRevision: '1' } }]);
+    let staleWriterInvoked = false;
+    await expect(coordinator.commitSkillFiles('workspace', { scope: 'workspace', agentDirectoryId: 'agent-source', expectedSourceRevision: '0', operationId: 'stale-operation' }, {
+      reconcile, commit: async () => { staleWriterInvoked = true; return '2'; },
+    })).rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+    expect(staleWriterInvoked).toBe(false);
+    expect(await readFile(skillFile, 'utf8')).toBe('Committed skill');
+  } finally { finishCommit.resolve(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('cold admission reconciles a committed Host source after service publication loss without replaying apply', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'skill-source-recovery-'));
+  const options = { readMcpConfiguration: async () => null, commitMcp: async () => { throw new Error('Recovery cannot configure MCP'); } };
+  try {
+    const original = new CatalogCoordinator(directory, options);
+    await original.initialize();
+    await original.registerWorkspace('workspace', 'agent-source');
+    const hostFile = join(directory, 'committed-host-sources.json');
+    await writeFile(hostFile, JSON.stringify({ workspace: '3', agent: '2' }));
+    const recovered = new CatalogCoordinator(directory, options);
+    await recovered.initialize();
+    const bootstrap = await recovered.admit({ workspaceId: 'workspace', agentDirectoryId: 'agent-source', catalogRevision: '0' }, async () => SkillSourceRevisionsSchema.parse(JSON.parse(await readFile(hostFile, 'utf8'))), async bootstrap => bootstrap);
+    expect(bootstrap.skillSources).toEqual({ workspace: '3', agent: '2' });
+    const cold = new CatalogCoordinator(directory, options);
+    await cold.initialize();
+    expect((await cold.prepareBootstrap({ workspaceId: 'workspace', agentDirectoryId: 'agent-source', catalogRevision: '0' })).skillSources).toEqual({ workspace: '3', agent: '2' });
+    await expect(cold.admit({ workspaceId: 'workspace', agentDirectoryId: 'agent-source', catalogRevision: '0' }, async () => { throw new Error('Host source recovery unavailable'); }, async () => { throw new Error('Admission must not proceed'); })).rejects.toThrow('Host source recovery unavailable');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

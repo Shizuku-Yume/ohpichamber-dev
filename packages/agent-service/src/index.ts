@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { AgentService } from './supervisor/service.ts';
 import { HostApprovalPolicies } from './interaction/host-policy.ts';
 import { HostWorkerAuthorization } from './supervisor/host-authorization.ts';
+import { HostSkillSources } from './supervisor/host-skill-sources.ts';
 
 function requestedPort(args: string[]): number {
   if (args.length === 0) return 0;
@@ -16,6 +17,7 @@ async function main(): Promise<void> {
   let service: AgentService | undefined;
   const policies = new HostApprovalPolicies();
   const authorization = new HostWorkerAuthorization(rootSessionId => service?.authorizationScope(rootSessionId));
+  const skillSources = new HostSkillSources();
   try {
     const current = fileURLToPath(import.meta.url);
     const workerFile = extname(current) === '.ts' ? './worker/index.ts' : './worker/index.js';
@@ -29,10 +31,12 @@ async function main(): Promise<void> {
       approvalPolicyLoad: policies.load,
       policyCheck: authorization.authorize,
       invokeHostAction: authorization.invoke,
+      hostSkillSource: skillSources.execute,
     });
     const owned = service;
     const stop = () => {
       authorization.close();
+      skillSources.close();
       void owned.stop().then(() => { policies.close(); process.exit(0); }, () => { policies.close(); process.exit(1); });
     };
     process.once('SIGTERM', stop);
@@ -41,6 +45,7 @@ async function main(): Promise<void> {
   } catch {
     process.stderr.write('Agent Service startup failed\n');
     authorization.close();
+    skillSources.close();
     try { await service?.stop(); } finally { policies.close(); process.exitCode = 1; }
   }
 }

@@ -118,9 +118,13 @@ export class NativeAgents {
       if (slash > 0) model = { providerId: selector.slice(0, slash), modelId: selector.slice(slash + 1) };
     }
     const profile = metadata.openchamber;
+    const availableToolNames = this.context.availableToolNames();
+    const allowedTools = profile?.allowedTools ?? (definition.source === 'bundled'
+      ? (definition.tools ?? []).filter(toolName => availableToolNames.includes(toolName))
+      : definition.tools ?? [...availableToolNames]);
     const candidate: Agent = {
       agentId: definition.name, name: profile?.name ?? definition.name, description: definition.description,
-      model, allowedTools: profile?.allowedTools ?? definition.tools ?? [...this.context.availableToolNames()],
+      model, allowedTools,
     };
     const systemPromptOverride = profile ? profile.systemPromptOverride : definition.systemPrompt || undefined;
     if (systemPromptOverride !== undefined) candidate.systemPromptOverride = systemPromptOverride;

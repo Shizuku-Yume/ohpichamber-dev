@@ -56,6 +56,18 @@ function publicScope(skill: Skill): 'workspace' | 'agent' {
   }
 }
 
+export function sanitizeSkillRoots(skill: Skill, text: string, context: Pick<WorkerSkillsContext, 'cwd' | 'agentDirectory'>): string {
+  const roots = [skill.filePath, skill.baseDir, skill.containRoot, context.cwd, context.agentDirectory]
+    .filter((root): root is string => root !== undefined && root.length > 0).sort((a, b) => b.length - a.length);
+  for (const root of roots) text = text.split(root).join('[skill-root]');
+  return text;
+}
+
+export async function buildPublicSkillPrompt(skill: Skill, args: string, context: Pick<WorkerSkillsContext, 'cwd' | 'agentDirectory'>): Promise<string> {
+  const built = await buildSkillPromptMessage({ ...skill, baseDir: `skill://${skill.name}` }, { args }, 'user');
+  return sanitizeSkillRoots(skill, built.message, context);
+}
+
 export class WorkerSkills {
   private readonly context: WorkerSkillsContext;
   private skills: Skill[] = [];
@@ -77,7 +89,7 @@ export class WorkerSkills {
       persistedSources: parsedSources,
       appliedSources: this.appliedSources,
       catalogRevision: this.catalogRevision,
-      skills: this.appliedSources ? this.skills.map(skill => ({ skillId: skill.name, name: skill.name, description: this.sanitizeRoots(skill, skill.description), scope: publicScope(skill) })) : [],
+      skills: this.appliedSources ? this.skills.map(skill => ({ skillId: skill.name, name: skill.name, description: sanitizeSkillRoots(skill, skill.description, this.context), scope: publicScope(skill) })) : [],
     });
   }
 
@@ -239,7 +251,7 @@ export class WorkerSkills {
       }
       SkillsCatalogStateSchema.parse({ worker: this.context.worker, agentDirectoryId: this.context.agentDirectoryId,
         runtimeStatus: 'ready', persistedSources: parsedSources, appliedSources: parsedSources, catalogRevision,
-        skills: result.skills.map(skill => ({ skillId: skill.name, name: skill.name, description: this.sanitizeRoots(skill, skill.description), scope: publicScope(skill) })) });
+        skills: result.skills.map(skill => ({ skillId: skill.name, name: skill.name, description: sanitizeSkillRoots(skill, skill.description, this.context), scope: publicScope(skill) })) });
       const outcome = SkillsWorkerApplyOutcomeSchema.parse({ worker: this.context.worker, outcome: 'applied',
         revisions: { runtimeStatus: 'ready', persistedSources: parsedSources, appliedSources: parsedSources, catalogRevision } });
       publishing = true;
@@ -273,9 +285,8 @@ export class WorkerSkills {
     if (this.runtimeStatus !== 'ready') throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill runtime is unavailable until successful reapplication');
     const skill = this.skills.find(candidate => candidate.name === parsedRequest.skillId);
     if (!skill) throw new ProjectionError(404, 'INVALID_REQUEST', 'Skill is not in the published catalog');
-    const built = await buildSkillPromptMessage({ ...skill, baseDir: `skill://${skill.name}` }, { args: parsedRequest.arguments }, 'user');
     return SkillExpandResultSchema.parse({ worker: this.context.worker, skillId: skill.name, catalogRevision: this.catalogRevision,
-      message: this.sanitizeRoots(skill, built.message) });
+      message: await buildPublicSkillPrompt(skill, parsedRequest.arguments, this.context) });
   }
 
   async preparePrompt(skillId: string, args: string): Promise<string> {
@@ -283,10 +294,4 @@ export class WorkerSkills {
       catalogRevision: this.catalogRevision })).message;
   }
 
-  private sanitizeRoots(skill: Skill, text: string): string {
-    const roots = [skill.filePath, skill.baseDir, skill.containRoot, this.context.cwd, this.context.agentDirectory]
-      .filter((root): root is string => root !== undefined && root.length > 0).sort((a, b) => b.length - a.length);
-    for (const root of roots) text = text.split(root).join('[skill-root]');
-    return text;
-  }
 }

@@ -22,6 +22,7 @@ import { NativeMcpCredentials } from './mcp-credentials.ts';
 import { WorkerShell } from './shell.ts';
 import { WorkerCompletion } from './completion.ts';
 import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
+import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
 import type { WorkerAuthorize } from './policy.ts';
 import { createHostToolExtension } from './host-tool.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
@@ -30,6 +31,8 @@ import { captureNativePolicy } from './native-policy-snapshot.ts';
 import type { HostNativePolicySnapshot, NativePolicyContext } from '../native-policy-protocol.ts';
 import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
 import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
+import { nativePluginExtensionPaths } from './native-plugin-loader.ts';
+import { NativeCacheWarming } from './catalog-warming.ts';
 
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'follow-up' }>;
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
@@ -68,6 +71,7 @@ export class WorkerSession {
     private readonly authorize: WorkerAuthorize,
     private readonly onSubagent: (payload: SubagentLifecyclePayload) => void,
     private readonly subagentEventBus: EventBus,
+    private readonly webSearch: NativeWebSearch,
   ) {
     this.projection = new WorkerProjection(session.sessionManager, sessionId);
     this.defaultToolNames = session.getActiveToolNames();
@@ -123,7 +127,7 @@ export class WorkerSession {
     const authorizeTool = async (toolName: string, toolInput: JsonObject, approval?: { approvalId?: string; toolCallId: string }): Promise<void> => {
       await capturePolicy?.();
       const profile = admission.profile;
-      if (profile && !profile.allowedTools.includes(toolName)) throw new ProjectionError(403, 'UNAUTHORIZED', 'Selected agent profile does not permit this tool');
+      if (profile && toolName !== 'provider.use' && !profile.allowedTools.includes(toolName)) throw new ProjectionError(403, 'UNAUTHORIZED', 'Selected agent profile does not permit this tool');
       const model = session?.model;
       const nativeContext: NativePolicyContext = { editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined) };
       if (model) {
@@ -166,6 +170,7 @@ export class WorkerSession {
       isCurrent: () => !owned || !owned.closed && !owned.failed,
     }) : undefined;
     try {
+      await installWebSearchAuthorization(runtime, hostAuthorize);
       const directory = input.sessionsDirectory ?? SessionManager.getDefaultSessionDir(input.cwd, input.agentDirectory);
       manager = input.sessionFile
         ? await SessionManager.open(input.sessionFile, directory, undefined, { initialCwd: input.cwd, throwIfMissing: true })
@@ -177,6 +182,7 @@ export class WorkerSession {
         getSessionSpawns: () => '*',
       });
       const subagentEventBus = new EventBus();
+      const pluginExtensionPaths = await nativePluginExtensionPaths(input.cwd);
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
@@ -187,21 +193,26 @@ export class WorkerSession {
           scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
           invoke: invocation => invokeHostAction(invocation.request, invocation.signal),
         })],
-        extensionRoots: () => nativeExtensionRoots(settings),
+        extensionRoots: () => nativeExtensionRoots(settings, pluginExtensionPaths),
         getApiKey: async model => {
           await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
           return modelRegistry.resolver(model, session?.agent.sessionId ?? input.workerGeneration);
         },
       });
       session = result.session;
+      if (result.extensionsResult.errors.length > 0) {
+        throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native plugin or local extension failed to load');
+      }
       const nativeSession = session;
       mcp?.attachSession(nativeSession);
       result.setToolUIContext(interaction.ui, true);
+      const warming = new NativeCacheWarming({ cwd: input.cwd, agentDirectory: input.agentDirectory, session: nativeSession });
       const catalogs = new WorkerCatalogs({
         ...nativeModelsContext(runtime, () => nativeSession.sessionManager.getSessionId()), worker,
+        warming,
         cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration,
-        get extensionRoots() { return nativeExtensionRoots(settings); },
-        get options() { return nativeSkillOptions(settings); },
+        get extensionRoots() { return nativeExtensionRoots(settings, pluginExtensionPaths); },
+        get options() { return nativeSkillOptions(settings, pluginExtensionPaths); },
         permissionPreset: presetId => authorize({ type: 'tool', toolName: 'permission.preset', input: { presetId }, permissionPresetId: presetId }),
         availableToolNames: () => nativeSession.getAllToolInfos().map(tool => tool.name),
         assertProviderEntryAllowed: () => authorize({ type: 'provider-entry' }),
@@ -230,7 +241,7 @@ export class WorkerSession {
       const sessionFile = manager.getSessionFile();
       if (!sessionFile) throw new ProjectionError(503, 'SESSION_RESTORE_FAILED', 'Session storage is unavailable');
       await rememberPrivateRoots(manager, input);
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, onSubagent, subagentEventBus);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize));
       capturePolicy = async () => {
         const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId) : null;
         publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
@@ -248,6 +259,8 @@ export class WorkerSession {
         mode: 'rpc', uiContext: interaction.ui,
         reportSendError: () => owned?.fail(), reportRuntimeError: () => owned?.fail(), onShutdown: onFatal,
       });
+      // Reopening a transcript must use the latest workspace preference, not restored session state.
+      warming.apply((await warming.read(input.workspaceId, '0')).mode);
       return owned;
     } catch (error) {
       interaction.close();
@@ -422,6 +435,12 @@ export class WorkerSession {
     if (this.closed || this.failed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Worker session is unavailable');
     if (this.controllingBranch) throw new ProjectionError(409, 'COMMAND_IN_FLIGHT', 'Native branch selection is in progress');
     switch (operation.type) {
+      case 'web-search': {
+        if (operation.operation.type !== 'apply') throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Search mutations require their workspace owner');
+        const result = await this.webSearch.operation(operation.operation);
+        await this.session.reconcileBuiltinTools();
+        return { type: 'web-search', result };
+      }
       case 'catalog': {
         const applying = operation.operation.type === 'skills.apply';
         if (applying && this.skillsApplying) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Skill application is already active');
@@ -432,6 +451,8 @@ export class WorkerSession {
           return { type: 'catalog', result };
         } finally { if (applying) this.skillsApplying = false; }
       }
+      case 'usage.stats': case 'usage.tools':
+        throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Historical usage reads belong to the cold usage worker');
       case 'mcp.configuration.read':
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Configuration hydration belongs to the workspace worker');
       case 'mcp': {
@@ -547,6 +568,7 @@ export class WorkerSession {
     this.closed = true;
     this.interaction.close();
     try {
+      await this.catalogs.close();
       try { await this.preparation; } catch { /* The operation reports preparation failure to its caller. */ }
       await this.session.abort();
       await this.promptTask;

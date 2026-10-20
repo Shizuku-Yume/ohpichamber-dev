@@ -49,6 +49,27 @@ test('agent profile mutations round-trip through native markdown and model resol
   }
 });
 
+test('bundled profiles expose only tools installed in the native worker', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-agent-capabilities-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  try {
+    const agents = new NativeAgents({ cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      extensionRoots: nativeExtensionRoots(runtime.settings), permissionPreset: async () => {},
+      availableToolNames: () => ['read', 'grep', 'glob', 'web_search'] });
+    const catalog = await agents.read('workspace_1', '0');
+    const scout = catalog.agents.find(agent => agent.agentId === 'scout');
+    expect(scout?.allowedTools).toEqual(['read', 'grep', 'glob', 'web_search']);
+  } finally {
+    runtime.authStorage.close();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('a long-lived native profile reader observes bundled deletion and subsequent replacement', async () => {
   const root = await mkdtemp(join(tmpdir(), 'catalog-agents-readers-'));
   const cwd = join(root, 'workspace');

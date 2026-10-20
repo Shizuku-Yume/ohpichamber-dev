@@ -139,6 +139,23 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   }
 }
 
+test('profile tool allowlist does not block selected provider authorization', async () => {
+  const harness = await fixture({ respond: () => completion() });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+  });
+  try {
+    await harness.worker.operation({
+      type: 'prompt', runId: 'profile-provider-run',
+      request: { ...prompt('Run through the selected native profile.'), options: { ...options, agentId: 'child' } },
+    });
+    await terminal.promise;
+    expect(harness.requests).toHaveLength(1);
+    expect(harness.events.some(input => input.event.type === 'run.completed')).toBe(true);
+  } finally { unsubscribe(); await harness.close(); }
+}, 30000);
+
 for (const approvalMode of ['always-ask', 'yolo'] as const) {
   for (const decision of ['approve', 'reject'] as const) {
     test(`actual SDK Bash ${approvalMode} waits for source-bound ${decision} before execution`, async () => {

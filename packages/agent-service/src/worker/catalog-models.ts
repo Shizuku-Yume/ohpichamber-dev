@@ -12,14 +12,16 @@ import { ModelsConfigFile, validateProviderConfiguration } from '@oh-my-pi/pi-co
 import { ModelsConfigSchema, type ModelsConfig } from '@oh-my-pi/pi-coding-agent/config/models-config-schema';
 import { cfgDisabledProviders, cfgEnabledModels } from '@oh-my-pi/pi-coding-agent/config/model-settings';
 import { filterAvailableModelsByEnabledPatterns } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
-import { invalidateCommandConfig, resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
+import { invalidateCommandConfig, resolveConfigHeaders, resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
 import {
   ModelSchema, ModelCatalogSchema, ModelConfigureRequestSchema, ModelDeleteRequestSchema,
   ModelMutationResultSchema, ModelSelectionSchema, ProviderSchema, ProviderCatalogSchema,
   ProviderConfigurationSchema, ProviderConfigureRequestSchema, ProviderDeleteRequestSchema,
-  ProviderMutationResultSchema, PositiveCounterSchema,
+  ProviderMutationResultSchema, PositiveCounterSchema, ProviderConfigurationReadSchema,
+  ProviderModelDiscoveryRequestSchema, ProviderModelDiscoveryResultSchema,
+  type ProviderConfigurationRead, type ProviderModelDiscoveryRequest, type ProviderModelDiscoveryResult,
   type Model, type ModelCatalog, type ModelConfigureRequest, type ModelDeleteRequest,
   type ModelMutationResult, type ModelSelection, type Provider, type ProviderCatalog,
   type ProviderConfigureRequest, type ProviderDeleteRequest, type ProviderMutationResult,
@@ -52,7 +54,9 @@ export type NativeModelsContext = {
 const MetadataSchema = z.object({
   providers: z.record(z.string(), ProviderConfigurationSchema).default({}),
   models: z.record(z.string(), ModelSchema).default({}),
-}).default({ providers: {}, models: {} });
+  defaultCredentials: z.record(z.string(), z.string().nullable()).default({}),
+  providerHeaders: z.record(z.string(), z.record(z.string(), z.string())).default({}),
+}).default({ providers: {}, models: {}, defaultCredentials: {}, providerHeaders: {} });
 const FileMetadataSchema = z.object({ openchamber: MetadataSchema });
 type CatalogMetadata = z.infer<typeof MetadataSchema>;
 type ConfigState = { config: ModelsConfig; metadata: CatalogMetadata; path: string; content: string | null };
@@ -198,7 +202,7 @@ export function resolveModelSelection(registry: ModelRegistry, input: ModelSelec
 }
 
 export class NativeModels {
-  private metadata: CatalogMetadata = { providers: {}, models: {} };
+  private metadata: CatalogMetadata = MetadataSchema.parse({});
   constructor(private readonly context: NativeModelsContext) {
     if (context.modelRegistry.authStorage !== context.authStorage) throw new Error('Catalog registry and credential storage must share ownership');
   }
@@ -211,7 +215,7 @@ export class NativeModels {
     const loaded = file.tryLoad();
     if (loaded.status === 'error') throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native model configuration could not be read');
     let content: string | null = null;
-    let metadata: CatalogMetadata = { providers: {}, models: {} };
+    let metadata: CatalogMetadata = MetadataSchema.parse({});
     if (loaded.status === 'ok') {
       try {
         content = await readFile(file.path(), 'utf8');
@@ -258,7 +262,119 @@ export class NativeModels {
       && state.config.providers?.[providerId] !== undefined;
   }
 
+  async readProviderConfiguration(providerId: string, revision: string): Promise<ProviderConfigurationRead> {
+    const state = await this.load();
+    await this.context.modelRegistry.reapplyModelPolicies();
+    const provider = this.provider(providerId);
+    const configuration = state.metadata.providers[providerId] ?? {
+      providerId, name: provider.name, endpoint: provider.endpoint, protocol: provider.protocol,
+      credentialRef: this.defaultCredentialRef(providerId),
+    };
+    if (!configuration.endpoint || !configuration.protocol) {
+      throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Provider has no configurable endpoint and protocol');
+    }
+    return ProviderConfigurationReadSchema.parse({ revision, configuration,
+      headerNames: [...new Set([...Object.keys(state.config.providers?.[providerId]?.headers ?? {}),
+        ...Object.keys(state.metadata.providerHeaders[providerId] ?? {})])],
+      models: this.context.modelRegistry.getProviderModels(providerId)
+        .filter(model => model.contextWindow !== null && model.contextWindow > 0 && model.maxTokens !== null && model.maxTokens > 0)
+        .map(model => publicModel(model, state.metadata.models[modelKey({ providerId, modelId: model.id })])),
+    });
+  }
+
+  async discoverProviderModels(input: ProviderModelDiscoveryRequest): Promise<ProviderModelDiscoveryResult> {
+    const request = ProviderModelDiscoveryRequestSchema.parse(input);
+    try {
+      const state = await this.load();
+      await this.context.authStorage.credentials.reload();
+      const configured = request.providerId ? state.metadata.providers[request.providerId] : undefined;
+      const matchesConfigured = configured?.endpoint === request.endpoint && configured.protocol === request.protocol;
+      const headers = new Headers(matchesConfigured ? {
+        ...await resolveConfigHeaders(state.config.providers?.[configured.providerId]?.headers),
+        ...state.metadata.providerHeaders[configured.providerId],
+      } : undefined);
+      for (const [name, value] of Object.entries(request.headers ?? {})) headers.set(name, value);
+      let apiKey = request.apiKey;
+      const source = request.providerId ? this.context.authStorage.keys.source(request.providerId) : undefined;
+      const storedSource = !source || source.kind === 'api_key' || source.kind === 'oauth';
+      const reference = request.credentialRef ?? (matchesConfigured && storedSource ? this.defaultCredentialRef(configured.providerId) : null);
+      if (!apiKey && reference) {
+        if (!request.providerId) throw new ProjectionError(422, 'INVALID_REQUEST', 'Credential discovery requires a provider identity');
+        const credential = await this.resolveBoundCredential(request.providerId, reference, undefined);
+        if (!credential) throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider credential is unavailable');
+        apiKey = credential.apiKey;
+      }
+      if (!apiKey && !reference && matchesConfigured) {
+        apiKey = await this.context.authStorage.keys.get(configured.providerId, undefined, { baseUrl: request.endpoint });
+      }
+      if (apiKey) {
+        const name = request.protocol === 'messages' ? 'x-api-key' : request.protocol === 'generate-content' ? 'x-goog-api-key' : 'authorization';
+        if (!headers.has(name)) headers.set(name, name === 'authorization' ? `Bearer ${apiKey}` : apiKey);
+      }
+      if (request.protocol === 'messages' && !headers.has('anthropic-version')) headers.set('anthropic-version', '2023-06-01');
+      const url = new URL(`${request.endpoint.replace(/\/+$/, '')}/models`);
+      const models: ProviderModelDiscoveryResult['models'] = [];
+      const seen = new Set<string>();
+      const pages = new Set<string>();
+      const signal = AbortSignal.timeout(15_000);
+      while (true) {
+        if (pages.has(url.href)) throw new Error('Invalid discovery pagination');
+        pages.add(url.href);
+        const response = await fetch(url, { headers, signal, redirect: 'error' });
+        if (!response.ok) throw new Error('Discovery request failed');
+        const payload = z.object({ data: z.array(z.unknown()).optional(), models: z.array(z.unknown()).optional(),
+          nextPageToken: z.string().optional(), has_more: z.boolean().optional(), last_id: z.string().optional() }).parse(await response.json());
+        const rows = request.protocol === 'generate-content' ? payload.models : payload.data;
+        if (!rows) throw new Error('Invalid model listing');
+        for (const entry of rows) {
+          const row = z.object({ id: z.string().optional(), name: z.string().optional(), display_name: z.string().optional(),
+            displayName: z.string().optional(), context_window: z.number().int().positive().optional(),
+            max_output_tokens: z.number().int().positive().optional(), inputTokenLimit: z.number().int().positive().optional(),
+            outputTokenLimit: z.number().int().positive().optional() }).parse(entry);
+          const modelId = request.protocol === 'generate-content' ? row.name?.replace(/^models\//, '') : row.id;
+          if (!modelId) throw new Error('Invalid model identity');
+          if (seen.has(modelId)) continue;
+          seen.add(modelId);
+          const contextWindow = row.inputTokenLimit ?? row.context_window;
+          const maxOutputTokens = row.outputTokenLimit ?? row.max_output_tokens;
+          models.push({ modelId, name: row.displayName ?? row.display_name ?? row.name ?? modelId,
+            ...(contextWindow ? { contextWindow } : {}), ...(maxOutputTokens ? { maxOutputTokens } : {}),
+          });
+        }
+        if (request.protocol === 'generate-content' && payload.nextPageToken) url.searchParams.set('pageToken', payload.nextPageToken);
+        else if (request.protocol === 'messages' && payload.has_more) {
+          if (!payload.last_id) throw new Error('Invalid discovery pagination');
+          url.searchParams.set('after_id', payload.last_id);
+        } else break;
+      }
+      return ProviderModelDiscoveryResultSchema.parse({ models });
+    } catch (error) {
+      if (error instanceof ProjectionError) throw error;
+      throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Provider model discovery failed');
+    }
+  }
+
+  defaultCredentialRef(providerId: string): string | null {
+    return this.metadata.defaultCredentials[providerId] ?? this.metadata.providers[providerId]?.credentialRef ?? null;
+  }
+
+  async selectCredential(providerId: string, credentialRef: string | null, revision: string): Promise<ProviderMutationResult> {
+    PositiveCounterSchema.parse(revision);
+    const state = await this.load();
+    await this.context.authStorage.credentials.reload();
+    if (credentialRef !== null && !this.context.authStorage.credentials.list(providerId)
+      .some(row => row.disabledCause === null && credentialReference(providerId, row.id) === credentialRef)) {
+      throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Provider credential reference is not available');
+    }
+    state.metadata.defaultCredentials[providerId] = credentialRef;
+    const configured = state.metadata.providers[providerId];
+    if (configured) configured.credentialRef = credentialRef;
+    return ProviderMutationResultSchema.parse(await this.commit(state, () => {},
+      () => ({ revision, providerId, provider: this.provider(providerId) })));
+  }
+
   provider(providerId: string): Provider {
+    const reference = this.defaultCredentialRef(providerId);
     const configured = this.metadata.providers[providerId];
     const first = this.context.modelRegistry.getProviderModels(providerId)[0];
     const rawEndpoint = configured?.endpoint ?? this.context.modelRegistry.getProviderBaseUrl(providerId) ?? null;
@@ -267,13 +383,13 @@ export class NativeModels {
     const supportedOAuth = this.context.oauthProviderIds().has(providerId) || rows.some(row => row.credential.type === 'oauth');
     const authMethods: Provider['authMethods'] = supportedOAuth ? ['api-key', 'oauth'] : ['api-key'];
     let auth: Provider['auth'] = { status: 'missing' };
-    if (configured?.credentialRef) {
-      const selected = rows.find(row => credentialReference(providerId, row.id) === configured.credentialRef);
+    if (reference && (!source || source.kind === 'api_key' || source.kind === 'oauth')) {
+      const selected = rows.find(row => credentialReference(providerId, row.id) === reference);
       if (selected) {
         auth = {
           status: 'configured',
           method: selected.credential.type === 'oauth' ? 'oauth' : 'api-key',
-          credentialRef: configured.credentialRef,
+          credentialRef: reference,
           source: 'stored-credential',
         };
       }
@@ -354,7 +470,9 @@ export class NativeModels {
   ): Promise<BoundProviderCredentialResolution> {
     await this.load();
     await this.context.authStorage.credentials.reload();
-    const reference = this.metadata.providers[providerId]?.credentialRef;
+    const source = this.context.authStorage.keys.source(providerId);
+    if (source && source.kind !== 'api_key' && source.kind !== 'oauth') return { bound: false };
+    const reference = this.defaultCredentialRef(providerId);
     if (!reference) return { bound: false };
     return {
       bound: true,
@@ -374,7 +492,9 @@ export class NativeModels {
       throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected model is disabled or unavailable');
     }
     const nativeCredentialSessionId = this.context.currentNativeSessionId();
-    const reference = this.metadata.providers[input.providerId]?.credentialRef;
+    const source = this.context.authStorage.keys.source(input.providerId);
+    const reference = source && source.kind !== 'api_key' && source.kind !== 'oauth'
+      ? null : this.defaultCredentialRef(input.providerId);
     if (reference) {
       const resolved = await this.resolveBoundCredential(input.providerId, reference, nativeCredentialSessionId, { modelId: input.modelId });
       if (!resolved) {
@@ -382,7 +502,14 @@ export class NativeModels {
       }
     }
     const configured = this.metadata.models[modelKey(input)];
-    return { ...resolveModelSelection(this.context.modelRegistry, input, configured, controls), nativeCredentialSessionId };
+    const resolved = resolveModelSelection(this.context.modelRegistry, input, configured, controls);
+    const headers = this.metadata.providerHeaders[input.providerId];
+    if (headers && Object.keys(headers).length > 0) {
+      const model = resolved.nativeModel;
+      resolved.nativeModel = { ...model, headers: undefined,
+        resolveHeaders: async signal => ({ ...(model.resolveHeaders ? await model.resolveHeaders(signal) : model.headers), ...headers }) };
+    }
+    return { ...resolved, nativeCredentialSessionId };
   }
 
   private validate(config: ModelsConfigInput): ModelsConfig {
@@ -446,6 +573,7 @@ export class NativeModels {
     PositiveCounterSchema.parse(revision);
     const state = await this.load();
     await this.context.authStorage.credentials.reload();
+    await this.context.modelRegistry.reapplyModelPolicies();
     const configuration = request.configuration;
     if (configuration.credentialRef !== null && !this.context.authStorage.credentials.list(configuration.providerId)
       .some(row => credentialReference(configuration.providerId, row.id) === configuration.credentialRef && row.disabledCause === null)) {
@@ -469,8 +597,33 @@ export class NativeModels {
       ...state.config.providers[configuration.providerId], baseUrl: configuration.endpoint, api: nativeApi(configuration.protocol),
     };
     state.metadata.providers[configuration.providerId] = configuration;
+    state.metadata.defaultCredentials[configuration.providerId] = configuration.credentialRef;
+    if (request.headers !== undefined) {
+      delete state.config.providers[configuration.providerId].headers;
+      state.metadata.providerHeaders[configuration.providerId] = request.headers;
+    }
+    const allowed = filterAvailableModelsByEnabledPatterns(this.context.modelRegistry.getAll('all'),
+      cfgEnabledModels.get(this.context.settings), this.context.settings);
+    if (request.models !== undefined) {
+      if (request.models.some(model => model.provider !== configuration.providerId)
+        || new Set(request.models.map(model => model.modelId)).size !== request.models.length) {
+        throw new ProjectionError(422, 'INVALID_REQUEST', 'Configured models must have unique identities within this provider');
+      }
+      state.config.providers[configuration.providerId].models = [];
+      for (const [key, model] of Object.entries(state.metadata.models)) {
+        if (model.provider === configuration.providerId) delete state.metadata.models[key];
+      }
+      for (const model of request.models) this.stageModel(state, model);
+    }
     return ProviderMutationResultSchema.parse(await this.commit(state, () => {
       cfgDisabledProviders.set(this.context.settings, cfgDisabledProviders.get(this.context.settings).filter(id => id !== configuration.providerId));
+      if (request.models?.some(model => model.enabled !== undefined)) {
+        const selectors = new Set(allowed.filter(row => row.provider !== configuration.providerId).map(row => `${row.provider}/${row.id}`));
+        for (const model of request.models) {
+          if (model.enabled !== false) selectors.add(`${model.provider}/${model.modelId}`);
+        }
+        cfgEnabledModels.set(this.context.settings, enabledModelSelectors(selectors));
+      }
     }, () => ProviderMutationResultSchema.parse({ revision, providerId: configuration.providerId, provider: this.provider(configuration.providerId) })));
   }
 
@@ -480,18 +633,15 @@ export class NativeModels {
     const state = await this.load();
     if (state.config.providers) delete state.config.providers[request.providerId];
     delete state.metadata.providers[request.providerId];
+    delete state.metadata.defaultCredentials[request.providerId];
+    delete state.metadata.providerHeaders[request.providerId];
     for (const [key, model] of Object.entries(state.metadata.models)) if (model.provider === request.providerId) delete state.metadata.models[key];
     return ProviderMutationResultSchema.parse(await this.commit(state, () => {
       cfgDisabledProviders.set(this.context.settings, [...new Set([...cfgDisabledProviders.get(this.context.settings), request.providerId])]);
     }, () => ProviderMutationResultSchema.parse({ revision, providerId: request.providerId, provider: null })));
   }
 
-  async configureModel(input: ModelConfigureRequest, revision: string): Promise<ModelMutationResult> {
-    const request = ModelConfigureRequestSchema.parse(input);
-    PositiveCounterSchema.parse(revision);
-    const state = await this.load();
-    await this.context.modelRegistry.reapplyModelPolicies();
-    const model = request.model;
+  private stageModel(state: ConfigState, model: Model): void {
     const existing = this.context.modelRegistry.find(model.provider, model.modelId);
     const providerBase = this.context.modelRegistry.getProviderBaseUrl(model.provider);
     const configuredProvider = state.config.providers?.[model.provider];
@@ -539,6 +689,15 @@ export class NativeModels {
       [model.provider]: { ...provider, auth: provider.auth ?? 'none', models: [...(provider.models ?? []).filter(row => row.id !== model.modelId), raw] },
     } });
     state.metadata.models[modelKey({ providerId: model.provider, modelId: model.modelId })] = model;
+  }
+
+  async configureModel(input: ModelConfigureRequest, revision: string): Promise<ModelMutationResult> {
+    const request = ModelConfigureRequestSchema.parse(input);
+    PositiveCounterSchema.parse(revision);
+    const state = await this.load();
+    await this.context.modelRegistry.reapplyModelPolicies();
+    const model = request.model;
+    this.stageModel(state, model);
     const before = this.context.modelRegistry.getAll('all');
     const allowed = filterAvailableModelsByEnabledPatterns(before, cfgEnabledModels.get(this.context.settings), this.context.settings);
     const selection = { providerId: model.provider, modelId: model.modelId };

@@ -4,9 +4,9 @@ import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { z } from 'zod';
 import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema, SessionBranchRequestSchema, SubagentSchema } from '@openchamber/agent-contract';
-import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, Subagent } from '@openchamber/agent-contract';
+import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, Subagent, UsageQueryResult } from '@openchamber/agent-contract';
 import { WorkerBootstrapSchema } from '../protocol.ts';
-import type { WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
+import type { UsageSessionReference, WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
 import { HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, type HostSessionRelocationPrepare } from '../supervisor/host-authorization-protocol.ts';
 import { nativePrivateRootContext, rememberPrivateRoots, resolveCanonicalMessage, WorkerProjection } from '../worker/projection.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
@@ -29,6 +29,10 @@ export interface SessionForkResult { sessionId: string; rootSessionId: string; s
 export interface NativeEntryResult { entryId: string }
 export interface NativeArchiveInventory { chats: { id: string; title?: string; parentSessionId?: string }[]; complete: true }
 export interface NativeArchiveImported { sessionId: string; session: RuntimeSession; children: Subagent[]; imported: true }
+export interface IdleSessionRestartTarget { rootSessionId: string; workerGeneration: string }
+export type IdleSessionRestartOutcome =
+  | { rootSessionId: string; previousGeneration: string; outcome: 'restarted'; workerGeneration: string }
+  | { rootSessionId: string; previousGeneration: string; outcome: 'failed'; error: { status: number; code: ProblemCode } };
 type Entry =
   | { state: 'unloaded'; reference: SessionReference; runtime: RuntimeSession }
   | { state: 'opening'; input: SessionBootstrap; opened?: Opened }
@@ -101,6 +105,56 @@ export class SessionRegistry {
     await this.open({ ...input, displayPath }, true);
     return true;
   }
+  async restartIdleSessions(targets: IdleSessionRestartTarget[], admit: RelocationAdmission): Promise<IdleSessionRestartOutcome[]> {
+    this.ensureOpen();
+    const reserved: { target: IdleSessionRestartTarget; input: SessionBootstrap; release: () => void; assertIdle: () => Promise<void> }[] = [];
+    try {
+      // Reserve the entire selection synchronously before the first admission or retirement.
+      for (const target of targets) {
+        this.assertWritable(target.rootSessionId);
+        const entry = this.get(target.rootSessionId);
+        if (this.openings.has(target.rootSessionId) || this.subagentLifecycleTails.has(target.rootSessionId))
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+        if (entry.state !== 'live' || entry.opened.generation !== target.workerGeneration)
+          throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+        const runtime = entry.opened.journal.runtime();
+        if (runtime.activeRunId !== null || this.pendingRuns.has(target.rootSessionId))
+          throw new WorkerOperationError(409, 'RUN_ACTIVE');
+        if (runtime.runtimeStatus !== 'idle') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        if (this.interactions.approvals(target.rootSessionId).length > 0 || this.interactions.questions(target.rootSessionId).length > 0)
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+        const bootstrap = this.workers.bootstrap(target.rootSessionId);
+        if (!bootstrap || !this.references.get(target.rootSessionId)) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+        const reservation = this.workers.reserveRestart(target.rootSessionId, target.workerGeneration);
+        this.controls.add(target.rootSessionId);
+        reserved.push({ target, input: { ...entry.input, ...bootstrap, sessionFile: entry.opened.sessionFile }, ...reservation });
+      }
+      // Snapshot while reservations deny new worker commands; a background Shell is busy too.
+      for (const reservation of reserved) await reservation.assertIdle();
+      const outcomes: IdleSessionRestartOutcome[] = [];
+      for (const { target, input } of reserved) {
+        try {
+          await admit(input, bootstrap => this.openResolved({ ...input, ...bootstrap }, true, undefined, true, target.workerGeneration));
+          const current = this.workers.info(target.rootSessionId);
+          if (!current || current.state !== 'ready' || current.workerGeneration === target.workerGeneration)
+            throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+          outcomes.push({ rootSessionId: target.rootSessionId, previousGeneration: target.workerGeneration,
+            outcome: 'restarted', workerGeneration: current.workerGeneration });
+        } catch (error) {
+          outcomes.push({ rootSessionId: target.rootSessionId, previousGeneration: target.workerGeneration,
+            outcome: 'failed', error: error instanceof WorkerOperationError || error instanceof SessionReferenceError
+              ? { status: error.status, code: error.code } : { status: 503, code: 'SESSION_RESTORE_FAILED' } });
+        }
+      }
+      return outcomes;
+    } finally {
+      for (const { target, release } of reserved) {
+        this.controls.delete(target.rootSessionId);
+        release();
+      }
+    }
+  }
+
   consumeApprovalGrant(sessionId: string, generation: string, request: Extract<WorkerPolicyRequest, { type: 'tool' }>): NativeApprovalGrant | undefined {
     if (!request.approvalId || !request.toolCallId) return undefined;
     return this.interactions.consumeApprovalGrant(sessionId, generation, request.approvalId, request.toolCallId, request.toolName, request.input);
@@ -135,6 +189,29 @@ export class SessionRegistry {
       }
     }
     return { items, errors: references.errors };
+  }
+
+  usageReferences(authorized: readonly { workspaceId: string; projectId: string }[], query: UsageQueryResult): UsageSessionReference[] {
+    this.ensureOpen();
+    const scopes = new Map(authorized.map(scope => [scope.workspaceId, scope.projectId]));
+    const result: UsageSessionReference[] = [];
+    const inventory = this.references.list();
+    if (inventory.errors.length) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+    for (const root of inventory.items) {
+      if (scopes.get(root.workspaceId) !== root.projectId
+        || (query.workspaceId !== undefined && query.workspaceId !== root.workspaceId)
+        || (query.projectId !== undefined && query.projectId !== root.projectId)) continue;
+      if (this.controls.has(root.rootSessionId) || this.references.relocation(root.rootSessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+      const common = { rootSessionId: root.rootSessionId, workspaceId: root.workspaceId, projectId: root.projectId,
+        cwd: root.cwd, agentDirectory: root.agentDirectory, sessionsDirectory: root.sessionsDirectory };
+      result.push({ ...common, sessionId: root.rootSessionId, sessionFile: root.sessionFile, parentSessionId: root.parentSessionId });
+      for (const child of this.references.listSubagents(root.rootSessionId)) {
+        if (child.rootSessionId !== root.rootSessionId || child.workspaceId !== root.workspaceId || child.projectId !== root.projectId)
+          throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+        result.push({ ...common, sessionId: child.childSessionId, sessionFile: child.sessionFile, parentSessionId: child.parentSessionId });
+      }
+    }
+    return result;
   }
 
   async onSubagent(rootSessionId: string, generation: string, input: SubagentLifecycleInput): Promise<void> {
@@ -740,7 +817,7 @@ export class SessionRegistry {
     await this.references.close();
   }
 
-  private async openResolved(input: SessionBootstrap, replace: boolean, reference = this.references.get(input.rootSessionId), persistReference = true): Promise<RuntimeSession> {
+  private async openResolved(input: SessionBootstrap, replace: boolean, reference = this.references.get(input.rootSessionId), persistReference = true, restartGeneration?: string): Promise<RuntimeSession> {
     this.assertBootstrapWritable(input);
     const previous = this.entries.get(input.rootSessionId);
     if (!replace && previous?.state === 'live' && previous.opened.journal.runtime().runtimeStatus !== 'unavailable') return previous.opened.journal.runtime();
@@ -759,7 +836,7 @@ export class SessionRegistry {
       const { displayPath, ...bootstrap } = resolved;
       const policies = this.policyLoad ? await this.policyLoad({ sessionId: input.rootSessionId, workspaceId: input.workspaceId }) : [];
       this.interactions.loadPolicies(input.rootSessionId, input.workspaceId, policies);
-      await this.workers.start(bootstrap, replace || previous?.state === 'live', policies);
+      await this.workers.start(bootstrap, replace || previous?.state === 'live', policies, restartGeneration);
       workerStarted = true;
       if (!entry.opened) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
       const runtime = entry.opened.journal.runtime();

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { setAgentDir } from '@oh-my-pi/pi-utils';
+import { resolveProfileEnv, setAgentDir, setProfile } from '@oh-my-pi/pi-utils';
 import { getOAuthProviders, type AuthApiKeyOptions, type ResolvedApiKey } from '@oh-my-pi/pi-ai';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
@@ -66,7 +66,11 @@ export interface NativeWorkerRuntime {
 }
 
 export async function openNativeRuntime(input: { cwd: string; agentDirectory: string }): Promise<NativeWorkerRuntime> {
-  setAgentDir(input.agentDirectory);
+  // setAgentDir clears native profile selection; retain an explicitly selected native profile instead.
+  // Plugin storage belongs to that resolver's config/XDG root, never dirname(agentDirectory).
+  const profile = resolveProfileEnv(process.env.OMP_PROFILE, process.env.PI_PROFILE);
+  if (profile) setProfile(profile);
+  else setAgentDir(input.agentDirectory);
   const settings = await Settings.init({ cwd: input.cwd, agentDir: input.agentDirectory });
   const authStorage = await discoverAuthStorage(input.agentDirectory, { cwd: input.cwd, settings });
   try {
@@ -109,10 +113,10 @@ export function nativeModelsContext(
   return { ...runtime, currentNativeSessionId, oauthProviderIds: () => new Set(getOAuthProviders().filter(provider => provider.available).map(provider => provider.id)) };
 }
 
-export function nativeExtensionRoots(settings: Settings): EffectiveExtensionRoots {
-  return { explicit: [], mode: 'explicit-only', configured: cfgExtensions.get(settings), configuredLevel: settings.extensionsSourceLevel() };
+export function nativeExtensionRoots(settings: Settings, explicit: string[] = []): EffectiveExtensionRoots {
+  return { explicit, mode: 'explicit-only', configured: cfgExtensions.get(settings), configuredLevel: settings.extensionsSourceLevel() };
 }
 
-export function nativeSkillOptions(settings: Settings): LoadSkillsOptions {
-  return { ...cfgSkills.get(settings), disabledExtensions: cfgDisabledExtensions.get(settings), extensionRoots: nativeExtensionRoots(settings) };
+export function nativeSkillOptions(settings: Settings, explicit: string[] = []): LoadSkillsOptions {
+  return { ...cfgSkills.get(settings), disabledExtensions: cfgDisabledExtensions.get(settings), extensionRoots: nativeExtensionRoots(settings, explicit) };
 }

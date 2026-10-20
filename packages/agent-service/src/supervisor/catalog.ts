@@ -6,7 +6,7 @@ import {
   CatalogWorkerIdentitySchema, CounterSchema, EntityIdSchema,
   MCPConfigurationStateSchema, MCPConfigSchema,
   MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema,
-  SkillsApplyRequestSchema, SkillExpandRequestSchema,
+  SkillsApplyRequestSchema, SkillExpandRequestSchema, SkillSourceRevisionsSchema,
   MCPWorkerApplyOutcomeSchema, SkillsWorkerApplyOutcomeSchema,
   MCPOAuthRequestSchema, MCPOAuthResultSchema,
 } from '@openchamber/agent-contract';
@@ -20,6 +20,10 @@ import type {
 import { MCPWorkspaceReconnectResultSchema } from '@openchamber/agent-contract';
 import type { MCPConnectionTestResult, MCPWorkspaceReconnectResult } from '@openchamber/agent-contract';
 import { WorkerOperationError } from './workers.ts';
+import { PluginWorkerApplyOutcomeSchema, type PluginWorkerApplyOutcome, type PluginRuntimeState } from '@openchamber/agent-contract';
+import type { HostSkillSourceCommit } from './file-resources-host-protocol.ts';
+interface SkillSourcePublication { scope: 'workspace' | 'agent'; sourceRevision: string; expectedSourceRevision: string; agentDirectoryId?: string; }
+type SkillSourceReconciler = (workspaceId: string, agentDirectoryId: string) => Promise<SkillSourceRevisions>;
 
 const CatalogWorkerIdentityWithOwnerSchema = CatalogWorkerIdentitySchema.extend({ agentDirectoryId: EntityIdSchema });
 export type CatalogWorkerIdentity = z.infer<typeof CatalogWorkerIdentityWithOwnerSchema>;
@@ -59,6 +63,7 @@ export interface CatalogBootstrapInput {
   agentDirectoryId: string;
   catalogRevision: string;
 }
+export type CatalogAdmission = <T>(input: CatalogBootstrapInput, reconcile: () => Promise<SkillSourceRevisions>, launch: (bootstrap: CatalogBootstrap) => Promise<T>) => Promise<T>;
 
 export type CatalogCoordinatorErrorCode =
   | 'CATALOG_CONFLICT' | 'MCP_CONFIG_WRITE_FAILED' | 'MCP_APPLY_FAILED'
@@ -118,6 +123,7 @@ export class CatalogCoordinator {
   private readonly workers = new Map<string, CatalogWorker>();
   private readonly mcpSnapshots = new Map<string, MCPCatalogRead>();
   private readonly skillSnapshots = new Map<string, SkillsCatalogState>();
+  private readonly pluginSnapshots = new Map<string, PluginRuntimeState>();
   private readonly hydrating = new Map<string, Promise<void>>();
   private tail: Promise<void> = Promise.resolve();
   private initialized = false;
@@ -186,8 +192,11 @@ export class CatalogCoordinator {
   }
 
   /** Holds workspace admission behind all serialized owner updates. */
-  async admit<T>(input: CatalogBootstrapInput, launch: (bootstrap: CatalogBootstrap) => Promise<T>): Promise<T> {
-    return this.serial(async () => launch(await this.prepareBootstrapNow(input)));
+  async admit<T>(input: CatalogBootstrapInput, reconcile: () => Promise<SkillSourceRevisions>, launch: (bootstrap: CatalogBootstrap) => Promise<T>): Promise<T> {
+    return this.serial(async () => {
+      await this.reconcileSourcesNow(input.workspaceId, input.agentDirectoryId, await reconcile());
+      return launch(await this.prepareBootstrapNow(input));
+    });
   }
 
   async prepareBootstrap(input: CatalogBootstrapInput): Promise<CatalogBootstrap> {
@@ -252,6 +261,73 @@ export class CatalogCoordinator {
       return result;
     });
   }
+  async pluginRuntime(workspaceId: string): Promise<PluginRuntimeState[]> {
+    const targets = await this.snapshotWorkers(worker => worker.identity.workspaceId === workspaceId);
+    return targets.map(worker => this.pluginSnapshots.get(worker.identity.rootSessionId) ?? {
+      worker: ownerIdentity(worker), status: 'unavailable', appliedRevision: null,
+      error: { code: 'RELOAD_REQUIRED', detail: 'Plugin runtime application has not been confirmed for this session.', retryable: false },
+    });
+  }
+  async pluginTargets(): Promise<ContractCatalogWorkerIdentity[]> {
+    return (await this.snapshotWorkers(() => true)).map(ownerIdentity);
+  }
+
+  publishPluginRuntime(worker: ContractCatalogWorkerIdentity, revision: string): void {
+    CounterSchema.parse(revision);
+    const current = this.workers.get(worker.rootSessionId);
+    if (current?.identity.workerGeneration !== worker.workerGeneration) return;
+    this.pluginSnapshots.set(worker.rootSessionId, { worker, status: 'ready', appliedRevision: revision, error: null });
+  }
+  runPluginOperation<T>(operation: () => Promise<T>): Promise<T> {
+    return this.serial(operation);
+  }
+  runPluginApplication<T>(operation: (admit: CatalogAdmission) => Promise<T>): Promise<T> {
+    return this.serial(async () => {
+      const admit: CatalogAdmission = async (input, reconcile, launch) => {
+        await this.reconcileSourcesNow(input.workspaceId, input.agentDirectoryId, await reconcile());
+        return launch(await this.prepareBootstrapNow(input));
+      };
+      return operation(admit);
+    });
+  }
+
+  async pluginsChanged(input: { revision: string; rootSessionIds: string[] },
+    apply: (worker: ContractCatalogWorkerIdentity) => Promise<PluginWorkerApplyOutcome>): Promise<PluginWorkerApplyOutcome[]> {
+      const selectedRoots = new Set(input.rootSessionIds);
+      const targets = await this.snapshotWorkers(worker => selectedRoots.has(worker.identity.rootSessionId));
+      const outcomes: PluginWorkerApplyOutcome[] = [];
+      for (const worker of targets) {
+        const identity = ownerIdentity(worker);
+        let outcome: PluginWorkerApplyOutcome;
+        try { outcome = PluginWorkerApplyOutcomeSchema.parse(await apply(identity)); }
+        catch (error) { outcome = { worker: identity, outcome: 'failed', appliedRevision: this.pluginSnapshots.get(identity.rootSessionId)?.appliedRevision ?? null,
+          error: operationError(error instanceof Error ? error : undefined, 'PLUGIN_APPLY_FAILED', 'Plugin configuration is committed but active runtime application failed.') }; }
+        if (outcome.worker.rootSessionId !== identity.rootSessionId || outcome.worker.workspaceId !== identity.workspaceId
+          || outcome.worker.workerGeneration !== identity.workerGeneration) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+        if (!await this.live(worker) || this.workers.get(identity.rootSessionId)?.identity.workerGeneration !== identity.workerGeneration) {
+          this.dropWorker(worker);
+          outcome = { worker: identity, outcome: 'retired' };
+        } else if (outcome.outcome === 'applied') {
+          if (outcome.appliedRevision !== input.revision) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+          this.pluginSnapshots.set(identity.rootSessionId, { worker: identity, status: 'ready', appliedRevision: outcome.appliedRevision, error: null });
+        } else if (outcome.outcome === 'failed') {
+          const appliedRevision = this.pluginSnapshots.get(identity.rootSessionId)?.appliedRevision ?? outcome.appliedRevision;
+          outcome = { ...outcome, appliedRevision };
+          this.pluginSnapshots.set(identity.rootSessionId, { worker: identity, status: 'unavailable', appliedRevision, error: outcome.error });
+        }
+        outcomes.push(outcome);
+      }
+      for (let index = 0; index < outcomes.length; index++) {
+        const outcome = outcomes[index];
+        const current = this.workers.get(outcome.worker.rootSessionId);
+        if (!current || current.identity.workerGeneration !== outcome.worker.workerGeneration || !await this.live(current)) {
+          if (current?.identity.workerGeneration === outcome.worker.workerGeneration) this.dropWorker(current);
+          outcomes[index] = { worker: outcome.worker, outcome: 'retired' };
+        }
+      }
+      return outcomes;
+  }
+
 
 
   async configure(rootSessionId: string, request: MCPConfigureRequest): Promise<MCPApplyResult> {
@@ -450,61 +526,101 @@ export class CatalogCoordinator {
   }
 
 
-  async publishSources(workspaceId: string, input: {
-    scope: 'workspace' | 'agent'; sourceRevision: string; expectedSourceRevision: string; agentDirectoryId?: string;
+  async publishSources(workspaceId: string, input: SkillSourcePublication): Promise<SkillInstallResult> {
+    return this.serial(() => this.publishSourcesNow(workspaceId, input));
+  }
+
+  private async publishSourcesNow(workspaceId: string, input: SkillSourcePublication): Promise<SkillInstallResult> {
+    const workspace = this.workspace(workspaceId);
+    const selectedAgentDirectoryId = input.agentDirectoryId ?? workspace.agentDirectoryIds[0];
+    if (!selectedAgentDirectoryId || !workspace.agentDirectoryIds.includes(selectedAgentDirectoryId)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+    const scope: SkillSourceScope = input.scope === 'workspace' ? { kind: 'workspace', workspaceId } : { kind: 'agent', agentDirectoryId: selectedAgentDirectoryId };
+    const owner = input.scope === 'workspace' ? workspace.workspaceSourceRevision : this.agent(selectedAgentDirectoryId).sourceRevision;
+    CounterSchema.parse(input.sourceRevision);
+    CounterSchema.parse(input.expectedSourceRevision);
+    if (owner === input.sourceRevision) return { scope, sourceRevision: input.sourceRevision, persistence: 'committed', apply: null };
+    if (owner !== input.expectedSourceRevision || BigInt(input.sourceRevision) <= BigInt(owner)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: owner });
+    if (input.scope === 'workspace') workspace.workspaceSourceRevision = input.sourceRevision;
+    else this.agent(selectedAgentDirectoryId).sourceRevision = input.sourceRevision;
+    try { await this.persist(); }
+    catch (error) {
+      if (input.scope === 'workspace') workspace.workspaceSourceRevision = owner;
+      else this.agent(selectedAgentDirectoryId).sourceRevision = owner;
+      throw error;
+    }
+    return { scope, sourceRevision: input.sourceRevision, persistence: 'committed', apply: null };
+  }
+
+  async reconcileSkillSources(workspaceId: string, agentDirectoryId: string, reconcile: () => Promise<SkillSourceRevisions>): Promise<SkillSourceRevisions> {
+    return this.serial(async () => this.reconcileSourcesNow(workspaceId, agentDirectoryId, await reconcile()));
+  }
+
+  private async reconcileSourcesNow(workspaceId: string, agentDirectoryId: string, input: SkillSourceRevisions): Promise<SkillSourceRevisions> {
+    const workspace = this.workspace(workspaceId);
+    if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+    const sources = SkillSourceRevisionsSchema.parse(input);
+    const agent = this.agent(agentDirectoryId);
+    const previous = { workspace: workspace.workspaceSourceRevision, agent: agent.sourceRevision };
+    if (BigInt(sources.workspace) < BigInt(previous.workspace) || BigInt(sources.agent) < BigInt(previous.agent)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+    if (sources.workspace === previous.workspace && sources.agent === previous.agent) return sources;
+    workspace.workspaceSourceRevision = sources.workspace;
+    agent.sourceRevision = sources.agent;
+    try { await this.persist(); }
+    catch (error) { workspace.workspaceSourceRevision = previous.workspace; agent.sourceRevision = previous.agent; throw error; }
+    return sources;
+  }
+
+  async commitSkillFiles(workspaceId: string, input: HostSkillSourceCommit, callbacks: {
+    reconcile: SkillSourceReconciler; commit(): Promise<string>;
   }): Promise<SkillInstallResult> {
     return this.serial(async () => {
-      const workspace = this.workspace(workspaceId);
-      const selectedAgentDirectoryId = input.agentDirectoryId ?? workspace.agentDirectoryIds[0];
-      if (!selectedAgentDirectoryId || !workspace.agentDirectoryIds.includes(selectedAgentDirectoryId)) {
-        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
-      }
-      const scope: SkillSourceScope = input.scope === 'workspace'
-        ? { kind: 'workspace', workspaceId }
-        : { kind: 'agent', agentDirectoryId: selectedAgentDirectoryId };
-      const owner = input.scope === 'workspace' ? workspace.workspaceSourceRevision : this.agent(selectedAgentDirectoryId).sourceRevision;
-      CounterSchema.parse(input.sourceRevision);
-      CounterSchema.parse(input.expectedSourceRevision);
-      if (owner !== input.expectedSourceRevision || BigInt(input.sourceRevision) <= BigInt(owner)) {
-        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: owner });
-      }
-      if (input.scope === 'workspace') workspace.workspaceSourceRevision = input.sourceRevision;
-      else this.agent(selectedAgentDirectoryId).sourceRevision = input.sourceRevision;
-      try { await this.persist(); }
-      catch (error) {
-        if (input.scope === 'workspace') workspace.workspaceSourceRevision = owner;
-        else this.agent(selectedAgentDirectoryId).sourceRevision = owner;
-        throw error;
-      }
-      return { scope, sourceRevision: input.sourceRevision, persistence: 'committed', apply: null };
+      const sources = await this.reconcileSourcesNow(workspaceId, input.agentDirectoryId, await callbacks.reconcile(workspaceId, input.agentDirectoryId));
+      const current = sources[input.scope];
+      if (current !== input.expectedSourceRevision) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: current });
+      const sourceRevision = CounterSchema.parse(await callbacks.commit());
+      if (BigInt(sourceRevision) !== BigInt(current) + 1n) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+      const result = await this.publishSourcesNow(workspaceId, { scope: input.scope, sourceRevision, expectedSourceRevision: current, agentDirectoryId: input.agentDirectoryId });
+      const apply = await this.applySkillsScope(workspaceId, input.agentDirectoryId, { scope: input.scope, sourceRevision }, callbacks.reconcile);
+      return { ...result, apply };
     });
   }
 
-  async applySkills(rootSessionId: string, request: { scope: 'workspace' | 'agent'; sourceRevision: string }): Promise<SkillsApplyResult> {
+  async applySkills(rootSessionId: string, request: { scope: 'workspace' | 'agent'; sourceRevision: string }, reconcile: SkillSourceReconciler): Promise<SkillsApplyResult> {
     return this.serial(async () => {
       const root = await this.resolveWorker(rootSessionId);
-      const input = SkillsApplyRequestSchema.parse(request);
-      const sourceOwner = input.scope === 'workspace' ? this.workspace(root.identity.workspaceId).workspaceSourceRevision : this.agent(root.identity.agentDirectoryId).sourceRevision;
-      if (sourceOwner !== input.sourceRevision) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: sourceOwner });
-      const scope: SkillSourceScope = input.scope === 'workspace'
-        ? { kind: 'workspace', workspaceId: root.identity.workspaceId }
-        : { kind: 'agent', agentDirectoryId: root.identity.agentDirectoryId };
-      const outcomes: SkillsWorkerApplyOutcome[] = [];
-      const targets = await this.snapshotWorkers(item => input.scope === 'workspace'
-        ? item.identity.workspaceId === root.identity.workspaceId
-        : item.identity.agentDirectoryId === root.identity.agentDirectoryId);
-      for (const worker of targets) outcomes.push(await this.applySkillsWorker(worker));
-      const lifetimes = await Promise.all(targets.map(worker => this.live(worker)));
-      for (const [index, worker] of targets.entries()) {
-        if (!lifetimes[index] || this.workers.get(worker.identity.rootSessionId)?.identity.workerGeneration !== worker.identity.workerGeneration) {
-          this.dropWorker(worker);
-          outcomes[index] = { worker: ownerIdentity(worker), outcome: 'retired' };
-        }
-      }
-      const result = { kind: 'skills' as const, status: aggregate(outcomes), scope, sourceRevision: input.sourceRevision, workers: outcomes } satisfies SkillsApplyResult;
-      if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'SKILL_APPLY_FAILED', { result });
-      return result;
+      return this.applySkillsScope(root.identity.workspaceId, root.identity.agentDirectoryId, request, reconcile);
     });
+  }
+
+  async applySkillsWorkspace(workspaceId: string, agentDirectoryId: string, request: { scope: 'workspace' | 'agent'; sourceRevision: string }, reconcile: SkillSourceReconciler): Promise<SkillsApplyResult> {
+    return this.serial(() => this.applySkillsScope(workspaceId, agentDirectoryId, request, reconcile));
+  }
+
+  private async applySkillsScope(workspaceId: string, agentDirectoryId: string, request: { scope: 'workspace' | 'agent'; sourceRevision: string }, reconcile: SkillSourceReconciler): Promise<SkillsApplyResult> {
+    const workspace = this.workspace(workspaceId);
+    if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+    const input = SkillsApplyRequestSchema.parse(request);
+    const targets = await this.snapshotWorkers(item => input.scope === 'workspace'
+      ? item.identity.workspaceId === workspaceId : item.identity.agentDirectoryId === agentDirectoryId);
+    const pairs = new Map<string, { workspaceId: string; agentDirectoryId: string }>();
+    pairs.set(JSON.stringify([workspaceId, agentDirectoryId]), { workspaceId, agentDirectoryId });
+    for (const worker of targets) pairs.set(JSON.stringify([worker.identity.workspaceId, worker.identity.agentDirectoryId]), worker.identity);
+    for (const pair of pairs.values()) await this.reconcileSourcesNow(pair.workspaceId, pair.agentDirectoryId, await reconcile(pair.workspaceId, pair.agentDirectoryId));
+    const sourceOwner = input.scope === 'workspace' ? workspace.workspaceSourceRevision : this.agent(agentDirectoryId).sourceRevision;
+    if (sourceOwner !== input.sourceRevision) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: sourceOwner });
+    const scope: SkillSourceScope = input.scope === 'workspace' ? { kind: 'workspace', workspaceId } : { kind: 'agent', agentDirectoryId };
+    const outcomes: SkillsWorkerApplyOutcome[] = [];
+    for (const worker of targets) outcomes.push(await this.applySkillsWorker(worker));
+    const lifetimes = await Promise.all(targets.map(worker => this.live(worker)));
+    for (const [index, worker] of targets.entries()) {
+      if (!lifetimes[index] || this.workers.get(worker.identity.rootSessionId)?.identity.workerGeneration !== worker.identity.workerGeneration) {
+        this.dropWorker(worker);
+        outcomes[index] = { worker: ownerIdentity(worker), outcome: 'retired' };
+      }
+    }
+    const result = { kind: 'skills' as const, status: aggregate(outcomes), scope, sourceRevision: input.sourceRevision, workers: outcomes } satisfies SkillsApplyResult;
+    if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'SKILL_APPLY_FAILED', { result });
+    return result;
   }
 
   async expand(rootSessionId: string, request: SkillExpandRequest): Promise<SkillExpandResult> {
@@ -715,6 +831,7 @@ export class CatalogCoordinator {
     this.workers.delete(worker.identity.rootSessionId);
     this.mcpSnapshots.delete(worker.identity.rootSessionId);
     this.skillSnapshots.delete(worker.identity.rootSessionId);
+    this.pluginSnapshots.delete(worker.identity.rootSessionId);
   }
 
   private serial<T>(operation: () => Promise<T>): Promise<T> {

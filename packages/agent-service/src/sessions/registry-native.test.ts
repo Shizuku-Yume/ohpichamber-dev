@@ -62,7 +62,9 @@ async function fixture() {
     await sessions.initialize();
     const source = { rootSessionId, projectId: 'project', workspaceId: 'source-workspace', cwd: sourceCwd,
       agentDirectory, agentDirectoryId: 'retained-owner', displayPath: 'source', sessionFile: sourceFile, sessionsDirectory,
-      env: { HOME: root, XDG_CONFIG_HOME: join(root, 'config'), XDG_DATA_HOME: join(root, 'data') } };
+      env: { HOME: root, USERPROFILE: root, PI_CONFIG_DIR: '.omp', PI_CODING_AGENT_DIR: agentDirectory,
+        OMP_PROFILE: '', PI_PROFILE: '', XDG_CONFIG_HOME: join(root, 'config'), XDG_DATA_HOME: join(root, 'data'),
+        XDG_STATE_HOME: join(root, 'state'), XDG_CACHE_HOME: join(root, 'cache') } };
     await sessions.open(source);
     const destination = { rootSessionId, projectId: 'project', workspaceId: 'destination-workspace', cwd: destinationCwd,
       agentDirectory, agentDirectoryId: 'retained-owner', displayPath: 'destination', env: source.env };
@@ -342,5 +344,124 @@ test('root deletion drains pending child lifecycle writes and removes persisted 
     expect(() => harness.sessions.listSubagents(rootSessionId)).toThrow();
     await harness.restart();
     expect(() => harness.sessions.listSubagents(rootSessionId)).toThrow();
+  } finally { await harness.close(); }
+}, 60000);
+
+test('explicit idle restart preserves native transcript files and publishes a new generation and epoch', async () => {
+  const harness = await fixture();
+  try {
+    const previous = harness.workers.authorizationScope(rootSessionId)!;
+    const before = harness.sessions.journal(rootSessionId).snapshot();
+    const bytes = await readFile(harness.source.sessionFile, 'utf8');
+    const outcomes = await harness.sessions.restartIdleSessions([previous], admit);
+    const current = harness.workers.authorizationScope(rootSessionId)!;
+    expect(outcomes).toEqual([{ rootSessionId, previousGeneration: previous.workerGeneration,
+      outcome: 'restarted', workerGeneration: current.workerGeneration }]);
+    expect(current.workerGeneration).not.toBe(previous.workerGeneration);
+    expect(harness.workers.bootstrap(rootSessionId)?.sessionFile).toBe(harness.source.sessionFile);
+    const after = harness.sessions.journal(rootSessionId).snapshot();
+    expect(after.messages).toEqual(before.messages);
+    expect(after.session.epoch).not.toBe(before.session.epoch);
+    expect(await readFile(harness.source.sessionFile, 'utf8')).toBe(bytes);
+    expect(await readFile(harness.childFile, 'utf8')).toBe(harness.childBytes);
+  } finally { await harness.close(); }
+}, 60000);
+
+test('idle restart preflights all roots and preserves earlier generations when a later root has controls or commands pending', async () => {
+  const harness = await fixture();
+  try {
+    const { sessionFile: _sourceFile, ...second } = harness.source;
+    const secondId = 'second-idle-root';
+    await harness.sessions.open({ ...second, rootSessionId: secondId });
+    const first = harness.workers.authorizationScope(rootSessionId)!;
+    const last = harness.workers.authorizationScope(secondId)!;
+    const resolving = harness.sessions.resolveNativeEntry(secondId, 'unmapped-message').catch(error => error);
+    await expect(harness.sessions.restartIdleSessions([first, last], admit)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    await resolving;
+    expect(harness.workers.authorizationScope(rootSessionId)?.workerGeneration).toBe(first.workerGeneration);
+    expect(harness.workers.authorizationScope(secondId)?.workerGeneration).toBe(last.workerGeneration);
+    const pending = harness.workers.request(secondId, { type: 'shell', operation: { type: 'snapshot' } });
+    await expect(harness.sessions.restartIdleSessions([first, last], admit)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    await pending;
+    expect(harness.workers.authorizationScope(rootSessionId)?.workerGeneration).toBe(first.workerGeneration);
+    expect(harness.workers.authorizationScope(secondId)?.workerGeneration).toBe(last.workerGeneration);
+    // A refused preflight releases every reservation: a later explicit request can succeed.
+    const outcomes = await harness.sessions.restartIdleSessions([first, last], admit);
+    expect(outcomes.map(outcome => outcome.outcome)).toEqual(['restarted', 'restarted']);
+  } finally { await harness.close(); }
+}, 60000);
+
+test('idle restart refuses background Shell work before retiring any selected root', async () => {
+  const harness = await fixture();
+  try {
+    const { sessionFile: _sourceFile, ...second } = harness.source;
+    const secondId = 'shell-busy-root';
+    await harness.sessions.open({ ...second, rootSessionId: secondId });
+    const first = harness.workers.authorizationScope(rootSessionId)!;
+    const last = harness.workers.authorizationScope(secondId)!;
+    const shell = await harness.workers.request(secondId, { type: 'shell', operation: { type: 'start', request: {
+      command: 'sleep 30', background: true,
+    } } });
+    if (shell.type !== 'shell' || shell.result.type !== 'start') throw new Error('Real native background Shell is required');
+    try {
+      await expect(harness.sessions.restartIdleSessions([first, last], admit)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+      expect(harness.workers.authorizationScope(rootSessionId)?.workerGeneration).toBe(first.workerGeneration);
+      expect(harness.workers.authorizationScope(secondId)?.workerGeneration).toBe(last.workerGeneration);
+    } finally {
+      const { jobId, sessionId, epoch, workerGeneration } = shell.result.job;
+      await harness.workers.request(secondId, { type: 'shell', operation: { type: 'stop', request: { job: { jobId, sessionId, epoch, workerGeneration } } } });
+    }
+  } finally { await harness.close(); }
+}, 60000);
+
+test('failed idle restart preserves native references for an explicit later reopen without reporting success', async () => {
+  const harness = await fixture();
+  const displaced = `${harness.source.cwd}-temporarily-unavailable`;
+  let moved = false;
+  try {
+    const previous = harness.workers.authorizationScope(rootSessionId)!;
+    const bytes = await readFile(harness.source.sessionFile, 'utf8');
+    await rename(harness.source.cwd, displaced);
+    moved = true;
+    const outcomes = await harness.sessions.restartIdleSessions([previous], admit);
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]).toMatchObject({ rootSessionId, previousGeneration: previous.workerGeneration, outcome: 'failed' });
+    expect(harness.sessions.runtime(rootSessionId).runtimeStatus).toBe('unavailable');
+    expect(await readFile(harness.source.sessionFile, 'utf8')).toBe(bytes);
+    await rename(displaced, harness.source.cwd);
+    moved = false;
+    await harness.sessions.reopen(harness.source);
+    expect(harness.sessions.runtime(rootSessionId).runtimeStatus).toBe('idle');
+    expect(harness.workers.authorizationScope(rootSessionId)?.workerGeneration).not.toBe(previous.workerGeneration);
+    expect(await readFile(harness.source.sessionFile, 'utf8')).toBe(bytes);
+  } finally {
+    if (moved) await rename(displaced, harness.source.cwd);
+    await harness.close();
+  }
+}, 60000);
+
+test('stateless identity changes preserve active commands and recreate an idle worker under its actual new profile', async () => {
+  const harness = await fixture();
+  try {
+    const input = { rootSessionId: 'stateless-profile-owner', workspaceId: harness.source.workspaceId,
+      projectId: harness.source.projectId, cwd: harness.source.cwd, agentDirectory: harness.source.agentDirectory,
+      agentDirectoryId: harness.source.agentDirectoryId, catalogRevision: '0', env: harness.source.env };
+    const first = await harness.workers.startStateless(input);
+    const reused = await harness.workers.startStateless({ ...input, catalogRevision: '7' });
+    expect(reused.workerGeneration).toBe(first.workerGeneration);
+    const pending = harness.workers.request(input.rootSessionId, { type: 'catalog', revision: '0', operation: { type: 'plugins.owner' } });
+    const changed = { ...input, env: { ...input.env, OMP_PROFILE: 'refreshed-native-profile' } };
+    await expect(harness.workers.startStateless(changed)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
+    expect(harness.workers.authorizationScope(input.rootSessionId)?.workerGeneration).toBe(first.workerGeneration);
+    const oldOwner = await pending;
+    if (oldOwner.type !== 'catalog' || oldOwner.result.type !== 'plugins.owner') throw new Error('Actual native plugin owner is required');
+    const current = await harness.workers.startStateless(changed);
+    expect(current.workerGeneration).not.toBe(first.workerGeneration);
+    const currentOwner = await harness.workers.request(input.rootSessionId, { type: 'catalog', revision: '0', operation: { type: 'plugins.owner' } });
+    if (currentOwner.type !== 'catalog' || currentOwner.result.type !== 'plugins.owner') throw new Error('Refreshed native plugin owner is required');
+    expect(currentOwner.result.rootPath).not.toBe(oldOwner.result.rootPath);
+    await expect(harness.workers.request(input.rootSessionId, { type: 'catalog', revision: '0', operation: { type: 'plugins.owner' } }, first.workerGeneration))
+      .rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
+    expect((await harness.workers.startStateless(changed)).workerGeneration).toBe(current.workerGeneration);
   } finally { await harness.close(); }
 }, 60000);

@@ -14,6 +14,11 @@ import type {
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
   QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
   ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult, StreamInvalidated,
+  ProviderAccounts, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderConfigurationRead,
+  CacheWarmingState, CacheWarmingApplyResult,
+  UsageStats, UsageToolsResponse,
+  WebSearchConfigState, WebSearchMutationResult,
+  PluginCatalogState, PluginMutationResult, PluginDoctorResult, PluginMarketplaceState,
 } from '@openchamber/agent-contract';
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
@@ -23,12 +28,15 @@ import type { ApprovalPolicyCommit, ApprovalPolicyLoad } from '../interaction/ma
 import { SessionReferenceError } from '../sessions/references.ts';
 import { ArchiveImportRequestSchema } from '../sessions/archive.ts';
 import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo } from './workers.ts';
-import { CatalogCoordinator, CatalogCoordinatorError } from './catalog.ts';
+import { CatalogCoordinator, CatalogCoordinatorError, type CatalogAdmission, type CatalogBootstrap } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
 import { WorkspaceRoutes } from './workspace-routes.ts';
+import { WebSearchCoordinator } from './websearch.ts';
 import { ShellCoordinator } from './shell.ts';
 import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema, HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
 import type { PrivateCredentialResolveResult, PrivateCredentialHandoffResult } from '../catalogs/private-credentials.ts';
+import type { CommandCatalogState, PromptTemplateCatalogState, FileResourceSkillCatalog, FileResourceExpandResult, FileResourcePromptInputResult, SkillSourceRevisions } from '@openchamber/agent-contract';
+import { HostSkillSourceCommitSchema, HostSkillSourceResultSchema, type HostSkillSourceOperation, type HostSkillSourceResult } from './file-resources-host-protocol.ts';
 const SessionForkRequestSchema = z.strictObject({ sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']) }).refine(input => input.mode === 'full' || input.entryId !== null, { message: 'Selected forks require an entry identity', path: ['entryId'] });
 const SessionReopenRequestSchema = HostSessionBootstrapSchema.omit({ sessionFile: true });
 const SessionForkAckSchema = z.strictObject({ sessionId: EntityIdSchema, rootSessionId: EntityIdSchema, sessionFile: z.string().min(1), sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']) });
@@ -43,11 +51,14 @@ interface ServiceOptions {
   approvalPolicyLoad?: ApprovalPolicyLoad;
   policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;
   invokeHostAction?: (rootSessionId: string, request: HostActionRequest, signal: AbortSignal) => Promise<HostActionResult>;
+  hostSkillSource: (operation: HostSkillSourceOperation) => Promise<HostSkillSourceResult>;
 }
 const InternalSecretSchema = z.string().regex(/^[a-f0-9]{64}$/i);
 const HostSkillSourcePublicationSchema = z.strictObject({
   scope: z.enum(['workspace', 'agent']), sourceRevision: CounterSchema, expectedSourceRevision: CounterSchema, agentDirectoryId: EntityIdSchema.optional(),
 }).refine(input => (input.scope === 'agent') === (input.agentDirectoryId !== undefined), 'Agent source publication selects its captured owner');
+const HostSkillFilesApplySchema = z.strictObject({ scope: z.enum(['workspace', 'agent']), sourceRevision: CounterSchema, agentDirectoryId: EntityIdSchema });
+const HostSkillSourceReconcileSchema = z.strictObject({ agentDirectoryId: EntityIdSchema });
 const ListeningAddressSchema = z.object({ address: z.literal('127.0.0.1'), port: z.number().int().min(1).max(65_535) });
 class RequestError extends Error {
   constructor(readonly status: number, readonly code: ProblemCode, message: string) { super(message); }
@@ -69,10 +80,16 @@ type ServiceResponse =
   | MCPCatalogRead | MCPApplyResult | MCPOAuthResult
   | MCPConfigurationState | MCPConnectionTestResult | MCPWorkspaceReconnectResult | MCPSecretWriteResult
   | SkillsCatalogState | SkillsApplyResult | SkillExpandResult | SkillInstallResult
+  | PluginCatalogState | PluginMutationResult | PluginDoctorResult | PluginMarketplaceState
   | ModelCatalog | ProviderCatalog | AgentCatalog
   | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
-  | CompletionResult | CompletionCancelResult
+  | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderConfigurationRead
+  | CacheWarmingState | CacheWarmingApplyResult
+  | WebSearchConfigState | WebSearchMutationResult
+  | CompletionResult | CompletionCancelResult | UsageStats | UsageToolsResponse
   | PrivateCredentialResolveResult | PrivateCredentialHandoffResult
+  | CommandCatalogState | PromptTemplateCatalogState | FileResourceSkillCatalog | FileResourceExpandResult | FileResourcePromptInputResult
+  | { sources: SkillSourceRevisions }
   | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult;
 
 function respondJson(response: ServerResponse, status: number, body: ServiceResponse): void {
@@ -114,6 +131,7 @@ export class AgentService {
   private readonly sessions: SessionRegistry;
   private readonly catalog: CatalogCoordinator;
   private readonly workspaceCatalogs: WorkspaceCatalogs;
+  private readonly webSearch: WebSearchCoordinator;
   private readonly workspaceRoutes: WorkspaceRoutes;
   private readonly shell: ShellCoordinator;
   private readonly observationEpoch = randomUUID();
@@ -140,7 +158,7 @@ export class AgentService {
         onSubagent: (...args) => { void this.sessions.onSubagent(...args); },
       },
     });
-    this.workspaceCatalogs = new WorkspaceCatalogs(options.stateDirectory, this.workers);
+    this.workspaceCatalogs = new WorkspaceCatalogs(options.stateDirectory, this.workers, () => this.catalog);
     this.catalog = new CatalogCoordinator(options.stateDirectory, {
       readMcpConfiguration: async workspaceId => {
         const root = await this.workspaceCatalogs.stateless(workspaceId);
@@ -155,7 +173,23 @@ export class AgentService {
       },
     });
     this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad);
-    this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers, this.catalog);
+    this.webSearch = new WebSearchCoordinator(this.workspaceCatalogs, this.workers);
+    this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers, this.catalog,
+      this.sessions, options.stateDirectory, this.webSearch,
+      (workspaceId, request) => this.workspaceCatalogs.applyPlugins(workspaceId, request, async (targets, revision, admission) => {
+        const outcomes = await this.sessions.restartIdleSessions(targets, (input, launch) => this.admit(input, launch, admission));
+        return outcomes.map((outcome, index) => {
+          const target = targets[index];
+          if (!target || target.rootSessionId !== outcome.rootSessionId) throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (outcome.outcome === 'failed') return { worker: target, outcome: 'failed' as const, appliedRevision: null,
+            error: { code: outcome.error.code, detail: 'The native session could not restart with the persisted plugin configuration.', retryable: outcome.error.status >= 500 } };
+          const worker = { ...target, workerGeneration: outcome.workerGeneration };
+          const appliedRevision = this.workers.bootstrap(outcome.rootSessionId)?.pluginRevision;
+          if (appliedRevision === undefined || appliedRevision !== revision) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+          this.catalog.publishPluginRuntime(worker, appliedRevision);
+          return { worker, outcome: 'applied' as const, appliedRevision };
+        });
+      }));
     this.shell = new ShellCoordinator(this.workers, this.sessions, this.observationEpoch, rootSessionId => {
       const input = this.workers.bootstrap(rootSessionId);
       return input !== undefined && this.workspaceCatalogs.matches(input);
@@ -165,14 +199,18 @@ export class AgentService {
     const scope = this.workers.authorizationScope(rootSessionId);
     return scope === undefined ? undefined : HostAuthorizationScopeSchema.parse(scope);
   }
-  private async admit<T>(input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<T>): Promise<T> {
+  private async admit<T>(input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<T>, capturedAdmission?: CatalogAdmission): Promise<T> {
     this.sessions.assertBootstrapWritable(input);
     const captured = this.workers.bootstrap(input.rootSessionId);
     if (captured && (captured.workspaceId !== input.workspaceId || captured.projectId !== input.projectId || captured.cwd !== input.cwd || captured.agentDirectory !== input.agentDirectory || (input.agentDirectoryId !== undefined && captured.agentDirectoryId !== input.agentDirectoryId))) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    if (capturedAdmission && (!captured || input.agentDirectoryId === undefined || !this.workspaceCatalogs.matches(input)))
+      throw new WorkerOperationError(403, 'UNAUTHORIZED');
     const agentDirectoryId = await this.workspaceCatalogs.registerRoot(input);
-    await this.catalog.registerWorkspace(input.workspaceId, agentDirectoryId);
-    return this.catalog.admit({ workspaceId: input.workspaceId, agentDirectoryId, catalogRevision: this.workspaceCatalogs.revision(input.workspaceId, agentDirectoryId) }, async authority => {
-      const bootstrap = WorkerBootstrapSchema.parse({ ...input, ...authority, agentDirectoryId, observationEpoch: this.observationEpoch, mcpConfigPath: join(input.cwd, '.omp', 'mcp.json') });
+    if (!capturedAdmission) await this.catalog.registerWorkspace(input.workspaceId, agentDirectoryId);
+    const load = async (authority: CatalogBootstrap): Promise<T> => this.webSearch.admit(agentDirectoryId, async () => {
+      const pluginRevision = await this.workspaceCatalogs.pluginRevision(input.workspaceId);
+      const bootstrap = WorkerBootstrapSchema.parse({ ...input, ...authority, agentDirectoryId, pluginRevision,
+        observationEpoch: this.observationEpoch, mcpConfigPath: join(input.cwd, '.omp', 'mcp.json') });
       const result = await launch(bootstrap);
       try {
         const scope = this.workers.authorizationScope(bootstrap.rootSessionId);
@@ -184,6 +222,24 @@ export class AgentService {
         throw error;
       }
     });
+    const authority = { workspaceId: input.workspaceId, agentDirectoryId, catalogRevision: this.workspaceCatalogs.revision(input.workspaceId, agentDirectoryId) };
+    const reconcile = () => this.reconcileHostSkillSources(input.workspaceId, agentDirectoryId);
+    return capturedAdmission ? capturedAdmission(authority, reconcile, load) : this.catalog.admit(authority, reconcile, load);
+  }
+  private async invokeHostSkillSource(operation: HostSkillSourceOperation): Promise<HostSkillSourceResult> {
+    const result = HostSkillSourceResultSchema.parse(await this.options.hostSkillSource(operation));
+    if (result.status === 'failed') {
+      const status = result.code === 'INVALID_REQUEST' ? 400 : result.code === 'UNAUTHORIZED' ? 403 : result.code === 'NOT_FOUND' ? 404 : result.code === 'CATALOG_CONFLICT' ? 409 : 503;
+      throw new WorkerOperationError(status, result.code === 'NOT_FOUND' ? 'SESSION_NOT_FOUND' : result.code, result.currentRevision === undefined ? undefined : { currentRevision: result.currentRevision });
+    }
+    return result;
+  }
+  private async reconcileHostSkillSources(workspaceId: string, agentDirectoryId: string): Promise<SkillSourceRevisions> {
+    const workspace = this.workspaceCatalogs.get(workspaceId);
+    if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    const result = await this.invokeHostSkillSource({ action: 'reconcile', projectId: workspace.projectId, workspaceId, agentDirectoryId });
+    if (result.status !== 'reconciled') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    return result.sources;
   }
   private async registerCatalogWorker(input: WorkerBootstrap, generation: string): Promise<void> {
     const root = input.rootSessionId;
@@ -236,6 +292,8 @@ export class AgentService {
         },
       },
     });
+    if (input.pluginRevision !== undefined) this.catalog.publishPluginRuntime({ rootSessionId: root,
+      workspaceId: input.workspaceId, workerGeneration: generation }, input.pluginRevision);
   }
   async start(): Promise<void> {
     await this.catalog.initialize();
@@ -393,6 +451,36 @@ export class AgentService {
         if (input.agentDirectoryId !== undefined && !owner.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
         respondJson(response, 200, await this.catalog.publishSources(workspaceId, input)); return;
       }
+      const skillFilesCommit = /^\/internal\/workspaces\/([^/]+)\/skill-files\/(commit|reconcile)$/.exec(url.pathname);
+      if (skillFilesCommit && request.method === 'POST') {
+        const workspaceId = identity(skillFilesCommit[1]);
+        const workspace = this.workspaceCatalogs.get(workspaceId);
+        if (skillFilesCommit[2] === 'reconcile') {
+          const input = await readBody(request, HostSkillSourceReconcileSchema);
+          if (!workspace.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+          const sources = await this.catalog.reconcileSkillSources(workspaceId, input.agentDirectoryId, () => this.reconcileHostSkillSources(workspaceId, input.agentDirectoryId));
+          respondJson(response, 200, { sources }); return;
+        }
+        const input = await readBody(request, HostSkillSourceCommitSchema);
+        if (!workspace.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+        const result = await this.catalog.commitSkillFiles(workspaceId, input, {
+          reconcile: (workspaceId, agentDirectoryId) => this.reconcileHostSkillSources(workspaceId, agentDirectoryId),
+          commit: async () => {
+            const result = await this.invokeHostSkillSource({ action: 'commit', projectId: workspace.projectId, workspaceId, ...input });
+            if (result.status !== 'committed') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+            return result.sourceRevision;
+          },
+        });
+        respondJson(response, 200, result); return;
+      }
+      const skillFilesApply = /^\/internal\/workspaces\/([^/]+)\/skill-files\/apply$/.exec(url.pathname);
+      if (skillFilesApply && request.method === 'POST') {
+        const workspaceId = identity(skillFilesApply[1]);
+        const input = await readBody(request, HostSkillFilesApplySchema);
+        const owner = this.workspaceCatalogs.get(workspaceId);
+        if (!owner.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+        respondJson(response, 200, await this.catalog.applySkillsWorkspace(workspaceId, input.agentDirectoryId, { scope: input.scope, sourceRevision: input.sourceRevision }, (workspaceId, agentDirectoryId) => this.reconcileHostSkillSources(workspaceId, agentDirectoryId))); return;
+      }
       const privateBranch = /^\/internal\/sessions\/([^/]+)\/branch$/.exec(url.pathname);
       if (privateBranch && request.method === 'POST') {
         respondJson(response, 200, await this.sessions.branch(identity(privateBranch[1]), await readBody(request, SessionBranchRequestSchema))); return;
@@ -519,7 +607,7 @@ export class AgentService {
         if (kind === 'mcp' && action === 'apply' && request.method === 'POST') { respondJson(response, 200, await this.catalog.applyMcp(sessionId, await readBody(request, MCPApplyRequestSchema))); return; }
         if (kind === 'mcp' && catalogRoute[4] !== undefined && request.method === 'POST') { respondJson(response, 200, await this.catalog.reconnect(sessionId, identity(catalogRoute[4]), await readBody(request, MCPReconnectRequestSchema))); return; }
         if (kind === 'skills' && action === 'catalog' && request.method === 'GET') { respondJson(response, 200, await this.catalog.readSkills(sessionId)); return; }
-        if (kind === 'skills' && action === 'apply' && request.method === 'POST') { respondJson(response, 200, await this.catalog.applySkills(sessionId, await readBody(request, SkillsApplyRequestSchema))); return; }
+        if (kind === 'skills' && action === 'apply' && request.method === 'POST') { respondJson(response, 200, await this.catalog.applySkills(sessionId, await readBody(request, SkillsApplyRequestSchema), (workspaceId, agentDirectoryId) => this.reconcileHostSkillSources(workspaceId, agentDirectoryId))); return; }
         if (kind === 'skills' && action === 'expand' && request.method === 'POST') { respondJson(response, 200, await this.catalog.expand(sessionId, await readBody(request, SkillExpandRequestSchema))); return; }
       }
       if (request.method === 'GET' && url.pathname === '/internal/workers') { respondJson(response, 200, { workers: this.workers.list() }); return; }

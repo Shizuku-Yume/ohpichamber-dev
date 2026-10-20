@@ -1,3 +1,8 @@
+import { randomUUID } from 'node:crypto';
+import { readFile, mkdir, writeFile, rm } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
+import { ProviderAccountsSchema, ProviderAccountMutationRequestSchema, type ProviderAccounts, type ProviderAccountMutationRequest } from '@openchamber/agent-contract';
 import { z } from 'zod';
 import { resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
@@ -15,7 +20,56 @@ import { ProjectionError } from '../projection/journal.ts';
 import { NativeModels, credentialReference } from './catalog-models.ts';
 export class NativeCredentials {
   constructor(private readonly authStorage: AuthStorage, private readonly models: NativeModels,
-    private readonly workspaceId: string, private readonly agentDirectoryId: string) {}
+    private readonly workspaceId: string, private readonly agentDirectoryId: string, private readonly labelsPath?: string) {}
+
+  private async labels(): Promise<Record<string, string>> {
+    if (!this.labelsPath) return {};
+    try { return z.record(z.string(), z.string().max(128)).parse(JSON.parse(await readFile(this.labelsPath, 'utf8'))); }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return {};
+      throw new ProjectionError(503, 'CREDENTIAL_WRITE_FAILED', 'Provider account labels could not be read');
+    }
+  }
+
+  async accounts(providerId: string, revision: string): Promise<ProviderAccounts> {
+    await this.models.readProviders(this.workspaceId, revision);
+    this.models.provider(providerId);
+    const labels = await this.labels();
+    const selected = this.models.defaultCredentialRef(providerId);
+    const provider = this.models.provider(providerId);
+    const active = selected ?? (provider.auth.status === 'configured' && provider.auth.source === 'stored-credential' ? provider.auth.credentialRef : null);
+    return ProviderAccountsSchema.parse({ revision, providerId, accounts: this.authStorage.credentials.list(providerId).map(row => {
+      const credentialRef = credentialReference(providerId, row.id);
+      return { credentialRef, method: row.credential.type === 'oauth' ? 'oauth' : 'api-key',
+        label: labels[credentialRef], active: credentialRef === active, disabled: row.disabledCause !== null,
+        ...(row.credential.type === 'oauth' ? { email: row.credential.email, accountId: row.credential.accountId } : {}) };
+    }) });
+  }
+
+  async account(providerId: string, input: ProviderAccountMutationRequest, revision: string): Promise<ProviderAccounts> {
+    const request = ProviderAccountMutationRequestSchema.parse(input);
+    await this.models.readProviders(this.workspaceId, request.expectedRevision);
+    const row = this.authStorage.credentials.list(providerId).find(row => credentialReference(providerId, row.id) === request.credentialRef);
+    if (!row) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Provider account is no longer stored');
+    if (request.action === 'select') {
+      await this.models.selectCredential(providerId, request.credentialRef, revision);
+    } else if (request.action === 'remove') {
+      await this.delete({ expectedRevision: request.expectedRevision, providerId, credentialRef: request.credentialRef }, revision);
+    } else {
+      if (!this.labelsPath) throw new ProjectionError(503, 'CREDENTIAL_WRITE_FAILED', 'Provider account metadata storage is unavailable');
+      const labels = await this.labels();
+      if (request.label) labels[request.credentialRef] = request.label; else delete labels[request.credentialRef];
+      try {
+        await mkdir(dirname(this.labelsPath), { recursive: true, mode: 0o700 });
+        const temporary = `${this.labelsPath}.${randomUUID()}.tmp`;
+        try {
+          await writeFile(temporary, JSON.stringify(labels), { mode: 0o600, flag: 'wx' });
+          await replaceFileAtomically(temporary, this.labelsPath);
+        } finally { await rm(temporary, { force: true }); }
+      } catch { throw new ProjectionError(503, 'CREDENTIAL_WRITE_FAILED', 'Provider account label could not be saved'); }
+    }
+    return this.accounts(providerId, revision);
+  }
 
   async write(input: ProviderCredentialWriteRequest, revision: string): Promise<ProviderCredentialMutationResult> {
     const request = ProviderCredentialWriteRequestSchema.parse(input);
