@@ -1,11 +1,26 @@
 import type { Message } from "@openchamber/agent-contract"
 
+// Canonical authoring order inside one turn: the prompt header first, then the
+// assistant message, then independently authored tool results. This is the
+// projection's order and makes equal-time messages deterministic before the
+// identity tie-break.
+const ROLE_ORDER = {
+  user: 0,
+  assistant: 1,
+  system: 2,
+} satisfies Record<Message['role'], number>
+
 /** Native message IDs are identity keys; creation time is transcript order. */
 export const compareMessagesChronologically = (left: Message, right: Message): number => {
   const createdAtDifference = left.createdAt - right.createdAt
   if (createdAtDifference !== 0) return createdAtDifference
-  if (left.messageId < right.messageId) return -1
-  if (left.messageId > right.messageId) return 1
+  // Keep all messages authored at one instant grouped by their turn before
+  // ordering within that turn. A pairwise role check alone would interleave
+  // turn headers and assistants and break comparator transitivity.
+  if (left.turnId !== right.turnId) return left.turnId < right.turnId ? -1 : 1
+  const roleDifference = ROLE_ORDER[left.role] - ROLE_ORDER[right.role]
+  if (roleDifference !== 0) return roleDifference
+  if (left.messageId !== right.messageId) return left.messageId < right.messageId ? -1 : 1
   return 0
 }
 

@@ -2,13 +2,13 @@ import { describe, expect, test } from "bun:test"
 import type { Message } from "@openchamber/agent-contract"
 import { insertMessageChronologically, messagesBefore, messagesFrom, sortMessagesChronologically } from "./message-ordering"
 
-const message = (messageId: string, createdAt: number): Message => ({
+const message = (messageId: string, createdAt: number, role: Message['role'] = 'user', turnId = 'turn-a', parts: Message['parts'] = []): Message => ({
   messageId,
   sessionId: "session-a",
-  turnId: "turn-a",
-  role: "user",
+  turnId,
+  role,
   createdAt,
-  parts: [],
+  parts,
 })
 
 describe("native message chronology", () => {
@@ -27,6 +27,39 @@ describe("native message chronology", () => {
     const second = message("msg_b", 100)
     const first = message("msg_a", 100)
     expect(sortMessagesChronologically([second, first])).toEqual([first, second])
+  })
+
+  test("places a turn's user header before its assistant at one creation time", () => {
+    const header = message("msg_z_header", 100, "user", "turn-a")
+    const assistant = message("msg_a_assistant", 100, "assistant", "turn-a", [
+      { type: "text", partId: "part-text", content: "Done." },
+    ])
+    const sorted = sortMessagesChronologically([assistant, header])
+    expect(sorted).toEqual([header, assistant])
+    expect(sorted.at(-1)).toBe(assistant)
+  })
+
+  test("orders one turn's independent result after its assistant at one creation time", () => {
+    const header = message("msg_z_header", 100, "user", "turn-a")
+    const assistant = message("msg_a_assistant", 100, "assistant", "turn-a")
+    const result = message("msg_0_result", 100, "system", "turn-a")
+    expect(sortMessagesChronologically([result, assistant, header])).toEqual([header, assistant, result])
+  })
+
+  test("groups equal-time turns by turn identity and remains transitive", () => {
+    const firstTurnHeader = message("msg_z", 100, "user", "turn-a")
+    const firstTurnAssistant = message("msg_a", 100, "assistant", "turn-a")
+    const secondTurnHeader = message("msg_0", 100, "user", "turn-b")
+    const sorted = sortMessagesChronologically([secondTurnHeader, firstTurnAssistant, firstTurnHeader])
+    expect(sorted).toEqual([firstTurnHeader, firstTurnAssistant, secondTurnHeader])
+    expect(sorted.at(-1)).toBe(secondTurnHeader)
+  })
+
+  test("leaves an empty real user prompt as the last message when no assistant answered", () => {
+    const prompt = message("msg_a_empty_prompt", 100)
+    const laterAssistant = message("msg_z_answered", 200, "assistant", "turn-b")
+    expect(sortMessagesChronologically([laterAssistant, prompt]).at(-1)).toBe(laterAssistant)
+    expect(sortMessagesChronologically([prompt]).at(-1)).toBe(prompt)
   })
 
   test("splits a branch by message identity, not lexical ID", () => {

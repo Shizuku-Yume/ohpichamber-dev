@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import type { ApprovalRequest, PromptRequest, Run, Session, SessionDeleteAck, SessionSnapshot } from "@openchamber/agent-contract"
-import { SessionMetadataSchema } from "@openchamber/agent-contract"
+import { CanonicalEventSchema, SessionMetadataSchema } from "@openchamber/agent-contract"
 import { z } from "zod"
 import { CanonicalApiError, canonicalClient } from "@/api/canonicalClient"
 import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from "@/lib/runtime-switch"
@@ -10,6 +10,7 @@ import { useConfigStore } from "@/stores/useConfigStore"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { isSessionPinned, useSessionPinnedStore } from "@/stores/useSessionPinnedStore"
 import { ChildStoreManager } from "./child-store"
+import { applyDirectoryEvent } from "./event-reducer"
 import { replaceGlobalSessionStatusById } from "./global-session-status"
 import { resetSessionActionFailures, takeSessionActionFailure } from "./session-action-failures"
 import { SessionMessageLoader, setImperativeSessionMessageLoader } from "./session-message-loader"
@@ -472,6 +473,54 @@ describe("native delivery and execution controls", () => {
     expect(store.getState().message["session-a"]).toBeUndefined()
   })
 
+  test("publishes the accepted run as control state before any status event", async () => {
+    const store = seed()
+    spyOn(canonicalClient, "createRun").mockResolvedValue({ run })
+    await sendMessage({ sessionId: "session-a", request })
+    expect(store.getState().session_status["session-a"]).toBe("running")
+    expect(store.getState().session.find((item) => item.sessionId === "session-a")).toMatchObject({ runtimeStatus: "running", activeRunId: run.runId })
+    // Control state only: acceptance is not proof of a message.
+    expect(store.getState().message["session-a"]).toBeUndefined()
+  })
+
+  test("an idle snapshot unchanged since the request accepts the new run ack", async () => {
+    const store = seed()
+    const idle = nativeSnapshot("session-a", [])
+    store.setState({ snapshot: { "session-a": idle } })
+    spyOn(canonicalClient, "createRun").mockResolvedValue({ run })
+    await sendMessage({ sessionId: "session-a", request })
+    expect(store.getState().session_status["session-a"]).toBe("running")
+    expect(store.getState().snapshot["session-a"]?.session).toMatchObject({ runtimeStatus: "running", activeRunId: run.runId })
+  })
+
+  test("a createRun ack resolved after a released run cannot resurrect stop", async () => {
+    const store = seed()
+    store.setState({ snapshot: { "session-a": nativeSnapshot("session-a", []) } })
+    const ack = deferred<{ run: Run }>()
+    const requested = deferred<void>()
+    spyOn(canonicalClient, "createRun").mockImplementation(() => { requested.resolve(); return ack.promise })
+    const pending = sendMessage({ sessionId: "session-a", request })
+    await requested.promise
+
+    // The run is observed terminal while the HTTP acknowledgement is in flight.
+    const started = applyDirectoryEvent(store.getState(), CanonicalEventSchema.parse({
+      sessionId: "session-a", epoch: "epoch-a", sequence: "5", timestamp: 5, type: "run.started", runId: run.runId, createdAt: 1,
+    }))
+    store.setState(started.state)
+    const completed = applyDirectoryEvent(store.getState(), CanonicalEventSchema.parse({
+      sessionId: "session-a", epoch: "epoch-a", sequence: "6", timestamp: 6, type: "run.completed", runId: run.runId, finishedAt: 6,
+    }))
+    store.setState(completed.state)
+    expect(store.getState().session_status["session-a"]).toBe("idle")
+
+    ack.resolve({ run })
+    await pending
+    expect(store.getState().session_status["session-a"]).toBe("idle")
+    expect(store.getState().snapshot["session-a"]?.session.activeRunId).toBeNull()
+    expect(store.getState().snapshot["session-a"]?.activeRun).toBeNull()
+    expect(store.getState().session.find((item) => item.sessionId === "session-a")).toMatchObject({ runtimeStatus: "idle", activeRunId: null })
+  })
+
   test("routes steer and follow-up through their native acknowledgments", async () => {
     const steer = spyOn(canonicalClient, "steer").mockResolvedValue({ sessionId: "session-a", runId: run.runId, acceptedAt: 2 })
     const follow = spyOn(canonicalClient, "followUp").mockResolvedValue({ sessionId: "session-a", followUpId: "follow-a", acceptedAt: 2 })
@@ -519,6 +568,25 @@ describe("native delivery and execution controls", () => {
     read.mockResolvedValue(nativeSnapshot("session-a", []))
     await abortCurrentOperation("session-a")
     expect(abort).toHaveBeenCalledTimes(1)
+  })
+
+  test("publishes the abort acknowledgement as terminal control state", async () => {
+    const store = seed()
+    const live = nativeSnapshot("session-a", [])
+    live.session = { ...live.session, runtimeStatus: "running", activeRunId: run.runId }
+    live.activeRun = run
+    store.setState({
+      snapshot: { "session-a": live },
+      session_status: { "session-a": "running" },
+      session: [{ ...store.getState().session[0]!, runtimeStatus: "running", activeRunId: run.runId }],
+    })
+    spyOn(canonicalClient, "getSnapshot").mockResolvedValue(live)
+    spyOn(canonicalClient, "abortSession").mockResolvedValue({ run: { ...run, status: "cancelled", finishedAt: 2 } })
+    await abortCurrentOperation("session-a")
+    expect(store.getState().session_status["session-a"]).toBe("idle")
+    expect(store.getState().snapshot["session-a"]?.session.activeRunId).toBeNull()
+    expect(store.getState().snapshot["session-a"]?.activeRun).toBeNull()
+    expect(store.getState().session[0]).toMatchObject({ runtimeStatus: "idle", activeRunId: null })
   })
 
   test("failed history recovery preserves cached messages; successful empty authority replaces them", async () => {

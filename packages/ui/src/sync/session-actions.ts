@@ -41,8 +41,8 @@ import { withoutSourceOwnedLinks } from "@/lib/sessionForkInheritance"
 import { fetchGoalObjectiveContent, writeGoalObjectiveFile } from "@/lib/goalObjectiveFiles"
 import { canonicalClient, CanonicalApiError } from "@/api/canonicalClient"
 import { SessionMetadataSchema, SessionMetadataPatchSchema, PromptRequestSchema } from "@openchamber/agent-contract"
-import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata } from "@openchamber/agent-contract"
-import { installHostSession, installSessionMetadata, installSessionSnapshot } from "./event-reducer"
+import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata, Run } from "@openchamber/agent-contract"
+import { installHostSession, installRuntimeRun, installSessionMetadata, installSessionSnapshot, type RunControlBaseline } from "./event-reducer"
 import { registerWorkspaceDirectory, resolveWorkspaceDirectory } from "@/stores/globalSessions"
 import type { State } from "./types"
 
@@ -123,10 +123,44 @@ export async function sendMessage(input: SessionSendInput): Promise<void> {
     const result = await canonicalClient.followUp(input.sessionId, request, input.commandId)
     if (result.sessionId !== input.sessionId) throw new Error("Follow-up response identified another session")
   } else {
+    // Capture the live head before the request: an ack that arrives after the
+    // session already advanced past it and released its run is stale.
+    const baselines = captureRunControlBaselines(input.sessionId)
     const result = await canonicalClient.createRun(input.sessionId, request, input.commandId)
     if (result.run.sessionId !== input.sessionId) throw new Error("Run response identified another session")
+    if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+    // The accepted run is authoritative control state even before its event
+    // arrives; without this the composer can keep offering Send for a live run.
+    publishRuntimeRun(result.run, baselines)
   }
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
+}
+
+type RunControlBaselines = ReadonlyMap<string, RunControlBaseline>
+
+/** Per-store live head authority captured before a native run request. */
+function captureRunControlBaselines(sessionId: string): RunControlBaselines {
+  const baselines = new Map<string, RunControlBaseline>()
+  for (const [directory, store] of _childStores?.children ?? []) {
+    const state = store.getState()
+    const session = state.snapshot[sessionId]?.session ?? state.session.find((item) => item.sessionId === sessionId)
+    baselines.set(directory, session ? { epoch: session.epoch, headSequence: session.headSequence } : null)
+  }
+  return baselines
+}
+
+/**
+ * Apply a native run acknowledgement to every store that already holds the
+ * session. Stores are never created here: an ack for a session no store knows
+ * about has nothing to reconcile, and a guessed directory would be worse than
+ * waiting for the authoritative snapshot.
+ */
+function publishRuntimeRun(run: Run, baselines?: RunControlBaselines): void {
+  for (const [directory, store] of _childStores?.children ?? []) {
+    const state = store.getState()
+    if (!state.snapshot[run.sessionId] && !state.session.some((session) => session.sessionId === run.sessionId)) continue
+    store.setState((current) => installRuntimeRun(current, run, baselines?.get(directory) ?? null))
+  }
 }
 
 // Reference set by SyncProvider — allows actions to access the stores
@@ -648,7 +682,7 @@ async function submitApproval(request: PermissionRequest, response: "once" | "al
   }
 }
 
-async function submitQuestion(request: FormRequest, action: { action: "answer"; response: FormAnswer } | { action: "cancel" }, runtimeKey: string): Promise<void> {
+async function submitQuestion(request: FormRequest, action: { action: "answer"; response: JsonValue } | { action: "cancel" }, runtimeKey: string): Promise<void> {
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   const reply: QuestionReply = { version: request.version, epoch: request.epoch, workerGeneration: request.workerGeneration, ...action }
   try {
@@ -1670,6 +1704,9 @@ export async function abortCurrentOperation(sessionId: string): Promise<void> {
   const result = await canonicalClient.abortSession(sessionId, snapshot.activeRun.runId)
   if (isStaleRuntime(runtimeKey)) throw new Error("runtime changed")
   if (result.run.sessionId !== sessionId || result.run.runId !== snapshot.activeRun.runId) throw new Error("Abort response identified another run")
+  // The abort ack is the native terminal record for this run; publish it so
+  // the stop control clears without waiting for the event stream to recover.
+  publishRuntimeRun(result.run)
 }
 
 // ---------------------------------------------------------------------------
@@ -1736,10 +1773,7 @@ export async function dismissOpenPermissionsForSession(sessionId: string): Promi
 // Forms (the agent asking the user for input)
 // ---------------------------------------------------------------------------
 
-/** One filled-in form: every field the agent declared, keyed by field key. */
-export type FormAnswer = Record<string, string | number | boolean | string[]>
-
-export async function replyToForm(sessionId: string, formId: string, answer: FormAnswer): Promise<void> {
+export async function replyToForm(sessionId: string, formId: string, answer: JsonValue): Promise<void> {
   const runtimeKey = getRuntimeKey()
   await waitForConnectionOrThrow()
   const request = await readPendingQuestion(sessionId, formId, runtimeKey)

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import type { CanonicalEvent, Message, RuntimeSession, Session, SessionSnapshot } from "@openchamber/agent-contract"
-import { applyDirectoryEvent, compareCounters, installQueue, installSessionMetadata, installSessionSnapshot, mergeHostSession } from "./event-reducer"
+import type { CanonicalEvent, Message, Run, RuntimeSession, Session, SessionSnapshot } from "@openchamber/agent-contract"
+import { applyDirectoryEvent, compareCounters, installQueue, installRuntimeRun, installSessionMetadata, installSessionSnapshot, mergeHostSession } from "./event-reducer"
 import { INITIAL_STATE, type State } from "./types"
 
 const runtime = (overrides: Partial<RuntimeSession> = {}): RuntimeSession => ({
@@ -182,5 +182,85 @@ describe("native canonical event reducer", () => {
     expect(next.permission["session-1"]).toBeUndefined()
     expect(next.snapshot["session-2"]).toBe(sibling)
     expect(next.sessionDeletedRevision?.["session-1"] ?? 0).toBeGreaterThan(0)
+  })
+
+  const run = (overrides: Partial<Run> = {}): Run => ({ runId: "run-1", sessionId: "session-1", status: "running", createdAt: 5, ...overrides })
+
+  test("an accepted run acknowledgement binds live control state before its event arrives", () => {
+    const base = installSessionSnapshot(state(), snapshot())
+    const accepted = installRuntimeRun(base, run())
+    expect(accepted.session_status["session-1"]).toBe("running")
+    expect(accepted.snapshot["session-1"]?.session).toMatchObject({ runtimeStatus: "running", activeRunId: "run-1" })
+    expect(accepted.snapshot["session-1"]?.activeRun).toEqual({ runId: "run-1", sessionId: "session-1", status: "running", createdAt: 5 })
+    expect(accepted.session[0]).toMatchObject({ runtimeStatus: "running", activeRunId: "run-1" })
+    // Control state only: the transcript is untouched and a repeated ack is a no-op.
+    expect(accepted.message["session-1"]).toBe(base.message["session-1"])
+    expect(installRuntimeRun(accepted, run())).toBe(accepted)
+  })
+
+  test("a stale or foreign run acknowledgement cannot steal the bound run", () => {
+    const live = installRuntimeRun(installSessionSnapshot(state(), snapshot()), run())
+    expect(installRuntimeRun(live, run({ runId: "run-other" }))).toBe(live)
+    // The terminal ack for a run the store never bound is not proof this run ended.
+    expect(installRuntimeRun(live, run({ runId: "run-other", status: "cancelled", finishedAt: 6 }))).toBe(live)
+  })
+
+  test("only the terminal acknowledgement of the bound run releases it", () => {
+    const live = installRuntimeRun(installSessionSnapshot(state(), snapshot()), run())
+    const stale = installRuntimeRun(live, run({ runId: "run-old", status: "cancelled", finishedAt: 6 }))
+    expect(stale).toBe(live)
+    const done = installRuntimeRun(live, run({ status: "cancelled", finishedAt: 7 }))
+    expect(done.session_status["session-1"]).toBe("idle")
+    expect(done.snapshot["session-1"]?.session).toMatchObject({ runtimeStatus: "idle", activeRunId: null })
+    expect(done.snapshot["session-1"]?.activeRun).toBeNull()
+    expect(done.session[0]).toMatchObject({ runtimeStatus: "idle", activeRunId: null })
+    // A terminal duplicate is a no-op.
+    expect(installRuntimeRun(done, run({ status: "cancelled", finishedAt: 7 }))).toBe(done)
+  })
+
+  test("a control acknowledgement without a projected session records its mutation revision", () => {
+    const base = state({ session: [], sessionTotal: 0, snapshot: { "session-1": snapshot() } })
+    const accepted = installRuntimeRun(base, run())
+    expect(accepted.snapshot["session-1"]?.session.activeRunId).toBe("run-1")
+    expect(accepted.sessionEventRevision?.["session-1"] ?? 0).toBeGreaterThan(0)
+  })
+
+  test("an accepted run acknowledgement binds when the head is unchanged since the request", () => {
+    const base = installSessionSnapshot(state(), snapshot())
+    const accepted = installRuntimeRun(base, run(), { epoch: "epoch-1", headSequence: "0" })
+    expect(accepted.session_status["session-1"]).toBe("running")
+    expect(accepted.snapshot["session-1"]?.session).toMatchObject({ runtimeStatus: "running", activeRunId: "run-1" })
+  })
+
+  test("a late live acknowledgement cannot resurrect a run the session already released", () => {
+    let terminal = installSessionSnapshot(state(), snapshot())
+    terminal = applyDirectoryEvent(terminal, event("1", "run.started", { runId: "run-1", createdAt: 1 })).state
+    terminal = applyDirectoryEvent(terminal, event("2", "run.completed", { runId: "run-1", finishedAt: 2 })).state
+    expect(terminal.session_status["session-1"]).toBe("idle")
+    expect(terminal.session[0]).toMatchObject({ runtimeStatus: "idle", activeRunId: null })
+    // The ack was requested at head 0 and resolved after the terminal head 2.
+    expect(installRuntimeRun(terminal, run(), { epoch: "epoch-1", headSequence: "0" })).toBe(terminal)
+    // The same ack from a request made at the current head still binds.
+    expect(installRuntimeRun(terminal, run(), { epoch: "epoch-1", headSequence: "2" }).session_status["session-1"]).toBe("running")
+  })
+
+  test("a newer terminal snapshot rejects a stale live acknowledgement", () => {
+    const base = installSessionSnapshot(state(), snapshot({ session: runtime({ headSequence: "2" }), cursor: "epoch-1:2" }))
+    expect(installRuntimeRun(base, run(), { epoch: "epoch-1", headSequence: "0" })).toBe(base)
+    expect(base.session_status["session-1"]).toBe("idle")
+  })
+
+  test("an acknowledgement clears a disconnect invalidation and a later snapshot replaces it", () => {
+    const disconnected = state({
+      session: [session({ runtimeStatus: "unavailable", activeRunId: null })],
+      session_status: { "session-1": "unavailable" },
+      sessionStatusInvalidated: { "session-1": true },
+    })
+    const accepted = installRuntimeRun(disconnected, run())
+    expect(accepted.sessionStatusInvalidated?.["session-1"]).toBeUndefined()
+    expect(accepted.session_status["session-1"]).toBe("running")
+    const authoritative = installSessionSnapshot(accepted, snapshot({ session: runtime({ headSequence: "1", runtimeStatus: "idle" }), cursor: "epoch-1:1" }))
+    expect(authoritative.session_status["session-1"]).toBe("idle")
+    expect(authoritative.snapshot["session-1"]?.session.activeRunId).toBeNull()
   })
 })

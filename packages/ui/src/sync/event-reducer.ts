@@ -1,4 +1,4 @@
-import type { CanonicalEvent, Message, Part, QueueState, Session, SessionMetadataState, SessionSnapshot } from "@openchamber/agent-contract"
+import type { CanonicalEvent, Message, Part, QueueState, Run, Session, SessionMetadataState, SessionSnapshot } from "@openchamber/agent-contract"
 import type { State } from "./types"
 
 export function compareCounters(left: string, right: string): number {
@@ -93,6 +93,72 @@ export function installSessionSnapshot(state: State, snapshot: SessionSnapshot):
 }
 
 export type DirectoryEventResult = { kind: "applied" | "duplicate" | "resnapshot"; state: State }
+
+/**
+ * Live session authority captured before a native run request was sent.
+ * `null` means the store held no session record at request start, so there is
+ * no head to compare the acknowledgement against.
+ */
+export type RunControlBaseline = { epoch: string; headSequence: string } | null
+
+/**
+ * A native run acknowledgement is a control observation, not transcript history.
+ * An accepted run may bind an unbound session (or refresh the same binding); it
+ * never replaces a different run another acknowledgement or event already made
+ * authoritative. A terminal acknowledgement releases only the run it names, so
+ * a late abort for an older run cannot clear a newer one. Full snapshots remain
+ * the replacement authority: the next install rewrites both fields wholesale.
+ *
+ * A live ack is also rejected when the session advanced past the head captured
+ * before the request began and still reports no bound run. That means the run
+ * was already observed terminal (or replaced) while the HTTP acknowledgement
+ * was in flight; binding it then would resurrect the stop control.
+ */
+export function installRuntimeRun(state: State, run: Run, requestBaseline: RunControlBaseline = null): State {
+  const id = run.sessionId
+  const snapshot = state.snapshot[id]
+  const index = state.session.findIndex((item) => item.sessionId === id)
+  if (!snapshot && index < 0) return state
+  const boundRunId = snapshot ? snapshot.session.activeRunId : state.session[index]!.activeRunId
+  const terminal = run.status === "completed" || run.status === "failed" || run.status === "cancelled"
+  if (terminal ? boundRunId !== run.runId : boundRunId !== null && boundRunId !== run.runId) return state
+  if (!terminal && boundRunId === null && requestBaseline !== null) {
+    const current = snapshot?.session ?? state.session[index]
+    if (current && (current.epoch !== requestBaseline.epoch
+      || compareCounters(current.headSequence, requestBaseline.headSequence) !== 0)) return state
+  }
+
+  const status = terminal ? "idle" : "running"
+  const activeRun = terminal ? null : { runId: run.runId, sessionId: id, status: run.status, createdAt: run.createdAt }
+  // A repeated live ack never downgrades the run record an event may already
+  // have advanced; it only fills a binding that is missing.
+  const settledLive = !terminal && snapshot?.session.activeRunId === run.runId && snapshot.activeRun !== null && snapshot.session.runtimeStatus === "running"
+  let next = state
+  if (snapshot && !settledLive && (snapshot.session.activeRunId !== (terminal ? null : run.runId) || snapshot.session.runtimeStatus !== status || !same(snapshot.activeRun, activeRun))) {
+    next = {
+      ...next,
+      snapshot: {
+        ...next.snapshot,
+        [id]: { ...snapshot, session: { ...snapshot.session, runtimeStatus: status, activeRunId: terminal ? null : run.runId }, activeRun },
+      },
+    }
+  }
+  if (next.session_status[id] !== status) next = { ...next, session_status: { ...next.session_status, [id]: status } }
+  if (next.sessionStatusInvalidated?.[id]) next = { ...next, sessionStatusInvalidated: clearInvalidation(next.sessionStatusInvalidated, id) }
+  const projected = next.session[index]
+  if (projected && (projected.runtimeStatus !== status || projected.activeRunId !== (terminal ? null : run.runId))) {
+    next = installHostSession(next, { ...projected, runtimeStatus: status, activeRunId: terminal ? null : run.runId })
+  } else if (!projected && next !== state) {
+    // A snapshot can exist without a projected session record. Record the
+    // control mutation so a snapshot read started before this ack cannot
+    // install its older idle fields over it.
+    const revision = (next.sessionRevision ?? 0) + 1
+    next = { ...next, sessionRevision: revision, sessionEventRevision: { ...next.sessionEventRevision, [id]: revision } }
+  }
+  // Every transition above early-returns when it has nothing to change, so an
+  // unchanged ack is already `state` itself.
+  return next
+}
 
 /** Every canonical variant shares the same sequence gate. Never apply across a gap. */
 export function applyDirectoryEvent(state: State, event: CanonicalEvent): DirectoryEventResult {
