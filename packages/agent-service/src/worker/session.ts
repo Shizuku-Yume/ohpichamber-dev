@@ -144,6 +144,15 @@ export class WorkerSession {
         interaction.observeToolCall(event);
         if (admission.profile && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
         if (['bash', 'openchamber', 'web', 'memory', 'notify'].includes(event.toolName)) return;
+        // The native search tool is the SDK's egress entry point, not a generic
+        // tool grant. Host authorization already owns web-search policy (including
+        // enterprise refusal), so route exactly this SDK name to that capability.
+        // Every other tool keeps the descriptor/approval-aware generic path.
+        if (event.toolName === 'web_search') {
+          try { await authorize({ type: 'web-search' }); }
+          catch { return { block: true, reason: 'Host policy refused the tool operation' }; }
+          return;
+        }
         try { await authorizeTool(event.toolName, JsonObjectSchema.parse(JSON.parse(JSON.stringify(event.input)))); }
         catch { return { block: true, reason: 'Host policy refused the tool operation' }; }
       });

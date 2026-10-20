@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/63",
+  "observedAt": "2026-10-21",
+  "status": "verified",
+  "baseCommit": "a01cc3715a66f59b20a1751d42c9e1149d12fcab",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "headBeforeImplementation": "a01cc3715",
+    "webDist": {
+      "path": "packages/web/dist",
+      "indexSha256": "c438247e7abd698759fc8fe55e50a4b08ed147a86d213906732d9789fdfa478e"
+    },
+    "webHost": "http://127.0.0.1:3164 (normal then OPENCHAMBER_ENTERPRISE_MODE=1, same isolated HOME)",
+    "browser": "Google Chrome headless CDP 9236",
+    "workspace": "/tmp/ohpi-task63/ws",
+    "agentFixture": "http://127.0.0.1:4610 model agent-model",
+    "searchFixture": "http://127.0.0.1:4620/search SearXNG JSON loopback"
+  },
+  "rootCause": "WorkerSession.open's tool observer passed the exact SDK web_search tool through generic authorizeTool, producing {type:'tool',toolName:'web_search'}. Host worker-operation-authorizer only admits listed native tools or exact toolRequests entries, so it denied before NativeWebSearch's own guarded transport could request {type:'web-search'}.",
+  "fix": "In the tool observer, after the existing profile allowedTools check, exact event.toolName === 'web_search' calls authorize({type:'web-search'}); all other tools continue through authorizeTool. No Host authorizer broadening or bypass was added.",
+  "check": {
+    "before": "bun test packages/agent-service/src/worker/session-native.test.ts -> both new tests failed because hostRequests contained {type:'tool',toolName:'web_search'}; 13 existing tests passed.",
+    "after": "bun test packages/agent-service/src/worker/session-native.test.ts -> 15 pass / 0 fail / 114 assertions in 65.5s.",
+    "host": "bunx vitest run packages/web/server/lib/host/worker-operation-authorizer.test.js -> 18 pass / 0 fail, including generic unknown-tool refusal, native descriptor/approval, and enterprise web-search policy.",
+    "typecheck": "Focused tsc with the prepared OMP declarations and only packages/agent-service/src/worker/session.ts -> exit 0; package-wide type-check was not run because it includes unrelated dirty live-reopen files.",
+    "lint": "bunx oxlint session.ts session-native.test.ts -> one unchanged baseline finding at session.ts:81 (require-safety-comment-for-type-assertion); no new finding."
+  },
+  "runtimeSmoke": {
+    "normal": {
+      "sessionId": "a0d7e7b1-dcdb-414f-91f8-252b2b11ac0f",
+      "configured": {
+        "selectedProviderId": "web/searxng",
+        "fallbackProviderIds": [
+          "web/tavily"
+        ],
+        "timeoutSeconds": 3,
+        "endpoint": "http://127.0.0.1:4620"
+      },
+      "toolResult": "completed; output [1] Task63 Loopback Result / http://127.0.0.1:4620/result / Controlled Task63 loopback result.",
+      "loopbackRequests": 1,
+      "loopbackQuery": "task63 loopback",
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task63-normal-search.png"
+    },
+    "enterprise": {
+      "sessionId": "0bcb07f3-6742-4d42-ac22-62371cf46cf6",
+      "hostMode": "OPENCHAMBER_ENTERPRISE_MODE=1, same persisted workspace/provider/search config",
+      "toolResult": "failed: Host policy refused the tool operation / Tool execution failed",
+      "loopbackRequests": "0 new; the single normal-phase request was the only log entry after the enterprise run",
+      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task63-enterprise-denied.png"
+    }
+  },
+  "credentialSafety": "No external credentials were used. The Task53 write-only credential evidence remains unchanged; this fix does not touch credential storage or public responses.",
+  "task53Rerun": "The previously failing connected Web search path now completes through the real UI and native transport with one loopback request; Task53 can be updated and archived after Task63 lands.",
+  "cleanup": "Completed: normal/enterprise Host, Chrome CDP, agent fixture and search fixture stopped; isolated HOME, workspace, profile and scripts removed; ports closed.",
+  "screenshots": [
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task63-normal-search.png",
+    "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task63-enterprise-denied.png"
+  ],
+  "reviews": {
+    "quality": {
+      "verdict": "pass",
+      "findings": "none"
+    },
+    "security": {
+      "verdict": "no blocking findings",
+      "nonblocking": [
+        "Name-only routing can be reached by a locally installed extension that shadows the builtin web_search name; MCP/custom-tool-file paths cannot mint it. Left unchanged to keep the requested exact-name/minimal routing; provenance hardening is a possible follow-up.",
+        "A persisted workspace deny policy for web_search is not evaluated because the web-search request returns before generic tool policies; SDK deny setting and enterprise policy still apply. Left as a documented narrowing, not an egress bypass."
+      ]
+    }
+  }
+}

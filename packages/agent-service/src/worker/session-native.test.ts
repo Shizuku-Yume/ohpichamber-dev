@@ -7,7 +7,9 @@ import { JsonValueSchema, type ApprovalRequest, type JsonObject, type JsonValue,
 import { cfgEditMode } from '@oh-my-pi/pi-coding-agent/edit/settings';
 import { cfgBashPatterns } from '@oh-my-pi/pi-coding-agent/exec/settings';
 import type { SubagentLifecyclePayload } from '@oh-my-pi/pi-coding-agent/task';
-import { cfgToolsApprovalMode } from '@oh-my-pi/pi-coding-agent/tools/settings';
+import { cfgToolsApprovalMode, cfgWebSearchEnabled } from '@oh-my-pi/pi-coding-agent/tools/settings';
+import { cfgSearxngEndpoint } from '@oh-my-pi/pi-coding-agent/web/settings';
+import { cfgProvidersWebSearchTimeoutSeconds } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { InteractionManager } from '../interaction/manager.ts';
@@ -47,11 +49,12 @@ function completion(tool?: { name: string; input: JsonObject; id: string }): Res
   return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(finish)}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
 }
 
-async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {} }: {
+async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => {}, denyWebSearch = false }: {
   respond: (payload: ProviderRequest, root: string) => Promise<Response> | Response;
   invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
   machineCommands?: string[];
   onSubagent?: (payload: SubagentLifecyclePayload) => void;
+  denyWebSearch?: boolean;
 }) {
   const root = await mkdtemp(join(tmpdir(), 'native-seams-'));
   const home = process.env.HOME;
@@ -65,6 +68,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   const events: ProjectionInput[] = [];
   const requests: ProviderRequest[] = [];
   const grants: string[] = [];
+  const hostRequests: WorkerPolicyRequest[] = [];
   const pendingApprovals: ApprovalRequest[] = [];
   let approvalWaiter: ((approval: ApprovalRequest) => void) | undefined;
   let journal: SessionJournal | undefined;
@@ -88,6 +92,12 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
       if (approvalWaiter) { const waiter = approvalWaiter; approvalWaiter = undefined; waiter(approval); }
       else pendingApprovals.push(approval);
     }, () => { fatal = true; }, async request => {
+      hostRequests.push(request);
+      if (request.type === 'web-search') {
+        if (denyWebSearch) throw new Error('Host policy refused the tool operation');
+        return;
+      }
+      if (request.type === 'tool' && request.toolName === 'web_search') throw new Error('Host policy refused the tool operation');
       if (request.type === 'tool' && ['openchamber', 'web', 'memory', 'notify'].includes(request.toolName)) throw new Error('Host tools must use their domain capability owner, not generic tool grants');
       if (request.type !== 'tool' || request.toolName !== 'bash') return;
       const command = z.string().parse(request.input.command);
@@ -110,7 +120,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
       modelId: 'native-model', provider: 'native-fixture', name: 'Native model', modalities: ['text'], contextWindow: 65536, maxOutputTokens: 128,
       reasoningEffortSupported: false, reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null,
     } } } });
-    return { root: cwd, worker, events, requests, grants, interactions, journal, mcpConfigPath,
+    return { root: cwd, worker, events, requests, grants, hostRequests, interactions, journal, mcpConfigPath,
       waitApproval: () => {
         const approval = pendingApprovals.shift();
         if (approval) return Promise.resolve(approval);
@@ -140,6 +150,19 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   }
 }
 
+async function searxngLoopback(): Promise<{ url: string; requests: string[]; stop: () => void }> {
+  const requests: string[] = [];
+  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname !== '/search') return new Response('{}', { status: 404, headers: { 'content-type': 'application/json' } });
+    requests.push(url.searchParams.get('q') ?? '');
+    return Response.json({ query: url.searchParams.get('q') ?? '', results: [{
+      title: 'Task63 Loopback Result', url: 'http://127.0.0.1/task63', content: 'Controlled Task63 loopback result.', engine: 'task63-loopback',
+    }] });
+  } });
+  return { url: `http://127.0.0.1:${server.port}`, requests, stop: () => server.stop(true) };
+}
+
 test('profile tool allowlist does not block selected provider authorization', async () => {
   const harness = await fixture({ respond: () => completion() });
   const terminal = Promise.withResolvers<void>();
@@ -155,6 +178,53 @@ test('profile tool allowlist does not block selected provider authorization', as
     expect(harness.requests).toHaveLength(1);
     expect(harness.events.some(input => input.event.type === 'run.completed')).toBe(true);
   } finally { unsubscribe(); await harness.close(); }
+}, 30000);
+
+test('native web_search tool routes to Host web-search authorization and performs one loopback search', async () => {
+  const search = await searxngLoopback();
+  const harness = await fixture({ respond(payload) {
+    return payload.messages.at(-1)?.role === 'tool' ? completion() : completion({ name: 'web_search', id: 'web-search-call', input: { query: 'task63 loopback', num_results: 3 } });
+  } });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+  try {
+    cfgWebSearchEnabled.override(harness.worker.session.settings, true);
+    cfgSearxngEndpoint.override(harness.worker.session.settings, search.url);
+    cfgProvidersWebSearchTimeoutSeconds.override(harness.worker.session.settings, 3);
+    harness.worker.session.settings.setModelRole('web', 'web/searxng');
+    await harness.worker.operation({ type: 'prompt', runId: 'web-search-run', request: prompt('Search the loopback endpoint with the native web_search tool.') });
+    await terminal.promise;
+    expect(harness.hostRequests.some(request => request.type === 'tool' && request.toolName === 'web_search')).toBe(false);
+    expect(harness.hostRequests).toContainEqual({ type: 'web-search' });
+    expect(search.requests).toEqual(['task63 loopback']);
+    const outcome = harness.events.map(input => input.event).find(event => event.type === 'tool.completed' && event.toolCallId === 'web-search-call');
+    expect(outcome).toMatchObject({ status: 'completed', isError: false,
+      output: { content: expect.arrayContaining([{ type: 'text', text: expect.stringContaining('Task63 Loopback Result') }]) } });
+    expect(harness.fatal()).toBe(false);
+  } finally { unsubscribe(); search.stop(); await harness.close(); }
+}, 30000);
+
+test('enterprise Host refusal of web-search blocks the native tool before any loopback egress', async () => {
+  const search = await searxngLoopback();
+  const harness = await fixture({ denyWebSearch: true, respond(payload) {
+    return payload.messages.at(-1)?.role === 'tool' ? completion() : completion({ name: 'web_search', id: 'web-search-denied', input: { query: 'task63 denied' } });
+  } });
+  const terminal = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve(); });
+  try {
+    cfgWebSearchEnabled.override(harness.worker.session.settings, true);
+    cfgSearxngEndpoint.override(harness.worker.session.settings, search.url);
+    cfgProvidersWebSearchTimeoutSeconds.override(harness.worker.session.settings, 3);
+    harness.worker.session.settings.setModelRole('web', 'web/searxng');
+    await harness.worker.operation({ type: 'prompt', runId: 'web-search-denied-run', request: prompt('Try the native web_search tool.') });
+    await terminal.promise;
+    expect(harness.hostRequests.some(request => request.type === 'tool' && request.toolName === 'web_search')).toBe(false);
+    expect(harness.hostRequests).toContainEqual({ type: 'web-search' });
+    expect(search.requests).toEqual([]);
+    const outcome = harness.events.map(input => input.event).find(event => event.type === 'tool.completed' && event.toolCallId === 'web-search-denied');
+    expect(outcome).toMatchObject({ status: 'failed', isError: true });
+    expect(harness.fatal()).toBe(false);
+  } finally { unsubscribe(); search.stop(); await harness.close(); }
 }, 30000);
 
 for (const approvalMode of ['always-ask', 'yolo'] as const) {

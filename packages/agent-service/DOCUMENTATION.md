@@ -64,6 +64,8 @@ The worker derives the search catalog from the native registry's web-role/model 
 
 Every cached native search transport checks the enabled setting and then requests Host authorization with `{ type: 'web-search' }` immediately before searching. This includes explicit provider selectors and the XAI transport chain; cached transport objects do not bypass the live authorization boundary.
 
+The session tool observer routes the exact native SDK `web_search` tool name to that same `{ type: 'web-search' }` authorization after the selected profile's `allowedTools` check. Other tool names keep the generic descriptor/approval-aware path. Host enterprise policy therefore refuses search before the provider transport, with no request egress.
+
 ## Historical usage
 
 `GET /api/agent/v1/usage` and `/usage/tools` are Host-authenticated historical reads. Queries carry optional inclusive `from` and exclusive `to` epoch-millisecond bounds (omitted `to` defaults to now), an explicit viewer IANA timezone, and optional canonical workspace/project filters. The Host supplies its authorized opaque scope set over private transport; the supervisor intersects it with registered root and child session references. "All" means this intersection, not native home-directory discovery. No client path or global OMP statistics database participates.
