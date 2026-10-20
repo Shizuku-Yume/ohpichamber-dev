@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/64",
+  "observedAt": "2026-10-21",
+  "status": "verified",
+  "baseCommit": "84b3d4046d4d31f18b0f5c0ff3c050195885f4e6",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/64-live-session-reopen",
+    "branch": "omp-through-m3/64-live-session-reopen",
+    "platform": "Linux x64, 7.2.8-200.fc44.x86_64",
+    "baseProbeWorktree": "/home/shizuku/Project/ohpichamber-worktrees/64-base-probe (detached 84b3d4046; removed after the run)"
+  },
+  "rootCause": "The private reopen route called admit() unconditionally. SessionRegistry.reopen() already returned a healthy live runtime through openResolved(), but admission still registered the workspace/agent directory, reconciled Host skill sources through catalog.admit(), and re-registered the catalog worker on every canonical open/history read.",
+  "baseObservation": {
+    "method": "Clean detached worktree at 84b3d4046; real Bun Agent Service spawned by a process-level harness; one workspace registration, one session create, two live reopens with the same scope.",
+    "createStatus": 201,
+    "reopenStatus": 200,
+    "skillSourceReconcilesAfterCreate": 1,
+    "skillSourceReconcilesAfterTwoLiveReopens": 3,
+    "generationStable": true,
+    "transcriptBytesEqual": true,
+    "meaning": "Each live reopen re-ran admission and Host skill-source reconciliation while the generation stayed the same; generation equality alone does not discriminate the defect."
+  },
+  "change": "SessionRegistry.liveReopenRuntime() returns the existing runtime only for a live, opened, non-unavailable root whose captured worker generation is still current, delegating the entry-scope comparison to open(). The shared liveRuntime() predicate also serves openResolved(). AgentService.assertAdmissionScope() is called by the private reopen route before the live branch, preserving 403 UNAUTHORIZED for captured-scope mismatches; everything else takes admit() + reopen().",
+  "check": {
+    "before": "Committed registry-native.test.ts at the Base: 11 pass / 2 fail, both literal transcript-byte assertions (timestamped custom records on runtime open/dispose). Test-only patch at the Base: 13 pass / 1 fail, TypeError: harness.sessions.liveReopenRuntime is not a function.",
+    "after": "registry-native.test.ts 14 pass / 0 fail (73.29 s); service-live-reopen.test.ts 1 pass / 0 fail / 15 expect() calls (12.51 s); packages/agent-service type-check exit 0; changed-file oxlint adds no finding, with the same 11 pre-existing registry.ts findings as the Base file.",
+    "routeCoverage": "service-live-reopen.test.ts mounts a real AgentService and asserts the live reopen returns 200 without a new skill-source reconcile or catalog generation, and that agentDirectoryId/projectId/cwd mismatches return 403 UNAUTHORIZED with the generation unchanged."
+  },
+  "runtimeSmoke": {
+    "hostService": {
+      "method": "Process-level Host harness spawning the real src/index.ts Bun Agent Service; private workspace, session and reopen routes over loopback with the internal secret; Host IPC replies for skill sources and approval-policy reads.",
+      "sessionId": "a75224bb-c4d8-4416-9ab4-1c09d8c3b001",
+      "liveReopen": {
+        "status": 200,
+        "sameEpoch": true,
+        "generation": "f009de0b-672b-42bf-8a85-37bef78c5375",
+        "generationAfter": "f009de0b-672b-42bf-8a85-37bef78c5375",
+        "skillSourceReconcilesAfterAdmission": 1,
+        "skillSourceReconcilesAfterReopen": 1,
+        "parsedTranscriptMessagesEqual": true
+      },
+      "scopeMismatches": [
+        { "field": "agentDirectoryId", "status": 403, "code": "UNAUTHORIZED" },
+        { "field": "projectId", "status": 403, "code": "UNAUTHORIZED" },
+        { "field": "workspaceId", "status": 403, "code": "UNAUTHORIZED" },
+        { "field": "cwd", "status": 403, "code": "UNAUTHORIZED" },
+        { "field": "agentDirectory", "status": 403, "code": "UNAUTHORIZED" }
+      ],
+      "generationAfterMismatches": "f009de0b-672b-42bf-8a85-37bef78c5375",
+      "coldServiceReopen": {
+        "status": 200,
+        "newGeneration": true,
+        "generation": "b416b47f-b22f-4460-be3f-6c52c1173513",
+        "skillSourceReconcilesBefore": 1,
+        "skillSourceReconcilesAfter": 2,
+        "historyStatus": 200,
+        "historyMessages": 2,
+        "parsedTranscriptMessagesEqual": true
+      }
+    },
+    "web": {
+      "method": "Actual packages/web Host (server/index.js) with its supervised Agent Service, isolated HOME and OPENCHAMBER_DATA_DIR, password session, canonical session create and Web open/history reads.",
+      "host": "http://127.0.0.1:44565",
+      "staticDist": "absent (API-only run; static files were not served)",
+      "sessionId": "3656bcb9-64c6-43eb-9823-ffe958c1031f",
+      "provider": "isolated native custom provider/model for model resolution only; no provider request made",
+      "generation": "7e06f277-1ce7-4277-a05a-82fda159241f",
+      "generationAfterOpen": "7e06f277-1ce7-4277-a05a-82fda159241f",
+      "generationAfterHistory": "7e06f277-1ce7-4277-a05a-82fda159241f",
+      "generationAfterSecondHistory": "7e06f277-1ce7-4277-a05a-82fda159241f",
+      "sameEpoch": true,
+      "sameRuntimeStatus": true,
+      "historySame": true
+    }
+  },
+  "cleanup": "Completed: both Host/service runs stopped, temporary roots and isolated HOME/data directories removed, throwaway smoke scripts deleted, listeners closed. No fixture or disposable code remains in the worktree.",
+  "reviews": {
+    "briefA": "pass after one fix round (blocking root cause/reproduction record and false documentation fixed)",
+    "briefB": "pass after one fix round (blocking reproduction record and documentation fixed; nonblocking predicate, branch comment, test naming and route coverage addressed)",
+    "security": "no blocking findings; one nonblocking liveness fail-open fixed with the captured-generation check and a stopping-worker regression; one nonblocking documentation status corrected",
+    "boundary": "comparison point 84b3d4046; packages/agent-service reopen route, registry live/admission split, tests, owner docs, development record and this receipt; deliverable = live reopen returns the current runtime without admission"
+  }
+}

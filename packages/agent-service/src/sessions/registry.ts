@@ -91,9 +91,29 @@ export class SessionRegistry {
   async reopen(input: SessionBootstrap): Promise<RuntimeSession> {
     this.ensureOpen();
     const parsed = HostSessionBootstrapSchema.parse(input);
-    this.assertWritable(parsed.rootSessionId);
-    if (!this.references.get(parsed.rootSessionId)) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+    this.assertReopenable(parsed.rootSessionId);
     return this.open(parsed);
+  }
+  /** Returns the live runtime for an already-open healthy root; callers keep admission for anything else. */
+  async liveReopenRuntime(input: SessionBootstrap): Promise<RuntimeSession | undefined> {
+    this.ensureOpen();
+    const parsed = HostSessionBootstrapSchema.parse(input);
+    this.assertReopenable(parsed.rootSessionId);
+    const entry = this.get(parsed.rootSessionId);
+    if (entry.state !== 'live' || !this.liveRuntime(entry)) return undefined;
+    // A stopping, disconnected or replaced worker still has a live entry until exit; its captured generation is gone.
+    if (this.workers.authorizationScope(parsed.rootSessionId)?.workerGeneration !== entry.opened.generation) return undefined;
+    // `open` keeps the existing captured-scope comparison and returns the live runtime without restarting it.
+    return this.open(parsed);
+  }
+  private liveRuntime(entry: Entry | undefined): RuntimeSession | undefined {
+    if (entry?.state !== 'live') return undefined;
+    const runtime = entry.opened.journal.runtime();
+    return runtime.runtimeStatus === 'unavailable' ? undefined : runtime;
+  }
+  private assertReopenable(sessionId: string): void {
+    this.assertWritable(sessionId);
+    if (!this.references.get(sessionId)) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
   }
   async restart(input: z.infer<typeof WorkerBootstrapSchema>): Promise<boolean> {
     this.assertWritable(input.rootSessionId);
@@ -820,7 +840,8 @@ export class SessionRegistry {
   private async openResolved(input: SessionBootstrap, replace: boolean, reference = this.references.get(input.rootSessionId), persistReference = true, restartGeneration?: string): Promise<RuntimeSession> {
     this.assertBootstrapWritable(input);
     const previous = this.entries.get(input.rootSessionId);
-    if (!replace && previous?.state === 'live' && previous.opened.journal.runtime().runtimeStatus !== 'unavailable') return previous.opened.journal.runtime();
+    const previousRuntime = replace ? undefined : this.liveRuntime(previous);
+    if (previousRuntime) return previousRuntime;
     const resolved = { ...input };
     if (reference) {
       resolved.sessionFile = reference.sessionFile;

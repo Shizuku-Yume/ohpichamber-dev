@@ -1,0 +1,49 @@
+# 64: Reopen a healthy live session without re-admitting its worker
+
+**Effort:** omp-through-m3
+**Task type:** bugfix
+**Base commit:** 84b3d4046d4d31f18b0f5c0ff3c050195885f4e6
+
+**Started:** 2026-10-21T04:53:39+08:00
+
+**Finished:** 2026-10-21T06:05:00+08:00
+
+**Delivers:** A reopen request for a healthy, already-live Agent Service session returns that worker's existing runtime transcript without re-admitting the directory, creating a new worker generation, or changing history IDs. Admission remains mandatory for cold or unavailable sessions, and a scope mismatch still returns the existing unauthorized response.
+
+**Blocked by:** None
+**Files:** `packages/agent-service/src/sessions/registry.ts`, `packages/agent-service/src/sessions/registry-native.test.ts`, `packages/agent-service/src/supervisor/service.ts`, `packages/agent-service/src/sessions/DOCUMENTATION.md` or the nearest sessions document, focused supervisor route coverage if the harness supports it
+
+**Read first:** `.workflow/specs/omp-through-m3.md` W3, W7, W8; `packages/agent-service/src/sessions/registry.ts`; `packages/agent-service/src/supervisor/service.ts` reopen/admission paths; `packages/agent-service/src/sessions/registry-native.test.ts`
+**Covers:** W3, W7, W8
+
+**Check:** `bun test packages/agent-service/src/sessions/registry-native.test.ts` and `bun run --cwd packages/agent-service type-check` pass; `bun run --cwd packages/agent-service lint` is clean for touched files; one real Host/Agent Service reopen of a live session returns the same `workerGeneration`, journal/history content and runtime session, with no admission or generation change. A clean-Base test-only patch must fail before the change, and the same test must pass after it.
+
+- [x] Reopen a live, opened session through the private reopen route without calling admission; preserve the captured agent-directory/scope comparison and fail closed on any mismatch.
+- [x] Keep cold and journal-`unavailable` sessions on the existing `admit()` + `sessions.reopen()` path with a new worker generation.
+- [x] Preserve the existing unauthorized/scope-rejection response and do not publish history from a previous runtime.
+- [x] Replace the removed raw transcript-byte assertions with parsed journal/history-content equality, or record why raw bytes are not stable; do not silently reduce coverage.
+- [x] Cover healthy reopen, each scope mismatch, missing root, and unavailable-to-cold reopen in `registry-native.test.ts`; add the route-level live-versus-fallback branch test if the supervisor harness can mount it.
+
+**Starting state:** The integration worktree currently has user-owned uncommitted edits in `packages/agent-service/src/sessions/registry.ts`, `packages/agent-service/src/sessions/registry-native.test.ts` and `packages/agent-service/src/supervisor/service.ts` that implement this behavior. Record them as `Dirty at start` in `## Progress
+
+Dirty at start: `none` in this isolated worktree (`omp-through-m3/64-live-session-reopen`, created from the Base commit). The integration worktree's pre-existing task-owned edits in `packages/agent-service/src/sessions/registry.ts`, `packages/agent-service/src/sessions/registry-native.test.ts`, `packages/agent-service/src/supervisor/service.ts` and its unrelated UI dirty files were left untouched. All Task64 paths remain uncommitted in this worktree until the task commit; none of the integration worktree's paths are staged here.
+
+Root cause: the private reopen route called `admit()` unconditionally. On a healthy live root `sessions.reopen()` already returned the open runtime, but admission still registered the workspace/agent directory, ran `catalog.admit()` with its Host skill-source reconcile, and re-registered the catalog worker on every canonical open/history read. The live branch is placed in the route so admission — not merely worker creation — is skipped.
+
+Base observation: a clean detached worktree at `84b3d4046` drove the real service through workspace registration, one session create and two live reopens. Host skill-source reconciles rose **1 → 3** (one per create, then one per live reopen) while the worker generation stayed the same, which shows the defect and why a generation check alone cannot prove the fix. The probe and its temporary roots were deleted.
+
+Check before: the committed `registry-native.test.ts` at the clean Base was **11 pass / 2 fail**. Both failures are the literal transcript-byte assertions: native storage appends timestamped `custom` records on runtime open/dispose (`ohpichamber.private-roots.v1`, then `session_exit` with a new timestamp), so whole-file bytes are not stable. With only the new/changed test hunks applied at the Base, the file was **13 pass / 1 fail**: `TypeError: harness.sessions.liveReopenRuntime is not a function`. The two transcript-byte tests passed once they compared parsed `message` records, which is the stable invariant.
+
+Change: `SessionRegistry.liveReopenRuntime()` returns the existing runtime only for a `live`, opened, non-`unavailable` root whose captured worker generation is still current; `open()` keeps the entry-scope comparison. `AgentService.assertAdmissionScope()` carries the captured-bootstrap comparison used by `admit()`, and the private reopen route calls it before the live branch, so scope mismatches still return 403 `UNAUTHORIZED`. Anything else falls through to `admit()` + `sessions.reopen()`, including a reopen without `agentDirectoryId`. The shared `liveRuntime()` predicate is used by both the live reopen and `openResolved()`, so the healthy-live rule exists once. `service-live-reopen.test.ts` mounts a real `AgentService` and pins the route branch: live reopen 200 with no new skill-source reconcile and the same catalog generation, and 403 `UNAUTHORIZED` with the generation unchanged for `agentDirectoryId`, `projectId` and `cwd` mismatches.
+
+Check after: `bun test packages/agent-service/src/sessions/registry-native.test.ts` → **14 pass / 0 fail** (73.29 s, including the stopping-worker case). `bun test packages/agent-service/src/supervisor/service-live-reopen.test.ts` → **1 pass / 0 fail / 15 expect() calls** (12.51 s). `bun run --cwd packages/agent-service type-check` → exit 0. `oxlint` on every touched source/test file reports no new finding; `registry.ts` keeps the same **11 pre-existing** findings as its Base version (lines 64, 254, 329, 353×2, 389, 483–486, 685).
+
+Real Host/Agent Service run: a process-level Host harness spawned the real `src/index.ts` Bun Agent Service (26 s, two real workers) and drove the private routes. Live reopen returned **200** with the same runtime epoch and generation (`f009de0b…`), Host skill-source reconciles stayed **1 → 1**, and parsed transcript records stayed equal. All five mismatches (`agentDirectoryId`, `projectId`, `workspaceId`, `cwd`, `agentDirectory`) returned **403 UNAUTHORIZED** with the generation unchanged. After a real service stop/start on the same state directory, reopen returned **200** with a new generation (`b416b47f…`), reconciles **1 → 2**, history **200** with the retained user/assistant messages, and parsed transcript records unchanged.
+
+Real Web run: the actual `packages/web` Host (isolated HOME/data dir, `127.0.0.1:44565`) with its supervised Agent Service created session `3656bcb9…`, then performed Web `open` and `history` reads (each issuing the private reopen). The canonical MCP catalog reported generation `7e06f277…` after create, after open, after history and after a second history read; epoch and runtime status stayed equal and both history responses were byte-equal. The run required a loopback-only provider/model configuration in the isolated native profile; no provider request was made. Throwaway smoke scripts were deleted; no fixture or listener remains. Both runs are recorded in `.workflow/omp-migration/m3/task64-live-reopen-2026-10-21.json`.
+
+Docs: `packages/agent-service/DOCUMENTATION.md` owns the live-reopen/admission split, the preserved refusals (including the 500 corrupt-reference and 409 deleted-space statuses), the id-less fallback and the parsed-transcript invariant; `packages/agent-service/README.md` qualifies policy preloading to replacement launches.
+
+Review boundary: comparison point `84b3d4046`; paths `packages/agent-service/src/sessions/registry.ts`, `src/sessions/registry-native.test.ts`, `src/supervisor/service.ts`, `src/supervisor/service-live-reopen.test.ts`, `packages/agent-service/DOCUMENTATION.md`, `packages/agent-service/README.md`, `.workflow/development.md`, the task file and the M3 receipt; deliverable = live reopen returns the current runtime without admission; trust boundary = the private reopen route plus the registry scope/admission split.
+
+Review findings and outcomes: Brief A blocking (missing root cause and pre-change reproduction) — fixed above with the base reconcile observation. Brief A/B blocking (false documentation statuses and the claim that `opening` roots get a new generation) — fixed. Security nonblocking (live gate could report a stopping/disconnected worker as healthy where Base returned 503) — fixed with the captured-generation check and a stopping-worker regression. Brief B nonblocking (duplicated live-healthy rule, dead `opened` operand) — fixed with `liveRuntime()`. Brief B nonblocking (untested id-less branch) — documented in code and docs; the Host caller always supplies the id. Brief B nonblocking (test name overclaimed admission coverage) — renamed and pointed at the route test. Brief B/Brief A nonblocking (no automated route guard) — fixed by `service-live-reopen.test.ts`. Brief A nonblocking (`README.md` stale replacement sentence) — fixed. Brief A nonblocking (evidence durability) — receipt added. No blocking finding remains unaddressed; no new review round was needed because the fixes stayed inside the reviewed boundary.

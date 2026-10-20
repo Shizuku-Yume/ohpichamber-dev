@@ -16,6 +16,13 @@ const assistant = (text: string) => ({ role: 'assistant' as const, content: [{ t
   provider: 'fixture', model: 'fixture', stopReason: 'stop' as const, timestamp: Date.now(),
   usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } });
 const admit = (input: WorkerBootstrap, launch: (input: WorkerBootstrap) => Promise<RuntimeSession>) => launch(input);
+// Native storage appends timestamped `custom` records (private roots, session exit) when a runtime opens or
+// disposes, so whole-file byte equality is not stable. The transcript invariant is the parsed message log.
+const nativeMessages = async (file: string) => {
+  const records: { type?: string; id?: string; parentId?: string | null; message?: unknown }[] =
+    (await readFile(file, 'utf8')).split('\n').filter(line => line.trim()).map(line => JSON.parse(line));
+  return records.filter(record => record.type === 'message').map(({ id, parentId, message }) => ({ id, parentId, message }));
+};
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'native-session-relocation-'));
@@ -352,7 +359,8 @@ test('explicit idle restart preserves native transcript files and publishes a ne
   try {
     const previous = harness.workers.authorizationScope(rootSessionId)!;
     const before = harness.sessions.journal(rootSessionId).snapshot();
-    const bytes = await readFile(harness.source.sessionFile, 'utf8');
+    const beforeNative = await nativeMessages(harness.source.sessionFile);
+    const beforeChild = await nativeMessages(harness.childFile);
     const outcomes = await harness.sessions.restartIdleSessions([previous], admit);
     const current = harness.workers.authorizationScope(rootSessionId)!;
     expect(outcomes).toEqual([{ rootSessionId, previousGeneration: previous.workerGeneration,
@@ -362,8 +370,8 @@ test('explicit idle restart preserves native transcript files and publishes a ne
     const after = harness.sessions.journal(rootSessionId).snapshot();
     expect(after.messages).toEqual(before.messages);
     expect(after.session.epoch).not.toBe(before.session.epoch);
-    expect(await readFile(harness.source.sessionFile, 'utf8')).toBe(bytes);
-    expect(await readFile(harness.childFile, 'utf8')).toBe(harness.childBytes);
+    expect(await nativeMessages(harness.source.sessionFile)).toEqual(beforeNative);
+    expect(await nativeMessages(harness.childFile)).toEqual(beforeChild);
   } finally { await harness.close(); }
 }, 60000);
 
@@ -420,24 +428,87 @@ test('failed idle restart preserves native references for an explicit later reop
   let moved = false;
   try {
     const previous = harness.workers.authorizationScope(rootSessionId)!;
-    const bytes = await readFile(harness.source.sessionFile, 'utf8');
+    const before = harness.sessions.journal(rootSessionId).snapshot();
+    const beforeNative = await nativeMessages(harness.source.sessionFile);
     await rename(harness.source.cwd, displaced);
     moved = true;
     const outcomes = await harness.sessions.restartIdleSessions([previous], admit);
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]).toMatchObject({ rootSessionId, previousGeneration: previous.workerGeneration, outcome: 'failed' });
     expect(harness.sessions.runtime(rootSessionId).runtimeStatus).toBe('unavailable');
-    expect(await readFile(harness.source.sessionFile, 'utf8')).toBe(bytes);
+    expect(harness.sessions.journal(rootSessionId).snapshot().messages).toEqual(before.messages);
+    expect(await nativeMessages(harness.source.sessionFile)).toEqual(beforeNative);
     await rename(displaced, harness.source.cwd);
     moved = false;
     await harness.sessions.reopen(harness.source);
     expect(harness.sessions.runtime(rootSessionId).runtimeStatus).toBe('idle');
     expect(harness.workers.authorizationScope(rootSessionId)?.workerGeneration).not.toBe(previous.workerGeneration);
-    expect(await readFile(harness.source.sessionFile, 'utf8')).toBe(bytes);
+    expect(harness.sessions.journal(rootSessionId).snapshot().messages).toEqual(before.messages);
+    expect(await nativeMessages(harness.source.sessionFile)).toEqual(beforeNative);
+    const history = await harness.sessions.history({ sessionId: rootSessionId });
+    expect(history.messages.map(({ messageId, role }) => ({ messageId, role })))
+      .toEqual(before.messages.map(({ messageId, role }) => ({ messageId, role })));
+    expect(JSON.stringify(history)).toContain('Retained root prompt');
+    expect(JSON.stringify(history)).toContain('Retained root reply');
   } finally {
     if (moved) await rename(displaced, harness.source.cwd);
     await harness.close();
   }
+}, 60000);
+
+// Registry contract only: the route's admission skip and 403 scope refusals are covered by
+// `service-live-reopen.test.ts` and the recorded real run.
+test('live reopen returns the open runtime and defers unavailable, unloaded or stopping roots', async () => {
+  const harness = await fixture();
+  try {
+    const generation = harness.workers.authorizationScope(rootSessionId)?.workerGeneration;
+    if (!generation) throw new Error('Live root worker generation is required');
+    const before = harness.sessions.runtime(rootSessionId);
+    const beforeJournal = harness.sessions.journal(rootSessionId).snapshot();
+    const beforeNative = await nativeMessages(harness.source.sessionFile);
+    expect(await harness.sessions.liveReopenRuntime(harness.source)).toEqual(before);
+    expect(harness.workers.authorizationScope(rootSessionId)?.workerGeneration).toBe(generation);
+    expect(harness.sessions.journal(rootSessionId).snapshot().messages).toEqual(beforeJournal.messages);
+    expect(await nativeMessages(harness.source.sessionFile)).toEqual(beforeNative);
+    for (const mismatch of [
+      { projectId: 'other-project' },
+      { workspaceId: 'other-workspace' },
+      { cwd: harness.destination.cwd },
+      { agentDirectory: join(harness.root, 'destination') },
+      { agentDirectoryId: 'other-owner' },
+    ]) {
+      await expect(harness.sessions.liveReopenRuntime({ ...harness.source, ...mismatch }))
+        .rejects.toMatchObject({ status: 409, code: 'INVALID_REQUEST' });
+    }
+    expect(harness.workers.authorizationScope(rootSessionId)?.workerGeneration).toBe(generation);
+    await expect(harness.sessions.liveReopenRuntime({ ...harness.source, rootSessionId: 'missing-root' }))
+      .rejects.toMatchObject({ status: 503, code: 'SESSION_RESTORE_FAILED' });
+    harness.sessions.journal(rootSessionId).unavailable();
+    expect(await harness.sessions.liveReopenRuntime(harness.source)).toBeUndefined();
+    expect(harness.workers.authorizationScope(rootSessionId)?.workerGeneration).toBe(generation);
+    const reAdmitted = await harness.sessions.reopen(harness.source);
+    expect(reAdmitted.runtimeStatus).toBe('idle');
+    const reAdmittedGeneration = harness.workers.authorizationScope(rootSessionId)?.workerGeneration;
+    expect(reAdmittedGeneration).not.toBe(generation);
+    expect(await harness.sessions.liveReopenRuntime(harness.source)).toEqual(reAdmitted);
+    expect(harness.workers.authorizationScope(rootSessionId)?.workerGeneration).toBe(reAdmittedGeneration);
+    await harness.restart();
+    expect(await harness.sessions.liveReopenRuntime(harness.source)).toBeUndefined();
+    const cold = await harness.sessions.reopen(harness.source);
+    expect(cold.runtimeStatus).toBe('idle');
+    const coldGeneration = harness.workers.authorizationScope(rootSessionId)?.workerGeneration;
+    expect(coldGeneration).toBeDefined();
+    expect(coldGeneration).not.toBe(reAdmittedGeneration);
+    expect(harness.sessions.journal(rootSessionId).snapshot().messages).toEqual(beforeJournal.messages);
+    expect(await nativeMessages(harness.source.sessionFile)).toEqual(beforeNative);
+    // A worker that is stopping or disconnected still has a live entry until exit; it is not a reopen target.
+    const stopping = harness.workers.stop(rootSessionId);
+    expect(await harness.sessions.liveReopenRuntime(harness.source)).toBeUndefined();
+    expect(await stopping).toBe(true);
+    const restarted = await harness.sessions.reopen(harness.source);
+    expect(restarted.runtimeStatus).toBe('idle');
+    expect(harness.workers.authorizationScope(rootSessionId)?.workerGeneration).not.toBe(coldGeneration);
+  } finally { await harness.close(); }
 }, 60000);
 
 test('stateless identity changes preserve active commands and recreate an idle worker under its actual new profile', async () => {

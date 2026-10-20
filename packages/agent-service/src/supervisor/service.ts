@@ -199,10 +199,14 @@ export class AgentService {
     const scope = this.workers.authorizationScope(rootSessionId);
     return scope === undefined ? undefined : HostAuthorizationScopeSchema.parse(scope);
   }
-  private async admit<T>(input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<T>, capturedAdmission?: CatalogAdmission): Promise<T> {
+  private assertAdmissionScope(input: WorkerBootstrap): WorkerBootstrap | undefined {
     this.sessions.assertBootstrapWritable(input);
     const captured = this.workers.bootstrap(input.rootSessionId);
     if (captured && (captured.workspaceId !== input.workspaceId || captured.projectId !== input.projectId || captured.cwd !== input.cwd || captured.agentDirectory !== input.agentDirectory || (input.agentDirectoryId !== undefined && captured.agentDirectoryId !== input.agentDirectoryId))) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    return captured;
+  }
+  private async admit<T>(input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<T>, capturedAdmission?: CatalogAdmission): Promise<T> {
+    const captured = this.assertAdmissionScope(input);
     if (capturedAdmission && (!captured || input.agentDirectoryId === undefined || !this.workspaceCatalogs.matches(input)))
       throw new WorkerOperationError(403, 'UNAUTHORIZED');
     const agentDirectoryId = await this.workspaceCatalogs.registerRoot(input);
@@ -508,6 +512,11 @@ export class AgentService {
         const rootSessionId = identity(privateReopen[1]);
         const { displayPath, ...input } = await readBody(request, SessionReopenRequestSchema);
         if (input.rootSessionId !== rootSessionId) throw new RequestError(400, 'INVALID_REQUEST', 'Session identity does not match the route');
+        this.assertAdmissionScope(input);
+        // A healthy live root is already admitted: return it instead of registering and reconciling again.
+        // A reopen without an agent-directory id keeps the admission path, which resolves the id it must compare.
+        const live = input.agentDirectoryId === undefined ? undefined : await this.sessions.liveReopenRuntime({ ...input, displayPath });
+        if (live) { respondJson(response, 200, live); return; }
         respondJson(response, 200, await this.admit(input, bootstrap => this.sessions.reopen({ ...bootstrap, displayPath })));
         return;
       }
