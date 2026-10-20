@@ -6,7 +6,7 @@
 
 **Delivers:** Retained settings/sidebar/Board/Guest Shell and Guest SDK surfaces consume the canonical catalogs, queue, shell, subagent hierarchy and session contracts while host-owned capabilities remain on their existing APIs.
 
-**Blocked by:** 18, 36
+**Blocked by:** 36, 65, 67
 **Files:** `packages/ui/src/`, `packages/sdk/`, `packages/web/`, Board/Guest/settings modules, focused tests and nearest documentation
 
 **Read first:** `.workflow/specs/omp-through-m3.md` M3/W6/W9; `.workflow/tasks/omp-through-m3/32-m3-native-subagent-navigation.md`; `.workflow/omp-migration/scope.md` `SCOPE-3.2` Session Sidebar subagent hierarchy; `packages/sdk/DOCUMENTATION.md`; UI stores/sync docs; `packages/ui/src/components/sourceBoard/SourceBoardView.tsx`; `packages/ui/src/lib/guests/shells.ts`; contracts catalog/shell/queue sections; locale skill; `packages/ui/src/lib/theme/STYLING.md` and `packages/ui/src/components/sections/PATTERNS.md` for affected styling/Settings
@@ -55,4 +55,4 @@
 - **Host settings route ownership (2026-10-20):** GET/PUT `/api/config/settings` now register from `packages/web/server/lib/host/settings-routes.js`, reusing existing Host settings owners. The external route, surface query, authorization ordering, payload/error semantics and secret/device sanitization are unchanged; focused tests and Host docs were added. No checks ran.
 - **Guest session item projection (2026-10-20):** `GuestSessionRecord.items` now projects only canonical `kind: 'guest'` links whose `providerId` matches the subscribing extension. Public IDs use `identifier`, optional guest-owned data is preserved, and other guest/provider metadata is excluded. Focused regressions cover scope and identity; no checks ran.
 
-- **Pause handoff (2026-10-20):** The source cutovers are integrated, including Host settings route ownership, explicit Host filesystem directory queries, and Guest-owned item projection. Regression tests were added or adjusted but are unrun under the Task18-only verification plan. Resume after Tasks36/18 for evidence and archive; connected Board/Guest/sidebar observation is owned by Task36.
+- **Pause handoff (2026-10-20, dependency resolved 2026-10-21):** The source cutovers are integrated, including Host settings route ownership, explicit Host filesystem directory queries, and Guest-owned item projection. Regression tests were added or adjusted but are unrun under the Task18-only verification plan. Resume after Task36's archived connected receipt and after Tasks65/67 land the shared sync source: reuse Task36's Board/Guest/sidebar observation where its artifact provenance supports the claim, run the focused owner suites and UI type-check against landed sync code, and archive. Task15 no longer blocks on Task18; Task18 waits on Task15 instead.

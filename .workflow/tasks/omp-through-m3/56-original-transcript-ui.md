@@ -6,7 +6,7 @@
 
 **Delivers:** Restores the original OpenChamber message transcript UI from pre-M1 baseline (`bfa8edacb9b0096aabf40b12886794ce62df8ddb`) onto current native Canonical contracts (`e848504602333955b1d134bba3345d8bbc2ed065`). Restores original bubble styling, header, footer actions, turn composition, collapse/navigation, and rich `MessageBody` without redesign or fallback to generic placeholders, keeping native canonical `Message` and `Part` models without OpenCode shims.
 
-**Blocked by:** None
+**Blocked by:** 65, 67
 **Files:** `packages/ui/src/components/chat/ChatMessage.tsx`, `packages/ui/src/components/chat/MessageList.tsx`, `packages/ui/src/components/chat/message/MessageBody.tsx`, `packages/ui/src/components/chat/message/`, `packages/ui/src/components/chat/components/`, `packages/ui/src/components/chat/lib/`, related tests
 **Read first:** Visual reference at `bfa8edacb9b0096aabf40b12886794ce62df8ddb` (`packages/ui/src/components/chat/`); canonical contracts in `packages/agent-contract/src/messages.ts`; `.workflow/specs/omp-through-m3.md` W7, W9, W10
 **Covers:** W7, W9, W10

@@ -6,7 +6,7 @@
 
 **Delivers:** Restores the original compact animated tool execution row, status feedback, and rich `ToolOutputDialog` with diff previews, syntax-highlighted code, quick-open actions, subagent inspection, and shell output formatting from pre-M1 baseline (`bfa8edacb9b0096aabf40b12886794ce62df8ddb`). Replaces raw `<pre>` or generic `<details>` substitutes with the original tool UI connected to native canonical tool calls and outcomes, with truthful OMP semantics.
 
-**Blocked by:** None
+**Blocked by:** 65, 67
 **Files:** `packages/ui/src/components/chat/message/parts/ToolPart.tsx`, `packages/ui/src/components/chat/message/parts/ToolPartDiffPreview.tsx`, `packages/ui/src/components/chat/message/ToolOutputDialog.tsx`, `packages/ui/src/components/chat/message/toolRenderers.tsx`, `packages/ui/src/components/chat/DiffPreview.tsx`, related tool part helpers and tests
 **Read first:** Visual reference at `bfa8edacb9b0096aabf40b12886794ce62df8ddb` (`packages/ui/src/components/chat/message/parts/ToolPart.tsx`, `ToolOutputDialog.tsx`); canonical tool schemas in `packages/agent-contract/src/messages.ts`; `.workflow/specs/omp-through-m3.md` W7, W9, W10
 **Covers:** W7, W9, W10

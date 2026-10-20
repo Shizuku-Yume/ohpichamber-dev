@@ -6,7 +6,7 @@
 
 **Delivers:** Restores the original file attachment chips, image thumbnails, media gallery, and preview/popup inspection (`FileAttachment`, `MarkdownImageGallery`) from pre-M1 baseline (`bfa8edacb9b0096aabf40b12886794ce62df8ddb`). Resolves canonical attachment identities via authenticated client transports without embedding bearer tokens in query string URLs, properly handles file click/open/download, and cleans up object URLs and resources on unmount or runtime switch.
 
-**Blocked by:** None
+**Blocked by:** 65, 67
 **Files:** `packages/ui/src/components/chat/FileAttachment.tsx`, `packages/ui/src/components/chat/MarkdownImageGallery.tsx`, `packages/ui/src/components/chat/message/parts/attachmentCitationChips.tsx`, attachment preview and modal components, related hooks and tests
 **Read first:** Visual reference at `bfa8edacb9b0096aabf40b12886794ce62df8ddb` (`packages/ui/src/components/chat/FileAttachment.tsx`, `MarkdownImageGallery.tsx`); canonical attachment schemas in `packages/agent-contract/src/messages.ts` and `prompt.ts`, authenticated attachment operations in `packages/ui/src/api/canonicalClient.ts`; `.workflow/specs/omp-through-m3.md` W7, W9, W10
 **Covers:** W7, W9, W10

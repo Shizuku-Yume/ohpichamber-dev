@@ -6,7 +6,7 @@
 
 **Delivers:** Restores the original themed approval and question card UI (`FormCard`, `FormDock`, `PermissionDock`, `PermissionCard`) from pre-M1 baseline (`bfa8edacb9b0096aabf40b12886794ce62df8ddb`) on top of canonical interactive request contracts (`e848504602333955b1d134bba3345d8bbc2ed065`). Renders native `omp.ask` questions with typed choices and text inputs, supports native permission CAS revisions, preserves keyboard IME/navigation and accessibility, and avoids OpenCode FormField shims or raw JSON fallback textareas.
 
-**Blocked by:** None
+**Blocked by:** 65, 67
 **Files:** `packages/ui/src/components/chat/FormCard.tsx`, `packages/ui/src/components/chat/FormDock.tsx`, `packages/ui/src/components/chat/PermissionDock.tsx`, `packages/ui/src/components/chat/PermissionCard.tsx`, `packages/ui/src/components/chat/FormFieldControl.tsx`, related interaction hooks and tests
 **Read first:** Visual reference at `bfa8edacb9b0096aabf40b12886794ce62df8ddb` (`packages/ui/src/components/chat/FormCard.tsx`, `FormDock.tsx`, `PermissionDock.tsx`); native interaction contracts in `packages/agent-contract/src/requests.ts` and `packages/agent-service/src/interaction/manager.ts`; `.workflow/specs/omp-through-m3.md` W4, W7, W10
 **Covers:** W4, W7, W10

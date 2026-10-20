@@ -8,7 +8,7 @@
 
 **Delivers:** Canonical workspace plugin and extension management wired to the native `PluginManager` and `MarketplaceManager` in the Bun Agent Service worker. Exposes canonical `/api/agent/v1/workspaces/:workspaceId/plugins` endpoints for plugin listing, installation, uninstallation, enable/disable toggling, updates, doctor diagnostics, and local extension authoring under revision CAS. Replaces legacy `/api/config/plugins` and `/api/integration` routes in `usePluginsStore`, enforces Host enterprise egress boundaries, and reports explicit persistence versus active runtime apply outcomes without fake reload successes.
 
-**Blocked by:** None
+**Blocked by:** 64
 **Files:** `packages/agent-contract/src/catalogs.ts`, `packages/agent-contract/src/plugins.ts`, `packages/agent-service/src/worker/catalog-plugins.ts`, `packages/agent-service/src/worker/catalogs.ts`, `packages/agent-service/src/supervisor/workspace-routes.ts`, `packages/web/server/lib/host/canonical-routes.js`, `packages/ui/src/api/canonicalClient.ts`, `packages/ui/src/stores/usePluginsStore.ts`, `packages/ui/src/components/sections/plugins/`, `.workflow/development.md`, `.workflow/specs/omp-through-m3.md`
 **Read first:** `.workflow/specs/omp-through-m3.md` W6, W9, W10; `packages/agent-contract/src/catalogs.ts`; installed native SDK `@oh-my-pi/pi-coding-agent/src/extensibility/plugins/manager.ts` (`PluginManager`), `src/extensibility/plugins/marketplace/manager.ts` (`MarketplaceManager`), and `src/extensibility/plugins/runtime-config.ts`; `packages/ui/src/stores/usePluginsStore.ts`; Host enterprise network boundary policies
 **Covers:** W6, W9, W10
@@ -71,6 +71,7 @@ Plugin and extension lifecycle management is an implemented native subsystem of 
 
 ## Progress
 
+- **Dependency (2026-10-21):** `Blocked by: 64`. Task64 lands the live-reopen change in `packages/agent-service/src/sessions/registry-native.test.ts`, a file this task's four-file parent packet shares. Wait for Task64 to be archived and landed before running the parent packet; never stage, revert or stash that dirty user-owned test file from the integration tree.
 - Dirty at start: none. Manual worktree: `m3-native-plugins`; branch: `m3-native/plugins-20261018`.
 - Checks are intentionally not run in this worker; parent owns integrated verification.
 - Shared development/spec documentation belongs to the coordinator writer and is intentionally unchanged.

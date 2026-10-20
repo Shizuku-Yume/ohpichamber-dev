@@ -7,7 +7,7 @@
 
 **Delivers:** Restores the original OpenChamber provider management experience (`packages/ui/src/components/sections/providers/`) from pre-M1 baseline (`bfa8edacb9b0096aabf40b12886794ce62df8ddb`), including the visual `ProviderGrid`, connection picker, multi-account management roster, OAuth sign-in modal with manual callback prompts, custom provider configuration forms, and detailed model rows. Replaces simplified or unstyled model lists with the original interactive provider cards while strictly preserving native OAuth flows, write-only credential storage, revision CAS, enterprise mode gates, and runtime guards.
 
-**Blocked by:** None
+**Blocked by:** 65, 67
 **Files:** `packages/ui/src/components/sections/providers/`, related provider UI tests
 **Read first:** Visual reference at `bfa8edacb9b0096aabf40b12886794ce62df8ddb` (`packages/ui/src/components/sections/providers/`); canonical provider and OAuth contracts in `packages/agent-contract/src/catalogs.ts` and `provider-management.ts`; `.workflow/specs/omp-through-m3.md` W9, W10
 **Covers:** W9, W10
