@@ -27,7 +27,7 @@ No es un callback de montaje único. Monta la UI y registra suscripciones una ve
 | `theme.tokens` | los colores de la app (superficies, texto, estados de interacción, primario, success/warning/error/info), `font`, `mono` y `radius`. Pásalo a `applyHostReady` antes de montar la UI. |
 | `locale` | la etiqueta de idioma de la app |
 | `directory` | el directorio del proyecto actual, o `null` |
-| `session` | `{ id, title, busy }` o `null`. Si no hay título, se usa el id de la sesión. `busy` es el estado en vivo. `model` y `agent` (el agente de OpenCode) aparecen cuando la sesión los tiene. |
+| `session` | `{ id, title, busy }` o `null`. Si no hay título, se usa el id de la sesión. `busy` es el estado en vivo. `model` y `agent` (el agente de la sesión) aparecen cuando la sesión los tiene. |
 | `surface` | `panel` en la barra lateral, `dialog` en la ventana de adjuntar, `page` a pantalla completa, `status` en el panel Work Status, `file` como editor de archivos en Files |
 | `item` | para qué se abrió esta superficie, o `null`: el elemento adjunto en el que el usuario hizo clic (los mismos campos que pasaste a `attach`, incluido `data`), un mensaje (`kind: "message"`) o una sesión (`kind: "session"`) desde una de tus acciones declaradas. Ver [Acciones](/sdk/#acciones-comandos-y-la-insignia). |
 | `connection` | `{ connected, account }` de tu integración |
@@ -153,6 +153,22 @@ Sin `send`, `prompt` reemplaza el texto del cuadro de chat. Con `send: true` env
 
 `host.storage.get(key)`, `set(key, value)`, `delete(key)` y `keys()` guardan JSON propio sin otro permiso. Una clave ausente devuelve `undefined`; null guardado sigue siendo null. Las claves tienen de 1 a 128 caracteres, cada valor hasta 64 KiB UTF-8 y el conjunto hasta 2 MiB y 2.000 claves. Usa el ID del proyecto en la clave para datos por proyecto. Las escrituras se serializan y son atómicas; los errores conservan los datos. Desinstalar elimina este almacenamiento del servidor conectado.
 
+## Shells en segundo plano
+
+Con la capacidad `shells`, supervisa los comandos de shell que se ejecutan en segundo plano, delimitados a una sesión y sus subagentes, a un proyecto registrado o a todas las sesiones. OpenChamber responde desde su almacenamiento local; no se realiza ninguna lectura de red.
+
+| Llamada | Qué hace |
+| --- | --- |
+| `onRunningShells(scope, listener)` | se suscribe a los comandos de shell dentro del alcance: `{ kind: 'session', sessionId }` cubre la sesión y sus subagentes, `{ kind: 'project', projectId }` cubre un proyecto registrado y `{ kind: 'global' }` cubre todas las sesiones. Obtienes los comandos en ejecución del más antiguo al más reciente, cada uno con su indicador `background`, y los que ya terminaron. Devuelve una función para cancelar la suscripción. |
+| `readShellOutput(shellId, { cursor?, tailBytes? })` | una página de la salida de un comando en ejecución o finalizado. Sin `cursor`, comienza `tailBytes` (hasta 65536) antes del final. Devuelve `{ output, cursor, skipped }`. |
+| `stopShell(shellId)` | envía primero la nota de detención al agente y luego elimina el comando. |
+
+La instantánea es `{ kind: "shells", scope, shells, ended }`, donde `scope` refleja el alcance de la suscripción. Cada shell en ejecución es `{ id, sessionID, command, startedAt, background }`, como máximo 200, del más antiguo al más reciente. `background` es `true` para un trabajo por el que el turno no espera.
+
+`ended` enumera los comandos que OpenChamber vio terminar, del más antiguo al más reciente según su finalización, con un máximo de 200 conservando los más nuevos. Cada uno añade `status`, `endedAt` y `exit` cuando el comando finalizó con un código. El estado es `exited`, `timeout`, `killed` por una señal, `stopped` por un usuario o `unknown` si la finalización ocurrió durante una reconexión. OpenChamber conserva esta lista solo en memoria. Está vacía tras recargar la app, así que guarda en el almacenamiento de la extensión lo que muestre tu panel.
+
+El host conserva la salida de un comando finalizado para sus últimos 25 comandos finalizados por directorio. Un comando detenido pierde su salida de inmediato. Leer una shell que OpenChamber nunca vio, o una salida que el host ya no conserva, devuelve `NOT_FOUND`. Lo mismo ocurre al detener una shell que no está en ejecución. Una capacidad `shells` no aprobada devuelve `NOT_GRANTED`.
+
 ## request
 
 ```ts
@@ -194,7 +210,7 @@ Una ruta relativa está dentro del proyecto abierto y necesita la capacidad `fil
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/opencode/opencode.json");
+const info = await host.stat("~/.config/openchamber/config.json");
 ```
 
 Límites: ruta de hasta 1024 caracteres, contenido de hasta 2,000,000 caracteres, listado de hasta 2000 entradas. Superar el límite de contenido es `FILE_TOO_LARGE`.

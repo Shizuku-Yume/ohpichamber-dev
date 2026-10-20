@@ -5,7 +5,7 @@ description: Lass einen Agenten OpenChamber-Sitzungen, Worktrees und geplante Au
 
 # Agent-Steuerungswerkzeug
 
-Verwende das Agentenwerkzeug `openchamber`, um Arbeit in der App direkt aus dem Chat zu verwalten. Es ist standardmäßig aktiviert, wenn OpenChamber seinen eigenen lokalen OpenCode-Server ausführt; du musst kein separates Werkzeug installieren und keinen Shell-Befehl ausführen.
+Verwende das Agentenwerkzeug `openchamber`, um Arbeit in der App direkt aus dem Chat zu verwalten. Es ist standardmäßig aktiviert; du musst kein separates Werkzeug installieren und keinen Shell-Befehl ausführen.
 
 ## Was du anfragen kannst
 
@@ -28,9 +28,7 @@ Das Werkzeug kann Projekte und Modelleinstellungen auflisten, Sitzungen erstelle
 
 ## Werkzeug ein- oder ausschalten
 
-Öffne **Einstellungen → Allgemein → OpenChamber-Werkzeuge** und ändere **Agent control tool**. Die Einstellung gilt, sobald der verwaltete OpenCode-Server neu startet — OpenChamber bietet das als **Apply & Restart** an.
-
-Das Werkzeug ist nicht verfügbar, wenn OpenChamber über `OPENCODE_HOST` oder skip-start mit einem externen OpenCode-Server verbunden ist. Desktop- und Web-Installationen, die den verwalteten OpenCode-Server von OpenChamber verwenden, unterstützen es automatisch.
+Öffne **Einstellungen → Allgemein → OpenChamber-Werkzeuge** und ändere **Agent control tool**. Die Einstellung gilt sofort ohne Neustart. Das Werkzeug arbeitet über die native Host-Aktionsgrenze von OpenChamber, um Sitzungen, Worktrees und geplante Aufgaben zu verwalten.
 
 ## Verwandt
 

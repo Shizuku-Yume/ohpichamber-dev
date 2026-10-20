@@ -109,6 +109,7 @@ Rysowanie panelu i odczyt bieżącej sesji nie wymagają żadnej zgody. Wszystko
 | `sessions` | listy projektów, worktree i stanów sesji; tworzenie i otwieranie sesji w zarejestrowanych projektach |
 | `files` | odczyt i zapis plików w otwartym projekcie (`readFile`, `writeFile`, `listDir`, `stat` ze ścieżką względną) |
 | `model` | jednorazowe generowanie tekstu za pomocą Small Model użytkownika (`generate`), poza jakąkolwiek sesją |
+| `shells` | monitorowanie poleceń powłoki uruchamianych przez agentów w tle, odczyt ich wyjścia i zatrzymywanie ich (`onRunningShells`, `readShellOutput`, `stopShell`) |
 
 Pięć kolejnych jest dodawanych automatycznie: `network`, gdy deklarujesz `integration`, `service`, gdy deklarujesz `service`, `filesystem`, gdy deklarujesz wzorce `filesystem`, `origins`, gdy deklarujesz `origins`, oraz `conversation`, gdy akcja sesji prosi o wiadomości (zobacz [Akcje, polecenia i odznaka](#akcje-polecenia-i-odznaka)).
 
@@ -116,7 +117,7 @@ Użytkownik widzi pełną listę raz, przy instalacji rozszerzenia, i albo ją z
 
 ## Generowanie tekstu
 
-Dzięki uprawnieniu `model` `host.generate` prosi Small Model użytkownika o jednorazową odpowiedź: podsumowanie, tytuł, szkic. Nic nie trafia do sesji, historia nie jest zapisywana, a rozszerzenie nigdy nie wybiera dostawcy. OpenChamber używa tego samego modelu, którego używa do własnej pracy w tle, wybranego w Ustawienia → Sesje → Small Model, albo małego modelu dostawcy, z którym użytkownik akurat pracuje, albo domyślnego modelu z jego konfiguracji OpenCode.
+Dzięki uprawnieniu `model` `host.generate` prosi Small Model użytkownika o jednorazową odpowiedź: podsumowanie, tytuł, szkic. Nic nie trafia do sesji, historia nie jest zapisywana, a rozszerzenie nigdy nie wybiera dostawcy. OpenChamber używa modelu wybranego w Ustawienia → Sesje → Small Model albo małego modelu aktywnego dostawcy.
 
 ```ts
 const { text } = await host.generate({
@@ -166,14 +167,14 @@ Twoja strona nie może sama dotykać dysku. OpenChamber czyta i zapisuje za nią
 - Ścieżka zaczynająca się od `/` lub `~/` oznacza dowolne inne miejsce. Musi pasować do jednego ze wzorców zadeklarowanych w `contributes.filesystem`, a użytkownik widzi dokładnie te wzorce w oknie zatwierdzania:
 
 ```json
-"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
 ```
 
 Wzorce używają `*` dla jednego segmentu ścieżki i `**` dla dowolnej głębokości. Wszystko poza nimi to `BAD_PATH`, nawet po zatwierdzeniu. `..` nigdy nie jest dozwolone.
 
 ```ts
-const config = await host.readFile("~/.config/opencode/opencode.json");
-await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const config = await host.readFile("~/.config/openchamber/config.json");
+await host.writeFile("~/.config/openchamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -279,13 +280,13 @@ host.onResolve(async ({ command, args }) => {
 });
 ```
 
-Gdy użytkownik wpisze `/task ABC-12` w polu czatu, OpenChamber prosi Twoje rozszerzenie o rozwiązanie go i dołącza to, co zwrócisz, jako chip, niczego nie otwierając. Zwróć `null` dla "nic nie znaleziono". Jeśli Twój panel jest zamknięty, OpenChamber ładuje go w tle na potrzeby tego wywołania. Nazwa, której OpenChamber lub OpenCode już używa, jest ignorowana.
+Gdy użytkownik wpisze `/task ABC-12` w polu czatu, OpenChamber prosi Twoje rozszerzenie o rozwiązanie go i dołącza to, co zwrócisz, jako chip, niczego nie otwierając. Zwróć `null` dla "nic nie znaleziono". Jeśli Twój panel jest zamknięty, OpenChamber ładuje go w tle na potrzeby tego wywołania. Nazwa, której OpenChamber już używa, jest ignorowana.
 
 **Odznaka na ikonie na pasku bocznym.** `host.setBadge(3)` pokazuje liczbę na Twojej ikonie, na przykład otwarte zadania; `host.setBadge(null)` ją usuwa. Otwarcie panelu też ją usuwa.
 
 ## Twoje narzędzia w czacie
 
-Gdy Twoja wtyczka OpenCode lub serwer MCP dodaje narzędzie, czat pokazuje jego wywołania z ogólną ikoną i surowym wynikiem. Zamiast tego zadeklaruj, jak mają wyglądać, bez kodu:
+Gdy serwer MCP lub zintegrowane narzędzie dodaje narzędzie, czat pokazuje jego wywołania z ogólną ikoną i surowym wynikiem. Zamiast tego zadeklaruj, jak mają wyglądać, bez kodu:
 
 ```json
 "tools": [
@@ -301,7 +302,7 @@ Gdy Twoja wtyczka OpenCode lub serwer MCP dodaje narzędzie, czat pokazuje jego 
 ]
 ```
 
-`match` to nazwa narzędzia w takiej postaci, w jakiej zgłasza ją OpenCode; `*` na końcu dopasowuje prefiks. `icon` to nazwa ikony Remixicon albo plik `.svg` w Twoim pakiecie, tak jak `panel.icon`. `title` i `subtitle` to szablony nad `input`, `output` i `metadata` wywołania. `output` wybiera sposób renderowania treści: `text`, `json` (drzewo), `markdown`, `code` z `language`, `table` z `columns` (wiersze pochodzą z tablicy wyniku lub z `output.items`) albo `auto` dla domyślnego. Dokładny `match` wygrywa z symbolem wieloznacznym, a przy remisie wygrywa pierwsze zainstalowane rozszerzenie. Żadna zgoda nie jest potrzebna: to zmienia tylko sposób rysowania danych, które już są w czacie.
+`match` to nazwa narzędzia w takiej postaci, w jakiej zgłasza ją środowisko wykonawcze; `*` na końcu dopasowuje prefiks. `icon` to nazwa ikony Remixicon albo plik `.svg` w Twoim pakiecie, tak jak `panel.icon`. `title` i `subtitle` to szablony nad `input`, `output` i `metadata` wywołania. `output` wybiera sposób renderowania treści: `text`, `json` (drzewo), `markdown`, `code` z `language`, `table` z `columns` (wiersze pochodzą z tablicy wyniku lub z `output.items`) albo `auto` dla domyślnego. Dokładny `match` wygrywa z symbolem wieloznacznym, a przy remisie wygrywa pierwsze zainstalowane rozszerzenie. Żadna zgoda nie jest potrzebna: to zmienia tylko sposób rysowania danych, które już są w czacie.
 
 Rozszerzenie, które tylko stylizuje narzędzia, nie potrzebuje żadnej strony: pomiń `panel.entry`, a nie będzie miało ikony na pasku bocznym, tylko kartę w Ustawienia → Rozszerzenia. Bez strony może deklarować `tools` i nic więcej. Drugi wyjątek to sekcja Work Status lub edytor plików z własnym `entry`, patrz wyżej.
 

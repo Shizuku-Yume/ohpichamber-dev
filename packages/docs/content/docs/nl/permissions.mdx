@@ -5,29 +5,25 @@ description: Bepaal per sessie hoeveel de agent mag doen zonder het te vragen.
 
 # Toestemmingen en vangnet
 
-Elke actie van de agent wordt eerst getoetst aan de toestemmingsregels: een opdracht uitvoeren, een bestand bewerken, een MCP-tool aanroepen of een pagina ophalen. De toestemmingsmodus van OpenChamber bepaalt wat er gebeurt als een regel 'vragen' voorschrijft.
+Elke actie van de agent (een opdracht uitvoeren, een bestand bewerken, een MCP-tool aanroepen of een pagina ophalen) wordt geëvalueerd door de Host-authorizer en het worker-beleid van de Agent Service. De toestemmingsmodi van OpenChamber bepalen wat er gebeurt wanneer voor een actie goedkeuring vereist is.
 
-## Toestaan, vragen en weigeren
+## Autorisatie en goedkeuringen
 
-De toestemmingsregels staan in OpenCode. Elke regel geeft een actie een van drie uitkomsten:
+De Host Gateway toetst bestandssysteemtoegang aan de projectmap. Acties gericht op paden buiten de projectmap worden direct geweigerd. Binnen de projectmap verlopen routinematige lees- en bewerkacties via de projectbestandstools zonder extra bevestigingsvragen.
 
-- **allow:** de agent mag doorgaan
-- **deny:** de actie wordt geblokkeerd
-- **ask:** de agent stopt en wacht op een antwoord
+Wanneer een actie toestemming van de gebruiker vereist, zoals het uitvoeren van een niet-toegestane shell-opdracht, pauzeert de agent en maakt deze een goedkeuringsverzoek aan. Bij het beantwoorden van een goedkeuringsverzoek kunt u dit eenmalig toestaan, toestaan voor de rest van de sessie, of weigeren voor de gehele werkruimte. Blijvend goedkeuringsbeleid slaat toestemmingen op sessieniveau of weigeringen op werkruimteniveau op.
 
-Standaard zijn de meeste acties toegestaan. OpenCode vraagt alleen toestemming voordat de agent mappen buiten het project benadert of `.env`-bestanden leest. U kunt eigen regels toevoegen om bijvoorbeeld elke shell-opdracht eerst te laten vragen. Het regelformaat staat bij [Toestemmingen in de OpenCode-documentatie](https://opencode.ai/v2/docs/permissions/). In OpenChamber vindt u de rechten van een agent bij **Instellingen → Agents**.
-
-Toestemmingsmodi veranderen alleen wie de vraag bij `ask` beantwoordt. Een `deny` blijft geblokkeerd en bij `allow` wordt sowieso niets gevraagd.
+Om in te stellen welke tools een agent kan zien en aanroepen, gebruikt u het veld **toegestane tools** (allowed tools) onder **Instellingen → Agents**. De standaard toestemmingsmodus voor nieuwe sessies kiest u onder **Instellingen → Sessies**.
 
 ## De drie modi
 
-| Modus | Wie beantwoordt `ask`? |
+| Modus | Wie beantwoordt goedkeuringsverzoeken? |
 | --- | --- |
 | **Telkens vragen** | U. Elk verzoek wacht op uw antwoord. |
 | **Vangnet** | Jev laat routineacties door en houdt riskante acties voor u tegen. |
-| **Alles accepteren** | OpenChamber antwoordt altijd ja. Elk verzoek wordt direct toegestaan, zonder controle. |
+| **Alles accepteren** | OpenChamber keurt verzoeken die toestemming vereisen automatisch goed. |
 
-**Alles accepteren** heeft niets extra nodig. Het behandelt elk `ask` eenvoudigweg als toegestaan. Gebruik dit als u de taak vertrouwt en geen onderbrekingen wilt.
+In de modus **Alles accepteren** worden verzoeken die toestemming vereisen automatisch goedgekeurd, zodat het werk zonder wachten doorgaat. De beveiligingscontroles van de Host, inclusief de projectmapgrenzen en het weigeringsbeleid van de werkruimte, blijven bij elke actie onverminderd van kracht.
 
 ## Van modus wisselen
 
@@ -40,7 +36,7 @@ Subagents volgen de sessie die ze heeft gestart.
 
 In deze modus vraagt OpenChamber [Jev](/nl/classification-providers/) bij elk verzoek of het om een routineactie gaat of om iets waarover u moet beslissen. Lezen, bouwen, tests uitvoeren, projectbestanden bewerken en gewone commits gaan door. Git-geschiedenis herschrijven, gegevens verwijderen, het systeem wijzigen, uitrollen, iets publiceren of bestanden naar buiten versturen wacht op u. Dat geldt ook voor onduidelijke acties.
 
-Een tegengehouden verzoek toont de gebruikelijke toestemmingskaart, met de extra regel **Het vangnet heeft deze actie tegengehouden zodat u kunt beslissen** en het soort actie. Als Jev niet binnen vier seconden kan antwoorden, wacht de actie ook op u. Een mislukte controle is nooit reden om een actie toe te staan.
+Een tegengehouden verzoek toont de goedkeuringskaart in de chat met de toolnaam, de samenvatting van de opdracht en de details, waar u deze kunt toestaan of weigeren. Als Jev niet binnen vier seconden kan antwoorden, wacht de actie ook op u. Het vangnet staat nooit een actie toe wanneer de classificatie mislukt of de tijdslimiet verstrijkt.
 
 Het vangnet vereist een [classificatieprovider](/nl/classification-providers/). Zonder provider slaat de schildknop deze modus over en is de optie uitgeschakeld in de instellingen.
 
@@ -51,6 +47,5 @@ De modus wordt op de OpenChamber-server bijgehouden. Verzoeken blijven dus beant
 
 ## Zie ook
 
-- [Toestemmingen in de OpenCode-documentatie](https://opencode.ai/v2/docs/permissions/) om eigen `allow`-, `ask`- en `deny`-regels te schrijven
 - [Classificatieproviders en Jev](/nl/classification-providers/) om het model achter het vangnet in te stellen
 - [Meldingen](/nl/notifications/) om te horen wanneer een verzoek op u wacht

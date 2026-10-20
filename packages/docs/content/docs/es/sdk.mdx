@@ -109,6 +109,7 @@ Dibujar un panel y leer la sesión actual no requiere permisos. Todo lo que act�
 | `sessions` | listar proyectos, worktrees y estados de sesiones; crear y abrir sesiones en proyectos registrados |
 | `files` | leer y escribir archivos dentro del proyecto abierto (`readFile`, `writeFile`, `listDir`, `stat` con una ruta relativa) |
 | `model` | generación de texto puntual con el Small Model del usuario (`generate`), fuera de cualquier sesión |
+| `shells` | supervisar los comandos de shell que tus agentes ejecutan en segundo plano, leer su salida y detenerlos (`onRunningShells`, `readShellOutput`, `stopShell`) |
 
 Otras cinco se añaden por ti: `network` cuando declaras una `integration`, `service` cuando declaras un `service`, `filesystem` cuando declaras patrones `filesystem`, `origins` cuando declaras `origins`, y `conversation` cuando una acción de sesión pide los mensajes (ver [Acciones, comandos y la insignia](#acciones-comandos-y-la-insignia)).
 
@@ -116,7 +117,7 @@ El usuario ve la lista completa una vez, al instalar la extensión, y la aprueba
 
 ## Generar texto
 
-Con la capacidad `model`, `host.generate` pide al Small Model del usuario una respuesta puntual: un resumen, un título, un borrador. Nada entra en una sesión, no se guarda historial, y la extensión nunca elige un proveedor. OpenChamber usa el mismo modelo que usa para su propio trabajo en segundo plano, elegido en Ajustes → Sesiones → Small Model, o el modelo pequeño del proveedor con el que está trabajando el usuario, o el modelo predeterminado de su configuración de OpenCode.
+Con la capacidad `model`, `host.generate` pide al Small Model del usuario una respuesta puntual: un resumen, un título, un borrador. Nada entra en una sesión, no se guarda historial, y la extensión nunca elige un proveedor. OpenChamber usa el modelo elegido en Ajustes → Sesiones → Small Model, o el modelo pequeño del proveedor activo.
 
 ```ts
 const { text } = await host.generate({
@@ -166,14 +167,14 @@ Tu página no puede tocar el disco por sí misma. OpenChamber lee y escribe por 
 - Una ruta que empieza por `/` o `~/` significa cualquier otro lugar. Debe coincidir con uno de los patrones que declaras en `contributes.filesystem`, y el usuario ve esos patrones exactos en el diálogo de aprobación:
 
 ```json
-"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
 ```
 
 Los patrones usan `*` para un segmento de ruta y `**` para cualquier profundidad. Todo lo que quede fuera de ellos es `BAD_PATH`, incluso después de la aprobación. `..` nunca está permitido.
 
 ```ts
-const config = await host.readFile("~/.config/opencode/opencode.json");
-await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const config = await host.readFile("~/.config/openchamber/config.json");
+await host.writeFile("~/.config/openchamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -279,13 +280,13 @@ host.onResolve(async ({ command, args }) => {
 });
 ```
 
-Cuando el usuario escribe `/task ABC-12` en el cuadro de chat, OpenChamber pide a tu extensión que lo resuelva y adjunta lo que devuelves como un chip, sin abrir nada. Devuelve `null` para "no se encontró nada". Si tu panel está cerrado, OpenChamber lo carga en segundo plano para esa llamada. Un nombre que OpenChamber u OpenCode ya usan se ignora.
+Cuando el usuario escribe `/task ABC-12` en el cuadro de chat, OpenChamber pide a tu extensión que lo resuelva y adjunta lo que devuelves como un chip, sin abrir nada. Devuelve `null` para "no se encontró nada". Si tu panel está cerrado, OpenChamber lo carga en segundo plano para esa llamada. Un nombre que OpenChamber ya usa se ignora.
 
 **Insignia en el icono de la barra lateral.** `host.setBadge(3)` muestra un número en tu icono, por ejemplo tareas abiertas; `host.setBadge(null)` lo quita. Abrir el panel también lo quita.
 
 ## Tus herramientas en el chat
 
-Cuando tu plugin de OpenCode o servidor MCP añade una herramienta, el chat muestra sus llamadas con un icono genérico y la salida en bruto. Declara en su lugar cómo deben verse, sin código:
+Cuando un servidor MCP o herramienta integrada añade una herramienta, el chat muestra sus llamadas con un icono genérico y la salida en bruto. Declara en su lugar cómo deben verse, sin código:
 
 ```json
 "tools": [
@@ -301,7 +302,7 @@ Cuando tu plugin de OpenCode o servidor MCP añade una herramienta, el chat mues
 ]
 ```
 
-`match` es el nombre de la herramienta tal como lo reporta OpenCode; un `*` final coincide con un prefijo. `icon` es un nombre de Remixicon o un archivo `.svg` en tu paquete, como `panel.icon`. `title` y `subtitle` son plantillas sobre `input`, `output` y `metadata` de la llamada. `output` elige cómo se renderiza el cuerpo: `text`, `json` (un árbol), `markdown`, `code` con un `language`, `table` con `columns` (las filas vienen del array de salida o de `output.items`) o `auto` para el comportamiento por defecto. Un `match` exacto gana a un comodín, y en caso de empate gana la primera extensión instalada. No hace falta ningún permiso: esto solo cambia cómo se dibujan datos que ya están en el chat.
+`match` es el nombre de la herramienta tal como lo reporta el entorno de ejecución; un `*` final coincide con un prefijo. `icon` es un nombre de Remixicon o un archivo `.svg` en tu paquete, como `panel.icon`. `title` y `subtitle` son plantillas sobre `input`, `output` y `metadata` de la llamada. `output` elige cómo se renderiza el cuerpo: `text`, `json` (un árbol), `markdown`, `code` con un `language`, `table` con `columns` (las filas vienen del array de salida o de `output.items`) o `auto` para el comportamiento por defecto. Un `match` exacto gana a un comodín, y en caso de empate gana la primera extensión instalada. No hace falta ningún permiso: esto solo cambia cómo se dibujan datos que ya están en el chat.
 
 Una extensión que solo da estilo a herramientas no necesita página: omite `panel.entry` y no tendrá icono en la barra lateral, solo una tarjeta en Ajustes → Extensiones. Sin página puede declarar `tools` y nada más. La otra excepción es una sección de Work Status o un editor de archivos con su propio `entry`, ver arriba.
 

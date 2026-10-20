@@ -1,29 +1,28 @@
 ---
 title: Instalacja
-description: Zainstaluj OpenChamber na komputerze lub w przeglądarce.
+description: Zainstaluj OpenChamber na komputerze, w przeglądarce lub na urządzeniu mobilnym.
 ---
 
 # Instalacja
 
-OpenChamber można uruchomić na trzy sposoby:
+OpenChamber można uruchomić jako:
 
-- aplikacja na komputer dla macOS
-- aplikacja webowa hostowana przez CLI, którą możesz zainstalować jak aplikację na telefonie (jako PWA)
-
-## Wymaganie wstępne
-
-Najpierw zainstaluj [OpenCode](https://opencode.ai) — OpenChamber działa na jego bazie.
+- aplikacja desktopowa dla macOS, Windows i Linux
+- aplikacja webowa hostowana przez CLI, którą można zainstalować jako PWA
+- aplikacja mobilna dla iOS i Android
 
 ## Przeglądarka + PWA
+
+Uruchomienie serwera OpenChamber wymaga spełnienia wymagań wstępnych: Node.js 24.14+ dla Host Gateway, Bun 1.3.14+ w zmiennej PATH dla Agent Service oraz git.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/openchamber/openchamber/main/scripts/install.sh | bash
 openchamber --ui-password be-creative-here
 ```
 
-Otwórz adres URL wypisany przez CLI (zwykle `http://localhost:3000`). Powinna pojawić się lista sesji OpenChamber. Aby mieć ją zawsze pod ręką, użyj opcji „Zainstaluj” w pasku adresu przeglądarki, aby dodać ją jako aplikację.
+Otwórz adres URL wypisany przez CLI (zwykle `http://localhost:3000`). Wprowadź hasło UI na ekranie logowania, aby się zalogować. Po zalogowaniu pojawi się lista sesji OpenChamber. Aby mieć ją zawsze pod ręką, użyj opcji „Zainstaluj” w pasku adresu przeglądarki, aby dodać ją jako aplikację.
 
 ## Komputer
 
-Pobierz najnowszą kompilację na komputer ze strony wydań na GitHubie lub ze strony pobierania OpenChamber. Otwórz ją i zaloguj się do swojego zwykłego procesu pracy OpenCode.
+Pobierz najnowszą kompilację na komputer ze strony wydań na GitHubie lub ze strony pobierania OpenChamber. Uruchom aplikację i wybierz swój obszar roboczy lub połącz się ze zdalnym serwerem.
 

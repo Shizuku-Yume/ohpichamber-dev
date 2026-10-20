@@ -5,7 +5,7 @@ description: Let an agent manage OpenChamber sessions, worktrees, and scheduled 
 
 # Agent Control Tool
 
-Use the `openchamber` agent tool to manage work in the app directly from chat. It is enabled by default when OpenChamber runs its own local OpenCode server; there is no separate tool to install or shell command to run.
+Use the `openchamber` agent tool to manage work in the app directly from chat. It is enabled by default; there is no separate tool to install or shell command to run.
 
 ## What you can ask
 
@@ -28,9 +28,7 @@ The tool can list projects and model preferences, create and follow up on sessio
 
 ## Turn the tool on or off
 
-Open **Settings → General → OpenChamber Tools** and change **Agent control tool**. The setting applies once the managed OpenCode server restarts, which OpenChamber offers as **Apply & Restart**.
-
-The tool is not available when OpenChamber connects to an external OpenCode server through `OPENCODE_HOST` or skip-start. Desktop and web installations that use OpenChamber's managed OpenCode server support it automatically.
+Open **Settings → General → OpenChamber Tools** and change **Agent control tool**. The setting applies immediately without a restart. The tool operates through OpenChamber's native Host action boundary to manage sessions, worktrees, and scheduled tasks.
 
 ## Related
 

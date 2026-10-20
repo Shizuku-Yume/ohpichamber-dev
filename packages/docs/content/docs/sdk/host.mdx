@@ -27,7 +27,7 @@ It is not a one-time mount callback. Mount your UI and register subscriptions on
 | `theme.tokens` | the app's colours (surfaces, text, interaction states, primary, success/warning/error/info), `font`, `mono`, and `radius`. Pass this to `applyHostReady` before you mount UI. |
 | `locale` | the app language tag |
 | `directory` | current project directory, or `null` |
-| `session` | `{ id, title, busy }` or `null`. Title falls back to the session id. `busy` is the live status. `model` and `agent` (the OpenCode agent) appear when the session has them. |
+| `session` | `{ id, title, busy }` or `null`. Title falls back to the session id. `busy` is the live status. `model` and `agent` (the session agent) appear when the session has them. |
 | `surface` | `panel` on the rail, `dialog` in the attach window, `page` full-screen, `status` in the Work Status panel, `file` as a file editor in Files |
 | `item` | what this surface was opened for, or `null`: the attached item the user clicked (the same fields you passed to `attach`, including `data`), a message (`kind: "message"`), or a session (`kind: "session"`) from one of your declared actions. See [Actions](/sdk/#actions-commands-and-the-badge). |
 | `connection` | `{ connected, account }` for your integration |
@@ -180,7 +180,7 @@ The snapshot is `{ kind: "shells", scope, shells, ended }`, with `scope` echoing
 
 `ended` lists the commands OpenChamber saw end, oldest end first, at most 200 with the newest kept. Each one adds `status`, `endedAt`, and `exit` when the command exited with a code. The status is `exited`, `timeout`, `killed` by a signal, `stopped` by a user, or `unknown` when the end happened during a reconnect. OpenChamber keeps this list in memory only. It is empty after the app reloads, so save what your panel shows in extension storage.
 
-OpenCode keeps an ended command's output for its latest 25 ended commands per directory. A stopped command loses its output right away. Reading a shell OpenChamber never saw, or output OpenCode no longer has, is `NOT_FOUND`. So is stopping a shell that is not running. An unapproved `shells` capability is `NOT_GRANTED`.
+The host keeps an ended command's output for its latest 25 ended commands per directory. A stopped command loses its output right away. Reading a shell OpenChamber never saw, or output the host no longer has, is `NOT_FOUND`. So is stopping a shell that is not running. An unapproved `shells` capability is `NOT_GRANTED`.
 
 ## Persistent extension data
 
@@ -234,7 +234,7 @@ A relative path is inside the open project and needs the `files` capability. A p
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/opencode/opencode.json");
+const info = await host.stat("~/.config/openchamber/config.json");
 ```
 
 Limits: path up to 1024 characters, content up to 2,000,000 characters, listing up to 2000 entries. Over the content limit is `FILE_TOO_LARGE`.

@@ -22,7 +22,7 @@ Notities, taken en geplande taken zijn persoonlijk. Ze komen nooit in de reposit
 
 ## Een onderdeel verplaatsen
 
-Open **Instellingen → Projecten** en kies het project. Elke actie en inrichtingsopdracht heeft een knop **Naar repository verplaatsen**. Onderdelen uit de repository hebben **Naar mijn instellingen verplaatsen**. Bij startopties op het scherm voor nieuwe sessies verschijnen dezelfde knoppen als u erover beweegt. Bij plannen staan ze op elke rij van het tabblad Plannen.
+Open **Instellingen → Projecten** en kies het project om acties en inrichtingsopdrachten te verplaatsen: elk onderdeel heeft een knop **Naar repository verplaatsen**, en onderdelen uit de repository hebben **Naar mijn instellingen verplaatsen**. Concept-startopties beheert u rechtstreeks op het scherm voor nieuwe sessies door over de startchips te bewegen om ze te delen met de repository of persoonlijk te maken. Bij plannen staat de verplaatsknop op elke rij van het tabblad Plannen.
 
 Het onderdeel wordt echt verplaatst: het verdwijnt op de ene plek en verschijnt op de andere. Er wordt geen kopie gemaakt.
 
@@ -65,7 +65,7 @@ Alleen `version` is verplicht. Alle andere sleutels zijn optioneel. OpenChamber 
 
 `projectActions` bevat de acties in het menu bovenaan de app. `id`, `name` en `command` zijn verplicht. `icon` is optioneel; zonder waarde verschijnt een afspeelpictogram. Bekende namen zijn `play`, `build`, `lint`, `terminal`, `tools`, `bug`, `flask`, `rocket`, `code`, `server`, `branch`, `search`, `settings`, `brain`, `stack`, `robot`, `command` en `file`. Met `autoOpenUrl: true` opent u het adres dat de opdracht toont. Zie [Voorbeeldweergave en ontwikkelservers](/nl/preview/). `platforms` beperkt de actie tot `macos`, `linux` of `windows`. `runIn: "parent"` voert de actie uit in de hoofdcheckout in plaats van in de huidige worktree.
 
-`draftStarters` zet opdrachten en skills vast op het scherm voor een nieuwe sessie. Elke vermelding heeft de vorm `{ "type": "command" | "skill", "name": "..." }`. De opdracht of skill zelf moet bestaan in de OpenCode-configuratie van de repository.
+`draftStarters` zet opdrachten en skills vast op het scherm voor een nieuwe sessie. Elke vermelding heeft de vorm `{ "type": "command" | "skill", "name": "..." }`, en verwijst naar een opdracht of skill uit de catalogi van de werkruimte of de agent (zoals `.omp/commands/` of `.omp/skills/`) of ingebouwde startopties. De projectconfiguratie bewaart alleen deze verwijzingen, niet de definities van de opdrachten of skills zelf.
 
 `plansDir` bepaalt waar repositoryplannen staan. Zonder deze sleutel wordt `.openchamber/plans` gebruikt. Zie hieronder.
 

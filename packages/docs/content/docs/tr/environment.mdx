@@ -1,26 +1,21 @@
 ---
 title: Environment Değişkenleri
-description: Environment değişkenleriyle OpenChamber ve OpenCode entegrasyonunu yapılandırın.
+description: Ortam değişkenleriyle OpenChamber'ı yapılandırın.
 ---
-
-> OhPiChamber üretim başlatması Node Host Gateway ve denetlenen Bun OMP Agent Service kullanır; otomatik OpenCode başlatması veya CLI önkoşulu yoktur; aşağıdaki OpenCode kılavuzu, kalan açık eski denetimler için devralınan belgelendirmedir, kurallı başlatma yapılandırması değildir. Agent kullanılabilirliği `/api/agent/v1/ready` adresindedir.
-
 # Environment Değişkenleri
 
 OpenChamber bu environment değişkenlerini başlangıçta okur. Başlangıç servisleri için `openchamber startup enable` varsayılan olarak mevcut environment'ı anlık görüntü olarak kaydeder. Servisin kullanmasını istediğiniz değişkenleri değiştirdikten sonra bunu yeniden çalıştırın.
 
-## OpenCode, Git ve terminal için değişkenler
+## Agent oturumları, Git ve terminal için değişkenler
 
-OpenCode'a, Git'e, terminale ve [proje eylemlerine](/tr/project-actions/) API token'ı ya da veritabanı adresi gibi kendi değişkenlerinizi vermek için, bunları OpenChamber başlamadan önce export etmek yerine **Ayarlar → Genel → Ortam değişkenleri** bölümüne ekleyin. Değerler OpenChamber'ı çalıştıran makinede, veri dizinindeki `environment.json` dosyasında kalır ve onları yalnızca sizin kullanıcınız okuyabilir. Ayarlar bir değeri bir daha asla göstermez: değeri değiştirebilir ya da silebilirsiniz ama geri okuyamazsınız.
+Agent oturumlarına, Git'e, terminale ve [proje eylemlerine](/tr/project-actions/) API token'ı ya da veritabanı adresi gibi kendi değişkenlerinizi vermek için, bunları OpenChamber başlamadan önce export etmek yerine **Ayarlar → Genel → Ortam değişkenleri** bölümüne ekleyin. Değerler OpenChamber'ı çalıştıran makinede, veri dizinindeki `environment.json` dosyasında kalır ve onları yalnızca sizin kullanıcınız okuyabilir. Ayarlar bir değeri bir daha asla göstermez: değeri değiştirebilir ya da silebilirsiniz ama geri okuyamazsınız.
 
-- OpenCode bunları başlarken alır, bu yüzden bir değişiklikten sonra onu yeniden başlatın. Ayarlar bunun için bir düğme sunar.
-- `opencode service set env` ile ayarladığınız değişkenler de OpenCode'a ulaşır. Ayarlar'dakiler önceliklidir.
+- Agent oturumları bunları başlarken alır.
 - Git, terminal ve proje eylemleri bunları bir sonraki çalıştırmada alır.
-- OpenChamber'ın OpenCode'un kendisi için ayarladığı değişkenler, örneğin parolası ve yapılandırması, sizinkilerden önceliklidir.
 
 Bir proje kendi değişkenlerini ya da bunları yazdıran `direnv export json` gibi bir komutu **Ayarlar → Projeler** bölümünde ekleyebilir. [Projeler](/tr/projects/#proje-ortamı) sayfasına bakın.
 
-Bu değişkenler kendi başlattığınız bir OpenCode sunucusuna ulaşmaz. Aşağıdaki her şeyi OpenChamber başlangıçta kendisi okur.
+Aşağıdaki her şeyi OpenChamber başlangıçta kendisi okur.
 
 ## OpenChamber sunucusu
 
@@ -44,6 +39,10 @@ Tarayıcı arayüzü için parola. Bunu localhost dışına bind ederken, tünel
 
 Güvendiğiniz bir cihazda oturumun kaç gün geçerli kalacağı. Varsayılan `7`.
 
+### `OPENCODE_JWT_SECRET`
+
+Host UI oturum belirteçlerini imzalamak için kullanılan gizli anahtarı geçersiz kılar. Bu ayar Host oturum imzalamasını yapılandırır ve agent çalışma zamanını etkilemez. Bu değeri gizli tutun. Ayarlandığında, OpenChamber imzalama anahtarını döndüremediği için genel oturum kapatma kullanılamaz.
+
 ### `OPENCHAMBER_API_ONLY`
 
 `true` ya da `1` olarak ayarlandığında OpenChamber'ı headless modda başlatır. API rotaları masaüstü ve mobil istemciler için açık kalır, ama tarayıcı arayüzü sunulmaz.
@@ -58,7 +57,7 @@ OpenChamber veri dizinini geçersiz kılar. Varsayılan `~/.config/openchamber`.
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-OpenChamber'ın projesiz sohbetler için oluşturduğu yönetilen sohbet dizinlerinin yerini değiştirir. Varsayılan `~/.config/openchamber/chats`. OpenChamber ve OpenCode farklı kullanıcılarla çalışıyorsa OpenCode sunucusunun okuyabileceği bir dizin belirtin. Mevcut sohbetler taşınmaz.
+OpenChamber'ın projesiz sohbetler için oluşturduğu yönetilen sohbet dizinlerinin yerini değiştirir. Varsayılan `~/.config/openchamber/chats` dizinidir. Mevcut sohbetler taşınmaz.
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -84,53 +83,7 @@ Otomatik algılama yanlışsa, güncelleme işlemlerinin kullandığı package m
 
 ### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-OpenChamber’ın kendi giden isteklerini, örneğin kullanım limitlerini ve skill kataloglarını, bir proxy üzerinden gönderir. Küçük harfli adlar da çalışır. `NO_PROXY` içindeki sunucular doğrudan bağlanır; `localhost`, `127.0.0.1` ve `::1` her zaman doğrudan bağlanır, böylece oturum açma geri çağrıları ve yerel OpenCode sunucusu çalışmaya devam eder.
-
-## OpenCode sunucusu
-
-### `OPENCODE_HOST`
-
-OpenChamber'ı mevcut bir OpenCode sunucusuna bağlar. Değer, açık bir port içeren ve path, query ya da hash içermeyen bir `http` ya da `https` origin'i olmalıdır. `OPENCODE_HOST`, `OPENCODE_PORT`'a göre önceliklidir.
-
-### `OPENCODE_PORT`
-
-OpenCode sunucu portunu ayarlar. Yönetilen OpenCode ile bu, yönetilen portu ister. `OPENCODE_SKIP_START=true` ile harici bir sunucuya o port üzerinden bağlanır.
-
-### `OPENCODE_SKIP_START`
-
-`true` olarak ayarlandığında OpenChamber'ın kendi OpenCode sunucusunu başlatmasını engeller.
-
-### `OPENCHAMBER_OPENCODE_HOSTNAME`
-
-OpenChamber'ın yönettiği OpenCode sunucusu için bind hostname'i. Varsayılan `127.0.0.1`.
-
-### `OPENCODE_BINARY`
-
-OpenChamber'ın çalıştırması gereken `opencode` yürütülebilir dosyasının yolu.
-
-### `OPENCODE_CONFIG`
-
-Belirli bir OpenCode yapılandırma dosyasının yolu.
-
-### `OPENCODE_CONFIG_DIR`
-
-Agent'lar, skills, snippets ve config keşfi için belirli bir OpenCode yapılandırma dizininin yolu.
-
-### `OPENCODE_DATA_DIR`
-
-Yönetilen OpenCode sunucusu için özel veri dizini.
-
-### `OPENCODE_WSL_DISTRO`
-
-Windows'ta OpenCode entegrasyonu için kullanılan WSL dağıtımını seçer.
-
-### `OPENCHAMBER_OPENCODE_WSL_DISTRO`
-
-WSL dağıtımını seçmek için OpenChamber'a özel takma ad. İkisi de ayarlıysa `OPENCODE_WSL_DISTRO` önceliklidir.
-
-### `OPENCODE_JWT_SECRET`
-
-UI kimlik doğrulama token'larını imzalamak için kullanılan gizli değer. Kalıcı servis dağıtımlarında uzun ve rastgele bir değer kullanın.
+OpenChamber’ın kendi giden isteklerini, örneğin kullanım limitlerini ve skill kataloglarını, bir proxy üzerinden gönderir. Küçük harfli adlar da çalışır. `NO_PROXY` içindeki sunucular doğrudan bağlanır; `localhost`, `127.0.0.1` ve `::1` her zaman doğrudan bağlanır, böylece oturum açma geri çağrıları ve yerel bağlantılar çalışmaya devam eder.
 
 ## Terminal ve Git
 
@@ -174,6 +127,3 @@ Daemon süreçleri başlatılırken OpenChamber'ın kullanması gereken Bun yür
 
 Bun kurulum kökü. OpenChamber bunu daemon başlangıcı ve güncellemeleri için `bin/bun` bulmakta kullanır.
 
-### `VITE_OPENCODE_URL`
-
-Vite ile derlenen web uygulaması için derleme zamanı API base URL'i. Çoğu kullanıcı bunu normal CLI ya da masaüstü kullanımında ayarlamamalıdır.

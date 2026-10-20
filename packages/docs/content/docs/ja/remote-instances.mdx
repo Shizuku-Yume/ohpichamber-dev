@@ -7,7 +7,7 @@ description: デスクトップアプリを SSH 経由で別マシン上の Open
 
 デスクトップアプリは、作業サーバー、クラウドマシン、ホームラボなど、別マシン上で動く OpenChamber に SSH 経由で接続し、その UI をローカルのように画面へ表示できます。**Settings → Remote Instances** で設定します。
 
-> リモートインスタンスは**デスクトップ専用**機能です。Web では、代わりに [OpenCode サーバー](/ja/opencode-server/) の環境変数を使ってリモートサーバーに接続します。
+> リモートインスタンスは**デスクトップアプリ**で設定します。Web では、サーバー URL、ネットワークアドレス、またはトンネルリンクを使って直接接続します。
 
 ## リモートインスタンスを追加する
 
@@ -44,5 +44,4 @@ openchamber connect-url --port 3000 --server http://your-host:3000 --qr
 
 - [デバイスを接続する](/connect-devices/) — ペアリングリンク、QR コード、デバイス管理
 - [Private Relay](/private-relay/) — 「どこでも」接続の仕組み
-- [OpenCode サーバー](/ja/opencode-server/) — Web でリモートサーバーに接続する
 - [リモートアクセス](/troubleshooting/remote-access/) — 接続が完了しない場合

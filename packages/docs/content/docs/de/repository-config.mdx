@@ -22,7 +22,7 @@ Notizen, Todos und geplante Aufgaben gehören dir. Sie landen nie im Repository.
 
 ## Einen Eintrag verschieben
 
-Öffne **Settings → Projects** und wähle das Projekt. Jede Aktion und jeder Setup-Befehl hat einen Button **Move to repository**, und jeder Eintrag aus dem Repository hat **Move to my settings**. Starter auf dem Bildschirm für neue Sitzungen zeigen dasselbe Paar beim Überfahren. Pläne haben es in jeder Zeile des Tabs „Pläne“.
+Öffne **Settings → Projects** und wähle das Projekt, um Aktionen und Setup-Befehle zu verschieben: Jeder Eintrag hat einen Button **Move to repository**, und jeder Eintrag aus dem Repository hat **Move to my settings**. Entwurfs-Starter werden direkt auf dem Bildschirm für neue Sitzungen verwaltet, indem du über die Starter-Chips fährst, um sie im Repository zu teilen oder persönlich zu machen. Pläne haben den Button in jeder Zeile des Tabs „Pläne“.
 
 Verschieben heißt verschieben. Der Eintrag verlässt den einen Ort und landet am anderen, nichts wird verdoppelt.
 
@@ -65,7 +65,7 @@ Nur `version` ist Pflicht. Alle anderen Schlüssel sind optional, und OpenChambe
 
 `projectActions` ist die Liste der Aktionen im Kopfzeilenmenü. `id`, `name` und `command` sind Pflicht. `icon` ist optional und fällt auf ein Play-Symbol zurück; OpenChamber kennt die Namen `play`, `build`, `lint`, `terminal`, `tools`, `bug`, `flask`, `rocket`, `code`, `server`, `branch`, `search`, `settings`, `brain`, `stack`, `robot`, `command` und `file`. `autoOpenUrl: true` öffnet die Adresse, die der Befehl ausgibt, siehe [Vorschau und Entwicklungsserver](/preview/). `platforms` beschränkt die Aktion auf `macos`, `linux` oder `windows`. `runIn: "parent"` führt die Aktion im Haupt-Checkout statt im aktuellen Worktree aus.
 
-`draftStarters` heftet Befehle und Skills an den Bildschirm für neue Sitzungen. Jeder Eintrag hat die Form `{ "type": "command" | "skill", "name": "..." }`, und der Befehl oder Skill selbst muss in der OpenCode-Konfiguration des Repositorys existieren.
+`draftStarters` heftet Befehle und Skills an den Bildschirm für neue Sitzungen. Jeder Eintrag hat die Form `{ "type": "command" | "skill", "name": "..." }` und verweist auf einen Befehl oder Skill aus den Katalogen des Arbeitsbereichs oder Agenten (wie `.omp/commands/` oder `.omp/skills/`) oder integrierte Starter. Die Projektkonfiguration speichert nur diese Verweise, nicht die Definitionen der Befehle oder Skills selbst.
 
 `plansDir` ist der Ort der Repository-Pläne. Lass ihn weg, um `.openchamber/plans` zu verwenden. Siehe unten.
 

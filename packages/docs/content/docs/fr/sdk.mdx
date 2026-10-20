@@ -109,6 +109,7 @@ Dessiner un panneau et lire la session en cours ne demandent aucune permission. 
 | `sessions` | lister les projets, worktrees et états des sessions ; créer et ouvrir des sessions dans les projets enregistrés |
 | `files` | lire et écrire des fichiers dans le projet ouvert (`readFile`, `writeFile`, `listDir`, `stat` avec un chemin relatif) |
 | `model` | génération de texte ponctuelle avec le Small Model de l'utilisateur (`generate`), en dehors de toute session |
+| `shells` | surveiller les commandes shell exécutées en arrière-plan par vos agents, lire leur sortie et les arrêter (`onRunningShells`, `readShellOutput`, `stopShell`) |
 
 Cinq autres sont ajoutées pour vous : `network` quand vous déclarez une `integration`, `service` quand vous déclarez un `service`, `filesystem` quand vous déclarez des motifs `filesystem`, `origins` quand vous déclarez `origins`, et `conversation` quand une action de session demande les messages (voir [Actions, commandes et le badge](#actions-commandes-et-le-badge)).
 
@@ -116,7 +117,7 @@ L'utilisateur voit la liste complète une seule fois, à l'installation de l'ext
 
 ## Générer du texte
 
-Avec la capacité `model`, `host.generate` demande au Small Model de l'utilisateur une réponse ponctuelle : un résumé, un titre, un brouillon. Rien n'entre dans une session, aucun historique n'est conservé, et l'extension ne choisit jamais de fournisseur. OpenChamber utilise le même modèle que pour son propre travail en arrière-plan, choisi dans Paramètres → Sessions → Small Model, ou le petit modèle du fournisseur avec lequel l'utilisateur travaille, ou le modèle par défaut de sa configuration OpenCode.
+Avec la capacité `model`, `host.generate` demande au Small Model de l'utilisateur une réponse ponctuelle : un résumé, un titre, un brouillon. Rien n'entre dans une session, aucun historique n'est conservé, et l'extension ne choisit jamais de fournisseur. OpenChamber utilise le modèle choisi dans Paramètres → Sessions → Small Model, ou le petit modèle du fournisseur actif.
 
 ```ts
 const { text } = await host.generate({
@@ -166,14 +167,14 @@ Votre page ne peut pas toucher le disque elle-même. OpenChamber lit et écrit p
 - Un chemin qui commence par `/` ou `~/` désigne n'importe quel autre endroit. Il doit correspondre à l'un des motifs que vous déclarez dans `contributes.filesystem`, et l'utilisateur voit exactement ces motifs dans la boîte de dialogue d'approbation :
 
 ```json
-"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
 ```
 
 Les motifs utilisent `*` pour un segment de chemin et `**` pour n'importe quelle profondeur. Tout ce qui est en dehors donne `BAD_PATH`, même après approbation. `..` n'est jamais autorisé.
 
 ```ts
-const config = await host.readFile("~/.config/opencode/opencode.json");
-await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const config = await host.readFile("~/.config/openchamber/config.json");
+await host.writeFile("~/.config/openchamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -279,13 +280,13 @@ host.onResolve(async ({ command, args }) => {
 });
 ```
 
-Quand l'utilisateur tape `/task ABC-12` dans la zone de chat, OpenChamber demande à votre extension de le résoudre et attache ce que vous renvoyez sous forme de puce, sans rien ouvrir. Renvoyez `null` pour "rien trouvé". Si votre panneau est fermé, OpenChamber le charge en arrière-plan pour cet appel. Un nom déjà utilisé par OpenChamber ou OpenCode est ignoré.
+Quand l'utilisateur tape `/task ABC-12` dans la zone de chat, OpenChamber demande à votre extension de le résoudre et attache ce que vous renvoyez sous forme de puce, sans rien ouvrir. Renvoyez `null` pour "rien trouvé". Si votre panneau est fermé, OpenChamber le charge en arrière-plan pour cet appel. Un nom déjà utilisé par OpenChamber est ignoré.
 
 **Badge sur l'icône de la barre latérale.** `host.setBadge(3)` affiche un nombre sur votre icône, par exemple les tâches ouvertes ; `host.setBadge(null)` l'efface. Ouvrir le panneau l'efface aussi.
 
 ## Vos outils dans le chat
 
-Quand votre plugin OpenCode ou serveur MCP ajoute un outil, le chat affiche ses appels avec une icône générique et une sortie brute. Déclarez plutôt à quoi ils doivent ressembler, sans code :
+Quand un serveur MCP ou un outil intégré ajoute un outil, le chat affiche ses appels avec une icône générique et une sortie brute. Déclarez plutôt à quoi ils doivent ressembler, sans code :
 
 ```json
 "tools": [
@@ -301,7 +302,7 @@ Quand votre plugin OpenCode ou serveur MCP ajoute un outil, le chat affiche ses 
 ]
 ```
 
-`match` est le nom de l'outil tel qu'OpenCode le rapporte ; un `*` final correspond à un préfixe. `icon` est un nom Remixicon ou un fichier `.svg` dans votre paquet, comme `panel.icon`. `title` et `subtitle` sont des gabarits sur `input`, `output` et `metadata` de l'appel. `output` choisit comment le corps est rendu : `text`, `json` (un arbre), `markdown`, `code` avec un `language`, `table` avec `columns` (les lignes viennent du tableau de sortie ou de `output.items`) ou `auto` pour le rendu par défaut. Un `match` exact l'emporte sur un joker, et en cas d'égalité la première extension installée gagne. Aucune permission n'est nécessaire : cela ne change que la façon dont des données déjà dans le chat sont dessinées.
+`match` est le nom de l'outil tel que le runtime le rapporte ; un `*` final correspond à un préfixe. `icon` est un nom Remixicon ou un fichier `.svg` dans votre paquet, comme `panel.icon`. `title` et `subtitle` sont des gabarits sur `input`, `output` et `metadata` de l'appel. `output` choisit comment le corps est rendu : `text`, `json` (un arbre), `markdown`, `code` avec un `language`, `table` avec `columns` (les lignes viennent du tableau de sortie ou de `output.items`) ou `auto` pour le rendu par défaut. Un `match` exact l'emporte sur un joker, et en cas d'égalité la première extension installée gagne. Aucune permission n'est nécessaire : cela ne change que la façon dont des données déjà dans le chat sont dessinées.
 
 Une extension qui ne fait que styliser des outils n'a besoin d'aucune page : omettez `panel.entry` et elle n'aura pas d'icône dans la barre latérale, juste une carte dans Paramètres → Extensions. Sans page, elle peut déclarer `tools` et rien d'autre. L'autre exception est une section Work Status ou un éditeur de fichiers avec son propre `entry`, voir plus haut.
 

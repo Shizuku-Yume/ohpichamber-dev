@@ -38,7 +38,7 @@ passkey 与当前密码绑定。如果你更改或移除密码，已保存的 pa
 
 ## 企业模式
 
-如果你的团队只能把对话内容发送给你在 OpenCode 中配置的模型提供商，请开启企业模式。有两种方式，任选其一即可。
+如果你的团队只能把对话内容发送给在 Host 中配置的模型提供商，请开启企业模式。有两种方式，任选其一即可。
 
 ### 机器上的策略文件
 
@@ -86,24 +86,6 @@ OPENCHAMBER_ENTERPRISE_MODE=1
 在笔记本电脑上这是一把较弱的锁：桌面应用从登录 shell 的配置文件（例如 `~/.zshrc`）读取它，而用户可以编辑这个文件。在笔记本电脑上请使用策略文件。
 
 使用这个变量时，中继、Jev、网络访问和允许的扩展也来自各自的变量：`OPENCHAMBER_RELAY_URL`、`OPENCHAMBER_JEV_URL`、`OPENCHAMBER_ALLOW_NETWORK_ACCESS=1`、`OPENCHAMBER_ALLOWED_EXTENSIONS`（用逗号分隔的仓库 URL）和 `OPENCHAMBER_ALLOW_LOCAL_EXTENSIONS=1`。在 Docker 中你需要网络访问的那个变量，因为服务器必须监听来自容器之外的连接。
-
-### 固定 OpenCode CLI
-
-如果你的机器上已经装好了 OpenCode，并且希望 OpenChamber 使用这份安装，把它的路径写进策略文件即可。开不开企业模式都能用。
-
-```json
-{
-  "opencodeBinary": "/usr/local/bin/opencode"
-}
-```
-
-- OpenChamber 只从这个路径启动 OpenCode。它会忽略设置里的路径、`OPENCODE_BINARY` 以及桌面应用自带的副本，那份副本留在磁盘上但不会被使用。
-- 如果这个路径下没有可运行的文件，OpenChamber 不会退回到其他副本，而是停下来并报错，错误里写明路径。
-- 设置里的路径变为只读，并注明由管理员设定。
-- OpenChamber 不会安装或更新被固定的 OpenCode，也不会提示新版本。更新随你的统一部署进行。
-- CLI 必须是 OpenCode 2.x，且不低于 OpenChamber 要求的版本。版本更旧时，OpenChamber 会停在"更新 OpenCode"的界面。
-- 也可以填一个文件夹，只要里面有 `opencode`（Windows 上是 `opencode.exe`）。这一项没有对应的环境变量，因为用户可以自己设置环境变量。
-
 
 ### 隐藏内置技能目录
 
@@ -165,7 +147,8 @@ environment:
 
 ### 会有哪些变化
 
-- 模型提供商只来自你的 OpenCode 配置。在 OpenChamber 中连接提供商、登录提供商、添加密钥或创建自定义提供商都会关闭；移除或切换已有账户仍然可用。这只是关上了经由应用的入口；真正的锁是下文所述的 OpenCode 策略。登录 OpenCode 配置中的 MCP 服务器仍然可用，因为它连接的是该服务器，而不是模型提供商。企业模式开启时，Host 也会拒绝显式的 OMP 凭据交接 preflight；不会读取或导入任何凭据。
+- 模型提供商与凭据管理由 Host 负责。在企业模式下，提供商录入操作（连接提供商、添加或配置自定义提供商与模型、写入凭据、发现模型或发起 OAuth）会被 Host 拒绝；移除或切换已有账户仍然可用。为会话或工作区配置的 MCP 服务器仍然可用，因为它连接的是该服务器，而不是模型提供商。企业模式开启时，显式的凭据交接 preflight 也会被 Host 拒绝；不会读取或导入任何凭据。
+- Host 会在网络出口处拒绝原生网页搜索，也会阻止添加或替换搜索凭据。你仍可更改搜索设置或删除已保存的凭据；密钥仅供写入，绝不会返回。
 - [分类提供方（Jev）](/zh-cn/classification-providers/)保持关闭，有人在设置里填写的自定义端点也一样。安全网和 Auto 不会提供，会话只能手动移入进行中。要通过你自己的基础设施使用 Jev，请用策略文件中的 `jev` 或用 `OPENCHAMBER_JEV_URL` 固定一个端点（再加上 `OPENCHAMBER_JEV_MODEL`，如有需要还有 `OPENCHAMBER_JEV_API_KEY`）。它会成为默认选项，仍然可以关闭，但不能选择其他任何来源。
 - 通过 OpenAI 朗读的功能会关闭。自定义的语音合成或转写服务器必须运行在同一台机器上。本地语音和本地口述模型照常工作。
 - 发往手机和浏览器的推送通知只带一个通用标题，例如“Agent response is ready”，不含消息文本或会话名称。桌面通知留在你的机器上，保留完整文本。
@@ -176,31 +159,8 @@ environment:
 - [Private Relay](/zh-cn/private-relay/) 只能通过你自己的中继使用。运行一个[自托管中继](https://github.com/openchamber/openchamber-relay)，并用策略文件中的 `relayUrl` 或 `OPENCHAMBER_RELAY_URL=wss://relay.example.com/ws` 让 OpenChamber 指向它。共享中继同样无法读取你的流量，因为它是端到端加密的，但你自己的中继能把连接元数据和进入这台机器的通道留在你的网络内。没有你自己的中继，就完全无法配对设备。
 - OpenChamber 只在它所运行的机器上监听。允许本地网络中其他设备打开应用的桌面设置会关闭，服务器也会拒绝在网络地址上启动，无论是通过 CLI（`--host`、`--lan`）还是通过环境。如果应用运行期间出现了策略文件，来自其他机器的连接会被断开，直到下次启动。要允许网络访问，请在策略文件中设置 `"allowNetworkAccess": true`，或在由环境开启企业模式的情况下设置 `OPENCHAMBER_ALLOW_NETWORK_ACCESS=1`。请注意连接是未加密的 HTTP，在共享网络中任何人都能读取；其他人要访问的服务器，请放在[你自己的 HTTPS](/zh-cn/reverse-proxy/) 后面。
 - 能把数据发送到机器之外的[扩展](/zh-cn/extensions/)（与外部 API 通信、从外部地址加载内容或运行后台服务的扩展）只能从 `allowedExtensions` 中列出的 Git 仓库安装。不做这些事的扩展照常安装。从其他地方安装的扩展会保持关闭，设置中会说明原因。列表里填写仓库 URL，因为扩展的名字由它自己决定。以 `/` 结尾的条目（如 `https://github.com/acme/`）会允许其下的所有仓库。在开发扩展的人的机器上，`"allowLocalExtensions": true` 还允许从本地文件夹安装。ZIP 无论如何都不能安装。
-- 来自 **设置 → 通用** 和 `opencode service set env` 的环境变量不会传给 OpenCode，因为其中可能带有提供商密钥。Git、终端和项目操作仍然会拿到它们。
 
-小模型任务（会话标题、摘要、提交信息、变更讲解）不需要任何特殊模式。它们始终使用你在设置中选择的小模型、你当前所用提供商的小模型，或你的 OpenCode 配置中的默认模型。它们绝不会退而使用你恰好连接着的其他提供商。
-
-到底能使用哪些模型提供商，由 OpenCode 决定，而不是 OpenChamber。用 [OpenCode 策略](https://opencode.ai/v2/docs/policies/)锁定它：先拒绝所有提供商，再允许你批准的那些。
-
-```jsonc
-{
-  "experimental": {
-    "policies": [
-      { "action": "provider.use", "resource": "*", "effect": "deny" },
-      { "action": "provider.use", "resource": "anthropic", "effect": "allow" }
-    ]
-  }
-}
-```
-
-被拒绝的提供商即使有人为它添加了密钥也会消失。把策略放在全局的 `~/.config/opencode/opencode.jsonc` 中，项目无法解除它们；或者从拥有最终决定权的 OpenCode Console 工作区下发。企业模式在此之上负责 OpenChamber 自身发送的内容。
-
-智能体的网页搜索和网页抓取同样经由 OpenCode，发往搜索服务和页面本身。如果它们不应离开你的网络，用同类策略拒绝它们：
-
-```jsonc
-{ "action": "permission", "resource": "websearch:*", "effect": "deny" },
-{ "action": "permission", "resource": "webfetch:*", "effect": "deny" }
-```
+小模型任务（会话标题、摘要、提交信息、变更讲解）不需要任何特殊模式。它们始终使用你在设置中选择的小模型、你当前所用提供商的小模型，或在 Host 中配置的默认模型。它们绝不会退而使用你恰好连接着的其他提供商。
 
 ## 相关内容
 

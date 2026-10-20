@@ -22,7 +22,7 @@ OpenChamber はそれらをリポジトリ直下の `.openchamber/project.json` 
 
 ## 項目を移動する
 
-**Settings → Projects** を開き、プロジェクトを選びます。各アクションと各セットアップコマンドには **Move to repository** ボタンがあり、リポジトリ由来の各項目には **Move to my settings** があります。新規セッション画面のスターターはホバーで同じ 2 つを表示します。プランはプランタブの各行にあります。
+**Settings → Projects** を開いてプロジェクトを選択し、アクションやセットアップコマンドを移動できます。各項目には **Move to repository** ボタンがあり、リポジトリ由来の各項目には **Move to my settings** があります。新規セッション画面の下書きスターターは、スターターチップにホバーすることで直接リポジトリへ共有するか個人用にするかを管理できます。プランはプランタブの各行に移動ボタンがあります。
 
 移動は文字どおり移動です。項目は一方から消えてもう一方に現れ、複製はされません。
 
@@ -65,7 +65,7 @@ OpenChamber はそれらをリポジトリ直下の `.openchamber/project.json` 
 
 `projectActions` はヘッダーメニューのアクション一覧です。`id`、`name`、`command` は必須です。`icon` は省略可能で、省略時は play アイコンになります。OpenChamber が認識する名前は `play`、`build`、`lint`、`terminal`、`tools`、`bug`、`flask`、`rocket`、`code`、`server`、`branch`、`search`、`settings`、`brain`、`stack`、`robot`、`command`、`file` です。`autoOpenUrl: true` はコマンドが出力したアドレスを開きます（[プレビューと開発サーバー](/preview/) を参照）。`platforms` はアクションを `macos`、`linux`、`windows` に限定します。`runIn: "parent"` は現在のワークツリーではなくメインのチェックアウトでアクションを実行します。
 
-`draftStarters` はコマンドとスキルを新規セッション画面にピン留めします。各項目は `{ "type": "command" | "skill", "name": "..." }` の形で、コマンドやスキル自体はリポジトリの OpenCode 設定に存在している必要があります。
+`draftStarters` はコマンドとスキルを新規セッション画面にピン留めします。各項目は `{ "type": "command" | "skill", "name": "..." }` の形で、ワークスペースやエージェントのカタログ（`.omp/commands/` や `.omp/skills/` など）または組み込みスターターのコマンドやスキルを参照します。プロジェクト設定にはこれらの参照のみが保存され、コマンドやスキル自体の定義は含まれません。
 
 `plansDir` はリポジトリのプランを置く場所です。省略すると `.openchamber/plans` が使われます。後述します。
 

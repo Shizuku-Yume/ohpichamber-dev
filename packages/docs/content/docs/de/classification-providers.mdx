@@ -26,29 +26,29 @@ Jev ist aus, bis du es einschaltest: Aus deinen Unterhaltungen geht nichts an ei
 
 ### OpenCode-Zen-Aktion
 
-Für begrenzte Zeit kostenlos, kein Schlüssel nötig. Solange die Aktion läuft, lässt OpenCode OpenChamber Jev über OpenCode Zen kostenlos nutzen.
+Für begrenzte Zeit kostenlos, kein Schlüssel nötig. Solange die Aktion läuft, lässt OpenCode Zen OpenChamber Jev kostenlos nutzen.
 
 Wenn die Aktion endet, verschwindet die Option, und OpenChamber wechselt zu einem der Schlüssel unten, falls du einen hast.
 
 ### OpenCode-Zen-Schlüssel
 
-Nutzt den in OpenCode gespeicherten Zen-API-Schlüssel und rechnet über dein Zen-Guthaben ab.
+Nutzt den für OpenCode Zen konfigurierten gespeicherten API-Schlüssel und rechnet über dein Zen-Guthaben ab. Die Jev-Klassifizierung erfordert gespeicherte Zugangsdaten im Provider-Speicher anstelle einer Umgebungsvariable.
 
 1. Öffne **Einstellungen → Anbieter** und füge dem Anbieter **OpenCode Zen** einen API-Schlüssel hinzu (siehe [Anbieter, Modelle und Agenten](/de/providers/)).
 2. Geh zurück zu **Klassifizierungsanbieter** und wähle **OpenCode-Zen-Schlüssel**.
 
-Die Anmeldung mit einem OpenCode-Konto reicht nicht. Für Jev akzeptiert Zen nur einen API-Schlüssel.
+Für Jev akzeptiert Zen nur einen API-Schlüssel.
 
 ### OpenRouter-Schlüssel
 
-Nutzt den in OpenCode gespeicherten OpenRouter-API-Schlüssel und rechnet über dein OpenRouter-Konto ab. Wenn du OpenRouter-Modelle in OpenCode schon nutzt, musst du nichts einrichten. Ein Schlüssel in der Umgebungsvariable `OPENROUTER_API_KEY` funktioniert auch. Gibt es beide, gewinnt der in OpenCode gespeicherte.
+Nutzt den für OpenRouter konfigurierten gespeicherten API-Schlüssel und rechnet über dein OpenRouter-Konto ab. Die Jev-Klassifizierung erfordert gespeicherte Zugangsdaten im Provider-Speicher anstelle einer Umgebungsvariable.
 
 1. Öffne **Einstellungen → Anbieter** und füge dem Anbieter **OpenRouter** einen API-Schlüssel hinzu.
 2. Geh zurück zu **Klassifizierungsanbieter** und wähle **OpenRouter-Schlüssel**.
 
 ### Vercel-AI-Gateway-Schlüssel
 
-Nutzt den in OpenCode gespeicherten AI-Gateway-API-Schlüssel und rechnet über dein Vercel-Konto ab. Ein Schlüssel in der Umgebungsvariable `AI_GATEWAY_API_KEY` funktioniert auch. Gibt es beide, gewinnt der in OpenCode gespeicherte.
+Nutzt den für Vercel AI Gateway konfigurierten gespeicherten API-Schlüssel und rechnet über dein Vercel-Konto ab. Die Jev-Klassifizierung erfordert gespeicherte Zugangsdaten im Provider-Speicher anstelle einer Umgebungsvariable.
 
 1. Öffne **Einstellungen → Anbieter** und füge dem Anbieter **Vercel AI Gateway** einen API-Schlüssel hinzu.
 2. Geh zurück zu **Klassifizierungsanbieter** und wähle **Vercel-AI-Gateway-Schlüssel**.
@@ -101,7 +101,7 @@ Ist Jev bei einer einzelnen Anfrage langsam oder schlägt fehl, geht nichts kapu
 
 ## Was Jev sieht
 
-Jev bekommt kurze Auszüge deiner Unterhaltung: deine letzte Nachricht und als Kontext bis zu drei vorherige Züge, gekürzt auf ihre ersten paar hundert Zeichen. Für das Sicherheitsnetz bekommt es außerdem die geprüfte Aktion, so wie OpenCode sie beschreibt: den Befehl, den der Agent ausführen will, oder die Datei und die Änderung bei einer Bearbeitung. Ganze Dateien oder Bilder bekommt es nie.
+Jev bekommt kurze Auszüge deiner Unterhaltung: deine letzte Nachricht und als Kontext bis zu drei vorherige Züge, gekürzt auf ihre ersten paar hundert Zeichen. Für das Sicherheitsnetz bekommt es außerdem die geprüfte Aktion: den Befehl, den der Agent ausführen will, oder die Datei und die Änderung bei einer Bearbeitung. Ganze Dateien oder Bilder bekommt es nie.
 
 Anfragen gehen vom OpenChamber-Server direkt an OpenCode Zen, OpenRouter, Vercel AI Gateway, TypeSafe oder deinen eigenen Endpunkt, je nach deiner Wahl.
 

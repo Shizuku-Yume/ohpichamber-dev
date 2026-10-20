@@ -26,29 +26,29 @@ O Jev fica desativado até você ativá-lo: nada das suas conversas vai para um 
 
 ### Promoção do OpenCode Zen
 
-Grátis por tempo limitado, sem chave. Enquanto a promoção durar, o OpenCode deixa o OpenChamber usar o Jev pelo OpenCode Zen sem custo.
+Grátis por tempo limitado, sem chave. Enquanto a promoção durar, o OpenCode Zen deixa o OpenChamber usar o Jev sem custo.
 
 Quando a promoção acabar, a opção some e o OpenChamber passa para uma das chaves abaixo, se você tiver alguma.
 
 ### Chave do OpenCode Zen
 
-Usa a chave de API do Zen salva no OpenCode, paga com o seu saldo do Zen.
+Usa a chave de API salva e configurada para o OpenCode Zen, paga com o seu saldo do Zen. A classificação do Jev requer uma credencial de provedor salva em vez de uma variável de ambiente.
 
 1. Abra **Configurações → Provedores** e adicione uma chave de API ao provedor **OpenCode Zen** (veja [Provedores, modelos e agentes](/pt-br/providers/)).
 2. Volte a **Provedores de classificação** e escolha **Chave do OpenCode Zen**.
 
-Entrar com uma conta do OpenCode não basta. Para o Jev, o Zen só aceita uma chave de API.
+Para o Jev, o Zen só aceita uma chave de API.
 
 ### Chave do OpenRouter
 
-Usa a chave de API do OpenRouter salva no OpenCode, cobrada da sua conta OpenRouter. Se você já usa modelos do OpenRouter no OpenCode, não há nada para configurar. Uma chave na variável de ambiente `OPENROUTER_API_KEY` também funciona. Se houver as duas, vale a chave salva no OpenCode.
+Usa a chave de API salva e configurada para o OpenRouter, cobrada da sua conta OpenRouter. A classificação do Jev requer uma credencial de provedor salva em vez de uma variável de ambiente.
 
 1. Abra **Configurações → Provedores** e adicione uma chave de API ao provedor **OpenRouter**.
 2. Volte para **Provedores de classificação** e escolha **Chave do OpenRouter**.
 
 ### Chave do Vercel AI Gateway
 
-Usa a chave de API do AI Gateway salva no OpenCode, cobrada da sua conta Vercel. Uma chave na variável de ambiente `AI_GATEWAY_API_KEY` também funciona. Se houver as duas, vale a chave salva no OpenCode.
+Usa a chave de API salva e configurada para o Vercel AI Gateway, cobrada da sua conta Vercel. A classificação do Jev requer uma credencial de provedor salva em vez de uma variável de ambiente.
 
 1. Abra **Configurações → Provedores** e adicione uma chave de API ao provedor **Vercel AI Gateway**.
 2. Volte para **Provedores de classificação** e escolha **Chave do Vercel AI Gateway**.
@@ -101,7 +101,7 @@ Se o Jev estiver lento ou falhar em uma solicitação, nada quebra. Cada funçã
 
 ## O que o Jev vê
 
-O Jev recebe trechos curtos da sua conversa: sua última mensagem e, como contexto, até três turnos anteriores, cortados nas primeiras centenas de caracteres. Para a rede de segurança, ele também recebe a ação verificada, do jeito que o OpenCode a descreve: o comando que o agente quer executar, ou o arquivo e a mudança em uma edição. Ele nunca recebe arquivos inteiros nem imagens.
+O Jev recebe trechos curtos da sua conversa: sua última mensagem e, como contexto, até três turnos anteriores, cortados nas primeiras centenas de caracteres. Para a rede de segurança, ele também recebe a ação verificada: o comando que o agente quer executar, ou o arquivo e a mudança em uma edição. Ele nunca recebe arquivos inteiros nem imagens.
 
 As solicitações vão do servidor do OpenChamber direto para o OpenCode Zen, o OpenRouter, o Vercel AI Gateway, a TypeSafe ou o seu endpoint personalizado, conforme a sua escolha.
 

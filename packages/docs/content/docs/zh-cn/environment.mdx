@@ -1,26 +1,21 @@
 ---
 title: 环境变量
-description: 使用环境变量配置 OpenChamber 和 OpenCode 集成。
+description: 使用环境变量配置 OpenChamber。
 ---
-
-> OhPiChamber 生产环境启动使用 Node Host Gateway 与受监管的 Bun OMP Agent Service；系统不包含 OpenCode 自动启动或 CLI 前置依赖；下文的 OpenCode 指南属于针对保留的显式旧版控制项的继承文档，并非标准启动配置。Agent 可用性端点为 `/api/agent/v1/ready`。
-
 # 环境变量
 
 OpenChamber 会在启动时读取这些变量。对于开机启动服务，`openchamber startup enable` 默认会保存当前环境的 snapshot，所以如果要让服务使用新的变量，请重新运行它。
 
-## 供 OpenCode、Git 和终端使用的变量
+## 供智能体会话、Git 与终端使用的变量
 
-要给 OpenCode、Git、终端和[项目操作](/zh-cn/project-actions/)提供你自己的变量，比如 API 令牌或数据库地址，请在 **设置 → 通用 → 环境变量** 中添加，而不是在启动 OpenChamber 之前导出。这些值只保存在运行 OpenChamber 的机器上，位于数据目录中的 `environment.json`，只有你的用户能读取。设置不会再显示已保存的值：你可以替换或删除它，但无法读回。
+要给智能体会话、Git、终端和[项目操作](/zh-cn/project-actions/)提供你自己的变量，比如 API 令牌或数据库地址，请在 **设置 → 通用 → 环境变量** 中添加，而不是在启动 OpenChamber 之前导出。这些值只保存在运行 OpenChamber 的机器上，位于数据目录中的 `environment.json`，只有你的用户能读取。设置不会再显示已保存的值：你可以替换或删除它，但无法读回。
 
-- OpenCode 在启动时读取这些变量，所以修改后需要重启它。设置中提供了对应的按钮。
-- 用 `opencode service set env` 设置的变量也会传给 OpenCode。两者冲突时，以设置中的为准。
+- 智能体会话在启动时读取这些变量。
 - Git、终端和项目操作会在下一次运行时拿到这些变量。
-- OpenChamber 为 OpenCode 自身设置的变量（例如它的密码和配置）优先于你的变量。
 
 项目可以在 **设置 → 项目** 中添加自己的变量，或者添加一条输出这些变量的命令，例如 `direnv export json`。参阅[项目](/zh-cn/projects/#项目环境)。
 
-这些变量不会传给你自己启动的 OpenCode 服务器。下面的所有变量都由 OpenChamber 本身在启动时读取。
+下面的所有变量都由 OpenChamber 本身在启动时读取。
 
 ## OpenChamber 服务器
 
@@ -44,6 +39,10 @@ OpenChamber web 服务器监听的地址。使用 `0.0.0.0` 可允许其他机�
 
 在你选择信任的设备上，登录的有效时长（天）。默认值为 `7`。
 
+### `OPENCODE_JWT_SECRET`
+
+覆盖用于对 Host UI 会话 Token 进行签名的 Secret。此设置仅配置 Host 会话签名，不影响 Agent 运行时。请妥善保管并保持私密。设置此变量后，由于 OpenChamber 无法轮换签名 Secret，全局退出登录将不可用。
+
 ### `OPENCHAMBER_API_ONLY`
 
 设置为 `true` 或 `1` 时，以 headless 模式启动 OpenChamber。桌面和移动客户端仍可使用 API 路由，但不会提供浏览器 UI。
@@ -60,7 +59,7 @@ OpenChamber 存储的所有内容都位于此目录下：设置、认证、项�
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-更改 OpenChamber 为无项目聊天创建的托管聊天目录的位置。默认是 `~/.config/openchamber/chats`。当 OpenChamber 和 OpenCode 以不同用户运行时，请设置为 OpenCode 服务器可读取的目录。现有聊天不会被移动。
+更改 OpenChamber 为无项目聊天创建的托管聊天目录的位置。默认是 `~/.config/openchamber/chats`。现有聊天不会被移动。
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -86,53 +85,7 @@ OpenChamber 存储的所有内容都位于此目录下：设置、认证、项�
 
 ### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-OpenChamber 自身发出的请求（例如用量限额和技能目录）会通过代理发送。小写变量名同样有效。`NO_PROXY` 中的主机直接连接，`localhost`、`127.0.0.1` 和 `::1` 始终直接连接，因此登录回调和本地 OpenCode 服务器不受影响。
-
-## OpenCode 服务器
-
-### `OPENCODE_HOST`
-
-将 OpenChamber 连接到已有的 OpenCode server。值必须是带明确端口、没有 path、query 或 hash 的 `http` 或 `https` origin。`OPENCODE_HOST` 优先于 `OPENCODE_PORT`。
-
-### `OPENCODE_PORT`
-
-设置 OpenCode server 端口。对于 managed OpenCode，它请求使用该端口；配合 `OPENCODE_SKIP_START=true` 时，它连接到该端口上的外部服务器。
-
-### `OPENCODE_SKIP_START`
-
-设置为 `true` 时阻止 OpenChamber 启动自己的 OpenCode server。
-
-### `OPENCHAMBER_OPENCODE_HOSTNAME`
-
-OpenChamber 管理的 OpenCode server 绑定 hostname。默认是 `127.0.0.1`。
-
-### `OPENCODE_BINARY`
-
-OpenChamber 应该运行的 `opencode` executable 路径。
-
-### `OPENCODE_CONFIG`
-
-指定 OpenCode config 文件路径。
-
-### `OPENCODE_CONFIG_DIR`
-
-指定 OpenCode config 目录，用于 agents、skills、snippets 和 config discovery。
-
-### `OPENCODE_DATA_DIR`
-
-managed OpenCode server 的自定义数据目录。
-
-### `OPENCODE_WSL_DISTRO`
-
-选择 Windows 上 OpenCode 集成使用的 WSL distro。
-
-### `OPENCHAMBER_OPENCODE_WSL_DISTRO`
-
-OpenChamber 专用的 WSL distro alias。如果两个变量都设置，`OPENCODE_WSL_DISTRO` 优先。
-
-### `OPENCODE_JWT_SECRET`
-
-用于签名 UI auth tokens 的 secret。持久服务部署应使用长的随机值。
+OpenChamber 自身发出的请求（例如用量限额和技能目录）会通过代理发送。小写变量名同样有效。`NO_PROXY` 中的主机直接连接，`localhost`、`127.0.0.1` 和 `::1` 始终直接连接，因此登录回调和本地连接不受影响。
 
 ## Terminal 和 Git
 
@@ -176,6 +129,3 @@ OpenChamber 启动 daemon processes 时使用的 Bun executable。
 
 Bun 安装根目录。OpenChamber 使用它查找 `bin/bun` 来启动 daemon 和执行更新。
 
-### `VITE_OPENCODE_URL`
-
-Vite-built web app 的 build-time API base URL。普通 CLI 或 desktop 使用通常不需要设置它。

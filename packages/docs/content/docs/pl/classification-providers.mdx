@@ -26,29 +26,29 @@ Jev jest wyłączony, dopóki go nie włączysz: nic z Twoich rozmów nie trafia
 
 ### Promocja OpenCode Zen
 
-Za darmo przez ograniczony czas, bez klucza. Dopóki trwa promocja, OpenCode pozwala OpenChamber korzystać z Jev przez OpenCode Zen bezpłatnie.
+Za darmo przez ograniczony czas, bez klucza. Dopóki trwa promocja, OpenCode Zen pozwala OpenChamber korzystać z Jev bezpłatnie.
 
 Kiedy promocja się skończy, ta opcja zniknie, a OpenChamber przełączy się na jeden z kluczy poniżej, jeśli go masz.
 
 ### Klucz OpenCode Zen
 
-Korzysta z klucza API Zen zapisanego w OpenCode, a opłaty idą z Twojego salda Zen.
+Korzysta z zapisanego klucza API skonfigurowanego dla OpenCode Zen, a opłaty idą z Twojego salda Zen. Klasyfikacja Jev wymaga zapisanego poświadczenia dostawcy zamiast zmiennej środowiskowej.
 
 1. Otwórz **Ustawienia → Dostawcy** i dodaj klucz API do dostawcy **OpenCode Zen** (zobacz [Dostawcy, modele i agenci](/pl/providers/)).
 2. Wróć do **Dostawcy klasyfikacji** i wybierz **Klucz OpenCode Zen**.
 
-Samo zalogowanie się kontem OpenCode nie wystarczy. Do Jev Zen przyjmuje tylko klucz API.
+Do Jev Zen przyjmuje tylko klucz API.
 
 ### Klucz OpenRouter
 
-Korzysta z klucza API OpenRouter zapisanego w OpenCode, a opłaty idą z Twojego konta OpenRouter. Jeśli już używasz modeli OpenRouter w OpenCode, nie trzeba niczego ustawiać. Klucz w zmiennej środowiskowej `OPENROUTER_API_KEY` też działa. Jeśli są oba, wygrywa klucz zapisany w OpenCode.
+Korzysta z zapisanego klucza API skonfigurowanego dla OpenRouter, a opłaty idą z Twojego konta OpenRouter. Klasyfikacja Jev wymaga zapisanego poświadczenia dostawcy zamiast zmiennej środowiskowej.
 
 1. Otwórz **Ustawienia → Dostawcy** i dodaj klucz API do dostawcy **OpenRouter**.
 2. Wróć do **Dostawcy klasyfikacji** i wybierz **Klucz OpenRouter**.
 
 ### Klucz Vercel AI Gateway
 
-Korzysta z klucza API AI Gateway zapisanego w OpenCode, a opłaty idą z Twojego konta Vercel. Klucz w zmiennej środowiskowej `AI_GATEWAY_API_KEY` też działa. Jeśli są oba, wygrywa klucz zapisany w OpenCode.
+Korzysta z zapisanego klucza API skonfigurowanego dla Vercel AI Gateway, a opłaty idą z Twojego konta Vercel. Klasyfikacja Jev wymaga zapisanego poświadczenia dostawcy zamiast zmiennej środowiskowej.
 
 1. Otwórz **Ustawienia → Dostawcy** i dodaj klucz API do dostawcy **Vercel AI Gateway**.
 2. Wróć do **Dostawcy klasyfikacji** i wybierz **Klucz Vercel AI Gateway**.
@@ -101,7 +101,7 @@ Jeśli Jev odpowiada wolno albo zawodzi przy pojedynczym zapytaniu, nic się nie
 
 ## Co widzi Jev
 
-Jev dostaje krótkie fragmenty Twojej rozmowy: Twoją ostatnią wiadomość i, jako kontekst, do trzech poprzednich tur, przyciętych do kilkuset pierwszych znaków. Dla siatki bezpieczeństwa dostaje też sprawdzane działanie w takiej postaci, w jakiej opisuje je OpenCode: polecenie, które agent chce uruchomić, albo plik i zmianę przy edycji. Nigdy nie dostaje całych plików ani obrazów.
+Jev dostaje krótkie fragmenty Twojej rozmowy: Twoją ostatnią wiadomość i, jako kontekst, do trzech poprzednich tur, przyciętych do kilkuset pierwszych znaków. Dla siatki bezpieczeństwa dostaje też sprawdzane działanie: polecenie, które agent chce uruchomić, albo plik i zmianę przy edycji. Nigdy nie dostaje całych plików ani obrazów.
 
 Zapytania idą z serwera OpenChamber prosto do OpenCode Zen, OpenRouter, Vercel AI Gateway, TypeSafe albo Twojego własnego endpointu, zależnie od Twojego wyboru.
 

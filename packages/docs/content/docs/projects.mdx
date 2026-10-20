@@ -35,12 +35,17 @@ When a project's tools come from direnv, devenv or a Nix shell, Git hooks, the t
 
 The command runs in the project folder, and in a worktree's own folder for that worktree. It runs again when you commit, open a terminal or run an action, once the last run is a few minutes old, and **Run again** runs it right away. Just having the project open doesn't run it. Under the field you see how many variables the last run added, or why it failed. A failed run adds nothing, and Git and the terminal keep working without it.
 
-These variables go to Git, the terminal and project actions, on top of the ones in **Settings → General → Environment variables** (see [Environment variables](/environment/#variables-for-opencode-git-and-the-terminal)). OpenCode serves every project from one process, so it doesn't get project variables: put what the agent needs in the general list.
+These variables go to Git, the terminal, project actions, worktree setup, and per-project workers, on top of the ones in **Settings → General → Environment variables** (see [Environment variables](/environment/)). Project environment and worktree setup follow Host project configuration and stay scoped to the project.
 
 The command is yours only. It isn't read from the repository, so a cloned repository can't make OpenChamber run anything.
 
+## Repository configuration and resources
+
+To share worktree setup commands, project actions, plans, or draft starters with teammates who clone the codebase, move them into `.openchamber/project.json` (see [Repository config](/repository-config/)). Project-scoped slash commands and skills live in `.omp/commands/` and `.omp/skills/` within the repository (see [Commands](/commands-snippets/) and [Skills](/skills/)).
+
 ## Related
 
+- [Repository config](/repository-config/) — share setup commands, actions, starters, and plans in the repository
 - [Chats](/chats/) — sessions without a project, for quick questions
 - [Project Notes, Todos & Plans](/notes-todos-plans/) — keep working notes per project
 - [Project Actions](/project-actions/) — save commands you run often

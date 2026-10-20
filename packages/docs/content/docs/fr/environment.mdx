@@ -1,26 +1,21 @@
 ---
 title: Variables d’environnement
-description: Configurez OpenChamber et l’intégration OpenCode avec des variables d’environnement.
+description: Configurez OpenChamber avec des variables d’environnement.
 ---
-
-> Le démarrage en production d’OhPiChamber utilise Node Host Gateway et le service supervisé Bun OMP Agent Service ; aucun démarrage automatique d’OpenCode ni prérequis CLI n’est requis ; les instructions OpenCode ci-dessous constituent une documentation héritée pour les contrôles historiques explicites restants, et non la configuration canonique de lancement. La disponibilité de l’agent est `/api/agent/v1/ready`.
-
 # Variables d’environnement
 
 OpenChamber lit ces variables d’environnement au démarrage. Pour les services de démarrage, `openchamber startup enable` capture l’environnement actuel par défaut ; relancez donc la commande après avoir changé les variables que le service doit utiliser.
 
-## Variables pour OpenCode, Git et le terminal
+## Variables pour les sessions d’agent, Git et le terminal
 
-Pour donner vos propres variables à OpenCode, à Git, au terminal et aux [actions de projet](/fr/project-actions/), comme un jeton d’API ou l’adresse d’une base de données, ajoutez-les dans **Paramètres → Général → Variables d’environnement** plutôt que de les exporter avant de lancer OpenChamber. Les valeurs restent sur la machine qui fait tourner OpenChamber, dans `environment.json` dans le dossier de données, et seul votre utilisateur peut les lire. Les Paramètres n’affichent plus jamais une valeur : vous pouvez la remplacer ou la supprimer, pas la relire.
+Pour donner vos propres variables aux sessions d’agent, à Git, au terminal et aux [actions de projet](/fr/project-actions/), comme un jeton d’API ou l’adresse d’une base de données, ajoutez-les dans **Paramètres → Général → Variables d’environnement** plutôt que de les exporter avant de lancer OpenChamber. Les valeurs restent sur la machine qui fait tourner OpenChamber, dans `environment.json` dans le dossier de données, et seul votre utilisateur peut les lire. Les Paramètres n’affichent plus jamais une valeur : vous pouvez la remplacer ou la supprimer, pas la relire.
 
-- OpenCode les reçoit au démarrage, donc redémarrez-le après un changement. Les Paramètres proposent le bouton.
-- Les variables définies avec `opencode service set env` arrivent aussi jusqu’à OpenCode. Celles des Paramètres l’emportent.
+- Les sessions d’agent les reçoivent au démarrage.
 - Git, le terminal et les actions de projet les reçoivent à leur prochaine exécution.
-- Les variables qu’OpenChamber définit pour OpenCode lui-même, comme son mot de passe et sa configuration, l’emportent sur les vôtres.
 
 Un projet peut ajouter ses propres variables, ou une commande qui les affiche comme `direnv export json`, dans **Paramètres → Projets**. Voir [Projets](/fr/projects/#environnement-du-projet).
 
-Ces variables n’atteignent pas un serveur OpenCode que vous avez lancé vous-même. Tout ce qui suit est lu par OpenChamber lui-même au démarrage.
+Tout ce qui suit est lu par OpenChamber lui-même au démarrage.
 
 ## Serveur OpenChamber
 
@@ -44,6 +39,10 @@ Durée d’une connexion dans le navigateur, en heures, quand « faire confiance
 
 Durée d’une connexion, en jours, sur un appareil auquel vous faites confiance. La valeur par défaut est `7`.
 
+### `OPENCODE_JWT_SECRET`
+
+Remplace le secret utilisé pour signer les jetons de session de l’UI Host. Ce paramètre configure la signature des sessions du Host et n’affecte pas le runtime de l’agent. Gardez ce secret privé. Lorsqu’il est défini, la déconnexion globale n’est pas disponible car OpenChamber ne peut pas effectuer la rotation du secret de signature.
+
 ### `OPENCHAMBER_API_ONLY`
 
 Démarre OpenChamber en mode headless lorsqu’il vaut `true` ou `1`. Les routes API restent disponibles pour les clients desktop et mobile, mais l’UI navigateur n’est pas servie.
@@ -58,7 +57,7 @@ Remplace le dossier de données OpenChamber. La valeur par défaut est `~/.confi
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-Déplace les dossiers de chat gérés qu'OpenChamber crée pour les chats sans projet. La valeur par défaut est `~/.config/openchamber/chats`. Indiquez un dossier lisible par le serveur OpenCode lorsque OpenChamber et OpenCode tournent sous des utilisateurs différents. Les chats existants ne sont pas déplacés.
+Déplace les dossiers de chat gérés qu'OpenChamber crée pour les chats sans projet. La valeur par défaut est `~/.config/openchamber/chats`. Les chats existants ne sont pas déplacés.
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -84,53 +83,7 @@ Force le gestionnaire de paquets utilisé par les opérations de mise à jour lo
 
 ### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-Fait passer par un proxy les requêtes sortantes propres à OpenChamber, comme les limites d’utilisation et les catalogues de skills. Les noms en minuscules fonctionnent aussi. Les hôtes de `NO_PROXY` se connectent directement, et `localhost`, `127.0.0.1` et `::1` toujours, donc les retours de connexion et le serveur OpenCode local continuent de fonctionner.
-
-## Serveur OpenCode
-
-### `OPENCODE_HOST`
-
-Connecte OpenChamber à un serveur OpenCode existant. La valeur doit être une origine `http` ou `https` avec un port explicite, sans chemin, query ni hash. `OPENCODE_HOST` a priorité sur `OPENCODE_PORT`.
-
-### `OPENCODE_PORT`
-
-Définit le port du serveur OpenCode. Avec OpenCode géré, cela demande le port géré ; avec `OPENCODE_SKIP_START=true`, OpenChamber se connecte à un serveur externe sur ce port.
-
-### `OPENCODE_SKIP_START`
-
-Empêche OpenChamber de démarrer son propre serveur OpenCode lorsqu’il vaut `true`.
-
-### `OPENCHAMBER_OPENCODE_HOSTNAME`
-
-Nom d’hôte d’écoute du serveur OpenCode géré par OpenChamber. La valeur par défaut est `127.0.0.1`.
-
-### `OPENCODE_BINARY`
-
-Chemin vers l’exécutable `opencode` qu’OpenChamber doit lancer.
-
-### `OPENCODE_CONFIG`
-
-Chemin vers un fichier de configuration OpenCode précis.
-
-### `OPENCODE_CONFIG_DIR`
-
-Chemin vers un dossier de configuration OpenCode précis pour la découverte des agents, skills, snippets et configurations.
-
-### `OPENCODE_DATA_DIR`
-
-Dossier de données personnalisé pour le serveur OpenCode géré.
-
-### `OPENCODE_WSL_DISTRO`
-
-Sélectionne la distribution WSL utilisée pour l’intégration OpenCode sur Windows.
-
-### `OPENCHAMBER_OPENCODE_WSL_DISTRO`
-
-Alias propre à OpenChamber pour sélectionner la distribution WSL. `OPENCODE_WSL_DISTRO` a priorité lorsque les deux sont définies.
-
-### `OPENCODE_JWT_SECRET`
-
-Secret utilisé pour signer les tokens d’authentification UI. Utilisez une longue valeur aléatoire pour les déploiements de service persistants.
+Fait passer par un proxy les requêtes sortantes propres à OpenChamber, comme les limites d’utilisation et les catalogues de skills. Les noms en minuscules fonctionnent aussi. Les hôtes de `NO_PROXY` se connectent directement, et `localhost`, `127.0.0.1` et `::1` toujours, donc les retours de connexion et les connexions locales continuent de fonctionner.
 
 ## Terminal et Git
 
@@ -174,6 +127,3 @@ Exécutable Bun qu’OpenChamber doit utiliser lorsqu’il lance des processus d
 
 Racine d’installation de Bun. OpenChamber l’utilise pour trouver `bin/bun` lors du démarrage des daemons et des mises à jour.
 
-### `VITE_OPENCODE_URL`
-
-URL de base API à la compilation pour l’application web construite par Vite. La plupart des utilisateurs ne doivent pas la définir pour un usage CLI ou desktop normal.

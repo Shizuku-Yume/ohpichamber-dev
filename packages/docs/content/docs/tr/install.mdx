@@ -1,29 +1,28 @@
 ---
 title: Kurulum
-description: OpenChamber'ı masaüstü veya web için kurun.
+description: OpenChamber'ı masaüstü, web veya mobil için kurun.
 ---
 
 # Kurulum
 
-OpenChamber'ı çalıştırmanın üç yolu vardır:
+OpenChamber şu şekillerde çalıştırılabilir:
 
-- macOS için masaüstü uygulaması
-- CLI tarafından barındırılan web uygulaması, bunu telefon uygulaması gibi yükleyebilirsiniz, yani PWA
-
-## Gereksinim
-
-Önce [OpenCode](https://opencode.ai) kurun. OpenChamber onun üzerinde çalışır.
+- macOS, Windows ve Linux için masaüstü uygulaması
+- CLI tarafından barındırılan ve PWA olarak da kurulabilen web uygulaması
+- iOS ve Android için mobil uygulama
 
 ## Web + PWA
+
+OpenChamber sunucusunu çalıştırmak için önkoşulların sağlanması gerekir: Host Gateway için Node.js 24.14+, Agent Service için PATH üzerinde Bun 1.3.14+ ve git.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/openchamber/openchamber/main/scripts/install.sh | bash
 openchamber --ui-password be-creative-here
 ```
 
-CLI'nın yazdırdığı URL'yi açın. Genellikle `http://localhost:3000` olur. OpenChamber oturum listesini görmelisiniz. El altında tutmak için tarayıcınızın adres çubuğundaki "Install" seçeneğini kullanıp uygulama olarak ekleyin.
+CLI'nın yazdırdığı URL'yi açın (genellikle `http://localhost:3000`). Giriş yapmak için oturum açma ekranında UI şifrenizi girin. Giriş yaptıktan sonra OpenChamber oturum listesini görürsünüz. El altında tutmak için tarayıcınızın adres çubuğundaki "Install" seçeneğini kullanıp uygulama olarak ekleyin.
 
 ## Masaüstü
 
-En son masaüstü sürümünü GitHub releases sayfasından ya da OpenChamber indirme sayfasından indirin. Açın ve alışık olduğunuz OpenCode akışına giriş yapın.
+Platformunuz için en son masaüstü sürümünü GitHub releases sayfasından ya da OpenChamber indirme sayfasından indirin. Uygulamayı başlatın ve çalışma alanınızı seçin ya da uzak bir sunucuya bağlanın.
 

@@ -35,12 +35,17 @@ Bir projenin araçları direnv, devenv ya da bir Nix shell'den geliyorsa Git hoo
 
 Komut proje klasöründe, bir worktree için de o worktree'nin kendi klasöründe çalışır. Son çalıştırmanın üzerinden birkaç dakika geçtiyse, commit yaptığınızda, terminal açtığınızda ya da bir eylem çalıştırdığınızda yeniden çalışır; **Yeniden çalıştır** onu hemen çalıştırır. Projenin yalnızca açık olması onu çalıştırmaz. Alanın altında son çalıştırmanın kaç değişken eklediğini ya da neden başarısız olduğunu görürsünüz. Başarısız bir çalıştırma hiçbir şey eklemez; Git ve terminal onsuz çalışmaya devam eder.
 
-Bu değişkenler, **Ayarlar → Genel → Ortam değişkenleri** içindekilere ek olarak Git'e, terminale ve proje eylemlerine gider ([Ortam değişkenleri](/tr/environment/#opencode-git-ve-terminal-için-değişkenler) sayfasına bakın). OpenCode tüm projelere tek bir süreçten hizmet verdiği için proje değişkenlerini almaz: aracının ihtiyaç duyduklarını genel listeye koyun.
+Bu değişkenler, **Ayarlar → Genel → Ortam değişkenleri** içindekilere ek olarak Git'e, terminale, proje eylemlerine, worktree kurulumuna ve proje başına çalışan worker'lara gider ([Ortam değişkenleri](/tr/environment/) sayfasına bakın). Proje ortamı ve worktree kurulumu host proje yapılandırmasını izler ve projeye özel kalır.
 
 Komutu yalnızca siz belirlersiniz. Depodan okunmaz, bu yüzden klonlanmış bir depo OpenChamber'a hiçbir şey çalıştıramaz.
 
+## Depo yapılandırması ve kaynaklar
+
+Worktree kurulum komutlarını, proje eylemlerini, planları veya taslak başlatıcıları kod tabanını klonlayan ekip arkadaşlarıyla paylaşmak için bunları `.openchamber/project.json` dosyasına taşıyın (bkz. [Depo yapılandırması](/tr/repository-config/)). Proje kapsamındaki eğik çizgi komutları ve skill'ler depo içindeki `.omp/commands/` ve `.omp/skills/` dizinlerinde yer alır (bkz. [Komutlar](/commands-snippets/) ve [Skill'ler](/skills/)).
+
 ## İlgili
 
+- [Depo yapılandırması](/tr/repository-config/) — kurulum komutlarını, eylemleri, başlatıcıları ve planları depoda paylaşın
 - [Sohbetler](/tr/chats/) — hızlı sorular için projesiz oturumlar
 - [Project Notes, Todos & Plans](/notes-todos-plans/) — proje başına çalışma notları tutun
 - [Project Actions](/project-actions/) — sık çalıştırdığınız komutları kaydedin

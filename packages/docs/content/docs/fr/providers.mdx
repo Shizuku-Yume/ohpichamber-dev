@@ -10,10 +10,23 @@ Avant qu’OpenChamber puisse faire quoi que ce soit, au moins un fournisseur IA
 ## Connecter un fournisseur
 
 1. Ouvrez **Paramètres → Fournisseurs**.
-2. Ouvrez le menu **Add provider** et choisissez un fournisseur qui n’est pas encore connecté.
-3. Connectez-vous de l’une des deux façons, selon le fournisseur :
+2. Ouvrez le menu **Add provider** et choisissez un fournisseur qui n’est pas encore connecté, ou choisissez **Other / Custom** pour un endpoint compatible OpenAI.
+3. Connectez-vous selon la méthode requise par le fournisseur :
    - **API key** — collez votre clé et enregistrez.
-   - **Sign-in (device flow)** — OpenChamber affiche un lien et un code court. Ouvrez le lien, saisissez le code et approuvez. OpenChamber termine la connexion tout seul.
+   - **Connexion OAuth** — ouvrez le lien d’autorisation dans votre navigateur pour vous connecter. Si demandé, collez le code d’autorisation dans OpenChamber, puis finalisez la connexion.
+
+### Fournisseurs personnalisés et autres
+
+Pour les passerelles, modèles sur réseau local, Ollama, LiteLLM et API similaires compatibles OpenAI :
+
+1. Choisissez **Other / Custom** dans la liste des fournisseurs.
+2. Saisissez un ID de fournisseur, un nom affiché, une URL de base (`http://` ou `https://`), une clé API facultative et au moins un identifiant et nom de modèle.
+3. Indiquez la fenêtre de contexte et le nombre maximal de jetons de sortie du modèle. Les métadonnées avancées (telles que les options de raisonnement, les variantes et les modalités) peuvent être configurées en JSON dans les détails du modèle.
+4. Ajoutez des en-têtes de requête facultatifs.
+5. Enregistrez — OpenChamber enregistre le fournisseur et les modèles via l'Agent Service, en conservant les clés API comme identifiants en écriture seule.
+6. Pour modifier un fournisseur personnalisé existant, ouvrez-le et choisissez **Edit**.
+
+Une clé API est facultative. Les endpoints locaux sans clé (comme Ollama, LiteLLM ou llama.cpp) et les services utilisant une authentification par en-têtes peuvent être connectés sans clé API.
 
 Quand un fournisseur apparaît comme connecté, ses modèles deviennent disponibles dans le chat.
 
@@ -28,20 +41,20 @@ Vous choisissez le modèle là où vous travaillez :
 
 ## Configurer des agents
 
-Un agent est une configuration nommée — un modèle, une personnalité et ce qu’il est autorisé à faire.
+Un agent est une configuration nommée — un modèle, une invite système et les outils mis à sa disposition.
 
 1. Ouvrez **Paramètres → Agents**.
 2. Choisissez un agent ou créez-en un nouveau.
 3. Modifiez au besoin :
    - **description** — à quoi sert l’agent
-   - **model** — son modèle par défaut
-   - **temperature** — le niveau de créativité de ses réponses
-   - **prompt** — les instructions permanentes qu’il suit toujours
-   - **tool rules** — les outils qu’il peut utiliser
+   - **model** — son fournisseur et modèle par défaut
+   - **prompt** — les instructions permanentes et l'invite système qu’il suit toujours
+   - **allowed tools** — les outils disponibles pour l'agent (disponibilité des outils : les lister ici permet au modèle de les appeler, tandis que l'autorisation des opérations reste contrôlée par les règles et approbations du Host)
+   - **permission preset** — identifiant facultatif de préréglage de permissions pour le profil
 
 ## Où vivent vos connexions
 
-Les connexions aux fournisseurs sont stockées par OpenCode, pas OpenChamber ; elles sont donc partagées avec la CLI OpenCode. Si vous définissez le même fournisseur à plusieurs endroits, le réglage le plus spécifique gagne : un réglage par projet remplace votre réglage personnel.
+Les identifiants et connexions aux fournisseurs sont stockés dans le magasin d’identifiants de l'Agent Service sur le serveur, garantissant la sécurité et l’isolation des clés. Vous pouvez associer plusieurs comptes pour un même fournisseur et choisir le compte actif par défaut dans la liste des comptes du fournisseur.
 
 ## Pages liées
 

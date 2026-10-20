@@ -35,12 +35,17 @@ Quando as ferramentas de um projeto vêm do direnv, do devenv ou de um shell Nix
 
 O comando roda na pasta do projeto e, para um worktree, na pasta do próprio worktree. Ele roda de novo quando você faz um commit, abre um terminal ou roda uma ação, se a última execução já tiver alguns minutos, e **Rodar de novo** o executa na hora. Só ter o projeto aberto não faz ele rodar. Embaixo do campo você vê quantas variáveis a última execução adicionou, ou por que ela falhou. Uma execução que falha não adiciona nada, e o Git e o terminal continuam funcionando sem ela.
 
-Essas variáveis vão para o Git, o terminal e as ações de projeto, somadas às de **Configurações → Geral → Variáveis de ambiente** (veja [Variáveis de ambiente](/pt-br/environment/#variáveis-para-o-opencode-o-git-e-o-terminal)). O OpenCode atende todos os projetos a partir de um único processo, então ele não recebe variáveis de projeto: coloque o que o agente precisa na lista geral.
+Essas variáveis vão para o Git, o terminal, as ações de projeto, a configuração do worktree e os workers por projeto, somadas às de **Configurações → Geral → Variáveis de ambiente** (veja [Variáveis de ambiente](/pt-br/environment/)). O ambiente do projeto e a configuração do worktree seguem a configuração de projeto do host e ficam restritos ao projeto.
 
 O comando é só seu. Ele não é lido do repositório, então um repositório clonado não consegue fazer o OpenChamber rodar nada.
 
+## Configuração e recursos do repositório
+
+Para compartilhar comandos de configuração do worktree, ações de projeto, planos ou iniciadores de rascunho com os colegas que clonarem o repositório, mova-os para `.openchamber/project.json` (veja [Configuração do repositório](/pt-br/repository-config/)). Comandos slash e skills com escopo de projeto ficam em `.omp/commands/` e `.omp/skills/` dentro do repositório (veja [Comandos](/commands-snippets/) e [Skills](/skills/)).
+
 ## Relacionado
 
+- [Configuração do repositório](/pt-br/repository-config/) — compartilhe comandos de configuração, ações, iniciadores e planos no repositório
 - [Conversas](/pt-br/chats/) — sessões sem projeto, para perguntas rápidas
 - [Notas, Tarefas e Planos do Projeto](/pt-br/notes-todos-plans/) — mantenha notas de trabalho por projeto
 - [Ações de Projeto](/pt-br/project-actions/) — salve comandos que você executa com frequência

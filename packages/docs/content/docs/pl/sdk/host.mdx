@@ -27,7 +27,7 @@ To nie jest jednorazowy callback montowania. Zamontuj UI i zarejestruj subskrypc
 | `theme.tokens` | kolory aplikacji (powierzchnie, tekst, stany interakcji, primary, success/warning/error/info), `font`, `mono` i `radius`. Przekaż to do `applyHostReady` przed zamontowaniem UI. |
 | `locale` | tag języka aplikacji |
 | `directory` | katalog bieżącego projektu albo `null` |
-| `session` | `{ id, title, busy }` albo `null`. Tytuł wraca do id sesji, gdy go brak. `busy` to status na żywo. `model` i `agent` (agent OpenCode) pojawiają się, gdy sesja je ma. |
+| `session` | `{ id, title, busy }` albo `null`. Tytuł wraca do id sesji, gdy go brak. `busy` to status na żywo. `model` i `agent` (agent sesji) pojawiają się, gdy sesja je ma. |
 | `surface` | `panel` na pasku bocznym, `dialog` w oknie dołączania, `page` na pełnym ekranie, `status` w panelu Work Status, `file` jako edytor plików w Files |
 | `item` | to, dla czego otwarto tę powierzchnię, albo `null`: dołączony element, który użytkownik kliknął (te same pola, które przekazałeś do `attach`, łącznie z `data`), wiadomość (`kind: "message"`) albo sesja (`kind: "session"`) z jednej z zadeklarowanych przez Ciebie akcji. Zobacz [Akcje](/sdk/#akcje-polecenia-i-odznaka). |
 | `connection` | `{ connected, account }` dla Twojej integracji |
@@ -153,6 +153,22 @@ Bez `send` `prompt` zastępuje tekst w polu czatu. Z `send: true` wysyła wiadom
 
 `host.storage.get(key)`, `set(key, value)`, `delete(key)` i `keys()` zapisują własny JSON na połączonym serwerze bez dodatkowego uprawnienia. Brak klucza daje `undefined`, zapisane null pozostaje null. Klucze mają od 1 do 128 znaków, wartość do 64 KiB UTF-8, całość do 2 MiB i 2 000 kluczy. Dla danych projektu umieść jego ID w kluczu. Zapisy są serializowane i atomowe, a błędy zachowują poprzednie dane. Usunięcie rozszerzenia usuwa pamięć.
 
+## Powłoki w tle
+
+Dzięki uprawnieniu `shells` możesz monitorować polecenia powłoki działające w tle, zawężone do sesji i jej podagentów, zarejestrowanego projektu lub wszystkich sesji. OpenChamber odpowiada ze swojego lokalnego magazynu; nie dochodzi do odczytów przez sieć.
+
+| Wywołanie | Co robi |
+| --- | --- |
+| `onRunningShells(scope, listener)` | subskrybuje polecenia powłoki w danym zakresie: `{ kind: 'session', sessionId }` obejmuje sesję i jej podagentów, `{ kind: 'project', projectId }` obejmuje zarejestrowany projekt, a `{ kind: 'global' }` obejmuje każdą sesję. Otrzymujesz działające polecenia od najstarszych, każde z flagą `background`, oraz te, które się zakończyły. Zwraca funkcję anulującą subskrypcję. |
+| `readShellOutput(shellId, { cursor?, tailBytes? })` | jedna strona wyjścia działającego lub zakończonego polecenia. Bez `cursor` zaczyna się `tailBytes` (do 65536) przed końcem. Zwraca `{ output, cursor, skipped }`. |
+| `stopShell(shellId)` | najpierw wysyła agentowi informację o zatrzymaniu, a następnie usuwa polecenie. |
+
+Migawka ma postać `{ kind: "shells", scope, shells, ended }`, gdzie `scope` odpowiada zakresowi subskrypcji. Każda działająca powłoka to `{ id, sessionID, command, startedAt, background }`, maksymalnie 200, od najstarszych. `background` ma wartość `true` dla zadania, na którego zakończenie tura nie czeka.
+
+`ended` zawiera listę poleceń, których zakończenie zaobserwował OpenChamber, od najwcześniej zakończonych, maksymalnie 200 z zachowaniem najnowszych. Każde z nich dodaje `status`, `endedAt` oraz `exit`, gdy polecenie zakończyło się z kodem wyjścia. Status to `exited`, `timeout`, `killed` przez sygnał, `stopped` przez użytkownika lub `unknown`, gdy zakończenie nastąpiło podczas ponownego łączenia. OpenChamber przechowuje tę listę wyłącznie w pamięci. Po przeładowaniu aplikacji jest pusta, dlatego zapisz to, co pokazuje Twój panel, w magazynie rozszerzenia.
+
+Host przechowuje wyjście zakończonego polecenia dla ostatnich 25 zakończonych poleceń na katalog. Zatrzymane polecenie natychmiast traci swoje wyjście. Próba odczytu powłoki, której OpenChamber nigdy nie widział, lub wyjścia, którego host już nie posiada, zwraca błąd `NOT_FOUND`. Podobnie zatrzymanie powłoki, która nie działa. Niezatwierdzone uprawnienie `shells` zwraca `NOT_GRANTED`.
+
 ## request
 
 ```ts
@@ -194,7 +210,7 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/opencode/opencode.json");
+const info = await host.stat("~/.config/openchamber/config.json");
 ```
 
 Limity: ścieżka do 1024 znaków, treść do 2 000 000 znaków, listing do 2000 wpisów. Przekroczenie limitu treści to `FILE_TOO_LARGE`.

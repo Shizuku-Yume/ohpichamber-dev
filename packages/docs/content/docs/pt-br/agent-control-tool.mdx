@@ -5,7 +5,7 @@ description: Permita que um agente gerencie sessões, worktrees e tarefas agenda
 
 # Ferramenta de controle para agentes
 
-Use a ferramenta de agente `openchamber` para gerenciar o trabalho no aplicativo diretamente pelo chat. Ela vem ativada por padrão quando o OpenChamber executa seu próprio servidor OpenCode local; não é preciso instalar outra ferramenta nem executar um comando de shell.
+Use a ferramenta de agente `openchamber` para gerenciar o trabalho no aplicativo diretamente pelo chat. Ela vem ativada por padrão; não é preciso instalar outra ferramenta nem executar um comando de shell.
 
 ## O que você pode pedir
 
@@ -28,9 +28,7 @@ A ferramenta pode listar projetos e preferências de modelos, criar e continuar 
 
 ## Ativar ou desativar a ferramenta
 
-Abra **Configurações → Geral → Ferramentas do OpenChamber** e altere **Ferramenta de controle para agentes**. A configuração entra em vigor quando o servidor OpenCode gerenciado reinicia, o que o OpenChamber oferece como **Apply & Restart**.
-
-A ferramenta não está disponível quando o OpenChamber se conecta a um servidor OpenCode externo por `OPENCODE_HOST` ou skip-start. As instalações desktop e web que usam o servidor OpenCode gerenciado pelo OpenChamber têm suporte automático.
+Abra **Configurações → Geral → Ferramentas do OpenChamber** e altere **Ferramenta de controle para agentes**. A configuração entra em vigor imediatamente sem reiniciar. A ferramenta opera através do limite de ação nativo do host do OpenChamber para gerenciar sessões, worktrees e tarefas agendadas.
 
 ## Relacionado
 

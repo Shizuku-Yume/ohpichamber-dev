@@ -109,6 +109,7 @@ Desenhar um painel e ler a sessão atual não exige permissão. Tudo que age em 
 | `sessions` | listar projetos, worktrees e estados de sessões; criar e abrir sessões em projetos registrados |
 | `files` | ler e escrever arquivos dentro do projeto aberto (`readFile`, `writeFile`, `listDir`, `stat` com um caminho relativo) |
 | `model` | geração de texto avulsa com o Small Model do usuário (`generate`), fora de qualquer sessão |
+| `shells` | monitorar os comandos de shell que seus agentes executam em segundo plano, ler a saída deles e pará-los (`onRunningShells`, `readShellOutput`, `stopShell`) |
 
 Outras cinco são adicionadas por você automaticamente: `network` quando você declara uma `integration`, `service` quando declara um `service`, `filesystem` quando declara padrões `filesystem`, `origins` quando declara `origins`, e `conversation` quando uma ação de sessão pede as mensagens (veja [Ações, comandos e o selo](#ações-comandos-e-o-selo)).
 
@@ -116,7 +117,7 @@ O usuário vê a lista completa uma vez, ao instalar a extensão, e aprova ou re
 
 ## Gerar texto
 
-Com a capacidade `model`, `host.generate` pede ao Small Model do usuário uma resposta avulsa: um resumo, um título, um rascunho. Nada entra em uma sessão, nenhum histórico é mantido, e a extensão nunca escolhe um provedor. O OpenChamber usa o mesmo modelo que usa para seu próprio trabalho em segundo plano, escolhido em Configurações → Sessões → Small Model, ou o modelo pequeno do provedor com que o usuário está trabalhando, ou o modelo padrão da configuração do OpenCode dele.
+Com a capacidade `model`, `host.generate` pede ao Small Model do usuário uma resposta avulsa: um resumo, um título, um rascunho. Nada entra em uma sessão, nenhum histórico é mantido, e a extensão nunca escolhe um provedor. O OpenChamber usa o modelo escolhido em Configurações → Sessões → Small Model ou o modelo pequeno do provedor ativo.
 
 ```ts
 const { text } = await host.generate({
@@ -166,14 +167,14 @@ Sua página não consegue tocar o disco por conta própria. O OpenChamber lê e 
 - Um caminho que começa com `/` ou `~/` significa qualquer outro lugar. Ele precisa bater com um dos padrões que você declara em `contributes.filesystem`, e o usuário vê exatamente esses padrões no diálogo de aprovação:
 
 ```json
-"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
 ```
 
 Os padrões usam `*` para um segmento do caminho e `**` para qualquer profundidade. Tudo que ficar fora deles é `BAD_PATH`, mesmo depois da aprovação. `..` nunca é permitido.
 
 ```ts
-const config = await host.readFile("~/.config/opencode/opencode.json");
-await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const config = await host.readFile("~/.config/openchamber/config.json");
+await host.writeFile("~/.config/openchamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -279,13 +280,13 @@ host.onResolve(async ({ command, args }) => {
 });
 ```
 
-Quando o usuário digita `/task ABC-12` na caixa de chat, o OpenChamber pede à sua extensão que o resolva e anexa o que você devolve como um chip, sem abrir nada. Devolva `null` para "nada encontrado". Se o seu painel estiver fechado, o OpenChamber o carrega em segundo plano para essa chamada. Um nome que o OpenChamber ou o OpenCode já usa é ignorado.
+Quando o usuário digita `/task ABC-12` na caixa de chat, o OpenChamber pede à sua extensão que o resolva e anexa o que você devolve como um chip, sem abrir nada. Devolva `null` para "nada encontrado". Se o seu painel estiver fechado, o OpenChamber o carrega em segundo plano para essa chamada. Um nome que o OpenChamber já usa é ignorado.
 
 **Selo no ícone da barra lateral.** `host.setBadge(3)` mostra um número no seu ícone, por exemplo tarefas abertas; `host.setBadge(null)` o limpa. Abrir o painel também o limpa.
 
 ## Suas ferramentas no chat
 
-Quando o seu plugin do OpenCode ou servidor MCP adiciona uma ferramenta, o chat mostra as chamadas dela com um ícone genérico e a saída bruta. Em vez disso, declare como elas devem aparecer, sem código:
+Quando um servidor MCP ou ferramenta integrada adiciona uma ferramenta, o chat mostra as chamadas dela com um ícone genérico e a saída bruta. Em vez disso, declare como elas devem aparecer, sem código:
 
 ```json
 "tools": [
@@ -301,7 +302,7 @@ Quando o seu plugin do OpenCode ou servidor MCP adiciona uma ferramenta, o chat 
 ]
 ```
 
-`match` é o nome da ferramenta como o OpenCode o reporta; um `*` no final casa com um prefixo. `icon` é um nome do Remixicon ou um arquivo `.svg` no seu pacote, como `panel.icon`. `title` e `subtitle` são templates sobre `input`, `output` e `metadata` da chamada. `output` escolhe como o corpo é renderizado: `text`, `json` (uma árvore), `markdown`, `code` com um `language`, `table` com `columns` (as linhas vêm do array de saída ou de `output.items`) ou `auto` para o padrão. Um `match` exato vence um curinga, e em caso de empate vence a primeira extensão instalada. Nenhuma permissão é necessária: isso só muda como dados que já estão no chat são desenhados.
+`match` é o nome da ferramenta como o runtime o reporta; um `*` no final casa com um prefixo. `icon` é um nome do Remixicon ou um arquivo `.svg` no seu pacote, como `panel.icon`. `title` e `subtitle` são templates sobre `input`, `output` e `metadata` da chamada. `output` escolhe como o corpo é renderizado: `text`, `json` (uma árvore), `markdown`, `code` com um `language`, `table` com `columns` (as linhas vêm do array de saída ou de `output.items`) ou `auto` para o padrão. Um `match` exato vence um curinga, e em caso de empate vence a primeira extensão instalada. Nenhuma permissão é necessária: isso só muda como dados que já estão no chat são desenhados.
 
 Uma extensão que só estiliza ferramentas não precisa de página nenhuma: deixe `panel.entry` de fora e ela não terá ícone na barra lateral, só um card em Configurações → Extensões. Sem página ela pode declarar `tools` e nada mais. A outra exceção é uma seção do Work Status ou um editor de arquivos com `entry` próprio, veja acima.
 

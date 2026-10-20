@@ -26,29 +26,29 @@ Jev is off until you turn it on: nothing from your conversations goes to a class
 
 ### OpenCode Zen promotion
 
-Free for a limited time, no key needed. OpenCode lets OpenChamber use Jev through OpenCode Zen at no cost while the promotion runs.
+Free for a limited time, no key needed. OpenCode Zen lets OpenChamber use Jev at no cost while the promotion runs.
 
 When the promotion ends, the option disappears and OpenChamber switches to one of the keys below if you have one.
 
 ### OpenCode Zen key
 
-Uses the Zen API key saved in OpenCode, paid from your Zen balance.
+Uses the stored API key configured for OpenCode Zen, paid from your Zen balance. Jev classification requires a stored provider credential rather than an environment variable.
 
 1. Open **Settings → Providers** and add an API key to the **OpenCode Zen** provider (see [Providers, Models & Agents](/providers/)).
 2. Come back to **Classification providers** and pick **OpenCode Zen key**.
 
-Signing in with an OpenCode account is not enough. Zen accepts only an API key for Jev.
+Zen requires an API key for Jev.
 
 ### OpenRouter key
 
-Uses the OpenRouter API key saved in OpenCode, billed to your OpenRouter account. If you already use OpenRouter models in OpenCode, there's nothing to set up. A key in the `OPENROUTER_API_KEY` environment variable works too. If both are there, the key saved in OpenCode wins.
+Uses the stored API key configured for OpenRouter, billed to your OpenRouter account. Jev classification requires a stored provider credential rather than an environment variable.
 
 1. Open **Settings → Providers** and add an API key to the **OpenRouter** provider.
 2. Come back to **Classification providers** and pick **OpenRouter key**.
 
 ### Vercel AI Gateway key
 
-Uses the AI Gateway API key saved in OpenCode, billed to your Vercel account. A key in the `AI_GATEWAY_API_KEY` environment variable works too. If both are there, the key saved in OpenCode wins.
+Uses the stored API key configured for Vercel AI Gateway, billed to your Vercel account. Jev classification requires a stored provider credential rather than an environment variable.
 
 1. Open **Settings → Providers** and add an API key to the **Vercel AI Gateway** provider.
 2. Come back to **Classification providers** and pick **Vercel AI Gateway key**.
@@ -101,7 +101,7 @@ If Jev is slow or fails on a single request, nothing breaks. Each feature has a 
 
 ## What Jev sees
 
-Jev gets short excerpts of your conversation: your latest message, and for context up to three previous turns, cut down to their first few hundred characters. For the safety net it also gets the action being checked, the way OpenCode describes it: the command the agent wants to run, or the file and the change for an edit. It never gets whole files or images.
+Jev gets short excerpts of your conversation: your latest message, and for context up to three previous turns, cut down to their first few hundred characters. For the safety net it also gets the action being checked: the command the agent wants to run, or the file and the change for an edit. It never gets whole files or images.
 
 Requests go from the OpenChamber server straight to OpenCode Zen, OpenRouter, Vercel AI Gateway, TypeSafe or your custom endpoint, depending on your pick.
 

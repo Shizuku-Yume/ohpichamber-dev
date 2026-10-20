@@ -26,29 +26,29 @@ Jev siz açana kadar kapalıdır: Bir sınıflandırma sağlayıcısı seçmedi�
 
 ### OpenCode Zen kampanyası
 
-Sınırlı bir süre ücretsiz, anahtar gerekmez. Kampanya sürdüğü sürece OpenCode, OpenChamber'ın Jev'i OpenCode Zen üzerinden ücretsiz kullanmasına izin veriyor.
+Sınırlı bir süre ücretsiz, anahtar gerekmez. Kampanya sürdüğü sürece OpenCode Zen, OpenChamber'ın Jev'i ücretsiz kullanmasına izin verir.
 
 Kampanya bittiğinde bu seçenek kaybolur ve varsa OpenChamber aşağıdaki anahtarlardan birine geçer.
 
 ### OpenCode Zen anahtarı
 
-OpenCode'da kayıtlı Zen API anahtarını kullanır, ücret Zen bakiyenizden düşer.
+OpenCode Zen için kaydedilmiş API anahtarını kullanır, ücret Zen bakiyenizden düşer. Jev sınıflandırması, ortam değişkeni yerine kaydedilmiş bir sağlayıcı kimlik bilgisi gerektirir.
 
 1. **Ayarlar → Provider'lar** sayfasını açın ve **OpenCode Zen** sağlayıcısına bir API anahtarı ekleyin ([Sağlayıcılar, modeller ve agentlar](/tr/providers/) sayfasına bakın).
 2. **Sınıflandırma sağlayıcıları** sayfasına dönün ve **OpenCode Zen anahtarı** seçeneğini seçin.
 
-Bir OpenCode hesabıyla giriş yapmak yetmez. Zen, Jev için yalnızca API anahtarı kabul eder.
+Zen, Jev için yalnızca API anahtarı kabul eder.
 
 ### OpenRouter anahtarı
 
-OpenCode'da kayıtlı OpenRouter API anahtarını kullanır, ücret OpenRouter hesabınıza yansır. OpenCode'da zaten OpenRouter modellerini kullanıyorsanız ayarlamanız gereken bir şey yok. `OPENROUTER_API_KEY` ortam değişkenindeki anahtar da çalışır. İkisi de varsa OpenCode'da kayıtlı anahtar kullanılır.
+OpenRouter için kaydedilmiş API anahtarını kullanır, ücret OpenRouter hesabınıza yansır. Jev sınıflandırması, ortam değişkeni yerine kaydedilmiş bir sağlayıcı kimlik bilgisi gerektirir.
 
 1. **Ayarlar → Provider'lar** sayfasını açın ve **OpenRouter** sağlayıcısına bir API anahtarı ekleyin.
 2. **Sınıflandırma sağlayıcıları** sayfasına dönün ve **OpenRouter anahtarı** seçeneğini seçin.
 
 ### Vercel AI Gateway anahtarı
 
-OpenCode'da kayıtlı AI Gateway API anahtarını kullanır, ücret Vercel hesabınıza yansır. `AI_GATEWAY_API_KEY` ortam değişkenindeki anahtar da çalışır. İkisi de varsa OpenCode'da kayıtlı anahtar kullanılır.
+Vercel AI Gateway için kaydedilmiş API anahtarını kullanır, ücret Vercel hesabınıza yansır. Jev sınıflandırması, ortam değişkeni yerine kaydedilmiş bir sağlayıcı kimlik bilgisi gerektirir.
 
 1. **Ayarlar → Provider'lar** sayfasını açın ve **Vercel AI Gateway** sağlayıcısına bir API anahtarı ekleyin.
 2. **Sınıflandırma sağlayıcıları** sayfasına dönün ve **Vercel AI Gateway anahtarı** seçeneğini seçin.
@@ -101,7 +101,7 @@ Jev tek bir istekte yavaş kalırsa ya da hata verirse hiçbir şey bozulmaz. He
 
 ## Jev neyi görür
 
-Jev konuşmanızdan kısa alıntılar alır: son mesajınızı ve bağlam için en fazla üç önceki turu, ilk birkaç yüz karakterine kısaltılmış olarak. Güvenlik ağı için kontrol edilen eylemi de OpenCode'un tarif ettiği şekliyle alır: ajanın çalıştırmak istediği komutu ya da bir düzenlemede dosyayı ve değişikliği. Asla dosyaların tamamını veya görselleri almaz.
+Jev konuşmanızdan kısa alıntılar alır: son mesajınızı ve bağlam için en fazla üç önceki turu, ilk birkaç yüz karakterine kısaltılmış olarak. Güvenlik ağı için kontrol edilen eylemi de alır: ajanın çalıştırmak istediği komutu ya da bir düzenlemede dosyayı ve değişikliği. Asla dosyaların tamamını veya görselleri almaz.
 
 İstekler, seçiminize göre OpenChamber sunucusundan doğrudan OpenCode Zen'e, OpenRouter'a, Vercel AI Gateway'e, TypeSafe'e veya özel uç noktanıza gider.
 

@@ -10,10 +10,23 @@ Bevor OpenChamber etwas tun kann, braucht es mindestens einen verbundenen KI-Pro
 ## Einen Provider verbinden
 
 1. Öffne **Einstellungen → Provider**.
-2. Öffne das Menü **Provider hinzufügen** und wähle einen Provider aus, der noch nicht verbunden ist.
-3. Melde dich auf eine von zwei Arten an, je nach Provider:
+2. Öffne das Menü **Provider hinzufügen** und wähle einen Provider aus, der noch nicht verbunden ist, oder wähle **Andere / Benutzerdefiniert** für einen OpenAI-kompatiblen Endpunkt.
+3. Melde dich über die vom Provider unterstützte Methode an:
    - **API-Schlüssel** — füge deinen Schlüssel ein und speichere.
-   - **Anmeldung (Gerätefluss)** — OpenChamber zeigt einen Link und einen kurzen Code an. Öffne den Link, gib den Code ein und bestätige. OpenChamber schließt die Verbindung dann selbstständig ab.
+   - **OAuth-Anmeldung** — öffne den Autorisierungslink im Browser, um dich anzumelden. Falls aufgefordert, füge den Autorisierungscode in OpenChamber ein und schließe die Verbindung ab.
+
+### Benutzerdefinierte und weitere Provider
+
+Für Gateways, Universitäts-LLMs, Ollama, LiteLLM und ähnliche OpenAI-kompatible APIs:
+
+1. Wähle **Andere / Benutzerdefiniert** in der Provider-Liste.
+2. Gib eine Provider-ID, einen Anzeigenamen, eine Basis-URL (`http://` oder `https://`), einen optionalen API-Schlüssel sowie mindestens eine Modell-ID und einen Modellnamen ein.
+3. Gib das Kontextfenster und das maximale Ausgabe-Token-Limit des Modells an. Erweiterte Metadaten (wie Reasoning-Optionen, Varianten und Modalitäten) lassen sich als JSON unter den Modelldetails konfigurieren.
+4. Füge bei Bedarf benutzerdefinierte Anfrage-Header hinzu.
+5. Speichere — OpenChamber registriert den Provider und die Modelle über den Agent-Dienst und speichert API-Schlüssel als reine Schreibzugangsdaten.
+6. Um einen vorhandenen benutzerdefinierten Provider zu bearbeiten, öffne ihn und wähle **Bearbeiten**.
+
+Ein API-Schlüssel ist optional. Schlüssellose lokale Endpunkte (wie Ollama, LiteLLM oder llama.cpp) sowie Dienste mit Header-Authentifizierung lassen sich ohne API-Schlüssel verbinden.
 
 Wenn ein Provider als verbunden angezeigt wird, sind seine Modelle im Chat verfügbar.
 
@@ -28,20 +41,20 @@ Du wählst das Modell dort aus, wo du arbeitest:
 
 ## Agents einrichten
 
-Ein Agent ist eine benannte Konfiguration — ein Modell, eine Persönlichkeit und das, was er tun darf.
+Ein Agent ist eine benannte Konfiguration — ein Modell, ein System-Prompt und die Werkzeuge, die ihm zur Verfügung stehen.
 
 1. Öffne **Einstellungen → Agents**.
 2. Wähle einen Agenten aus oder erstelle einen neuen.
 3. Bearbeite beliebige dieser Felder:
    - **Beschreibung** — wofür der Agent gedacht ist
-   - **Modell** — sein Standardmodell
-   - **Temperatur** — wie kreativ seine Antworten sind
-   - **Prompt** — dauerhafte Anweisungen, denen er immer folgt
-   - **Tool-Regeln** — welche Werkzeuge er verwenden darf
+   - **Modell** — sein Standard-Provider und Modell-Override
+   - **Prompt** — dauerhafte Anweisungen und System-Prompts, denen er immer folgt
+   - **Erlaubte Tools** — welche Werkzeuge für den Agenten verfügbar sind (Tool-Verfügbarkeit: Werkzeuge in dieser Liste können vom Modell aufgerufen werden, während die Autorisierung von Operationen weiterhin durch Host-Richtlinien und Genehmigungen gesteuert wird)
+   - **Berechtigungsvoreinstellung** — optionale Berechtigungs-Preset-ID für das Agentenprofil
 
 ## Wo deine Anmeldungen gespeichert werden
 
-Provider-Anmeldungen werden von OpenCode gespeichert, nicht von OpenChamber, daher sind sie mit der OpenCode-CLI geteilt. Wenn du denselben Provider an mehr als einem Ort einrichtest, gewinnt die spezifischste Einstellung: Eine projektbezogene Einstellung überschreibt deine persönliche.
+Provider-Anmeldungen und Zugangsdaten werden im Anmeldedatenspeicher des Agent-Dienstes auf dem Server verwahrt, sodass Schlüssel sicher und isoliert bleiben. Du kannst mehrere Konten für einen Provider verbinden und in der Kontenliste des Providers auswählen, welches aktive Konto als Standard verwendet wird.
 
 ## Weiterführend
 

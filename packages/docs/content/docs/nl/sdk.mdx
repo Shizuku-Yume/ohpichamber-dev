@@ -109,6 +109,7 @@ Een paneel tonen en de huidige sessie lezen vereist geen toestemming. Voor hande
 | `sessions` | projecten, worktrees en sessiestatussen opvragen; sessies aanmaken en openen in geregistreerde projecten |
 | `files` | bestanden in het geopende project lezen en schrijven via `readFile`, `writeFile`, `listDir` en `stat` met een relatief pad |
 | `model` | eenmalig tekst genereren met het Small Model via `generate`, buiten een sessie |
+| `shells` | shellopdrachten volgen die uw agents op de achtergrond uitvoeren, hun uitvoer lezen en ze stoppen (`onRunningShells`, `readShellOutput`, `stopShell`) |
 
 Vijf rechten worden automatisch toegevoegd: `network` bij een `integration`, `service` bij een `service`, `filesystem` bij `filesystem`-patronen, `origins` bij `origins` en `conversation` als een sessieactie berichten opvraagt. Zie [Acties, opdrachten en de badge](#acties-opdrachten-en-de-badge).
 
@@ -116,7 +117,7 @@ Bij installatie ziet de gebruiker de volledige lijst en kan die goedkeuren of de
 
 ## Tekst genereren
 
-Met het recht `model` vraagt `host.generate` het Small Model van de gebruiker om een eenmalig antwoord, zoals een samenvatting, titel of concepttekst. Niets komt in een sessie terecht, er wordt geen geschiedenis bewaard en de extensie kiest nooit zelf een provider. OpenChamber gebruikt hetzelfde model als voor eigen achtergrondtaken: het model uit Instellingen → Sessies → Small Model, het kleine model van de provider waarmee de gebruiker werkt, of het standaardmodel uit de OpenCode-configuratie.
+Met het recht `model` vraagt `host.generate` het Small Model van de gebruiker om een eenmalig antwoord, zoals een samenvatting, titel of concepttekst. Niets komt in een sessie terecht, er wordt geen geschiedenis bewaard en de extensie kiest nooit zelf een provider. OpenChamber gebruikt het model gekozen in Instellingen → Sessies → Small Model of het kleine model van de actieve provider.
 
 ```ts
 const { text } = await host.generate({
@@ -166,14 +167,14 @@ Uw pagina heeft zelf geen schijftoegang. OpenChamber leest en schrijft namens ha
 - Een pad dat met `/` of `~/` begint, verwijst naar een andere locatie. Het moet passen bij een patroon in `contributes.filesystem`. De gebruiker ziet precies die patronen in het toestemmingsvenster:
 
 ```json
-"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
 ```
 
 `*` staat voor één padsegment en `**` voor willekeurige diepte. Een pad daarbuiten geeft `BAD_PATH`, ook na goedkeuring. `..` is nooit toegestaan.
 
 ```ts
-const config = await host.readFile("~/.config/opencode/opencode.json");
-await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const config = await host.readFile("~/.config/openchamber/config.json");
+await host.writeFile("~/.config/openchamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -279,13 +280,13 @@ host.onResolve(async ({ command, args }) => {
 });
 ```
 
-Typt de gebruiker `/task ABC-12`, dan vraagt OpenChamber uw extensie om het item op te zoeken en koppelt het teruggegeven resultaat aan het invoerveld, zonder een venster te openen. Geef `null` terug als niets is gevonden. Is het paneel gesloten, dan laadt OpenChamber het op de achtergrond voor de aanroep. Namen die OpenChamber of OpenCode al gebruikt, worden genegeerd.
+Typt de gebruiker `/task ABC-12`, dan vraagt OpenChamber uw extensie om het item op te zoeken en koppelt het teruggegeven resultaat aan het invoerveld, zonder een venster te openen. Geef `null` terug als niets is gevonden. Is het paneel gesloten, dan laadt OpenChamber het op de achtergrond voor de aanroep. Namen die OpenChamber al gebruikt, worden genegeerd.
 
 **Badge op het balkpictogram.** `host.setBadge(3)` toont een getal, bijvoorbeeld het aantal open taken. `host.setBadge(null)` wist de badge. Het openen van het paneel wist haar ook.
 
 ## Uw tools in de chat
 
-Tools uit een OpenCode-plugin of MCP-server verschijnen standaard met een algemeen pictogram en onbewerkte uitvoer. Geef zonder extra code een eigen weergave op:
+Wanneer een MCP-server of geïntegreerde tool een tool toevoegt, toont de chat diens aanroepen met een algemeen pictogram en onbewerkte uitvoer. Geef zonder extra code een eigen weergave op:
 
 ```json
 "tools": [
@@ -301,7 +302,7 @@ Tools uit een OpenCode-plugin of MCP-server verschijnen standaard met een algeme
 ]
 ```
 
-`match` is de toolnaam zoals OpenCode die meldt. Een afsluitende `*` vergelijkt op voorvoegsel. `icon` is een Remixicon-naam of `.svg`-bestand in uw pakket, net als `panel.icon`. `title` en `subtitle` zijn sjablonen op basis van `input`, `output` en `metadata`. `output` bepaalt de weergave: `text`, `json` als boom, `markdown`, `code` met `language`, `table` met `columns`, of `auto` voor de standaard. Tabelrijen komen uit de uitvoerarray of `output.items`. Een exacte overeenkomst gaat boven een jokerteken; bij gelijke matches wint de eerst geïnstalleerde extensie. Er is geen toestemming nodig, omdat alleen de weergave van bestaande chatgegevens verandert.
+`match` is de toolnaam zoals de runtime die meldt. Een afsluitende `*` vergelijkt op voorvoegsel. `icon` is een Remixicon-naam of `.svg`-bestand in uw pakket, net als `panel.icon`. `title` en `subtitle` zijn sjablonen op basis van `input`, `output` en `metadata`. `output` bepaalt de weergave: `text`, `json` als boom, `markdown`, `code` met `language`, `table` met `columns`, of `auto` voor de standaard. Tabelrijen komen uit de uitvoerarray of `output.items`. Een exacte overeenkomst gaat boven een jokerteken; bij gelijke matches wint de eerst geïnstalleerde extensie. Er is geen toestemming nodig, omdat alleen de weergave van bestaande chatgegevens verandert.
 
 Een extensie die alleen tools opmaakt, heeft geen pagina nodig. Zonder `panel.entry` verschijnt geen balkpictogram, alleen een kaart bij Instellingen → Extensies. Zonder pagina mag ze uitsluitend `tools` opgeven. Een Werkstatus-onderdeel of bestandseditor met een eigen `entry` is de andere uitzondering, zoals hierboven beschreven.
 

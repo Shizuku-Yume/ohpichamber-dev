@@ -109,6 +109,7 @@ Ein Panel zeichnen und die aktuelle Session lesen braucht keine Berechtigung. Al
 | `sessions` | Projekte, Worktrees und Sitzungszustände auflisten; Sitzungen in registrierten Projekten erstellen und öffnen |
 | `files` | Dateien innerhalb des offenen Projekts lesen und schreiben (`readFile`, `writeFile`, `listDir`, `stat` mit einem relativen Pfad) |
 | `model` | einmalige Textgenerierung mit dem Small Model des Nutzers (`generate`), außerhalb jeder Session |
+| `shells` | Shell-Befehle beobachten, die deine Agents im Hintergrund ausführen, deren Ausgabe lesen und sie stoppen (`onRunningShells`, `readShellOutput`, `stopShell`) |
 
 Fünf weitere kommen automatisch dazu: `network`, wenn du eine `integration` deklarierst, `service`, wenn du einen `service` deklarierst, `filesystem`, wenn du `filesystem`-Muster deklarierst, `origins`, wenn du `origins` deklarierst, und `conversation`, wenn eine Session-Aktion die Nachrichten anfordert (siehe [Aktionen, Befehle und das Badge](#aktionen-befehle-und-das-badge)).
 
@@ -116,7 +117,7 @@ Der Nutzer sieht die vollständige Liste einmal, bei der Installation der Erweit
 
 ## Text erzeugen
 
-Mit der Berechtigung `model` bittet `host.generate` das Small Model des Nutzers um eine einmalige Antwort: eine Zusammenfassung, einen Titel, einen Entwurf. Nichts landet in einer Session, es wird kein Verlauf gespeichert, und die Erweiterung wählt nie einen Anbieter. OpenChamber nutzt dasselbe Modell, das es für seine eigene Hintergrundarbeit verwendet, eingestellt unter Einstellungen → Sessions → Small Model, oder das Small Model des Anbieters, mit dem der Nutzer gerade arbeitet, oder das Standardmodell aus seiner OpenCode-Konfiguration.
+Mit der Berechtigung `model` bittet `host.generate` das Small Model des Nutzers um eine einmalige Antwort: eine Zusammenfassung, einen Titel, einen Entwurf. Nichts landet in einer Session, es wird kein Verlauf gespeichert, und die Erweiterung wählt nie einen Anbieter. OpenChamber nutzt das unter Einstellungen → Sessions → Small Model gewählte Modell oder das Small Model des aktiven Anbieters.
 
 ```ts
 const { text } = await host.generate({
@@ -166,14 +167,14 @@ Deine Seite kann die Festplatte nicht selbst anfassen. OpenChamber liest und sch
 - Ein Pfad, der mit `/` oder `~/` beginnt, meint irgendwo sonst. Er muss zu einem der Muster passen, die du in `contributes.filesystem` deklarierst, und der Nutzer sieht genau diese Muster im Bestätigungsdialog:
 
 ```json
-"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
 ```
 
 In Mustern steht `*` für ein Pfadsegment und `**` für beliebige Tiefe. Alles außerhalb davon ist `BAD_PATH`, auch nach der Bestätigung. `..` ist nie erlaubt.
 
 ```ts
-const config = await host.readFile("~/.config/opencode/opencode.json");
-await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const config = await host.readFile("~/.config/openchamber/config.json");
+await host.writeFile("~/.config/openchamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -279,13 +280,13 @@ host.onResolve(async ({ command, args }) => {
 });
 ```
 
-Wenn der Nutzer `/task ABC-12` ins Chatfeld tippt, bittet OpenChamber deine Erweiterung, das aufzulösen, und hängt das Ergebnis als Chip an, ohne etwas zu öffnen. Gib `null` zurück für "nichts gefunden". Ist dein Panel geschlossen, lädt OpenChamber es für den Aufruf im Hintergrund. Ein Name, den OpenChamber oder OpenCode schon verwendet, wird ignoriert.
+Wenn der Nutzer `/task ABC-12` ins Chatfeld tippt, bittet OpenChamber deine Erweiterung, das aufzulösen, und hängt das Ergebnis als Chip an, ohne etwas zu öffnen. Gib `null` zurück für "nichts gefunden". Ist dein Panel geschlossen, lädt OpenChamber es für den Aufruf im Hintergrund. Ein Name, den OpenChamber schon verwendet, wird ignoriert.
 
 **Badge auf dem Symbol in der Leiste.** `host.setBadge(3)` zeigt eine Zahl auf deinem Symbol, zum Beispiel offene Aufgaben; `host.setBadge(null)` entfernt sie. Das Öffnen des Panels entfernt sie ebenfalls.
 
 ## Deine Tools im Chat
 
-Wenn dein OpenCode-Plugin oder MCP-Server ein Tool hinzufügt, zeigt der Chat dessen Aufrufe mit einem generischen Symbol und roher Ausgabe. Beschreibe stattdessen, wie sie aussehen sollen, ganz ohne Code:
+Wenn ein MCP-Server oder integriertes Tool ein Tool hinzufügt, zeigt der Chat dessen Aufrufe mit einem generischen Symbol und roher Ausgabe. Beschreibe stattdessen, wie sie aussehen sollen, ganz ohne Code:
 
 ```json
 "tools": [
@@ -301,7 +302,7 @@ Wenn dein OpenCode-Plugin oder MCP-Server ein Tool hinzufügt, zeigt der Chat de
 ]
 ```
 
-`match` ist der Tool-Name, wie OpenCode ihn meldet; ein `*` am Ende passt auf ein Präfix. `icon` ist ein Remixicon-Name oder eine `.svg`-Datei in deinem Paket, wie bei `panel.icon`. `title` und `subtitle` sind Vorlagen über `input`, `output` und `metadata` des Aufrufs. `output` bestimmt, wie der Inhalt dargestellt wird: `text`, `json` (als Baum), `markdown`, `code` mit einer `language`, `table` mit `columns` (die Zeilen kommen aus dem Ausgabe-Array oder aus `output.items`) oder `auto` für die Standarddarstellung. Ein exaktes `match` schlägt einen Platzhalter, und bei Gleichstand gewinnt die zuerst installierte Erweiterung. Eine Berechtigung ist nicht nötig: das ändert nur, wie Daten gezeichnet werden, die ohnehin schon im Chat sind.
+`match` ist der Tool-Name, wie die Runtime ihn meldet; ein `*` am Ende passt auf ein Präfix. `icon` ist ein Remixicon-Name oder eine `.svg`-Datei in deinem Paket, wie bei `panel.icon`. `title` und `subtitle` sind Vorlagen über `input`, `output` und `metadata` des Aufrufs. `output` bestimmt, wie der Inhalt dargestellt wird: `text`, `json` (als Baum), `markdown`, `code` mit einer `language`, `table` mit `columns` (die Zeilen kommen aus dem Ausgabe-Array oder aus `output.items`) oder `auto` für die Standarddarstellung. Ein exaktes `match` schlägt einen Platzhalter, und bei Gleichstand gewinnt die zuerst installierte Erweiterung. Eine Berechtigung ist nicht nötig: das ändert nur, wie Daten gezeichnet werden, die ohnehin schon im Chat sind.
 
 Eine Erweiterung, die nur Tools gestaltet, braucht gar keine Seite: lass `panel.entry` weg, dann hat sie kein Icon in der Leiste, nur eine Karte unter Einstellungen → Erweiterungen. Ohne Seite darf sie `tools` und sonst nichts deklarieren. Die andere Ausnahme ist ein Work-Status-Abschnitt oder ein Datei-Editor mit eigenem `entry`, siehe oben.
 

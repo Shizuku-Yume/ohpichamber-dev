@@ -1,29 +1,28 @@
 ---
 title: インストール
-description: デスクトップまたは Web 向けに OpenChamber をインストールします。
+description: デスクトップ、Web、モバイル向けに OpenChamber をインストールします。
 ---
 
 # インストール
 
-OpenChamber を実行する方法は 3 つあります。
+OpenChamber は以下の形態で実行できます。
 
-- macOS 用のデスクトップアプリ
-- CLI がホストする Web アプリ。スマートフォンアプリのようにインストールできます（PWA）
-
-## 前提条件
-
-先に [OpenCode](https://opencode.ai) をインストールしてください。OpenChamber はその上で動作します。
+- macOS、Windows、Linux 向けのデスクトップアプリ
+- CLI がホストする Web アプリ（PWA としてもインストール可能）
+- iOS および Android 向けのモバイルアプリ
 
 ## Web + PWA
+
+OpenChamber サーバーの実行には前提条件を満たす必要があります：Host Gateway 用の Node.js 24.14+、Agent Service 用の PATH 内の Bun 1.3.14+、および git。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/openchamber/openchamber/main/scripts/install.sh | bash
 openchamber --ui-password be-creative-here
 ```
 
-CLI が表示する URL（通常は `http://localhost:3000`）を開きます。OpenChamber のセッション一覧が表示されるはずです。すぐ使えるようにしておくには、ブラウザのアドレスバーにある「インストール」オプションでアプリとして追加します。
+CLI が表示する URL（通常は `http://localhost:3000`）を開きます。ログイン画面で UI パスワードを入力してログインします。ログインすると OpenChamber のセッション一覧が表示されます。すぐ使えるようにしておくには、ブラウザのアドレスバーにある「インストール」オプションでアプリとして追加します。
 
 ## デスクトップ
 
-GitHub releases ページまたは OpenChamber ダウンロードページから最新のデスクトップビルドをダウンロードします。開いたら、普段の OpenCode ワークフローにサインインします。
+GitHub releases ページまたは OpenChamber ダウンロードページからお使いのプラットフォーム向けの最新デスクトップビルドをダウンロードします。起動してワークスペースを選択するか、リモートサーバーに接続します。
 

@@ -35,12 +35,17 @@ Wenn die Werkzeuge eines Projekts aus direnv, devenv oder einer Nix-Shell kommen
 
 Der Befehl läuft im Projektordner und für einen Worktree in dessen eigenem Ordner. Er läuft erneut, wenn du committest, ein Terminal öffnest oder eine Aktion ausführst und der letzte Lauf ein paar Minuten zurückliegt, und **Erneut ausführen** startet ihn sofort. Nur weil das Projekt geöffnet ist, läuft er nicht. Unter dem Feld siehst du, wie viele Variablen der letzte Lauf hinzugefügt hat oder warum er fehlgeschlagen ist. Ein fehlgeschlagener Lauf fügt nichts hinzu, und Git und das Terminal arbeiten ohne ihn weiter.
 
-Diese Variablen gehen an Git, das Terminal und Projektaktionen, zusätzlich zu denen unter **Einstellungen → Allgemein → Umgebungsvariablen** (siehe [Umgebungsvariablen](/de/environment/#variablen-für-opencode-git-und-das-terminal)). OpenCode bedient alle Projekte aus einem einzigen Prozess und bekommt deshalb keine Projektvariablen: Was der Agent braucht, gehört in die allgemeine Liste.
+Diese Variablen gehen an Git, das Terminal, Projektaktionen, das Worktree-Setup und Worker pro Projekt, zusätzlich zu denen unter **Einstellungen → Allgemein → Umgebungsvariablen** (siehe [Umgebungsvariablen](/de/environment/)). Projektumgebung und Worktree-Setup folgen der Host-Projektkonfiguration und bleiben auf das Projekt beschränkt.
 
 Den Befehl legst nur du fest. Er wird nicht aus dem Repository gelesen, ein geklontes Repository kann OpenChamber also nichts ausführen lassen.
 
+## Repository-Konfiguration und Ressourcen
+
+Um Worktree-Setup-Befehle, Projektaktionen, Pläne oder Entwurfs-Starter mit Teammitgliedern zu teilen, die die Codebasis klonen, verschiebe sie in `.openchamber/project.json` (siehe [Repository-Konfiguration](/de/repository-config/)). Projektspezifische Slash-Befehle und Skills liegen unter `.omp/commands/` und `.omp/skills/` im Repository (siehe [Befehle](/commands-snippets/) und [Skills](/skills/)).
+
 ## Verwandtes
 
+- [Repository-Konfiguration](/de/repository-config/) — Setup-Befehle, Aktionen, Starter und Pläne im Repository teilen
 - [Chats](/de/chats/) — Sitzungen ohne Projekt, für schnelle Fragen
 - [Projektnotizen, Todos & Pläne](/notes-todos-plans/) — Arbeitsnotizen pro Projekt behalten
 - [Projektaktionen](/project-actions/) — Befehle speichern, die du oft ausführst

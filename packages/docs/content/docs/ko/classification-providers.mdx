@@ -26,29 +26,29 @@ Jev는 직접 켜기 전까지 꺼져 있습니다. 분류 제공자를 고르�
 
 ### OpenCode Zen 프로모션
 
-기간 한정 무료이며 키가 필요 없습니다. 프로모션 기간 동안 OpenCode는 OpenChamber가 OpenCode Zen을 통해 Jev를 무료로 쓰도록 허용합니다.
+기간 한정 무료이며 키가 필요 없습니다. 프로모션 기간 동안 OpenCode Zen을 통해 OpenChamber에서 Jev를 무료로 이용할 수 있습니다.
 
 프로모션이 끝나면 이 선택지는 사라지고, 아래 키 중 하나가 있으면 OpenChamber가 그 키로 전환합니다.
 
 ### OpenCode Zen 키
 
-OpenCode에 저장된 Zen API 키를 사용하며, 요금은 Zen 잔액에서 나갑니다.
+OpenCode Zen용으로 저장 및 설정된 API 키를 사용하며, 요금은 Zen 잔액에서 나갑니다. Jev 분류에는 환경 변수가 아닌 저장된 공급자 자격 증명이 필요합니다.
 
 1. **설정 → 프로바이더**를 열고 **OpenCode Zen** 프로바이더에 API 키를 추가합니다([공급자, 모델, 에이전트](/ko/providers/) 참고).
 2. **분류 제공자**로 돌아와 **OpenCode Zen 키**를 고릅니다.
 
-OpenCode 계정으로 로그인하는 것만으로는 부족합니다. Zen은 Jev에 대해 API 키만 받습니다.
+Zen은 Jev에 대해 API 키만 받습니다.
 
 ### OpenRouter 키
 
-OpenCode에 저장된 OpenRouter API 키를 사용하며, 요금은 OpenRouter 계정으로 청구됩니다. OpenCode에서 이미 OpenRouter 모델을 쓰고 있다면 따로 설정할 것이 없습니다. 환경 변수 `OPENROUTER_API_KEY`에 있는 키도 쓸 수 있습니다. 둘 다 있으면 OpenCode에 저장된 키가 우선합니다.
+OpenRouter용으로 저장 및 설정된 API 키를 사용하며, 요금은 OpenRouter 계정으로 청구됩니다. Jev 분류에는 환경 변수가 아닌 저장된 공급자 자격 증명이 필요합니다.
 
 1. **설정 → 프로바이더**를 열고 **OpenRouter** 프로바이더에 API 키를 추가합니다.
 2. **분류 제공자**로 돌아와 **OpenRouter 키**를 고릅니다.
 
 ### Vercel AI Gateway 키
 
-OpenCode에 저장된 AI Gateway API 키를 사용하며, 요금은 Vercel 계정으로 청구됩니다. 환경 변수 `AI_GATEWAY_API_KEY`에 있는 키도 쓸 수 있습니다. 둘 다 있으면 OpenCode에 저장된 키가 우선합니다.
+Vercel AI Gateway용으로 저장 및 설정된 API 키를 사용하며, 요금은 Vercel 계정으로 청구됩니다. Jev 분류에는 환경 변수가 아닌 저장된 공급자 자격 증명이 필요합니다.
 
 1. **설정 → 프로바이더**를 열고 **Vercel AI Gateway** 프로바이더에 API 키를 추가합니다.
 2. **분류 제공자**로 돌아와 **Vercel AI Gateway 키**를 고릅니다.
@@ -101,7 +101,7 @@ Jev가 한 번의 요청에서 느리거나 실패해도 망가지는 것은 없
 
 ## Jev가 보는 것
 
-Jev는 대화의 짧은 발췌만 받습니다. 가장 최근 메시지와, 맥락을 위한 직전 최대 세 턴이며, 각각 앞부분 수백 자로 잘립니다. 안전망의 경우 확인 중인 작업도 OpenCode가 설명한 그대로 받습니다. 에이전트가 실행하려는 명령, 편집이라면 파일과 변경 내용입니다. 파일 전체나 이미지는 받지 않습니다.
+Jev는 대화의 짧은 발췌만 받습니다. 가장 최근 메시지와, 맥락을 위한 직전 최대 세 턴이며, 각각 앞부분 수백 자로 잘립니다. 안전망의 경우 확인 중인 작업도 받습니다. 에이전트가 실행하려는 명령, 편집이라면 파일과 변경 내용입니다. 파일 전체나 이미지는 받지 않습니다.
 
 요청은 선택에 따라 OpenChamber 서버에서 OpenCode Zen, OpenRouter, Vercel AI Gateway, TypeSafe 또는 사용자 지정 엔드포인트로 바로 갑니다.
 

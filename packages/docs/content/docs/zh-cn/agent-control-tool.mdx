@@ -5,7 +5,7 @@ description: 让智能体从聊天中管理 OpenChamber 会话、worktree 和计
 
 # 智能体控制工具
 
-使用 `openchamber` 智能体工具直接从聊天中管理应用内的工作。当 OpenChamber 运行自己的本地 OpenCode 服务器时，此工具默认启用；无需安装单独的工具或运行 shell 命令。
+使用 `openchamber` 智能体工具直接从聊天中管理应用内的工作。此工具默认启用；无需安装单独的工具或运行 shell 命令。
 
 ## 可以提出哪些请求
 
@@ -28,9 +28,7 @@ description: 让智能体从聊天中管理 OpenChamber 会话、worktree 和计
 
 ## 开启或关闭工具
 
-打开 **设置 → 常规 → OpenChamber 工具**，更改 **智能体控制工具**。该设置会在托管的 OpenCode 服务器重启后生效，OpenChamber 会以 **Apply & Restart** 的形式提示重启。
-
-当 OpenChamber 通过 `OPENCODE_HOST` 或 skip-start 连接外部 OpenCode 服务器时，此工具不可用。使用 OpenChamber 托管 OpenCode 服务器的桌面端和 Web 安装会自动支持此工具。
+打开 **设置 → 常规 → OpenChamber 工具**，更改 **智能体控制工具**。该设置即时生效，无需重启。该工具通过 OpenChamber 原生主机操作边界运行，用以管理会话、worktree 和计划任务。
 
 ## 相关内容
 

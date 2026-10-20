@@ -109,6 +109,7 @@ Panel çizmek ve geçerli oturumu okumak izin gerektirmez. Kullanıcı adına bi
 | `sessions` | projeleri, worktree ve oturum durumlarını listelemek; kayıtlı projelerde oturum oluşturmak ve açmak |
 | `files` | açık projedeki dosyaları okuyup yazmak (göreli yol ile `readFile`, `writeFile`, `listDir`, `stat`) |
 | `model` | kullanıcının Small Model'iyle tek seferlik metin üretimi (`generate`), herhangi bir oturumun dışında |
+| `shells` | ajanlarınızın arka planda çalıştırdığı kabuk komutlarını izlemek, çıktılarını okumak ve onları durdurmak (`onRunningShells`, `readShellOutput`, `stopShell`) |
 
 Beş tanesi sizin için otomatik eklenir: bir `integration` tanımladığınızda `network`, bir `service` tanımladığınızda `service`, `filesystem` desenleri tanımladığınızda `filesystem`, `origins` tanımladığınızda `origins` ve bir oturum eylemi mesajları istediğinde `conversation` (bkz. [Eylemler, komutlar ve rozet](#eylemler-komutlar-ve-rozet)).
 
@@ -116,7 +117,7 @@ Kullanıcı tam listeyi bir kez, eklentiyi kurarken görür ve ya onaylar ya da 
 
 ## Metin üretme
 
-`model` yeteneğiyle `host.generate`, kullanıcının Small Model'inden tek seferlik bir yanıt ister: bir özet, bir başlık, bir taslak. Hiçbir şey bir oturuma girmez, geçmiş tutulmaz ve eklenti asla bir sağlayıcı seçmez. OpenChamber, kendi arka plan işleri için kullandığı aynı modeli kullanır; bu model Ayarlar → Oturumlar → Small Model üzerinden seçilen model, kullanıcının çalıştığı sağlayıcının küçük modeli ya da kullanıcının OpenCode yapılandırmasındaki varsayılan modeldir.
+`model` yeteneğiyle `host.generate`, kullanıcının Small Model'inden tek seferlik bir yanıt ister: bir özet, bir başlık, bir taslak. Hiçbir şey bir oturuma girmez, geçmiş tutulmaz ve eklenti asla bir sağlayıcı seçmez. OpenChamber, Ayarlar → Oturumlar → Small Model üzerinden seçilen modeli ya da etkin sağlayıcının küçük modelini kullanır.
 
 ```ts
 const { text } = await host.generate({
@@ -166,14 +167,14 @@ Sayfanız diske kendisi dokunamaz. OpenChamber onun yerine, kullanıcının onay
 - `/` veya `~/` ile başlayan bir yol başka herhangi bir yeri ifade eder. `contributes.filesystem` içinde tanımladığınız desenlerden biriyle eşleşmelidir ve kullanıcı onay penceresinde tam olarak bu desenleri görür:
 
 ```json
-"filesystem": ["~/.config/opencode/opencode.json", "~/notes/**"]
+"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
 ```
 
 Desenlerde `*` tek bir yol parçasını, `**` herhangi bir derinliği karşılar. Bunların dışındaki her şey, onaydan sonra bile `BAD_PATH` olur. `..` hiçbir zaman izinli değildir.
 
 ```ts
-const config = await host.readFile("~/.config/opencode/opencode.json");
-await host.writeFile("~/.config/opencode/opencode.json", nextJson);
+const config = await host.readFile("~/.config/openchamber/config.json");
+await host.writeFile("~/.config/openchamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -279,13 +280,13 @@ host.onResolve(async ({ command, args }) => {
 });
 ```
 
-Kullanıcı sohbet kutusuna `/task ABC-12` yazdığında OpenChamber eklentinizden bunu çözmesini ister ve döndürdüğünüzü, hiçbir şey açmadan, etiket olarak iliştirir. "Bir şey bulunamadı" için `null` döndürün. Paneliniz kapalıysa OpenChamber bu çağrı için onu arka planda yükler. OpenChamber'ın veya OpenCode'un zaten kullandığı bir ad yok sayılır.
+Kullanıcı sohbet kutusuna `/task ABC-12` yazdığında OpenChamber eklentinizden bunu çözmesini ister ve döndürdüğünüzü, hiçbir şey açmadan, etiket olarak iliştirir. "Bir şey bulunamadı" için `null` döndürün. Paneliniz kapalıysa OpenChamber bu çağrı için onu arka planda yükler. OpenChamber'ın zaten kullandığı bir ad yok sayılır.
 
 **Şerit simgesindeki rozet.** `host.setBadge(3)` simgenizde bir sayı gösterir, örneğin açık görevler; `host.setBadge(null)` onu temizler. Paneli açmak da temizler.
 
 ## Sohbetteki araçlarınız
 
-OpenCode eklentiniz veya MCP sunucunuz bir araç eklediğinde sohbet, çağrılarını genel bir simge ve ham çıktıyla gösterir. Bunun yerine, kod yazmadan nasıl görünmeleri gerektiğini bildirin:
+Bir MCP sunucusu veya entegre araç bir araç eklediğinde sohbet, çağrılarını genel bir simge ve ham çıktıyla gösterir. Bunun yerine, kod yazmadan nasıl görünmeleri gerektiğini bildirin:
 
 ```json
 "tools": [
@@ -301,7 +302,7 @@ OpenCode eklentiniz veya MCP sunucunuz bir araç eklediğinde sohbet, çağrıla
 ]
 ```
 
-`match`, OpenCode'un bildirdiği haliyle aracın adıdır; sondaki `*` bir öneki eşleştirir. `icon`, `panel.icon` gibi bir Remixicon adı ya da paketinizdeki bir `.svg` dosyasıdır. `title` ve `subtitle`, çağrının `input`, `output` ve `metadata` değerleri üzerinde çalışan şablonlardır. `output`, gövdenin nasıl çizileceğini seçer: `text`, `json` (ağaç), `markdown`, `language` ile `code`, `columns` ile `table` (satırlar çıktı dizisinden veya `output.items` içinden gelir) ya da varsayılan için `auto`. Tam bir `match` joker karakteri yener; eşitlikte ilk yüklenen eklenti kazanır. İzin gerekmez: bu yalnızca sohbette zaten bulunan verilerin nasıl çizildiğini değiştirir.
+`match`, çalışma zamanının bildirdiği haliyle aracın adıdır; sondaki `*` bir öneki eşleştirir. `icon`, `panel.icon` gibi bir Remixicon adı ya da paketinizdeki bir `.svg` dosyasıdır. `title` ve `subtitle`, çağrının `input`, `output` ve `metadata` değerleri üzerinde çalışan şablonlardır. `output`, gövdenin nasıl çizileceğini seçer: `text`, `json` (ağaç), `markdown`, `language` ile `code`, `columns` ile `table` (satırlar çıktı dizisinden veya `output.items` içinden gelir) ya da varsayılan için `auto`. Tam bir `match` joker karakteri yener; eşitlikte ilk yüklenen eklenti kazanır. İzin gerekmez: bu yalnızca sohbette zaten bulunan verilerin nasıl çizildiğini değiştirir.
 
 Yalnızca araçları biçimlendiren bir eklentinin sayfaya hiç ihtiyacı yoktur: `panel.entry` öğesini atlayın, şeritte simgesi olmaz, sadece Ayarlar → Uzantılar içinde bir kart görünür. Sayfası olmadan yalnızca `tools` tanımlayabilir, başka bir şey tanımlamaz. Diğer istisna, kendi `entry` sayfası olan bir Work Status bölümü veya dosya düzenleyicisidir, yukarıya bakın.
 

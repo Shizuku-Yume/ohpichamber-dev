@@ -38,7 +38,7 @@ Les appareils associés via [Connecter un appareil](/connect-devices/) s’authe
 
 ## Mode entreprise
 
-Si votre équipe ne peut envoyer le contenu des conversations qu’aux fournisseurs de modèles configurés dans OpenCode, activez le mode entreprise. Il y a deux façons de le faire, et une seule suffit.
+Si votre équipe ne peut envoyer le contenu des conversations qu’aux fournisseurs de modèles configurés dans le Host, activez le mode entreprise. Il y a deux façons de le faire, et une seule suffit.
 
 ### Un fichier de politique sur la machine
 
@@ -86,24 +86,6 @@ OPENCHAMBER_ENTERPRISE_MODE=1
 Sur un portable, c’est un verrou plus faible : l’application de bureau la lit dans le profil du shell de connexion (par exemple `~/.zshrc`), et l’utilisateur peut le modifier. Utilisez plutôt le fichier de politique.
 
 Avec la variable, le relais, Jev, l’accès réseau et les extensions autorisées viennent eux aussi de leurs propres variables : `OPENCHAMBER_RELAY_URL`, `OPENCHAMBER_JEV_URL`, `OPENCHAMBER_ALLOW_NETWORK_ACCESS=1`, `OPENCHAMBER_ALLOWED_EXTENSIONS` (des URL de dépôts séparées par des virgules) et `OPENCHAMBER_ALLOW_LOCAL_EXTENSIONS=1`. Dans Docker, il vous faudra celle de l’accès réseau, puisque le serveur doit écouter au-delà du conteneur.
-
-### Imposer la CLI OpenCode
-
-Si OpenCode est déjà installé sur vos machines et qu’OpenChamber doit utiliser cette installation, indiquez son chemin dans le fichier de politique. Cela marche avec ou sans le mode entreprise.
-
-```json
-{
-  "opencodeBinary": "/usr/local/bin/opencode"
-}
-```
-
-- OpenChamber lance OpenCode uniquement depuis ce chemin. Il ignore le chemin des Paramètres, `OPENCODE_BINARY` et la copie fournie avec l’application de bureau, qui reste sur le disque sans servir.
-- S’il n’y a rien d’exécutable à ce chemin, OpenChamber ne se rabat pas sur une autre copie. Il s’arrête avec une erreur qui donne le chemin.
-- Les Paramètres affichent le chemin en lecture seule, avec une note indiquant que l’administrateur l’a défini.
-- OpenChamber n’installe ni ne met à jour un OpenCode imposé et n’annonce pas les nouvelles versions. Les mises à jour arrivent avec votre déploiement.
-- La CLI doit être OpenCode 2.x, au moins la version demandée par OpenChamber. Avec une version plus ancienne, OpenChamber s’arrête sur l’écran « mettre à jour OpenCode ».
-- Un dossier fonctionne aussi, s’il contient `opencode` (`opencode.exe` sous Windows). Il n’y a pas de variable d’environnement pour cela, puisqu’un utilisateur peut les définir lui-même.
-
 
 ### Masquer les catalogues de skills intégrés
 
@@ -165,7 +147,8 @@ Pour vérifier que ça a marché, ouvrez Paramètres → Fournisseurs : un avis 
 
 ### Ce qui change
 
-- Les fournisseurs de modèles viennent uniquement de votre configuration OpenCode. Connecter un fournisseur, s’y identifier, ajouter une clé ou créer un fournisseur personnalisé est désactivé dans OpenChamber ; supprimer ou changer de compte existant fonctionne toujours. Cela ferme seulement l’accès par l’application ; le verrou lui-même, c’est la politique OpenCode décrite plus bas. Se connecter à un serveur MCP de votre configuration OpenCode fonctionne toujours, car cela atteint ce serveur et non un fournisseur de modèles. Le preflight explicite de transmission d’identifiants OMP est également refusé par le Host lorsque le mode entreprise est activé ; aucun identifiant n’est lu ni importé.
+- La gestion des fournisseurs de modèles et des identifiants est assurée par le Host. En mode entreprise, les opérations d’ajout de fournisseurs — connecter un fournisseur, ajouter ou configurer des fournisseurs ou modèles personnalisés, écrire des identifiants, découvrir des modèles ou initier un flux OAuth — sont refusées par le Host ; supprimer ou changer de compte existant fonctionne toujours. Les serveurs MCP configurés pour la session ou l'espace de travail continuent de fonctionner, car ils se connectent à ce serveur et non à un fournisseur de modèles. Le preflight explicite de transmission d’identifiants est également refusé par le Host lorsque le mode entreprise est activé ; aucun identifiant n’est lu ni importé.
+- Le Host bloque les recherches web natives au moment de la sortie réseau et empêche l’ajout ou le remplacement d’identifiants de recherche. Vous pouvez toujours modifier les paramètres de recherche ou supprimer les identifiants enregistrés ; les clés sont en écriture seule et ne sont jamais renvoyées.
 - Les [Fournisseurs de classification (Jev)](/classification-providers/) restent désactivés, y compris un point de terminaison personnalisé que quelqu’un saisit dans les Paramètres. Le filet de sécurité et Auto ne sont pas proposés, et les sessions ne passent en cours qu’à la main. Pour utiliser Jev via votre propre infrastructure, fixez un point de terminaison avec `jev` dans le fichier de politique, ou avec `OPENCHAMBER_JEV_URL` (plus `OPENCHAMBER_JEV_MODEL` et, s’il en faut une, `OPENCHAMBER_JEV_API_KEY`). Il devient le choix par défaut, on peut toujours le désactiver, et rien d’autre ne peut être choisi.
 - La lecture à voix haute via OpenAI est désactivée. Un serveur personnalisé de synthèse vocale ou de transcription doit tourner sur la même machine. Les voix locales et les modèles de dictée locaux continuent de fonctionner.
 - Les notifications push vers les téléphones et les navigateurs ne portent qu’un titre générique comme « Agent response is ready », sans texte de message ni nom de session. Les notifications de bureau restent sur votre machine et gardent le texte complet.
@@ -176,31 +159,8 @@ Pour vérifier que ça a marché, ouvrez Paramètres → Fournisseurs : un avis 
 - Le [Relais privé](/private-relay/) ne fonctionne que via votre propre relais. Faites tourner un [relais auto-hébergé](https://github.com/openchamber/openchamber-relay) et pointez OpenChamber dessus avec `relayUrl` dans le fichier de politique ou avec `OPENCHAMBER_RELAY_URL=wss://relay.example.com/ws`. Le relais partagé ne peut pas lire votre trafic non plus, puisqu’il est chiffré de bout en bout, mais le vôtre garde les métadonnées de connexion et l’accès à cette machine à l’intérieur de votre réseau. Sans votre propre relais, aucun appareil ne peut être associé.
 - OpenChamber n’écoute que sur la machine où il tourne. Le réglage de bureau qui permet aux autres appareils du réseau local d’ouvrir l’application est désactivé, et le serveur refuse de démarrer sur une adresse réseau, que ce soit via la CLI (`--host`, `--lan`) ou via l’environnement. Si le fichier de politique apparaît pendant que l’application tourne, les connexions depuis d’autres machines sont coupées jusqu’au prochain démarrage. Autorisez l’accès réseau avec `"allowNetworkAccess": true` dans le fichier de politique, ou avec `OPENCHAMBER_ALLOW_NETWORK_ACCESS=1` là où l’environnement active le mode entreprise. Gardez en tête que la connexion passe en HTTP simple, donc sur un réseau partagé n’importe qui peut la lire ; placez un serveur que d’autres atteignent derrière [votre propre HTTPS](/reverse-proxy/).
 - Les [extensions](/extensions/) qui peuvent envoyer des données hors de la machine (celles qui parlent à une API externe, chargent depuis des adresses externes ou font tourner un service en arrière-plan) ne s’installent que depuis un dépôt Git listé dans `allowedExtensions`. Les extensions qui ne font rien de tout cela s’installent comme d’habitude. Une extension installée depuis n’importe où ailleurs reste désactivée, et les Paramètres expliquent pourquoi. La liste contient des URL de dépôts, puisqu’une extension choisit elle-même son nom ; une entrée qui se termine par `/`, comme `https://github.com/acme/`, autorise tous les dépôts en dessous. Sur les machines des personnes qui développent des extensions, `"allowLocalExtensions": true` autorise aussi l’installation depuis un dossier local. Un ZIP reste bloqué dans tous les cas.
-- Les variables d’environnement de **Paramètres → Général** et de `opencode service set env` n’atteignent pas OpenCode, car l’une d’elles pourrait contenir une clé de fournisseur. Git, le terminal et les actions de projet les reçoivent toujours.
 
-Les tâches du petit modèle (titres de session, récapitulatifs, messages de commit, la revue guidée des modifications) n’ont besoin d’aucun mode particulier. Elles tournent toujours sur le petit modèle choisi dans les Paramètres, sur un petit modèle du fournisseur avec lequel vous travaillez, ou sur le modèle par défaut de votre configuration OpenCode. Elles ne se rabattent jamais sur un autre fournisseur qui se trouve simplement connecté.
-
-Quels fournisseurs de modèles peuvent être utilisés, c’est OpenCode qui le décide, pas OpenChamber. Verrouillez-le avec les [politiques OpenCode](https://opencode.ai/v2/docs/policies/) : interdisez tous les fournisseurs, puis autorisez ceux que vous avez approuvés.
-
-```jsonc
-{
-  "experimental": {
-    "policies": [
-      { "action": "provider.use", "resource": "*", "effect": "deny" },
-      { "action": "provider.use", "resource": "anthropic", "effect": "allow" }
-    ]
-  }
-}
-```
-
-Un fournisseur interdit disparaît même si quelqu’un ajoute une clé pour lui. Placez les politiques dans le fichier global `~/.config/opencode/opencode.jsonc`, où un projet ne peut pas les lever, ou diffusez-les depuis un espace de travail OpenCode Console, qui a le dernier mot. Le mode entreprise couvre en plus ce qu’OpenChamber envoie lui-même.
-
-Les recherches web et les récupérations de pages de l’agent passent aussi par OpenCode, vers le service de recherche et vers les pages elles-mêmes. Si elles ne doivent pas quitter votre réseau, interdisez-les avec le même type de politique :
-
-```jsonc
-{ "action": "permission", "resource": "websearch:*", "effect": "deny" },
-{ "action": "permission", "resource": "webfetch:*", "effect": "deny" }
-```
+Les tâches du petit modèle (titres de session, récapitulatifs, messages de commit, la revue guidée des modifications) n’ont besoin d’aucun mode particulier. Elles tournent toujours sur le petit modèle choisi dans les Paramètres, sur un petit modèle du fournisseur avec lequel vous travaillez, ou sur le modèle par défaut configuré dans le Host. Elles ne se rabattent jamais sur un autre fournisseur qui se trouve simplement connecté.
 
 ## Pages liées
 

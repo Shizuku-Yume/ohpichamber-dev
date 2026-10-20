@@ -27,7 +27,7 @@ const host = connectHost();
 | `theme.tokens` | 앱의 색상(표면, 텍스트, 상호작용 상태, primary, success/warning/error/info), `font`, `mono`, `radius`. UI를 마운트하기 전에 `applyHostReady`에 넘기세요. |
 | `locale` | 앱 언어 태그 |
 | `directory` | 현재 프로젝트 디렉터리, 또는 `null` |
-| `session` | `{ id, title, busy }` 또는 `null`. 제목이 없으면 세션 id를 사용합니다. `busy`는 실시간 상태입니다. 세션에 있으면 `model`과 `agent`(OpenCode 에이전트)도 포함됩니다. |
+| `session` | `{ id, title, busy }` 또는 `null`. 제목이 없으면 세션 id를 사용합니다. `busy`는 실시간 상태입니다. 세션에 있으면 `model`과 `agent`(세션 에이전트)도 포함됩니다. |
 | `surface` | 레일은 `panel`, 첨부 창은 `dialog`, 전체 화면은 `page`, Work Status 패널은 `status`, Files의 파일 편집기는 `file` |
 | `item` | 이 화면이 무엇 때문에 열렸는지, 또는 `null`. 사용자가 클릭한 첨부 항목(`attach`에 넘긴 것과 같은 필드, `data` 포함), 또는 선언한 작업에서 온 메시지(`kind: "message"`)나 세션(`kind: "session"`). [작업](/sdk/#작업-명령-배지) 참고. |
 | `connection` | 여러분의 통합에 대한 `{ connected, account }` |
@@ -153,6 +153,22 @@ host.onSessionLifecycle((event) => {
 
 `host.storage.get(key)`, `set(key, value)`, `delete(key)`, `keys()`는 추가 권한 없이 연결된 서버에 자체 JSON을 저장합니다. 없는 키는 `undefined`, 저장된 null은 null입니다. 키는1~128자, 값은 UTF-8 기준64 KiB, 전체는2 MiB와2,000키까지입니다. 프로젝트별 데이터는 키에 프로젝트 ID를 넣으세요. 쓰기는 직렬화되고 원자적으로 처리되며 실패 시 기존 데이터를 유지합니다. 확장 프로그램 제거 시 삭제됩니다.
 
+## 백그라운드 셸
+
+`shells` 권한을 사용하면 세션 및 해당 하위 에이전트, 등록된 프로젝트 또는 모든 세션으로 범위를 지정하여 백그라운드에서 실행 중인 셸 명령을 감시할 수 있습니다. OpenChamber는 로컬 저장소에서 응답하므로 네트워크 읽기가 발생하지 않습니다.
+
+| 호출 | 동작 |
+| --- | --- |
+| `onRunningShells(scope, listener)` | 범위 내의 셸 명령을 구독합니다. `{ kind: 'session', sessionId }`는 세션과 해당 하위 에이전트를, `{ kind: 'project', projectId }`는 등록된 프로젝트를, `{ kind: 'global' }`은 모든 세션을 포함합니다. 오래된 순서대로 정렬된 실행 중인 명령(각각 `background` 플래그 포함)과 종료된 명령을 받습니다. 구독 취소 함수를 반환합니다. |
+| `readShellOutput(shellId, { cursor?, tailBytes? })` | 실행 중이거나 종료된 명령의 출력 한 페이지를 읽습니다. `cursor`가 없으면 끝에서 `tailBytes`(최대 65536) 전부터 시작합니다. `{ output, cursor, skipped }`를 반환합니다. |
+| `stopShell(shellId)` | 에이전트에 먼저 중지 알림을 보낸 다음 명령을 제거합니다. |
+
+스냅샷은 `{ kind: "shells", scope, shells, ended }` 형태이며, `scope`는 구독의 범위를 반영합니다. 실행 중인 각 셸은 `{ id, sessionID, command, startedAt, background }`이며 최대 200개까지 오래된 순서대로 제공됩니다. `background`는 턴이 완료를 기다리지 않는 작업인 경우 `true`입니다.
+
+`ended`는 OpenChamber가 종료를 확인한 명령을 종료 시점이 오래된 순서대로 최대 200개까지(최신 항목 유지) 나열합니다. 명령이 종료 코드를 반환하며 끝난 경우 각 항목에 `status`, `endedAt`, `exit`가 추가됩니다. 상태는 `exited`, `timeout`, 시그널에 의한 `killed`, 사용자에 의한 `stopped`, 또는 재연결 중에 종료가 발생한 경우 `unknown`입니다. OpenChamber는 이 목록을 메모리에만 보관합니다. 앱을 새로 고치면 비워지므로 패널에 표시할 내용은 확장 저장소에 저장하세요.
+
+호스트는 디렉터리당 최근 종료된 명령 25개에 대한 출력을 보관합니다. 중지된 명령의 출력은 즉시 삭제됩니다. OpenChamber가 확인한 적 없는 셸을 읽으려 하거나 호스트에 더 이상 없는 출력을 읽으려 하면 `NOT_FOUND`가 발생합니다. 실행 중이 아닌 셸을 중지하려 할 때도 마찬가지입니다. 승인되지 않은 `shells` 권한은 `NOT_GRANTED`가 됩니다.
+
 ## request
 
 ```ts
@@ -194,7 +210,7 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/opencode/opencode.json");
+const info = await host.stat("~/.config/openchamber/config.json");
 ```
 
 제한: 경로는 최대 1024자, 내용은 최대 2,000,000자, 목록은 최대 2000개 항목. 내용 제한을 넘으면 `FILE_TOO_LARGE`입니다.

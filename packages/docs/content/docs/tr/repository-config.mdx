@@ -22,7 +22,7 @@ Notlar, yapılacaklar ve zamanlanmış görevler senindir. Asla depoya girmez.
 
 ## Bir öğeyi taşıma
 
-**Settings → Projects** bölümünü aç ve projeyi seç. Her eylemin ve her kurulum komutunun bir **Move to repository** düğmesi, depodan gelen her öğenin de **Move to my settings** düğmesi vardır. Yeni oturum ekranındaki başlatıcılar üzerine gelince aynı ikiliyi gösterir. Planlarda bu, Planlar sekmesindeki her satırda bulunur.
+Eylemleri ve kurulum komutlarını taşımak için **Settings → Projects** bölümünü aç ve projeyi seç: Her öğenin bir **Move to repository** düğmesi, depodan gelen her öğenin de **Move to my settings** düğmesi vardır. Taslak başlatıcılar doğrudan yeni oturum ekranında, başlatıcı çiplerinin üzerine gelinerek depoyla paylaşılacak ya da kişisel yapılacak şekilde yönetilir. Planlarda taşıma düğmesi Planlar sekmesindeki her satırda bulunur.
 
 Taşımak tam olarak taşımaktır. Öğe bir yerden çıkar, diğerine gider; hiçbir şey çoğaltılmaz.
 
@@ -65,7 +65,7 @@ Yalnızca `version` zorunludur. Diğer tüm anahtarlar isteğe bağlıdır ve Op
 
 `projectActions`, başlık menüsündeki eylemlerin listesidir. `id`, `name` ve `command` zorunludur. `icon` isteğe bağlıdır ve verilmezse play simgesi kullanılır; OpenChamber'ın bildiği adlar `play`, `build`, `lint`, `terminal`, `tools`, `bug`, `flask`, `rocket`, `code`, `server`, `branch`, `search`, `settings`, `brain`, `stack`, `robot`, `command` ve `file`. `autoOpenUrl: true`, komutun yazdırdığı adresi açar; bkz. [Önizleme ve geliştirme sunucuları](/preview/). `platforms`, eylemi `macos`, `linux` veya `windows` ile sınırlar. `runIn: "parent"`, eylemi geçerli worktree yerine ana checkout'ta çalıştırır.
 
-`draftStarters`, komutları ve skill'leri yeni oturum ekranına sabitler. Her giriş `{ "type": "command" | "skill", "name": "..." }` biçimindedir ve komutun ya da skill'in kendisi deponun OpenCode yapılandırmasında bulunmalıdır.
+`draftStarters`, komutları ve skill'leri yeni oturum ekranına sabitler. Her giriş `{ "type": "command" | "skill", "name": "..." }` biçiminde olup çalışma alanı veya aracı kataloglarındaki (örneğin `.omp/commands/` veya `.omp/skills/`) ya da yerleşik başlatıcılardaki bir komuta veya skill'e başvurur. Proje yapılandırması yalnızca bu başvuruları depolar, komut veya skill tanımlarının kendisini içermez.
 
 `plansDir`, depo planlarının bulunduğu yerdir. `.openchamber/plans` kullanmak için atla. Aşağıya bak.
 

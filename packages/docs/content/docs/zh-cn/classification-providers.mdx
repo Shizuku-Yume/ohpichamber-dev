@@ -26,29 +26,29 @@ Jev 从不写代码，也不会在你的聊天里回复。它只返回一个判�
 
 ### OpenCode Zen 促销
 
-限时免费，不需要密钥。促销期间，OpenCode 允许 OpenChamber 通过 OpenCode Zen 免费使用 Jev。
+限时免费，不需要密钥。促销期间，OpenCode Zen 允许 OpenChamber 免费使用 Jev。
 
 促销结束后，这个选项会消失；如果你有下面的某个密钥，OpenChamber 会切换过去。
 
 ### OpenCode Zen 密钥
 
-使用保存在 OpenCode 里的 Zen API 密钥，费用从你的 Zen 余额中扣除。
+使用为 OpenCode Zen 保存配置的 API 密钥，费用从你的 Zen 余额中扣除。Jev 分类需要提供商在本地保存的凭据，不支持从环境变量读取。
 
 1. 打开 **设置 → 提供商**，给 **OpenCode Zen** 提供商添加一个 API 密钥（参见[提供商、模型与智能体](/zh-cn/providers/)）。
 2. 回到 **分类提供方**，选择 **OpenCode Zen 密钥**。
 
-只用 OpenCode 账号登录是不够的。对于 Jev，Zen 只接受 API 密钥。
+对于 Jev，Zen 只接受 API 密钥。
 
 ### OpenRouter 密钥
 
-使用保存在 OpenCode 里的 OpenRouter API 密钥，费用记在你的 OpenRouter 账户上。如果你已经在 OpenCode 里用 OpenRouter 的模型，就不用再做任何设置。 环境变量 `OPENROUTER_API_KEY` 里的密钥也可以用。两者都有时，以保存在 OpenCode 里的密钥为准。
+使用为 OpenRouter 保存配置的 API 密钥，费用记在你的 OpenRouter 账户上。Jev 分类需要提供商在本地保存的凭据，不支持从环境变量读取。
 
 1. 打开 **设置 → 提供商**，给 **OpenRouter** 提供商添加一个 API 密钥。
 2. 回到 **分类提供方**，选择 **OpenRouter 密钥**。
 
 ### Vercel AI Gateway 密钥
 
-使用保存在 OpenCode 里的 AI Gateway API 密钥，费用记在你的 Vercel 账户上。 环境变量 `AI_GATEWAY_API_KEY` 里的密钥也可以用。两者都有时，以保存在 OpenCode 里的密钥为准。
+使用为 Vercel AI Gateway 保存配置的 API 密钥，费用记在你的 Vercel 账户上。Jev 分类需要提供商在本地保存的凭据，不支持从环境变量读取。
 
 1. 打开 **设置 → 提供商**，给 **Vercel AI Gateway** 提供商添加一个 API 密钥。
 2. 回到 **分类提供方**，选择 **Vercel AI Gateway 密钥**。
@@ -101,7 +101,7 @@ OPENCHAMBER_JEV_API_KEY=...             # 可选
 
 ## Jev 能看到什么
 
-Jev 只拿到对话的简短摘录：你最新的一条消息，以及作为上下文的最多前三轮，每段都截取开头的几百个字符。对于安全网，它还会拿到被检查的操作，也就是 OpenCode 描述的样子：智能体想运行的命令，或者编辑时的文件和改动。它永远拿不到完整文件或图片。
+Jev 只拿到对话的简短摘录：你最新的一条消息，以及作为上下文的最多前三轮，每段都截取开头的几百个字符。对于安全网，它还会拿到被检查的操作：智能体想运行的命令，或者编辑时的文件和改动。它永远拿不到完整文件或图片。
 
 请求会根据你的选择，从 OpenChamber 服务器直接发往 OpenCode Zen、OpenRouter、Vercel AI Gateway、TypeSafe 或你的自定义端点。
 

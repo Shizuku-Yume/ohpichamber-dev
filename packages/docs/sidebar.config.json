@@ -68,23 +68,6 @@
           }
         },
         {
-          "label": "OpenCode Server",
-          "link": "/opencode-server/",
-          "translations": {
-            "nl": "OpenCode-server",
-            "uk": "Сервер OpenCode",
-            "zh-CN": "OpenCode 服务器",
-            "es": "Servidor OpenCode",
-            "pt-BR": "Servidor OpenCode",
-            "ko": "OpenCode 서버",
-            "pl": "Serwer OpenCode",
-            "fr": "Serveur OpenCode",
-            "ja": "OpenCode サーバー",
-            "de": "OpenCode-Server",
-            "tr": "OpenCode Sunucusu"
-          }
-        },
-        {
           "label": "Environment Variables",
           "link": "/environment/",
           "translations": {
@@ -467,19 +450,19 @@
       ]
     },
     {
-      "label": "OpenCode setup",
+      "label": "Agent & model setup",
       "translations": {
-        "nl": "OpenCode instellen",
-        "uk": "Налаштування OpenCode",
-        "zh-CN": "OpenCode 设置",
-        "es": "Configuración de OpenCode",
-        "pt-BR": "Configuração do OpenCode",
-        "ko": "OpenCode 설정",
-        "pl": "Konfiguracja OpenCode",
-        "fr": "Configuration OpenCode",
-        "ja": "OpenCode 設定",
-        "de": "OpenCode-Einrichtung",
-        "tr": "OpenCode kurulumu"
+        "nl": "Agent- en modelconfiguratie",
+        "uk": "Налаштування агентів та моделей",
+        "zh-CN": "智能体与模型设置",
+        "es": "Configuración de agentes y modelos",
+        "pt-BR": "Configuração de agentes e modelos",
+        "ko": "에이전트 및 모델 설정",
+        "pl": "Konfiguracja agentów i modeli",
+        "fr": "Configuration des agents et modèles",
+        "ja": "エージェントとモデルの設定",
+        "de": "Agenten- und Modelleinrichtung",
+        "tr": "Agent ve model kurulumu"
       },
       "items": [
         {
@@ -1063,23 +1046,6 @@
             "ja": "トラブルシューティング",
             "de": "Fehlerbehebung",
             "tr": "Sorun giderme"
-          }
-        },
-        {
-          "label": "OpenCode Connection",
-          "link": "/troubleshooting/opencode-connection/",
-          "translations": {
-            "nl": "Verbinding met OpenCode",
-            "uk": "Підключення до OpenCode",
-            "zh-CN": "OpenCode 连接",
-            "es": "Conexión con OpenCode",
-            "pt-BR": "Conexão com o OpenCode",
-            "ko": "OpenCode 연결",
-            "pl": "Połączenie z OpenCode",
-            "fr": "Connexion à OpenCode",
-            "ja": "OpenCode 接続",
-            "de": "OpenCode-Verbindung",
-            "tr": "OpenCode bağlantısı"
           }
         },
         {

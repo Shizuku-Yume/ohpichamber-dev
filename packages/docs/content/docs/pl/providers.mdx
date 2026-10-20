@@ -10,10 +10,23 @@ Zanim OpenChamber cokolwiek zrobi, potrzebuje co najmniej jednego połączonego 
 ## Połącz dostawcę
 
 1. Otwórz **Settings → Providers**.
-2. Otwórz menu **Add provider** i wybierz dostawcę, który nie jest jeszcze połączony.
-3. Zaloguj się na jeden z dwóch sposobów, zależnie od dostawcy:
+2. Otwórz menu **Add provider** i wybierz dostawcę, który nie jest jeszcze połączony, lub wybierz **Other / Custom** dla punktu końcowego zgodnego z OpenAI.
+3. Zaloguj się metodą wymaganą przez dostawcę:
    - **Klucz API** — wklej swój klucz i zapisz.
-   - **Logowanie (device flow)** — OpenChamber pokazuje link i krótki kod. Otwórz link, wpisz kod i zatwierdź. OpenChamber sam dokończy łączenie.
+   - **Logowanie OAuth** — otwórz link autoryzacyjny w przeglądarce, aby się zalogować. Jeśli pojawi się monit, wklej kod autoryzacji do OpenChamber i dokończ łączenie.
+
+### Dostawcy niestandardowi i inni
+
+Dla bramek, lokalnych modeli LLM, Ollama, LiteLLM i podobnych interfejsów API zgodnych z OpenAI:
+
+1. Wybierz **Other / Custom** na liście dostawców.
+2. Wprowadź identyfikator dostawcy, nazwę wyświetlaną, bazowy URL (`http://` lub `https://`), opcjonalny klucz API oraz co najmniej jeden identyfikator i nazwę modelu.
+3. Podaj okno kontekstu i maksymalną liczbę tokenów wyjściowych modelu. Zaawansowane metadane (takie jak opcje rozumowania, warianty i modalności) można skonfigurować w formacie JSON w szczegółach modelu.
+4. Opcjonalnie dodaj nagłówki żądań.
+5. Zapisz — OpenChamber rejestruje dostawcę i modele za pośrednictwem usługi Agent Service, przechowując klucze API jako poświadczenia tylko do zapisu.
+6. Aby zmodyfikować istniejącego dostawcę niestandardowego, otwórz go i wybierz **Edit**.
+
+Klucz API jest opcjonalny. Lokalne punkty końcowe bez klucza (takie jak Ollama, LiteLLM czy llama.cpp) oraz usługi korzystające z uwierzytelniania w nagłówkach mogą łączyć się bez klucza API.
 
 Gdy dostawca pokazuje się jako połączony, jego modele stają się dostępne w czacie.
 
@@ -28,20 +41,20 @@ Model wybierasz tam, gdzie pracujesz:
 
 ## Skonfiguruj agentów
 
-Agent to nazwana konfiguracja — model, osobowość i to, co wolno mu robić.
+Agent to nazwana konfiguracja — model, prompt systemowy oraz narzędzia, do których ma dostęp.
 
 1. Otwórz **Settings → Agents**.
 2. Wybierz agenta lub utwórz nowego.
 3. Edytuj dowolne z poniższych:
    - **description** — do czego służy agent
-   - **model** — jego domyślny model
-   - **temperature** — jak kreatywne są jego odpowiedzi
-   - **prompt** — stałe instrukcje, których zawsze przestrzega
-   - **tool rules** — których narzędzi może używać
+   - **model** — nadpisanie domyślnego dostawcy i modelu
+   - **prompt** — stałe instrukcje i prompt systemowy, których zawsze przestrzega
+   - **allowed tools** — narzędzia dostępne dla agenta (dostępność narzędzi: umieszczenie ich tutaj pozwala modelowi na ich wywołanie, podczas gdy autoryzacja operacji pozostaje kontrolowana przez polityki i zatwierdzenia Hosta)
+   - **permission preset** — opcjonalny identyfikator zestawu uprawnień (preset ID) dla profilu
 
 ## Gdzie są przechowywane Twoje logowania
 
-Logowania dostawców są przechowywane przez OpenCode, a nie OpenChamber, więc są współdzielone z OpenCode CLI. Jeśli ustawisz tego samego dostawcę w więcej niż jednym miejscu, wygrywa ustawienie najbardziej szczegółowe: ustawienie dla projektu nadpisuje Twoje osobiste.
+Dane uwierzytelniające i logowania dostawców są przechowywane w magazynie poświadczeń usługi Agent Service na serwerze, co zapewnia bezpieczeństwo i izolację kluczy. Dla jednego dostawcy możesz połączyć wiele kont i wybrać domyślne aktywne konto na liście kont dostawcy.
 
 ## Powiązane
 

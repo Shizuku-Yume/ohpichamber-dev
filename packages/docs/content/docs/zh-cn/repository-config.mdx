@@ -22,7 +22,7 @@ OpenChamber 把它们存放在仓库根目录的 `.openchamber/project.json` 里
 
 ## 移动项目
 
-打开 **Settings → Projects** 并选择项目。每个操作和每条设置命令都有 **Move to repository** 按钮，每个来自仓库的项目都有 **Move to my settings**。新会话界面上的启动项在悬停时显示同样的一对按钮。计划则在“计划”标签的每一行里。
+打开 **Settings → Projects** 并选择项目即可移动操作和设置命令：每个项目都有 **Move to repository** 按钮，来自仓库的项目则有 **Move to my settings**。新会话界面上的草稿启动项直接在启动项卡片上悬停管理，可将其共享至仓库或转为个人配置。“计划”标签的每一行中也有移动按钮。
 
 移动就是移动。项目离开一处，落到另一处，不会产生副本。
 
@@ -65,7 +65,7 @@ OpenChamber 把它们存放在仓库根目录的 `.openchamber/project.json` 里
 
 `projectActions` 是头部菜单中的操作列表。`id`、`name` 和 `command` 是必填的。`icon` 可选，缺省时使用 play 图标；OpenChamber 认识的名称有 `play`、`build`、`lint`、`terminal`、`tools`、`bug`、`flask`、`rocket`、`code`、`server`、`branch`、`search`、`settings`、`brain`、`stack`、`robot`、`command` 和 `file`。`autoOpenUrl: true` 会打开命令输出的地址，见[预览与开发服务器](/preview/)。`platforms` 把操作限制在 `macos`、`linux` 或 `windows`。`runIn: "parent"` 在主检出而不是当前工作树中运行操作。
 
-`draftStarters` 把命令和技能固定到新会话界面。每一项形如 `{ "type": "command" | "skill", "name": "..." }`，命令或技能本身必须存在于仓库的 OpenCode 配置中。
+`draftStarters` 把命令和技能固定到新会话界面。每一项形如 `{ "type": "command" | "skill", "name": "..." }`，引用工作区或智能体目录（如 `.omp/commands/` 或 `.omp/skills/`）或内置启动项中定义的命令或技能。项目配置只存储这些引用，不包含命令或技能本身的定义。
 
 `plansDir` 是仓库计划所在的位置。省略则使用 `.openchamber/plans`。见下文。
 

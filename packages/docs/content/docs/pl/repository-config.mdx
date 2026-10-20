@@ -22,7 +22,7 @@ Notatki, todo i zaplanowane zadania są Twoje. Nigdy nie trafiają do repozytori
 
 ## Przenoszenie elementu
 
-Otwórz **Settings → Projects** i wybierz projekt. Każda akcja i każde polecenie konfiguracji ma przycisk **Move to repository**, a każdy element pochodzący z repozytorium ma **Move to my settings**. Startery na ekranie nowej sesji pokazują tę samą parę po najechaniu. Plany mają ją w każdym wierszu karty Plany.
+Otwórz **Settings → Projects** i wybierz projekt, aby przenosić akcje i polecenia konfiguracji: każdy element ma przycisk **Move to repository**, a każdy element z repozytorium ma **Move to my settings**. Startery wersji roboczej są zarządzane bezpośrednio na ekranie nowej sesji przez najechanie na kafelki starterów, aby udostępnić je w repozytorium lub uczynić osobistymi. Plany mają przycisk przenoszenia w każdym wierszu karty Plany.
 
 Przeniesienie to po prostu przeniesienie. Element znika z jednego miejsca i pojawia się w drugim, nic nie jest duplikowane.
 
@@ -65,7 +65,7 @@ Wymagany jest tylko `version`. Wszystkie pozostałe klucze są opcjonalne, a Ope
 
 `projectActions` to lista akcji w menu nagłówka. `id`, `name` i `command` są wymagane. `icon` jest opcjonalna i domyślnie jest to ikona play; OpenChamber zna nazwy `play`, `build`, `lint`, `terminal`, `tools`, `bug`, `flask`, `rocket`, `code`, `server`, `branch`, `search`, `settings`, `brain`, `stack`, `robot`, `command` i `file`. `autoOpenUrl: true` otwiera adres wypisany przez polecenie, zobacz [Podgląd i serwery deweloperskie](/preview/). `platforms` ogranicza akcję do `macos`, `linux` lub `windows`. `runIn: "parent"` uruchamia akcję w głównym checkoucie zamiast w bieżącym worktree.
 
-`draftStarters` przypina polecenia i skille do ekranu nowej sesji. Każdy wpis ma postać `{ "type": "command" | "skill", "name": "..." }`, a samo polecenie lub skill musi istnieć w konfiguracji OpenCode tego repozytorium.
+`draftStarters` przypina polecenia i skille do ekranu nowej sesji. Każdy wpis ma postać `{ "type": "command" | "skill", "name": "..." }`, odwołując się do polecenia lub skilla z katalogów obszaru roboczego lub agenta (takich jak `.omp/commands/` lub `.omp/skills/`) lub wbudowanych starterów. Konfiguracja projektu przechowuje jedynie te odwołania, a nie same definicje poleceń lub skilli.
 
 `plansDir` to miejsce planów repozytorium. Pomiń go, aby używać `.openchamber/plans`. Zobacz niżej.
 

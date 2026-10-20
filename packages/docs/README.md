@@ -1,9 +1,8 @@
 # Product documentation source
 
-This directory contains product documentation for the pinned inherited OpenChamber baseline.
+This directory contains product documentation for OpenChamber powered by the Oh My Pi (OMP) agent runtime.
 
-OhPiChamber's target is Oh My Pi (OMP) as its sole agent runtime, retaining Web/PWA, Electron desktop, Mobile and the Guest SDK. OpenCode runtime integration remains in the inherited source until its later cutover. The VS Code extension form has been removed; external editor launch and VS Code theme import remain. These guides describe the retained inherited runtime, not completed OMP support.
-
+OhPiChamber uses Oh My Pi (OMP) as its production agent runtime, supporting Web/PWA, Electron desktop, Mobile, and the Guest SDK. The Node.js Host Gateway supervises the Bun Agent Service and serves the Canonical `/api/agent/v1` API. These guides describe current OMP product behavior.
 ## Layout
 
 - `content/docs/*.mdx`: English docs pages (source of truth)

@@ -1,26 +1,21 @@
 ---
 title: 環境変数
-description: 環境変数で OpenChamber と OpenCode 連携を設定します。
+description: OpenChamber を環境変数で設定します。
 ---
-
-> OhPiChamber の本番起動では Node Host Gateway と監視対象の Bun OMP Agent Service を使用します。OpenCode の自動起動や CLI の前提条件はありません。以下の OpenCode に関する記述は残存する明示的なレガシー制御のための引き継ぎドキュメントであり、標準の起動構成ではありません。Agent の可用性は `/api/agent/v1/ready` です。
-
 # 環境変数
 
 OpenChamber は起動時にこれらの環境変数を読み取ります。スタートアップサービスでは、`openchamber startup enable` がデフォルトで現在の環境をスナップショットするため、サービスに使わせたい変数を変更した後は再実行してください。
 
-## OpenCode、Git、ターミナル用の変数
+## エージェントセッション、Git、ターミナル用の変数
 
-OpenCode、Git、ターミナル、[プロジェクトアクション](/ja/project-actions/)に API トークンやデータベースのアドレスなど独自の変数を渡すには、OpenChamber の起動前に export するのではなく、**設定 → 一般 → 環境変数** に追加します。値は OpenChamber を実行しているマシンのデータディレクトリにある `environment.json` に保存され、あなたのユーザーだけが読めます。設定画面に値が再び表示されることはありません。置き換えたり削除したりはできますが、読み返すことはできません。
+エージェントセッション、Git、ターミナル、[プロジェクトアクション](/ja/project-actions/) に独自の変数（API トークンやデータベースアドレスなど）を渡すには、OpenChamber を起動する前に export するのではなく、**設定 → 一般 → 環境変数** に追加します。値は OpenChamber を実行しているマシンのデータディレクトリ内にある `environment.json` に保存され、あなたのユーザーのみが読み取れます。設定画面では一度保存した値を再表示しません。置き換えや削除はできますが、再読み取りはできません。
 
-- OpenCode は起動時に変数を受け取るため、変更後は再起動してください。設定画面に再起動のボタンがあります。
-- `opencode service set env` で設定した変数も OpenCode に渡ります。重なる場合は設定画面の値が優先されます。
-- Git、ターミナル、プロジェクトアクションには次回の実行時に反映されます。
-- OpenChamber が OpenCode 自体のために設定する変数（パスワードや設定など）は、あなたの変数より優先されます。
+- エージェントセッションは起動時にこれらを受け取ります。
+- Git、ターミナル、プロジェクトアクションは次回の実行時にこれらを受け取ります。
 
-プロジェクトごとの変数や、`direnv export json` のように変数を出力するコマンドは、**設定 → プロジェクト** で追加できます。[プロジェクト](/ja/projects/#プロジェクトの環境)を参照してください。
+プロジェクトは **設定 → プロジェクト** で独自の変数や、`direnv export json` のように変数を出力するコマンドを追加できます。[プロジェクト](/ja/projects/#プロジェクト環境) を参照してください。
 
-これらの変数は、自分で起動した OpenCode サーバーには渡りません。以下の変数はすべて、OpenChamber 自身が起動時に読み取ります。
+以下はすべて、OpenChamber 自体が起動時に読み取るものです。
 
 ## OpenChamber サーバー
 
@@ -44,6 +39,10 @@ OpenChamber Web サーバーのバインドアドレスです。他のマシン�
 
 信頼したデバイスでのサインイン有効期間（日）です。既定値は `7` です。
 
+### `OPENCODE_JWT_SECRET`
+
+Host UI セッショントークンの署名に使用するシークレットを上書きします。この設定は Host のセッション署名を構成するものであり、エージェントランタイムには影響しません。この値は非公開に保ってください。設定されている場合、OpenChamber は署名シークレットをローテーションできないため、グローバルサインアウトは利用できません。
+
 ### `OPENCHAMBER_API_ONLY`
 
 `true` または `1` に設定すると、OpenChamber をヘッドレスモードで起動します。デスクトップおよびモバイルクライアント向けの API ルートは利用できますが、ブラウザ UI は配信されません。
@@ -60,7 +59,7 @@ OpenChamber が保存するものはすべてこのディレクトリ配下に�
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-プロジェクトを持たないチャット用に OpenChamber が作成する管理チャットディレクトリの場所を変更します。デフォルトは `~/.config/openchamber/chats` です。OpenChamber と OpenCode を別のユーザーで実行している場合は、OpenCode サーバーが読み取れるディレクトリを指定してください。既存のチャットは移動されません。
+プロジェクトのないチャット用に OpenChamber が作成する管理チャットディレクトリの場所を変更します。デフォルトは `~/.config/openchamber/chats` です。既存のチャットは移動されません。
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -86,53 +85,7 @@ API レスポンス圧縮を制御します。`true` または `1` で強制的�
 
 ### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-利用上限やスキルカタログなど、OpenChamber 自身が送るリクエストをプロキシ経由にします。小文字の変数名も使えます。`NO_PROXY` のホストは直接接続し、`localhost`、`127.0.0.1`、`::1` は常に直接接続するため、サインインのコールバックやローカルの OpenCode サーバーはそのまま動作します。
-
-## OpenCode サーバー
-
-### `OPENCODE_HOST`
-
-OpenChamber を既存の OpenCode サーバーに接続します。値は明示的なポートを含み、パス、クエリ、ハッシュを含まない `http` または `https` の origin である必要があります。`OPENCODE_HOST` は `OPENCODE_PORT` より優先されます。
-
-### `OPENCODE_PORT`
-
-OpenCode サーバーのポートを設定します。管理対象 OpenCode では管理対象ポートの要求になり、`OPENCODE_SKIP_START=true` ではそのポートの外部サーバーに接続します。
-
-### `OPENCODE_SKIP_START`
-
-`true` に設定すると、OpenChamber が独自の OpenCode サーバーを起動しません。
-
-### `OPENCHAMBER_OPENCODE_HOSTNAME`
-
-OpenChamber が管理する OpenCode サーバーのバインドホスト名です。デフォルトは `127.0.0.1` です。
-
-### `OPENCODE_BINARY`
-
-OpenChamber が実行する `opencode` 実行ファイルへのパスです。
-
-### `OPENCODE_CONFIG`
-
-特定の OpenCode 設定ファイルへのパスです。
-
-### `OPENCODE_CONFIG_DIR`
-
-エージェント、スキル、スニペット、設定検出に使う特定の OpenCode 設定ディレクトリへのパスです。
-
-### `OPENCODE_DATA_DIR`
-
-管理対象 OpenCode サーバーのカスタムデータディレクトリです。
-
-### `OPENCODE_WSL_DISTRO`
-
-Windows 上の OpenCode 連携に使う WSL ディストリビューションを選びます。
-
-### `OPENCHAMBER_OPENCODE_WSL_DISTRO`
-
-WSL ディストリビューション選択用の OpenChamber 固有エイリアスです。両方が設定されている場合は `OPENCODE_WSL_DISTRO` が優先されます。
-
-### `OPENCODE_JWT_SECRET`
-
-UI 認証トークンの署名に使うシークレットです。永続的なサービス配置では長いランダム値を使ってください。
+利用上限やスキルカタログなど、OpenChamber 自身が送るリクエストをプロキシ経由にします。小文字の変数名も使えます。`NO_PROXY` のホストは直接接続し、`localhost`、`127.0.0.1`、`::1` は常に直接接続するため、サインインのコールバックやローカル接続はそのまま動作します。
 
 ## ターミナルと Git
 
@@ -176,6 +129,3 @@ OpenChamber のトンネルコマンドで使う ngrok 認証トークンです�
 
 Bun のインストールルートです。OpenChamber はデーモン起動と更新のために `bin/bun` を探す際に使います。
 
-### `VITE_OPENCODE_URL`
-
-Vite でビルドされた Web アプリ向けのビルド時 API base URL です。通常の CLI またはデスクトップ利用では、ほとんどのユーザーは設定する必要がありません。

@@ -26,29 +26,29 @@ Jev staat uit totdat u het inschakelt. Er gaat niets uit uw gesprekken naar een 
 
 ### OpenCode Zen-actie
 
-Tijdelijk gratis, zonder sleutel. Tijdens de actie laat OpenCode OpenChamber kosteloos gebruikmaken van Jev via OpenCode Zen.
+Tijdelijk gratis, zonder sleutel. Tijdens de actie laat OpenCode Zen OpenChamber kosteloos gebruikmaken van Jev.
 
 Als de actie eindigt, verdwijnt deze optie en schakelt OpenChamber over op een van de onderstaande sleutels, als u die hebt.
 
 ### OpenCode Zen-sleutel
 
-Deze optie gebruikt de Zen API-sleutel die in OpenCode is opgeslagen. De kosten worden van uw Zen-saldo afgeschreven.
+Deze optie gebruikt de voor OpenCode Zen opgeslagen API-sleutel. De kosten worden van uw Zen-saldo afgeschreven. Jev-classificatie vereist opgeslagen toegangsgegevens in plaats van een omgevingsvariabele.
 
 1. Open **Instellingen → Providers** en voeg een API-sleutel toe aan **OpenCode Zen**. Zie [Providers, modellen en agents](/nl/providers/).
 2. Ga terug naar **Classificatieproviders** en kies **OpenCode Zen-sleutel**.
 
-Aanmelden met een OpenCode-account is niet genoeg. Voor Jev accepteert Zen alleen een API-sleutel.
+Voor Jev accepteert Zen alleen een API-sleutel.
 
 ### OpenRouter-sleutel
 
-Deze optie gebruikt de OpenRouter API-sleutel uit OpenCode. De kosten komen op uw OpenRouter-account. Als u al OpenRouter-modellen in OpenCode gebruikt, hoeft u niets extra in te stellen. Een sleutel in de omgevingsvariabele `OPENROUTER_API_KEY` werkt ook. Als beide aanwezig zijn, krijgt de opgeslagen sleutel in OpenCode voorrang.
+Deze optie gebruikt de voor OpenRouter opgeslagen API-sleutel. De kosten komen op uw OpenRouter-account. Jev-classificatie vereist opgeslagen toegangsgegevens in plaats van een omgevingsvariabele.
 
 1. Open **Instellingen → Providers** en voeg een API-sleutel toe aan **OpenRouter**.
 2. Ga terug naar **Classificatieproviders** en kies **OpenRouter-sleutel**.
 
 ### Vercel AI Gateway-sleutel
 
-Deze optie gebruikt de AI Gateway API-sleutel uit OpenCode. De kosten komen op uw Vercel-account. Een sleutel in de omgevingsvariabele `AI_GATEWAY_API_KEY` werkt ook. Als beide aanwezig zijn, krijgt de opgeslagen sleutel in OpenCode voorrang.
+Deze optie gebruikt de voor Vercel AI Gateway opgeslagen API-sleutel. De kosten komen op uw Vercel-account. Jev-classificatie vereist opgeslagen toegangsgegevens in plaats van een omgevingsvariabele.
 
 1. Open **Instellingen → Providers** en voeg een API-sleutel toe aan **Vercel AI Gateway**.
 2. Ga terug naar **Classificatieproviders** en kies **Vercel AI Gateway-sleutel**.
@@ -101,7 +101,7 @@ Als Jev bij één verzoek traag is of faalt, blijft de app werken. Elke functie 
 
 ## Wat krijgt Jev te zien?
 
-Jev ontvangt korte fragmenten uit uw gesprek: uw laatste bericht en, ter context, maximaal drie eerdere beurten, elk ingekort tot de eerste paar honderd tekens. Voor het vangnet ontvangt het ook de te beoordelen actie zoals OpenCode die beschrijft: de opdracht die de agent wil uitvoeren, of het bestand en de wijziging bij een bewerking. Het krijgt nooit volledige bestanden of afbeeldingen.
+Jev ontvangt korte fragmenten uit uw gesprek: uw laatste bericht en, ter context, maximaal drie eerdere beurten, elk ingekort tot de eerste paar honderd tekens. Voor het vangnet ontvangt het ook de te beoordelen actie: de opdracht die de agent wil uitvoeren, of het bestand en de wijziging bij een bewerking. Het krijgt nooit volledige bestanden of afbeeldingen.
 
 Verzoeken gaan rechtstreeks van de OpenChamber-server naar OpenCode Zen, OpenRouter, Vercel AI Gateway, TypeSafe of uw aangepaste adres, afhankelijk van uw keuze.
 

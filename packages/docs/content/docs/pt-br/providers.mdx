@@ -10,10 +10,23 @@ Antes de o OpenChamber poder fazer qualquer coisa, ele precisa de pelo menos um 
 ## Conectar um provedor
 
 1. Abra **Settings → Providers**.
-2. Abra o menu **Add provider** e escolha um provedor que ainda não esteja conectado.
-3. Faça login de uma de duas maneiras, dependendo do provedor:
+2. Abra o menu **Add provider** e escolha um provedor que ainda não esteja conectado, ou selecione **Other / Custom** para um endpoint compatível com a OpenAI.
+3. Faça login usando o método exigido pelo provedor:
    - **Chave de API** — cole sua chave e salve.
-   - **Login (device flow)** — o OpenChamber mostra um link e um código curto. Abra o link, insira o código e aprove. O OpenChamber conclui a conexão sozinho.
+   - **Login OAuth** — abra o link de autorização no navegador para fazer login. Se solicitado, cole o código de autorização no OpenChamber e conclua a conexão.
+
+### Provedores personalizados e outros
+
+Para gateways, LLMs locais, Ollama, LiteLLM e APIs semelhantes compatíveis com a OpenAI:
+
+1. Escolha **Other / Custom** na lista de provedores.
+2. Insira um ID de provedor, nome de exibição, URL base (`http://` ou `https://`), uma chave de API opcional e pelo menos um ID e nome de modelo.
+3. Informe a janela de contexto e o limite máximo de tokens de saída do modelo. Metadados avançados (como opções de raciocínio, variantes e modalidades) podem ser configurados como JSON nos detalhes do modelo.
+4. Adicione cabeçalhos de requisição opcionais.
+5. Salve — o OpenChamber registra o provedor e os modelos por meio do Agent Service, armazenando as chaves de API como credenciais somente de gravação.
+6. Para alterar um provedor personalizado existente, abra-o e escolha **Edit**.
+
+A chave de API é opcional. Endpoints locais sem chave (como Ollama, LiteLLM ou llama.cpp) e serviços autenticados por cabeçalhos personalizados podem ser conectados sem chave de API.
 
 Quando um provedor aparece como conectado, seus modelos ficam disponíveis no chat.
 
@@ -28,20 +41,20 @@ Você escolhe o modelo onde está trabalhando:
 
 ## Configurar agentes
 
-Um agente é uma configuração nomeada — um modelo, uma personalidade e o que ele tem permissão de fazer.
+Um agente é uma configuração nomeada — um modelo, um prompt do sistema e as ferramentas disponíveis para ele.
 
 1. Abra **Settings → Agents**.
 2. Escolha um agente ou crie um novo.
 3. Edite qualquer um destes:
    - **description** — para que serve o agente
-   - **model** — seu modelo padrão
-   - **temperature** — quão criativas são suas respostas
-   - **prompt** — instruções permanentes que ele sempre segue
-   - **tool rules** — quais ferramentas ele pode usar
+   - **model** — seu provedor e modelo padrão
+   - **prompt** — instruções permanentes e prompt do sistema que ele sempre segue
+   - **allowed tools** — quais ferramentas estão disponíveis para o agente (disponibilidade de ferramentas: listá-las aqui permite que o modelo as chame, enquanto a autorização das operações continua controlada pelas políticas e aprovações do Host)
+   - **permission preset** — ID opcional de pré-definição de permissões para o perfil
 
 ## Onde ficam seus logins
 
-Os logins de provedores são armazenados pelo OpenCode, não pelo OpenChamber, então são compartilhados com a CLI do OpenCode. Se você definir o mesmo provedor em mais de um lugar, a configuração mais específica vence: uma configuração por projeto sobrescreve a sua pessoal.
+As credenciais e os logins de provedores são armazenados no repositório de credenciais do Agent Service no servidor, mantendo as chaves protegidas e isoladas. Você pode conectar várias contas para um provedor e escolher qual conta ativa usar como padrão na lista de contas do provedor.
 
 ## Relacionado
 

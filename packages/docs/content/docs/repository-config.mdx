@@ -22,7 +22,7 @@ Notes, todos, and scheduled tasks are yours. They never end up in the repository
 
 ## Moving an item
 
-Open **Settings → Projects** and pick the project. Every action and setup command has a **Move to repository** button, and every item that came from the repository has **Move to my settings**. Starters on the new session screen show the same pair on hover. Plans have it on each row of the Plans tab.
+Open **Settings → Projects** and pick the project to move actions and setup commands: each item has a **Move to repository** button, and every item that came from the repository has **Move to my settings**. Draft starters are managed directly on the new session screen by hovering over starter chips to share them to the repository or make them personal. Plans have the move button on each row of the Plans tab.
 
 A move is just that. The item leaves one place and lands in the other, so nothing is duplicated.
 
@@ -65,7 +65,7 @@ Only `version` is required. Every other key is optional, and OpenChamber writes 
 
 `projectActions` is the list of actions in the header menu. `id`, `name`, and `command` are required. `icon` is optional and falls back to a play icon; the names OpenChamber knows are `play`, `build`, `lint`, `terminal`, `tools`, `bug`, `flask`, `rocket`, `code`, `server`, `branch`, `search`, `settings`, `brain`, `stack`, `robot`, `command`, and `file`. `autoOpenUrl: true` opens the address the command prints, see [Preview & Dev Servers](/preview/). `platforms` limits the action to `macos`, `linux`, or `windows`. `runIn: "parent"` runs the action in the main checkout instead of the current worktree.
 
-`draftStarters` pins commands and skills to the new session screen. Each entry is `{ "type": "command" | "skill", "name": "..." }`, and the command or skill itself has to exist in the repository's OpenCode config.
+`draftStarters` pins commands and skills to the new session screen. Each entry is `{ "type": "command" | "skill", "name": "..." }`, referencing a command or skill from the workspace or agent catalogs (such as `.omp/commands/` or `.omp/skills/`) or built-in starters. The project config stores these references, not the command or skill definitions themselves.
 
 `plansDir` is where repository plans live. Leave it out to use `.openchamber/plans`. See below.
 
