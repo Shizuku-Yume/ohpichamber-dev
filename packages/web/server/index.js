@@ -1957,7 +1957,6 @@ async function main(options = {}) {
     listQuotaSelections,
     resolveCredential,
     crypto,
-    fs,
     os,
     path,
     fsPromises,

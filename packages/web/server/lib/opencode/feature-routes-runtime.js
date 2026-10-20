@@ -167,7 +167,6 @@ export const createFeatureRoutesRuntime = () => {
     const {
       messageSearchRuntime,
       crypto,
-      fs,
       os,
       path,
       fsPromises,
