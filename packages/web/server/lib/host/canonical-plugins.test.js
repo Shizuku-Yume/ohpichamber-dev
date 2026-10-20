@@ -32,7 +32,7 @@ let policy;
 let workspace;
 let scopes;
 const nativeEnvironment = (profile = '') => ({
-  HOME: directory, USERPROFILE: directory, PI_CONFIG_DIR: '.omp', OMP_PROFILE: profile, PI_PROFILE: '',
+  HOME: directory, USERPROFILE: directory, PI_CONFIG_DIR: '.omp', PI_PROFILE: profile, OMP_PROFILE: profile,
   XDG_CONFIG_HOME: path.join(directory, 'config'), XDG_DATA_HOME: path.join(directory, 'data'),
   XDG_STATE_HOME: path.join(directory, 'state'), XDG_CACHE_HOME: path.join(directory, 'cache'),
 });
@@ -50,7 +50,7 @@ beforeEach(async () => {
   clientId = created.client.id;
   auth = createUiAuth({ password: 'native-plugin-boundary', clientAuthController: clients });
   service = createAgentServiceSupervisor({
-    bunPath: process.execPath,
+    bunPath: 'bun',
     entrypoint: fileURLToPath(new URL('../../../../agent-service/src/index.ts', import.meta.url)),
     dataDir: directory,
     env: nativeEnvironment(),
@@ -116,7 +116,7 @@ describe('native plugin Host authorization and enterprise boundary', () => {
     problem(await authorized(request(app).post(`${endpoint}/install`)).send({}), 400, 'INVALID_REQUEST');
     policy.enterpriseMode = true;
     problem(await authorized(request(app).post(`${endpoint}/install`)).send({}), 403, 'enterprise_mode');
-  });
+  }, 60_000);
 
   it('keeps local authoring available in enterprise mode and refuses writes before persistence', async () => {
     policy.enterpriseMode = true;
@@ -152,7 +152,7 @@ describe('native plugin Host authorization and enterprise boundary', () => {
       if (error.code === 'ENOENT') return false;
       throw error;
     })).toBe(false);
-  });
+  }, 60_000);
 });
 
 it('shares native plugin CAS across distinct agent directories while keeping provider CAS and named profiles independent', async () => {

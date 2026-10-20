@@ -1,6 +1,7 @@
 import { spawn as nodeSpawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { CapturedHostBootstrapScopeSchema, HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, HostSkillSourceOperationSchema, HostSkillSourceRequestSchema, HostSkillSourceResultSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema, WorkerBootstrapSchema } from '@openchamber/agent-service/private-protocol';
 import { createHostWorkerAuthorizationChannel } from './worker-authorization-channel.js';
@@ -8,7 +9,9 @@ import { createHostWorkerAuthorizationChannel } from './worker-authorization-cha
 import { openApprovalPolicyStore } from './approval-policy-store.js';
 import { AgentServiceReadySchema } from '@openchamber/agent-contract';
 
-import { registerManagedProcess, unregisterManagedProcess } from './managed-process-registry.js';
+import { MANAGED_PROCESS_TOKEN_ENV, createManagedProcessRegistry, reapOrphanedProcesses, registerManagedProcess, unregisterManagedProcess } from './managed-process-registry.js';
+
+const defaultRegistry = { registerManagedProcess, unregisterManagedProcess, reapOrphanedProcesses };
 
 const STARTUP_TIMEOUT_MS = 15_000;
 const STOP_TIMEOUT_MS = 5_000;
@@ -53,10 +56,15 @@ const normalizeAnnouncement = (line) => {
 export const createAgentServiceSupervisor = ({
   bunPath = 'bun', entrypoint, dataDir, env = {}, startupTimeoutMs = STARTUP_TIMEOUT_MS,
   stopTimeoutMs = STOP_TIMEOUT_MS, spawn = nodeSpawn, fetchImpl = globalThis.fetch,
-  registry = { registerManagedProcess, unregisterManagedProcess }, randomBytes = crypto.randomBytes,
+  registry = null, randomBytes = crypto.randomBytes,
   approvalPolicyStore = null,
   authorizeWorkerOperation, invokeHostAction, handleSkillSource,
 } = {}) => {
+  // One registry per Host data directory keeps test/instance records out of the
+  // user's global config; OPENCHAMBER_MANAGED_PROCESS_REGISTRY still overrides.
+  const processRegistry = registry ?? (dataDir
+    ? createManagedProcessRegistry({ registryDir: path.join(dataDir, 'managed-processes'), bunPath })
+    : defaultRegistry);
   let phase = 'stopped'; let child = null; let port = null; let secret = null;
   let startupPromise = null; let stopPromise = null; let lifecycle = 0; let startupController = null; let accepting = false;
   const scopes = new Map();
@@ -121,6 +129,28 @@ export const createAgentServiceSupervisor = ({
       if (launched.connected) launched.send({ type: 'host.skill-source.result', requestId: requestId.data, result }, () => {});
     } catch { /* The service may disconnect while the Host source operation completes. */ }
   };
+  // Registry failures are diagnostics, never lifecycle failures: a missing
+  // record must not turn a healthy spawn or a completed stop into an error.
+  const reapPreviousManagedChildren = async () => {
+    try {
+      await processRegistry.reapOrphanedProcesses();
+    } catch {
+      // Best-effort cleanup: the service still starts with a clean in-memory child.
+    }
+  };
+  const registerManagedChild = async (launched, ownershipToken) => {
+    if (!Number.isInteger(launched?.pid)) return;
+    try {
+      await processRegistry.registerManagedProcess({
+        pid: launched.pid, ownerPid: process.pid, kind: 'agent-service',
+        binary: bunPath, entrypoint, ownershipToken,
+      });
+    } catch {
+      // Best-effort cleanup metadata: an unrecorded child is simply not reaped
+      // on a later run, which is no worse than the pre-registry behavior.
+    }
+  };
+
   const killChild = async () => {
     if (!child) return;
     const current = child;
@@ -134,11 +164,25 @@ export const createAgentServiceSupervisor = ({
     } catch {
       if (current.exitCode === null && current.signalCode === null) {
         if (process.platform === 'win32') current.kill('SIGKILL');
-        else process.kill(-current.pid, 'SIGKILL');
+        else {
+          // Escalate through pidfd identities; a numeric group kill can hit a
+          // recycled id. A failure leaves the recorded child for startup reap.
+          try {
+            await processRegistry.terminateManagedProcess(current.pid, 'SIGKILL');
+          } catch {
+            // pidfd/Bun unavailable: no numeric fallback.
+          }
+        }
       }
       await waitWithin(exited, 500, 'Agent service did not exit after termination');
     }
-    if (Number.isInteger(current.pid)) await registry.unregisterManagedProcess(current.pid);
+    if (Number.isInteger(current.pid)) {
+      try {
+        await processRegistry.unregisterManagedProcess(current.pid);
+      } catch {
+        // Best-effort cleanup metadata; the child is already gone.
+      }
+    }
     if (child === current) child = null;
   };
 
@@ -147,17 +191,30 @@ export const createAgentServiceSupervisor = ({
     if (phase === 'ready') return state();
     if (startupPromise) return startupPromise;
     const myLifecycle = lifecycle;
-    const deadline = Date.now() + startupTimeoutMs;
+    let deadline = 0;
     startupController = new AbortController();
     startupPromise = (async () => {
       if (child) await killChild();
       if (lifecycle !== myLifecycle) throw new Error('Agent service startup cancelled');
       phase = 'starting';
       accepting = false;
+      // Reap children orphaned by a previous hard-killed Host before spawning
+      // the replacement. The check after it closes the stop-during-reap race.
+      await reapPreviousManagedChildren();
+      if (lifecycle !== myLifecycle) throw new Error('Agent service startup cancelled');
+      deadline = Date.now() + startupTimeoutMs;
       if (!policyStore && dataDir) { policyStore = openApprovalPolicyStore({ dataDir }); ownsPolicyStore = true; }
       const bytes = randomBytes(32);
       secret = Buffer.from(bytes).toString('hex');
-      const childEnv = { ...process.env, ...env, [SECRET_ENV]: secret };
+      // Per-child nonce, inherited by the service's workers. It authorizes
+      // process-tree membership during orphan cleanup; env/tree position alone
+      // is not enough to signal a descendant.
+      const ownershipToken = Buffer.from(randomBytes(16)).toString('hex');
+      const childEnv = {
+        ...process.env, ...env,
+        [SECRET_ENV]: secret,
+        [MANAGED_PROCESS_TOKEN_ENV]: ownershipToken,
+      };
       const launched = spawn(bunPath, ['--no-env-file', entrypoint, '--port', '0'], {
         cwd: dataDir,
         env: childEnv,
@@ -196,6 +253,9 @@ export const createAgentServiceSupervisor = ({
         launched.once('error', (error) => finish(reject, error));
         launched.once('exit', onExit);
       });
+      // Record the real child before readiness so a hard-killed Host leaves a
+      // reaping record behind; the write is already best-effort.
+      await registerManagedChild(launched, ownershipToken);
       const remaining = () => Math.max(1, deadline - Date.now());
       port = await waitWithin(announced, remaining(), 'Agent service startup timed out', startupController.signal);
       while (Date.now() < deadline && lifecycle === myLifecycle) {

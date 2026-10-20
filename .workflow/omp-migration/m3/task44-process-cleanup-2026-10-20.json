@@ -1,0 +1,118 @@
+{
+  "task": "44",
+  "date": "2026-10-20",
+  "status": "pidfd-identity-signalling-corrected",
+  "platform": {
+    "os": "Linux 7.2.8-200.fc44.x86_64 x86_64",
+    "node": "v24.18.0",
+    "bun": "1.4.2",
+    "processPlatform": "linux"
+  },
+  "mechanism": {
+    "signalling": "Node Host signals only through a short-lived inline Bun pidfd helper (pidfd_open -> birth-ticks recheck -> pidfd_send_signal -> close). Neither the reaper nor the supervisor stop escalation calls numeric pid or pgid kill.",
+    "delivery": "No packaged helper file is added; the static FFI source runs through the Agent Service's existing Bun prerequisite, which packaged staging already includes.",
+    "treeOwnership": "Members are discovered from the verified leader's /proc session/group/ancestry, but discovery alone never authorizes a signal: each member must also carry the per-child ownership token inherited from the service, and each signal is bound to the member's own birth identity.",
+    "failClosed": "Missing/mismatched birth identity, missing ownership token, unreadable environment, missing Bun/libc/pidfd, or a leader that no longer owns its session/group leaves the process untouched. Non-Linux remains unsupported and unverified.",
+    "stopEscalation": "When a live Agent Service ignores SIGTERM past the stop timeout, the supervisor escalates through the same pidfd tree method instead of a numeric group kill; if pidfd is unavailable it leaves the recorded child for startup reap."
+  },
+  "observedProof": {
+    "command": "cd /tmp && node /tmp/task44-registry-proof.mjs",
+    "harness": "Temporary Node ESM harness outside the repository, removed after this receipt was written.",
+    "isolation": "Temporary data, registry, HOME and XDG directories; the temporary root was removed by the run.",
+    "realServiceEntrypoint": "packages/agent-service/src/index.ts (real Bun Agent Service)",
+    "normalLifecycle": {
+      "phase": "ready",
+      "pidRecorded": true,
+      "ownerRecorded": true,
+      "kind": "agent-service",
+      "binary": "bun",
+      "birthIdentityPresent": true,
+      "ownershipTokenPresent": true,
+      "ownershipTokenInherited": true,
+      "recordPresentAfterStart": true,
+      "stopped": true,
+      "recordRemovedAfterStop": true
+    },
+    "orphanTree": {
+      "ownerPid": 488253,
+      "servicePid": 488264,
+      "ownedWorkerPid": 488275,
+      "wrongTokenChildPid": 488276,
+      "treeSurvivedParentDeath": true,
+      "recordPresentAfterParentDeath": true,
+      "result": {
+        "inspected": 4,
+        "reaped": 1
+      },
+      "logs": [
+        "[lifecycle] reaped orphaned Agent Service pid 488264 (owner 488253 gone)"
+      ],
+      "serviceGone": true,
+      "ownedWorkerGone": true,
+      "wrongTokenChildSurvived": true,
+      "recordRemoved": true,
+      "siblingsSurvived": [
+        true,
+        true,
+        true
+      ]
+    },
+    "refusedRecords": [
+      "live unrelated pid with conflicting birth identity",
+      "live unrelated pid with missing birth identity",
+      "live unrelated pid with matching birth identity but non-matching binary/entrypoint",
+      "live tree member without the inherited ownership token"
+    ],
+    "unrelatedPids": [
+      488279,
+      488280,
+      488281
+    ],
+    "cleanup": {
+      "ownedChildrenRemaining": [],
+      "rootRemoved": true
+    },
+    "ok": true
+  },
+  "checks": [
+    {
+      "command": "bun run --cwd packages/web test server/lib/host/managed-process-registry.test.mjs server/lib/host/pidfd-terminator.test.js server/lib/host/agent-service-supervisor.registry.test.js server/lib/host/agent-service-supervisor.skill-source.test.js",
+      "result": "4 test files passed, 40 tests passed",
+      "delta": "The pidfd-corrected focused run first passed 38 tests; the later supervisor stop-escalation regression added 2 terminateManagedProcess cases for the final 40. Both numbers come from actual runs, not inference."
+    },
+    {
+      "command": "bun run --cwd packages/web test server/lib/host/canonical-plugins.test.js",
+      "result": "1 test file passed, 5 tests passed (121.73s) on the final pidfd-corrected code"
+    },
+    {
+      "command": "bun run --cwd packages/web type-check",
+      "result": "tsc -b passed"
+    },
+    {
+      "command": "node --check packages/web/server/lib/host/managed-process-registry.js && node --check packages/web/server/lib/host/pidfd-terminator.js && node --check packages/web/server/lib/host/agent-service-supervisor.js",
+      "result": "syntax passed"
+    },
+    {
+      "command": "./node_modules/.bin/oxlint packages/web/server/lib/host/managed-process-registry.js packages/web/server/lib/host/managed-process-registry.d.ts packages/web/server/lib/host/pidfd-terminator.js packages/web/server/lib/host/pidfd-terminator.test.js packages/web/server/lib/host/agent-service-supervisor.js packages/web/server/lib/host/agent-service-supervisor.d.ts packages/web/server/lib/host/agent-service-supervisor.registry.test.js packages/web/server/lib/host/managed-process-registry.test.mjs",
+      "result": "registry, pidfd terminator and tests clean; 3 pre-existing diagnostics remain in unchanged agent-service-supervisor.js lines 89, 112 and 120"
+    }
+  ],
+  "history": {
+    "supersededSmoke": {
+      "when": "2026-10-20 earlier run",
+      "tests": "32 focused tests passed",
+      "limitation": "Signalled the recorded pid and process group numerically after a birth check, so a check-to-signal pid/group-id reuse race remained. That smoke and its proof are superseded for process-cleanup safety."
+    },
+    "supersededPackage": {
+      "artifact": "AppImage sha256 71f97b41b9e4b2615556d04fb33ec32f8dab89ebfeee23610b95ed1264711935",
+      "limitation": "Built before the pidfd correction, so its managed-process orphan cleanup is superseded.",
+      "reusable": "Task55 packaged auth/composer/remote-exclusion behavior is not on this process-cleanup path and remains valid; only a rebundle is needed to carry the corrected cleanup."
+    }
+  },
+  "limits": [
+    "Non-Linux orphan reaping remains unverified and refuses to guess identity.",
+    "The real Agent Service proof had no admitted sessions; descendant cleanup was exercised with a controlled Bun service tree that inherited the same supervisor token.",
+    "Signal-resistant or environment-scrubbing descendants are left untouched (fail closed) rather than signalled without ownership proof.",
+    "Pre-token records written by the superseded smoke are not acted on and remain fail-closed."
+  ]
+}

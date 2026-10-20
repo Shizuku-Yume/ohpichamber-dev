@@ -1,62 +1,99 @@
-// Managed OpenCode process registry + orphan reaper.
+// Agent Service process registry + orphan reaper.
 //
-// OpenChamber spawns the OpenCode server as an EXTERNAL child binary (on Unix
-// with `detached: true`, so it leads its own process group). That binary can
-// therefore outlive its parent if the parent is hard-killed/crashes/`Ctrl+C`ed
-// before graceful teardown runs — leaving an orphaned `opencode serve` that
-// then contends on the shared SQLite DB and slows everything down.
+// The Host spawns the Agent Service as an EXTERNAL Bun child (on Unix with
+// `detached: true`, so it leads its own process group). That child can outlive
+// its parent if the Host is hard-killed/crashes before graceful teardown runs,
+// leaving a service that keeps worker memory alive with no owner.
 //
-// We cannot tie an arbitrary external binary to the parent's death portably
-// (Electron's `utilityProcess` would, but it only runs JS entrypoints, not a
-// standalone binary). So we use the same pattern OpenCode's own CLI daemon uses
-// for its detached server: an on-disk record of the pids WE spawned, plus a
-// startup reaper that kills ONLY our own, verified, genuinely-orphaned
-// processes — never a process a live instance or the user's standalone
-// `opencode` is actively using.
+// We cannot tie an external binary to the parent's death portably (Electron's
+// `utilityProcess` only runs JS entrypoints, not a standalone binary). So the
+// supervisor records every pid WE spawned on disk, and a startup reaper kills
+// only records that are still provably ours and provably orphaned.
 //
 // Storage: one file per spawned process in a registry directory, named
-// `<childPid>.json`. Multiple Host windows can run concurrently; a single shared
-// JSON file would be corrupted by the read-modify-write race (last writer wins,
-// clobbering another instance's entry). Per-process files mean every instance
-// only ever writes/deletes its own entry.
+// `<childPid>.json`. Multiple Host processes can run concurrently; a single
+// shared JSON file would be corrupted by the read-modify-write race (last
+// writer wins, clobbering another instance's entry). Per-process files mean
+// every instance only ever writes/deletes its own entry.
 //
-// Safety model (why this never kills the wrong thing):
-//   1. The reaper only ever considers pids THIS product recorded. The user's
-//      standalone CLI server, the official desktop app, and the TUI are never
-//      recorded, so they are never even candidates.
-//   2. Before killing, it re-verifies the live pid is still an `opencode serve`
-//      matching the recorded port (guards against the OS recycling a dead pid
-//      onto an unrelated process).
-//   3. It kills only when the spawning owner is provably gone — the child has
-//      been reparented to init/pid 1, or the recorded owner pid is dead. A
-//      child still owned by a live instance is left untouched.
+// Identity policy (why this never kills the wrong thing):
+//   1. Only explicit `kind: 'agent-service'` records participate. A legacy or
+//      malformed file is discarded without signalling anything.
+//   2. Registration captures the Linux process birth identity (`starttime`
+//      from `/proc/<pid>/stat`) and the exact binary + entrypoint used to
+//      spawn the child. Before signalling, the reaper re-reads both from the
+//      live pid and requires them to match. A recycled pid therefore cannot
+//      authorize a kill, and a missing identity refuses rather than guesses.
+//   3. The reaper only acts when the recorded owner pid is dead. A child still
+//      owned by a live Host instance is left untouched.
+//   4. Process-tree members are discovered through the verified leader's
+//      session/group/ancestry in `/proc`, then each one is signalled through a
+//      pidfd bound to its own birth identity. Numeric pid/pgid signalling is
+//      never used, so a recycled pid or process-group id cannot redirect a
+//      signal. Signalling is unavailable on non-Linux or without pidfd/Bun and
+//      fails closed rather than falling back to `kill(2)`.
 //
-// All filesystem and child-process operations here are ASYNCHRONOUS. The web
-// server runs in-process inside the Electron main event loop (and other hosts),
-// so any `spawnSync`/`*Sync` FS call blocks the single event loop — which also
-// serves UI asset requests and realtime SSE traffic. The startup reaper can
-// iterate several registry entries and, on Windows, each one spawns `tasklist`
-// (100-500ms) and possibly `taskkill`; doing that synchronously stalls the
-// whole process and is what caused the 1.13.3 `openchamber-ui://` lag
-// regression (#1841). `execFile`/`fsp.*` keep the event loop responsive while
-// the reaper waits on the kernel.
-// The registry is shared by every Host runtime that launches managed OpenCode.
+// Non-Linux platforms have no authoritative birth identity here, so reaping
+// refuses to guess (the live supervisor still stops its own child normally).
+// This is not a new platform promise.
+//
+// All filesystem and child-process operations are ASYNCHRONOUS. The web server
+// runs in-process inside the Electron main event loop (and other hosts), so a
+// `spawnSync`/`*Sync` FS call would block the loop that also serves UI asset
+// requests and realtime SSE traffic. The startup reaper can inspect several
+// entries; keeping it async keeps the event loop responsive while the kernel
+// work happens.
 
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { z } from 'zod';
+import { createPidfdTerminator } from './pidfd-terminator.js';
 
-const defaultExecFileAsync = promisify(execFile);
+const AGENT_SERVICE_KIND = 'agent-service';
 
-const resolveRegistryDir = () => {
-  const override = process.env.OPENCHAMBER_MANAGED_PROCESS_REGISTRY;
-  if (override && override.trim()) return override.trim();
-  return path.join(os.homedir(), '.config', 'openchamber', 'managed-opencode');
+// The service inherits this token into its workers. It proves tree membership
+// when a descendant was reparented or moved out of the original group; a pid,
+// session id, group id or ancestry alone is not sufficient authorization.
+export const MANAGED_PROCESS_TOKEN_ENV = 'OPENCHAMBER_MANAGED_PROCESS_TOKEN';
+
+// These decode the two external boundaries: a JSON record read from disk and
+// the registration input supplied by the supervisor. Everything below works
+// with the parsed domain record instead of probing representations.
+const ManagedProcessEntrySchema = z.object({
+  pid: z.number().int(),
+  ownerPid: z.number().int(),
+  kind: z.literal(AGENT_SERVICE_KIND),
+  binary: z.string().min(1),
+  entrypoint: z.string().min(1),
+  birthIdentity: z.string().min(1),
+  ownershipToken: z.string().min(16),
+  runtime: z.string().optional(),
+  startedAt: z.string().optional(),
+});
+
+const ManagedProcessRegistrationSchema = z.object({
+  pid: z.number().int(),
+  ownerPid: z.number().int().optional(),
+  kind: z.literal(AGENT_SERVICE_KIND),
+  binary: z.string().min(1),
+  entrypoint: z.string().min(1),
+  ownershipToken: z.string().min(16),
+  runtime: z.string().optional(),
+});
+
+const nonEmptyString = (value) => {
+  const parsed = z.string().trim().min(1).safeParse(value);
+  return parsed.success ? parsed.data : null;
 };
 
-const entryFilePath = (pid) => path.join(resolveRegistryDir(), `${pid}.json`);
+const resolveRegistryDir = (registryDir) => {
+  const override = nonEmptyString(process.env.OPENCHAMBER_MANAGED_PROCESS_REGISTRY);
+  if (override) return override;
+  const configured = nonEmptyString(registryDir);
+  if (configured) return path.resolve(configured);
+  return path.join(os.homedir(), '.config', 'openchamber', 'managed-processes');
+};
 
 const isPidAlive = (pid) => {
   if (!Number.isInteger(pid)) return false;
@@ -71,26 +108,152 @@ const isPidAlive = (pid) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const commandIdentifiesOurServer = (command, entry) => {
-  if (typeof command !== 'string') return false;
-  const lower = command.toLowerCase();
-  if ((entry.kind ?? 'opencode') === 'agent-service') {
-    if (!entry.entrypoint || !entry.binary) return false;
-    if (!lower.includes(String(entry.binary).toLowerCase()) || !lower.includes(String(entry.entrypoint).toLowerCase())) return false;
-    return true;
-  } else if (!lower.includes('opencode') || !lower.includes('serve')) return false;
-  if (Number.isInteger(entry.port) && !command.includes(String(entry.port))) return false;
-  return true;
+// `/proc/<pid>/stat` after the parenthesized command name: state, ppid, pgrp,
+// session, ... and starttime (field 22, zero-based index 19 after the comm).
+const parseProcessStat = (text) => {
+  const fields = text.slice(text.lastIndexOf(')') + 2).trim().split(/\s+/);
+  const birthIdentity = fields[19];
+  if (!birthIdentity) return null;
+  const parentPid = Number.parseInt(fields[1], 10);
+  const processGroupId = Number.parseInt(fields[2], 10);
+  const sessionId = Number.parseInt(fields[3], 10);
+  return {
+    state: fields[0],
+    birthIdentity,
+    parentPid: Number.isInteger(parentPid) ? parentPid : null,
+    processGroupId: Number.isInteger(processGroupId) ? processGroupId : null,
+    sessionId: Number.isInteger(sessionId) ? sessionId : null,
+  };
+};
+
+const readProcessStat = async (fs, pid) => {
+  if (process.platform !== 'linux' || !Number.isInteger(pid)) return null;
+  try {
+    return parseProcessStat(await fs.readFile(`/proc/${pid}/stat`, 'utf8'));
+  } catch {
+    return null;
+  }
+};
+
+// A point-in-time Linux process table. The reaper only builds this after a
+// record has matched the live leader's birth and command, so the normal
+// startup path does no `/proc` scan.
+const readLiveProcessTable = async (fs) => {
+  if (process.platform !== 'linux') return [];
+  let names = [];
+  try {
+    names = await fs.readdir('/proc');
+  } catch {
+    return [];
+  }
+  const table = [];
+  for (const name of names) {
+    if (!/^\d+$/.test(name)) continue;
+    const pid = Number.parseInt(name, 10);
+    const stat = await readProcessStat(fs, pid);
+    if (stat) table.push({ pid, ...stat });
+  }
+  return table;
+};
+
+// Select the tree owned by a verified leader. Session/group membership is only
+// a discovery filter; every signal is bound to the member's own birth identity.
+// A member born before the leader indicates that the id was recycled, so the
+// whole selection fails closed instead of guessing.
+const selectOwnedTree = async (fs, table, record) => {
+  const byPid = new Map(table.map((entry) => [entry.pid, entry]));
+  const root = byPid.get(record.pid);
+  if (!root || root.birthIdentity !== record.birthIdentity) return null;
+  // Detached spawn makes the service both session and group leader. If it no
+  // longer owns either, enumeration is not authoritative.
+  if (root.sessionId !== record.pid && root.processGroupId !== record.pid) return null;
+  if (!await ownsProcessEnvironment(fs, root.pid, record.ownershipToken)) return null;
+  const rootStart = BigInt(root.birthIdentity);
+  const owned = new Map([[root.pid, root]]);
+  for (const entry of table) {
+    if (entry.pid === root.pid || entry.pid === process.pid || entry.pid <= 1) continue;
+    const inTree = entry.sessionId === record.pid || entry.processGroupId === record.pid;
+    if (!inTree) continue;
+    if (BigInt(entry.birthIdentity) < rootStart) throw new Error('PROCESS_TREE_OWNERSHIP_UNAVAILABLE');
+    // Membership only discovers a candidate. The inherited token proves the
+    // Agent Service spawned it; unproven candidates are never signalled.
+    if (!await ownsProcessEnvironment(fs, entry.pid, record.ownershipToken)) continue;
+    owned.set(entry.pid, entry);
+  }
+  // Follow ancestry too: a native child may move to a new group/session, but
+  // its parent chain still starts at the verified service leader.
+  let added;
+  do {
+    added = false;
+    for (const entry of table) {
+      if (owned.has(entry.pid) || entry.pid === process.pid || entry.pid <= 1) continue;
+      const parent = owned.get(entry.parentPid);
+      if (!parent) continue;
+      if (BigInt(entry.birthIdentity) < BigInt(parent.birthIdentity)) throw new Error('PROCESS_TREE_OWNERSHIP_UNAVAILABLE');
+      if (!await ownsProcessEnvironment(fs, entry.pid, record.ownershipToken)) continue;
+      owned.set(entry.pid, entry);
+      added = true;
+    }
+  } while (added);
+  return [...owned.values()];
+};
+
+const identityRunning = (table, identity) => table.some((entry) => entry.pid === identity.pid
+  && entry.birthIdentity === identity.birthIdentity
+  && entry.state !== 'Z' && entry.state !== 'X');
+
+// Exact argv for a live Linux pid. Our child is a Bun process running one
+// entrypoint, so argv is stable and authoritative; a reused pid cannot present
+// both the recorded binary and entrypoint by accident.
+const readCommandLine = async (fs, pid) => {
+  if (process.platform !== 'linux') return null;
+  try {
+    const raw = await fs.readFile(`/proc/${pid}/cmdline`, 'utf8');
+    const argv = raw.split('\0').filter(Boolean);
+    return argv.length > 0 ? argv : null;
+  } catch {
+    return null;
+  }
+};
+
+const commandIdentifiesAgentService = (argv, entry) => {
+  if (!Array.isArray(argv) || argv.length === 0) return false;
+  const binaryMatches = argv[0] === entry.binary
+    || path.basename(argv[0]) === path.basename(entry.binary);
+  return binaryMatches && argv.slice(1).includes(entry.entrypoint);
+};
+
+// The service and its workers inherit this exact variable. Reading environment
+// requires the same user; an unreadable environment is never treated as owned.
+const ownsProcessEnvironment = async (fs, pid, ownershipToken) => {
+  if (process.platform !== 'linux' || !Number.isInteger(pid) || pid <= 1) return false;
+  try {
+    const raw = await fs.readFile(`/proc/${pid}/environ`, 'utf8');
+    const marker = `${MANAGED_PROCESS_TOKEN_ENV}=${ownershipToken}`;
+    return raw.split('\0').includes(marker);
+  } catch {
+    return false;
+  }
 };
 
 /**
- * Build the registry API over injectable filesystem and child-process
- * dependencies. Production callers use the default instance exported below;
- * tests pass their own `fs`/`execFileAsync` instead of mocking node builtins.
+ * Build the registry API over injectable filesystem dependencies.
+ * Production callers use the default instance exported below; the supervisor
+ * passes a directory under the Host data directory, and tests pass their own
+ * `fs` instead of mocking node builtins.
  */
-export const createManagedProcessRegistry = ({ fs = fsp, execFileAsync = defaultExecFileAsync } = {}) => {
+export const createManagedProcessRegistry = ({
+  fs = fsp,
+  registryDir = null,
+  bunPath = null,
+  signalIdentities = null,
+  readProcessTable = () => readLiveProcessTable(fs),
+} = {}) => {
+  const terminate = signalIdentities ?? createPidfdTerminator(bunPath ? { bunPath } : {});
+  const entryFilePath = (pid) => path.join(resolveRegistryDir(registryDir), `${pid}.json`);
+
   const writeEntryFile = async (entry) => {
-    const dir = resolveRegistryDir();
+    const dir = resolveRegistryDir(registryDir);
     try {
       await fs.mkdir(dir, { recursive: true });
       const filePath = path.join(dir, `${entry.pid}.json`);
@@ -102,8 +265,16 @@ export const createManagedProcessRegistry = ({ fs = fsp, execFileAsync = default
     }
   };
 
+  const removeEntryFile = async (filePath) => {
+    try {
+      await fs.rm(filePath, { force: true });
+    } catch {
+      // Best-effort: a missing/removed file is not an error.
+    }
+  };
+
   const readAllEntries = async () => {
-    const dir = resolveRegistryDir();
+    const dir = resolveRegistryDir(registryDir);
     let names = [];
     try {
       names = await fs.readdir(dir);
@@ -115,167 +286,171 @@ export const createManagedProcessRegistry = ({ fs = fsp, execFileAsync = default
       const filePath = path.join(dir, name);
       try {
         const entry = JSON.parse(await fs.readFile(filePath, 'utf8'));
-        if (entry && Number.isInteger(entry.pid)) {
+        // The filename is the pid we wrote; a mismatch means corruption, not
+        // a record that may authorize a signal.
+        if (entry && Number.isInteger(entry.pid) && name === `${entry.pid}.json`) {
           out.push({ entry, filePath });
         } else {
-          await fs.rm(filePath, { force: true });
+          await removeEntryFile(filePath);
         }
       } catch {
         // Corrupt/partial file — drop it.
-        try {
-          await fs.rm(filePath, { force: true });
-        } catch {
-          // ignore
-        }
+        await removeEntryFile(filePath);
       }
     }
     return out;
   };
 
-  const readBirthIdentity = async (pid) => {
-    if (process.platform !== 'linux') return null;
-    try {
-      const stat = await fs.readFile(`/proc/${pid}/stat`, 'utf8');
-      return stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)[19] ?? null;
-    } catch {
-      return null;
-    }
-  };
-
-  /** Record a process WE spawned so a future run can reap it if orphaned. */
-  const registerManagedProcess = async ({ pid, ownerPid, port, binary, runtime, kind, entrypoint } = {}) => {
-    if (!Number.isInteger(pid)) return;
+  /** Record the actual Agent Service child WE spawned so a future run can reap it. */
+  const registerManagedProcess = async (input = {}) => {
+    const parsed = ManagedProcessRegistrationSchema.safeParse(input);
+    if (!parsed.success) return;
+    const { pid, ownerPid, binary, entrypoint, ownershipToken, runtime } = parsed.data;
+    const birth = await readProcessStat(fs, pid);
+    if (!birth) return;
+    if (!await ownsProcessEnvironment(fs, pid, ownershipToken)) return;
     await writeEntryFile({
       pid,
-      ownerPid: Number.isInteger(ownerPid) ? ownerPid : process.pid,
-      port: Number.isInteger(port) ? port : null,
-      binary: typeof binary === 'string' ? binary : null,
-      kind: kind ?? 'opencode',
-      entrypoint: entrypoint ?? null,
-      birthIdentity: kind === 'agent-service' ? await readBirthIdentity(pid) : null,
-      runtime: typeof runtime === 'string' ? runtime : 'web',
+      ownerPid: ownerPid ?? process.pid,
+      kind: AGENT_SERVICE_KIND,
+      binary,
+      entrypoint,
+      birthIdentity: birth.birthIdentity,
+      ownershipToken,
+      runtime: runtime ?? 'web',
       startedAt: new Date().toISOString(),
     });
   };
 
-  /** Drop a pid from the registry (after we have killed/closed it ourselves). */
+  /** Drop a pid from the registry after we have stopped it ourselves. */
   const unregisterManagedProcess = async (pid) => {
     if (!Number.isInteger(pid)) return;
-    try {
-      await fs.rm(entryFilePath(pid), { force: true });
-    } catch {
-      // Best-effort: dropping a missing file is not an error.
-    }
+    await removeEntryFile(entryFilePath(pid));
   };
 
-  // Returns { ppid, command } for a live pid on Unix, or null if it can't be read.
-  const readUnixProcInfo = async (pid) => {
-    try {
-      const { stdout } = await execFileAsync('ps', ['-p', String(pid), '-o', 'ppid=,command='], {
-        encoding: 'utf8',
-        timeout: 3000,
-        windowsHide: true,
-      });
-      const line = (stdout || '').trim();
-      if (!line) return null;
-      const match = line.match(/^\s*(\d+)\s+(.*)$/);
-      if (!match) return null;
-      return { ppid: Number.parseInt(match[1], 10), command: match[2] };
-    } catch {
-      return null;
-    }
+  // The leader must still present its recorded birth and exact argv before any
+  // tree member is considered. Signalling itself goes through pidfd, never a
+  // numeric pid/pgid.
+  const matchesLiveRecord = async (entry) => {
+    const stat = await readProcessStat(fs, entry.pid);
+    if (!stat || stat.birthIdentity !== entry.birthIdentity) return null;
+    const argv = await readCommandLine(fs, entry.pid);
+    if (!commandIdentifiesAgentService(argv, entry)) return null;
+    if (!await ownsProcessEnvironment(fs, entry.pid, entry.ownershipToken)) return null;
+    return stat;
   };
 
-  // Windows image name for a pid (e.g. "opencode.exe"), or null.
-  const readWindowsImageName = async (pid) => {
-    try {
-      const { stdout } = await execFileAsync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
-        encoding: 'utf8',
-        timeout: 3000,
-        windowsHide: true,
-      });
-      return (stdout || '').trim() || null;
-    } catch {
-      return null;
-    }
+  const signalTree = async (known, signal) => {
+    const identities = [...known.values()]
+      .filter((entry) => entry.state !== 'Z' && entry.state !== 'X')
+      .map((entry) => ({ pid: entry.pid, startTicks: entry.birthIdentity }));
+    if (identities.length === 0) return false;
+    const results = await terminate(identities, signal);
+    return results.some((result) => result.delivered === true);
   };
 
-  const killOrphan = async (pid) => {
-    if (process.platform === 'win32') {
-      try {
-        await execFileAsync('taskkill', ['/PID', String(pid), '/T', '/F'], {
-          stdio: 'ignore',
-          timeout: 5000,
-          windowsHide: true,
-        });
-      } catch {
-        // Best-effort: a failed kill is not fatal (startup reaper is a backstop).
+  const killOrphan = async (record) => {
+    const known = new Map();
+    let leaderMatched = true;
+    const collect = async () => {
+      const table = await readProcessTable();
+      const tree = await selectOwnedTree(fs, table, record);
+      if (tree) {
+        leaderMatched = true;
+        for (const entry of tree) known.set(entry.pid, entry);
+      } else {
+        // The leader is gone or no longer matches. Stop discovering new
+        // members; only already-captured identities may still be signalled.
+        leaderMatched = false;
       }
-      return;
-    }
-
-    const signalTree = (signal) => {
-      try {
-        process.kill(-pid, signal);
-      } catch {
-        // process group may already be gone
-      }
-      try {
-        process.kill(pid, signal);
-      } catch {
-        // pid may already be gone
-      }
+      return table;
     };
 
-    signalTree('SIGTERM');
-    for (let waited = 0; waited < 1500 && isPidAlive(pid); waited += 150) {
+    await collect();
+    if (!leaderMatched) return false;
+    const termDelivered = await signalTree(known, 'SIGTERM');
+    if (!termDelivered) {
+      const table = await readProcessTable();
+      return [...known.values()].every((entry) => !identityRunning(table, entry));
+    }
+
+    let table = await readProcessTable();
+    let remaining = [...known.values()].filter((entry) => identityRunning(table, entry));
+    for (let waited = 0; waited < 1500 && remaining.length > 0; waited += 150) {
       await sleep(150);
+      table = await collect();
+      if (leaderMatched) await signalTree(known, 'SIGTERM');
+      remaining = [...known.values()].filter((entry) => identityRunning(table, entry));
     }
-    if (isPidAlive(pid)) {
-      signalTree('SIGKILL');
-      await sleep(300);
-    }
+    if (remaining.length === 0) return true;
+
+    // Capture any member that appeared during the grace window, then escalate
+    // through the same pidfd identities.
+    table = await collect();
+    remaining = [...known.values()].filter((entry) => identityRunning(table, entry));
+    if (remaining.length === 0) return true;
+    const killDelivered = await signalTree(known, 'SIGKILL');
+    if (!killDelivered) return false;
+    await sleep(300);
+    table = await readProcessTable();
+    return [...known.values()].every((entry) => !identityRunning(table, entry));
   };
 
-  // Decide+act on a single registry entry. Returns true if it was reaped.
-  const processEntry = async (entry, { log }) => {
-    // Dead pid → nothing to do (caller drops the file).
-    if (!isPidAlive(entry.pid)) return false;
-    const ownerGone = Number.isInteger(entry.ownerPid) && !isPidAlive(entry.ownerPid);
-    if (entry.kind === 'agent-service') {
-      const birth = await readBirthIdentity(entry.pid);
-      if (!entry.birthIdentity || birth !== entry.birthIdentity) return false;
-    }
-
-    if (process.platform === 'win32') {
-      const image = await readWindowsImageName(entry.pid);
-      const expected = entry.kind === 'agent-service' ? entry.binary : 'opencode';
-      const looksLikeExpected = image?.toLowerCase().includes(path.basename(expected ?? 'opencode').toLowerCase()) ?? false;
-      if (looksLikeExpected && ownerGone) {
-        await killOrphan(entry.pid);
-        log?.(`[lifecycle] reaped orphaned managed pid ${entry.pid} (owner ${entry.ownerPid} gone)`);
-        return true;
-      }
-      return false;
-    }
-
-    const info = await readUnixProcInfo(entry.pid);
-    // Can't verify identity (or it's not our server) → leave it alone.
-    if (!info || !commandIdentifiesOurServer(info.command, entry)) return false;
-
-    const orphaned = info.ppid === 1 || ownerGone;
-    if (!orphaned) return false; // still owned by a live instance
-    if (entry.kind === 'agent-service' && await readBirthIdentity(entry.pid) !== entry.birthIdentity) return false;
-
-    await killOrphan(entry.pid);
-    log?.(`[lifecycle] reaped orphaned managed pid ${entry.pid} (reparented/owner gone)`);
-    return true;
+  const terminateTreeOnce = async (record, signal) => {
+    const table = await readProcessTable();
+    const tree = await selectOwnedTree(fs, table, record);
+    if (!tree) return false;
+    return signalTree(new Map(tree.map((entry) => [entry.pid, entry])), signal);
   };
 
   /**
-   * Kill any genuinely-orphaned OpenCode processes WE previously spawned, and
-   * prune their registry files. Safe to call at startup before spawning a new
-   * server. Returns { inspected, reaped }.
+   * Pidfd SIGKILL for the tree of a live child this Host still owns. The
+   * supervisor uses this instead of a numeric group kill when its own stop
+   * escalation is needed. Returns false (no numeric fallback) when the record,
+   * identity, token or pidfd delivery cannot be established.
+   */
+  const terminateManagedProcess = async (pid, signal = 'SIGKILL') => {
+    if (!Number.isInteger(pid) || (signal !== 'SIGTERM' && signal !== 'SIGKILL')) return false;
+    let entry;
+    try {
+      entry = JSON.parse(await fs.readFile(entryFilePath(pid), 'utf8'));
+    } catch {
+      return false;
+    }
+    const parsed = ManagedProcessEntrySchema.safeParse(entry);
+    if (!parsed.success || parsed.data.pid !== pid || parsed.data.ownerPid !== process.pid) return false;
+    if (!await matchesLiveRecord(parsed.data)) return false;
+    return terminateTreeOnce(parsed.data, signal);
+  };
+
+  // Inspect one record and return whether it was reaped plus whether the file
+  // can be dropped. Dropping never signals; it only discards records that can
+  // no longer describe a live process of ours.
+  const processEntry = async (entry, { log }) => {
+    const parsed = ManagedProcessEntrySchema.safeParse(entry);
+    // Legacy OpenCode records and malformed files never authorize a signal.
+    if (!parsed.success) return { reaped: false, drop: true };
+    const record = parsed.data;
+    if (!isPidAlive(record.pid)) return { reaped: false, drop: true };
+    // A live owner still owns this child, even if it was reparented.
+    if (isPidAlive(record.ownerPid)) return { reaped: false, drop: false };
+    if (process.platform !== 'linux') return { reaped: false, drop: false };
+
+    const liveStat = await matchesLiveRecord(record);
+    // Mismatch means the recorded process is gone and the pid was recycled.
+    if (!liveStat) return { reaped: false, drop: true };
+
+    const reaped = await killOrphan(record, liveStat);
+    if (reaped) {
+      log?.(`[lifecycle] reaped orphaned Agent Service pid ${record.pid} (owner ${record.ownerPid} gone)`);
+    }
+    return { reaped, drop: reaped || !isPidAlive(record.pid) };
+  };
+
+  /**
+   * Kill any genuinely-orphaned Agent Service processes WE previously spawned,
+   * and prune their registry files. Safe to call at startup before spawning a
+   * new service. Returns { inspected, reaped }.
    */
   const reapOrphanedProcesses = async ({ log } = {}) => {
     const records = await readAllEntries();
@@ -285,27 +460,19 @@ export const createManagedProcessRegistry = ({ fs = fsp, execFileAsync = default
     for (const { entry, filePath } of records) {
       let drop = false;
       try {
-        const wasReaped = await processEntry(entry, { log });
-        if (wasReaped) reaped += 1;
-        // Drop the file when the process is gone (reaped now, or already dead);
-        // keep it only while the process is still alive and owned by a live owner.
-        drop = wasReaped || !isPidAlive(entry.pid);
+        const result = await processEntry(entry, { log });
+        if (result.reaped) reaped += 1;
+        drop = result.drop;
       } catch (error) {
         log?.(`[lifecycle] reap check failed for pid ${entry.pid}: ${error?.message ?? error}`);
       }
-      if (drop) {
-        try {
-          await fs.rm(filePath, { force: true });
-        } catch {
-          // best-effort
-        }
-      }
+      if (drop) await removeEntryFile(filePath);
     }
 
     return { inspected: records.length, reaped };
   };
 
-  return { registerManagedProcess, unregisterManagedProcess, reapOrphanedProcesses };
+  return { registerManagedProcess, unregisterManagedProcess, reapOrphanedProcesses, terminateManagedProcess };
 };
 
 const defaultRegistry = createManagedProcessRegistry();

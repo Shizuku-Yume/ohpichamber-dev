@@ -1133,7 +1133,7 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
     ) {
       express.json({ limit: '50mb' })(req, res, next);
     } else if (req.path.startsWith('/api')) {
-      // Unknown API paths remain unparsed for the generic proxy fallback.
+      // Leave unknown API paths to the route or not-found handler without parsing.
       next();
     } else {
       express.json({ limit: '50mb' })(req, res, next);

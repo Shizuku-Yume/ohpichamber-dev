@@ -28,7 +28,7 @@ async function scenario(handleSkillSource, { beforeReady } = {}) {
   let requestNumber = 0;
   const service = createAgentServiceSupervisor({
     entrypoint: '/unused-test-agent-service.js', handleSkillSource,
-    registry: { registerManagedProcess: async () => {}, unregisterManagedProcess: async () => {} },
+    registry: { registerManagedProcess: async () => {}, unregisterManagedProcess: async () => {}, reapOrphanedProcesses: async () => ({ inspected: 0, reaped: 0 }), terminateManagedProcess: async () => false },
     spawn: () => {
       const child = new EventEmitter();
       Object.assign(child, {

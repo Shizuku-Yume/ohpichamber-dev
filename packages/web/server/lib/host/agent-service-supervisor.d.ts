@@ -1,5 +1,5 @@
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
-import type { registerManagedProcess, unregisterManagedProcess } from './managed-process-registry.js';
+import type { reapOrphanedProcesses, registerManagedProcess, unregisterManagedProcess } from './managed-process-registry.js';
 import type { HostAuthorizationScope, WorkerPolicyRequest, WorkerPolicyResult, NativeOperationDescriptor, HostActionRequest, HostActionResult, HostSkillSourceOperation, HostSkillSourceResult } from '@openchamber/agent-service/private-protocol';
 
 export interface AgentServiceSupervisorState {
@@ -10,6 +10,8 @@ export interface AgentServiceSupervisorState {
 export interface AgentServiceRegistry {
   registerManagedProcess: typeof registerManagedProcess;
   unregisterManagedProcess: typeof unregisterManagedProcess;
+  reapOrphanedProcesses: typeof reapOrphanedProcesses;
+  terminateManagedProcess: (pid: number, signal?: 'SIGTERM' | 'SIGKILL') => Promise<boolean>;
 }
 export interface AgentServiceSupervisorOptions {
   bunPath?: string;
