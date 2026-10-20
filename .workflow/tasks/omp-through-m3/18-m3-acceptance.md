@@ -6,10 +6,10 @@
 
 **Delivers:** One current acceptance packet proves M0-to-M3 behavior on Web and Electron, records platform/provider limitations, and closes only the gates supported by observed evidence.
 
-**Blocked by:** 15, 52, 56, 57, 58, 59, 60, 61, 64, 65, 66, 67, 68
+**Blocked by:** 15, 52, 56, 57, 58, 59, 60, 61, 64, 65, 66, 67, 68, 69, 70
 **Files:** `.workflow/development.md`, `.workflow/omp-migration/implementation-plan.md`, `.workflow/specs/omp-through-m3.md`, acceptance artifacts under `.workflow/omp-migration/m3/`
 
-**Read first:** `.workflow/specs/omp-through-m3.md` W1-W10; `.workflow/tasks/omp-through-m3/32-m3-native-subagent-navigation.md`; tasks 15, 52, 56-61 and 64-68 with their `## Progress`/`## Findings`; Task60's Web Search defect handoff; all task artifacts; architecture/contracts/scope; package validation commands; existing M0 evidence
+**Read first:** `.workflow/specs/omp-through-m3.md` W1-W10; `.workflow/tasks/omp-through-m3/32-m3-native-subagent-navigation.md`; tasks 15, 52, 56-61 and 64-70 with their `## Progress`/`## Findings`; Task60's Web Search defect handoff; all task artifacts; architecture/contracts/scope; package validation commands; existing M0 evidence
 **Covers:** W1, W2, W3, W4, W5, W6, W7, W8, W9, W10
 
 **Check:** `bun run type-check && bun run lint && bun run build && bun run test && bun run dead-code && bun run docs:validate && .workflow/bin/workflow validate --no-color`, once after integration, plus observed connected Web/Electron W1-W10 acceptance. Reuse current task-17 observations where unchanged. Every required item must pass or carry an explicit maintainer acceptance decision; merely reporting a blocker does not pass or archive this gate.
@@ -23,7 +23,7 @@
 
 ## Expected evidence (2026-10-21 amendment)
 
-The gate runs only after Tasks 15, 52, 56-61 and 64-68 are archived and landed. It owns one non-duplicative integrated Web plus packaged Electron run; focused task checks are not replayed.
+The gate runs only after Tasks 15, 52, 56-61 and 64-70 are archived and landed. It owns one non-duplicative integrated Web plus packaged Electron run; focused task checks are not replayed.
 
 - Rebuild the Web dist and packaged Electron artifact from the landed HEAD and record their new index/AppImage SHA-256 values. Do not reuse `c438247e…` or `598bf582…` as post-change evidence.
 - The run must cover create/stream/abort/reload/reopen, reconnect snapshot/cursor recovery, Board launch, Guest Shell, sidebar hierarchy, Settings catalogs including Web Search, and the Settings Commands/Skills routes with actual composer use.
