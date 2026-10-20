@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/50",
+  "observedAt": "2026-10-21",
+  "status": "connected-warming-ui-verified",
+  "baseCommit": "93d519221527e15cf52a5dde0d6ddf011c7527bb",
+  "head": "6f5a09f3c",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "webHost": "http://127.0.0.1:3164",
+    "isolatedHome": "/tmp/ohpi-task50-home",
+    "workspaceId": "ws_e7138f54-6d1c-4718-914b-66583edf0222",
+    "workspaceCwd": "/tmp/ohpi-task50-home/.config/openchamber/chats",
+    "agentDirectory": "/tmp/ohpi-task50-home/.omp/agent",
+    "webDistIndexSha256": "c438247e7abd698759fc8fe55e50a4b08ed147a86d213906732d9789fdfa478e",
+    "browser": "Headless Chrome via chrome-devtools CLI",
+    "auth": "isolated Host /auth/session returned 200 {\"authenticated\":true,\"disabled\":true} with a signed passwordless session cookie",
+    "providerNetwork": "none"
+  },
+  "sourceInvalidation": {
+    "priorEvidence": "Focused packet passed 27 tests / 230 assertions on 2026-10-19.",
+    "laterCommitsTouchingTask50": ["dcbd55f7d", "ab70fb2bf", "66fbdec99"],
+    "currentRerun": "27 pass, 0 fail, 231 expect() calls across the same five files.",
+    "conclusion": "Source changed after the prior run, so the unchanged packet was not reused; the focused suite was rerun."
+  },
+  "observed": {
+    "nativeStreamingReadback": {
+      "setup": "workspace .omp/config.yml contained providers.cacheWarming: streaming before the UI read",
+      "get": "GET /api/agent/v1/workspaces/ws_e7138f54-6d1c-4718-914b-66583edf0222/cache-warming -> 200 {\"revision\":\"0\",\"mode\":\"streaming\"}",
+      "ui": "row description 'Streaming mode'; checkbox checked and enabled"
+    },
+    "uncheckedOff": {
+      "put": "PUT /api/agent/v1/workspaces/ws_e7138f54-6d1c-4718-914b-66583edf0222/cache-warming -> 200; body {\"expectedRevision\":\"0\",\"mode\":\"off\"}",
+      "ui": "row description 'Off'; status 'Saved; no active workers to apply this mode.'",
+      "nativeConfig": "providers.cacheWarming: \"off\"",
+      "readback": "GET -> 200 {\"revision\":\"1\",\"mode\":\"off\"}"
+    },
+    "checkedIdle": {
+      "put": "PUT /api/agent/v1/workspaces/ws_e7138f54-6d1c-4718-914b-66583edf0222/cache-warming -> 200; body {\"expectedRevision\":\"1\",\"mode\":\"idle\"}",
+      "ui": "row description 'Idle mode'; status 'Saved; no active workers to apply this mode.'",
+      "nativeConfig": "providers.cacheWarming: idle",
+      "readback": "GET -> 200 {\"revision\":\"2\",\"mode\":\"idle\"}"
+    },
+    "partialWrite": {
+      "inducement": "chmod 500 on isolated /tmp/ohpi-task50-home/.config/openchamber/agent-state before the write; restored to 700 immediately after observation",
+      "put": "PUT /api/agent/v1/workspaces/ws_e7138f54-6d1c-4718-914b-66583edf0222/cache-warming -> 503; body {\"expectedRevision\":\"2\",\"mode\":\"off\"}",
+      "ui": "row description 'Off'; checkbox and More information disabled; status 'Native configuration was saved, but the revision could not be committed and live application did not start. Reload before changing this setting again.'",
+      "nativeConfig": "providers.cacheWarming: \"off\"",
+      "serviceState": "workspace-catalog-owners.json owner revision remained \"2\"; GET -> 200 {\"revision\":\"2\",\"mode\":\"off\"}",
+      "recovery": "reload -> row description 'Off'; checkbox enabled; no partial-write message"
+    }
+  },
+  "log": "Host log recorded normal startup and no warming error line; exact HTTP method/URL/status and request bodies were captured from the page's preserved network requests.",
+  "surfaces": {
+    "web": "exercised",
+    "electron": "same Host Gateway and UI; not launched for this task",
+    "hostedMobileCapacitor": "same Host UI over the Gateway; no local worker",
+    "localMobileWorker": "none"
+  },
+  "limitations": [
+    "No live session was open, so the connected result was no-active-workers; applied/partial worker fanout is covered by the focused supervisor tests, not this browser run.",
+    "Electron and mobile surfaces were not separately launched.",
+    "No provider network request, prompt, cache hit, or native warmer execution was exercised; configured mode is not execution proof."
+  ],
+  "cleanup": "Host 3164 and headless Chrome stopped; /tmp/ohpi-task50-home, /tmp/ohpi-task50, /tmp/ohpi-task50-chrome and temporary cookie/response files removed; ports closed."
+}
