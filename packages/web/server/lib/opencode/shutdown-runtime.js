@@ -19,18 +19,10 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     messageSearchRuntime,
     scheduledTasksRuntime,
     hostSessionState,
-    getHealthCheckInterval,
-    clearHealthCheckInterval,
     getTerminalRuntime,
     setTerminalRuntime,
     getMessageStreamRuntime,
     setMessageStreamRuntime,
-    shouldSkipOpenCodeStop,
-    getOpenCodePort,
-    getOpenCodeProcess,
-    setOpenCodeProcess,
-    killProcessOnPort,
-    waitForPortRelease,
     getServer,
     getUiAuthController,
     setUiAuthController,
@@ -106,11 +98,6 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       }
     }
 
-    const healthCheckInterval = getHealthCheckInterval();
-    if (healthCheckInterval) {
-      clearHealthCheckInterval(healthCheckInterval);
-    }
-
     const terminalRuntime = getTerminalRuntime();
     if (terminalRuntime) {
       try {
@@ -131,27 +118,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       }
     }
 
-    if (!shouldSkipOpenCodeStop()) {
-      const portToKill = getOpenCodePort();
-      const openCodeProcess = getOpenCodeProcess();
-
-      if (openCodeProcess) {
-        console.log('Stopping OpenCode process...');
-        try {
-          await openCodeProcess.close();
-        } catch (error) {
-          console.warn('Error closing OpenCode process:', error);
-        }
-        setOpenCodeProcess(null);
-      }
-
-      killProcessOnPort(portToKill);
-      if (!(await waitForPortRelease(portToKill, 5000))) {
-        console.warn(`Timed out waiting for OpenCode port ${portToKill} to be released during shutdown`);
-      }
-    } else {
-      console.log('Skipping OpenCode shutdown (external server)');
-    }
+    // The OMP Agent Service owns agent execution. The Host never starts, stops, or probes an OpenCode process.
 
     const server = getServer();
     if (server) {

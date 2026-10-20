@@ -1,7 +1,6 @@
 import { registerFsRoutes } from '../fs/routes.js';
 import { registerEnvironmentRoutes } from '../environment/routes.js';
 import { registerQuotaRoutes } from '../quota/routes.js';
-import { registerSmallModelRoutes } from '../small-model/routes.js';
 import { registerWalkthroughRoutes } from '../walkthrough/routes.js';
 import { registerSessionGoalRoutes } from '../session-goal/routes.js';
 import { registerSourceControlRoutes } from '../source-control/routes.js';
@@ -21,7 +20,6 @@ import { registerMessageSearchRoutes } from '../message-search/routes.js';
 import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/runtime.js';
 import { registerMessageQueueRoutes } from '../message-queue/runtime.js';
 import { registerRoutingRoutes } from '../routing/routes.js';
-import { registerConfigEntityRoutes } from './config-entity-routes.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
 import { registerProjectIconRoutes } from '../host/project-icon-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
@@ -33,36 +31,7 @@ import { registerTrackedItemsRoutes } from '../tracked-items/routes.js';
 import { registerOpenChamberSessionRoutes } from '../openchamber-sessions/routes.js';
 import { registerOpenChamberControlRoutes } from '../openchamber-control/routes.js';
 import { registerMarkdownImageGrantRoutes } from '../markdown-image-grants/routes.js';
-import { registerSkillRoutes } from './skill-routes.js';
-import { registerPluginRoutes } from './plugin-routes.js';
-import { getNpmInfo, clearCache as clearNpmCache } from './npm-registry.js';
-import { parseNpmSpec, parsePathSpec, isExactSemver } from './plugin-spec.js';
-import { registerOpenCodeRoutes } from './routes.js';
-import { getProviderSources, removeProviderConfig, upsertProviderConfig } from './providers.js';
-import { getAgentSources, getAgentConfig, getAgentPermissions, createAgent, updateAgent, deleteAgent, listDisabledAgents } from './agents.js';
-import { getCommandSources, getCommandConfig, createCommand, updateCommand, deleteCommand } from './commands.js';
-import { listSnippets, getSnippet, createSnippet, updateSnippet, deleteSnippet, expandSnippets } from './snippets.js';
-import {
-  listPluginEntries,
-  getPluginEntry,
-  createPluginEntry,
-  updatePluginEntry,
-  deletePluginEntry,
-  listPluginDirFiles,
-  readPluginDirFile,
-  writePluginDirFile,
-  deletePluginDirFile,
-  encodePluginId,
-  decodePluginId,
-} from './plugins.js';
-import { SKILL_DIR, SKILL_SCOPE, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile } from './shared.js';
-import { getSkillSources, discoverSkills, createSkill, updateSkill, deleteSkill, renameSkill, isManagedSkillPath } from './skills.js';
-import { getCuratedSkillsSources } from '../skills-catalog/curated-sources.js';
-import { getCacheKey, scanWithCache } from '../skills-catalog/cache.js';
-import { parseSkillRepoSource } from '../skills-catalog/source.js';
-import { scanSkillsRepository } from '../skills-catalog/scan.js';
-import { installSkillsFromRepository } from '../skills-catalog/install.js';
-import { fetchGitHubRepoMetas } from '../skills-catalog/github-meta.js';
+import { createSkillRepositoryIdentityResolver } from '../host/skill-repository-identity.js';
 import crypto from 'node:crypto';
 import { getGitHubAuthByAccountId } from '../github/auth.js';
 import { getGitHubCliCredential } from '../github/octokit.js';
@@ -81,10 +50,8 @@ import { completeWorktreeCheckoutHydration, configureRepositoryTransport } from 
 import { createPrivateRepositoryIdentityResolver } from '../source-control/repository-identity.js';
 import { createSourceControlAuditStore } from '../source-control/audit-storage.js';
 
-export const createFeatureRoutesRuntime = (dependencies) => {
-  const {
-    clientReloadDelayMs,
-  } = dependencies;
+export const createFeatureRoutesRuntime = () => {
+  let skillRepositoryDependencies = null;
   const gitRuntimeIdentity = Object.freeze({
     id: `server_${crypto.randomUUID()}`,
     platform: process.env.OPENCHAMBER_RUNTIME === 'desktop' ? 'desktop' : 'web',
@@ -219,18 +186,11 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       readCustomThemesFromDisk,
       saveImportedTheme,
       deleteImportedTheme,
-      refreshOpenCodeAfterConfigChange,
-      getOpenCodeResolutionSnapshot,
-      formatSettingsResponse,
       readSettingsFromDisk,
       readSettingsFromDiskMigrated,
       persistSettings,
       sanitizeProjects,
       sanitizeSkillCatalogs,
-      isUnsafeSkillRelativePath,
-      buildOpenCodeUrl,
-      getOpenCodeAuthHeaders,
-      getOpenCodePort,
       getOwnPorts,
       devServerScanner,
       buildAugmentedPath,
@@ -248,7 +208,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       openChamberControlService,
       getOpenChamberEventClients,
       writeSseEvent,
-      emitSessionCreatedEvent,
       permissionAutoAcceptRuntime,
       worktreeBootstrapStore,
       messageQueueRuntime,
@@ -268,29 +227,12 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       readCustomThemesFromDisk,
       saveImportedTheme,
       deleteImportedTheme,
-      refreshOpenCodeAfterConfigChange,
-      clientReloadDelayMs,
     });
 
     registerPermissionAutoAcceptRoutes(app, permissionAutoAcceptRuntime);
     registerMessageQueueRoutes(app, messageQueueRuntime, { resolveSessionScope: resolveHostSessionScope, listQueueScopes });
     registerRoutingRoutes(app, routingRuntime);
 
-    registerOpenCodeRoutes(app, {
-      crypto,
-      clientReloadDelayMs,
-      getOpenCodeResolutionSnapshot,
-      formatSettingsResponse,
-      readSettingsFromDiskMigrated,
-      persistSettings,
-      resolveProjectDirectory,
-      getProviderSources,
-      removeProviderConfig,
-      upsertProviderConfig,
-      refreshOpenCodeAfterConfigChange,
-      buildOpenCodeUrl,
-      getOpenCodeAuthHeaders,
-    });
 
     registerProjectIconRoutes(app, {
       fsPromises,
@@ -331,56 +273,11 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       approvedTempRoot: os.tmpdir(),
     });
 
-    registerConfigEntityRoutes(app, {
-      resolveProjectDirectory,
-      resolveOptionalProjectDirectory,
-      refreshOpenCodeAfterConfigChange,
-      clientReloadDelayMs,
-      getAgentSources,
-      getAgentConfig,
-      getAgentPermissions,
-      listDisabledAgents,
-      createAgent,
-      updateAgent,
-      deleteAgent,
-      getCommandSources,
-      getCommandConfig,
-      createCommand,
-      updateCommand,
-      deleteCommand,
-      listSnippets,
-      getSnippet,
-      createSnippet,
-      updateSnippet,
-      deleteSnippet,
-      expandSnippets,
-    });
 
-    registerPluginRoutes(app, {
-      resolveOptionalProjectDirectory,
-      refreshOpenCodeAfterConfigChange,
-      clientReloadDelayMs,
-      listPluginEntries,
-      getPluginEntry,
-      createPluginEntry,
-      updatePluginEntry,
-      deletePluginEntry,
-      listPluginDirFiles,
-      readPluginDirFile,
-      writePluginDirFile,
-      deletePluginDirFile,
-      encodePluginId,
-      decodePluginId,
-      getNpmInfo,
-      parseNpmSpec,
-      parsePathSpec,
-      isExactSemver,
-    });
 
-    const { getProfiles, getProfile, getGlobalIdentity, resolveRepositoryGitPaths } = await import('../git/index.js');
+    const { getProfile, getGlobalIdentity, resolveRepositoryGitPaths } = await import('../git/index.js');
 
     registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential });
-    registerSmallModelRoutes(app, { getSmallModelService, resolveWorkspaceScope });
     registerSessionGoalRoutes(app);
     const gitBinary = resolveGitBinaryForSpawn();
     const gitlabAuthStore = createSourceControlAuthStore({
@@ -561,37 +458,12 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       fsImpl: fsPromises,
       snapshotRoot: path.join(openchamberDataDir, 'git-ssh-operation-keys'),
     });
-    registerSkillRoutes(app, {
-      resolveProjectDirectory,
-      resolveOptionalProjectDirectory,
+    skillRepositoryDependencies = {
       readSettingsFromDisk,
       sanitizeSkillCatalogs,
-      isUnsafeSkillRelativePath,
-      getSkillSources,
-      discoverSkills,
-      createSkill,
-      updateSkill,
-      deleteSkill,
-      renameSkill,
-      isManagedSkillPath,
-      readSkillSupportingFile,
-      writeSkillSupportingFile,
-      deleteSkillSupportingFile,
-      SKILL_SCOPE,
-      SKILL_DIR,
-      getCuratedSkillsSources,
-      getCacheKey,
-      scanWithCache,
-      parseSkillRepoSource,
-      scanSkillsRepository,
-      installSkillsFromRepository,
-      fetchGitHubRepoMetas,
-      getProfiles,
-      getProfile,
-      createHttpsCredentialReference,
-      resolveSourceControlAccount,
+      resolveCatalogGitIdentity: createSkillRepositoryIdentityResolver({ getProfile, resolveSourceControlAccount, createHttpsCredentialReference }),
       credentialResolver: gitCredentialResolver,
-    });
+    };
     gitRepositoryCredentialRuntime = createGitRepositoryCredentialRuntime({
       readBinding: (directory) => walkthroughBindingService.get(directory),
       credentialResolver: gitCredentialResolver,
@@ -640,8 +512,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       resolveSourceControlAccount,
       errorRedactionSecrets: [openchamberDataDir],
       worktreeBootstrapStore,
-      buildOpenCodeUrl,
-      getOpenCodeAuthHeaders,
       emitWorktreeChanged: ({ directories, at }) => {
         const clients = getOpenChamberEventClients();
         for (const client of clients) {
@@ -701,6 +571,10 @@ export const createFeatureRoutesRuntime = (dependencies) => {
 
   return {
     registerRoutes,
+    getSkillRepositoryDependencies() {
+      if (!skillRepositoryDependencies) throw new Error('Skill repository credentials are unavailable until Host initialization completes');
+      return skillRepositoryDependencies;
+    },
     hydrateBoundCheckout,
     createChangeRequestWorktree,
     /** Writes the Git credential helper's endpoint file; a no-op until the Git routes are registered. */

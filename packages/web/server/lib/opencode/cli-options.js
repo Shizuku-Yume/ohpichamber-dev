@@ -6,10 +6,7 @@ export const parseServeCliOptions = ({
   managedLocalMode,
 }) => {
   const args = Array.isArray(argv) ? [...argv] : [];
-  const envPassword =
-    env.OPENCHAMBER_UI_PASSWORD ||
-    env.OPENCODE_UI_PASSWORD ||
-    null;
+  const envPassword = env.OPENCHAMBER_UI_PASSWORD || null;
   const envCfTunnel = env.OPENCHAMBER_TRY_CF_TUNNEL === 'true';
   const envTunnelProvider = env.OPENCHAMBER_TUNNEL_PROVIDER || undefined;
   const envTunnelMode = env.OPENCHAMBER_TUNNEL_MODE || undefined;

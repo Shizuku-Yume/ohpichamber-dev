@@ -23,5 +23,3 @@ export const provideLoginShellEnvSnapshot = (snapshot) => {
   provided = snapshot ? { ...snapshot } : null;
 };
 
-// `undefined` when no host provided one, so the server probes itself.
-export const providedLoginShellEnvSnapshot = () => provided;

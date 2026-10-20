@@ -16,19 +16,19 @@ the 2.x code, not from memory of 1.x.
 - `packages/ui/src/lib/opencode/client.ts` — every official OpenCode call the
   shared UI makes; `projection.ts` turns wire shapes into the OpenChamber
   domain model in `model.ts`; `events.ts` translates wire events;
-  `plugins.ts` translates the experimental plugin routes; `session-stats.ts`
-  translates the experimental `session.stats` usage route; `websearch.ts`
+  `plugins.ts` translates the experimental plugin routes; `websearch.ts`
   translates web search (providers, the `websearch` config choice, keys, the
   tool's text result and its first-use consent form). These files are the
   only place that knows 2.x wire shapes. Rendering and stores
   read the domain model; fix a missing field there, never with a shim.
+- Historical usage no longer crosses the OpenCode boundary. Shared UI uses
+  CanonicalClient usage endpoints through the Host; exact registered native
+  sources are inspected cold in the Bun usage worker.
 - `packages/web/server/lib/opencode/proxy.js` forwards `/api/*` as-is (2.x
   serves under `/api` itself) and folds OpenChamber-owned session state into
   the records it serves. `env-runtime.js` launches `opencode serve`.
 - Plugins OpenChamber generates for OpenCode: `plugin-spec.js` and
-  `agent-tool/runtime.js`, declared through the watched
-  `<dataDir>/opencode.managed.json` (`OPENCODE_CONFIG`), so a settings change
-  applies without a restart. Only the binary, port and external toggle restart.
+  `agent-tool/runtime.js`. Only the binary, port and external toggle restart.
 
 ## Every directory-scoped read starts a location
 

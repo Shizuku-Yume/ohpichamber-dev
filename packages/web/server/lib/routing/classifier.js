@@ -4,11 +4,10 @@
  * - `off`: nothing. Jev sees conversation excerpts, so it is off until the
  *   user picks a source.
  * - `zen-promo`: OpenCode Zen's free promotional model, no credential.
- * - `zen-key`: the paid model on the same endpoint, with a Zen API key the user
- *   saved in OpenCode.
- * - `openrouter`, `vercel`: the same System One API through OpenRouter or
- *   Vercel AI Gateway, with the key the user saved for that provider in
- *   OpenCode.
+ * - `zen-key`: the paid model on the same endpoint, using API-key auth from the
+ *   native `opencode-zen` provider.
+ * - `openrouter`, `vercel`: the same System One API through the native
+ *   `openrouter` and `vercel-ai-gateway` providers.
  * - `typesafe`: TypeSafe's own API with a key saved in OpenChamber.
  * - `custom`: any endpoint that speaks the System One API (a self-hosted
  *   gateway, a company proxy), with the URL, model and optional key saved in

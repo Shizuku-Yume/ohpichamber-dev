@@ -147,22 +147,7 @@ describe('core-routes', () => {
     expect(dependencies.gracefulShutdown).not.toHaveBeenCalled();
   });
 
-  it('should parse JSON bodies for snippet config routes', async () => {
-    const app = express();
-    registerCommonRequestMiddleware(app, { express });
-    app.post('/api/config/snippets/example', (req, res) => {
-      res.json({ body: req.body });
-    });
-
-    const response = await request(app)
-      .post('/api/config/snippets/example')
-      .send({ content: 'Snippet body' })
-      .expect(200);
-
-    expect(response.body).toEqual({ body: { content: 'Snippet body' } });
-  });
-
-  it('leaves the body of a request alone when told to, for both parsers', async () => {
+  it('leaves space and unknown API bodies untouched for generic routing', async () => {
     const app = express();
     registerCommonRequestMiddleware(app, { express, skipBodyParsing: (req) => req.path.startsWith('/api/spaces/') });
     const raw = (req, res) => {
@@ -176,31 +161,19 @@ describe('core-routes', () => {
       req.on('end', () => res.json({ body: req.body ?? null, raw: Buffer.concat(chunks).toString('utf8') }));
     };
     app.post('/api/spaces/abc/form', raw);
-    app.post('/api/spaces/abc/config/snippets/x', raw);
+    app.post('/api/spaces/abc/agent/v1/workspaces/w/prompts', raw);
     app.post('/api/other/form', raw);
+    app.post('/api/small-model/generate', raw);
 
     const kept = await request(app).post('/api/spaces/abc/form').type('form').send('a=1&b=2').expect(200);
     expect(kept.body).toEqual({ body: null, raw: 'a=1&b=2' });
-    const keptJson = await request(app).post('/api/spaces/abc/config/snippets/x').send({ content: 'x' }).expect(200);
+    const keptJson = await request(app).post('/api/spaces/abc/agent/v1/workspaces/w/prompts').send({ content: 'x' }).expect(200);
     expect(keptJson.body).toEqual({ body: null, raw: '{"content":"x"}' });
+    const genericSmallModelFallback = await request(app).post('/api/small-model/generate').send({ prompt: 'x' }).expect(200);
+    expect(genericSmallModelFallback.body).toEqual({ body: null, raw: '{"prompt":"x"}' });
     // Elsewhere the parsers still run, and a parsed body leaves nothing to read.
     const parsed = await request(app).post('/api/other/form').type('form').send('a=1&b=2').expect(200);
     expect(parsed.body).toEqual({ body: { a: '1', b: '2' }, raw: '' });
-  });
-
-  it('should parse JSON bodies for the web search config route', async () => {
-    const app = express();
-    registerCommonRequestMiddleware(app, { express });
-    app.put('/api/config/websearch', (req, res) => {
-      res.json({ body: req.body });
-    });
-
-    const response = await request(app)
-      .put('/api/config/websearch')
-      .send({ selection: 'random' })
-      .expect(200);
-
-    expect(response.body).toEqual({ body: { selection: 'random' } });
   });
 
   it('should parse JSON bodies for custom provider upsert routes', async () => {

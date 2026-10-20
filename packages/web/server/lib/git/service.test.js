@@ -5,6 +5,8 @@ import path from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import simpleGit from 'simple-git';
 import { createWorktreeBootstrapStore } from './worktree-bootstrap-storage.js';
+import { createProjectConfigRuntime } from '../projects/project-config.js';
+import { createProjectIdFromPath } from '../projects/project-id.js';
 import { loadSourceSections, parseSource, sourceKey } from '../walkthrough/sources.js';
 import { registerGitRoutes } from './routes.js';
 import { isUserAction } from '../environment/refresh-scope.js';
@@ -12,6 +14,8 @@ import { normalizeGitOutputPath } from './output-path.js';
 
 import {
   configureGitEnvironment,
+  configureProjectWorktreeDirectory,
+  initializeRepository,
   getCurrentIdentity,
   checkoutBranch,
   checkoutCommit,
@@ -189,6 +193,20 @@ async function createTempRepo() {
 // ---------------------------------------------------------------------------
 // resolveBaseRefForLog
 // ---------------------------------------------------------------------------
+
+describe('initializeRepository', () => {
+  it('initializes an ordinary directory and rejects unsupported roots', async () => {
+    if (!canRunGit()) return;
+    const directory = createTempDir();
+    await initializeRepository(directory);
+    expect(await isGitRepository(directory)).toBe(true);
+    await expect(initializeRepository(os.homedir())).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('rejects missing directories before invoking Git', async () => {
+    await expect(initializeRepository(path.join(os.tmpdir(), 'missing-openchamber-git-init'))).rejects.toThrow();
+  });
+});
 
 describe('getLog on a repository with no commits yet', () => {
   it('answers an empty history instead of failing, then the first commit appears', async () => {
@@ -1158,9 +1176,9 @@ describe('worktree root resolution', () => {
 
   it('creates and queries a managed worktree using native filesystem paths', async () => {
     if (!canRunGit()) return;
-    const previousDataHome = process.env.XDG_DATA_HOME;
+    const previousDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const parent = createTempDir();
-    process.env.XDG_DATA_HOME = path.join(parent, 'data space');
+    process.env.OPENCHAMBER_DATA_DIR = path.join(parent, 'data space');
     try {
       const repo = path.join(parent, 'repo space');
       fs.mkdirSync(repo);
@@ -1192,16 +1210,16 @@ describe('worktree root resolution', () => {
       expect(fs.existsSync(created.path)).toBe(false);
       expect(await getWorktrees(repo)).toHaveLength(1);
     } finally {
-      if (previousDataHome === undefined) delete process.env.XDG_DATA_HOME;
-      else process.env.XDG_DATA_HOME = previousDataHome;
+      if (previousDataHome === undefined) delete process.env.OPENCHAMBER_DATA_DIR;
+      else process.env.OPENCHAMBER_DATA_DIR = previousDataHome;
     }
   });
 
   it('creates and removes a managed worktree from a bare repository project directory', async () => {
     if (!canRunGit()) return;
-    const previousDataHome = process.env.XDG_DATA_HOME;
+    const previousDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const parent = createTempDir();
-    process.env.XDG_DATA_HOME = path.join(parent, 'data');
+    process.env.OPENCHAMBER_DATA_DIR = path.join(parent, 'data');
     try {
       const source = path.join(parent, 'source');
       fs.mkdirSync(source);
@@ -1234,8 +1252,8 @@ describe('worktree root resolution', () => {
       expect(fs.existsSync(created.path)).toBe(false);
       expect(await getWorktrees(bareRoot)).toHaveLength(0);
     } finally {
-      if (previousDataHome === undefined) delete process.env.XDG_DATA_HOME;
-      else process.env.XDG_DATA_HOME = previousDataHome;
+      if (previousDataHome === undefined) delete process.env.OPENCHAMBER_DATA_DIR;
+      else process.env.OPENCHAMBER_DATA_DIR = previousDataHome;
     }
   });
 
@@ -1458,8 +1476,8 @@ describe('getWorktrees', () => {
   it('publishes worktrees this server creates and removes', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    process.env.XDG_DATA_HOME = createTempDir();
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
+    process.env.OPENCHAMBER_DATA_DIR = createTempDir();
     const events = [];
     const unsubscribe = subscribeWorktreeTopologyChanges((event) => events.push(event));
     try {
@@ -1487,9 +1505,9 @@ describe('getWorktrees', () => {
     } finally {
       unsubscribe();
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   });
@@ -1562,11 +1580,11 @@ describe('createWorktree', () => {
   it('reports directory, Git, and setup bootstrap phases while preserving legacy status', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
     const setupMarker = path.join(dataHome, 'setup-started');
     const setupScript = path.join(dataHome, 'setup-phase.cjs');
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
     fs.writeFileSync(
       setupScript,
@@ -1614,9 +1632,9 @@ describe('createWorktree', () => {
       });
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   });
@@ -1708,9 +1726,9 @@ describe('createWorktree', () => {
   it('does not run the post-checkout hook while populating a created worktree', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
     try {
       const repo = createTempDir();
@@ -1740,9 +1758,9 @@ describe('createWorktree', () => {
       expect(fs.existsSync(hookLog)).toBe(false);
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   });
@@ -1750,9 +1768,9 @@ describe('createWorktree', () => {
   it('skips a non-executable post-checkout hook', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
     try {
       const repo = createTempDir();
@@ -1784,9 +1802,9 @@ describe('createWorktree', () => {
       expect(fs.existsSync(hookLog)).toBe(false);
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   });
@@ -1794,9 +1812,9 @@ describe('createWorktree', () => {
   it('does not execute a failing post-checkout hook during bootstrap', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
     try {
       const repo = createTempDir();
@@ -1827,9 +1845,9 @@ describe('createWorktree', () => {
       expect(fs.existsSync(hookLog)).toBe(false);
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   });
@@ -1837,7 +1855,7 @@ describe('createWorktree', () => {
   it('waits for active bootstrap work before removing through a checkout alias', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
     const setupStarted = path.join(dataHome, 'remove-race-started');
     const setupCompleted = path.join(dataHome, 'remove-race-completed');
@@ -1852,7 +1870,7 @@ describe('createWorktree', () => {
         return true;
       }),
     };
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
     fs.writeFileSync(
       setupScript,
@@ -1907,9 +1925,9 @@ describe('createWorktree', () => {
       });
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   });
@@ -1969,9 +1987,9 @@ describe('createWorktree', () => {
   it('preflights fast create branch-in-use failures before creating the candidate directory', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
     try {
       const repo = createTempDir();
@@ -2000,13 +2018,13 @@ describe('createWorktree', () => {
         `Branch is already checked out in ${canonicalWorktree.replace(/\\/g, '/')}`,
       );
 
-      const candidateDirectory = path.join(dataHome, 'opencode', 'worktree', projectID, 'feature-in-use');
+      const candidateDirectory = path.join(dataHome, 'worktree', projectID, 'feature-in-use');
       expect(fs.existsSync(candidateDirectory)).toBe(false);
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   });
@@ -2014,9 +2032,9 @@ describe('createWorktree', () => {
   it('does not auto-track the remote start ref when creating a new branch from it', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
     try {
       const { repository } = createRepositoryWithRemote({ defaultBranch: 'main' });
@@ -2042,9 +2060,9 @@ describe('createWorktree', () => {
       expect(readBranchConfig(created.path, 'openchamber/feature', 'merge')).toBe('');
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   }, 30_000);
@@ -2052,9 +2070,9 @@ describe('createWorktree', () => {
   it('falls back to the remote start ref for upstream tracking when no explicit keys are given', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
     try {
       const { repository } = createRepositoryWithRemote({ defaultBranch: 'main' });
@@ -2074,9 +2092,9 @@ describe('createWorktree', () => {
       expect(readBranchConfig(created.path, 'openchamber/fallback-wt', 'remote')).toBe('origin');
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   }, 30_000);
@@ -2084,9 +2102,9 @@ describe('createWorktree', () => {
   it('falls back to the tracked local branch when the source fetch fails', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
     try {
       const { repository } = createRepositoryWithRemote({ defaultBranch: 'main' });
@@ -2106,24 +2124,24 @@ describe('createWorktree', () => {
       expect(runGit(created.path, ['rev-parse', 'HEAD']).trim()).toBe(expectedHead);
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   }, 30_000);
 
   describe('from a local base branch', () => {
     const withDataHome = async (run) => {
-      const previousXdgDataHome = process.env.XDG_DATA_HOME;
-      process.env.XDG_DATA_HOME = createTempDir();
+      const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
+      process.env.OPENCHAMBER_DATA_DIR = createTempDir();
       try {
         await run();
       } finally {
         if (previousXdgDataHome === undefined) {
-          delete process.env.XDG_DATA_HOME;
+          delete process.env.OPENCHAMBER_DATA_DIR;
         } else {
-          process.env.XDG_DATA_HOME = previousXdgDataHome;
+          process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
         }
       }
     };
@@ -2208,9 +2226,9 @@ describe('createWorktree', () => {
   it('rejects creation from a remote start ref that was never fetched and cannot be fetched', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
     try {
       const { repository } = createRepositoryWithRemote({ defaultBranch: 'main' });
@@ -2225,21 +2243,21 @@ describe('createWorktree', () => {
       })).rejects.toThrow(/does not appear to be a git repository|Could not read from remote repository/i);
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   }, 30_000);
 });
 
 // ---------------------------------------------------------------------------
-// createWorktree with OpenCode worktree.directory
+// createWorktree with a personal worktreeDirectory
 // ---------------------------------------------------------------------------
 
-describe('createWorktree with OpenCode worktree.directory', () => {
+describe('createWorktree with a personal worktreeDirectory', () => {
   const initRepo = () => {
-    const repo = createTempDir();
+    const repo = fs.realpathSync(createTempDir());
     runGit(repo, ['init', '-b', 'main']);
     runGit(repo, ['config', 'user.email', 'test@example.com']);
     runGit(repo, ['config', 'user.name', 'Test User']);
@@ -2249,29 +2267,37 @@ describe('createWorktree with OpenCode worktree.directory', () => {
     return repo;
   };
 
-  const withDataHome = (test) => async () => {
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+  const withWorktreeConfig = (test) => async () => {
+    const previousDataDir = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
+    const projectConfigRuntime = createProjectConfigRuntime({
+      fsPromises: fs.promises,
+      path,
+      projectsDirPath: createTempDir(),
+    });
+    configureProjectWorktreeDirectory((projectConfigId) => projectConfigRuntime.readWorktreeDirectory(projectConfigId));
     try {
-      await test(dataHome);
+      await test({ dataHome, projectConfigRuntime });
     } finally {
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+      configureProjectWorktreeDirectory(null);
+      if (previousDataDir === undefined) {
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousDataDir;
       }
     }
   };
 
-  it('creates and previews under a configured relative folder', withDataHome(async () => {
+  const setWorktreeDirectory = (projectConfigRuntime, repo, worktreeDirectory) => (
+    projectConfigRuntime.updateProjectSetup(createProjectIdFromPath(repo), { worktreeDirectory })
+  );
+
+  it('creates and previews under a configured relative folder', withWorktreeConfig(async ({ projectConfigRuntime }) => {
     if (!canRunGit()) return;
 
     const repo = initRepo();
-    fs.writeFileSync(
-      path.join(repo, 'opencode.json'),
-      JSON.stringify({ worktree: { directory: '.worktrees' } }),
-    );
+    await setWorktreeDirectory(projectConfigRuntime, repo, '.worktrees');
 
     const preview = await previewWorktreeCreate(repo, { mode: 'new', worktreeName: 'preview-tree' });
     expect(path.basename(preview.path)).toBe('preview-tree');
@@ -2288,15 +2314,24 @@ describe('createWorktree with OpenCode worktree.directory', () => {
     expect(fs.existsSync(created.path)).toBe(false);
   }));
 
-  it('uses an absolute configured folder as-is', withDataHome(async () => {
+  it('reads the setting from the primary worktree when asked from a linked worktree', withWorktreeConfig(async ({ projectConfigRuntime }) => {
+    if (!canRunGit()) return;
+
+    const repo = initRepo();
+    const linked = path.join(createTempDir(), 'linked');
+    runGit(repo, ['worktree', 'add', linked, '-b', 'feature/linked-config']);
+    await setWorktreeDirectory(projectConfigRuntime, repo, '.worktrees');
+
+    const preview = await previewWorktreeCreate(linked, { mode: 'new', worktreeName: 'linked-preview' });
+    expect(fs.realpathSync(path.dirname(preview.path))).toBe(fs.realpathSync(path.join(repo, '.worktrees')));
+  }));
+
+  it('uses an absolute configured folder as-is', withWorktreeConfig(async ({ projectConfigRuntime }) => {
     if (!canRunGit()) return;
 
     const repo = initRepo();
     const target = createTempDir();
-    fs.writeFileSync(
-      path.join(repo, 'opencode.json'),
-      JSON.stringify({ worktree: { directory: target } }),
-    );
+    await setWorktreeDirectory(projectConfigRuntime, repo, target);
 
     const created = await createWorktree(repo, {
       mode: 'new',
@@ -2306,58 +2341,41 @@ describe('createWorktree with OpenCode worktree.directory', () => {
     expect(fs.realpathSync(created.path)).toBe(fs.realpathSync(path.join(target, 'absolute-tree')));
   }));
 
-  it('falls back to the data-dir folder when the setting is unset', withDataHome(async (dataHome) => {
+  it('falls back to the Host data-dir folder when the setting is unset', withWorktreeConfig(async ({ dataHome }) => {
     if (!canRunGit()) return;
 
     const repo = initRepo();
     const projectID = runGit(repo, ['rev-list', '--max-parents=0', '--all']).trim();
 
-    // `worktree: null` in the custom layer forces the setting off even if the
-    // machine running the tests has a global `worktree.directory`.
-    const previousOpenCodeConfig = process.env.OPENCODE_CONFIG;
-    const customConfig = path.join(createTempDir(), 'opencode.json');
-    fs.writeFileSync(customConfig, JSON.stringify({ worktree: null }));
-    process.env.OPENCODE_CONFIG = customConfig;
-    try {
-      const created = await createWorktree(repo, {
-        mode: 'new',
-        branchName: 'openchamber/fallback-tree',
-        worktreeName: 'fallback-tree',
-      });
+    const created = await createWorktree(repo, {
+      mode: 'new',
+      branchName: 'openchamber/fallback-tree',
+      worktreeName: 'fallback-tree',
+    });
 
-      expect(fs.realpathSync(created.path))
-        .toBe(fs.realpathSync(path.join(dataHome, 'opencode', 'worktree', projectID, 'fallback-tree')));
-    } finally {
-      if (previousOpenCodeConfig === undefined) {
-        delete process.env.OPENCODE_CONFIG;
-      } else {
-        process.env.OPENCODE_CONFIG = previousOpenCodeConfig;
-      }
-    }
+    expect(fs.realpathSync(created.path))
+      .toBe(fs.realpathSync(path.join(dataHome, 'worktree', projectID, 'fallback-tree')));
   }));
 
-  it('still removes a leftover under the data-dir root after the setting moves new worktrees', withDataHome(async (dataHome) => {
+  it('still removes a leftover under the Host data-dir root after the setting moves new worktrees', withWorktreeConfig(async ({ dataHome, projectConfigRuntime }) => {
     if (!canRunGit()) return;
 
     const repo = initRepo();
     const projectID = runGit(repo, ['rev-list', '--max-parents=0', '--all']).trim();
-    const legacyOrphan = path.join(dataHome, 'opencode', 'worktree', projectID, 'legacy-orphan');
+    const legacyOrphan = path.join(dataHome, 'worktree', projectID, 'legacy-orphan');
     fs.mkdirSync(legacyOrphan, { recursive: true });
     fs.writeFileSync(path.join(legacyOrphan, 'leftover.txt'), 'x');
 
-    fs.writeFileSync(
-      path.join(repo, 'opencode.json'),
-      JSON.stringify({ worktree: { directory: '.worktrees' } }),
-    );
+    await setWorktreeDirectory(projectConfigRuntime, repo, '.worktrees');
 
     await removeWorktree(repo, { directory: legacyOrphan });
     expect(fs.existsSync(legacyOrphan)).toBe(false);
   }));
 
-  it('leaves an unregistered directory alone when the configured folder is the repository parent', withDataHome(async () => {
+  it('leaves an unregistered directory alone when the configured folder is the repository parent', withWorktreeConfig(async ({ projectConfigRuntime }) => {
     if (!canRunGit()) return;
 
-    const parent = createTempDir();
+    const parent = fs.realpathSync(createTempDir());
     const repo = path.join(parent, 'project');
     fs.mkdirSync(repo);
     runGit(repo, ['init', '-b', 'main']);
@@ -2366,7 +2384,7 @@ describe('createWorktree with OpenCode worktree.directory', () => {
     fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
     runGit(repo, ['add', 'README.md']);
     runGit(repo, ['commit', '-m', 'Initial commit']);
-    fs.writeFileSync(path.join(repo, 'opencode.json'), JSON.stringify({ worktree: { directory: '..' } }));
+    await setWorktreeDirectory(projectConfigRuntime, repo, '..');
 
     const sibling = path.join(parent, 'sibling-project');
     fs.mkdirSync(sibling);
@@ -2376,19 +2394,20 @@ describe('createWorktree with OpenCode worktree.directory', () => {
     expect(fs.existsSync(path.join(sibling, 'keep.txt'))).toBe(true);
   }));
 
-  it('still removes a worktree when the project config cannot be read', withDataHome(async (dataHome) => {
+  it('still removes a worktree when the project config cannot be read', withWorktreeConfig(async ({ dataHome }) => {
     if (!canRunGit()) return;
 
     const repo = initRepo();
     const projectID = runGit(repo, ['rev-list', '--max-parents=0', '--all']).trim();
-    const legacyOrphan = path.join(dataHome, 'opencode', 'worktree', projectID, 'unreadable-orphan');
+    const legacyOrphan = path.join(dataHome, 'worktree', projectID, 'unreadable-orphan');
     fs.mkdirSync(legacyOrphan, { recursive: true });
     fs.writeFileSync(path.join(legacyOrphan, 'leftover.txt'), 'x');
 
-    // A directory where the config file is expected makes the read throw. A
-    // removal must not depend on the config being readable, so it falls back to
-    // the data-dir root instead of failing.
-    fs.mkdirSync(path.join(repo, 'opencode.json'));
+    // A failing reader must not make removal depend on config being readable;
+    // it falls back to the Host data-dir root instead of failing.
+    configureProjectWorktreeDirectory(async () => {
+      throw new Error('project config unreadable');
+    });
 
     await expect(removeWorktree(repo, { directory: legacyOrphan })).resolves.toBe(true);
     expect(fs.existsSync(legacyOrphan)).toBe(false);
@@ -2401,16 +2420,16 @@ describe('createWorktree with OpenCode worktree.directory', () => {
 
 describe('createWorktree from a forked GitHub PR', () => {
   const withDataHome = async (test) => {
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
     try {
       await test(dataHome);
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   };
@@ -2777,7 +2796,7 @@ describe('contributor checkout trust inspection', () => {
     const sourceSha = runGit(repository, ['rev-parse', 'HEAD']).trim();
 
     const inspection = await inspectContributorCheckoutActions(repository, {
-      sourceSha, projectId: 'missing_project', setupCommand: '',
+      sourceSha, setupCommand: '',
     });
 
     expect(inspection.actions).toEqual([expect.objectContaining({
@@ -2797,7 +2816,7 @@ describe('contributor checkout trust inspection', () => {
       fs.chmodSync(hookPath, 0o755);
     }
     const sourceSha = runGit(repository, ['rev-parse', 'HEAD']).trim();
-    const provenance = { sourceSha, projectId: 'missing_project', setupCommand: '' };
+    const provenance = { sourceSha, setupCommand: '' };
     runGit(repository, ['config', 'core.hooksPath', 'first-hooks']);
     const first = await inspectContributorCheckoutActions(repository, provenance);
     runGit(repository, ['config', 'core.hooksPath', 'second-hooks']);
@@ -2805,6 +2824,35 @@ describe('contributor checkout trust inspection', () => {
 
     expect(first.actions[0].contentDigest).toBe(second.actions[0].contentDigest);
     expect(first.digest).not.toBe(second.digest);
+  });
+
+  it('inspects only explicit checkout actions, never OpenCode project storage', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const dataHome = createTempDir();
+    process.env.XDG_DATA_HOME = dataHome;
+    try {
+      const { repository } = createRepositoryWithRemote();
+      const sourceSha = runGit(repository, ['rev-parse', 'HEAD']).trim();
+      const projectId = runGit(repository, ['rev-list', '--max-parents=0', '--all']).trim().split('\n')[0];
+      const storageDirectory = path.join(dataHome, 'opencode', 'storage', 'project');
+      fs.mkdirSync(storageDirectory, { recursive: true });
+      fs.writeFileSync(
+        path.join(storageDirectory, `${projectId}.json`),
+        JSON.stringify({ commands: { start: 'touch project-start-ran' } }),
+      );
+
+      const inspection = await inspectContributorCheckoutActions(repository, {
+        sourceSha, projectId, setupCommand: 'touch explicit-setup-ran',
+      });
+
+      expect(inspection.actions).toEqual([{ kind: 'setup-command', command: 'touch explicit-setup-ran' }]);
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
   });
 });
 
@@ -2816,16 +2864,16 @@ describe('git remote arguments with option-like names', () => {
   const OPTION_LIKE_REMOTE = '--mirror';
 
   const withDataHome = async (test) => {
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
     try {
       await test(dataHome);
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   };
@@ -3016,30 +3064,15 @@ describe('removeWorktree', () => {
     expect(runGit(fixture.repo, ['worktree', 'list', '--porcelain'])).not.toContain(fixture.worktree);
   });
 
-  it('removes an absolute .git directory symlink only after instance disposal', async () => {
+  it('removes a registered worktree with an absolute .git directory symlink', async () => {
     if (!canRunGit() || process.platform === 'win32') return;
     const fixture = createRemovalWorktree();
-    const linkTarget = installGitDirectoryLink(fixture, true);
-    const disposalStates = [];
+    installGitDirectoryLink(fixture, true);
 
     await expect(removeWorktree(fixture.repo, {
       directory: fixture.worktree,
-      disposeInstance: async (directory) => {
-        disposalStates.push({
-          directory,
-          linkTarget: fs.readlinkSync(fixture.gitEntry),
-          metadataExists: fs.existsSync(fixture.metadata),
-          branch: runGit(directory, ['rev-parse', '--abbrev-ref', 'HEAD']).trim(),
-        });
-      },
     })).resolves.toBe(true);
 
-    expect(disposalStates).toEqual([{
-      directory: fixture.worktree,
-      linkTarget,
-      metadataExists: true,
-      branch: 'feature/remove',
-    }]);
     expect(fs.existsSync(fixture.worktree)).toBe(false);
     expect(fs.existsSync(fixture.metadata)).toBe(false);
     expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
@@ -3810,15 +3843,12 @@ describe('removeWorktree', () => {
     fs.renameSync(gitEntry, metadata);
     const linkTarget = absolute ? metadata : 'git-metadata';
     fs.symlinkSync(linkTarget, gitEntry, 'dir');
-    const disposeInstance = vi.fn();
 
     await expect(removeWorktree(fixture.repo, {
       directory: fixture.repo,
       deleteLocalBranch: true,
-      disposeInstance,
     })).rejects.toThrow('Cannot remove the primary workspace');
 
-    expect(disposeInstance).not.toHaveBeenCalled();
     expect(fs.readlinkSync(gitEntry)).toBe(linkTarget);
     expect(runGit(fixture.repo, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('main');
     expect(fs.readFileSync(path.join(fixture.repo, 'README.md'), 'utf8')).toBe('# Test\n');
@@ -3830,11 +3860,9 @@ describe('removeWorktree', () => {
     const orphan = createTempDir();
     const gitEntry = path.join(orphan, '.git');
     fs.symlinkSync(fixture.metadata, gitEntry, 'dir');
-    const disposeInstance = vi.fn();
 
-    await expect(removeWorktree(fixture.repo, { directory: orphan, disposeInstance })).resolves.toBe(true);
+    await expect(removeWorktree(fixture.repo, { directory: orphan })).resolves.toBe(true);
 
-    expect(disposeInstance).not.toHaveBeenCalled();
     expect(fs.readlinkSync(gitEntry)).toBe(fixture.metadata);
     expect(fs.existsSync(fixture.metadata)).toBe(true);
     expect(fs.existsSync(fixture.worktree)).toBe(true);
@@ -3843,9 +3871,9 @@ describe('removeWorktree', () => {
   it('forgets unmanaged orphan worktree entries without deleting files', async () => {
     if (!canRunGit()) return;
 
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
     const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
+    process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
     try {
       const repo = createTempDir();
@@ -3860,140 +3888,16 @@ describe('removeWorktree', () => {
       runGit(repo, ['commit', '-m', 'Initial commit']);
       fs.writeFileSync(canary, 'sentinel');
 
-      const disposeInstance = vi.fn();
       await expect(removeWorktree(repo, {
         directory: sentinel,
         deleteLocalBranch: false,
-        disposeInstance,
       })).resolves.toBe(true);
       expect(fs.existsSync(canary)).toBe(true);
-      expect(disposeInstance).not.toHaveBeenCalled();
     } finally {
       if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
+        delete process.env.OPENCHAMBER_DATA_DIR;
       } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  it('disposes the registered worktree instance before git removes the directory', async () => {
-    if (!canRunGit()) return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    process.env.XDG_DATA_HOME = createTempDir();
-
-    try {
-      const repo = createTempDir();
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
-
-      const created = await createWorktree(repo, {
-        mode: 'new',
-        branchName: 'feature/dispose-order',
-        worktreeName: 'dispose-order',
-      });
-      const targetRealPath = fs.realpathSync(created.path);
-
-      let observed = null;
-      const disposeInstance = vi.fn(async (worktreeDirectory) => {
-        observed = {
-          realPath: fs.realpathSync(worktreeDirectory),
-          directoryExists: fs.existsSync(worktreeDirectory),
-        };
-      });
-
-      await expect(removeWorktree(repo, {
-        directory: created.path,
-        disposeInstance,
-      })).resolves.toBe(true);
-
-      expect(disposeInstance).toHaveBeenCalledTimes(1);
-      expect(observed).toEqual({ realPath: targetRealPath, directoryExists: true });
-      expect(fs.existsSync(created.path)).toBe(false);
-    } finally {
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  it('warns about a failed instance disposal and still removes the worktree', async () => {
-    if (!canRunGit()) return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    process.env.XDG_DATA_HOME = createTempDir();
-
-    try {
-      const repo = createTempDir();
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
-
-      const created = await createWorktree(repo, {
-        mode: 'new',
-        branchName: 'feature/dispose-failure',
-        worktreeName: 'dispose-failure',
-      });
-
-      const disposeInstance = vi.fn(async () => {
-        throw new Error('OpenCode API URL is not available');
-      });
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      try {
-        await expect(removeWorktree(repo, {
-          directory: created.path,
-          disposeInstance,
-        })).resolves.toBe(true);
-
-        expect(disposeInstance).toHaveBeenCalledTimes(1);
-        expect(fs.existsSync(created.path)).toBe(false);
-        expect(warnSpy).toHaveBeenCalledWith(
-          expect.stringContaining(created.path),
-          'OpenCode API URL is not available'
-        );
-      } finally {
-        warnSpy.mockRestore();
-      }
-    } finally {
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  it('never disposes the primary workspace', async () => {
-    if (!canRunGit()) return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    process.env.XDG_DATA_HOME = createTempDir();
-
-    try {
-      const repo = createTempDir();
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
-
-      const disposeInstance = vi.fn();
-      await expect(removeWorktree(repo, {
-        directory: repo,
-        disposeInstance,
-      })).rejects.toThrow('Cannot remove the primary workspace');
-      expect(disposeInstance).not.toHaveBeenCalled();
-    } finally {
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
+        process.env.OPENCHAMBER_DATA_DIR = previousXdgDataHome;
       }
     }
   });
@@ -4058,7 +3962,7 @@ describe('removeWorktree', () => {
         }
         vi.stubEnv('HOME', home);
         vi.stubEnv('XDG_CONFIG_HOME', path.join(home, 'config'));
-        vi.stubEnv('XDG_DATA_HOME', path.join(home, 'data'));
+        vi.stubEnv('OPENCHAMBER_DATA_DIR', path.join(home, 'data'));
         vi.stubEnv('XDG_CACHE_HOME', path.join(home, 'cache'));
         vi.stubEnv('GIT_CONFIG_GLOBAL', os.devNull);
         vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1');
@@ -4100,19 +4004,11 @@ describe('removeWorktree', () => {
 
     it.each([false, true])('removes a worktree initialized by git-annex with deleteLocalBranch=%s', async (deleteLocalBranch) => {
       await withAnnexWorktree(async (fixture) => {
-        const disposals = [];
         await expect(removeWorktree(fixture.repo, {
           directory: fixture.worktree,
           deleteLocalBranch,
-          disposeInstance: async (directory) => {
-            disposals.push({
-              directory,
-              linkTarget: fs.readlinkSync(fixture.gitEntry, { encoding: 'buffer' }),
-            });
-          },
         })).resolves.toBe(true);
 
-        expect(disposals).toEqual([{ directory: fixture.worktree, linkTarget: fixture.linkTarget }]);
         expect(fs.existsSync(fixture.worktree)).toBe(false);
         expect(fs.existsSync(fixture.metadata)).toBe(false);
         expect(annexGit(fixture.repo, ['worktree', 'list', '--porcelain'])).not.toContain(fixture.worktree);

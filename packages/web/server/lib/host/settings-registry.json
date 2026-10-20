@@ -31,9 +31,6 @@
     "homeDirectory": {
       "scope": "instance"
     },
-    "opencodeBinary": {
-      "scope": "instance"
-    },
     "projects": {
       "scope": "instance"
     },
@@ -654,9 +651,6 @@
       "scope": "profile"
     },
     "usageModelGroups": {
-      "scope": "profile"
-    },
-    "globalBehaviorPrompt": {
       "scope": "profile"
     },
     "responseStyleEnabled": {

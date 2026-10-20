@@ -12,7 +12,6 @@ import path from 'node:path';
 
 import { z } from 'zod';
 
-import { getStoredLogin } from '../opencode/auth.js';
 import { createCodeIn } from './code-in.js';
 import { createCodeOut } from './code-out.js';
 import { createSpaceDispatcher } from './dispatcher.js';
@@ -46,12 +45,6 @@ const SESSION_PAGE_LIMIT = 100;
 const SESSION_MAX_PAGES = 10;
 const SESSION_LIST_TIMEOUT_MS = 10_000;
 const MAX_SESSION_LIST_BYTES = 8 * 1024 * 1024;
-// The server inside restarts its OpenCode and answers once it is ready again, which on a slow
-// machine takes a while; past this the restart is reported as not answered.
-const RESTART_OPENCODE_TIMEOUT_MS = 180_000;
-const MAX_RESTART_ANSWER_BYTES = 64 * 1024;
-// A managed OpenCode that restarted; an external one answers `success` with no restart at all.
-const restartedSchema = z.object({ success: z.literal(true), requiresReload: z.literal(true) });
 // The cursor of a next page, as the server inside names it; anything else ends the read.
 const nextCursorSchema = z.string().min(1);
 
@@ -67,30 +60,6 @@ const readBody = (response, cap) => new Promise((resolve, reject) => {
   response.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
   response.on('error', reject);
 });
-
-/**
- * Asks the server inside a space to restart the OpenCode it manages, the route its own settings
- * use for that, over the dispatcher's `requestInside`. The answer comes from inside and is
- * data: anything but a 200 that says OpenCode was restarted is a failure, and its text never
- * travels further than a code.
- */
-export const restartOpenCodeInside = async (requestInside, spaceId) => {
-  const response = await requestInside(spaceId, {
-    method: 'POST',
-    path: '/api/config/reload',
-    headers: { accept: 'application/json', 'content-length': '0' },
-    timeoutMs: RESTART_OPENCODE_TIMEOUT_MS,
-  });
-  let succeeded = false;
-  try {
-    succeeded = response.statusCode === 200 && restartedSchema.safeParse(JSON.parse(await readBody(response, MAX_RESTART_ANSWER_BYTES))).success;
-  } catch {
-    succeeded = false;
-  } finally {
-    response.destroy();
-  }
-  if (!succeeded) throw new SpaceError('opencode_restart_failed', `OpenCode inside the space did not restart (status ${response.statusCode}).`);
-};
 
 /**
  * The installation id that labels this host's spaces, so two installations that share a Docker
@@ -122,9 +91,9 @@ export function readOrCreateOwner(dataDir) {
  * without it every space is marked as of an unknown project. `readIdleStop` and `saveIdleStop`
  * read and keep the user's idle stop setting in the host's settings. `archive` is the chat archive
  * of `space-archive.js`, which a delete saves the space's chats to; without it they go with it.
- * `readHostLogin(provider)` reads the host's own browser login for a provider from the host's
- * OpenCode, for a login grant; the tests give a login of their own, and `loginWindowOf` lets the
- * live test point that grant's upstream at its stand-in.
+ * `readHostLogin(provider)` reads the host's own browser login for a provider, for a login grant;
+ * without it a login grant has no login to carry. The tests give a login of their own, and
+ * `loginWindowOf` lets the live test point that grant's upstream at its stand-in.
  */
 export function createSpacesHost({
   dataDir,
@@ -136,7 +105,9 @@ export function createSpacesHost({
   readIdleStop,
   saveIdleStop,
   archive = null,
-  readHostLogin = getStoredLogin,
+  // Injected by tests and the live grant test; when absent, the journey's own default answers no
+  // login, so a login grant has nothing to carry.
+  readHostLogin,
   loginWindowOf = undefined,
   runCommand = runCommandProcess,
   openCommandStream = openCommandStreamProcess,
@@ -253,7 +224,6 @@ export function createSpacesHost({
     records,
     spaceOpenCode,
     serverInside,
-    restartOpenCodeInside: (spaceId) => restartOpenCodeInside(dispatcher.requestInside, spaceId),
     listProjectDirectories,
     archiveChats: archive ? ({ spaceId, name, projectDirectory, running, allowUnsaved }) => archive.saveChats({
       spaceId,

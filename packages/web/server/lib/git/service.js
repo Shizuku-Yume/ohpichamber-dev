@@ -9,7 +9,8 @@ import { promisify } from 'util';
 import { createRequire } from 'module';
 import crypto from 'node:crypto';
 import { fingerprintRemoteUrl } from '../source-control/url-redaction.js';
-import { readWorktreeDirectorySetting } from '../opencode/shared.js';
+import { createProjectIdFromPath } from '../projects/project-id.js';
+import { resolveWorktreeDirectory } from './worktree-directory.js';
 import { normalizeGitOutputPath } from './output-path.js';
 import { overlayEnvironment } from '../environment/variables.js';
 import { primaryWorktreeRootFromGitDir, unsupportedRepositoryRootReason } from './repository-root.js';
@@ -380,6 +381,16 @@ let gitEnvironment = null;
 
 export const configureGitEnvironment = (runtime) => {
   gitEnvironment = runtime;
+};
+
+// Host composition injects the canonical project-config reader. It answers the
+// personal `worktreeDirectory` value for a project config id, or null. Unset in
+// tests and tools that load this module alone, where no personal override
+// applies.
+let projectWorktreeDirectoryReader = null;
+
+export const configureProjectWorktreeDirectory = (reader) => {
+  projectWorktreeDirectoryReader = typeof reader === 'function' ? reader : null;
 };
 
 // Names simple-git refuses in a command's environment unless the matching
@@ -825,10 +836,14 @@ const OPENCODE_NOUNS = [
 
 const OPENCODE_WORKTREE_ATTEMPTS = 26;
 
-const getOpenCodeDataPath = () => {
-  const xdgDataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
-  return path.join(xdgDataHome, 'opencode');
-};
+// OpenChamber's own data directory owns the per-project worktree folder.
+// `OPENCHAMBER_DATA_DIR` matches the root the Host composition uses for every
+// other OpenChamber-owned folder.
+const getOpenChamberDataPath = () => (
+  process.env.OPENCHAMBER_DATA_DIR
+    ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
+    : path.join(os.homedir(), '.config', 'openchamber')
+);
 
 const pickRandom = (values) => values[Math.floor(Math.random() * values.length)];
 
@@ -1250,7 +1265,7 @@ const getFileIdentity = async (filePath) => {
 };
 
 // OpenChamber places managed worktrees under a deep data-dir path
-// (`<XDG_DATA_HOME>/opencode/worktree/<40-char project id>/<name>/`). On
+// (`<OpenChamber data dir>/worktree/<40-char project id>/<name>/`). On
 // Windows that prefix plus a deeply nested repo file routinely exceeds
 // MAX_PATH (260). Git can check those paths out when core.longpaths is
 // enabled; without it, `git reset --hard` during bootstrap fails with
@@ -1407,11 +1422,9 @@ export const inspectContributorCheckoutActions = async (directory, provenance) =
   const head = String((await runGitCommandOrThrow(directory, ['rev-parse', 'HEAD'], 'Failed to inspect worktree HEAD')).stdout || '').trim().toLowerCase();
   if (head !== provenance.sourceSha) throw Object.assign(new Error('Contributor worktree HEAD changed'), { code: 'STALE_CONFIG', status: 409 });
   const hook = await inspectPostCheckoutHook(directory);
-  const projectCommand = await loadProjectStartCommand(provenance.projectId);
   const setupCommand = String(provenance.setupCommand || '').trim();
   const actions = [];
   if (hook) actions.push(hook);
-  if (projectCommand) actions.push({ kind: 'project-start-command', command: projectCommand });
   if (setupCommand) actions.push({ kind: 'setup-command', command: setupCommand });
   const digestActions = actions.map((action) => action.kind === 'post-checkout-hook' ? {
     kind: action.kind,
@@ -1952,34 +1965,41 @@ const resolveWorktreeProjectContext = async (directory, options = {}) => {
   // directory is the closest thing to one.
   const primaryWorktree = derivePrimaryWorktreeRootFromGitDir(commonDir) || sandbox;
   const projectID = await ensureOpenCodeProjectId(primaryWorktree);
-  // OpenCode's `worktree.directory` is read from the canonical checkout so a
-  // linked worktree still sees the project's saved configuration. When unset,
-  // worktrees keep landing in the data-dir folder keyed by project ID.
-  const legacyWorktreeRoot = path.join(getOpenCodeDataPath(), 'worktree', projectID);
+  // The personal project config is named by the canonical path-based id. The
+  // Git metadata id above stays the key for the data-dir folder because it
+  // follows the checkout when it is moved.
+  const projectConfigID = createProjectIdFromPath(primaryWorktree);
+  const defaultWorktreeRoot = path.join(getOpenChamberDataPath(), 'worktree', projectID);
   // Creation must not guess a folder the user did not choose, so a config read
   // failure propagates there. Read-only and removal paths pass
   // `tolerateWorktreeRootConfigError` and fall back to the data-dir root, so an
-  // unreadable config never blocks removing a worktree that already exists.
+  // unreadable project config never blocks removing a worktree that already
+  // exists.
   let configuredWorktreeRoot = null;
   try {
-    configuredWorktreeRoot = readWorktreeDirectorySetting(primaryWorktree);
+    if (projectWorktreeDirectoryReader) {
+      configuredWorktreeRoot = resolveWorktreeDirectory(
+        await projectWorktreeDirectoryReader(projectConfigID),
+        primaryWorktree,
+      );
+    }
   } catch (error) {
     if (!tolerateWorktreeRootConfigError) {
       throw error;
     }
     console.warn(
-      'Failed to read OpenCode worktree.directory; using the data-dir worktree root:',
+      'Failed to read the project worktreeDirectory setting; using the Host data-dir worktree root:',
       error instanceof Error ? error.message : String(error),
     );
   }
-  const worktreeRoot = configuredWorktreeRoot || legacyWorktreeRoot;
+  const worktreeRoot = configuredWorktreeRoot || defaultWorktreeRoot;
 
   return {
     projectID,
     sandbox,
     primaryWorktree,
     worktreeRoot,
-    legacyWorktreeRoot,
+    defaultWorktreeRoot,
   };
 };
 
@@ -2120,18 +2140,6 @@ const runWorktreeStartCommand = async (directory, command) => {
   return result;
 };
 
-const loadProjectStartCommand = async (projectID) => {
-  const storagePath = path.join(getOpenCodeDataPath(), 'storage', 'project', `${projectID}.json`);
-  try {
-    const raw = await fsp.readFile(storagePath, 'utf8');
-    const parsed = JSON.parse(raw);
-    const start = typeof parsed?.commands?.start === 'string' ? parsed.commands.start.trim() : '';
-    return start || '';
-  } catch {
-    return '';
-  }
-};
-
 // OpenCode owns its own project/sandbox registry. It records a worktree as a
 // sandbox itself when an instance boots for that directory, and filters entries
 // whose directory no longer exists when reading them back. OpenChamber used to
@@ -2171,16 +2179,7 @@ const cleanupFailedFastWorktreeCreate = async (context, candidate) => {
   }
 };
 
-const runWorktreeStartScripts = async (directory, projectID, startCommand) => {
-  const projectStart = await loadProjectStartCommand(projectID);
-  if (projectStart) {
-    const projectResult = await runWorktreeStartCommand(directory, projectStart);
-    if (!projectResult.success) {
-      console.warn('Worktree project start command failed:', projectResult.message || projectResult.stderr || projectResult.stdout);
-      return;
-    }
-  }
-
+const runWorktreeStartScripts = async (directory, startCommand) => {
   const extraCommand = String(startCommand || '').trim();
   if (!extraCommand) {
     return;
@@ -2194,7 +2193,6 @@ const runWorktreeStartScripts = async (directory, projectID, startCommand) => {
 const queueWorktreeBootstrap = (args) => {
   const {
     directory,
-    projectID,
     primaryWorktree,
     localBranch,
     setUpstream,
@@ -2249,7 +2247,7 @@ const queueWorktreeBootstrap = (args) => {
         bootstrapStore,
       );
       if (!contributorFork) {
-        await runWorktreeStartScripts(directory, projectID, startCommand).catch((error) => {
+        await runWorktreeStartScripts(directory, startCommand).catch((error) => {
           console.warn('Worktree start script task failed:', error instanceof Error ? error.message : String(error));
         });
       }
@@ -2511,6 +2509,27 @@ const applyUpstreamConfiguration = async (args) => {
 };
 
 const warnedUnsupportedRoots = new Set();
+
+/** Initialize a normal project directory as a Git repository. */
+export async function initializeRepository(directory) {
+  const normalizedDirectory = normalizeDirectoryPath(directory);
+  if (typeof normalizedDirectory !== 'string' || !normalizedDirectory.trim()) {
+    throw Object.assign(new Error('directory is required'), { statusCode: 400 });
+  }
+  const directoryPath = path.resolve(normalizedDirectory);
+  const rootReason = unsupportedRepositoryRootReason(directoryPath);
+  if (rootReason === 'home') {
+    throw Object.assign(new Error('Git is not initialized in the home directory: a repository there covers every file you own.'), { statusCode: 400 });
+  }
+  if (rootReason === 'filesystem-root') {
+    throw Object.assign(new Error('Git is not initialized at the root of a disk.'), { statusCode: 400 });
+  }
+  await fsp.stat(directoryPath);
+  const result = await runGitCommand(directoryPath, ['init']);
+  if (!result.success) {
+    throw Object.assign(new Error(result.message || 'Failed to initialize Git'), { statusCode: 500 });
+  }
+}
 
 export async function isGitRepository(directory) {
   const directoryPath = normalizeDirectoryPath(directory);
@@ -5284,7 +5303,6 @@ async function attachGitWorktreeToCandidateWithoutRemoteRollback(context, candid
   if (bootstrapStatus.status === WORKTREE_BOOTSTRAP_PENDING) {
     queueWorktreeBootstrap({
       directory: candidate.directory,
-      projectID: context.projectID,
       primaryWorktree: context.primaryWorktree,
       localBranch,
       setUpstream: shouldSetUpstream,
@@ -5659,25 +5677,6 @@ export async function completeWorktreeCheckoutHydration(directory, { bootstrapSt
   return completed;
 }
 
-/**
- * Releases the OpenCode instance that served a removed worktree. The owning
- * runtime injects `disposeInstance`; disposal is best-effort, so a failure is
- * warned about and never fails or rolls back the removal.
- */
-const disposeWorktreeInstanceBestEffort = async (disposeInstance, worktreeDirectory) => {
-  if (!disposeInstance) {
-    return;
-  }
-  try {
-    await disposeInstance(worktreeDirectory);
-  } catch (error) {
-    console.warn(
-      `Failed to dispose the OpenCode instance for removed worktree ${worktreeDirectory}:`,
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-};
-
 // Windows refuses to delete a folder another process still holds (a session's
 // shell, a file watcher, an editor); those handles are usually released
 // moments later, so a busy failure is retried briefly before it is reported.
@@ -5902,8 +5901,8 @@ export async function removeWorktree(directory, input = {}, { bootstrapStore } =
     throw new Error('Cannot remove the primary workspace');
   }
   const worktreeRootCanonical = await canonicalPath(context.worktreeRoot);
-  const legacyWorktreeRootCanonical = context.legacyWorktreeRoot
-    ? await canonicalPath(context.legacyWorktreeRoot)
+  const defaultWorktreeRootCanonical = context.defaultWorktreeRoot
+    ? await canonicalPath(context.defaultWorktreeRoot)
     : null;
 
   const entries = await listWorktreeEntries(context.primaryWorktree);
@@ -5922,16 +5921,16 @@ export async function removeWorktree(directory, input = {}, { bootstrapStore } =
 
   const removeManagedOrphan = async ({ registered }) => {
     // The data-dir root is ours alone, so any leftover inside it may go. A
-    // configured worktree.directory can be shared (".." is the repository's
+    // configured worktreeDirectory can be shared (".." is the repository's
     // parent, holding sibling projects), so there only a directory git had
     // registered as this project's worktree is deleted; an unregistered one
     // could be anything.
-    const insideLegacyRoot = legacyWorktreeRootCanonical !== null
-      && targetCanonical !== legacyWorktreeRootCanonical
-      && isInsideOrSameDirectory(legacyWorktreeRootCanonical, targetCanonical);
+    const insideDefaultRoot = defaultWorktreeRootCanonical !== null
+      && targetCanonical !== defaultWorktreeRootCanonical
+      && isInsideOrSameDirectory(defaultWorktreeRootCanonical, targetCanonical);
     const insideConfiguredRoot = targetCanonical !== worktreeRootCanonical
       && isInsideOrSameDirectory(worktreeRootCanonical, targetCanonical);
-    const isManagedOrphan = insideLegacyRoot || (registered && insideConfiguredRoot);
+    const isManagedOrphan = insideDefaultRoot || (registered && insideConfiguredRoot);
 
     await clearWorktreeBootstrapState(targetDirectory, bootstrapStore);
     const targetExists = await checkPathExists(targetDirectory);
@@ -5949,9 +5948,6 @@ export async function removeWorktree(directory, input = {}, { bootstrapStore } =
   }
 
   await clearWorktreeBootstrapState(matchedEntry.worktree, bootstrapStore);
-  // The directory is a registered linked worktree and still exists here, which
-  // is the only point where its OpenCode instance can be released by path.
-  await disposeWorktreeInstanceBestEffort(input?.disposeInstance, matchedEntry.worktree);
 
   const restoreGitDirectoryLink = await replaceWorktreeGitDirectoryLink(context.primaryWorktree, matchedEntry.worktree);
   try {

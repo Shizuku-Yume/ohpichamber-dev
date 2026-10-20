@@ -102,9 +102,6 @@ export default defineConfig({
     global: 'globalThis',
     __APP_VERSION__: JSON.stringify(packageJson.version),
   },
-  optimizeDeps: {
-    include: ['@opencode/client'],
-  },
   server: {
     port: 5173,
     proxy: {
@@ -191,7 +188,6 @@ export default defineConfig({
           if (packageName === 'react' || packageName === 'react-dom') return 'vendor-react';
           if (packageName === 'zustand' || packageName === 'zustand/middleware') return 'vendor-zustand';
 
-          if (packageName === '@opencode/client') return 'vendor-opencode-client';
           if (packageName.includes('remark') || packageName.includes('rehype') || packageName === 'react-markdown') return 'vendor-markdown';
           if (packageName === '@base-ui/react' || packageName.startsWith('@base-ui')) return 'vendor-base-ui';
 

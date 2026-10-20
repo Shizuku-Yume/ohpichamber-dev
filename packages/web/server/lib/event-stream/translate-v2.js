@@ -1,25 +1,8 @@
 /**
- * OpenCode v2 wire events -> the vocabulary the server's own consumers speak.
+ * Translate isolated-space OpenCode 2.x event payloads for retained Host consumers.
  *
- * The browser gets raw wire payloads (the UI translates them itself in
- * `packages/ui/src/lib/opencode/events.ts`). Everything that reacts on the
- * server — notifications, the message queue, session activity, goal mode,
- * permission auto-accept, Linear status — was written against OpenCode v1
- * event names, so this module is the single place that maps v2 onto them.
- * Keeping one translator means a consumer never has to know which OpenCode
- * shape produced its event.
- *
- * Two differences from v1 are load-bearing and cannot be papered over:
- *
- * - v2 emits no `session.status` and no `session.idle` of its own. Live status
- *   comes from `session.execution.started|succeeded|interrupted|failed`, so
- *   those are what synthesize the status vocabulary here, together with
- *   `session.retry.scheduled` (status `retry` while a provider error waits for
- *   the next attempt) and `session.step.started` (back to `busy` once that
- *   attempt begins).
- * - a v2 turn is a sequence of steps. Each `session.step.ended` becomes an
- *   assistant `message.updated`; only the last one carries `finish: "stop"`,
- *   which is the same signal v1 gave once per turn.
+ * Canonical Agent Service events already use the shared contract. This legacy
+ * translation is limited to the separate isolated-space runtime.
  */
 import { isRecord } from '../shared/guards.js';
 

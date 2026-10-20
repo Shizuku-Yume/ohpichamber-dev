@@ -64,8 +64,6 @@ export const createBootstrapRuntime = (dependencies) => {
       openchamberDataDir,
       modelsDevApiUrl,
       modelsMetadataCacheTtl,
-      fetchFreeZenModels,
-      getCachedZenModels,
       setAutoAcceptSession,
       pluginNotificationEmitter,
       desktopUpdater,
@@ -174,8 +172,6 @@ export const createBootstrapRuntime = (dependencies) => {
       modelsDevApiUrl,
       modelsMetadataCacheTtl,
       readSettingsFromDiskMigrated,
-      fetchFreeZenModels,
-      getCachedZenModels,
       desktopUpdater,
     });
 

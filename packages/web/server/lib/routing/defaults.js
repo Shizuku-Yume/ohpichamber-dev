@@ -51,15 +51,16 @@ export const ZEN_JEV_PROMOTION_ACTIVE = true;
 /**
  * The paid model behind a Zen API key, same endpoint. Not verified live: an
  * OpenCode account sign-in (OAuth) is rejected there as "Invalid API key", so
- * only a Zen API key saved in OpenCode is offered.
+ * only the native OpenCode Zen provider's API key is offered.
  */
 export const ZEN_JEV_PAID_MODEL = 'jev-1.13';
 
 /**
  * OpenRouter and Vercel AI Gateway serve TypeSafe's System One API under their
- * own base URLs and bill the call to the account behind the key the user saved
- * for that provider in OpenCode. OpenRouter maps the bare `jev-latest` onto its
- * `~typesafe/jev-latest` alias; AI Gateway knows Jev only as `typesafe-ai/jev`.
+ * own base URLs and bill the account behind each native provider credential.
+ * The Host resolves the selected workspace credential at execution. OpenRouter
+ * maps the bare `jev-latest` onto its `~typesafe/jev-latest` alias; AI Gateway
+ * knows Jev only as `typesafe-ai/jev`.
  * Both answer 401 without a key (checked 2026-09-27); a paid call is not
  * verified live yet.
  */

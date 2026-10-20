@@ -50,7 +50,7 @@ worktree setup commands and `/api/fs/exec`. There are two layers:
 
 One managed OpenCode serves every project, so project variables never reach
 it. An external OpenCode is not started by OpenChamber and gets nothing.
-OpenChamber's own keys for OpenCode (password, managed config, agent tool
+OpenChamber's own keys for OpenCode (password, agent tool
 token, PATH entries it needs) are applied after the user's variables and win.
 
 ## Invariants

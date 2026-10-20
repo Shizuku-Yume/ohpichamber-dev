@@ -63,9 +63,14 @@ const toDirectoryListResult = (fallbackDirectory: string, payload: WebDirectoryL
   };
 };
 
-const directoryHeaders = (getDirectory?: () => string | undefined, override?: string): Record<string, string> | undefined => {
-  const directory = override || getDirectory?.();
-  return directory ? { 'x-opencode-directory': directory } : undefined;
+const requestDirectory = (getDirectory?: () => string | undefined, override?: string): string | undefined =>
+  override || getDirectory?.();
+
+const withDirectoryQuery = (query: URLSearchParams, directory: string | undefined): URLSearchParams => {
+  if (directory) {
+    query.set('directory', directory);
+  }
+  return query;
 };
 
 export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAPI => ({
@@ -80,8 +85,7 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
     }
 
     const response = await runtimeFetch('/api/fs/list', {
-      query: params,
-      headers: directoryHeaders(getDirectory),
+      query: withDirectoryQuery(params, requestDirectory(getDirectory)),
     });
 
     if (!response.ok) {
@@ -115,9 +119,11 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
 
   async createDirectory(path: string): Promise<{ success: boolean; path: string }> {
     const target = normalizePath(path);
+    const directory = requestDirectory(getDirectory);
     const response = await runtimeFetch('/api/fs/mkdir', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...directoryHeaders(getDirectory) },
+      query: directory ? { directory } : undefined,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: target }),
     });
 
@@ -143,9 +149,8 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
       params.set('outsideFileGrant', options.outsideFileGrant);
     }
     const response = await runtimeFetch('/api/fs/stat', {
-      query: params,
+      query: withDirectoryQuery(params, requestDirectory(getDirectory, options?.directory)),
       signal: AbortSignal.timeout(30_000),
-      headers: directoryHeaders(getDirectory, options?.directory),
     });
 
     if (!response.ok) {
@@ -175,10 +180,9 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
       params.set('optional', 'true');
     }
     const response = await runtimeFetch('/api/fs/read', {
-      query: params,
+      query: withDirectoryQuery(params, requestDirectory(getDirectory, options?.directory)),
       signal: AbortSignal.timeout(30_000),
       cache: options?.optional || options?.fresh ? 'no-store' : 'default',
-      headers: directoryHeaders(getDirectory, options?.directory),
     });
 
     if (!response.ok) {
@@ -192,9 +196,11 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
 
   async writeFile(path: string, content: string): Promise<{ success: boolean; path: string }> {
     const target = normalizePath(path);
+    const directory = requestDirectory(getDirectory);
     const response = await runtimeFetch('/api/fs/write', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...directoryHeaders(getDirectory) },
+      query: directory ? { directory } : undefined,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: target, content }),
     });
 
@@ -217,10 +223,10 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
       query: {
         path: target,
         overwrite: options?.overwrite ? 'true' : undefined,
+        directory: requestDirectory(getDirectory, options?.directory),
       },
       headers: {
         'Content-Type': 'application/octet-stream',
-        ...directoryHeaders(getDirectory, options?.directory),
       },
       body: file,
     });
@@ -242,9 +248,11 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
 
   async delete(path: string): Promise<{ success: boolean }> {
     const target = normalizePath(path);
+    const directory = requestDirectory(getDirectory);
     const response = await runtimeFetch('/api/fs/delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...directoryHeaders(getDirectory) },
+      query: directory ? { directory } : undefined,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: target }),
     });
 
@@ -258,9 +266,11 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
   },
 
   async rename(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }> {
+    const directory = requestDirectory(getDirectory);
     const response = await runtimeFetch('/api/fs/rename', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...directoryHeaders(getDirectory) },
+      query: directory ? { directory } : undefined,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ oldPath, newPath }),
     });
 
@@ -280,9 +290,11 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
   },
 
   async revealPath(targetPath: string): Promise<{ success: boolean }> {
+    const directory = requestDirectory(getDirectory);
     const response = await runtimeFetch('/api/fs/reveal', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...directoryHeaders(getDirectory) },
+      query: directory ? { directory } : undefined,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: normalizePath(targetPath) }),
     });
 
@@ -305,8 +317,7 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
       params.set('outsideFileGrant', options.outsideFileGrant);
     }
     const response = await runtimeFetch('/api/fs/raw', {
-      query: params,
-      headers: directoryHeaders(getDirectory, options?.directory),
+      query: withDirectoryQuery(params, requestDirectory(getDirectory, options?.directory)),
     });
     if (!response.ok) {
       throw new Error(`Download failed (${response.status})`);

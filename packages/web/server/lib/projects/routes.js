@@ -1,6 +1,7 @@
 /**
  * Project setup routes: the client-owned part of a project's config file
- * (worktree setup commands, project actions, draft starters).
+ * (worktree setup commands, the new-worktree folder, project actions, draft
+ * starters).
  *
  * These replace the shared UI's direct `/api/fs/*` access to
  * `~/.config/openchamber/projects/<projectId>.json`. The client no longer

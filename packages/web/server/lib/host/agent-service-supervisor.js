@@ -2,7 +2,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import { isDeepStrictEqual } from 'node:util';
-import { CapturedHostBootstrapScopeSchema, HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema, WorkerBootstrapSchema } from '@openchamber/agent-service/private-protocol';
+import { CapturedHostBootstrapScopeSchema, HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, HostSkillSourceOperationSchema, HostSkillSourceRequestSchema, HostSkillSourceResultSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema, WorkerBootstrapSchema } from '@openchamber/agent-service/private-protocol';
 import { createHostWorkerAuthorizationChannel } from './worker-authorization-channel.js';
 
 import { openApprovalPolicyStore } from './approval-policy-store.js';
@@ -55,7 +55,7 @@ export const createAgentServiceSupervisor = ({
   stopTimeoutMs = STOP_TIMEOUT_MS, spawn = nodeSpawn, fetchImpl = globalThis.fetch,
   registry = { registerManagedProcess, unregisterManagedProcess }, randomBytes = crypto.randomBytes,
   approvalPolicyStore = null,
-  authorizeWorkerOperation, invokeHostAction,
+  authorizeWorkerOperation, invokeHostAction, handleSkillSource,
 } = {}) => {
   let phase = 'stopped'; let child = null; let port = null; let secret = null;
   let startupPromise = null; let stopPromise = null; let lifecycle = 0; let startupController = null; let accepting = false;
@@ -98,6 +98,28 @@ export const createAgentServiceSupervisor = ({
         ? { type: 'approval.policy.committed', requestId: message.requestId, policyId: result.policyId, revision: result.revision }
         : { type: 'approval.policy.listed', requestId: message.requestId, policies: result.policies });
     } catch { send({ type: 'approval.policy.failed', requestId: message.requestId, code: 'APPROVAL_POLICY_WRITE_FAILED' }); }
+  };
+  const handleSkillSourceMessage = async (launched, message) => {
+    if (message?.type !== 'host.skill-source.request') return;
+    const requestId = HostSkillSourceRequestSchema.shape.requestId.safeParse(message.requestId);
+    if (!requestId.success) return;
+    let result = { status: 'failed', code: 'SERVICE_UNAVAILABLE' };
+    try {
+      const request = HostSkillSourceRequestSchema.parse(message);
+      const operation = HostSkillSourceOperationSchema.parse(request.operation);
+      const captured = workspaceScopes.get(operation.workspaceId)?.scope;
+      if (child !== launched || !accepting || phase !== 'ready' || !launched.connected
+        || typeof handleSkillSource !== 'function' || !captured
+        || captured.projectId !== operation.projectId || captured.workspaceId !== operation.workspaceId
+        || captured.agentDirectoryId !== operation.agentDirectoryId) throw new Error('Skill source scope unavailable');
+      // Only Host-captured paths reach the disk owner; the private operation carries IDs alone.
+      const handled = HostSkillSourceResultSchema.parse(await handleSkillSource(operation, captured));
+      if (child === launched && accepting && phase === 'ready'
+        && workspaceScopes.get(operation.workspaceId)?.scope === captured) result = handled;
+    } catch { /* Never send filesystem paths, thrown messages, or internal service details. */ }
+    try {
+      if (launched.connected) launched.send({ type: 'host.skill-source.result', requestId: requestId.data, result }, () => {});
+    } catch { /* The service may disconnect while the Host source operation completes. */ }
   };
   const killChild = async () => {
     if (!child) return;
@@ -144,7 +166,7 @@ export const createAgentServiceSupervisor = ({
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       });
       child = launched;
-      const onPolicyMessage = message => { handlePolicyMessage(launched, message); authorization.handleMessage(launched, message); };
+      const onPolicyMessage = message => { handlePolicyMessage(launched, message); authorization.handleMessage(launched, message); void handleSkillSourceMessage(launched, message); };
       launched.on('message', onPolicyMessage);
       launched.once('disconnect', () => authorization.closeChild(launched));
       launched.once('close', () => { launched.removeListener('message', onPolicyMessage); authorization.closeChild(launched); });

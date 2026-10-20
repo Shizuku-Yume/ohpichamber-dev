@@ -73,7 +73,6 @@ copy:
 The modules below keep their exported names and signatures and now re-export
 the shared functions, so existing importers are unaffected:
 
-- `opencode/config-v2.js`: `isRecord`
 - `linear/parse.js`: `isString`, `isPlainObject`
 - `gitlab/validation.js`: `isString`, `isPlainObject`
 - `quota/utils/transformers.js`: `asNonEmptyString`

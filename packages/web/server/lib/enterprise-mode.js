@@ -5,8 +5,8 @@ import { z } from 'zod';
 
 /**
  * Enterprise mode: an administrator's promise that conversation content goes
- * only to the model providers configured in OpenCode. Two sources turn it on,
- * and either one is enough:
+ * only to the model providers configured in the native OMP Host. Two sources
+ * turn it on, and either one is enough:
  * - the machine policy file (`policyFilePaths`), which only an administrator
  *   can write and a device manager can roll out; nothing a user sets can
  *   turn off what it turns on;
@@ -28,15 +28,14 @@ import { z } from 'zod';
  *
  * Each feature that could send conversation content anywhere else checks it
  * at its own server boundary:
- * - Model providers come only from the OpenCode config: connecting one,
- *   signing in, adding a key or creating a custom provider through this
- *   server is refused, as is probing a custom provider's model endpoint
- *   (`opencode/routes.js`). OpenCode's `provider.use`
- *   policy is the real lock; this closes the way in through the app.
- *   Signing in to a remote MCP server from the OpenCode config uses the same
- *   routes and stays allowed.
- *   Canonical OMP credential-handoff preflight is also refused at use time
- *   (`host/canonical-routes.js`), without reading or importing credentials.
+ * - Native OMP provider operations use the Canonical API. Enterprise mode
+ *   refuses selected credential handoff and native search credential writes
+ *   at their Host boundaries; the Agent Service checks search execution. These
+ *   checks do not read or expose credentials.
+ * - Native OMP plugin package installation, update and removal, and marketplace
+ *   fetches are refused (`host/canonical-routes.js`): package-manager commands
+ *   can access external registries. Catalog reads, settings, enable/disable and
+ *   confined workspace extension source authoring remain local and available.
  * - Jev classification is off, unless the administrator pinned their own
  *   endpoint (`routing/runtime.js`).
  * - External tunnels are refused: their provider sees plain text (`tunnels`).
@@ -46,9 +45,6 @@ import { z } from 'zod';
  *   `dictation`).
  * - Push notifications carry no message text or session name (`notifications`).
  * - Update checks still run but never report usage (`package-manager.js`).
- * - Environment variables from Settings and `opencode service set env` do
- *   not reach the managed OpenCode: one could carry a provider key
- *   (`environment/runtime.js`). Git, the terminal and exec still get them.
  * - The draw.io diagram editor, diagrams.net's own page in a frame, is not
  *   loaded; a .drawio file opens as its XML (`packages/ui` FilesView). The
  *   crossing happens in the browser, so the UI is where it is held back.
@@ -64,11 +60,6 @@ import { z } from 'zod';
  *   listed (`allowedExtensions` / `OPENCHAMBER_ALLOWED_EXTENSIONS`), or from a
  *   local folder where `allowLocalExtensions` /
  *   `OPENCHAMBER_ALLOW_LOCAL_EXTENSIONS` allows it; see `guests/enterprise.js`.
- *
- * The file can also pin the OpenCode CLI (`opencodeBinary`), with or without
- * enterprise mode: managed OpenCode then starts only from that path, never
- * falls back to the bundled CLI or PATH, ignores the user's binary setting,
- * and OpenChamber neither installs nor upgrades it (`opencode/env-runtime.js`).
  *
  * The file can also hide the skills catalogs OpenChamber ships with
  * (`hideBuiltinSkillCatalogs`), with or without enterprise mode, so the only
@@ -110,7 +101,6 @@ const policyFileSchema = z.object({
   allowedExtensions: z.array(z.string().trim().min(1)).max(200).optional(),
   allowLocalExtensions: z.boolean().optional(),
   jev: z.object({ url: optionalText, model: optionalText, apiKey: optionalText }).optional(),
-  opencodeBinary: optionalText,
   hideBuiltinSkillCatalogs: z.boolean().optional(),
 }).refine((policy) => !policy.jev || policy.jev.url || (!policy.jev.model && !policy.jev.apiKey), {
   message: '"jev" needs a "url"',
@@ -132,7 +122,7 @@ const parsePolicyFile = (text) => {
     const field = issue.path.length > 0 ? `"${issue.path.join('.')}": ` : '';
     throw new Error(`${field}${issue.message}`);
   }
-  const { enterpriseMode, organization, relayUrl, allowNetworkAccess, allowedExtensions, allowLocalExtensions, jev, opencodeBinary, hideBuiltinSkillCatalogs } = parsed.data;
+  const { enterpriseMode, organization, relayUrl, allowNetworkAccess, allowedExtensions, allowLocalExtensions, jev, hideBuiltinSkillCatalogs } = parsed.data;
   return {
     enterpriseMode: enterpriseMode === true,
     organization: organization ?? null,
@@ -141,7 +131,6 @@ const parsePolicyFile = (text) => {
     allowedExtensions,
     allowLocalExtensions,
     jev: jev?.url ? { url: jev.url, model: jev.model ?? null, apiKey: jev.apiKey ?? null } : undefined,
-    opencodeBinary: opencodeBinary ?? null,
     hideBuiltinSkillCatalogs: hideBuiltinSkillCatalogs === true,
   };
 };
@@ -212,7 +201,6 @@ export const readEnterprisePolicy = (options = {}) => {
       allowNetworkAccess: false,
       allowedExtensions: [],
       allowLocalExtensions: false,
-      opencodeBinary: null,
       // Fails closed like the rest: a broken policy offers no catalog it might have hidden.
       hideBuiltinSkillCatalogs: true,
     };
@@ -246,10 +234,7 @@ export const readEnterprisePolicy = (options = {}) => {
     allowNetworkAccess,
     allowedExtensions,
     allowLocalExtensions,
-    // File only, in or out of enterprise mode: OPENCODE_BINARY already lets a
-    // user pick a binary, and a pin they could override would not be one.
-    opencodeBinary: fromFile?.opencodeBinary ?? null,
-    // File only, in or out of enterprise mode, for the same reason.
+    // File only, in or out of enterprise mode: the environment is the user's to edit.
     hideBuiltinSkillCatalogs: fromFile?.hideBuiltinSkillCatalogs === true,
   };
 };
@@ -262,98 +247,14 @@ export const isNetworkAccessBlocked = (options) => {
   return policy.enterpriseMode && !policy.allowNetworkAccess;
 };
 
+export const ENTERPRISE_MODE_ERROR = 'Not available in enterprise mode: this operation is blocked by enterprise policy.';
+
 export const NETWORK_ACCESS_BLOCKED_ERROR = 'Enterprise mode keeps OpenChamber on this machine: it does not listen on a network address. '
   + 'An administrator can allow it with "allowNetworkAccess": true in the policy file, or OPENCHAMBER_ALLOW_NETWORK_ACCESS=1 where the environment turns enterprise mode on.';
 
 /** What a client may know about the policy; pinned endpoints and keys stay on the server. */
 export const publicEnterprisePolicy = (options) => {
-  const { enterpriseMode, source, organization, policyError, allowNetworkAccess, opencodeBinary } = readEnterprisePolicy(options);
-  return { enterpriseMode, source, organization, policyError, networkAccessBlocked: enterpriseMode && !allowNetworkAccess, opencodeBinary };
+  const { enterpriseMode, source, organization, policyError, allowNetworkAccess } = readEnterprisePolicy(options);
+  return { enterpriseMode, source, organization, policyError, networkAccessBlocked: enterpriseMode && !allowNetworkAccess };
 };
 
-// OpenCode registers every remote MCP server with OAuth as an integration
-// whose id is `mcp_` plus 16 hex digits of a hash of its name and URL
-// (`packages/core/src/mcp/index.ts` upstream). Signing in to one reaches a
-// tool server from the OpenCode config, not a model provider.
-const MCP_INTEGRATION_ID = /^mcp_[0-9a-f]{16}$/;
-const ATTEMPT_ID = /^[A-Za-z0-9_-]+$/;
-
-/**
- * The path segments as OpenCode 2.0.18 to 2.0.20 route them. Bun's URL parsing turns
- * `\` into `/`; OpenCode's router (`effect/unstable/http` FindMyWay:
- * case-insensitive, duplicate and trailing slashes ignored, `safeDecodeURI`)
- * ends the path at `?`, `#` or `;` and decodes percent escapes. So `/API//integration\%6Fpenai/connect/key;x` reaches the same
- * handler as `/api/integration/openai/connect/key`. Null when a segment cannot
- * be decoded or is a dot segment: such a path is refused. Recheck this list
- * when OpenCode changes its router.
- */
-const routeSegments = (requestPath) => {
-  const pathOnly = String(requestPath).split(/[?#;]/, 1)[0];
-  const segments = [];
-  for (const raw of pathOnly.split(/[\\/]/)) {
-    if (!raw) continue;
-    let segment;
-    try {
-      segment = decodeURIComponent(raw);
-    } catch {
-      return null;
-    }
-    if (segment === '.' || segment === '..') return null;
-    segments.push(segment);
-  }
-  return segments;
-};
-
-// POST `connect/oauth` starts an MCP sign-in, `connect/oauth/:attempt/complete`
-// finishes it with a pasted code.
-const isMcpSignIn = (integrationId, rest) => (
-  MCP_INTEGRATION_ID.test(integrationId)
-  && rest[0]?.toLowerCase() === 'oauth'
-  && (rest.length === 1 || (rest.length === 3 && ATTEMPT_ID.test(rest[1]) && rest[2].toLowerCase() === 'complete'))
-);
-
-/**
- * Whether a request to OpenCode would add a way to reach a model provider:
- * every POST under `/api/integration/:id/connect` (key, oauth start and
- * complete, command, external since 2.0.25), storing a key with `POST /api/credential`, and adding a
- * well-known integration. Signing in to a
- * remote MCP server goes through the same routes and stays allowed. Reads,
- * cancelling an attempt and removing or switching an existing account stay
- * allowed too: they only narrow access. A path that cannot be read safely
- * counts as a connect.
- */
-export const isProviderConnectRequest = (method, requestPath) => {
-  if (String(method).toUpperCase() !== 'POST') return false;
-  const segments = routeSegments(requestPath);
-  if (segments === null) return true;
-  const [api, group, ...tail] = segments.map((segment) => segment.toLowerCase());
-  if (api !== 'api') return false;
-  // `POST /api/credential` stores a new key (OpenCode 2.0.20);
-  // `/api/credential/:id/activate` only switches between existing ones.
-  if (group === 'credential') return tail.length === 0;
-  if (group === 'experimental') return tail[0] === 'integration' && tail[1] === 'wellknown';
-  if (group !== 'integration' || tail[1] !== 'connect') return false;
-  return !isMcpSignIn(segments[2], segments.slice(4));
-};
-
-export const ENTERPRISE_MODE_ERROR = 'Not available in enterprise mode: this server keeps conversations with the model providers configured in OpenCode.';
-
-/**
- * Whether a request asks OpenCode for every stored credential. Since 2.0.20
- * `GET /api/credential` answers with the secrets themselves. The server reads
- * it for itself (`opencode/auth.js`); no client gets it, in or out of enterprise
- * mode, because anyone signed in to the UI (over a tunnel or a paired phone
- * too) would otherwise read every key.
- * It lives here because it needs the same reading of an OpenCode path as the
- * provider-connect check. A path under `/api` that cannot be read safely
- * counts as a read; anything else never reaches OpenCode and is left alone.
- */
-export const isCredentialListRequest = (method, requestPath) => {
-  const upper = String(method).toUpperCase();
-  if (upper !== 'GET' && upper !== 'HEAD') return false;
-  const segments = routeSegments(requestPath);
-  if (segments === null) return /^[\\/]*api(?:[\\/?#;]|$)/i.test(String(requestPath));
-  return segments.length === 2 && segments[0].toLowerCase() === 'api' && segments[1].toLowerCase() === 'credential';
-};
-
-export const CREDENTIAL_LIST_ERROR = 'OpenChamber does not hand stored provider keys to clients.';

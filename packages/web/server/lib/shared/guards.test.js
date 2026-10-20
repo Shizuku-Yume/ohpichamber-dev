@@ -100,10 +100,6 @@ describe('re-exported public APIs', () => {
     expect(validation.isPlainObject).toBe(isPlainObject);
   });
 
-  it('opencode/config-v2.js re-exports the shared isRecord', async () => {
-    const configV2 = await import('../opencode/config-v2.js');
-    expect(configV2.isRecord).toBe(isRecord);
-  });
 
   it('quota/utils/transformers.js re-exports the shared asNonEmptyString', async () => {
     const transformers = await import('../quota/utils/transformers.js');

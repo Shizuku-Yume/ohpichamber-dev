@@ -40,15 +40,6 @@ const ensureNotificationTemplateShape = (templates) => {
   return { templates: next, changed };
 };
 
-/** Settings that decide which OpenChamber plugins the managed OpenCode loads. */
-const MANAGED_PLUGIN_SETTINGS_KEYS = new Set([
-  'agentControlToolEnabled',
-  'agentWebToolEnabled',
-  'agentMemoryToolEnabled',
-  'agentNotifyToolEnabled',
-  'agentToolsCodeMode',
-]);
-
 export const createSettingsRuntime = (deps) => {
   const {
     fsPromises,
@@ -62,12 +53,12 @@ export const createSettingsRuntime = (deps) => {
     normalizeStringArray,
     formatSettingsResponse,
     resolveDirectoryCandidate,
+    managedChatsRoot,
     normalizeManagedRemoteTunnelHostname,
     normalizeManagedRemoteTunnelPresets,
     normalizeManagedRemoteTunnelPresetTokens,
     syncManagedRemoteTunnelConfigWithPresets,
     upsertManagedRemoteTunnelToken,
-    onManagedPluginSettingsChanged = async () => {},
     onMessageSearchEnabledChanged = () => {},
     onMessageSearchReasoningChanged = () => {},
   } = deps;
@@ -91,6 +82,18 @@ export const createSettingsRuntime = (deps) => {
 
   const PROJECTS_ROOT_DIR = path.join(path.dirname(SETTINGS_FILE_PATH), 'projects');
   const PROJECT_ICONS_DIR = path.join(path.dirname(SETTINGS_FILE_PATH), 'project-icons');
+
+  const isManagedChatDirectory = async (candidate) => {
+    if (!managedChatsRoot) return false;
+    const root = await fsPromises.realpath(managedChatsRoot).catch((error) => {
+      if (error?.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (!root) return false;
+    const directory = await fsPromises.realpath(candidate);
+    const relative = path.relative(root, directory);
+    return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+  };
 
   const sha1Hex = (value) => crypto.createHash('sha1').update(value).digest('hex');
   const projectIconBaseName = (projectId) => `project-${sha1Hex(projectId)}`;
@@ -786,7 +789,8 @@ export const createSettingsRuntime = (deps) => {
       if (candidate) {
         try {
           const stats = await fsPromises.stat(candidate);
-          if (stats.isDirectory()) {
+          // Automatic legacy promotion must not reassign the managed namespace.
+          if (stats.isDirectory() && !await isManagedChatDirectory(candidate)) {
             const id = createProjectIdFromPath(candidate);
             nextProjects = [
               {
@@ -1126,14 +1130,6 @@ export const createSettingsRuntime = (deps) => {
 
       const changedKeys = Object.keys(sanitized);
       await writeSettingsToDisk(next, { surface, changedKeys });
-      // OpenChamber's own OpenCode plugins live in a config file OpenCode
-      // watches, so flipping one of these switches takes effect in the running
-      // process instead of waiting for a restart.
-      if (changedKeys.some((key) => MANAGED_PLUGIN_SETTINGS_KEYS.has(key))) {
-        await Promise.resolve(onManagedPluginSettingsChanged(next)).catch((error) => {
-          console.warn('Failed to refresh the managed OpenCode config:', error?.message ?? error);
-        });
-      }
       // The search index starts or stops in the background; the save does not wait for it.
       if (changedKeys.includes('messageSearchEnabled')) {
         onMessageSearchEnabledChanged(next.messageSearchEnabled === true);

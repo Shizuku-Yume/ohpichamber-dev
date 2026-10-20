@@ -66,8 +66,6 @@ const createApp = ({
     modelsDevApiUrl: 'https://models.example.test',
     modelsMetadataCacheTtl: 0,
     readSettingsFromDiskMigrated: vi.fn(),
-    fetchFreeZenModels: vi.fn(),
-    getCachedZenModels: vi.fn(),
     desktopUpdater,
   };
 

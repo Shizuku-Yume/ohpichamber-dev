@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PromptRequestSchema } from '@openchamber/agent-contract';
 import { createExistingSessionTasks, createScheduledTaskContext } from './existing-session.js';
 import { createScheduledTaskService } from './service.js';
+import { createScheduledPromptExpander } from './file-resource-prompt.js';
 
 const task = { id: 'task', name: 'Follow up', enabled: true, targetSessionId: 'target', schedule: { kind: 'daily', time: '09:00' },
   execution: { prompt: 'Continue', useDefaults: true }, state: {} };
@@ -24,8 +25,11 @@ const setup = (extra = {}) => {
     cancelScheduledTask: vi.fn(async () => {}),
   };
   const dependencies = { projectConfigRuntime, messageQueueRuntime, sessionService: { open: async () => snapshot() },
-    resolveSessionScope: async () => scope, isSessionArchived: async () => false, ...extra };
-  return { runtime: createExistingSessionTasks(dependencies), dependencies, messageQueueRuntime, appended, stored: () => stored,
+    resolveSessionScope: async () => scope, resolveWorkspaceScope: async () => scope,
+    service: { request: vi.fn(async () => Response.json({ kind: 'template', content: 'Expanded native prompt' })) },
+    isSessionArchived: async () => false, ...extra };
+  const expandPrompt = createScheduledPromptExpander(dependencies);
+  return { runtime: createExistingSessionTasks({ ...dependencies, expandPrompt }), dependencies, messageQueueRuntime, appended, stored: () => stored,
     replace: (value) => { stored = value; } };
 };
 
@@ -47,6 +51,32 @@ describe('canonical existing-session scheduling', () => {
     const h = setup();
     await h.runtime.run('host-project', { ...task, execution: { prompt: 'Pinned', providerID: 'provider', modelID: 'model', agent: 'agent', variant: 'high' } }, 'manual');
     expect(h.appended[0].request.request.options).toEqual({ providerId: 'provider', modelId: 'model', agentId: 'agent', variant: 'high', reasoningEffort: null });
+  });
+
+  it('captures worker expansion once before queue persistence while keeping raw task display', async () => {
+    const h = setup({ service: { request: vi.fn(async () => Response.json({ kind: 'command', content: '# Native\n\n  raw body\n',
+      modelSelection: { providerId: 'bound-provider', modelId: 'bound-model' }, agentId: 'bound-agent' })) } });
+    const prompt = '/deploy "quoted release"  trailing  ';
+    const scheduled = { ...task, execution: { prompt, providerID: 'pinned-provider', modelID: 'pinned-model', agent: 'pinned-agent', variant: 'high' } };
+    expect(await h.runtime.run('host-project', scheduled, 'manual')).toMatchObject({ ok: true });
+    expect(h.dependencies.service.request).toHaveBeenCalledTimes(1);
+    expect(h.dependencies.service.request.mock.calls[0][0]).toBe('/api/agent/v1/workspaces/opaque-workspace/commands/expand-text');
+    expect(JSON.parse(h.dependencies.service.request.mock.calls[0][1].body)).toEqual({ text: prompt });
+    const queued = h.appended[0].request;
+    expect(queued.content).toBe(prompt);
+    expect(queued.request.input.text).toBe('# Native\n\n  raw body\n');
+    expect(queued.request.options).toEqual({ providerId: 'bound-provider', modelId: 'bound-model', agentId: 'bound-agent', variant: 'high', reasoningEffort: null });
+    await h.runtime.beforeSend(scope, { request: queued.request });
+    expect(h.dependencies.service.request).toHaveBeenCalledTimes(1);
+    expect(scheduled.execution.prompt).toBe(prompt);
+  });
+
+  it('fails admission when worker expansion fails without queueing unexpanded text', async () => {
+    const h = setup({ service: { request: vi.fn(async () => { throw new Error('Worker unavailable'); }) } });
+    const scheduled = { ...task, execution: { ...task.execution, prompt: '/deploy args' } };
+    expect(await h.runtime.run('host-project', scheduled, 'manual')).toMatchObject({ ok: false, error: 'Worker unavailable' });
+    expect(h.appended).toEqual([]);
+    expect(h.stored().state.lastStatus).toBe('failed');
   });
 
   it('keeps target goal and permission policies untouched', async () => {

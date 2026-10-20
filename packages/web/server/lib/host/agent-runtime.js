@@ -5,6 +5,7 @@ import { createAgentServiceSupervisor } from './agent-service-supervisor.js';
 import { createWorkerOperationAuthorizer } from './worker-operation-authorizer.js';
 import { openApprovalPolicyStore } from './approval-policy-store.js';
 import { isEnterpriseMode } from '../enterprise-mode.js';
+import { createSkillFileOwner } from './skill-file-owner.js';
 
 const unavailable = (code = 'SERVICE_UNAVAILABLE', status = 503) => Object.assign(
   new Error('The authorized Agent workspace is unavailable'), { code, status },
@@ -32,6 +33,7 @@ export function createHostAgentRuntime({
 }) {
   const approvalPolicyStore = openApprovalPolicyStore({ dataDir });
   let service;
+  let skillFileOwner;
   let closePromise;
   const resolvePolicy = async (captured) => {
     const authorized = await scopeRuntime.resolveWorkspaceScope(captured.workspaceId);
@@ -52,8 +54,9 @@ export function createHostAgentRuntime({
   });
   service = createAgentServiceSupervisor({
     bunPath, entrypoint, dataDir, approvalPolicyStore, authorizeWorkerOperation,
-    invokeHostAction,
+    invokeHostAction, handleSkillSource: (operation, capturedScope) => skillFileOwner.handle(operation, capturedScope),
   });
+  skillFileOwner = createSkillFileOwner({ service });
   const admitWorkspace = async (scope) => {
     const env = isEnterpriseMode(enterprisePolicyOptions)
       ? {} : await getEnvironmentForDirectory(scope.cwd);
@@ -108,7 +111,7 @@ export function createHostAgentRuntime({
     },
     stop: () => service.stop(),
     close,
-    service, resolveWorkspaceScope, resolveWorkspaceDirectory: scopeRuntime.resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope,
+    service, skillFileOwner, resolveWorkspaceScope, resolveWorkspaceDirectory: scopeRuntime.resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope,
     resolveHostRelocationScope: scopeRuntime.resolveRelocationSourceScope,
   };
 }

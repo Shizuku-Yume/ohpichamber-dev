@@ -127,8 +127,9 @@ prompt remains waiting. The card shows the last attempt's status in that case.
 Reuse status ends at queue send: `queued` becomes `sent`, `failed` or
 `cancelled`. The existing task state fields hold the result. There is no
 per-run history or assistant-completion tracking. `execution.useDefaults`
-leaves the target model and agent unchanged. A pinned selection switches the
-requested model and agent before sending. Tasks without a target keep the
+leaves the target model and agent unchanged unless a native file invocation
+explicitly binds them. A pinned selection supplies the captured model and agent,
+with native file bindings taking precedence. Tasks without a target keep the
 new-session execution path below.
 
 Reuse preserves the target's goal and permission auto-accept policy. Task
@@ -144,9 +145,43 @@ A task either pins them (`execution.providerID`, `modelID`, `variant`, `agent`)
 or sets `execution.useDefaults: true`. Such a task reads the session defaults
 when each run starts (`session-defaults.js`: the project's `defaultModel` /
 `defaultVariant` / `defaultAgent`, then the global ones), so changing a default
-reaches it on its next run without editing it. With nothing set, the session is
-created without a model or agent and OpenCode applies its own. A pinned value
+reaches it on its next run without editing it. With nothing set, nullable captured
+options leave native session selection to its existing owner. A pinned value
 stored next to `useDefaults` is kept only for when the task is pinned again.
+
+## Native file-resource prompts
+
+`file-resource-prompt.js` is the shared Host capture owner for both existing- and
+new-session scheduled execution. It receives the private Agent Service request
+owner and the Host workspace resolver through production composition. Before
+forwarding a leading `/` invocation, it revalidates workspace, project, Host
+project, working directory, and selected agent-directory identity against the
+authorized scope. The Node Host never imports the native SDK.
+
+- One canonical `POST /workspaces/:workspaceId/commands/expand-text` request sends
+  `{ text }` unchanged, including quoted arguments, line breaks and trailing
+  spaces. The worker owns the complete native command-then-template expansion
+  pipeline and reports `kind: command | template | text`; the Host does not
+  duplicate catalog precedence, parse arguments, or substitute Markdown.
+- Captured content is the worker result. Command/template model and agent
+  bindings override only their corresponding captured fields; variant and
+  reasoning effort are retained. No-match text remains unchanged, with no
+  speculative scheduled skill lookup or expansion.
+- Existing-session tasks expand once before queue capture/append. Queue display
+  content and persisted task definitions keep the original prompt; the durable
+  request contains expanded content and bindings. Queue drain revalidates task
+  and target ownership but never re-expands a mutable file.
+- New-session tasks expand before creating a session, use the captured bindings
+  for creation and send, and use the captured content for a requested goal.
+  Expansion failure creates no session and removes an empty managed-chat
+  directory through the existing cleanup boundary.
+- Scope, worker, schema, and expansion failures fail the scheduled attempt;
+  unexpanded text is not sent as a success fallback.
+
+Web/PWA and Electron use this Host execution owner. Hosted mobile and Capacitor
+schedule through the active authenticated Host and use the same execution path.
+Expansion stays inside the configured Host/Bun boundary and adds no external
+egress, listeners, provider-entry path, or enterprise-mode exception.
 
 ## Files
 
@@ -154,8 +189,11 @@ stored next to `useDefaults` is kept only for when the task is pinned again.
   - Next-run computation (daily/weekly/cron compatibility)
   - Timer scheduling and queueing
   - Concurrency controls
-  - Session create + prompt_async execution
+  - Canonical session create + prompt execution
   - Emits OpenChamber task-run events
+
+- `packages/web/server/lib/scheduled-tasks/file-resource-prompt.js`
+  - Authorized, worker-owned native file prompt capture shared by new and existing sessions
 
 - `packages/web/server/lib/scheduled-tasks/loops.js`
   - Discovery of `.agents/loops/*.md` (project scope, ancestors up to the worktree root) and `~/.agents/loops/*.md` (user scope)

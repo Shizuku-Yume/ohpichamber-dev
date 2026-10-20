@@ -24,6 +24,7 @@ const emptyPersonal = {
   setupWorktree: [],
   setupWorktreeWait: null,
   setupWorktreeMode: 'append',
+  worktreeDirectory: null,
   projectActions: [],
   projectActionsPrimaryId: null,
   draftStarters: [],
@@ -109,6 +110,7 @@ describe('project setup sanitizers', () => {
       'setup-worktree': ['bun install'],
       'setup-worktree-wait': true,
       setupWorktreeMode: 'replace',
+      worktreeDirectory: ' ../trees ',
       projectActions: [{ id: 'a', name: 'A', command: 'x' }],
       projectActionsPrimaryId: 'missing',
       draftStarters: [{ type: 'skill', name: 's' }],
@@ -119,6 +121,7 @@ describe('project setup sanitizers', () => {
       setupWorktree: ['bun install'],
       setupWorktreeWait: true,
       setupWorktreeMode: 'replace',
+      worktreeDirectory: '../trees',
       projectActions: [{ id: 'a', name: 'A', command: 'x', icon: null }],
       projectActionsPrimaryId: null,
       draftStarters: [{ type: 'skill', name: 's' }],
@@ -140,6 +143,9 @@ describe('project setup sanitizers', () => {
       hiddenSharedActionIds: ['x'],
       setupWorktreeMode: 'replace',
     });
+    expect(projectSetupPatchToStored({ worktreeDirectory: ' ~/trees ' })).toEqual({ worktreeDirectory: '~/trees' });
+    expect(projectSetupPatchToStored({ worktreeDirectory: null })).toEqual({ worktreeDirectory: undefined });
+    expect(projectSetupPatchToStored({ worktreeDirectory: '   ' })).toEqual({ worktreeDirectory: undefined });
     expect(projectSetupPatchToStored({})).toEqual({});
     expect(() => projectSetupPatchToStored({ setupWorktree: 'a' })).toThrow('setupWorktree must be');
     expect(() => projectSetupPatchToStored({ setupWorktreeWait: 'yes' })).toThrow('setupWorktreeWait must be');
@@ -147,6 +153,7 @@ describe('project setup sanitizers', () => {
     expect(() => projectSetupPatchToStored({ draftStarters: null })).toThrow('draftStarters must be');
     expect(() => projectSetupPatchToStored({ hiddenSharedActionIds: 'dev' })).toThrow('hiddenSharedActionIds must be');
     expect(() => projectSetupPatchToStored({ setupWorktreeMode: 'merge' })).toThrow('setupWorktreeMode must be');
+    expect(() => projectSetupPatchToStored({ worktreeDirectory: 42 })).toThrow('worktreeDirectory must be');
     expect(() => projectSetupPatchToStored({ sharedTrustHash: '' })).toThrow('sharedTrustHash must be');
     expect(projectSetupPatchToStored({ sharedTrustHash: null })).toEqual({ sharedTrust: undefined });
     expect(projectSetupPatchToStored({ sharedTrustHash: 'sha256:x' }).sharedTrust).toMatchObject({ hash: 'sha256:x' });
@@ -388,6 +395,25 @@ describe('project setup runtime', () => {
       await runtime.updateProjectSetup('project-a', { projectActionsPrimaryId: null });
       expect(await readRaw('project-a')).not.toHaveProperty('projectActionsPrimaryId');
       expect((await runtime.readProjectSetup('project-a')).projectActionsPrimaryId).toBeNull();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('round-trips the personal worktree directory and clears it with null', async () => {
+    const { runtime, readRaw, cleanup } = await createRuntime();
+    try {
+      expect(await runtime.readWorktreeDirectory('project-a')).toBeNull();
+
+      const view = await runtime.updateProjectSetup('project-a', { worktreeDirectory: ' ~/worktrees ' });
+      expect(view.personal.worktreeDirectory).toBe('~/worktrees');
+      expect(await runtime.readWorktreeDirectory('project-a')).toBe('~/worktrees');
+      expect((await readRaw('project-a')).worktreeDirectory).toBe('~/worktrees');
+
+      await runtime.updateProjectSetup('project-a', { worktreeDirectory: null });
+      expect(await readRaw('project-a')).not.toHaveProperty('worktreeDirectory');
+      expect(await runtime.readWorktreeDirectory('project-a')).toBeNull();
+      expect((await runtime.readProjectSetup('project-a')).personal.worktreeDirectory).toBeNull();
     } finally {
       await cleanup();
     }

@@ -3,8 +3,7 @@
  *
  * Loops are git-commit-able markdown files with YAML frontmatter, discovered
  * from `.agents/loops/*.md` (project scope, including ancestor directories up
- * to the worktree root) and `~/.agents/loops/*.md` (user scope), mirroring the
- * skills discovery pattern (`packages/web/server/lib/opencode/skills.js`).
+ * to the worktree root) and `~/.agents/loops/*.md` (user scope).
  *
  * File format:
  *

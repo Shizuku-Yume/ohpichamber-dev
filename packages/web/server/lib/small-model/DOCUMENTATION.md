@@ -25,10 +25,10 @@ ID, not an engine-specific directory header.
   pending. A signal does not merely abandon HTTP delivery.
 - `index.js`: Host selection policy and input/output budgeting. Canonical
   failures and cancellations are distinct errors, not empty text.
-- `routes.js`: inherited `/api/small-model` preview and generation registration.
-  Route composition and final legacy-route removal belong to Task17; these are
-  not the shared UI generation interface. Remaining preview consumers must
-  migrate before removal. No compatibility resolver or payload adapter is added.
+
+The public `/api/small-model` preview and `/api/small-model/generate` routes are
+retired; UI utilities use the canonical client, while Guest/session-assist/
+session-goal retain injected access to this service.
 
 ## Selection and scope
 

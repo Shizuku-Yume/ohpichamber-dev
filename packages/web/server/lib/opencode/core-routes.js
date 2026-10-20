@@ -1,4 +1,3 @@
-import { buildExternalManualRestartResponse } from './config-mutation-response.js';
 import { ThemeImportStorageError } from '../host/theme-runtime.js';
 import { registerThemeCatalogRoutes } from '../host/theme-catalog.js';
 
@@ -1049,8 +1048,6 @@ export const registerSettingsUtilityRoutes = (app, dependencies) => {
     readCustomThemesFromDisk,
     saveImportedTheme,
     deleteImportedTheme,
-    refreshOpenCodeAfterConfigChange,
-    clientReloadDelayMs,
   } = dependencies;
 
   app.get('/api/config/themes', async (_req, res) => {
@@ -1086,33 +1083,6 @@ export const registerSettingsUtilityRoutes = (app, dependencies) => {
       res.status(error instanceof ThemeImportStorageError ? error.status : 500).json({ error: 'delete' });
     }
   });
-
-  app.post('/api/config/reload', async (_req, res) => {
-    try {
-      console.log('[Server] Manual configuration reload requested');
-
-      const refreshResult = await refreshOpenCodeAfterConfigChange('manual configuration reload');
-
-      if (refreshResult?.external) {
-        return res.json(buildExternalManualRestartResponse(
-          'Configuration is saved on disk. Restart your connected OpenCode server to apply the changes.',
-        ));
-      }
-
-      res.json({
-        success: true,
-        requiresReload: true,
-        message: 'Configuration reloaded successfully. Refreshing interface…',
-        reloadDelayMs: clientReloadDelayMs,
-      });
-    } catch (error) {
-      console.error('[Server] Failed to reload configuration:', error);
-      res.status(500).json({
-        error: error.message || 'Failed to reload configuration',
-        success: false,
-      });
-    }
-  });
 };
 
 export const registerCommonRequestMiddleware = (app, dependencies) => {
@@ -1136,13 +1106,8 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
       express.json({ limit: '256kb' })(req, res, next);
     } else if (
       req.path.startsWith('/api/config/agents') ||
-      req.path.startsWith('/api/config/commands') ||
-      req.path.startsWith('/api/config/snippets') ||
       req.path.startsWith('/api/config/settings') ||
       req.path.startsWith('/api/config/skills') ||
-      req.path.startsWith('/api/config/plugins') ||
-      req.path.startsWith('/api/config/websearch') ||
-      req.path.startsWith('/api/config/warming') ||
       req.path.startsWith('/api/projects') ||
       req.path.startsWith('/api/fs') ||
       req.path.startsWith('/api/git') ||
@@ -1157,7 +1122,6 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
       req.path.startsWith('/api/message-queue') ||
       req.path.startsWith('/api/provider') ||
       req.path.startsWith('/api/session-folders') ||
-      req.path.startsWith('/api/small-model') ||
       req.path.startsWith('/api/walkthrough') ||
       req.path.startsWith('/api/goals') ||
       req.path.startsWith('/api/text') ||
@@ -1169,6 +1133,7 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
     ) {
       express.json({ limit: '50mb' })(req, res, next);
     } else if (req.path.startsWith('/api')) {
+      // Unknown API paths remain unparsed for the generic proxy fallback.
       next();
     } else {
       express.json({ limit: '50mb' })(req, res, next);

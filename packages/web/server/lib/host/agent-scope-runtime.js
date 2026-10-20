@@ -176,6 +176,13 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
     if (!requested.ok) return null;
     const [projects, selectedAgentDirectory] = await Promise.all([readProjects(), selectedDirectory()]);
     let discoveryFailed = false;
+    if (managedChatsScope) {
+      let root;
+      try { root = await managedRoot(); }
+      catch { discoveryFailed = true; }
+      // Managed admission owns this namespace even when a configured project overlaps it.
+      if (root && contains(root, requested.directory)) return publicWorkspace(await admitChatDirectory(requested.directory));
+    }
     for (const project of projects) {
       let projectDirectory;
       try { projectDirectory = await validateDirectory(project.path); }
@@ -200,12 +207,6 @@ const archiveSpaceId = (workspaceId) => /^archive_([a-f0-9]{12})$/.exec(workspac
           }));
         } catch { discoveryFailed = true; }
       }
-    }
-    if (managedChatsScope) {
-      try {
-        const root = await managedRoot();
-        if (contains(root, requested.directory)) return publicWorkspace(await admitChatDirectory(requested.directory));
-      } catch { discoveryFailed = true; }
     }
     if (discoveryFailed) throw new MetadataReadError('Configured Host workspace discovery is unavailable');
     return null;

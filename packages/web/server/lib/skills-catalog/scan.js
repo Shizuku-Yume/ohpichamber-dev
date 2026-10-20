@@ -155,7 +155,7 @@ export async function scanSkillsRepository({
         .filter((p) => p.endsWith('/SKILL.md') || p === 'SKILL.md');
     }
 
-    // Root-level SKILL.md doesn't map cleanly to OpenCode's "skill name == folder name" convention.
+    // Repository-root SKILL.md has no installable destination directory basename.
     const uniqueSkillDirs = Array.from(
       new Set(
         skillMdPaths
@@ -180,6 +180,8 @@ export async function scanSkillsRepository({
         // Prefer filesystem reads when sparse checkout succeeded.
         const filePath = toFsPath(skillMdPath);
         try {
+          const stat = await fs.promises.lstat(filePath);
+          if (stat.isSymbolicLink() || !stat.isFile()) continue;
           skillMdContent = await fs.promises.readFile(filePath, 'utf8');
         } catch {
           const showResult = await runGit(['-C', tempBase, 'show', `HEAD:${skillMdPath}`], { ...remoteGitOptions, timeoutMs: 15_000 });
@@ -198,7 +200,7 @@ export async function scanSkillsRepository({
 
         const installable = validateSkillName(skillName);
         if (!installable) {
-          warnings.push('Skill directory name is not a valid OpenCode skill name');
+          warnings.push('Skill directory name is not an installable skill name');
         }
 
         items.push({

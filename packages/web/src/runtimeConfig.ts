@@ -5,7 +5,6 @@ import { warmDesktopHostStatuses } from '@openchamber/ui/lib/desktopHostStatus';
 import { restoreDesktopRelayRuntime } from '@openchamber/ui/lib/desktopRelayRestore';
 import { getInjectedBootOutcome } from '@openchamber/ui/lib/desktopBoot';
 import { configureRuntimeUrlResolver } from '@openchamber/ui/lib/runtime-url';
-import { opencodeClient } from '@openchamber/ui/lib/opencode/client';
 import { createWebAPIs } from './api';
 
 // The switcher's statuses are warmed after boot settles, not during it.
@@ -70,9 +69,6 @@ export const createConfiguredWebAPIs = () => {
   });
   setRuntimeBearerToken(clientToken || null);
   setRuntimeExtraHeaders(runtimeHeaders || null);
-  // createWebAPIs imports UI stores, which instantiate the SDK singleton
-  // before the endpoint above is configured.
-  opencodeClient.reconnectToRuntimeBaseUrl();
   void refreshRuntimeUrlAuthToken(apiBaseUrl || undefined).catch(() => {});
   if (localOrigin && !sameOrigin(apiBaseUrl, localOrigin) && Object.keys(getRuntimeExtraHeadersSync()).length > 0) {
     void refreshLocalRuntimeUrlAuthToken(localOrigin).catch(() => {});
@@ -88,11 +84,7 @@ export const createConfiguredWebAPIs = () => {
     restoreDesktopRelayRuntime(relayHostId || undefined).catch(() => {}),
     // Never hold the app hostage: a stuck probe/tunnel gives up to the UI.
     new Promise<void>((resolve) => { window.setTimeout(resolve, 10_000); }),
-  ]).then(() => {
-    // Relay-capable windows may select a reachable direct leg before React
-    // subscribes to runtime-change events, so bind the SDK explicitly.
-    opencodeClient.reconnectToRuntimeBaseUrl();
-  });
+  ]).then(() => {});
   // Learn every instance's reachability in the background, so the switcher opens
   // on real values instead of probing for the first time under the user's
   // cursor. After the endpoint is settled and past the app's own bootstrap:

@@ -1,9 +1,7 @@
-import { readOpenCodeInfo, isSupportedOpenCodeVersion } from './lib/opencode/compatibility.js';
 import 'reflect-metadata';
 import express from 'express';
 import compression from 'compression';
 import path from 'path';
-import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import net from 'net';
@@ -11,6 +9,7 @@ import { fileURLToPath } from 'url';
 import os from 'os';
 import crypto from 'crypto';
 import http2 from 'node:http2';
+import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { createUiAuth } from './lib/ui-auth/ui-auth.js';
 import { createTunnelAuth } from './lib/host/tunnel-auth.js';
@@ -50,20 +49,11 @@ import {
   createGlobalMessageStreamHub,
   createMessageStreamWsRuntime,
 } from './lib/event-stream/index.js';
-import { DEFAULT_UPSTREAM_STALL_TIMEOUT_MS, UPSTREAM_STALL_TIMEOUT_CONCURRENT_MS } from './lib/event-stream/upstream-reader.js';
 import { createFsSearchRuntime as createFsSearchRuntimeFactory } from './lib/fs/search.js';
-import { createOpenCodeLifecycleRuntime } from './lib/opencode/lifecycle.js';
-import { createOpenCodeEnvRuntime } from './lib/opencode/env-runtime.js';
-import { providedLoginShellEnvSnapshot } from './lib/host/login-shell-env.js';
-import { resolveOpenCodeEnvConfig } from './lib/opencode/env-config.js';
-import { createHmrStateRuntime } from './lib/opencode/hmr-state-runtime.js';
-import { createOpenCodeNetworkRuntime } from './lib/host/network-runtime.js';
-import { createOpenCodeAuthStateRuntime } from './lib/opencode/auth-state-runtime.js';
 import { createProjectDirectoryRuntime } from './lib/host/project-directory-runtime.js';
 import { createSettingsNormalizationRuntime } from './lib/host/settings-normalization-runtime.js';
 import { createSettingsHelpers } from './lib/host/settings-helpers.js';
 import { createThemeRuntime } from './lib/host/theme-runtime.js';
-import { createFeatureRoutesRuntime } from './lib/opencode/feature-routes-runtime.js';
 import { parseServeCliOptions } from './lib/opencode/cli-options.js';
 import {
   isRequestAuthorized,
@@ -72,12 +62,15 @@ import {
   registerServerStatusRoutes,
 } from './lib/opencode/core-routes.js';
 import { registerOpenChamberRoutes } from './lib/opencode/openchamber-routes.js';
-import { createServerUtilsRuntime } from './lib/opencode/server-utils-runtime.js';
 import { createStaticRoutesRuntime } from './lib/host/static-routes-runtime.js';
 import { createSettingsRuntime } from './lib/host/settings-runtime.js';
-import { createOpenCodeResolutionRuntime } from './lib/opencode/opencode-resolution-runtime.js';
-import { createBootstrapRuntime } from './lib/opencode/bootstrap-runtime.js';
+import { registerSettingsRoutes } from './lib/host/settings-routes.js';
 import { createSessionRuntime } from './lib/opencode/session-runtime.js';
+import { createServerUtilsRuntime } from './lib/opencode/server-utils-runtime.js';
+import { createFeatureRoutesRuntime } from './lib/opencode/feature-routes-runtime.js';
+import { createBootstrapRuntime } from './lib/opencode/bootstrap-runtime.js';
+import { createGracefulShutdownRuntime } from './lib/opencode/shutdown-runtime.js';
+import { runCliEntryIfMain } from './lib/opencode/cli-entry-runtime.js';
 import { configureAgentService } from './lib/small-model/client.js';
 import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
 import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
@@ -92,7 +85,6 @@ import { createChatsScope } from './lib/scheduled-tasks/chats-scope.js';
 import { createServerStartupRuntime } from './lib/host/server-startup-runtime.js';
 import { createTunnelWiringRuntime } from './lib/host/tunnel-wiring-runtime.js';
 import { createStartupPipelineRuntime } from './lib/host/startup-pipeline-runtime.js';
-import { runCliEntryIfMain } from './lib/opencode/cli-entry-runtime.js';
 import { registerNotificationRoutes } from './lib/notifications/routes.js';
 import { createNotificationEmitterRuntime } from './lib/notifications/emitter-runtime.js';
 import { createNotificationTriggerRuntime } from './lib/notifications/runtime.js';
@@ -106,7 +98,6 @@ import { createRoutingRuntime } from './lib/routing/runtime.js';
 import { createJevClient } from './lib/routing/jev.js';
 import { createSessionWorkRuntime } from './lib/session-work/runtime.js';
 import { createSessionLineage } from './lib/session-lineage.js';
-import { createGracefulShutdownRuntime } from './lib/opencode/shutdown-runtime.js';
 import { beginGuestServiceHost, beginGuestServiceShutdown, stopAllGuestServices } from './lib/guests/service.js';
 import { findInstalledGuest } from './lib/guests/catalog.js';
 import { extensionsPersistPath } from './lib/guests/persist.js';
@@ -125,11 +116,9 @@ import { CHAT_EXPORT_TIMEOUT_MS } from './lib/spaces/space-native-archive.js';
 import { readIdleStopSetting, startIdleStop } from './lib/spaces/idle-stop.js';
 import { SPACE_IDLE_EXIT_CODE } from './lib/spaces/layout.js';
 import { createSwitchController, registerSpaceRoutes } from './lib/spaces/routes.js';
-import { configureGitEnvironment, resolvePrimaryWorktreeRoot, getWorktrees } from './lib/git/service.js';
+import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, getWorktrees } from './lib/git/service.js';
 import { createEnvironmentStore } from './lib/environment/store.js';
 import { createEnvironmentRuntime } from './lib/environment/runtime.js';
-import { readOpenCodeServiceEnv } from './lib/environment/opencode-service-env.js';
-import { OPENCODE_CONFIG_DIR } from './lib/opencode/shared.js';
 import { createWorktreeBootstrapStore } from './lib/git/worktree-bootstrap-storage.js';
 import { createRemoteClientAuthRuntime } from './lib/client-auth/remote-clients.js';
 import { createClientPairingRuntime } from './lib/client-auth/pairing.js';
@@ -142,7 +131,6 @@ import { createBrowserControlRouter } from './lib/browser-control/provider.js';
 import { createDevServerScanner } from './lib/dev-servers/routes.js';
 import { createDevTunnelRuntime } from './lib/dev-tunnel/runtime.js';
 import { registerBrowserControlRoutes } from './lib/browser-control/routes.js';
-import { createManagedConfigRuntime } from './lib/opencode/managed-config-file.js';
 import { createOpenChamberSessionService, registerCanonicalSessionRoutes } from './lib/openchamber-sessions/routes.js';
 import { createHostSessionState } from './lib/host/session-state.js';
 import { createHostAgentScopeRuntime } from './lib/host/agent-scope-runtime.js';
@@ -166,6 +154,23 @@ applyOutboundProxyFromEnv();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+let exitOnShutdown = false;
+let isShuttingDown = false;
+let activeTunnelController = null;
+let runtimeManagedRemoteTunnelHostname = null;
+let expressApp = null;
+let server = null;
+let runtimeManagedRemoteTunnelToken = null;
+let uiAuthController = null;
+let spacesHost = null;
+let realtimeProxyRuntime = null;
+let guestSurfaceRuntime = null;
+let relayServiceInstance = null;
+let terminalRuntime = null;
+let dictationRuntime = null;
+let messageStreamRuntime = null;
+let signalsAttached = false;
+let relayReconcileTimer = null;
 
 const DEFAULT_PORT = 3000;
 const DESKTOP_NOTIFY_PREFIX = '[OpenChamberDesktopNotify] ';
@@ -175,7 +180,6 @@ const uiOpenChamberEventClients = new Set();
 const SHUTDOWN_TIMEOUT = 10000;
 const MODELS_DEV_API_URL = 'https://models.dev/api.json';
 const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000;
-const CLIENT_RELOAD_DELAY_MS = 800;
 const OPEN_CODE_READY_GRACE_MS = 12000;
 const LONG_REQUEST_TIMEOUT_MS = 4 * 60 * 1000;
 const TUNNEL_BOOTSTRAP_TTL_DEFAULT_MS = 30 * 60 * 1000;
@@ -321,8 +325,7 @@ const OPENCHAMBER_USER_CONFIG_ROOT = process.env.OPENCHAMBER_DATA_DIR
   : OPENCHAMBER_DEFAULT_CONFIG_ROOT;
 const OPENCHAMBER_USER_THEMES_DIR = path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'themes');
 const OPENCHAMBER_PROJECTS_CONFIG_DIR = path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'projects');
-// OPENCHAMBER_CHATS_DIR relocates managed chat worktrees — needed when the
-// OpenCode server runs as a separate user that cannot traverse $HOME.
+// OPENCHAMBER_CHATS_DIR relocates managed chat worktrees for the Host Gateway.
 const OPENCHAMBER_CHATS_DIR = process.env.OPENCHAMBER_CHATS_DIR && process.env.OPENCHAMBER_CHATS_DIR.trim()
   ? path.resolve(process.env.OPENCHAMBER_CHATS_DIR.trim())
   : path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats');
@@ -343,7 +346,6 @@ const saveImportedTheme = (...args) => themeRuntime.saveImportedTheme(...args);
 const deleteImportedTheme = (...args) => themeRuntime.deleteImportedTheme(...args);
 
 let notificationTemplateRuntime = null;
-let managedConfigRuntime = null;
 
 const resolveNotificationTemplate = (...args) => notificationTemplateRuntime.resolveNotificationTemplate(...args);
 const shouldApplyResolvedTemplateMessage = (...args) => notificationTemplateRuntime.shouldApplyResolvedTemplateMessage(...args);
@@ -384,7 +386,6 @@ const resolveManagedRemoteTunnelToken = (...args) => managedTunnelConfigRuntime.
 
 const settingsHelpers = createSettingsHelpers({
   normalizePathForPersistence,
-  normalizeDirectoryPath,
   normalizeTunnelBootstrapTtlMs,
   normalizeTunnelSessionTtlMs,
   normalizeTunnelProvider,
@@ -432,12 +433,12 @@ const settingsRuntime = createSettingsRuntime({
   normalizeStringArray,
   formatSettingsResponse,
   resolveDirectoryCandidate,
+  managedChatsRoot: OPENCHAMBER_CHATS_DIR,
   normalizeManagedRemoteTunnelHostname,
   normalizeManagedRemoteTunnelPresets,
   normalizeManagedRemoteTunnelPresetTokens,
   syncManagedRemoteTunnelConfigWithPresets,
   upsertManagedRemoteTunnelToken,
-  onManagedPluginSettingsChanged: () => managedConfigRuntime?.refreshManagedConfigFile(),
   // Declared further down; settings are only saved once the server serves requests.
   onMessageSearchEnabledChanged: (enabled) => messageSearchRuntime.setEnabled(enabled),
   onMessageSearchReasoningChanged: (enabled) => messageSearchRuntime.setReasoningEnabled(enabled),
@@ -534,9 +535,7 @@ const broadcastGlobalUiEvent = createGlobalUiEventBroadcaster({
 });
 const broadcastUiNotification = (...args) => notificationEmitterRuntime.broadcastUiNotification(...args);
 
-// OpenChamber-owned events (queue changes, archive state) travel on the shared
-// control stream, not on OpenCode's event proxy. One broadcaster so every owner
-// reaches the same clients.
+// OpenChamber-owned events travel on the shared control stream, not an engine proxy.
 const broadcastOpenChamberUiEvent = createGlobalUiEventBroadcaster({
   sseClients: uiOpenChamberEventClients,
   wsClients: uiNotificationWsClients,
@@ -674,14 +673,6 @@ const sessionRuntime = createSessionRuntime({
   broadcastEvent: broadcastGlobalUiEvent,
 });
 
-const getActiveSessionCount = () => sessionRuntime.getActiveSessionCount();
-
-const getUpstreamStallTimeoutMs = () => (
-  getActiveSessionCount() > 1
-    ? UPSTREAM_STALL_TIMEOUT_CONCURRENT_MS
-    : DEFAULT_UPSTREAM_STALL_TIMEOUT_MS
-);
-
 const movedUserDirs = await migrateLegacyUserDirs({
   fsPromises,
   path,
@@ -698,6 +689,9 @@ const projectConfigRuntime = createProjectConfigRuntime({
   path,
   projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
 });
+// Git asks the canonical project config for the personal worktree folder; it
+// never reads OpenCode's JSONC configuration.
+configureProjectWorktreeDirectory((projectConfigId) => projectConfigRuntime.readWorktreeDirectory(projectConfigId));
 
 const projectContextRuntime = createProjectContextRuntime({
   fsPromises,
@@ -732,116 +726,8 @@ const isAgentMemoryEnabled = async () => {
   return settings?.agentMemoryToolEnabled === true;
 };
 
-// HMR-persistent state via globalThis
-// These values survive Vite HMR reloads to prevent zombie OpenCode processes
-const hmrStateRuntime = createHmrStateRuntime({
-  globalThisLike: globalThis,
-  os,
-  processLike: process,
-  stateKey: '__openchamberHmrState',
-});
-const hmrState = hmrStateRuntime.getOrCreateHmrState();
-hmrStateRuntime.ensureUserProvidedOpenCodePassword(hmrState);
 
-// Non-HMR state (safe to reset on reload)
-let healthCheckInterval = null;
-let server = null;
-let expressApp = null;
-let currentRestartPromise = null;
-let isRestartingOpenCode = false;
-let openCodeApiPrefix = '';
-let openCodeApiPrefixDetected = true;
-let openCodeApiDetectionTimer = null;
-let lastOpenCodeError = null;
-let lastOpenCodeLaunchDiagnostics = null;
-let lastOpenCodeHealthFailure = null;
-let lastManagedOpenCodeProcess = null;
-let lastOpenCodeRestartDiagnostics = null;
-let isOpenCodeReady = false;
-let openCodeNotReadySince = 0;
-let isExternalOpenCode = false;
-let exitOnShutdown = true;
-let uiAuthController = null;
-// The isolated-spaces host: the place, the manager and the dispatcher. Null while the feature's
-// switch is off, and then nothing of the feature runs, see .workflow/isolated-spaces/DESIGN.md.
-let spacesHost = null;
-let activeTunnelController = null;
-const tunnelProviderRegistry = createTunnelProviderRegistry([
-  createCloudflareTunnelProvider(),
-  createNgrokTunnelProvider(),
-]);
-tunnelProviderRegistry.seal();
-const tunnelAuthController = createTunnelAuth();
-let runtimeManagedRemoteTunnelToken = '';
-let runtimeManagedRemoteTunnelHostname = '';
-let terminalRuntime = null;
-let dictationRuntime = null;
-// Built once the HTTP server exists (it hooks `upgrade`); the browser
-// provider router is built earlier and reaches it through this holder.
-let guestSurfaceRuntime = null;
-let realtimeProxyRuntime = null;
-let relayServiceInstance = null;
-let relayReconcileTimer = null;
-let messageStreamRuntime = null;
-const userProvidedOpenCodePassword = hmrStateRuntime.getUserProvidedOpenCodePassword(hmrState);
-const initialOpenCodeAuthState = hmrStateRuntime.resolveOpenCodeAuthFromState({
-  hmrState,
-  userProvidedOpenCodePassword,
-});
-let openCodeAuthPassword = initialOpenCodeAuthState.openCodeAuthPassword;
-let openCodeAuthSource = initialOpenCodeAuthState.openCodeAuthSource;
 
-// Sync helper - call after modifying any HMR state variable
-const syncToHmrState = () => {
-  hmrStateRuntime.syncStateFromRuntime(hmrState, {
-    openCodeProcess,
-    openCodePort,
-    openCodeBaseUrl,
-    isShuttingDown,
-    signalsAttached,
-    openCodeWorkingDirectory,
-    openCodeAuthPassword,
-    openCodeAuthSource,
-  });
-};
-
-// Sync helper - call to restore state from HMR (e.g., on module reload)
-const syncFromHmrState = () => {
-  const restored = hmrStateRuntime.restoreRuntimeFromState({
-    hmrState,
-    userProvidedOpenCodePassword,
-  });
-  openCodeProcess = restored.openCodeProcess;
-  openCodePort = restored.openCodePort;
-  openCodeBaseUrl = restored.openCodeBaseUrl;
-  isShuttingDown = restored.isShuttingDown;
-  signalsAttached = restored.signalsAttached;
-  openCodeWorkingDirectory = restored.openCodeWorkingDirectory;
-  openCodeAuthPassword = restored.openCodeAuthPassword;
-  openCodeAuthSource = restored.openCodeAuthSource;
-};
-
-// Module-level variables that shadow HMR state
-// These are synced to/from hmrState to survive HMR reloads
-let openCodeProcess = hmrState.openCodeProcess;
-let openCodePort = hmrState.openCodePort;
-let openCodeBaseUrl = hmrState.openCodeBaseUrl ?? null;
-let isShuttingDown = hmrState.isShuttingDown;
-let signalsAttached = hmrState.signalsAttached;
-let openCodeWorkingDirectory = hmrState.openCodeWorkingDirectory;
-
-const {
-  configuredOpenCodePort: ENV_CONFIGURED_OPENCODE_PORT,
-  configuredOpenCodeHost: ENV_CONFIGURED_OPENCODE_HOST,
-  effectivePort: ENV_EFFECTIVE_PORT,
-  configuredOpenCodeHostname: ENV_CONFIGURED_OPENCODE_HOSTNAME,
-} = resolveOpenCodeEnvConfig({
-  env: process.env,
-  logger: console,
-});
-
-const ENV_SKIP_OPENCODE_START = process.env.OPENCODE_SKIP_START === 'true' ||
-                                    process.env.OPENCHAMBER_SKIP_OPENCODE_START === 'true';
 const ENV_DESKTOP_NOTIFY = (() => {
   if (process.env.OPENCHAMBER_DESKTOP_NOTIFY === 'true') {
     return true;
@@ -855,133 +741,17 @@ const ENV_DESKTOP_NOTIFY = (() => {
   const argv1 = typeof process.argv?.[1] === 'string' ? process.argv[1] : '';
   return /openchamber-server/i.test(argv0) || /openchamber-server/i.test(argv1);
 })();
-const openCodeAuthStateRuntime = createOpenCodeAuthStateRuntime({
-  crypto,
-  process,
-  getAuthPassword: () => openCodeAuthPassword,
-  setAuthPassword: (value) => {
-    openCodeAuthPassword = value;
-  },
-  getAuthSource: () => openCodeAuthSource,
-  setAuthSource: (value) => {
-    openCodeAuthSource = value;
-  },
-  getUserProvidedPassword: () => userProvidedOpenCodePassword,
-  syncToHmrState,
-});
-
-const getOpenCodeAuthHeaders = (...args) => openCodeAuthStateRuntime.getOpenCodeAuthHeaders(...args);
-const isOpenCodeConnectionSecure = (...args) => openCodeAuthStateRuntime.isOpenCodeConnectionSecure(...args);
-const ensureLocalOpenCodeServerPassword = (...args) => openCodeAuthStateRuntime.ensureLocalOpenCodeServerPassword(...args);
-
-const openCodeNetworkState = {};
-Object.defineProperties(openCodeNetworkState, {
-  openCodePort: { get: () => openCodePort, set: (value) => { openCodePort = value; } },
-  openCodeBaseUrl: { get: () => openCodeBaseUrl, set: (value) => { openCodeBaseUrl = value; } },
-  openCodeApiPrefix: { get: () => openCodeApiPrefix, set: (value) => { openCodeApiPrefix = value; } },
-  openCodeApiPrefixDetected: { get: () => openCodeApiPrefixDetected, set: (value) => { openCodeApiPrefixDetected = value; } },
-  openCodeApiDetectionTimer: { get: () => openCodeApiDetectionTimer, set: (value) => { openCodeApiDetectionTimer = value; } },
-});
-
-const openCodeNetworkRuntime = createOpenCodeNetworkRuntime({
-  state: openCodeNetworkState,
-  getOpenCodeAuthHeaders,
-  readOpenCodeInfo,
-  isSupportedOpenCodeVersion,
-  configuredOpenCodeHostname: ENV_CONFIGURED_OPENCODE_HOSTNAME,
-});
-
-const waitForReady = (...args) => openCodeNetworkRuntime.waitForReady(...args);
-const normalizeApiPrefix = (...args) => openCodeNetworkRuntime.normalizeApiPrefix(...args);
-const setDetectedOpenCodeApiPrefix = (...args) => openCodeNetworkRuntime.setDetectedOpenCodeApiPrefix(...args);
-const buildOpenCodeUrl = (...args) => openCodeNetworkRuntime.buildOpenCodeUrl(...args);
-const ensureOpenCodeApiPrefix = (...args) => openCodeNetworkRuntime.ensureOpenCodeApiPrefix(...args);
-
 configureAgentService(hostAgentRuntime.service, {
   resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
 });
 
-const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
-  process.env.OPENCODE_API_PREFIX || process.env.OPENCHAMBER_API_PREFIX || ''
-);
 
-  if (ENV_CONFIGURED_API_PREFIX && ENV_CONFIGURED_API_PREFIX !== '') {
-  console.warn('Ignoring configured OpenCode API prefix; API runs at root.');
-}
-
-let cachedLoginShellEnvSnapshot;
-let resolvedOpencodeBinary = null;
-let resolvedOpencodeBinarySource = null;
-let resolvedNodeBinary = null;
-let resolvedBunBinary = null;
-let resolvedGitBinary = null;
-let useWslForOpencode = false;
-let resolvedWslBinary = null;
-let resolvedWslOpencodePath = null;
-let resolvedWslDistro = null;
-
-const openCodeEnvState = {};
-Object.defineProperties(openCodeEnvState, {
-  cachedLoginShellEnvSnapshot: { get: () => cachedLoginShellEnvSnapshot, set: (value) => { cachedLoginShellEnvSnapshot = value; } },
-  resolvedOpencodeBinary: { get: () => resolvedOpencodeBinary, set: (value) => { resolvedOpencodeBinary = value; } },
-  resolvedOpencodeBinarySource: { get: () => resolvedOpencodeBinarySource, set: (value) => { resolvedOpencodeBinarySource = value; } },
-  resolvedNodeBinary: { get: () => resolvedNodeBinary, set: (value) => { resolvedNodeBinary = value; } },
-  resolvedBunBinary: { get: () => resolvedBunBinary, set: (value) => { resolvedBunBinary = value; } },
-  resolvedGitBinary: { get: () => resolvedGitBinary, set: (value) => { resolvedGitBinary = value; } },
-  useWslForOpencode: { get: () => useWslForOpencode, set: (value) => { useWslForOpencode = value; } },
-  resolvedWslBinary: { get: () => resolvedWslBinary, set: (value) => { resolvedWslBinary = value; } },
-  resolvedWslOpencodePath: { get: () => resolvedWslOpencodePath, set: (value) => { resolvedWslOpencodePath = value; } },
-  resolvedWslDistro: { get: () => resolvedWslDistro, set: (value) => { resolvedWslDistro = value; } },
-});
-
-const openCodeEnvRuntime = createOpenCodeEnvRuntime({
-  state: openCodeEnvState,
-  normalizeDirectoryPath,
-  readSettingsFromDiskMigrated,
-  providedLoginShellEnvSnapshot,
-});
-
-const applyLoginShellEnvSnapshot = (...args) => openCodeEnvRuntime.applyLoginShellEnvSnapshot(...args);
-const getLoginShellEnvSnapshot = (...args) => openCodeEnvRuntime.getLoginShellEnvSnapshot(...args);
-const ensureOpencodeCliEnv = (...args) => openCodeEnvRuntime.ensureOpencodeCliEnv(...args);
-const applyOpencodeBinaryFromSettings = (...args) => openCodeEnvRuntime.applyOpencodeBinaryFromSettings(...args);
-const resolveOpencodeCliPath = (...args) => openCodeEnvRuntime.resolveOpencodeCliPath(...args);
-const isExecutable = (...args) => openCodeEnvRuntime.isExecutable(...args);
-const searchPathFor = (...args) => openCodeEnvRuntime.searchPathFor(...args);
-const resolveGitBinaryForSpawn = (...args) => openCodeEnvRuntime.resolveGitBinaryForSpawn(...args);
-const resolveManagedOpenCodeLaunchSpec = (...args) => openCodeEnvRuntime.resolveManagedOpenCodeLaunchSpec(...args);
-const clearResolvedOpenCodeBinary = (...args) => openCodeEnvRuntime.clearResolvedOpenCodeBinary(...args);
-const openCodeResolutionRuntime = createOpenCodeResolutionRuntime({
-  path,
-  resolveOpencodeCliPath,
-  applyOpencodeBinaryFromSettings,
-  ensureOpencodeCliEnv,
-  resolveManagedOpenCodeLaunchSpec,
-  getResolvedState: () => ({
-    resolvedOpencodeBinary,
-    resolvedOpencodeBinarySource,
-    useWslForOpencode,
-    resolvedWslBinary,
-    resolvedWslOpencodePath,
-    resolvedWslDistro,
-    resolvedNodeBinary,
-    resolvedBunBinary,
-  }),
-  setResolvedOpencodeBinarySource: (value) => {
-    resolvedOpencodeBinarySource = value;
-  },
-});
-const getOpenCodeResolutionSnapshot = (...args) =>
-  openCodeResolutionRuntime.getOpenCodeResolutionSnapshot(...args);
-
-applyLoginShellEnvSnapshot();
 
 notificationTemplateRuntime = createNotificationTemplateRuntime({
   sessionService: openChamberSessionService,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
-  readSettingsFromDisk,
-  resolveGitBinaryForSpawn,
   readSessionMetadata: readStoredSessionMetadata,
+  readSettingsFromDisk,
 });
 
 const notificationTriggerRuntime = createNotificationTriggerRuntime({
@@ -1014,13 +784,7 @@ const sessionAssistRuntime = createSessionAssistRuntime({
   getSmallModelService: async () => import('./lib/small-model/index.js'),
   persistSessionAssist: (sessionID, directory, assist) =>
     persistSessionMetadataPatch(sessionID, { openchamber: { assist } }, { directory }),
-  // Declared further down; only ever called after startup.
-  isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
-  // Declared further down; only ever called after startup.
-  evaluateTurn: (input) => sessionWorkRuntime.evaluateTurnEnd(input),
-  lineage: sessionLineage,
 });
-
 const sessionGoalRuntime = createSessionGoalRuntime({
   sessionService: openChamberSessionService,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
@@ -1082,8 +846,7 @@ const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
     return settings.agentControlToolEnabled !== false;
   },
   readSessionMetadata: readStoredSessionMetadata,
-  // Pins and the delivered-signature cursor are read from and written to
-  // OpenChamber's own store; nothing here talks to OpenCode any more.
+  // Pins and the delivered-signature cursor are read from OpenChamber's own store.
   persistSessionMetadata: (sessionID, directory, patch) => persistSessionMetadataPatch(sessionID, patch, { directory }),
 });
 
@@ -1209,63 +972,12 @@ globalMessageStreamHub.subscribeEvent(async (event, scope) => {
 
 
 const serverUtilsRuntime = createServerUtilsRuntime({
-  // Read lazily: session service composition completes before proxy registration.
-  listArchivedSessions: () => openChamberSessionService.archiveStore.listAll(),
-  listSessionMetadata: () => sessionMetadataStore.listAll(),
-  persistSessionMetadata: persistSessionMetadataPatch,
-  inheritForkMetadata: (...args) => openChamberSessionService.inheritForkMetadata(...args),
-  // Isolated spaces: with the switch on, the session list carries every space's sessions and
-  // the global SSE stream their events. Called, not captured: the host is made in `main`.
-  getMergeSpaceSessionList: () => (spacesHost ? (payload) => spacesHost.mergeSessionList(payload) : null),
-  getSpaceEventHub: () => (spacesHost ? globalMessageStreamHub : null),
-  fs,
   os,
   path,
   process,
-  openCodeReadyGraceMs: OPEN_CODE_READY_GRACE_MS,
-  longRequestTimeoutMs: LONG_REQUEST_TIMEOUT_MS,
-  getRuntime: () => ({
-    openCodePort,
-    openCodeBaseUrl,
-    openCodeNotReadySince,
-    isOpenCodeReady,
-    isRestartingOpenCode,
-  }),
-  getOpenCodeAuthHeaders,
-  buildOpenCodeUrl,
-  ensureOpenCodeApiPrefix,
-  getUpstreamStallTimeoutMs,
-  getUiNotificationClients: () => uiNotificationClients,
-  getOpenCodePort: () => openCodePort,
-  setOpenCodePortState: (value) => {
-    openCodePort = value;
-  },
-  syncToHmrState,
-  markOpenCodeNotReady: () => {
-    isOpenCodeReady = false;
-  },
-  setOpenCodeNotReadySince: (value) => {
-    openCodeNotReadySince = value;
-  },
-  clearLastOpenCodeError: () => {
-    lastOpenCodeError = null;
-  },
-  getLoginShellPath: () => {
-    const snapshot = getLoginShellEnvSnapshot();
-    if (!snapshot || typeof snapshot.PATH !== 'string' || snapshot.PATH.length === 0) {
-      return null;
-    }
-    return snapshot.PATH;
-  },
 });
 
-const setOpenCodePort = (...args) => serverUtilsRuntime.setOpenCodePort(...args);
-const waitForOpenCodePort = (...args) => serverUtilsRuntime.waitForOpenCodePort(...args);
-const buildAugmentedPath = (...args) => serverUtilsRuntime.buildAugmentedPath(...args);
-const buildManagedOpenCodePath = (...args) => serverUtilsRuntime.buildManagedOpenCodePath(...args);
 
-// Variables from Settings for the processes OpenChamber starts: the managed
-// OpenCode, Git, the terminal and command execution (lib/environment).
 const environmentStore = createEnvironmentStore({
   filePath: path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'environment.json'),
 });
@@ -1277,14 +989,10 @@ const environmentRuntime = createEnvironmentRuntime({
   store: environmentStore,
   listProjects: listConfiguredProjects,
   spawn,
-  // The terminal's PATH: a packaged server starts with a minimal one, where
-  // direnv, devenv or nix would not be found.
-  commandBaseEnv: () => ({ ...process.env, PATH: buildAugmentedPath() }),
-  readOpenCodeServiceEnv: () => readOpenCodeServiceEnv(OPENCODE_CONFIG_DIR),
+  commandBaseEnv: () => ({ ...process.env, PATH: serverUtilsRuntime.buildAugmentedPath() }),
   isEnterpriseMode: () => isEnterpriseMode(),
 });
 configureGitEnvironment(environmentRuntime);
-const parseSseDataPayload = (...args) => serverUtilsRuntime.parseSseDataPayload(...args);
 const staticRoutesRuntime = createStaticRoutesRuntime({
   fs,
   path,
@@ -1292,8 +1000,8 @@ const staticRoutesRuntime = createStaticRoutesRuntime({
   __dirname,
   express,
   resolveProjectDirectory,
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  buildCanonicalApiUrl: (pathname) => pathname,
+  getCanonicalAuthHeaders: () => ({}),
   readSettingsFromDiskMigrated,
   normalizePwaAppName,
   normalizePwaOrientation,
@@ -1313,9 +1021,7 @@ const clientPairingRuntime = createClientPairingRuntime({
   storePath: CLIENT_PAIRING_SESSIONS_FILE_PATH,
   remoteClientAuthRuntime,
 });
-const featureRoutesRuntime = createFeatureRoutesRuntime({
-  clientReloadDelayMs: CLIENT_RELOAD_DELAY_MS,
-});
+const featureRoutesRuntime = createFeatureRoutesRuntime();
 const bootstrapRuntime = createBootstrapRuntime({
   createUiAuth,
   registerServerStatusRoutes,
@@ -1326,6 +1032,11 @@ const bootstrapRuntime = createBootstrapRuntime({
   registerOpenChamberRoutes,
   express,
 });
+const tunnelProviderRegistry = createTunnelProviderRegistry([
+  createCloudflareTunnelProvider(),
+  createNgrokTunnelProvider(),
+]);
+const tunnelAuthController = createTunnelAuth();
 const tunnelWiringRuntime = createTunnelWiringRuntime({
   crypto,
   URL,
@@ -1367,128 +1078,12 @@ const startupPipelineRuntime = createStartupPipelineRuntime({
   createServerStartupRuntime,
 });
 
-const openCodeLifecycleState = {};
-Object.defineProperties(openCodeLifecycleState, {
-  openCodeProcess: { get: () => openCodeProcess, set: (value) => { openCodeProcess = value; } },
-  openCodePort: { get: () => openCodePort, set: (value) => { openCodePort = value; } },
-  openCodeBaseUrl: { get: () => openCodeBaseUrl, set: (value) => { openCodeBaseUrl = value; } },
-  openCodeWorkingDirectory: { get: () => openCodeWorkingDirectory, set: (value) => { openCodeWorkingDirectory = value; } },
-  currentRestartPromise: { get: () => currentRestartPromise, set: (value) => { currentRestartPromise = value; } },
-  isRestartingOpenCode: { get: () => isRestartingOpenCode, set: (value) => { isRestartingOpenCode = value; } },
-  openCodeApiPrefix: { get: () => openCodeApiPrefix, set: (value) => { openCodeApiPrefix = value; } },
-  openCodeApiPrefixDetected: { get: () => openCodeApiPrefixDetected, set: (value) => { openCodeApiPrefixDetected = value; } },
-  openCodeApiDetectionTimer: { get: () => openCodeApiDetectionTimer, set: (value) => { openCodeApiDetectionTimer = value; } },
-  lastOpenCodeError: { get: () => lastOpenCodeError, set: (value) => { lastOpenCodeError = value; } },
-  lastOpenCodeLaunchDiagnostics: { get: () => lastOpenCodeLaunchDiagnostics, set: (value) => { lastOpenCodeLaunchDiagnostics = value; } },
-  lastOpenCodeHealthFailure: { get: () => lastOpenCodeHealthFailure, set: (value) => { lastOpenCodeHealthFailure = value; } },
-  lastManagedOpenCodeProcess: { get: () => lastManagedOpenCodeProcess, set: (value) => { lastManagedOpenCodeProcess = value; } },
-  lastOpenCodeRestartDiagnostics: { get: () => lastOpenCodeRestartDiagnostics, set: (value) => { lastOpenCodeRestartDiagnostics = value; } },
-  isOpenCodeReady: { get: () => isOpenCodeReady, set: (value) => { isOpenCodeReady = value; } },
-  openCodeNotReadySince: { get: () => openCodeNotReadySince, set: (value) => { openCodeNotReadySince = value; } },
-  isExternalOpenCode: { get: () => isExternalOpenCode, set: (value) => { isExternalOpenCode = value; } },
-  isShuttingDown: { get: () => isShuttingDown, set: (value) => { isShuttingDown = value; } },
-  healthCheckInterval: { get: () => healthCheckInterval, set: (value) => { healthCheckInterval = value; } },
-  expressApp: { get: () => expressApp, set: (value) => { expressApp = value; } },
-  useWslForOpencode: { get: () => useWslForOpencode, set: (value) => { useWslForOpencode = value; } },
-  resolvedWslBinary: { get: () => resolvedWslBinary, set: (value) => { resolvedWslBinary = value; } },
-  resolvedWslOpencodePath: { get: () => resolvedWslOpencodePath, set: (value) => { resolvedWslOpencodePath = value; } },
-  resolvedWslDistro: { get: () => resolvedWslDistro, set: (value) => { resolvedWslDistro = value; } },
-});
 
-const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
-  state: openCodeLifecycleState,
-  env: {
-    ENV_CONFIGURED_OPENCODE_PORT,
-    ENV_CONFIGURED_OPENCODE_HOST,
-    ENV_EFFECTIVE_PORT,
-    ENV_CONFIGURED_OPENCODE_HOSTNAME,
-    ENV_SKIP_OPENCODE_START,
-  },
-  syncToHmrState,
-  syncFromHmrState,
-  getOpenCodeAuthHeaders,
-  buildOpenCodeUrl,
-  waitForReady,
-  normalizeApiPrefix,
-  applyOpencodeBinaryFromSettings,
-  ensureOpencodeCliEnv,
-  ensureLocalOpenCodeServerPassword,
-  resolveManagedOpenCodeLaunchSpec,
-  setOpenCodePort,
-  setDetectedOpenCodeApiPrefix,
-  setupProxy: (...args) => setupProxy(...args),
-  ensureOpenCodeApiPrefix,
-  clearResolvedOpenCodeBinary,
-  buildAugmentedPath,
-  buildManagedOpenCodePath,
-  getManagedOpenCodeShellEnvSnapshot: getLoginShellEnvSnapshot,
-  getActiveSessionCount,
-  // Most-recently-used directories first: OpenCode initializes each directory
-  // lazily on first request (seconds on large session stores), so the
-  // lifecycle warms these right after readiness — before the UI's first
-  // interactive request would otherwise pay that cost.
-  getWarmupDirectories: async () => {
-    const settings = await readSettingsFromDiskMigrated().catch(() => null);
-    if (!settings) return [];
-    const directories = [];
-    if (typeof settings.lastDirectory === 'string' && settings.lastDirectory) {
-      directories.push(settings.lastDirectory);
-    }
-    const projects = Array.isArray(settings.projects) ? [...settings.projects] : [];
-    projects.sort((a, b) => (b?.lastOpenedAt ?? 0) - (a?.lastOpenedAt ?? 0));
-    for (const project of projects) {
-      if (typeof project?.path === 'string' && project.path) {
-        directories.push(project.path);
-      }
-    }
-    // A deleted project would fail every read scoped to it, and the first entry
-    // also scopes server-side reads that have no directory of their own.
-    const existing = await Promise.all([...new Set(directories)].map(async (directory) => (
-      (await fs.promises.stat(directory).catch(() => null))?.isDirectory() ? directory : null
-    )));
-    return existing.filter(Boolean);
-  },
-  noProjectDirectory: OPENCHAMBER_CHATS_DIR,
-  // A managed restart can move OpenCode to a NEW port (the old one may stay
-  // occupied if killProcessOnPort/waitForPortRelease didn't free it in time,
-  // on any platform). Rebind the message-stream upstream readers to the current port
-  // so the UI keeps receiving events instead of staying pinned to the old
-  // process (#2638). The runtime is created later by the startup pipeline;
-  // by the time any restart runs, it is assigned.
-  onOpenCodeRestarted: () => {
-    try {
-      const { sessionIds } = sessionRuntime.interruptBusySessionsAfterRestart();
-      if (sessionIds.length > 0) {
-        const multiple = sessionIds.length > 1;
-        broadcastUiNotification({
-          title: multiple ? 'Chats interrupted' : 'Chat interrupted',
-          body: multiple
-            ? 'OpenCode restarted during running responses. Send a message in each chat to continue.'
-            : 'OpenCode restarted during a running response. Send a message to continue.',
-          tag: 'opencode-restart-interrupted',
-          kind: 'opencode-restart-interrupted',
-          sessionId: sessionIds[0],
-        });
-      }
-    } catch (error) {
-      console.warn('Failed to reconcile sessions after OpenCode restart:', error?.message ?? error);
-    }
-  },
-  getManagedOpenCodeEnv: async () => (managedConfigRuntime ? managedConfigRuntime.buildManagedChildEnv() : {}),
-  getUserEnvironment: () => environmentRuntime.forOpenCode(),
-});
-
-
-
-const restartOpenCode = (...args) => openCodeLifecycleRuntime.restartOpenCode(...args);
-const waitForOpenCodeReady = (...args) => openCodeLifecycleRuntime.waitForOpenCodeReady(...args);
-const waitForAgentPresence = (...args) => openCodeLifecycleRuntime.waitForAgentPresence(...args);
-const refreshOpenCodeAfterConfigChange = (...args) => openCodeLifecycleRuntime.refreshOpenCodeAfterConfigChange(...args);
-const triggerHealthCheck = () => openCodeLifecycleRuntime.triggerHealthCheck();
 const scheduledTasksRuntime = createScheduledTasksRuntime({
   projectConfigRuntime,
   chatsScope: scheduledChatsScope,
   sessionService: openChamberSessionService,
+  service: hostAgentRuntime.service,
   resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
   resolveSessionScope: hostAgentRuntime.resolveSessionScope,
   listWorkspaceScopes,
@@ -1566,26 +1161,6 @@ const convertLegacyQueue = async () => {
   });
   if (result.status === 'partial' || result.status === 'failed') {
     console.warn('[message-queue] legacy conversion incomplete:', result.status, result.storage ?? 'conversion_failed', result.errors.length);
-  }
-};
-const emitSessionCreatedEvent = (event) => {
-  for (const client of uiOpenChamberEventClients) {
-    try {
-      writeSseEvent(client, {
-        type: 'openchamber:session-created',
-        properties: {
-          sessionId: event.sessionID,
-          directory: event.directory,
-          createdAt: event.createdAt,
-          promptDispatched: event.promptDispatched === true,
-          dispatchedAsCommand: event.dispatchedAsCommand === true,
-          ...(event.projectID ? { projectId: event.projectID } : {}),
-          ...(event.title ? { title: event.title } : {}),
-        },
-      });
-    } catch {
-      uiOpenChamberEventClients.delete(client);
-    }
   }
 };
 /**
@@ -1777,10 +1352,6 @@ const startAgentService = async () => {
   await scheduledTasksRuntime.start();
   return hostAgentRuntime.service.getState();
 };
-const killProcessOnPort = (...args) => openCodeLifecycleRuntime.killProcessOnPort(...args);
-const waitForPortRelease = (...args) => openCodeLifecycleRuntime.waitForPortRelease(...args);
-
-const setupProxy = (...args) => serverUtilsRuntime.setupProxy(...args);
 const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   process,
   shutdownTimeoutMs: SHUTDOWN_TIMEOUT,
@@ -1789,8 +1360,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   setIsShuttingDown: (value) => {
     isShuttingDown = value;
   },
-  syncToHmrState,
-  globalMessageStreamHub,
+  syncToHmrState: () => {},
   hostAgentRuntime,
   permissionAutoAcceptRuntime,
   sessionAssistRuntime,
@@ -1801,8 +1371,6 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   dispatchResultsRuntime,
   messageSearchRuntime,
   sessionRuntime,
-  getHealthCheckInterval: () => healthCheckInterval,
-  clearHealthCheckInterval: (value) => clearInterval(value),
   getTerminalRuntime: () => terminalRuntime,
   setTerminalRuntime: (value) => {
     terminalRuntime = value;
@@ -1811,14 +1379,6 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   setMessageStreamRuntime: (value) => {
     messageStreamRuntime = value;
   },
-  shouldSkipOpenCodeStop: () => ENV_SKIP_OPENCODE_START || isExternalOpenCode,
-  getOpenCodePort: () => openCodePort,
-  getOpenCodeProcess: () => openCodeProcess,
-  setOpenCodeProcess: (value) => {
-    openCodeProcess = value;
-  },
-  killProcessOnPort,
-  waitForPortRelease,
   getServer: () => server,
   getUiAuthController: () => uiAuthController,
   setUiAuthController: (value) => {
@@ -1856,14 +1416,6 @@ async function main(options = {}) {
     || (typeof process.env.OPENCHAMBER_HOST === 'string' && process.env.OPENCHAMBER_HOST.trim().length > 0
       ? process.env.OPENCHAMBER_HOST.trim()
       : '127.0.0.1');
-  managedConfigRuntime = createManagedConfigRuntime({
-    fsPromises,
-    path,
-    dataDir: OPENCHAMBER_DATA_DIR,
-    env: process.env,
-    readSettings: () => readSettingsFromDiskMigrated(),
-    isAgentMemoryAvailable: isAgentMemoryFeatureAvailable,
-  });
   await ensureChatsDir({ fsPromises, chatsDir: OPENCHAMBER_CHATS_DIR, warn: (message) => console.warn(`[data-dir] ${message}`) });
 
   // Pairing transports advertised to the create-device dialog. LAN reachability is
@@ -2011,8 +1563,7 @@ async function main(options = {}) {
 
   console.log(`Starting OpenChamber on port ${port === 0 ? 'auto' : port}`);
 
-  // Voice enumeration is independent from route registration. Start it now,
-  // but do not hold server listen or managed OpenCode startup on `say -v "?"`.
+  // Voice enumeration is independent from route registration and Agent Service startup.
   const sayTTSCapability = detectSayTtsCapability(process);
 
   // Native archive bytes and metadata are owned by the Agent Service; Host scope is selected here.
@@ -2054,12 +1605,10 @@ async function main(options = {}) {
   // While it is off the feature has no place, no manager, no route and runs no `docker`.
   const buildSpacesHost = () => createSpacesHost({
     dataDir: OPENCHAMBER_DATA_DIR,
-    dockerPath: searchPathFor('docker', buildAugmentedPath()) ?? 'docker',
-    // Only for a clean-up of the spaces' disk on Colima, to give the freed space back; null without it.
-    colimaPath: searchPathFor('colima', buildAugmentedPath()),
-    gitPath: searchPathFor('git', buildAugmentedPath()) ?? 'git',
-    // git starts `docker exec` itself when code moves in or out, so its PATH must find docker.
-    hostEnvironment: { ...process.env, PATH: buildAugmentedPath() },
+    dockerPath: serverUtilsRuntime.searchPathFor('docker', serverUtilsRuntime.buildAugmentedPath()) ?? 'docker',
+    colimaPath: serverUtilsRuntime.searchPathFor('colima', serverUtilsRuntime.buildAugmentedPath()),
+    gitPath: serverUtilsRuntime.searchPathFor('git', serverUtilsRuntime.buildAugmentedPath()) ?? 'git',
+    hostEnvironment: { ...process.env, PATH: serverUtilsRuntime.buildAugmentedPath() },
     // So the session list can say which registered project each space was made for.
     listProjectDirectories: async () => {
       const settings = await readSettingsFromDiskMigrated();
@@ -2130,7 +1679,7 @@ async function main(options = {}) {
       // The packaged desktop UI (openchamber-ui://) and the dev UI sit on a
       // different origin, so every custom request header must be listed here or
       // the browser refuses the request at preflight, before it reaches a route.
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With,Cache-Control,X-OpenCode-Directory,X-OpenCode-Directory-Encoding,Ngrok-Skip-Browser-Warning,X-OpenChamber-Surface,X-OpenChamber-Provider,X-OpenChamber-Model');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With,Cache-Control,X-OpenChamber-Directory,X-OpenChamber-Directory-Encoding,Ngrok-Skip-Browser-Warning,X-OpenChamber-Surface,X-OpenChamber-Provider,X-OpenChamber-Model');
       res.setHeader('Access-Control-Expose-Headers', 'x-next-cursor');
       res.setHeader('Vary', 'Origin');
       if (req.method === 'OPTIONS') {
@@ -2166,40 +1715,12 @@ async function main(options = {}) {
     openchamberVersion: OPENCHAMBER_VERSION,
     runtimeName: process.env.OPENCHAMBER_RUNTIME || 'web',
     serverStartedAt,
-    gracefulShutdown,
-    getHealthSnapshot: () => {
-      const launchSpec = resolvedOpencodeBinary && !useWslForOpencode
-        ? resolveManagedOpenCodeLaunchSpec(resolvedOpencodeBinary)
-        : null;
-      return {
-        openCodePort,
-        openCodeRunning: Boolean(openCodePort && isOpenCodeReady && !isRestartingOpenCode),
-        openCodeSecureConnection: isOpenCodeConnectionSecure(),
-        openCodeAuthSource: openCodeAuthSource || null,
-        openCodeApiPrefix: '',
-        openCodeApiPrefixDetected: true,
-        isOpenCodeReady,
-        lastOpenCodeError,
-        lastOpenCodeLaunchDiagnostics,
-        lastOpenCodeHealthFailure,
-        lastManagedOpenCodeProcess,
-        lastOpenCodeRestartDiagnostics,
-        opencodeBinaryResolved: resolvedOpencodeBinary || null,
-        opencodeBinarySource: resolvedOpencodeBinarySource || null,
-        opencodeLaunchBinary: launchSpec?.binary || null,
-        opencodeLaunchArgs: launchSpec?.args || [],
-        opencodeLaunchWrapperType: launchSpec?.wrapperType || null,
-        opencodeViaWsl: useWslForOpencode,
-        opencodeWslBinary: resolvedWslBinary || null,
-        opencodeWslPath: resolvedWslOpencodePath || null,
-        opencodeWslDistro: resolvedWslDistro || null,
-        nodeBinaryResolved: resolvedNodeBinary || null,
-        bunBinaryResolved: resolvedBunBinary || null,
-        desktopNotifyEnabled: ENV_DESKTOP_NOTIFY,
-        planModeExperimentalEnabled: PLAN_MODE_EXPERIMENT_ENABLED,
-        apiOnly,
-      };
-    },
+    getHealthSnapshot: () => ({
+      agentService: hostAgentRuntime.service.getState(),
+      desktopNotifyEnabled: ENV_DESKTOP_NOTIFY,
+      planModeExperimentalEnabled: PLAN_MODE_EXPERIMENT_ENABLED,
+      apiOnly,
+    }),
     // Port this instance serves on and the active tunnel's public URL (if
     // any), for /api/system/info. Resolved lazily because the tunnel runtime
     // is created after these base routes are registered.
@@ -2248,12 +1769,14 @@ async function main(options = {}) {
     resolveTtsSelection,
     canonicalAgentRoutes: {
       service: hostAgentRuntime.service,
+      skillFileOwner: hostAgentRuntime.skillFileOwner,
       resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
       resolveWorkspaceDirectory: hostAgentRuntime.resolveWorkspaceDirectory,
       resolveSessionScope: hostAgentRuntime.resolveSessionScope,
       listProjects: agentScopeRuntime.listProjects,
       listWorkspaces: agentScopeRuntime.listWorkspaces,
       resolveCredentialHandoff,
+      getSkillRepositoryDependencies: featureRoutesRuntime.getSkillRepositoryDependencies,
       queueRoutes: (router) => registerCanonicalQueueRoutes(router, messageQueueRuntime, {
         resolveSessionScope: hostAgentRuntime.resolveHostSessionScope,
       }),
@@ -2308,7 +1831,7 @@ async function main(options = {}) {
   };
   app.get('/api/openchamber/space/archive/manifest', (_req, res) => forwardNativeArchive('/internal/archive/manifest', res, 'application/json'));
   app.get('/api/openchamber/space/archive/sessions/:id', (req, res) => forwardNativeArchive(`/internal/archive/sessions/${encodeURIComponent(req.params.id)}`, res, 'application/x-tar'));
-  // After the API auth gate, before every route that reads a directory, before the OpenCode proxy.
+  // After the API auth gate, before every route that reads a directory.
   // The slot is mounted once and reads the host at call time, so the switch can turn the feature
   // on and off live: with no host it passes every request on and no upgrade is taken.
   // An archived chat of a deleted space is read and deleted, never run or changed.
@@ -2403,7 +1926,6 @@ async function main(options = {}) {
   // user can see is exactly a port the tunnel will dial.
   const devServerScanner = createDevServerScanner({ spawn, platform: process.platform });
   const listDevServers = () => devServerScanner.discover({
-    ownPorts: [port, openCodePort].filter((value) => Number.isInteger(value) && value > 0),
   });
 
   createDevTunnelRuntime({
@@ -2413,6 +1935,12 @@ async function main(options = {}) {
     isRequestOriginAllowed,
     rejectWebSocketUpgrade,
     logger: console,
+  });
+
+  registerSettingsRoutes(app, {
+    readSettingsFromDiskMigrated,
+    formatSettingsResponse,
+    persistSettings,
   });
 
   await featureRoutesRuntime.registerRoutes(app, {
@@ -2435,7 +1963,6 @@ async function main(options = {}) {
     path,
     fsPromises,
     spawn,
-    resolveGitBinaryForSpawn,
     createFsSearchRuntime: createFsSearchRuntimeFactory,
     openchamberDataDir: OPENCHAMBER_DATA_DIR,
     openchamberVersion: OPENCHAMBER_VERSION,
@@ -2454,21 +1981,12 @@ async function main(options = {}) {
     readCustomThemesFromDisk,
     saveImportedTheme,
     deleteImportedTheme,
-    refreshOpenCodeAfterConfigChange,
-    getOpenCodeResolutionSnapshot,
-    formatSettingsResponse,
     readSettingsFromDisk,
     readSettingsFromDiskMigrated,
     persistSettings,
     sanitizeProjects,
     sanitizeSkillCatalogs,
     isUnsafeSkillRelativePath,
-    buildOpenCodeUrl,
-    getOpenCodeAuthHeaders,
-    getOpenCodePort: () => openCodePort,
-    // Dev-server discovery must not offer OpenChamber's own listeners back to
-    // the user as something to preview.
-    getOwnPorts: () => [port, openCodePort].filter((value) => Number.isInteger(value) && value > 0),
     getActivePort: () => {
       const address = server?.address?.();
       return address && Number.isInteger(address.port) ? address.port : null;
@@ -2476,7 +1994,8 @@ async function main(options = {}) {
     // A pipe listener reports a string here, which has no address to bind back to.
     getActiveHost: () => server?.address?.()?.address ?? null,
     devServerScanner,
-    buildAugmentedPath,
+    buildAugmentedPath: () => serverUtilsRuntime.buildAugmentedPath(),
+    resolveGitBinaryForSpawn: () => (process.platform === 'win32' ? 'git.exe' : 'git'),
     projectConfigRuntime,
     projectContextRuntime,
     agentMemoryRuntime,
@@ -2486,7 +2005,6 @@ async function main(options = {}) {
     scheduledTaskService,
     openChamberSessionService,
     openChamberControlService,
-    emitSessionCreatedEvent,
     getOpenChamberEventClients: () => uiOpenChamberEventClients,
     writeSseEvent,
     globalEventHub: globalMessageStreamHub,
@@ -2514,9 +2032,9 @@ async function main(options = {}) {
     fs,
     path,
     uiAuthController,
-    buildAugmentedPath,
-    searchPathFor,
-    isExecutable,
+    buildAugmentedPath: () => serverUtilsRuntime.buildAugmentedPath(),
+    searchPathFor: (name, searchPath) => serverUtilsRuntime.searchPathFor(name, searchPath),
+    isExecutable: (filePath) => serverUtilsRuntime.isExecutable(filePath),
     isRequestOriginAllowed,
     rejectWebSocketUpgrade,
     globalEventHub: globalMessageStreamHub,
@@ -2525,7 +2043,6 @@ async function main(options = {}) {
     terminalRebindWindowMs: TERMINAL_INPUT_WS_REBIND_WINDOW_MS,
     terminalMaxRebindsPerWindow: TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW,
     environmentRuntime,
-    setupProxy,
     startAgentService: () => startAgentService().catch((error) => {
       console.error('Agent Service startup failed:', error instanceof Error ? error.message : String(error));
     }),
@@ -2544,10 +2061,8 @@ async function main(options = {}) {
     startTunnelWithNormalizedRequest,
     gracefulShutdown,
     getSignalsAttached: () => signalsAttached,
-    setSignalsAttached: (value) => {
-      signalsAttached = value;
-    },
-    syncToHmrState,
+    setSignalsAttached: (value) => { signalsAttached = value; },
+    syncToHmrState: () => {},
     TUNNEL_MODE_QUICK,
     TUNNEL_MODE_MANAGED_LOCAL,
     TUNNEL_MODE_MANAGED_REMOTE,
@@ -2609,7 +2124,6 @@ async function main(options = {}) {
       sessionRuntime.interruptBusySessionsAfterRestart();
     },
     getAgentServiceState: () => hostAgentRuntime.service.getState(),
-    getOpenCodePort: () => openCodePort,
     getTunnelUrl: () => tunnelService.getPublicUrl(),
     getQuitRiskStatus: () => ({
       tunnel: {
@@ -2617,23 +2131,6 @@ async function main(options = {}) {
       },
       scheduledTasks: scheduledTasksRuntime.getStatus(),
     }),
-    isReady: () => isOpenCodeReady,
-    getManagedOpenCodePreflight: () => openCodeLifecycleRuntime.getManagedOpenCodePreflight(),
-    restartOpenCode: () => restartOpenCode(),
-    getOpenCodeProcessInfo: () => {
-      const managed = Boolean((openCodeProcess || openCodePort) && !ENV_SKIP_OPENCODE_START && !isExternalOpenCode);
-      // Only ever expose pid/port for a server WE manage. The Electron-side
-      // killer kills by port (lsof + kill -KILL), so returning a port we don't
-      // own — e.g. an external/desktop OpenCode on 4096 we attached to — would
-      // let a single miscomputed `managed` flag take down the user's separate
-      // server. Structurally withhold what isn't ours so the killer has no
-      // target, instead of relying on the flag check alone.
-      return {
-        managed,
-        pid: managed && typeof openCodeProcess?.pid === 'number' ? openCodeProcess.pid : null,
-        port: managed ? openCodePort : null,
-      };
-    },
     stop: (shutdownOptions = {}) => gracefulShutdown({ exitProcess: shutdownOptions.exitProcess ?? false }),
   };
 }
@@ -2653,8 +2150,6 @@ runCliEntryIfMain({
 
 export {
   gracefulShutdown,
-  setupProxy,
-  restartOpenCode,
   main as startWebUiServer,
   parseServeCliOptions as parseArgs,
 };

@@ -27,6 +27,15 @@ const clamp = (value, maxLength) => (value.length > maxLength ? value.slice(0, m
 
 const trimmedString = (value) => (typeof value === 'string' ? value.trim() : '');
 
+/**
+ * `worktreeDirectory` is a personal path override for new worktrees. Only a
+ * non-empty string is meaningful; anything else reads as unset.
+ */
+const normalizeWorktreeDirectory = (value) => trimmedString(value) || null;
+
+/** The personal worktree folder from a raw project document; null when unset. */
+export const worktreeDirectoryOf = (raw) => normalizeWorktreeDirectory(isObjectRecord(raw) ? raw.worktreeDirectory : null);
+
 /** Setup commands: non-empty trimmed strings, capped in count and length. */
 export const sanitizeSetupCommands = (value) => {
   if (!Array.isArray(value)) return [];
@@ -130,6 +139,7 @@ export const projectSetupViewOf = (raw) => {
     setupWorktree: sanitizeSetupCommands(document['setup-worktree']),
     setupWorktreeWait: typeof document['setup-worktree-wait'] === 'boolean' ? document['setup-worktree-wait'] : null,
     setupWorktreeMode: SETUP_WORKTREE_MODES.has(document.setupWorktreeMode) ? document.setupWorktreeMode : 'append',
+    worktreeDirectory: worktreeDirectoryOf(document),
     projectActions,
     projectActionsPrimaryId: primaryRaw && projectActions.some((action) => action.id === primaryRaw) ? primaryRaw : null,
     draftStarters: sanitizeDraftStarters(document.draftStarters),
@@ -185,6 +195,12 @@ export const projectSetupPatchToStored = (patch) => {
   if ('setupWorktreeMode' in patch) {
     if (!SETUP_WORKTREE_MODES.has(patch.setupWorktreeMode)) throw new Error('setupWorktreeMode must be "append" or "replace"');
     stored.setupWorktreeMode = patch.setupWorktreeMode;
+  }
+  if ('worktreeDirectory' in patch) {
+    const value = patch.worktreeDirectory;
+    if (value !== null && typeof value !== 'string') throw new Error('worktreeDirectory must be a string or null');
+    // null (or a blank string) clears the personal override.
+    stored.worktreeDirectory = normalizeWorktreeDirectory(value) || undefined;
   }
   if ('sharedTrustHash' in patch) {
     const hash = patch.sharedTrustHash;

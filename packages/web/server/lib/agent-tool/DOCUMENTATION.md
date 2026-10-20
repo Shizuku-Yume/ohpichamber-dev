@@ -17,12 +17,8 @@ the user can want independently:
   `agentNotifyToolEnabled` is `true`, and the control service refuses the
   action when the setting is off, so a stale plugin cannot keep paging.
 
-Both default to on, are toggled in Settings → General → OpenChamber Tools, and take
-effect in the running OpenCode within a couple of seconds — OpenChamber rewrites
-the managed config file OpenCode watches (see
-`lib/opencode/managed-config-file.js`). Installs where the user's own
-environment sets `OPENCODE_CONFIG` fall back to `OPENCODE_CONFIG_CONTENT` and
-still need a restart for a toggle. Each tool carries only its own actions and
+Both default to on, are toggled in Settings → General → OpenChamber Tools, and
+take effect for the running OpenCode. Each tool carries only its own actions and
 only the parameters those actions use, so turning one off removes its inputs
 from the schema rather than leaving them visible. The plugin is injected only
 when OpenChamber launches and owns the OpenCode process, and not at all when
@@ -49,9 +45,7 @@ OhPiChamber retains these tools in the adopted pre-M0 baseline. Target adapters 
 
 1. The OpenChamber HTTP listener binds and publishes its authoritative port.
 2. `materializePlugin()` writes the plugin under
-   `<openchamber-data-dir>/agent-tool/` and returns its directory; the managed
-   config layer lists that directory in `<data-dir>/opencode.managed.json` and
-   rewrites the file whenever a tool setting changes.
+   `<openchamber-data-dir>/agent-tool/` and returns its directory.
 3. `createChildEnv()` adds a random per-child token and the callback URL to the
    managed OpenCode child environment. They are present even while every tool
    is off, so a tool switched on later can call back without a restart. The URL

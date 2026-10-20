@@ -2166,7 +2166,7 @@ process.exit(safe ? 0 : 1);
         return spawn(binary, args, options);
       },
     });
-    vi.stubEnv('XDG_DATA_HOME', parent);
+    vi.stubEnv('OPENCHAMBER_DATA_DIR', parent);
     const started = performance.now();
     try {
       const created = await createWorktree(directory, {

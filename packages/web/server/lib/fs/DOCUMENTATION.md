@@ -42,6 +42,7 @@ Own filesystem API behavior for the web server runtime, including workspace-boun
   - Owns exec job queue state (`execJobs`) and lifecycle/TTL pruning.
   - Exec commands run with the terminal's PATH plus the user's and the project's environment variables for their directory (`environmentRuntime`, see `../environment`).
   - Enforces workspace boundary checks with active project + worktree fallback support.
+  - Directory-scoped requests name the project in the `directory` query, which the project-directory gate reads before any last-directory fallback. The `x-opencode-directory` header remains accepted for the SDK and legacy clients.
   - The active project directory is validated with `fs.realpath`, so when the project root is itself a symlink the workspace base no longer matches the paths the client sends. Workspace resolution therefore retries against the raw directory the client requested (`requestedDirectory` from `resolveProjectDirectory`) before falling back to worktree roots. Symlinks are still resolved afterwards, and write/exec routes keep their canonical containment check against the resolved base.
 - `createFsSearchRuntime({ fsPromises, path, spawn, resolveGitBinaryForSpawn })` from `search.js`
   - Returns `{ searchFilesystemFiles(rootPath, options) }`.

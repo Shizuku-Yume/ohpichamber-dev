@@ -71,7 +71,6 @@ const journeyWith = ({ failAt = null, place = createMemoryPlace(), projects = [P
     writeIdleStop: async (spaceId, setting) => { fail('writeIdleStop'); idle.writes.push([spaceId, setting]); },
     waitUntilReady: async (spaceId) => { fail('waitUntilReady'); if (holdReady) await readyHeld; calls.push(['waitUntilReady', spaceId]); },
   };
-  const restartOpenCodeInside = async (spaceId) => { calls.push(['restartOpenCodeInside', spaceId]); fail('restartOpenCodeInside'); };
   // With `holdLoginRow`, a write or removal of the login row inside waits until the test lets it
   // go, so the repair after a start can be caught in the middle of its writing.
   let releaseLoginRow = () => {};
@@ -104,7 +103,7 @@ const journeyWith = ({ failAt = null, place = createMemoryPlace(), projects = [P
   const records = createSpaceRecords({ dataDir, logger: quiet });
   const manager = createSpaceManager({ registry: createPlaceRegistry([place]), now: () => new Date('2026-09-26T10:00:00.000Z') });
   const journey = createSpaceJourney({
-    manager, place, gatekeeper, codeIn, codeOut, records, spaceOpenCode, serverInside, restartOpenCodeInside,
+    manager, place, gatekeeper, codeIn, codeOut, records, spaceOpenCode, serverInside,
     listProjectDirectories: async () => projects,
     archiveChats,
     readHostSecret: (name) => hostEnvironment[name],
@@ -442,12 +441,6 @@ describe('the journey: repair', () => {
     };
   };
 
-  it('restarts OpenCode inside a running space and nothing else', async () => {
-    const { journey, calls, id } = await ready();
-    expect(await journey.restartOpenCode(id)).toMatchObject({ id, state: 'running' });
-    expect(calls).toEqual([['restartOpenCodeInside', id]]);
-  });
-
   it('restarts the container with a fresh token written first, then stops and starts it with its network said again', async () => {
     const { journey, place, calls, id } = await ready();
     // The place's own steps, in the order they came, beside the stand-ins': the server inside
@@ -475,15 +468,11 @@ describe('the journey: repair', () => {
     expect(calls.map(([name]) => name)).toEqual(['writeToken', 'setNetwork']);
   });
 
-  it('refuses both restarts for a stopped space, and says why OpenCode did not restart', async () => {
+  it('refuses a restart for a stopped space', async () => {
     const { journey, calls, id } = await ready();
     await journey.stopSpace(id);
     await expect(journey.restartSpace(id)).rejects.toMatchObject({ code: 'space_not_running' });
-    await expect(journey.restartOpenCode(id)).rejects.toMatchObject({ code: 'space_not_running' });
     expect(calls).toEqual([]);
-
-    const failing = await ready({ failAt: 'restartOpenCodeInside' });
-    await expect(failing.journey.restartOpenCode(failing.id)).rejects.toMatchObject({ code: 'restartOpenCodeInside_failed' });
   });
 
   it('lists what is broken: nothing, a gatekeeper that a restart brings back, or one that is gone for good', async () => {
@@ -1075,7 +1064,7 @@ describe('the journey: the project folder of a space', () => {
     // The record names the folder: a journey that no longer has the project still lists it.
     const unregistered = createSpaceJourney({
       manager: first.manager, place: first.place, gatekeeper: first.gatekeeper, codeIn: {}, codeOut: {}, records: first.records,
-      spaceOpenCode: {}, serverInside: {}, restartOpenCodeInside: async () => {},
+      spaceOpenCode: {}, serverInside: {},
       listProjectDirectories: async () => [],
       folderExists: async (directory) => { asked.push(directory); return false; },
       logger: quiet,
@@ -1092,7 +1081,7 @@ describe('the journey: the project folder of a space', () => {
     const { first } = await made();
     const look = (directory) => createSpaceJourney({
       manager: first.manager, place: first.place, gatekeeper: first.gatekeeper, codeIn: {}, codeOut: {}, records: { read: () => ({ record: { repository: directory } }) },
-      spaceOpenCode: {}, serverInside: {}, restartOpenCodeInside: async () => {},
+      spaceOpenCode: {}, serverInside: {},
       listProjectDirectories: async () => [],
       logger: quiet,
     }).listSpaces();

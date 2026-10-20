@@ -33,7 +33,7 @@ Command modules implement user-facing commands and preserve output contracts acr
   - Implements `openchamber session create`, `send`, `fork`, `list`, `status`, and `messages`.
   - Maps CLI options to shared control-service inputs and owns only human, quiet, and JSON presentation.
   - Message projection matches Export Markdown semantics: only ordered `text` parts are exposed; tool, reasoning, file, and other parts are omitted.
-  - The server control service owns create/worktree/prompt orchestration, official OpenCode reads, Goal Mode, wait semantics, and partial failures.
+  - The Host control service (accessed via `commands-session.js` -> `cli-control.js` `POST /api/openchamber/control`) owns create/worktree/prompt orchestration, Host session and control API reads, Goal Mode, wait semantics, and partial failures; the CLI owns no OpenCode lifecycle.
 
 - `commands-schedule.js`
   - Implements scheduled task status/list/create/run/delete/enable/disable.

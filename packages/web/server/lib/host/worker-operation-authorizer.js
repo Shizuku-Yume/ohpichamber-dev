@@ -72,6 +72,7 @@ export const createWorkerOperationAuthorizer = ({
         const resolved = await resolveGuestFilePath({ path: relative || '.', projectDirectory: directory.directory, patterns: [], homeDir: os.homedir() });
         return resolved.ok && resolved.scope === 'project';
       };
+      if (request.type === 'web-search') return isEnterpriseMode(enterprisePolicyOptions) ? denied('enterprise_mode', 403) : allowed;
       if (request.type === 'provider-entry') {
         if (isEnterpriseMode(enterprisePolicyOptions)) return denied('enterprise_mode', 403);
         return policy.providerEntry ? allowed : denied();

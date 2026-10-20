@@ -5,6 +5,7 @@ import { CapturedSendOptionsSchema, PromptRequestSchema, SessionCreateAckSchema 
 import { buildGoalIntroText, createSessionGoal } from '../session-goal/create.js';
 import { discoverLoops } from './loops.js';
 import { createExistingSessionTasks, createScheduledTaskContext } from './existing-session.js';
+import { createScheduledPromptExpander } from './file-resource-prompt.js';
 
 const DEFAULT_GLOBAL_CONCURRENCY = 4;
 const DEFAULT_PROJECT_CONCURRENCY = 2;
@@ -202,6 +203,7 @@ export const createScheduledTasksRuntime = (deps) => {
     projectConfigRuntime,
     listProjects,
     sessionService,
+    service,
     resolveWorkspaceScope,
     resolveSessionScope,
     listWorkspaceScopes,
@@ -218,10 +220,11 @@ export const createScheduledTasksRuntime = (deps) => {
     maxProjectConcurrency = DEFAULT_PROJECT_CONCURRENCY,
     maxRunDurationMs = DEFAULT_MAX_RUN_MS,
   } = deps;
+  const expandPrompt = createScheduledPromptExpander({ service, resolveWorkspaceScope });
 
   const existingSessionTasks = createExistingSessionTasks({
     projectConfigRuntime, messageQueueRuntime, sessionService, resolveSessionScope,
-    isSessionArchived, emitTaskRunEvent,
+    isSessionArchived, emitTaskRunEvent, expandPrompt,
   });
 
   // A pinned task runs on what it stores; one that follows the session
@@ -476,9 +479,11 @@ export const createScheduledTasksRuntime = (deps) => {
       : await resolveProjectWorkspace(projectID, projectPath);
     if (!workspace?.workspaceId || !workspace.projectId || !workspace.cwd || workspace.hostProjectId !== projectID) throw new Error('Scheduled workspace is not authorized');
     let sessionID;
+    let prompt;
     try {
+      prompt = await expandPrompt(workspace, PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context: [] }, options }));
       const created = SessionCreateAckSchema.parse(await sessionService.create({
-        projectId: workspace.projectId, workspaceId: workspace.workspaceId, options,
+        projectId: workspace.projectId, workspaceId: workspace.workspaceId, options: prompt.options,
         metadata: { title: formatScheduledSessionTitle(task, startedAt) },
       }));
       sessionID = created.session.sessionId;
@@ -496,11 +501,11 @@ export const createScheduledTasksRuntime = (deps) => {
     }
     const context = [createScheduledTaskContext({ projectId: projectID, taskId: task.id, sessionId: sessionID, workspaceId: workspace.workspaceId, mode: 'new', triggeredAt: startedAt })];
     if (task.execution.goalEnabled) {
-      await createSessionGoal({ persistSessionGoal, sessionID, scope: workspace, objective: task.execution.prompt,
-        tokenBudget: task.execution.goalTokenBudget, providerID: options.providerId ?? undefined, modelID: options.modelId ?? undefined });
+      await createSessionGoal({ persistSessionGoal, sessionID, scope: workspace, objective: prompt.input.text,
+        tokenBudget: task.execution.goalTokenBudget, providerID: prompt.options.providerId ?? undefined, modelID: prompt.options.modelId ?? undefined });
       context.push({ kind: 'synthetic', text: buildGoalIntroText(task.execution.goalTokenBudget) });
     }
-    const result = await sessionService.send(sessionID, PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context }, options }));
+    const result = await sessionService.send(sessionID, PromptRequestSchema.parse({ input: { ...prompt.input, context }, options: prompt.options }));
     if (!result?.run || result.run.sessionId !== sessionID) throw new Error('Scheduled prompt acknowledgement is invalid');
     const finishedAt = Date.now();
     return { sessionID, directory: workspace.cwd, durationMs: Math.max(0, finishedAt - startedAt), reason, startedAt, finishedAt };

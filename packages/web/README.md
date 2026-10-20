@@ -10,9 +10,9 @@ This package owns the browser UI build, the Host Gateway HTTP and WebSocket serv
 
 ### Migration status
 
-OpenChamber's retained Host Gateway infrastructure is split between the dedicated `server/lib/host/` modules and the OpenCode integration directory; the extracted Host owner is documented in [`server/lib/host/DOCUMENTATION.md`](server/lib/host/DOCUMENTATION.md). OpenCode proxy routes and process lifecycle management remain scheduled for retirement in favor of the OMP Agent Service and Canonical API (`/api/agent/v1`).
+OpenChamber's retained Host Gateway infrastructure is split between the dedicated `server/lib/host/` modules and the OpenCode integration directory; the extracted Host owner is documented in [`server/lib/host/DOCUMENTATION.md`](server/lib/host/DOCUMENTATION.md). The Host Gateway has no production proxy registration or Host-managed OpenCode lifecycle (`proxy.js` is unmounted in production in favor of the OMP Agent Service and Canonical API `/api/agent/v1`); some legacy Host configuration/control routes and composition owners remain until caller retirement, while isolated-space OpenCode behavior is a separate M5 boundary.
 
-Production startup now starts the supervised Bun OMP Agent Service after the Host listener, Git credential-helper publication and shutdown handlers are ready. No OpenCode binary is required or automatically started. Canonical readiness is `/api/agent/v1/ready`; startup failure leaves canonical operations unavailable, without an alternate engine. Explicit legacy proxy/config/lifecycle controls still await caller retirement, and packaged Bun/service/native dependency staging and real Web/Electron release acceptance remain unverified. Credential handoff is explicit and private; startup never imports credentials.
+Production startup now starts the supervised Bun OMP Agent Service after the Host listener, Git credential-helper publication and shutdown handlers are ready. No OpenCode binary is required or automatically started. Canonical readiness is `/api/agent/v1/ready`; startup failure leaves canonical operations unavailable, without an alternate engine. Electron Agent Runtime staging is implemented and verified, while packaged Electron UI/runtime certification remains open; the OMP runtime inside a standalone npm installation remains unverified and out of M3 acceptance. Credential handoff is explicit and private; startup never imports credentials.
 
 Full project overview, screenshots, and architecture documents live in the repository root and `.workflow/omp-migration/`.
 
@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/openchamber/openchamber/main/script
 
 Or install manually: `bun add -g @openchamber/web` (or npm, pnpm, yarn).
 
-> **Runtime prerequisites:** Node.js 24.14+ for the Host, Bun 1.3.14+ on PATH for the supervised Agent Service, and built Agent Service entries with their installed pinned SDK/native dependencies. An OpenCode CLI is not a startup prerequisite. The upstream installer command above is inherited distribution guidance, not certification of an OMP-packaged release.
+> **Runtime prerequisites:** Node.js 24.14+ for the Host, Bun 1.3.14+ on PATH for the supervised Agent Service, and built Agent Service entries with their installed pinned SDK/native dependencies. An OpenCode CLI is not a startup prerequisite. The upstream installer command above is inherited distribution guidance; the npm Web package is publicly declared, but the OMP runtime inside a standalone npm installation remains unverified and out of M3 acceptance.
 
 ### Monorepo development scripts
 
@@ -119,23 +119,17 @@ openchamber serve --lan --port 3000 --ui-password your-password
 Generating a client token does not automatically password-protect the hosted browser UI. `--ui-password` protects browser access; the client token lets another OpenChamber app connect to this server.
 
 <details>
-<summary>Host environment and retained legacy controls</summary>
+<summary>Host environment variables</summary>
 
-The Host starts the OMP Agent Service automatically. OpenCode environment settings
-below are retained only for explicit unmigrated legacy controls; they neither
-select the canonical engine nor start an OpenCode server at production boot.
+The Host starts the supervised Bun OMP Agent Service automatically behind `/api/agent/v1`.
 
 | Variable | Description |
 |----------|-------------|
-| `OPENCODE_HOST` | Full base URL of external server (overrides `OPENCODE_PORT`) |
-| `OPENCODE_PORT` | Port of external server |
-| `OPENCODE_SKIP_START` | Retained legacy lifecycle setting; automatic OpenCode startup is retired |
-| `OPENCHAMBER_OPENCODE_HOSTNAME` | Retained explicit legacy managed-server bind setting; not the Host or Agent Service bind address |
 | `OPENCHAMBER_HOST` | Bind hostname for the OpenChamber web server (default: `127.0.0.1`; use `0.0.0.0` for LAN/remote access. trusted networks only) |
 | `OPENCHAMBER_VERBOSE_REQUEST_LOGS` | Set to `true` to log every HTTP request; disabled by default to keep user logs small |
 | `OPENCHAMBER_GITLAB_CLIENT_ID` | OAuth application ID used for GitLab device flow. Overrides the built-in application, which covers `gitlab.com` only; a self-managed instance needs its own. Personal access token and `glab` authentication remain available without it. |
 | `OPENCHAMBER_SKIP_API_COMPRESSION` | Set to `true` to disable gzip compression for `/api/*` responses |
-| `OPENCHAMBER_COMPRESS_API` | Set to `true` to force `/api/*` compression, or `false` to disable it. Desktop runtime disables API compression by default to reduce local sidecar CPU use |
+| `OPENCHAMBER_COMPRESS_API` | Set to `true` to force `/api/*` compression, or `false` to disable it. Desktop runtime disables API compression by default to reduce local CPU overhead |
 | `OPENCHAMBER_FS_UPLOAD_MAX_BYTES` | Maximum file upload size in bytes (default: 100 MiB) |
 | `OPENCHAMBER_TERMINAL_SHELL` | Preferred terminal shell executable used by the `Auto` setting before platform defaults |
 | `npm_config_registry` / `NPM_CONFIG_REGISTRY` | Registry used for plugin metadata and npm version checks. Scoped registry settings and the user's `.npmrc` are also honored. The lowercase value takes precedence when both are set. |
@@ -184,7 +178,7 @@ Managed-local path note: `OPENCHAMBER_TUNNEL_CONFIG` must use a container path u
 
 **Data directory:** mount `data/` for persistent storage. Ensure permissions:
 ```bash
-mkdir -p data/openchamber data/opencode/share data/opencode/config data/ssh
+mkdir -p data/openchamber data/ssh
 chown -R 1000:1000 data/
 ```
 
@@ -242,18 +236,11 @@ systemctl --user enable --now openchamber
 
 ## What makes the web version special
 
-- **Remote access** - Cloudflare tunnel with QR onboarding. Scan from your phone, start coding.
-- **Mobile-first PWA** - optimized chat controls, keyboard-safe layouts, drag-to-reorder projects
+- **Remote access** - Cloudflare tunnel with quick, managed-remote, and managed-local modes plus QR onboarding (direct UI password entry required)
+- **Mobile-first PWA** - optimized chat controls, keyboard-safe layouts, drag-to-reorder projects, and attachment-friendly UI
 - **Background notifications** - know when your agent finishes, even from another tab
-- **Self-update** - update and restart from the UI, server settings stay intact
-- **Cross-tab tracking** - session activity stays in sync across browser tabs
-
-- Cloudflare tunnel access with quick, managed-remote, and managed-local modes
-- One-scan onboarding with tunnel QR + password URL helpers
-- Mobile-first experience: optimized chat controls, keyboard-safe layouts, and attachment-friendly UI
-- Background notifications plus reliable cross-tab session activity tracking
-- Built-in self-update + restart flow that keeps your server settings intact
-
+- **Cross-tab tracking** - session activity stays in sync reliably across browser tabs
+- **Self-update** - update and restart flow from the UI that keeps server settings intact
 ## License
 
 MIT

@@ -14,6 +14,7 @@ import {
   projectSetupViewOf,
   serializeSharedProjectConfig,
   sharedTrustHashOf,
+  worktreeDirectoryOf,
 } from './project-setup.js';
 
 const PROJECT_CONFIG_VERSION = 1;
@@ -1035,6 +1036,15 @@ export const createProjectConfigRuntime = (deps) => {
 
   const readProjectSetup = async (projectID) => mergedProjectSetupOf(projectID, await readRawProjectConfigFromDisk(projectID));
 
+  /**
+   * The personal `worktreeDirectory` override, or null when the project has
+   * none. Git reads this through Host composition; the value is resolved into
+   * an absolute folder by the Git module, which owns the path rule.
+   */
+  const readWorktreeDirectory = async (projectID) => (
+    worktreeDirectoryOf(await readRawProjectConfigFromDisk(projectID))
+  );
+
   const updateProjectSetup = async (projectID, patch) => {
     const stored = projectSetupPatchToStored(patch);
     return withProjectWriteLock(projectID, async () => {
@@ -1114,6 +1124,7 @@ export const createProjectConfigRuntime = (deps) => {
 
   return {
     readProjectSetup,
+    readWorktreeDirectory,
     updateProjectSetup,
     updateSharedProjectSetup,
     resolveSharedPlansDir,

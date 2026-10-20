@@ -1,4 +1,5 @@
 import { recordStartupPerformance } from './startup-performance.js';
+import { isExecutable } from './executable.js';
 
 export const createStartupPipelineRuntime = (dependencies) => {
   const {
@@ -20,7 +21,6 @@ export const createStartupPipelineRuntime = (dependencies) => {
       uiAuthController,
       buildAugmentedPath,
       searchPathFor,
-      isExecutable,
       isRequestOriginAllowed,
       rejectWebSocketUpgrade,
       globalEventHub,

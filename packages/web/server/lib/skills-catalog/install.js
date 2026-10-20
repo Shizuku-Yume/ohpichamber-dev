@@ -4,20 +4,9 @@ import path from 'path';
 
 import { assertGitAvailable, looksLikeAuthError, runGit } from './git.js';
 import { parseSkillRepoSource } from './source.js';
-import { OPENCODE_CONFIG_DIR } from '../opencode/shared.js';
 
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
 
-function normalizeUserSkillDir(userSkillDir) {
-  if (!userSkillDir) return null;
-  const legacySkillDir = path.join(OPENCODE_CONFIG_DIR, 'skill');
-  const pluralSkillDir = path.join(OPENCODE_CONFIG_DIR, 'skills');
-  if (userSkillDir === legacySkillDir) {
-    if (fs.existsSync(legacySkillDir) && !fs.existsSync(pluralSkillDir)) return legacySkillDir;
-    return pluralSkillDir;
-  }
-  return userSkillDir;
-}
 
 function validateSkillName(skillName) {
   if (typeof skillName !== 'string') return false;
@@ -34,11 +23,7 @@ async function safeRm(dir) {
 }
 
 function toFsPath(repoDir, repoRelPosixPath) {
-  const parts = String(repoRelPosixPath || '')
-    .split('/')
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return path.join(repoDir, ...parts);
+  return path.join(repoDir, ...repoRelPosixPath.split('/'));
 }
 
 async function ensureDir(dirPath) {
@@ -62,7 +47,7 @@ async function copyDirectoryNoSymlinks(srcDir, dstDir) {
 
       // Guard against traversal: ensure source is still under srcReal
       const nextRealParent = await fs.promises.realpath(path.dirname(nextSrc));
-      if (!nextRealParent.startsWith(srcReal)) {
+      if (nextRealParent !== srcReal && !nextRealParent.startsWith(`${srcReal}${path.sep}`)) {
         throw new Error('Invalid source path traversal detected');
       }
 
@@ -112,115 +97,24 @@ async function cloneRepo({ cloneUrl, identity, credentialResolver, tempDir, ref 
   };
 }
 
-function getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName }) {
-  const source = targetSource === 'agents' ? 'agents' : 'opencode';
-
-  if (scope === 'user') {
-    if (source === 'agents') {
-      return path.join(os.homedir(), '.agents', 'skills', skillName);
-    }
-    return path.join(userSkillDir, skillName);
-  }
-
-  if (!workingDirectory) {
-    throw new Error('workingDirectory is required for project installs');
-  }
-
-  if (source === 'agents') {
-    return path.join(workingDirectory, '.agents', 'skills', skillName);
-  }
-
-  return path.join(workingDirectory, '.opencode', 'skills', skillName);
-}
-
-export async function installSkillsFromRepository({
-  source,
-  subpath,
-  defaultSubpath,
-  identity,
-  credentialResolver,
-  scope,
-  targetSource,
-  workingDirectory,
-  userSkillDir,
-  selections,
-  conflictPolicy,
-  conflictDecisions,
-} = {}) {
+/** Prepare untrusted repository files; only the Host source owner may commit them. */
+export async function prepareSkillsFromRepository({ source, subpath, identity, credentialResolver, selections }, consume) {
   const gitCheck = await assertGitAvailable();
-  if (!gitCheck.ok) {
-    return { ok: false, error: gitCheck.error };
-  }
-
-  const normalizedUserSkillDir = normalizeUserSkillDir(userSkillDir);
-  if (normalizedUserSkillDir) {
-    userSkillDir = normalizedUserSkillDir;
-  }
-
-  if (!userSkillDir) {
-    return { ok: false, error: { kind: 'unknown', message: 'userSkillDir is required' } };
-  }
-
-  if (scope !== 'user' && scope !== 'project') {
-    return { ok: false, error: { kind: 'invalidSource', message: 'Invalid scope' } };
-  }
-
-  if (targetSource !== undefined && targetSource !== 'opencode' && targetSource !== 'agents') {
-    return { ok: false, error: { kind: 'invalidSource', message: 'Invalid target source' } };
-  }
-
-  if (scope === 'project' && !workingDirectory) {
-    return { ok: false, error: { kind: 'invalidSource', message: 'Project installs require a directory parameter' } };
-  }
-
+  if (!gitCheck.ok) return { ok: false, error: gitCheck.error };
   const parsed = parseSkillRepoSource(source, { subpath });
-  if (!parsed.ok) {
-    return { ok: false, error: parsed.error };
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  const requestedDirs = selections.map(selection => selection.skillDir);
+  if (requestedDirs.some(directory => directory.includes('\\') || directory.split('/').some(part => !part || part === '.' || part === '..'))) {
+    return { ok: false, error: { kind: 'invalidSource', message: 'Invalid repository skill directory' } };
   }
-
-  const effectiveSubpath = parsed.effectiveSubpath || (typeof defaultSubpath === 'string' && defaultSubpath.trim() ? defaultSubpath.trim() : null);
-  void effectiveSubpath;
-
+  if (parsed.effectiveSubpath && requestedDirs.some(directory => directory !== parsed.effectiveSubpath && !directory.startsWith(`${parsed.effectiveSubpath}/`))) {
+    return { ok: false, error: { kind: 'invalidSource', message: 'Selected skill is outside the repository subpath' } };
+  }
+  const skillPlans = requestedDirs.map(skillDirPosix => ({ skillDirPosix, skillName: path.posix.basename(skillDirPosix) }));
+  if (skillPlans.some(plan => !validateSkillName(plan.skillName)) || new Set(skillPlans.map(plan => plan.skillName)).size !== skillPlans.length) {
+    return { ok: false, error: { kind: 'invalidSource', message: 'Invalid or duplicate skill name' } };
+  }
   const cloneUrl = identity?.transport === 'ssh' ? parsed.cloneUrlSsh : parsed.cloneUrlHttps;
-
-  const requestedDirs = Array.isArray(selections) ? selections.map((s) => String(s?.skillDir || '').trim()).filter(Boolean) : [];
-  if (requestedDirs.length === 0) {
-    return { ok: false, error: { kind: 'invalidSource', message: 'No skills selected for installation' } };
-  }
-
-  // Validate names early and compute conflicts without mutating.
-  const skillPlans = requestedDirs.map((skillDirPosix) => {
-    const skillName = path.posix.basename(skillDirPosix);
-    return { skillDirPosix, skillName, installable: validateSkillName(skillName) };
-  });
-
-  const conflicts = [];
-  for (const plan of skillPlans) {
-    if (!plan.installable) {
-      continue;
-    }
-
-    const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.skillName });
-    if (fs.existsSync(targetDir)) {
-      const decision = conflictDecisions?.[plan.skillName];
-      const hasAutoPolicy = conflictPolicy === 'skipAll' || conflictPolicy === 'overwriteAll';
-      if (!decision && !hasAutoPolicy) {
-        conflicts.push({ skillName: plan.skillName, scope, source: targetSource === 'agents' ? 'agents' : 'opencode' });
-      }
-    }
-  }
-
-  if (conflicts.length > 0) {
-    return {
-      ok: false,
-      error: {
-        kind: 'conflicts',
-        message: 'Some skills already exist in the selected scope',
-        conflicts,
-      },
-    };
-  }
-
   const tempBase = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'openchamber-skills-install-'));
 
   try {
@@ -247,57 +141,28 @@ export async function installSkillsFromRepository({
       return { ok: false, error: { kind: 'unknown', message: checkoutResult.stderr || checkoutResult.message || 'Failed to checkout repository' } };
     }
 
-    const installed = [];
-    const skipped = [];
-
-    for (const plan of skillPlans) {
-      if (!plan.installable) {
-        skipped.push({ skillName: plan.skillName, reason: 'Invalid skill name (directory basename)' });
-        continue;
+    const stagingRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'openchamber-skills-stage-'));
+    try {
+      const installations = [];
+      for (const plan of skillPlans) {
+        const srcDir = toFsPath(tempBase, plan.skillDirPosix);
+        let component = tempBase;
+        for (const part of plan.skillDirPosix.split('/')) {
+          component = path.join(component, part);
+          if ((await fs.promises.lstat(component)).isSymbolicLink()) throw new Error('Linked repository directories are not supported');
+        }
+        const stat = await fs.promises.lstat(srcDir);
+        if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Invalid repository skill directory');
+        const skillMd = await fs.promises.lstat(path.join(srcDir, 'SKILL.md'));
+        if (!skillMd.isFile() || skillMd.isSymbolicLink()) throw new Error('SKILL.md must be a regular file');
+        const stagingDirectory = path.join(stagingRoot, plan.skillName);
+        await copyDirectoryNoSymlinks(srcDir, stagingDirectory);
+        installations.push({ name: plan.skillName, stagingDirectory });
       }
-
-      const srcDir = toFsPath(tempBase, plan.skillDirPosix);
-      const skillMdPath = path.join(srcDir, 'SKILL.md');
-      if (!fs.existsSync(skillMdPath)) {
-        skipped.push({ skillName: plan.skillName, reason: 'SKILL.md not found in selected directory' });
-        continue;
-      }
-
-      const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.skillName });
-      const exists = fs.existsSync(targetDir);
-
-      let decision = conflictDecisions?.[plan.skillName] || null;
-      if (!decision) {
-        if (exists && conflictPolicy === 'skipAll') decision = 'skip';
-        if (exists && conflictPolicy === 'overwriteAll') decision = 'overwrite';
-        if (!exists) decision = 'overwrite'; // no conflict, proceed
-      }
-
-      if (exists && decision === 'skip') {
-        skipped.push({ skillName: plan.skillName, reason: 'Already installed (skipped)' });
-        continue;
-      }
-
-      if (exists && decision === 'overwrite') {
-        await safeRm(targetDir);
-      }
-
-      // Ensure project parent directories exist
-      await ensureDir(path.dirname(targetDir));
-
-      try {
-        await copyDirectoryNoSymlinks(srcDir, targetDir);
-        installed.push({ skillName: plan.skillName, scope, source: targetSource === 'agents' ? 'agents' : 'opencode' });
-      } catch (error) {
-        await safeRm(targetDir);
-        skipped.push({
-          skillName: plan.skillName,
-          reason: error instanceof Error ? error.message : 'Failed to copy skill files',
-        });
-      }
+      return await consume(installations);
+    } finally {
+      await safeRm(stagingRoot);
     }
-
-    return { ok: true, installed, skipped };
   } finally {
     await safeRm(tempBase);
   }

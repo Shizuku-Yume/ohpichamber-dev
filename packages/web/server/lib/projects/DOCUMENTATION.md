@@ -10,7 +10,7 @@ that writes it:
 | Keys | Owner | Reached through |
 |---|---|---|
 | `version`, `scheduledTasks` | `project-config.js` (scheduled-task runtime) | `/api/projects/:projectId/scheduled-tasks/*` |
-| `setup-worktree`, `setup-worktree-wait`, `projectActions`, `projectActionsPrimaryId`, `draftStarters`, `projectPath` | `project-setup.js` via `readProjectSetup` / `updateProjectSetup` on the same runtime | `GET/PUT /api/projects/:projectId/config` (`routes.js`) |
+| `setup-worktree`, `setup-worktree-wait`, `projectActions`, `projectActionsPrimaryId`, `draftStarters`, `projectPath`, `worktreeDirectory` | `project-setup.js` via `readProjectSetup` / `updateProjectSetup` on the same runtime | `GET/PUT /api/projects/:projectId/config` (`routes.js`) |
 
 Notes, todos, and plans moved out of this file to `packages/web/server/lib/project-context`.
 
@@ -29,6 +29,16 @@ blocks so a page can edit the personal file without copying a teammate's entry i
 | `projectActionsPrimaryId` | personal only |
 | `draftStarters` | union by `type:name`, shared first, every entry carries `source` |
 | `plansDir` | shared only |
+
+`personal.worktreeDirectory` is the personal folder where new Git worktrees for
+the project are created; there is no shared counterpart. A PUT accepts a string
+or `null` (and a blank string clears it). Git resolves a relative value against
+the project's primary worktree, a leading `~` against the home directory, and an
+absolute value as-is. When it is null, Git uses the Host data-dir default
+(`<OpenChamber data dir>/worktree/<git project id>`); it does not read OpenCode's
+configuration or data directory. `readWorktreeDirectory` on the runtime is the
+canonical reader Git receives through Host composition
+(`configureProjectWorktreeDirectory`).
 
 A shared file that exists but cannot be parsed (or names a `plansDir` outside the
 repo) is `shared.status: "invalid"` with a `reason`; the personal setup is still
@@ -64,8 +74,8 @@ UI (`packages/ui/src/lib/sharedTrustConfirmation.ts`).
 ## Modules
 
 - `project-id.js` — `createProjectIdFromPath` / `projectPathFromId`: the path-derived id (`path_<base64url>`) that names the file, and the checkout path back from it. The shared UI derives the same id (`packages/ui/src/lib/projectId.ts`); both sides must agree. `projectConfigFileStemOf`: the stem that names the file and the sibling folder for an id, see the file name invariant below.
-- `project-config.js` — `createProjectConfigRuntime`: raw read, atomic write, the cross-process file lock (Electron and a CLI `serve` can share one projects dir), scheduled-task normalization, and the project-setup read/update.
-- `project-setup.js` — sanitizers, the shared-file parser (`parseSharedProjectConfig`, `normalizePlansDir`), the merge (`mergeProjectSetup`), and the personal view for the setup keys.
+- `project-config.js` — `createProjectConfigRuntime`: raw read, atomic write, the cross-process file lock (Electron and a CLI `serve` can share one projects dir), scheduled-task normalization, the project-setup read/update, and `readWorktreeDirectory` (the personal Git worktree folder).
+- `project-setup.js` — sanitizers, the shared-file parser (`parseSharedProjectConfig`, `normalizePlansDir`), the merge (`mergeProjectSetup`), and the personal view for the setup keys (including `worktreeDirectory`).
 - `routes.js` — the setup routes. `/api/projects` is on the JSON-body allowlist in `opencode/core-routes.js`.
 
 ## Invariants

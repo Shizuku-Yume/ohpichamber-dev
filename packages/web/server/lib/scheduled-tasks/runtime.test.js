@@ -304,6 +304,37 @@ describe('canonical scheduled execution', () => {
     h.runtime.stop();
   });
 
+  it('expands native input before creation and sends its captured bindings without changing task text', async () => {
+    const raw = '/deploy "release one"  trailing  ';
+    const service = { request: vi.fn(async () => Response.json({ kind: 'template', content: '# Expanded\n\n  Markdown\n',
+      modelSelection: { providerId: 'bound-provider', modelId: 'bound-model' }, agentId: 'bound-agent' })) };
+    const h = setup({ prompt: raw }, { service });
+    await h.runtime.syncProject('host-project');
+    try {
+      expect(await h.runtime.runNow('host-project', 'task')).toMatchObject({ ok: true });
+      expect(service.request).toHaveBeenCalledTimes(1);
+      expect(service.request.mock.calls[0][0]).toBe('/api/agent/v1/workspaces/opaque-workspace/commands/expand-text');
+      expect(JSON.parse(service.request.mock.calls[0][1].body)).toEqual({ text: raw });
+      const captured = { providerId: 'bound-provider', modelId: 'bound-model', agentId: 'bound-agent', variant: 'high', reasoningEffort: null };
+      expect(h.created[0].options).toEqual(captured);
+      expect(h.sent[0].options).toEqual(captured);
+      expect(h.sent[0].input.text).toBe('# Expanded\n\n  Markdown\n');
+      expect(h.sent[0].input.context[0].metadata.scheduledTask.mode).toBe('new');
+      expect(h.stored().execution.prompt).toBe(raw);
+    } finally { h.runtime.stop(); }
+  });
+
+  it('does not create or send a session when native expansion fails', async () => {
+    const h = setup({ prompt: '/deploy args' }, { service: { request: vi.fn(async () => { throw new Error('Worker expansion unavailable'); }) } });
+    await h.runtime.syncProject('host-project');
+    try {
+      expect(await h.runtime.runNow('host-project', 'task')).toMatchObject({ ok: false, error: 'Worker expansion unavailable' });
+      expect(h.created).toEqual([]);
+      expect(h.sent).toEqual([]);
+      expect(h.stored().execution.prompt).toBe('/deploy args');
+    } finally { h.runtime.stop(); }
+  });
+
   it('reports unavailable defaults instead of switching to invented model defaults', async () => {
     const h = setup({ useDefaults: true }, { readSessionDefaults: async () => { throw new Error('Settings read failed'); } });
     await h.runtime.syncProject('host-project');
@@ -347,6 +378,28 @@ describe('canonical scheduled execution', () => {
       expect(await h.runtime.runNow(chatsScope.id, 'task')).toMatchObject({ ok: false });
       await expect(stat(scopes.at(-1).cwd)).rejects.toMatchObject({ code: 'ENOENT' });
       await expect(stat(first.directory)).resolves.toBeTruthy();
+    } finally { h.runtime.stop(); await rm(temp, { recursive: true, force: true }); }
+  });
+
+  it('cleans an empty managed-chat directory when native expansion fails before creation', async () => {
+    const temp = await mkdtemp(path.join(os.tmpdir(), 'scheduled-chat-expansion-'));
+    const chatsScope = createChatsScope(path.join(temp, 'chats'));
+    let admitted;
+    const h = setup({ prompt: '/deploy args' }, {
+      chatsScope,
+      service: { request: vi.fn(async () => { throw new Error('Native expansion unavailable'); }) },
+      resolveWorkspaceScope: async () => admitted,
+      createChatWorkspace: async () => {
+        admitted = { ...workspace, hostProjectId: chatsScope.id, workspaceId: 'new-chat', cwd: await chatsScope.createChatDirectory() };
+        return admitted;
+      },
+    });
+    try {
+      await h.runtime.syncProject(chatsScope.id);
+      expect(await h.runtime.runNow(chatsScope.id, 'task')).toMatchObject({ ok: false, error: 'Native expansion unavailable' });
+      expect(h.created).toEqual([]);
+      expect(h.sent).toEqual([]);
+      await expect(stat(admitted.cwd)).rejects.toMatchObject({ code: 'ENOENT' });
     } finally { h.runtime.stop(); await rm(temp, { recursive: true, force: true }); }
   });
 });

@@ -8,7 +8,7 @@ export const createScheduledTaskContext = (provenance) => ({
 
 const scheduledProvenance = (capture) => capture?.request?.input?.context?.find((entry) => entry.kind === 'context' && entry.metadata?.scheduledTask)?.metadata.scheduledTask;
 
-export const createExistingSessionTasks = ({ projectConfigRuntime, messageQueueRuntime, sessionService, resolveSessionScope, isSessionArchived, emitTaskRunEvent }) => {
+export const createExistingSessionTasks = ({ projectConfigRuntime, messageQueueRuntime, sessionService, resolveSessionScope, isSessionArchived, emitTaskRunEvent, expandPrompt }) => {
   const admissions = new Set();
   const validateTarget = async (projectId, targetSessionId) => {
     if (!EntityIdSchema.safeParse(targetSessionId).success) throw new OpenChamberControlError('targetSessionId is invalid', 400);
@@ -52,7 +52,8 @@ export const createExistingSessionTasks = ({ projectConfigRuntime, messageQueueR
         ? { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
         : { providerId: task.execution.providerID ?? null, modelId: task.execution.modelID ?? null, agentId: task.execution.agent ?? null, variant: task.execution.variant ?? null, reasoningEffort: null };
       const scheduledTask = { projectId, taskId: task.id, sessionId: scope.sessionId, workspaceId: scope.workspaceId, mode: 'existing', triggeredAt };
-      const request = PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context: [createScheduledTaskContext(scheduledTask)] }, options });
+      if (typeof expandPrompt !== 'function') throw new OpenChamberControlError('Native scheduled prompt capture is unavailable', 503);
+      const request = PromptRequestSchema.parse(await expandPrompt(scope, PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context: [createScheduledTaskContext(scheduledTask)] }, options })));
       const result = await projectConfigRuntime.updateScheduledTaskState(projectId, task.id, {
         lastRunAt: triggeredAt, lastStatus: 'queued', lastError: undefined, lastSessionId: task.targetSessionId, updatedAt: Date.now(),
       });

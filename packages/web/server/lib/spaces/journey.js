@@ -129,7 +129,7 @@ const failureOf = (error) => ({
  * `loginWindowOf(provider, login)` is the window grant that login makes, `space-opencode.js`'s
  * unless a live test points the upstream at a stand-in.
  * `serverInside.writeToken(spaceId, token)` replaces the token the server inside reads when it
- * starts, and `restartOpenCodeInside(spaceId)` asks the server inside to restart its OpenCode.
+ * starts.
  * `readIdleStop()` and `saveIdleStop(setting)` read and keep the user's idle stop setting, and
  * `serverInside.writeIdleStop(spaceId, setting)` tells it to the server inside.
  * `archiveChats({ spaceId, name, projectDirectory, running, allowUnsaved })` saves a space's chats
@@ -146,7 +146,6 @@ export function createSpaceJourney({
   records,
   spaceOpenCode,
   serverInside,
-  restartOpenCodeInside,
   listProjectDirectories,
   archiveChats = null,
   readHostSecret = () => undefined,
@@ -710,20 +709,6 @@ export function createSpaceJourney({
   });
 
   /**
-   * Restarts OpenCode inside a running space, the softest of the repair actions: the server inside
-   * restarts the OpenCode it manages and answers once it is ready again. The container, its
-   * gatekeeper and the grants stay as they are.
-   */
-  const restartOpenCode = (spaceId) => exclusive(spaceId, async () => {
-    requireNotPending(spaceId);
-    const space = await requireListed(spaceId);
-    if (space.state !== 'running') throw new SpaceError('space_not_running', 'OpenCode runs inside a running space. Start the space.');
-    await restartOpenCodeInside(spaceId);
-    onSpacesChanged();
-    return requireListed(spaceId);
-  });
-
-  /**
    * Gives a running space a grant: the key goes to the gatekeeper, the grant without its value
    * goes to the record, and for a model grant OpenCode inside is told to send that provider's
    * calls through the window. A second grant for the same provider replaces the first, which is
@@ -1073,5 +1058,5 @@ export function createSpaceJourney({
     return { brought, applied, removal, kept };
   });
 
-  return { createSpace, listSpaces, startSpace, stopSpace, restartSpace, restartOpenCode, removeSpace, stopAllSpaces, reopen, grantAccess, openDomain, restoreLostGrants, readJournal, previewApply, applySpace, readIdleStopSetting, changeIdleStop, runSetup, readSetup, readDisk, cleanUpDisk, pullImage };
+  return { createSpace, listSpaces, startSpace, stopSpace, restartSpace, removeSpace, stopAllSpaces, reopen, grantAccess, openDomain, restoreLostGrants, readJournal, previewApply, applySpace, readIdleStopSetting, changeIdleStop, runSetup, readSetup, readDisk, cleanUpDisk, pullImage };
 }

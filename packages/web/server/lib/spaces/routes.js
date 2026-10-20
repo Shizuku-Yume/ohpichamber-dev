@@ -231,11 +231,7 @@ export function registerSpaceRoutes(app, { getJourney, getPlaces = () => [], rea
     res.json(await journey.stopSpace(spaceIdOf(req)));
   }));
 
-  // The repair actions, from soft to hard: OpenCode inside, then the container with a fresh token.
-  app.post(`${SPACES_ROUTE}/:id/restart-opencode`, withJourney(async (journey, req, res) => {
-    res.json(await journey.restartOpenCode(spaceIdOf(req)));
-  }));
-
+  // The repair action: restart the container with a fresh token.
   app.post(`${SPACES_ROUTE}/:id/restart`, withJourney(async (journey, req, res) => {
     res.json(await journey.restartSpace(spaceIdOf(req)));
   }));

@@ -13,8 +13,9 @@ import {
 import { createRealpathCache } from '../path-realpath-cache.js';
 import { DEFAULT_UPSTREAM_STALL_TIMEOUT_MS } from '../event-stream/upstream-reader.js';
 import { recordStartupPerformance } from '../host/startup-performance.js';
+import { writeSseChunkWithBackpressure } from '../host/sse-stream.js';
+import { sanitizeSessionListItem } from '../host/session-list.js';
 import { getWorktreeBootstrapStatus } from '../git/service.js';
-
 const DEFAULT_SSE_HEARTBEAT_INTERVAL_MS = 20_000;
 
 const OPENCODE_AGENT_KEEP_ALIVE_MS = 30_000;
@@ -150,42 +151,6 @@ export const normalizeForwardedDirectoryHeaders = (headers) => {
   return headers;
 };
 
-const waitForSseDrain = (res, signal) => new Promise((resolve) => {
-  if (signal?.aborted || res.writableEnded || res.destroyed) {
-    resolve();
-    return;
-  }
-
-  const cleanup = () => {
-    res.off?.('drain', onDone);
-    res.off?.('close', onDone);
-    res.off?.('error', onDone);
-    signal?.removeEventListener?.('abort', onDone);
-  };
-  const onDone = () => {
-    cleanup();
-    resolve();
-  };
-
-  res.once?.('drain', onDone);
-  res.once?.('close', onDone);
-  res.once?.('error', onDone);
-  signal?.addEventListener?.('abort', onDone, { once: true });
-});
-
-export const writeSseChunkWithBackpressure = async (res, value, signal) => {
-  if (!value || value.length === 0 || signal?.aborted || res.writableEnded || res.destroyed) {
-    return false;
-  }
-
-  const flushed = res.write(value);
-  if (flushed !== false) {
-    return true;
-  }
-
-  await waitForSseDrain(res, signal);
-  return !signal?.aborted && !res.writableEnded && !res.destroyed;
-};
 
 export const createSseBoundaryTracker = () => {
   const decoder = new TextDecoder();
@@ -212,10 +177,6 @@ export const createSseBoundaryTracker = () => {
   };
 };
 
-const SESSION_LIST_ALLOWED_FIELDS = [
-  'id', 'parentID', 'projectID', 'location', 'subpath', 'agent', 'model',
-  'cost', 'tokens', 'outcome', 'time', 'fork', 'revert',
-];
 
 const sessionListItemSchema = z.object({
   id: z.string().optional(),
@@ -247,14 +208,6 @@ const hostMetadataPatchSchema = z.object({
 });
 const hostRevisionSchema = z.string().regex(/^(0|[1-9][0-9]*)$/);
 
-export const sanitizeSessionListItem = (session) => {
-  const parsed = z.record(z.string(), z.unknown()).parse(session);
-  const sanitized = {};
-  for (const key of SESSION_LIST_ALLOWED_FIELDS) {
-    if (key in parsed) sanitized[key] = parsed[key];
-  }
-  return sanitized;
-};
 
 
 const sessionListRecords = (payload) => {
@@ -799,10 +752,8 @@ export const registerOpenCodeProxy = (app, deps) => {
       req.path.startsWith('/themes/custom') ||
       req.path.startsWith('/push') ||
       req.path.startsWith('/config/agents') ||
-      req.path.startsWith('/config/opencode-resolution') ||
       req.path.startsWith('/config/settings') ||
       req.path.startsWith('/config/skills') ||
-      req.path === '/config/reload' ||
       req.path === '/health'
     ) {
       return next();

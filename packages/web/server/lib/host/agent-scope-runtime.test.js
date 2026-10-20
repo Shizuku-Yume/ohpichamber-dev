@@ -101,6 +101,91 @@ describe('configured Host scope authority', () => {
     }
   });
 
+  it('keeps admitted chat identity across overlapping project promotion and Host restart through canonical aliases', async () => {
+    const { root, projectDirectory, agentDirectory, owner, runtime, saveProjects, settingsFile, managedChatsScope } = await fixture({ managedChats: true });
+    const physicalRoot = managedChatsScope.root;
+    const configuredRoot = path.join(root, 'custom-chats-alias');
+    fs.symlinkSync(physicalRoot, configuredRoot, 'dir');
+    managedChatsScope.root = configuredRoot;
+    const directory = path.join(physicalRoot, 'day', 'session-one');
+    fs.mkdirSync(directory, { recursive: true });
+    const alias = path.join(root, 'session-alias');
+    fs.symlinkSync(directory, alias, 'dir');
+    const canonical = await runtime.resolveWorkspaceDirectory(directory);
+    const scope = await runtime.resolveWorkspaceScope(canonical.workspaceId);
+    await runtime.registerSessionScope(admittedSession(scope, 'chat-session'));
+
+    // Model settings promotion that already happened in an earlier Host process.
+    saveProjects([
+      { id: 'host-project', path: projectDirectory, label: 'Project' },
+      { id: 'overlapping-project', path: alias, label: 'Explicit overlapping project' },
+    ]);
+    const overlap = await owner.agentScopeStore.ensureWorkspace({
+      hostProjectId: 'overlapping-project', projectDirectory: directory,
+      workspaceDirectory: directory, agentDirectory, name: 'Explicit overlapping project',
+    });
+    expect(overlap.workspaceId).not.toBe(canonical.workspaceId);
+    for (const candidate of [directory, alias, path.join(configuredRoot, 'day', 'session-one')]) {
+      await expect(runtime.resolveWorkspaceDirectory(candidate)).resolves.toEqual(canonical);
+    }
+    await expect(runtime.resolveWorkspaceDirectory(projectDirectory)).resolves.toMatchObject({ name: 'Project' });
+
+    await owner.close();
+    const reopened = createHostSessionState({ dataDir: path.join(root, 'host') });
+    fixtures.find((entry) => entry.owner === owner).owner = reopened;
+    const directoryRuntime = createProjectDirectoryRuntime({
+      fsPromises: fs.promises, path, normalizeDirectoryPath: normalization.normalizeDirectoryPath,
+      sanitizeProjects: normalization.sanitizeProjects,
+    });
+    const restarted = createHostAgentScopeRuntime({
+      store: reopened.agentScopeStore,
+      readSettings: async () => JSON.parse(await fs.promises.readFile(settingsFile, 'utf8')),
+      sanitizeProjects: normalization.sanitizeProjects,
+      validateDirectoryPath: directoryRuntime.validateDirectoryPath,
+      getWorktrees, agentDirectory, managedChatsScope,
+    });
+    await restarted.initialize();
+    for (const candidate of [directory, alias, path.join(configuredRoot, 'day', 'session-one')]) {
+      await expect(restarted.resolveWorkspaceDirectory(candidate)).resolves.toEqual(canonical);
+    }
+    await expect(restarted.resolveSessionScope('chat-session')).resolves.toMatchObject({ workspaceId: canonical.workspaceId });
+    // Canonical precedence changes resolution only, not explicit settings or durable rows.
+    await expect(reopened.agentScopeStore.getWorkspace(overlap.workspaceId)).resolves.toMatchObject({ workspaceId: overlap.workspaceId });
+    expect(JSON.parse(fs.readFileSync(settingsFile, 'utf8')).projects).toHaveLength(2);
+
+    const replacementRoot = path.join(root, 'replacement-chats');
+    fs.mkdirSync(replacementRoot);
+    fs.unlinkSync(configuredRoot);
+    fs.symlinkSync(replacementRoot, configuredRoot, 'dir');
+    await expect(restarted.resolveSessionScope('chat-session')).rejects.toMatchObject({ code: 'METADATA_READ_FAILED' });
+  });
+
+  it('does not fall through to an overlapping project when managed admission fails', async () => {
+    const { projectDirectory, agentDirectory, runtime, saveProjects, managedChatsScope } = await fixture({ managedChats: true });
+    const directory = path.join(managedChatsScope.root, 'chat-one');
+    fs.mkdirSync(directory);
+    saveProjects([{ id: 'overlapping-project', path: directory }]);
+    let projectAdmissions = 0;
+    const failing = createHostAgentScopeRuntime({
+      store: {
+        ensureWorkspace: async ({ hostProjectId }) => {
+          if (hostProjectId === managedChatsScope.id) throw new Error('managed metadata unavailable');
+          projectAdmissions += 1;
+          throw new Error('Unexpected project admission');
+        },
+      },
+      readSettings: async () => ({ projects: [{ id: 'overlapping-project', path: directory }] }),
+      sanitizeProjects: normalization.sanitizeProjects,
+      validateDirectoryPath: async (candidate) => ({ ok: true, directory: fs.realpathSync(candidate) }),
+      getWorktrees: async () => [], agentDirectory, managedChatsScope,
+    });
+    await expect(failing.resolveWorkspaceDirectory(directory)).rejects.toThrow('managed metadata unavailable');
+    expect(projectAdmissions).toBe(0);
+    // The healthy owner still admits the same chat, and unrelated paths stay unconfigured.
+    await expect(runtime.resolveWorkspaceDirectory(directory)).resolves.toMatchObject({ name: 'chat-one' });
+    await expect(runtime.resolveWorkspaceDirectory(projectDirectory)).resolves.toBeNull();
+  });
+
   it('revokes persisted workspace and session access when the configured project is removed', async () => {
     const { root, projectDirectory, agentDirectory, owner, runtime, saveProjects } = await fixture();
     const projects = await runtime.listProjects();

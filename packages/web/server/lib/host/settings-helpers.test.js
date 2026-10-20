@@ -16,7 +16,6 @@ const packagesWebDir = join(dirname(testFilePath), '..', '..', '..');
 
 const createTestHelpers = () => createSettingsHelpers({
   normalizePathForPersistence: (value) => value,
-  normalizeDirectoryPath: (value) => value,
   normalizeTunnelBootstrapTtlMs: (value) => value,
   normalizeTunnelSessionTtlMs: (value) => value,
   normalizeTunnelProvider: (value) => value,
@@ -51,7 +50,6 @@ const createTestHelpersWithRealSanitizers = () => {
   });
   return createSettingsHelpers({
     normalizePathForPersistence: (value) => value,
-    normalizeDirectoryPath: (value) => value,
     normalizeTunnelBootstrapTtlMs: (value) => value,
     normalizeTunnelSessionTtlMs: (value) => value,
     normalizeTunnelProvider: (value) => value,
@@ -145,7 +143,6 @@ describe('settings helpers', () => {
 
       const helpers = extractedModule.createSettingsHelpers({
         normalizePathForPersistence: (value) => value,
-        normalizeDirectoryPath: (value) => value,
         normalizeTunnelBootstrapTtlMs: (value) => value,
         normalizeTunnelSessionTtlMs: (value) => value,
         normalizeTunnelProvider: (value) => value,
@@ -799,7 +796,7 @@ describe('settings registry gate', () => {
   const validValues = {
     themeId: 'openchamber-dark', locale: 'zh-CN', useSystemTheme: true, themeVariant: 'dark', lightThemeId: 'openchamber-light', darkThemeId: 'openchamber-dark',
     splashBgLight: '#fff', splashFgLight: '#000', splashBgDark: '#000', splashFgDark: '#fff',
-    lastDirectory: '/home/testuser/project', homeDirectory: '/home/testuser', opencodeBinary: '/usr/local/bin/opencode',
+    lastDirectory: '/home/testuser/project', homeDirectory: '/home/testuser',
     projects: [{ id: 'p', path: '/home/testuser/project' }], activeProjectId: 'p',
     securityScopedBookmarks: ['bookmark'], pinnedDirectories: ['/home/testuser/project'],
     desktopLanAccessEnabled: true, desktopKeepAwakeEnabled: true, desktopMinimizeToTrayEnabled: true, desktopMacMenuBarEnabled: true, desktopLinuxNativeFrame: true, sidebarShowChatsSection: false,
@@ -835,7 +832,7 @@ describe('settings registry gate', () => {
     notificationTemplates: { completion: { title: 't', message: 'm' } }, reportUsage: true,
     usageDisplayMode: 'usage', usageDropdownProviders: ['anthropic'], usageSelectedModels: { anthropic: ['claude'] }, usageCollapsedFamilies: { anthropic: ['f'] },
     usageExpandedFamilies: { anthropic: ['f'] }, usageModelGroups: { anthropic: { customGroups: [{ id: 'g', label: 'G', models: ['claude'], order: 0 }] } },
-    globalBehaviorPrompt: 'Be brief.', responseStyleEnabled: true, responseStylePreset: 'concise', responseStyleCustomInstructions: 'x',
+    responseStyleEnabled: true, responseStylePreset: 'concise', responseStyleCustomInstructions: 'x',
     pwaAppName: 'OpenChamber', pwaOrientation: 'portrait', mobileKeyboardMode: 'native', desktopWindowControlsPosition: 'left', desktopWindowControlsStyle: 'classic',
     inputBarOffset: 10,
     customProviderIcons: { 'campus-llm': 'cloud' },
@@ -847,7 +844,6 @@ describe('settings registry gate', () => {
     // so a key is judged by the sanitizer's own branch, not by a stub.
     const helpers = createSettingsHelpers({
       normalizePathForPersistence: (value) => value,
-      normalizeDirectoryPath: (value) => value,
       normalizeTunnelBootstrapTtlMs: (value) => value,
       normalizeTunnelSessionTtlMs: (value) => value,
       normalizeTunnelProvider: (value) => value,

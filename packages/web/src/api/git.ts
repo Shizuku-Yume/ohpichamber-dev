@@ -1,4 +1,5 @@
 import * as gitApiHttp from '@openchamber/ui/lib/gitApiHttp';
+import * as gitApi from '@openchamber/ui/lib/gitApi';
 import { configureWebAuxiliaryBinding, configureWebTransportBinding, removeWebTransportBinding } from './source-control';
 import { managedSshCredentials } from './managed-ssh';
 import type {
@@ -12,6 +13,7 @@ export const createWebGitAPI = (): GitAPI => ({
   configureTransportBinding: configureWebTransportBinding,
   removeTransportBinding: removeWebTransportBinding,
   configureAuxiliaryBinding: configureWebAuxiliaryBinding,
+  initializeGit: gitApiHttp.initializeGit,
   checkIsGitRepository: gitApiHttp.checkIsGitRepository,
   getGitStatus: gitApiHttp.getGitStatus,
   getGitDiff: gitApiHttp.getGitDiff,
@@ -32,8 +34,8 @@ export const createWebGitAPI = (): GitAPI => ({
   getGitUnpushedBranchCounts: gitApiHttp.getGitUnpushedBranchCounts,
   deleteGitBranch: gitApiHttp.deleteGitBranch as GitAPI['deleteGitBranch'],
   removeRemote: gitApiHttp.removeRemote as GitAPI['removeRemote'],
-  generateCommitMessage: gitApiHttp.generateCommitMessage,
-  generatePullRequestDescription: gitApiHttp.generatePullRequestDescription,
+  generateCommitMessage: gitApi.generateCommitMessage,
+  generatePullRequestDescription: gitApi.generatePullRequestDescription,
   listGitWorktrees: gitApiHttp.listGitWorktrees,
   validateGitWorktree: gitApiHttp.validateGitWorktree,
   createGitWorktree: gitApiHttp.createGitWorktree,
