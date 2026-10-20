@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "task": "omp-through-m3/47",
   "observedAt": "2026-10-21",
-  "status": "connected-file-tree-invalidation-verified",
+  "status": "connected-invalidation-observed-causality-unproven",
   "baseCommit": "93d519221527e15cf52a5dde0d6ddf011c7527bb",
   "environment": {
     "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
     "branch": "omp-through-m3/recovery-20261013",
-    "head": "working tree after d798d456e (fix not yet committed at observation)",
+    "head": "bba2cb6f2 (Task47 fix commit); current Web dist c438247e was built from the worktree also containing unrelated uncommitted liveControl changes",
     "webHost": "http://127.0.0.1:3164 (isolated HOME /tmp/ohpi-task47-home)",
     "browser": "Chrome headless, CDP 9236",
     "workspace": "/tmp/ohpi-task47-workdir",
@@ -28,50 +28,46 @@
     ]
   },
   "observed": {
-    "sessionId": "ce14b0c0-3cbf-41e1-bdcf-55f481efb5ab",
+    "sessionId": "b4139032-a883-4418-992a-767c42b4f41c",
     "terminalStatus": "idle",
-    "chatToolRow": "write TASK47_NEW.md; assistant text: Created TASK47_NEW.md with the native write tool.",
-    "workspaceFile": {
-      "path": "/tmp/ohpi-task47-workdir/TASK47_NEW.md",
-      "exists": true,
-      "content": "# Task47 native write\n\nCreated by the canonical native write tool.\n"
+    "nativeWrite": {
+      "toolCallCreatedAt": 1792523159967,
+      "toolResultCreatedAt": 1792523160823,
+      "finalAssistantCreatedAt": 1792523161714,
+      "file": "/tmp/ohpi-task47s-workdir/TASK47S_NEW.md",
+      "content": "# Task47S native write\n\nCreated by the canonical native write tool.\n"
     },
-    "gitStatus": "?? TASK47_NEW.md (plus fixture .omp/ before cleanup)",
-    "hostFsList": {
-      "status": 200,
-      "entries": [
-        "TASK47_NEW.md",
-        "NOTES.md",
-        ".git",
-        ".omp"
-      ]
-    },
-    "uiFilesTree": {
-      "before": [
-        ".git",
-        ".omp",
-        "NOTES.md"
-      ],
-      "after": [
-        ".git",
-        ".omp",
-        "NOTES.md",
-        "TASK47_NEW.md"
-      ],
-      "newFileVisible": true,
-      "appearedAfterAdditionalWait": true,
-      "newFileElement": {
+    "pageTimeline": {
+      "sendAtPerformanceMs": 32042.7,
+      "runtimeIdleAtPerformanceMs": 40588.8,
+      "initialFsListAtPerformanceMs": 6280.4,
+      "preWriteQuietSeconds": 16,
+      "fsCallsDuringQuiet": 0,
+      "fsListAfterWriteAtPerformanceMs": 44980.7,
+      "fsListAfterWriteDate": 1792523162918,
+      "fsListAfterWriteUrl": "/api/fs/list?path=%2Ftmp%2Fohpi-task47s-workdir&respectGitignore=true&directory=%2Ftmp%2Fohpi-task47s-workdir",
+      "fsListAfterWriteStack": "Error at rec (<anonymous>:8:69) at window.fetch (<anonymous>:14:41) at window.fetch (katex.min...js) at async Object.listDirectory (katex.min...js:540:58230) at async main-BfswuA6R.js:2:164819 at async Promise.all (index 0)",
+      "fsListRequestsAfterWrite": 1,
+      "treeNewFileVisible": true,
+      "treeNewFileElement": {
         "x": 1354,
         "y": 271,
         "width": 148,
         "height": 19
       },
-      "fsListRequestsObservedByHarness": 0,
-      "screenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task47-final-after-write-late.png",
-      "initialCheckScreenshot": "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task47-final-after-write.png"
-    }
+      "treeTransitionTimestampCaptured": false
+    },
+    "causality": {
+      "periodicPollRuledOut": "No /api/fs/list during 16 s pre-write quiet; SidebarFilesTree has no polling interval; post-write stack matches applyFileTreeChanges 2 s batch Promise.all loop.",
+      "normalToolTransitionStillPossible": "The request is 2.1 s after the native tool_result timestamp and 4.4 s after idle, consistent with fileTreeChanges.toolTransition + 2 s batching.",
+      "recoveryCallbackNotProven": "Page-side session snapshot polling could not be separated from an application recovery snapshot; no request was established to follow the recovery onSnapshot callback."
+    },
+    "screenshots": [
+      "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task47s-invalidation-request.png",
+      "/home/shizuku/.cache/ohpi-acceptance/evidence-electron/task47s-invalidation-late.png"
+    ]
   },
-  "limitation": "The harness did not expose the `/api/fs/list` network entry (service-worker/transport visibility); the tree entry appeared only after an additional wait, so the observation cannot distinguish the fix hook from the tree surface's periodic refresh. Direct Host `/api/fs/list` returned the file, and the source-level regression proves single invalidation at the onSnapshot boundary.",
+  "limitation": "Controlled instrumentation observed exactly one change-triggered /api/fs/list call and the eventual tree entry, and ruled out periodic polling. It could not prove the request followed the recovery onSnapshot callback rather than the normal write tool transition, because the timing matches the normal 2 s batch path and page-side snapshot polling obscured recovery snapshot attribution. Task47 remains open; not re-archived.",
   "sourceState": "Fix changes session-message-loader.ts (queued recovery when a recovered refresh arrives during an in-flight load), sync-context.tsx, session-message-loader.test.ts, sync-context-selection-boundary.test.tsx, and sync/files documentation. Focused loader + SyncProvider boundary tests 47 pass / 179 assertions; UI type-check/build, Web build (dist c438247e...), changed-path oxlint (2 unchanged baseline findings), dead-code baseline inventory complete.",
   "cleanup": "Completed: Host 3164, Chrome CDP 9236, fixture 4605 and children stopped; isolated HOME, temporary workspace, Chrome profile and proof scripts removed; ports 3164/9236/4605 closed.",
   "rootCauseFix": "EventPipeline recovery abandoned the live tool event. SessionMessageLoader now passes the previous snapshot only for pipeline recovery; SyncProvider compares epoch/headSequence after the snapshot commit and calls fileTreeChanges.unknownChange once for the addressed directory. Initial hydration and unchanged snapshots do not invalidate; no historical tool replay and no activeRun dependency."
