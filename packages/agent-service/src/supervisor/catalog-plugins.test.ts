@@ -81,7 +81,7 @@ test('captured plugin restart admission excludes all mutations and ordinary admi
     const entered = Promise.withResolvers<void>();
     const input = { workspaceId: 'workspace', agentDirectoryId: 'agent', catalogRevision: '0' };
     const application = coordinator.runPluginApplication(async admit => {
-      await admit(input, async bootstrap => {
+      await admit(input, async () => ({ workspace: '0', agent: '0' }), async bootstrap => {
         expect(bootstrap.workspaceId).toBe('workspace');
         trace.push('captured admission');
       });
@@ -91,7 +91,7 @@ test('captured plugin restart admission excludes all mutations and ordinary admi
     });
     await entered.promise;
     const mutation = coordinator.runPluginOperation(async () => { trace.push('mutation'); });
-    const admission = coordinator.admit(input, async () => { trace.push('ordinary admission'); });
+    const admission = coordinator.admit(input, async () => ({ workspace: '0', agent: '0' }), async () => { trace.push('ordinary admission'); });
     expect(trace).toEqual(['captured admission']);
     release.resolve();
     await Promise.all([application, mutation, admission]);

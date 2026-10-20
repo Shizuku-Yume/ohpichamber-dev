@@ -154,7 +154,9 @@ export class SessionRegistry {
       const outcomes: IdleSessionRestartOutcome[] = [];
       for (const { target, input } of reserved) {
         try {
-          await admit(input, bootstrap => this.openResolved({ ...input, ...bootstrap }, true, undefined, true, target.workerGeneration));
+          // Admission builds a strict worker bootstrap; displayPath belongs to the registry/reference only.
+          const { displayPath, ...admissionInput } = input;
+          await admit(admissionInput, bootstrap => this.openResolved({ ...input, ...bootstrap }, true, undefined, true, target.workerGeneration));
           const current = this.workers.info(target.rootSessionId);
           if (!current || current.state !== 'ready' || current.workerGeneration === target.workerGeneration)
             throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');

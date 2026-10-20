@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { __resetDirsFromEnvForTests, getPluginsDir, getPluginsLockfile, getProjectPluginOverridesPath, setAgentDir } from '@oh-my-pi/pi-utils';
 import { PluginManager } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/manager';
@@ -11,16 +11,48 @@ import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from '
 
 const worker = { rootSessionId: 'plugin-root', workspaceId: 'plugin-workspace', workerGeneration: 'plugin-generation' };
 
+// Bun caches os.homedir() at process start, so a per-test HOME assignment cannot
+// move the SDK resolver. The suite re-executes itself once with an isolated HOME;
+// every fixture then runs against that process home and clears the shared native
+// plugin state between tests.
+const fixtureHome = process.env.OPENCHAMBER_PLUGIN_FIXTURE_HOME;
+if (fixtureHome === undefined) {
+  test('native plugin fixtures rerun with an isolated HOME', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'native-plugins-home-'));
+    try {
+      const environment = { ...process.env, HOME: home, USERPROFILE: home, OPENCHAMBER_PLUGIN_FIXTURE_HOME: home };
+      for (const key of ['PI_CONFIG_DIR', 'OMP_PROFILE', 'PI_PROFILE', 'PI_CODING_AGENT_DIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME']) delete environment[key];
+      const child = Bun.spawn([process.execPath, 'test', import.meta.path], { env: environment, stdout: 'pipe', stderr: 'pipe' });
+      const [status, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+      if (status !== 0) throw new Error(`Fresh-HOME native plugin fixture failed (${status}):\n${stdout}\n${stderr}`);
+    } finally { await rm(home, { recursive: true, force: true }); }
+  });
+}
+const nativeTest = fixtureHome === undefined ? test.skip : test;
+
+async function resetNativeState(): Promise<void> {
+  await Promise.all([
+    rm(getPluginsDir(), { recursive: true, force: true }),
+    rm(getInstalledPluginsRegistryPath(), { force: true }),
+    rm(getMarketplacesRegistryPath(), { force: true }),
+    rm(getMarketplacesCacheDir(), { recursive: true, force: true }),
+    rm(getPluginsCacheDir(), { recursive: true, force: true }),
+  ]);
+  clearPluginRootsAndCaches();
+}
+
 async function fixture() {
-  const keys = ['HOME', 'USERPROFILE', 'PI_CONFIG_DIR', 'OMP_PROFILE', 'PI_PROFILE', 'PI_CODING_AGENT_DIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'];
-  const environment = new Map(keys.map(key => [key, process.env[key]] as const));
+  const keys = ['HOME', 'USERPROFILE', 'PI_CONFIG_DIR', 'OMP_PROFILE', 'PI_PROFILE', 'PI_CODING_AGENT_DIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'] as const;
+  const environment: Record<(typeof keys)[number], string | undefined> = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  const home = homedir();
   const root = await mkdtemp(join(tmpdir(), 'native-plugins-'));
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
   const packageDirectory = join(root, 'local-package');
   await Promise.all([mkdir(cwd), mkdir(agentDirectory), mkdir(packageDirectory)]);
-  process.env.HOME = root;
-  process.env.USERPROFILE = root;
+  await resetNativeState();
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
   process.env.PI_CONFIG_DIR = '.omp';
   for (const key of ['OMP_PROFILE', 'PI_PROFILE', 'PI_CODING_AGENT_DIR']) delete process.env[key];
   for (const key of ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME']) process.env[key] = join(root, key.toLowerCase());
@@ -30,9 +62,9 @@ async function fixture() {
     omp: { description: 'Native package proof', settings: {
       greeting: { type: 'string' }, retries: { type: 'number', min: 0, max: 3 }, token: { type: 'string', secret: true },
     } } }));
-  return { root, cwd, packageDirectory, plugins: new NativePlugins({ cwd, worker }), cleanup: async () => {
-    clearPluginRootsAndCaches();
-    for (const [key, value] of environment) {
+  return { root, home, cwd, packageDirectory, plugins: new NativePlugins({ cwd, worker }), cleanup: async () => {
+    await resetNativeState();
+    for (const [key, value] of Object.entries(environment)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
@@ -41,7 +73,7 @@ async function fixture() {
   } };
 }
 
-test('native linked package round-trips enablement and validated settings without leaking declared or undeclared secrets', async () => {
+nativeTest('native linked package round-trips enablement and validated settings without leaking declared or undeclared secrets', async () => {
   const context = await fixture();
   try {
     const native = new PluginManager(context.cwd);
@@ -68,7 +100,7 @@ test('native linked package round-trips enablement and validated settings withou
   } finally { await context.cleanup(); }
 });
 
-test('native setting validation rejects the whole invalid patch before changing an earlier valid key', async () => {
+nativeTest('native setting validation rejects the whole invalid patch before changing an earlier valid key', async () => {
   const context = await fixture();
   try {
     await new PluginManager(context.cwd).link(context.packageDirectory);
@@ -84,7 +116,7 @@ test('native setting validation rejects the whole invalid patch before changing 
   } finally { await context.cleanup(); }
 });
 
-test('corrupt native configuration is a failed authoritative read, never an empty catalog', async () => {
+nativeTest('corrupt native configuration is a failed authoritative read, never an empty catalog', async () => {
   const context = await fixture();
   try {
     await new PluginManager(context.cwd).link(context.packageDirectory);
@@ -121,7 +153,7 @@ test('local extension authoring atomically preserves valid source on syntax erro
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('native marketplace project installs retain scoped enablement while declared settings remain explicitly global', async () => {
+nativeTest('native marketplace project installs retain scoped enablement while declared settings remain explicitly global', async () => {
   const context = await fixture();
   try {
     const marketplaceRoot = join(context.root, 'marketplace');
@@ -155,13 +187,13 @@ test('native marketplace project installs retain scoped enablement while declare
   } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
 });
 
-test('native plugin ownership follows actual resolver root rather than agentDirectory or workspace labels', async () => {
+nativeTest('native plugin ownership follows actual resolver root rather than agentDirectory or workspace labels', async () => {
   const context = await fixture();
   try {
     const first = await context.plugins.operation({ type: 'plugins.owner' }, '0');
     if (first.type !== 'plugins.owner') throw new Error('Expected native owner identity');
     expect(first.rootPath).toBe(getPluginsDir());
-    expect(first.rootPath).toBe(join(context.root, '.omp', 'plugins'));
+    expect(first.rootPath).toBe(join(context.home, '.omp', 'plugins'));
     const alternativeAgent = join(context.root, 'another-agent');
     await mkdir(alternativeAgent);
     setAgentDir(alternativeAgent);
@@ -176,7 +208,7 @@ test('native plugin ownership follows actual resolver root rather than agentDire
   } finally { await context.cleanup(); }
 });
 
-test('global setting writes preserve native project overrides and expose saved-global versus effective values without secret values', async () => {
+nativeTest('global setting writes preserve native project overrides and expose saved-global versus effective values without secret values', async () => {
   const context = await fixture();
   try {
     await new PluginManager(context.cwd).link(context.packageDirectory);
@@ -195,7 +227,7 @@ test('global setting writes preserve native project overrides and expose saved-g
   } finally { await context.cleanup(); }
 });
 
-test('native doctor reports real checks without exposing native profile or plugin paths', async () => {
+nativeTest('native doctor reports real checks without exposing native profile or plugin paths', async () => {
   const context = await fixture();
   try {
     await new PluginManager(context.cwd).link(context.packageDirectory);

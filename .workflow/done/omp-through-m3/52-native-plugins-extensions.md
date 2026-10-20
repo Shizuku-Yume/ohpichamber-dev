@@ -4,7 +4,7 @@
 **Task type:** feature
 **Base commit:** 93d519221527e15cf52a5dde0d6ddf011c7527bb
 **Started:** 2026-10-18
-**Status:** active
+**Finished:** 2026-10-21
 
 **Delivers:** Canonical workspace plugin and extension management wired to the native `PluginManager` and `MarketplaceManager` in the Bun Agent Service worker. Exposes canonical `/api/agent/v1/workspaces/:workspaceId/plugins` endpoints for plugin listing, installation, uninstallation, enable/disable toggling, updates, doctor diagnostics, and local extension authoring under revision CAS. Replaces legacy `/api/config/plugins` and `/api/integration` routes in `usePluginsStore`, enforces Host enterprise egress boundaries, and reports explicit persistence versus active runtime apply outcomes without fake reload successes.
 
@@ -58,14 +58,14 @@ Plugin and extension lifecycle management is an implemented native subsystem of 
 
 ## Acceptance
 
-- [ ] Canonical contract defines schemas for plugins, marketplace entries, settings, and local extensions with uint64 decimal revision counters.
-- [ ] Agent Service and Host Gateway implement `/plugins` workspace endpoints under revision CAS.
-- [ ] Package lifecycle routes through native `PluginManager`; marketplace lifecycle and native user/project scopes route through `MarketplaceManager`.
-- [ ] Local extension authoring is confined to workspace `.omp/` extension directories.
-- [ ] Existing Host enterprise policy guards package-manager and marketplace-refresh egress without a new mode or policy knob.
-- [ ] `usePluginsStore` uses CanonicalClient; legacy plugin-specific configuration/routes are retired while unrelated provider/MCP integration routes stay with their owning tasks.
-- [ ] Persistence and active worker reloads return explicit outcomes without fake reload successes.
-- [ ] Node Host and UI remain free of native SDK imports.
+- [x] Canonical contract defines schemas for plugins, marketplace entries, settings, and local extensions with uint64 decimal revision counters.
+- [x] Agent Service and Host Gateway implement `/plugins` workspace endpoints under revision CAS.
+- [x] Package lifecycle routes through native `PluginManager`; marketplace lifecycle and native user/project scopes route through `MarketplaceManager`.
+- [x] Local extension authoring is confined to workspace `.omp/` extension directories.
+- [x] Existing Host enterprise policy guards package-manager and marketplace-refresh egress without a new mode or policy knob.
+- [x] `usePluginsStore` uses CanonicalClient; legacy plugin-specific configuration/routes are retired while unrelated provider/MCP integration routes stay with their owning tasks.
+- [x] Persistence and active worker reloads return explicit outcomes without fake reload successes.
+- [x] Node Host and UI remain free of native SDK imports.
 
 **Coordinator integration status:** Source implementation was integrated into the assembled M3 continuation at `54fbff9c78c1368853a84ab7cc86ca3517b1aacb` from base snapshot `a29e1617b65da9d6d2c07c954a0e2929d62301a2`. Parent-owned package checks, connected Web/Electron verification, and final acceptance remain pending; this record does not claim runtime certification.
 
@@ -90,3 +90,8 @@ Plugin and extension lifecycle management is an implemented native subsystem of 
 - Source-only integration merged core snapshot `a29e1617b65da9d6d2c07c954a0e2929d62301a2` as commit `e49a89741e884c8b6e0e67cc998660f5f825f9bd`, preserving provider49/warming50, helpers46/47, usage54 cold-worker refusal, and search53 behavior. No checks ran.
 - Combined admission ordering is intentionally catalog exclusion outside the web-search owner gate. Plugin Apply already holds catalog admission/mutation exclusion across restarts and reuses captured non-reentrant admission authority; acquiring search before catalog in normal admission would invert that order and deadlock a concurrent Apply. Both exclusions and native initialization/registration remain required.
 - Task51 is the next true merge dependency. Its trusted Host skill source reconciliation callback must remain inside catalog serialized admission before native launch and captured-generation registration; it is not a model-callable Host action. Final parent application uses only the net diff from the core snapshot to the final combined51+52 commit. The unrelated core websearch locale file remains unchanged for the coordinator's separate repair.
+
+- Verification (2026-10-21, clean integration HEAD `cf18bf59a`): contract 9/9; exact service packet 22 pass / 7 skip / 0 fail (161 expects, 69.72 s; the 7 worker-fixture tests run in a fresh-HOME child and the child exit is asserted); Host plugin file 5/5 (96 expects); combined Host packet 25/28 where the three failures are pre-existing Task54 usage-range tests; PluginStatusBanner 3/3 and PluginsPage 3/3; Agent Service type-check exit 0. Two committed test defects were fixed: the worker plugin fixture now isolates native HOME/XDG state in a re-executed child, and the supervisor admission test now uses the three-argument `CatalogAdmission` contract.
+- Real isolated Web smoke (API-only Host, password session, local loopback provider, no external registry): local extension create/read/edit/delete stayed in `.omp/extensions` with committed revisions and CAS; invalid syntax returned 400 without replacing the prior source; enterprise mode kept local authoring and returned 403 `enterprise_mode` for install, uninstall, update and marketplace refresh with the catalog revision unchanged; Apply refused a busy root with 409 `RUN_ACTIVE` and a stale revision with 409 `CATALOG_CONFLICT`.
+- Apply fix: the first smoke exposed `SESSION_RESTORE_FAILED` because `restartIdleSessions` passed `entry.input.displayPath` into the strict `WorkerBootstrapSchema` admission, which rejected it with a ZodError. `registry.ts` now strips `displayPath` for admission while keeping it for `openResolved`/reference persistence, matching create and reopen; `registry-native.test.ts` asserts the admission input excludes it. A bounded real-AgentService reproduction then returned 200 `applied` with the worker generation changing (`2f2ea937…` → `065703f7…`), `ready` at the committed revision, the native transcript byte-identical (1297 B), and the authored extension evaluated twice (initial open and restart).
+- Receipt: `.workflow/omp-migration/m3/task52-native-plugins-2026-10-21.json`. Limitations: the Web UI bundle was not served (component tests cover rendering); the full Host Apply path was not rerun after the one-line fix (the same production service route was proven); package/marketplace fetches and packaged/mobile runtime behavior remain unexercised.

@@ -361,7 +361,13 @@ test('explicit idle restart preserves native transcript files and publishes a ne
     const before = harness.sessions.journal(rootSessionId).snapshot();
     const beforeNative = await nativeMessages(harness.source.sessionFile);
     const beforeChild = await nativeMessages(harness.childFile);
-    const outcomes = await harness.sessions.restartIdleSessions([previous], admit);
+    let admissionInput: Record<string, unknown> | undefined;
+    const observingAdmit = (input: WorkerBootstrap, launch: (input: WorkerBootstrap) => Promise<RuntimeSession>) => {
+      admissionInput = { ...input };
+      return admit(input, launch);
+    };
+    const outcomes = await harness.sessions.restartIdleSessions([previous], observingAdmit);
+    expect(admissionInput).not.toHaveProperty('displayPath');
     const current = harness.workers.authorizationScope(rootSessionId)!;
     expect(outcomes).toEqual([{ rootSessionId, previousGeneration: previous.workerGeneration,
       outcome: 'restarted', workerGeneration: current.workerGeneration }]);

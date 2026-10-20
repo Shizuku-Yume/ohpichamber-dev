@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/52",
+  "observedAt": "2026-10-21",
+  "status": "verified",
+  "taskFile": ".workflow/tasks/omp-through-m3/52-native-plugins-extensions.md",
+  "baseCommit": "93d519221527e15cf52a5dde0d6ddf011c7527bb",
+  "head": "cf18bf59a",
+  "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m3-integrated-clean",
+  "branch": "omp-through-m3/verified-integration-20261021",
+  "sourceState": "Task52 production implementation was already in HEAD from the integrated core snapshot. This verification found and fixed one Task52-owned Apply orchestration defect plus two committed-test defects.",
+  "ownedChanges": [
+    {
+      "path": "packages/agent-service/src/sessions/registry.ts",
+      "reason": "Apply restart passed the registry entry input, including displayPath, into the admission callback. The service admission builds a strict WorkerBootstrapSchema and rejected the extra key with a ZodError, which restartIdleSessions reported as SESSION_RESTORE_FAILED. The restart now strips displayPath for admission and keeps it for openResolved/reference persistence, mirroring the create and reopen routes. Adds one line plus a comment."
+    },
+    {
+      "path": "packages/agent-service/src/sessions/registry-native.test.ts",
+      "reason": "Regression assertion in the explicit-idle-restart test: the admission input must not contain displayPath."
+    },
+    {
+      "path": "packages/agent-service/src/worker/catalog-plugins.test.ts",
+      "reason": "Committed test could not isolate native directories: Bun caches os.homedir(), so per-test HOME assignments still resolved /home/shizuku/.omp and collided with a pre-existing local-proof marketplace. The suite now re-executes once in a child with an isolated HOME, strips inherited native profile/XDG variables, clears native plugin/marketplace state per fixture, and asserts the owner root against the process home."
+    },
+    {
+      "path": "packages/agent-service/src/supervisor/catalog-plugins.test.ts",
+      "reason": "Committed admission test called CatalogAdmission with the old two-argument shape and timed out. It now passes (input, reconcile, launch) for captured and ordinary admissions."
+    }
+  ],
+  "applyRootCause": {
+    "symptom": "POST /plugins/apply returned 200 persistence committed but result status failed and worker outcome SESSION_RESTORE_FAILED with the prior generation retained.",
+    "cause": "SessionRegistry.restartIdleSessions built the admission input from entry.input, which includes displayPath. Service admission parses that input as a strict WorkerBootstrapSchema; the extra displayPath produced ZodError unrecognized_keys. restartIdleSessions caught the error and mapped it to SESSION_RESTORE_FAILED. The create and reopen routes already destructure displayPath away before admission, so only the Apply restart path regressed.",
+    "evidence": "Bounded in-process reproduction of the real AgentService with real worker processes and runtime method tracing printed: [diag] admit threw ZodError: [{ code: unrecognized_keys, keys: [displayPath] }]. Host service stderr is discarded by agent-service-supervisor.js, so the original Web Host smoke could not surface it.",
+    "fix": "packages/agent-service/src/sessions/registry.ts now destructures displayPath out of the restart admission input while still passing it to openResolved for reference persistence."
+  },
+  "postFixApplyProof": {
+    "method": "Bounded reproduction outside the repo: real AgentService (src supervisor and worker entrypoints), isolated HOME, registered workspace, real native session, valid authored local extension that appends a marker when evaluated, and the production POST /api/agent/v1/workspaces/:workspaceId/plugins/apply route with expectedRevision 0 and strategy restart-idle-sessions.",
+    "apply": { "status": 200, "persistence": "committed", "resultStatus": "applied", "workerOutcome": "applied" },
+    "generation": { "before": "2f2ea937-218a-47c3-bf12-a90930513634", "after": "065703f7-6ebc-445b-be34-fc31073fec89", "changed": true, "workerStatus": "ready", "appliedRevision": "0" },
+    "transcript": { "sameBytes": true, "bytes": 1297 },
+    "extensionEvaluationCount": 2,
+    "meaning": "The restarted generation loaded the authored extension again while the same native session file remained byte-identical."
+  },
+  "focusedTests": {
+    "contract": {
+      "command": "bun test packages/agent-contract/src/plugins.test.ts",
+      "result": "9 pass, 0 fail, 38 expect() calls"
+    },
+    "servicePacket": {
+      "command": "bun test packages/agent-service/src/worker/catalog-plugins.test.ts packages/agent-service/src/worker/session-plugins.test.ts packages/agent-service/src/supervisor/catalog-plugins.test.ts packages/agent-service/src/sessions/registry-native.test.ts --timeout 60000",
+      "result": "22 pass, 7 skip, 0 fail, 161 expect() calls, 69.72 s",
+      "detail": "The 7 skips are the worker plugin fixtures in the parent process; the file re-executes those 7 in a fresh-HOME child and fails if that child does not exit 0. Supervisor 3/3 after the signature fix; session plugins 3/3; registry-native 14/14 including the new displayPath regression."
+    },
+    "hostPluginFile": {
+      "command": "bun test packages/web/server/lib/host/canonical-plugins.test.js --timeout 60000",
+      "result": "5 pass, 0 fail, 96 expect() calls, 114.26 s"
+    },
+    "hostPacket": {
+      "command": "bun test packages/web/server/lib/host/canonical-plugins.test.js packages/web/server/lib/ui-auth/canonical-host-routes.test.js --timeout 60000",
+      "result": "25 pass, 3 fail, 520 expect() calls, 125.51 s",
+      "failures": "The three canonical-host-routes failures are the pre-existing Task54 usage-range tests (GET /api/agent/v1/usage and /usage/tools return 400), unrelated to Task52 plugin routes; the plugin Host file is 5/5 alone."
+    },
+    "ui": {
+      "result": "PluginStatusBanner 3 pass/12 expect; PluginsPage 3 pass/19 expect (direct bun test; the package test script expects a directory root)"
+    },
+    "staticChecks": {
+      "agentServiceTypeCheck": "bun run type-check in packages/agent-service after the Apply fix: exit 0",
+      "changedFilesLint": "bunx oxlint on registry.ts and the three test files reports only the pre-existing registry.ts anti-slop findings (unchanged lines 263-694); no finding on the changed restart block or tests"
+    },
+    "fixBeforeAfter": {
+      "workerCatalogBefore": "file alone: 6 pass, 2 fail (Marketplace \"local-proof\" already exists; owner root /home/shizuku/.omp/plugins instead of the fixture root)",
+      "supervisorBefore": "file alone: 2 pass, 1 fail; captured admission test timed out at 60 s",
+      "after": "both files pass as recorded above"
+    }
+  },
+  "webSmoke": {
+    "method": "Real packages/web Host (server/index.js --api-only) with its supervised Agent Service, isolated HOME and OPENCHAMBER_DATA_DIR, password session, a local loopback OpenAI-compatible provider defined only in the isolated native models.yml, and a settings.json project. No external registry, package, or marketplace request was made.",
+    "normalHost": { "origin": "http://127.0.0.1:45201", "exit": 0 },
+    "enterpriseHost": { "origin": "http://127.0.0.1:45202", "enterpriseEnv": "OPENCHAMBER_ENTERPRISE_MODE=1", "exit": 0 },
+    "observed": {
+      "catalogInitial": { "status": 200, "revision": "0", "plugins": 0, "localExtensions": [] },
+      "localCreate": { "status": 200, "revision": "1", "persistence": "committed", "apply": "no-active-workers", "diskMatches": true },
+      "localRead": { "status": 200, "matches": true, "revision": "1" },
+      "localEdit": { "status": 200, "revision": "2", "readBackMatches": true },
+      "localSyntaxRejected": { "status": 400, "code": "INVALID_REQUEST", "priorSourcePreserved": true },
+      "localDelete": { "status": 200, "revision": "4", "localExtensions": [], "diskGone": true, "readAfterDelete": { "status": 404, "code": "INVALID_REQUEST" } },
+      "sessionCreate": { "status": 200, "session": "8ccac402-3df6-48e0-8965-bdb756219119" },
+      "workerBeforeApply": { "status": "ready", "appliedRevision": "2", "workerGeneration": "e0063f0b-7acc-43e5-b651-9901c67811d9" },
+      "applyBeforeFix": { "status": 200, "persistence": "committed", "resultStatus": "failed", "workerOutcome": "SESSION_RESTORE_FAILED", "generationChanged": false },
+      "applyBusyRefused": { "status": 409, "code": "RUN_ACTIVE" },
+      "staleRevisionRefused": { "status": 409, "code": "CATALOG_CONFLICT" },
+      "enterprise": {
+        "catalog": { "status": 200, "revision": "4" },
+        "localAuthoring": { "status": 200, "revision": "5" },
+        "install": { "status": 403, "code": "enterprise_mode" },
+        "uninstall": { "status": 403, "code": "enterprise_mode" },
+        "update": { "status": 403, "code": "enterprise_mode" },
+        "marketplaceRefresh": { "status": 403, "code": "enterprise_mode" },
+        "catalogUnchangedAfterRefusals": true,
+        "localDelete": { "status": 200, "revision": "6" }
+      }
+    },
+    "applyAfterFix": "Verified through the production AgentService apply route and real worker processes (postFixApplyProof); the full Web Host was not rerun after the one-line fix because the Host adds only authentication, workspace scope and proxying around the same route, and those were exercised by the pre-fix Host run and the Host packet."
+  },
+  "securityReview": {
+    "boundary": "Host canonical routes / plugin contract / worker native managers",
+    "findings": [
+      "no blocking finding: every /plugins route resolves the authorized workspace scope before proxying; pluginName/extensionId route params must equal the parsed body identity.",
+      "no blocking finding: enterprise mode gates install, uninstall, update, and marketplace refresh with 403 enterprise_mode; local authoring, enable/disable, doctor and catalog reads remain local and available.",
+      "no blocking finding: PluginLocalSource confines to realpath(workspace)/.omp/extensions, validates flat .ts/.js/.mts/.mjs names, rejects traversal, rejects symlinked directories and files (O_NOFOLLOW read, lstat write/delete, realpath recheck before atomic rename), caps source at 1 MiB, and uses Bun.Transpiler.transform (parse only, no evaluation or import) before commit.",
+      "no blocking finding: Node Host and UI contain no @oh-my-pi imports; extension modules execute only in the Bun service worker.",
+      "nonblocking: public plugin settings omit declared secret values and expose only configured/globalConfigured/overridden flags."
+    ]
+  },
+  "qualityReview": {
+    "verdict": "pass after one fix round",
+    "notes": [
+      "Apply restart now matches create/reopen admission hygiene: displayPath stays a registry/reference field and never reaches the strict worker bootstrap.",
+      "The two committed test defects were test-only; no other production behavior changed.",
+      "The worker fixture wrapper keeps the exact task packet command working while preventing ambient ~/.omp writes.",
+      "The Host packet's three usage-range failures predate Task52 and belong to Task54; the plugin Host file passes alone."
+    ]
+  },
+  "environmentCleanup": "Normal and enterprise Hosts exited 0; no listener remains on 45201/45202; isolated HOME/data/workspace, local provider, repro scripts and smoke results were removed. No temporary diagnostic source remains.",
+  "limitations": [
+    "Web UI bundle was not served (API-only Host); plugin UI rendering is covered by PluginStatusBanner/PluginsPage component tests.",
+    "The full Web Host Apply path was not rerun after the one-line fix; the identical production AgentService apply route was proven with real workers, new generation, unchanged transcript and a twice-evaluated local extension.",
+    "No external package or marketplace installation, update, or refresh was attempted in either mode; enterprise refusal is proven before any egress.",
+    "Packaged Electron and mobile behavior were not exercised."
+  ]
+}
