@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { modelKind } from '@oh-my-pi/pi-catalog/types';
 import { getRoleInfo } from '@oh-my-pi/pi-coding-agent/config/model-roles';
+import { cfgDisabledProviders } from '@oh-my-pi/pi-coding-agent/config/model-settings';
 import { formatModelStringWithRouting as selector } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
+import { cfgRetryFallbackChains } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { runSearchQuery } from '@oh-my-pi/pi-coding-agent/web/search/index';
 import { cfgWebSearchEnabled } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { WebSearchConfigStateSchema } from '@openchamber/agent-contract';
@@ -67,11 +69,15 @@ test('provider catalog equals the native search-model pool and excludes chat gro
     const state = await new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {}).operation({ type: 'read' });
     if (state.type !== 'state') throw new Error('Expected native search state');
     const providerIds = state.state.providers.map(provider => provider.providerId);
-    const nativeSearchPool = runtime.modelRegistry.getAvailable('search').map(model => selector(model));
-    expect(nativeSearchPool).toContain('web/hosted');
-    expect(providerIds).toEqual(nativeSearchPool);
+    expect(providerIds).toEqual([
+      'web/brave', 'web/duckduckgo', 'web/ecosia', 'web/exa', 'web/firecrawl', 'web/google', 'web/hosted',
+      'web/jina', 'web/kagi', 'web/kimi', 'web/mojeek', 'web/ollama', 'web/parallel', 'web/perplexity',
+      'web/public', 'web/searxng', 'web/startpage', 'web/synthetic', 'web/tavily', 'web/tinyfish', 'web/zai',
+    ]);
     expect(providerIds.every(id => id.startsWith('web/'))).toBe(true);
 
+    // The web role still accepts grounded chat transports; they are execution
+    // paths, not search-provider catalog entries.
     const webRoleModels = runtime.modelRegistry.getAll('all').filter(getRoleInfo('web', runtime.settings).accepts);
     const chatSelectors = webRoleModels.filter(model => modelKind(model) !== 'search').map(model => selector(model));
     expect(chatSelectors.some(id => id.startsWith('anthropic/'))).toBe(true);
@@ -82,6 +88,63 @@ test('provider catalog equals the native search-model pool and excludes chat gro
     if (state.state.selectedProviderId !== null) expect(providerSet.has(state.state.selectedProviderId)).toBe(true);
     expect(state.state.fallbackProviderIds.every(id => providerSet.has(id))).toBe(true);
     expect(WebSearchConfigStateSchema.parse(state.state)).toEqual(state.state);
+  } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('legacy chat web-role selections survive non-selection updates and unknown replacements fail', async () => {
+  const { directory, bootstrap } = await fixture();
+  const runtime = await openNativeRuntime(bootstrap);
+  const primary = 'anthropic/claude-3-5-sonnet-20240620';
+  const fallback = 'anthropic/claude-3-5-sonnet-20241022';
+  try {
+    await runtime.authStorage.credentials.set('anthropic', { type: 'api_key', key: 'fixture-credential', source: 'login' });
+    runtime.settings.setModelRole('web', primary);
+    cfgRetryFallbackChains.setEntry(runtime.settings, 'web', [fallback]);
+    await runtime.settings.flush();
+    const search = new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {});
+
+    const initial = await search.operation({ type: 'read' });
+    if (initial.type !== 'state') throw new Error('Expected native search state');
+    expect(initial.state.selectedProviderId).toBe(primary);
+    expect(initial.state.fallbackProviderIds).toEqual([fallback]);
+    expect(initial.state.providers.map(provider => provider.providerId)).not.toContain(primary);
+    expect(initial.state.providers.map(provider => provider.providerId)).not.toContain(fallback);
+
+    const preserved = await search.operation({ type: 'update', request: { expectedRevision: '0', enabled: false, timeoutSeconds: 33 } });
+    if (preserved.type !== 'mutated') throw new Error('Expected applied mutation');
+    expect(preserved.result).toMatchObject({ persistence: 'persisted', status: 'applied', state: {
+      revision: '1', enabled: false, timeoutSeconds: 33, selectedProviderId: primary, fallbackProviderIds: [fallback],
+    } });
+
+    const resubmitted = await search.operation({ type: 'update', request: { expectedRevision: '1', selectedProviderId: primary, fallbackProviderIds: [fallback] } });
+    expect(resubmitted).toMatchObject({ type: 'mutated', result: { persistence: 'persisted', state: {
+      revision: '2', selectedProviderId: primary, fallbackProviderIds: [fallback],
+    } } });
+
+    const switched = await search.operation({ type: 'update', request: { expectedRevision: '2', selectedProviderId: fallback, fallbackProviderIds: [] } });
+    expect(switched).toMatchObject({ type: 'mutated', result: { state: { revision: '3', selectedProviderId: fallback, fallbackProviderIds: [] } } });
+    await expect(search.operation({ type: 'update', request: { expectedRevision: '3', selectedProviderId: 'vendor/unknown-model', fallbackProviderIds: [] } }))
+      .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(search.operation({ type: 'update', request: { expectedRevision: '3', fallbackProviderIds: ['vendor/unknown-model'] } }))
+      .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(search.operation({ type: 'update', request: { expectedRevision: '0', timeoutSeconds: 40 } }))
+      .rejects.toMatchObject({ status: 409, code: 'CATALOG_CONFLICT' });
+
+    // An empty native search catalog must not erase the persisted chat chain.
+    cfgDisabledProviders.set(runtime.settings, ['web']);
+    await runtime.settings.flush();
+    await runtime.modelRegistry.refresh('offline');
+    const disabled = await search.operation({ type: 'read' });
+    if (disabled.type !== 'state') throw new Error('Expected disabled native search state');
+    expect(disabled.state.providers).toEqual([]);
+    expect(disabled.state.selectedProviderId).toBe(fallback);
+    expect(disabled.state.fallbackProviderIds).toEqual([]);
+    const disabledUpdate = await search.operation({ type: 'update', request: { expectedRevision: '3', timeoutSeconds: 34 } });
+    expect(disabledUpdate).toMatchObject({ type: 'mutated', result: { persistence: 'persisted', state: {
+      revision: '4', timeoutSeconds: 34, selectedProviderId: fallback, fallbackProviderIds: [], providers: [],
+    } } });
+    await expect(search.operation({ type: 'update', request: { expectedRevision: '4', selectedProviderId: 'vendor/unknown-model', fallbackProviderIds: [] } }))
+      .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
   } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });
 

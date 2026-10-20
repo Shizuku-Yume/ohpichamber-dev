@@ -120,8 +120,18 @@ export class NativeWebSearch {
         const selected = request.selectedProviderId === undefined ? before.selectedProviderId : request.selectedProviderId;
         const fallbacks = request.fallbackProviderIds ?? before.fallbackProviderIds;
         if (selected && fallbacks.includes(selected)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Primary search model cannot also be a fallback');
+        // Native execution still accepts grounded chat transports, and a legacy
+        // setting may name one even though the catalog exposes search engines
+        // only. Validate against the native web-role pool plus the authoritative
+        // current chain so non-selection updates preserve those settings.
+        const selectorPool = new Set(roleCandidatePool('web', this.runtime.settings, this.runtime.modelRegistry).map(candidate => selector(candidate)));
+        const configuredPrimary = this.runtime.settings.getModelRole('web');
+        if (configuredPrimary) selectorPool.add(configuredPrimary);
+        for (const id of cfgRetryFallbackChains.get(this.runtime.settings).web ?? []) selectorPool.add(id);
+        if (before.selectedProviderId) selectorPool.add(before.selectedProviderId);
+        for (const id of before.fallbackProviderIds) selectorPool.add(id);
         for (const id of [...(selected ? [selected] : []), ...fallbacks]) {
-          if (!before.providers.some(provider => provider.providerId === id)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Unknown native web search model selector');
+          if (!selectorPool.has(id)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Unknown native web search model selector');
         }
         for (const providerId of Object.keys(options)) {
           if (!before.providers.some(provider => provider.providerId === `web/${providerId}`)) throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Provider options require an available native provider');
@@ -182,6 +192,9 @@ export class NativeWebSearch {
   }
 
   private async readCurrent(settings: Settings): Promise<WebSearchConfigState> {
+    // Availability belongs to the live native registry and credentials; the
+    // passed settings supply projected values and the role chain, including
+    // the committed-settings path used after a failed native write.
     const models = this.runtime.modelRegistry.getAvailable('search');
     const providers: WebSearchProviderEntry[] = await Promise.all(models.map(async model => {
       const provider = await providerFor(model);
