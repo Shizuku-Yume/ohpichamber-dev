@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/61",
+  "observedAt": "2026-10-21",
+  "status": "provider-ui-proof-pass-check-partial-no-archive",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
+    "branch": "omp-through-m3/recovery-20261013",
+    "head": "ac33b1c73",
+    "taskBase": "e848504602333955b1d134bba3345d8bbc2ed065",
+    "providerRestoreCommit": "6f1fe19fe",
+    "webArtifact": "packages/web/dist/index.html",
+    "webDistIndexSha256": "c438247e7abd698759fc8fe55e50a4b08ed147a86d213906732d9789fdfa478e",
+    "electronArtifact": "packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage",
+    "electronArtifactSha256": "598bf5823785ccf5b3f36d4e49bb950638e77b3eff35a5b3fc7b3e3259eabad9",
+    "packagedWebDistIndexSha256": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+    "provenanceNote": "The packaged AppImage is the current Task55 rebundle and embeds packaging-time UI 42170a97; the current Web dist c438247e is newer. Both bundles contain the restored provider grid/picker/custom-provider i18n keys. Electron evidence is labelled against the current packaged artifact, not the newer Web dist."
+  },
+  "focusedTests": {
+    "command": "bun test src/components/sections/providers/ProvidersPage.test.ts src/components/sections/providers/custom-provider-form.test.ts ; bun test src/hooks/useSettingsDirectory.test.ts src/components/sections/providers/ProviderOAuthMethods.test.tsx",
+    "cwd": "packages/ui",
+    "result": "19 pass / 0 fail / 43 expect() calls",
+    "files": [
+      "src/components/sections/providers/ProvidersPage.test.ts",
+      "src/components/sections/providers/custom-provider-form.test.ts",
+      "src/hooks/useSettingsDirectory.test.ts",
+      "src/components/sections/providers/ProviderOAuthMethods.test.tsx"
+    ],
+    "scopeNote": "Task61-specific classification/provider/settings tests only; no provider backend/API suite was duplicated."
+  },
+  "web": {
+    "surface": "Web",
+    "host": "http://127.0.0.1:3171 (isolated HOME /tmp/ohpi-task61-home, passwordless signed session, no provider network)",
+    "workspaceId": "ws_10bdba9b-1d54-4741-a516-141b270d475e",
+    "project": "/tmp/ohpi-task61-project",
+    "providerCards": {
+      "total": 96,
+      "logos": 98,
+      "statuses": ["Not signed in", "Connected"],
+      "examples": ["Not signed in\\nabliteration\\n3", "Not signed in\\nanthropic\\n28", "Connected\\nCampus Local\\n2"],
+      "screenshots": ["t61-04-providers.png", "t61-05-providers-top.png", "t61-23-grid-final.png"]
+    },
+    "connectPicker": {
+      "popular": ["openai (Recommended)", "opencode-go (Recommended)", "openrouter (Recommended)", "anthropic", "github-copilot", "google"],
+      "custom": "Custom provider — Any OpenAI- or Anthropic-compatible endpoint",
+      "allProvidersCount": 89,
+      "screenshot": "t61-08-connect-picker.png"
+    },
+    "customProvider": {
+      "formFieldsObserved": ["Provider ID", "API protocol", "Display name", "Provider icon", "Base URL", "API key (password, write-only)", "Models", "find models", "New model", "Model ID/name/context/output/capabilities/tool calls", "Headers (name + password value)", "back", "save provider"],
+      "rawJsonEditorAbsent": true,
+      "discovery": "clicking find models issued GET http://127.0.0.1:4621/v1/models with Authorization: Bearer sk-local-secret; result showed 2 of 2 models selected with limits (Campus Fast 33K/4.1K, Campus Research 131K/16K)",
+      "savedProvider": "campus-local / Campus Local, Connected card with 2 models",
+      "detail": "Accounts roster + Available Models (2) with Campus Fast and Campus Research",
+      "cancel": "a second form filled with discard-me/sk-discard returned to the picker; no discard card or password input remained and the canonical provider list contained no discard provider",
+      "screenshots": ["t61-09-custom-form.png", "t61-11-discovery.png", "t61-12-saved.png", "t61-14-custom-detail.png", "t61-25-cancelled-custom.png"]
+    },
+    "accountRoster": {
+      "firstSave": "canonical revision 2, one account credential_0ecc7e52e49250a321e37ada, active true",
+      "secondAccount": "canonical revision 3, second account credential_94fac7e0c68bd988a0780688, active false; UI showed API key 1 (Active) and API key 2 plus use",
+      "rename": "API key 2 renamed to Campus Secondary through the row actions menu",
+      "defaultSwitch": "use moved Active to Campus Secondary; UI then offered use on API key 1",
+      "remove": "Actions → Remove deleted API key 1; roster returned to one Campus Secondary account",
+      "secretBoundary": "canonical accounts responses contained only opaque credentialRef/method/active/disabled (plus label after rename); no sk-* value appeared in DOM or API responses, and password inputs were empty after save",
+      "screenshots": ["t61-15-two-accounts.png", "t61-16-roster.png", "t61-17-rename.png", "t61-18-default-switched.png"]
+    },
+    "oauth": {
+      "provider": "anthropic / Anthropic (Claude Pro/Max)",
+      "modalStates": "browser instructions, open/copy, Waiting for authorization…, cancel, and 'Copy the authorization code from your browser and paste it here.' with continue",
+      "authorizationLink": "https://claude.ai/oauth/authorize?client_id=…&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A54545%2Fcallback… (host claude.ai)",
+      "manualCallbackInput": "Paste authorization code",
+      "cancel": "cancel removed the pending panel and authorization link; no external OAuth grant was performed",
+      "screenshots": ["t61-21-oauth.png", "t61-22-oauth-cancelled.png"]
+    },
+    "modelSelection": {
+      "before": "2 Hide model controls",
+      "afterHide": "first row dimmed with opacity-50 and its control changed to Show model; second row remained Hide model",
+      "afterShowAll": "both rows restored to Hide model",
+      "screenshot": "t61-19-models.png"
+    }
+  },
+  "electron": {
+    "surface": "Packaged Electron",
+    "launch": "linux-unpacked openchamber (from current AppImage rebundle 598bf582…) under xvfb-run 1600x1000, --remote-debugging-port=9251, isolated HOME /tmp/ohpi-task61-electron-home",
+    "uiDocument": "openchamber-ui://app/index.html",
+    "embeddedHost": "127.0.0.1:57123 desktop Local, bearer-authenticated",
+    "workspaceId": "ws_ccc1e3f2-17b5-4480-b2a4-3fa68deccbf1",
+    "project": "/tmp/ohpi-task61-electron-project",
+    "providerCards": {
+      "total": 95,
+      "logos": 97,
+      "statuses": ["Not signed in", "Connected"],
+      "screenshot": "t61-33-electron-providers.png"
+    },
+    "connectPicker": {
+      "popular": ["openai", "opencode-go", "openrouter", "anthropic", "github-copilot", "google"],
+      "custom": "Custom provider",
+      "allProvidersCount": 89,
+      "search": "typing anth filtered to anthropic, bedrock-mantle, google-antigravity, synthetic, xai-oauth",
+      "screenshot": "t61-34-electron-picker.png"
+    },
+    "customProvider": {
+      "cancel": "discard-electron plus sk-discard-electron cleared; picker returned with no password input and no discard card",
+      "created": "campus-electron / Campus Electron via the same local fixture discovery; 2 of 2 models selected and saved",
+      "detail": "Accounts roster + Available Models (2) with Campus Fast and Campus Research",
+      "screenshots": ["t61-35-electron-custom-saved.png", "t61-36-electron-detail.png"]
+    },
+    "accountRoster": {
+      "secondAccount": "API key 2 added; canonical roster revision 5 with credential_365533835e00332cbcab339f and credential_fe8a9e2dd84da8c0d8a77080",
+      "rename": "API key 2 renamed to Electron Secondary",
+      "defaultSwitch": "use moved Active to Electron Secondary",
+      "remove": "Actions → Remove deleted API key 1; roster returned to one Electron Secondary account",
+      "secretBoundary": "canonical response contained only opaque credentialRef/label; no sk-electron value appeared",
+      "screenshot": "t61-38-electron-roster.png"
+    },
+    "oauth": {
+      "provider": "anthropic / Anthropic (Claude Pro/Max)",
+      "authorizationLink": "https://claude.ai/oauth/authorize?… (host claude.ai)",
+      "manualCallbackInput": "Paste authorization code",
+      "cancel": "removed the pending panel and link; no external OAuth grant was performed",
+      "screenshot": "t61-40-electron-oauth.png"
+    },
+    "modelSelection": {
+      "before": "2 Hide model controls",
+      "afterHide": "first row dimmed with opacity-50 and control changed to Show model",
+      "afterShowAll": "both rows restored to Hide model",
+      "screenshot": "t61-39-electron-models.png"
+    },
+    "screenshots": ["t61-31-electron-local.png", "t61-32-electron-settings.png"]
+  },
+  "localeAndStyleReview": {
+    "result": "pass",
+    "method": "Loaded every merged locale dictionary and checked the 157 settings.providers keys used by the provider surfaces.",
+    "missingKeys": "none in de/es/fr/ja/ko/nl/pl/pt-BR/tr/uk/zh-CN/zh-TW",
+    "englishIdenticalValues": "Only placeholders/product/protocol literals (sk-..., URLs, gpt-4o, Anthropic Messages, OpenAI Chat Completions, X-Custom-Header, ctx/out); no untranslated English sentences.",
+    "hardcodedCopyScan": "No user-facing JSX literals found in the provider .tsx files; all copy and aria labels resolve through t().",
+    "sharedSurfaceBoundary": "No SettingsView, shared primitive, or i18n dictionary changes were made by Task61 verification."
+  },
+  "checkStatus": {
+    "focusedBehavioralTests": "pass",
+    "webVisual": "pass for cards, picker, custom discovery, roster, OAuth modal states, model selection",
+    "electronVisual": "pass for cards, picker, custom discovery, roster, OAuth modal states, model selection on the current packaged artifact",
+    "strictUiTypeCheck": "not run: packages/ui contains unrelated dirty sync files (bootstrap/child-store/retry/session-message-loader/sync-context) and the instruction forbids a workspace-wide typecheck while that work is in flight",
+    "singleUiBuild": "not run for the same dirty-sync reason; the current Web dist c438247e and packaged UI 42170a97 are the artifacts exercised",
+    "archive": "not archived; the Check's type-check/build item remains unverified"
+  },
+  "dependency": {
+    "owner": "omp-through-m3/60",
+    "status": "confirmed outside Task61 UI-only scope; no backend/catalog change made",
+    "summary": "The Web Search provider catalog lists chat models as providers.",
+    "exactSource": "packages/agent-service/src/worker/catalog-websearch.ts readCurrent filters runtime.modelRegistry.getAll('all') by the web role, so entries such as anthropic/claude-3-5-sonnet-20240620 and openai/... appear as providers while fallbackProviderIds are web/parallel, web/hosted, web/exa.",
+    "task61Impact": "None observed in the Providers management grid/picker; Task61 added no UI filtering or masking for this catalog defect."
+  },
+  "limitations": [
+    "No official external provider key or OAuth consent grant was used; OAuth proof covers the native modal, real authorization URL, manual callback prompt, and cancel only.",
+    "Model discovery used a deterministic local OpenAI-compatible fixture at 127.0.0.1:4621; no third-party endpoint was contacted.",
+    "Electron proof is the current packaged artifact whose embedded UI (42170a97) predates the current Web dist (c438247e).",
+    "Hosted/Capacitor surfaces share the Host/UI but were not launched; they do not run the local worker."
+  ],
+  "evidenceHygiene": {
+    "overwrittenLegacyScreenshots": [
+      "04-providers.png",
+      "05-providers-top.png",
+      "09-custom-form.png",
+      "11-discovery.png",
+      "14-custom-detail.png",
+      "16-roster.png",
+      "19-models.png",
+      "21-oauth.png",
+      "22-oauth-cancelled.png",
+      "25-cancelled-custom.png"
+    ],
+    "cause": "An initial copy into ~/.cache/ohpi-acceptance/evidence used filenames without a prefix and replaced same-named legacy files from earlier acceptance runs.",
+    "retainedAlternatives": "All Task61 screenshots were copied again with the t61- prefix and are the evidence paths named in this receipt. The overwritten legacy files were not restored or guessed.",
+    "repoImpact": "None; this evidence directory is outside the repository and no tracked file was affected."
+  },
+  "cleanup": "Web Host 3171, Chrome 9241, Electron 9251, embedded Host 57123 and fixture 4621 stopped; ports closed; isolated HOMEs, project dirs, Chrome profile and temporary proof scripts removed; screenshots retained under /home/shizuku/.cache/ohpi-acceptance/evidence/t61-*.png."
+}
