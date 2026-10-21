@@ -56,6 +56,8 @@ const fixture = async () => {
       return Response.json({ session: runtime() });
     }
     if (pathname.endsWith('/reopen')) return Response.json(runtime());
+    if (pathname.includes('/native-entry/')) return Response.json({ entryId: decodeURIComponent(pathname.split('/').at(-1)) });
+    if (pathname.endsWith('/fork')) return Response.json({ sessionId: 'forked-child', rootSessionId: 'forked-child', sessionFile: '/tmp/forked-child.jsonl', sourceSessionId: 'public-root', entryId: 'message-7', mode: 'selected' }, { status: 201 });
     if (pathname.endsWith('/branch')) {
       const branch = { branchId: body.branchId, branchVersion: String(BigInt(body.branchVersion) + 1n), leafMessageId: null };
       if (body.action === 'revert') branch.revert = { messageId: body.messageId };
@@ -65,18 +67,20 @@ const fixture = async () => {
       if (native.abortFailure) return Response.json({ type: 'urn:ohpichamber:problem:RUN_NOT_FOUND', title: 'Run not found', status: 404, code: 'RUN_NOT_FOUND', detail: 'Run not found', retryable: false }, { status: 404 });
       return Response.json({ run: { runId: decodeURIComponent(pathname.split('/').at(-2)), sessionId: 'public-root', status: 'cancelled', createdAt: 1700000000000, finishedAt: 1700000000002 } });
     }
+    if (pathname === '/api/agent/v1/sessions/forked-child') return Response.json({ ...runtime('forked-child'), rootSessionId: 'forked-child' });
     if (pathname.startsWith('/api/agent/v1/sessions/')) return Response.json(runtime(decodeURIComponent(pathname.split('/').at(-1))));
     throw new Error(`Unexpected private request ${pathname}`);
   };
+  const registrations = [];
   const makeService = () => createOpenChamberSessionService({
     service: { request }, agentScopeStore: store, resolveHostRelocationScope: (id) => store.getSession(id),
     resolveSessionScope: (id) => store.getSession(id), resolveHostSessionScope: (id) => store.getSession(id),
-    resolveWorkspaceScope: (id) => store.getWorkspace(id), registerSessionScope: async () => true,
+    resolveWorkspaceScope: (id) => store.getWorkspace(id), registerSessionScope: async (session) => { registrations.push(session.sessionId); return true; },
     resolveAttachments: async () => [], capturePrompt: async (_scope, prompt) => prompt, beforeDispatch: async () => {}, onPromptAccepted: async () => {},
     directCommandAdmissionStore: owner.directCommandAdmissionStore,
     archiveStore: owner.archiveStore, sessionMetadataStore: owner.sessionMetadataStore,
   });
-  return { owner, root, store, source, destination, native, makeService };
+  return { owner, root, store, source, destination, native, makeService, registrations };
 };
 
 describe('Host native session control saga', () => {
@@ -176,5 +180,19 @@ describe('Host native session control saga', () => {
     await expect(makeService().selectBranch('public-root', { action: 'restore', branchId: 'branch-owner', branchVersion: '3' })).resolves.toMatchObject({ branch: { branchVersion: '4' } });
     expect(native.calls.findIndex((call) => call.pathname.endsWith('/relocation/finalize'))).toBeLessThan(native.calls.findIndex((call) => call.pathname.endsWith('/branch')));
     await expect(store.getRelocation('public-root')).resolves.toBeNull();
+  });
+  it('reopens the authorized source, forks the selected message, and registers the returned child scope', async () => {
+    const { native, makeService, registrations, source } = await fixture();
+    const service = makeService();
+    const result = await service.fork('public-root', { messageId: 'message-7', mode: 'selected' });
+    expect(result.session).toMatchObject({ sessionId: 'forked-child', rootSessionId: 'forked-child', projectId: source.projectId, workspaceId: native.workspaceId });
+    expect(native.calls.map((call) => call.pathname)).toEqual([
+      '/internal/sessions/public-root/reopen',
+      '/internal/sessions/public-root/native-entry/message-7',
+      '/internal/sessions/public-root/fork',
+      '/api/agent/v1/sessions/forked-child',
+    ]);
+    expect(native.calls.at(-2).body).toEqual({ sourceSessionId: 'public-root', entryId: 'message-7', mode: 'selected' });
+    expect(registrations).toEqual(['forked-child']);
   });
 });

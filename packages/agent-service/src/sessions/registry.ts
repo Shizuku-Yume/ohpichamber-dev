@@ -11,7 +11,7 @@ import { HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSe
 import { nativePrivateRootContext, rememberPrivateRoots, resolveCanonicalMessage, WorkerProjection } from '../worker/projection.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError, SessionJournal } from '../projection/journal.ts';
-import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad } from '../interaction/manager.ts';
+import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad, type ApprovalPolicyLoadRequest, type ApprovalPolicyRecord } from '../interaction/manager.ts';
 import { WorkerOperationError, WorkerRegistry } from '../supervisor/workers.ts';
 import { assertArchiveActive, exportNativeArchive, importNativeArchive, type ArchiveImportRequest } from './archive.ts';
 import { SessionReferenceError, SessionReferences } from './references.ts';
@@ -70,7 +70,7 @@ export class SessionRegistry {
     }
   }
 
-  async open(input: SessionBootstrap, replace = false): Promise<RuntimeSession> {
+  async open(input: SessionBootstrap, replace = false, forkOf?: string, forkTicketId?: string): Promise<RuntimeSession> {
     this.ensureOpen();
     const parsed = HostSessionBootstrapSchema.parse(input);
     this.assertBootstrapWritable(parsed);
@@ -83,7 +83,7 @@ export class SessionRegistry {
     }
     const pending = this.openings.get(parsed.rootSessionId);
     if (pending) return pending;
-    const operation = this.openResolved(parsed, replace);
+    const operation = this.openResolved(parsed, replace, undefined, true, undefined, forkOf, forkTicketId);
     this.openings.set(parsed.rootSessionId, operation);
     void operation.finally(() => { this.openings.delete(parsed.rootSessionId); }).catch(() => {});
     return operation;
@@ -463,7 +463,7 @@ export class SessionRegistry {
       return result.run;
     } finally { this.pendingRuns.delete(sessionId); }
   }
-  async fork(sessionId: string, entryId: string | null, mode: 'selected' | 'full'): Promise<SessionForkResult> {
+  async fork(sessionId: string, entryId: string | null, mode: 'selected' | 'full', forkTicketId?: string): Promise<SessionForkResult> {
     this.assertWritable(sessionId);
     this.ensureOpen();
     const entry = this.get(sessionId);
@@ -494,7 +494,7 @@ export class SessionRegistry {
         ...(source.mcpConfigPath ? { mcpConfigPath: source.mcpConfigPath } : {}),
         ...(source.options ? { options: source.options } : {}),
       };
-      const runtime = await this.open(childInput);
+      const runtime = await this.open(childInput, false, sessionId, forkTicketId);
       return { sessionId: runtime.sessionId, rootSessionId: runtime.rootSessionId, sessionFile: childFile, sourceSessionId: sessionId, entryId, mode };
     } finally {
       try { await manager?.close(); } finally { this.controls.delete(sessionId); }
@@ -839,7 +839,7 @@ export class SessionRegistry {
     await this.references.close();
   }
 
-  private async openResolved(input: SessionBootstrap, replace: boolean, reference = this.references.get(input.rootSessionId), persistReference = true, restartGeneration?: string): Promise<RuntimeSession> {
+  private async openResolved(input: SessionBootstrap, replace: boolean, reference = this.references.get(input.rootSessionId), persistReference = true, restartGeneration?: string, forkOf?: string, forkTicketId?: string): Promise<RuntimeSession> {
     this.assertBootstrapWritable(input);
     const previous = this.entries.get(input.rootSessionId);
     const previousRuntime = replace ? undefined : this.liveRuntime(previous);
@@ -857,7 +857,13 @@ export class SessionRegistry {
     let workerStarted = false;
     try {
       const { displayPath, ...bootstrap } = resolved;
-      const policies = this.policyLoad ? await this.policyLoad({ sessionId: input.rootSessionId, workspaceId: input.workspaceId }) : [];
+      let policies: ApprovalPolicyRecord[] = [];
+      if (this.policyLoad) {
+        const policyRequest: ApprovalPolicyLoadRequest = { sessionId: input.rootSessionId, workspaceId: input.workspaceId };
+        if (forkOf !== undefined) policyRequest.forkOf = forkOf;
+        if (forkTicketId !== undefined) policyRequest.forkTicketId = forkTicketId;
+        policies = await this.policyLoad(policyRequest);
+      }
       this.interactions.loadPolicies(input.rootSessionId, input.workspaceId, policies);
       await this.workers.start(bootstrap, replace || previous?.state === 'live', policies, restartGeneration);
       workerStarted = true;

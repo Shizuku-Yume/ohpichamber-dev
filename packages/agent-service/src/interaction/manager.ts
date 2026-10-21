@@ -11,6 +11,7 @@ import type { ProjectionInput } from '../projection/protocol.ts';
 import type { WorkerInteraction, WorkerOperation } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
+import type { HostApprovalPolicyListRequestSchema } from '../supervisor/host-authorization-protocol.ts';
 
 type RequestKind = 'approval' | 'question';
 type ApprovalRecordState = { kind: 'approval'; request: ApprovalRequest; target: ApprovalPolicyWrite['target']; timer?: NodeJS.Timeout };
@@ -34,8 +35,9 @@ export interface ApprovalPolicyRecord {
   decision: 'allow' | 'deny';
   target: ApprovalPolicyWrite['target'];
 }
+export type ApprovalPolicyLoadRequest = z.infer<typeof HostApprovalPolicyListRequestSchema>;
 export interface ApprovalPolicyLoad {
-  (request: { sessionId: string; workspaceId: string }): Promise<ApprovalPolicyRecord[]>;
+  (request: ApprovalPolicyLoadRequest): Promise<ApprovalPolicyRecord[]>;
 }
 
 const QuestionAnswerSchema = z.strictObject({

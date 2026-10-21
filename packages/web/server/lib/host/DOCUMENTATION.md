@@ -166,6 +166,10 @@ Regression tests in `../ui-auth/canonical-host-routes.test.js` preserve historic
 
 Child IPC uses `approval.policy.commit` and `approval.policy.list`. The service reserves request CAS, awaits a committed revision, and resolves the worker handle. Failed writes return `APPROVAL_POLICY_WRITE_FAILED`, leaving requests pending. Policies load before reopening a session and apply to future exact native targets, with workspace denial taking precedence over session allowance.
 
+A session created inside the service by `/internal/sessions/:id/fork` has no Host bootstrap of its own. The Supervisor issues a one-child fork ticket for the in-flight request, sends its opaque id in the private fork body, and accepts the child's `approval.policy.list` claim only when that id and source match; the child scope is the already-captured source project, workspace, cwd, and agent directory with the child's session identity. It never widens the workspace, rebinds an existing session, or copies source-session policies, and a missing ticket, malformed acknowledgement, or acknowledgement outside the ticket's child removes the derived scope. Policy list and commit for every other session still require a captured bootstrap scope.
+
+The ticket trusts the service's claimed child id for the lifetime of that one in-flight request: the derived scope is bounded by the source's captured project/workspace/cwd, and a mismatched or failed fork removes it. The Node Host never accepts an arbitrary session or a different workspace from the claim.
+
 Native Bash descriptors include their working directory as a source path. The Host represents the exact workspace root as `.` for containment validation, so a command at that root reaches the consent decision rather than failing as an empty path. An ungranted command still requires approval; outside paths and symlink escapes remain refused.
 
 ### Worker operation authorization and native questions

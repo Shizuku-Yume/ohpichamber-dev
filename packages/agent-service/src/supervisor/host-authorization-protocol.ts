@@ -28,6 +28,13 @@ export const HostSessionRelocationFinalizedSchema = z.strictObject({ session: Ru
 export const HostSessionRelocationPendingSchema = z.strictObject({ relocation: z.strictObject({
   transactionId: EntityIdSchema, sourceWorkspaceId: EntityIdSchema, destinationWorkspaceId: EntityIdSchema,
 }).nullable() });
+export const HostApprovalPolicyListRequestSchema = z.strictObject({
+  sessionId: EntityIdSchema, workspaceId: EntityIdSchema, forkOf: EntityIdSchema.optional(), forkTicketId: EntityIdSchema.optional(),
+});
+export const HostSessionForkAckSchema = z.strictObject({
+  sessionId: EntityIdSchema, rootSessionId: EntityIdSchema, sessionFile: z.string().min(1),
+  sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']),
+});
 export const HostWorkerAuthorizationRequestSchema = z.strictObject({ type: z.literal('worker.authorization.request'), requestId: EntityIdSchema, scope: HostAuthorizationScopeSchema, request: WorkerPolicyRequestSchema, descriptor: NativeOperationDescriptorSchema.optional() });
 export const HostWorkerAuthorizationReplySchema = z.strictObject({ type: z.literal('worker.authorization.result'), requestId: EntityIdSchema, result: WorkerPolicyResultSchema });
 export const HostWorkerAuthorizationCancelSchema = z.strictObject({ type: z.literal('worker.authorization.cancel'), requestId: EntityIdSchema });

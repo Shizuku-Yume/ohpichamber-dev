@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { CapturedHostBootstrapScopeSchema, HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, HostSkillSourceOperationSchema, HostSkillSourceRequestSchema, HostSkillSourceResultSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema, WorkerBootstrapSchema } from '@openchamber/agent-service/private-protocol';
+import { CapturedHostBootstrapScopeSchema, HostApprovalPolicyListRequestSchema, HostSessionBootstrapSchema, HostSessionForkAckSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, HostSkillSourceOperationSchema, HostSkillSourceRequestSchema, HostSkillSourceResultSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema, WorkerBootstrapSchema } from '@openchamber/agent-service/private-protocol';
 import { createHostWorkerAuthorizationChannel } from './worker-authorization-channel.js';
 
 import { openApprovalPolicyStore } from './approval-policy-store.js';
@@ -68,6 +68,7 @@ export const createAgentServiceSupervisor = ({
   let phase = 'stopped'; let child = null; let port = null; let secret = null;
   let startupPromise = null; let stopPromise = null; let lifecycle = 0; let startupController = null; let accepting = false;
   const scopes = new Map();
+  const forkTickets = new Map();
   const relocationScopes = new Map();
   const workspaceScopes = new Map();
   const authorization = createHostWorkerAuthorizationChannel({
@@ -97,8 +98,25 @@ export const createAgentServiceSupervisor = ({
     const send = (value) => { if (launched.connected) launched.send(value, () => {}); };
     if (!['approval.policy.commit', 'approval.policy.list'].includes(message?.type)) return;
     try {
-      const captured = scopes.get(message.request?.sessionId);
       if (child !== launched || !policyStore) throw new Error('Approval policy store unavailable');
+      let captured = scopes.get(message.request?.sessionId);
+      // A fork child is created inside the service, so the Host learns its identity only
+      // while the fork request is in flight. Its scope is the already-captured source
+      // scope with the child's own session identity: never a new workspace, and never a
+      // rebind of an existing session.
+      if (!captured && message.type === 'approval.policy.list') {
+        const request = HostApprovalPolicyListRequestSchema.safeParse(message.request);
+        const ticket = request.success && request.data.forkOf !== undefined && request.data.forkTicketId !== undefined
+          ? forkTickets.get(request.data.forkOf)?.find(candidate => candidate.id === request.data.forkTicketId && candidate.childId === null && candidate.captured.workspaceId === request.data.workspaceId)
+          : undefined;
+        if (ticket && request.data.sessionId !== ticket.sourceSessionId && !scopes.has(request.data.sessionId)) {
+          const childScope = Object.freeze({ ...ticket.captured, rootSessionId: request.data.sessionId });
+          scopes.set(request.data.sessionId, childScope);
+          ticket.childId = request.data.sessionId;
+          ticket.childScope = childScope;
+          captured = childScope;
+        }
+      }
       if (!captured || captured.workspaceId !== message.request?.workspaceId) throw new Error('Unauthorized approval policy scope');
       const approvalScope = { sessionId: captured.rootSessionId, rootSessionId: captured.rootSessionId, projectId: captured.projectId, workspaceId: captured.workspaceId };
       const result = message.type === 'approval.policy.commit' ? policyStore.commit({ scope: message.request.scope, decision: message.request.decision, target: message.request.target, ...approvalScope }) : { policies: policyStore.list(approvalScope) };
@@ -245,7 +263,7 @@ export const createAgentServiceSupervisor = ({
           finish(reject, new Error(`Agent service exited before listening (${code ?? signal ?? 'unknown'})`));
           if (child === launched && phase !== 'stopping') {
             phase = 'failed';
-            relocationScopes.clear(); scopes.clear(); workspaceScopes.clear(); authorization.closeChild(launched);
+            relocationScopes.clear(); forkTickets.clear(); scopes.clear(); workspaceScopes.clear(); authorization.closeChild(launched);
             accepting = false;
           }
         };
@@ -291,7 +309,7 @@ export const createAgentServiceSupervisor = ({
       await killChild();
       secret = null;
       port = null;
-      relocationScopes.clear(); scopes.clear();
+      relocationScopes.clear(); forkTickets.clear(); scopes.clear();
       workspaceScopes.clear();
       if (ownsPolicyStore) { policyStore.close(); policyStore = null; ownsPolicyStore = false; }
       phase = 'stopped';
@@ -304,11 +322,12 @@ export const createAgentServiceSupervisor = ({
     if (!requestPath.startsWith('/')) throw new Error('Agent service request requires an absolute path');
     const requestedChild = child; const requestedLifecycle = lifecycle;
     const method = String(init.method ?? 'GET').toUpperCase();
-    let capture; let workspaceCapture;
+    let capture; let workspaceCapture; let forkTicket;
     let relocationAction;
     const workspace = /^\/internal\/workspaces\/([^/]+)$/.exec(requestPath);
     const restartWorker = /^\/internal\/workers\/([^/]+)\/restart$/.exec(requestPath);
     const reopenSession = /^\/internal\/sessions\/([^/]+)\/reopen$/.exec(requestPath);
+    const forkSession = method === 'POST' && /^\/internal\/sessions\/([^/]+)\/fork$/.exec(requestPath);
     const relocationPrepare = method === 'POST' && /^\/internal\/sessions\/([^/]+)\/relocation\/prepare$/.exec(requestPath);
     const relocationFinalize = method === 'POST' && /^\/internal\/sessions\/([^/]+)\/relocation\/finalize$/.exec(requestPath);
     const rootBootstrap = method === 'POST' && (requestPath === '/internal/sessions' || requestPath === '/internal/workers' || restartWorker || reopenSession);
@@ -352,7 +371,59 @@ export const createAgentServiceSupervisor = ({
         const transition = relocationScopes.get(sessionId);
         if (transition?.prior) scopes.set(sessionId, transition.prior);
       }
+    } else if (forkSession) {
+      // The service creates the child, so its identity arrives while this request is
+      // in flight. A ticket lets the child's policy load derive its scope from the
+      // already-captured source scope instead of failing closed for an unknown session.
+      const sourceSessionId = decodeURIComponent(forkSession[1]);
+      const sourceScope = scopes.get(sourceSessionId);
+      let input;
+      try { input = JSON.parse(init.body); } catch { throw new Error('Invalid Host fork request'); }
+      if (!sourceScope || input?.sourceSessionId !== sourceSessionId) throw new Error('Fork requires an authorized source session scope');
+      forkTicket = { id: crypto.randomUUID(), sourceSessionId, captured: sourceScope, childId: null, childScope: null };
+      const tickets = forkTickets.get(sourceSessionId) ?? [];
+      tickets.push(forkTicket);
+      forkTickets.set(sourceSessionId, tickets);
+      // The service echoes this opaque id on the child's policy load, so concurrent
+      // forks of one source correlate to their own request instead of array order.
+      init = { ...init, body: JSON.stringify({ ...input, forkTicketId: forkTicket.id }) };
     }
+    const removeForkTicket = () => {
+      const tickets = forkTickets.get(forkTicket.sourceSessionId);
+      if (!tickets) return;
+      const index = tickets.indexOf(forkTicket);
+      if (index >= 0) tickets.splice(index, 1);
+      if (!tickets.length) forkTickets.delete(forkTicket.sourceSessionId);
+    };
+    const releaseFork = () => {
+      if (!forkTicket) return;
+      const ticket = forkTicket;
+      removeForkTicket();
+      forkTicket = null;
+      if (ticket.childId && scopes.get(ticket.childId) === ticket.childScope) scopes.delete(ticket.childId);
+    };
+    const settleFork = async (response) => {
+      if (!forkTicket) return;
+      if (!response.ok) { releaseFork(); return; }
+      let ack;
+      try { ack = HostSessionForkAckSchema.parse(await response.clone().json()); } catch { releaseFork(); throw new Error('Invalid Host fork admission'); }
+      if (child !== requestedChild || lifecycle !== requestedLifecycle || !accepting
+        || ack.sessionId !== ack.rootSessionId || ack.sourceSessionId !== forkTicket.sourceSessionId
+        || (forkTicket.childId !== null && forkTicket.childId !== ack.sessionId)) {
+        releaseFork();
+        throw new Error('Invalid Host fork admission');
+      }
+      if (!forkTicket.childId) {
+        if (scopes.has(ack.sessionId) || ack.sessionId === forkTicket.sourceSessionId) { releaseFork(); throw new Error('Invalid Host fork admission'); }
+        const childScope = Object.freeze({ ...forkTicket.captured, rootSessionId: ack.sessionId });
+        scopes.set(ack.sessionId, childScope);
+        forkTicket.childId = ack.sessionId;
+        forkTicket.childScope = childScope;
+      }
+      // The child is an authorized session from here on; only the in-flight ticket goes away.
+      removeForkTicket();
+      forkTicket = null;
+    };
     const rollback = () => {
       if (!capture || scopes.get(capture.captured.rootSessionId) !== capture.captured) return;
       if (capture.prior) scopes.set(capture.captured.rootSessionId, capture.prior);
@@ -367,6 +438,7 @@ export const createAgentServiceSupervisor = ({
         rollback();
         if (relocationPrepare) relocationScopes.delete(decodeURIComponent(relocationPrepare[1]));
       }
+      if (forkTicket) await settleFork(response);
       if (response.ok && workspaceCapture) {
         const registered = HostWorkspaceRegisteredSchema.safeParse(await response.clone().json());
         if (!registered.success || registered.data.workspaceId !== workspaceCapture.scope.workspaceId
@@ -383,6 +455,7 @@ export const createAgentServiceSupervisor = ({
       }
       return response;
     } catch (error) {
+      releaseFork();
       rollback();
       if (relocationPrepare) relocationScopes.delete(decodeURIComponent(relocationPrepare[1]));
       throw error;

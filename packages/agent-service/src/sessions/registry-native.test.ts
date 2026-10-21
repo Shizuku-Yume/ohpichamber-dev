@@ -34,13 +34,17 @@ async function fixture() {
   await Promise.all([sourceCwd, destinationCwd, agentDirectory].map(directory => mkdir(directory)));
   const sessionsDirectory = SessionManager.getDefaultSessionDir(sourceCwd, agentDirectory);
   const manager = SessionManager.create(sourceCwd, sessionsDirectory);
+  const policyLoads: { sessionId: string; workspaceId: string; forkOf?: string; workerStarted: boolean }[] = [];
   const createRegistry = () => {
     const workers: WorkerRegistry = new WorkerRegistry({ workerEntrypoint: fileURLToPath(new URL('../worker/index.ts', import.meta.url)),
       startupTimeoutMs: 30000, policyCheck: async () => ({ allowed: true }), callbacks: {
         onOpened: (...args) => sessions.onOpened(...args), onEvents: (...args) => sessions.onEvents(...args),
         onInteraction: (...args) => sessions.onInteraction(...args), onExit: (...args) => sessions.onExit(...args),
       } });
-    const sessions: SessionRegistry = new SessionRegistry(join(root, 'service-state'), workers);
+    const sessions: SessionRegistry = new SessionRegistry(join(root, 'service-state'), workers, undefined, async request => {
+      policyLoads.push({ ...request, workerStarted: workers.authorizationScope(request.sessionId) !== undefined });
+      return [];
+    });
     return { workers, sessions };
   };
   let { workers, sessions } = createRegistry();
@@ -75,7 +79,7 @@ async function fixture() {
     await sessions.open(source);
     const destination = { rootSessionId, projectId: 'project', workspaceId: 'destination-workspace', cwd: destinationCwd,
       agentDirectory, agentDirectoryId: 'retained-owner', displayPath: 'destination', env: source.env };
-    return { root, source, destination, sourceArtifacts, childFile, childRelative, childBytes,
+    return { root, source, destination, sourceArtifacts, childFile, childRelative, childBytes, policyLoads,
       get sessions() { return sessions; }, get workers() { return workers; },
       destinationFile: join(SessionManager.getDefaultSessionDir(destinationCwd, agentDirectory), basename(sourceFile)),
       restart: async () => { await sessions.close(); await workers.close(); ({ workers, sessions } = createRegistry()); await sessions.initialize(); },
@@ -540,5 +544,19 @@ test('stateless identity changes preserve active commands and recreate an idle w
     await expect(harness.workers.request(input.rootSessionId, { type: 'catalog', revision: '0', operation: { type: 'plugins.owner' } }, first.workerGeneration))
       .rejects.toMatchObject({ code: 'CATALOG_CONFLICT' });
     expect((await harness.workers.startStateless(changed)).workerGeneration).toBe(current.workerGeneration);
+  } finally { await harness.close(); }
+}, 60000);
+
+test('fork loads the child policy scope from the captured source before starting its worker', async () => {
+  const harness = await fixture();
+  try {
+    harness.policyLoads.length = 0;
+    const forked = await harness.sessions.fork(rootSessionId, null, 'full', 'fork-ticket-1');
+    expect(forked.sourceSessionId).toBe(rootSessionId);
+    expect(forked.sessionId).not.toBe(rootSessionId);
+    expect(harness.policyLoads).toEqual([
+      { sessionId: forked.sessionId, workspaceId: 'source-workspace', forkOf: rootSessionId, forkTicketId: 'fork-ticket-1', workerStarted: false },
+    ]);
+    expect(harness.workers.authorizationScope(forked.sessionId)).toBeDefined();
   } finally { await harness.close(); }
 }, 60000);
