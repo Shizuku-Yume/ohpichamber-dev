@@ -7,37 +7,34 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { normalizePath } from '@/lib/pathNormalization';
-import { guestProject, guestProjectWorktrees } from './workspace';
+import { guestProject, guestProjectDirectories } from './workspace';
 
 /**
- * The sessions a scope covers, or null for every session. A project scope
- * covers the sessions that run in the project root or one of its worktrees,
- * the same membership the workspace projection reports.
+ * A shell scope resolved to the identity it filters: every shell, the
+ * sessions in a tree, or the Host directories of a project and its
+ * registered worktrees. A project scope follows each shell's recorded
+ * directory, the same set the workspace projection uses for membership.
  */
-const scopeSessionIds = (scope: GuestShellsScope): ReadonlySet<string> | null => {
-  if (scope.kind === 'global') return null;
+type ShellScope =
+  | { kind: 'all' }
+  | { kind: 'sessions'; ids: ReadonlySet<string> }
+  | { kind: 'directories'; directories: ReadonlySet<string> };
+
+const scopeShells = (scope: GuestShellsScope): ShellScope => {
+  if (scope.kind === 'global') return { kind: 'all' };
+  if (scope.kind === 'project') return { kind: 'directories', directories: guestProjectDirectories(scope.projectId) };
   const sessions = useGlobalSessionsStore.getState().entityById;
-  if (scope.kind === 'project') {
-    const directories = new Set<string>();
-    const project = useProjectsStore.getState().projects.find((entry) => entry.id === scope.projectId);
-    if (project) {
-      directories.add(normalizePath(project.path) ?? project.path);
-      for (const worktree of guestProjectWorktrees(project.path)) {
-        const directory = normalizePath(worktree.path);
-        if (directory) directories.add(directory);
-      }
-    }
-    const ids = new Set<string>();
-    for (const session of sessions.values()) {
-      if (directories.has(normalizePath(session.displayPath) ?? session.displayPath)) ids.add(session.sessionId);
-    }
-    return ids;
-  }
   const known = new Set<string>();
   const store = useBackgroundShellsStore.getState();
   for (const shell of store.byId.values()) known.add(shell.sessionId);
   for (const shell of store.ended.values()) known.add(shell.sessionId);
-  return new Set(sessionsInTree(known, scope.sessionId, (id) => sessions.get(id)?.parentSessionId ?? undefined));
+  return { kind: 'sessions', ids: new Set(sessionsInTree(known, scope.sessionId, (id) => sessions.get(id)?.parentSessionId ?? undefined)) };
+};
+
+const inShellScope = (scope: ShellScope, shell: { sessionId: string; directory: string }): boolean => {
+  if (scope.kind === 'all') return true;
+  if (scope.kind === 'sessions') return scope.ids.has(shell.sessionId);
+  return scope.directories.has(normalizePath(shell.directory) ?? shell.directory);
 };
 
 const guestShell = (shell: Pick<TrackedShell, 'jobId' | 'sessionId' | 'command' | 'startedAt' | 'background'>): GuestRunningShell => ({
@@ -58,16 +55,16 @@ const guestEndedShell = (shell: EndedShell): GuestEndedShell => {
  */
 export const readGuestShells = (scope: GuestShellsScope): GuestRunningShellsSnapshot => {
   const store = useBackgroundShellsStore.getState();
-  const inScope = scopeSessionIds(scope);
+  const filter = scopeShells(scope);
   const shells: GuestRunningShell[] = [];
   for (const shell of store.byId.values()) {
-    if (inScope && !inScope.has(shell.sessionId)) continue;
+    if (!inShellScope(filter, shell)) continue;
     shells.push(guestShell(shell));
   }
   shells.sort((left, right) => left.startedAt - right.startedAt || left.id.localeCompare(right.id));
   const ended: GuestEndedShell[] = [];
   for (const shell of store.ended.values()) {
-    if (inScope && !inScope.has(shell.sessionId)) continue;
+    if (!inShellScope(filter, shell)) continue;
     ended.push(guestEndedShell(shell));
   }
   ended.sort((left, right) => left.endedAt - right.endedAt || left.id.localeCompare(right.id));

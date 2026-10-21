@@ -216,6 +216,8 @@ Snapshots carry `state: 'loading' | 'ready' | 'error'`; session snapshots also c
 
 Projects contain `id`, `name`, `directory`. Worktrees contain `directory`, `name`, `branch`, and `status: 'ready' | 'pending' | 'invalid' | 'missing'`. Session records contain `id`, `title`, `projectId`, `directory`, `parentId`, `createdAt`, `updatedAt`, `archivedAt`, `worktree`, `activity`, `outcome`, and `items`. Item references contain only this extension's `id` and optional `data`.
 
+Project ids are the ids returned by `listProjects`. A session record echoes that queried project id in `projectId`, and `directory` is the Host workspace directory where the session runs (the project root or one of its registered worktrees), not a project-relative display path. Sessions in other directories are not included, and a project's own root and worktree sessions may carry different canonical Host project ids.
+
 `activity` is `unknown`, `idle`, `running`, `retrying`, `waiting-permission`, or `waiting-question` (the agent put a form to the user and is waiting on the answer). `outcome` is the last observed `completed` or `failed` turn, or `null` when unknown or working. Outcomes are in memory for the latest 2,000 observed sessions, reset on runtime switch, and are not reconstructed from persisted history. A later idle event preserves an observed failure until another run starts. `completed` never means the extension's task is Done. Blocking-request contents and approve/reply actions are not exposed.
 
 ### Running shells

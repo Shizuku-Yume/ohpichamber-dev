@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/73",
+  "status": "connected-guest-partial-shell-timeout",
+  "observedAt": "2026-10-21T13:10:00+08:00",
+  "baseCommit": "fb761a77cf800d549796e57221f7cd127dc23312",
+  "commit": "landed on omp-through-m3/verified-integration-20261021; exact HEAD reported in the Task73 Progress",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/73-guest-project-session-projection",
+    "branch": "omp-through-m3/73-guest-project-session-projection",
+    "webHost": "http://127.0.0.1:3230",
+    "isolatedHome": "/tmp/ohpi-task73/home",
+    "isolatedDataDir": "/tmp/ohpi-task73/data",
+    "chats": "/tmp/ohpi-task73/chats/work",
+    "projectWorktree": "/tmp/ohpi-task73/chats/worktree (git branch task73-wt)",
+    "browser": "Chrome headless 155, CDP 9340",
+    "fixtureProvider": "http://127.0.0.1:4630/v1, model t15fixture/t15-fixture",
+    "commands": [
+      "bun install --frozen-lockfile",
+      "bun test packages/ui/src/lib/guests/workspace.test.ts",
+      "bun test packages/ui/src/lib/guests/shells.test.ts",
+      "bun run --cwd packages/ui type-check",
+      "bun run --cwd packages/ui build",
+      "bun run --cwd packages/web build",
+      "bunx oxlint packages/ui/src/lib/guests/workspace.ts packages/ui/src/lib/guests/workspace.test.ts packages/ui/src/lib/guests/shells.ts packages/ui/src/lib/guests/shells.test.ts",
+      "bun run dead-code",
+      ".workflow/bin/workflow validate",
+      "cd packages/web && HOME=/tmp/ohpi-task73/home XDG_CONFIG_HOME=/tmp/ohpi-task73/home/.config OPENCHAMBER_DATA_DIR=/tmp/ohpi-task73/data OPENCHAMBER_UI_PASSWORD=<isolated> OPENCHAMBER_RELAY_HOST=off OPENCHAMBER_ALLOW_DEV_ORIGINS=1 bun server/index.js --port 3230",
+      "google-chrome --headless=new --remote-debugging-port=9340 --user-data-dir=/tmp/ohpi-task73/chrome --no-sandbox --disable-gpu --window-size=1600,1000"
+    ]
+  },
+  "webDist": {
+    "indexSha256": "b8b92fa62e004329791faa5cb88b2a405062e41fda90cabfe3017637692cf768",
+    "sourceUnchangedSinceBuild": "packages/ui/src and packages/sdk source changes were completed before the Web build; only task/receipt documentation changed afterwards"
+  },
+  "projectRegistration": {
+    "request": "POST /api/openchamber/directory {path:'/tmp/ohpi-task73/chats/work',create:false}",
+    "projectId": "path_L3RtcC9vaHBpLXRhc2s3My9jaGF0cy93b3Jr",
+    "canonicalProjectId": "pro_22c41305-5cf0-4043-9603-eff19923d9fd",
+    "rootWorkspace": "ws_4dd12d09-7240-49b3-b98d-008d73d2d267",
+    "worktreeWorkspace": "ws_1f1e0847-fd7f-41c6-9f53-f33f14b52565"
+  },
+  "guest": {
+    "install": "POST /api/guests 200 t15-guest from /tmp/ohpi-task15b-guest with panel/main.js rebuilt against the Task73 SDK",
+    "granted": ["sessions", "shells"],
+    "panel": "T15 Guest rail panel",
+    "observed": {
+      "project": "path_L3RtcC9vaHBpLXRhc2s3My9jaGF0cy93b3Jr, name work, directory /tmp/ohpi-task73/chats/work",
+      "sessions": [
+        "T15-ITEMS session (root)",
+        "T15-SHELL session (root)",
+        "T15-WORKTREE session (observed in one connected panel instance after opening the worktree session; later panel instances listed only root sessions because the worktree child store had not been re-bootstrapped after reload)"
+      ],
+      "items": "T15-ITEMS session exposed only ITEM-1 (own guest link); ITEM-2 (other guest) and the issue link were absent",
+      "runningShell": "guest panel projected native:[\"Main\",\"bg_3\"] for the T15-SHELL session from the directory bootstrap shell snapshot",
+      "shellOutput": "FAILED: HostRequestError Host did not answer in time after the 20 s Guest request timeout",
+      "shellStop": "FAILED: HostRequestError Host did not answer in time after the 20 s Guest request timeout"
+    }
+  },
+  "shellFlow": {
+    "start": "UI composer on the T15-SHELL session sent 'T15-SHELL please run the long command via the UI'; the fixture provider answered with bash {command:'for i in $(seq 1 300); do echo t15-line-$i; sleep 1; done', async:true}",
+    "approval": "GET /approvals returned a bash_command request; POST /approvals/:id/respond returned 200 with decision approve using the returned version/epoch/workerGeneration",
+    "job": "GET /shell/jobs returned native:[\"Main\",\"bg_3\"] running with epoch 1e699b1f-9bd6-441b-a7b8-a941e7ee2292 and outputCursor above 0; the host kept it running",
+    "directRouteCheck": "GET /shell/jobs/:jobId/output with the same epoch/workerGeneration, cursor=0 and tailBytes=2048 returned 200 in 2205 ms",
+    "guestReason": "The running shell reached the Guest projection, but both Guest SDK shell operations timed out at the host bridge (GUEST_REQUEST_TIMEOUT_MS = 20 s). The observed error was 'HostRequestError: Host did not answer in time.' for readShellOutput and stopShell. This is outside the Task73 projection mapping: the panel source is packages/ui/src/lib/guests/shells.ts, which returned the correct directory-scoped running shell, and the failure is in the Guest host bridge/canonical shell output round trip."
+  },
+  "sourceChanges": [
+    "packages/ui/src/lib/guests/workspace.ts",
+    "packages/ui/src/lib/guests/workspace.test.ts",
+    "packages/ui/src/lib/guests/shells.ts",
+    "packages/ui/src/lib/guests/shells.test.ts",
+    "packages/sdk/API.md",
+    "packages/sdk/DOCUMENTATION.md"
+  ],
+  "checks": {
+    "checkBefore": "workspace.test 8 fail / 1 pass; shells.test 4 fail / 8 pass with the production-shape regressions (path_* project, pro_* canonical sessions, project-relative displayPath)",
+    "checkAfter": "workspace.test 9 pass / 0 fail (430 assertions); shells.test 12 pass / 0 fail (26 assertions); UI type-check clean; UI build clean; changed-file oxlint clean; workflow validate valid (83 task files); dead-code baseline report has no entry for the changed Guest files (the command exits 1 on the pre-existing unused-export baseline)"
+  },
+  "screenshots": {
+    "/tmp/ohpi-task73/evidence/02-guest-project-sessions.png": "65e50f3818263f5aabfb9553b39b941f078493814abc59bc639ced37702c09b3",
+    "/tmp/ohpi-task73/evidence/03-guest-shell-output-stop.png": "b449116daec9bb12c7284d0e834b2a78604a1f7a8edd1024877a1e600725f89f",
+    "/tmp/ohpi-task73/evidence/04-guest-worktree-session.png": "0b743daa729e3709ccd65e2cc54803cb076d04dea16a4ab3e3df5eb4a2fe6c21"
+  },
+  "outcome": {
+    "guestProjectAndSessions": "passed: project and canonical root sessions rendered; the worktree session was also rendered by the projection in a connected panel instance, and permanent tests cover root/worktree membership",
+    "guestOwnItems": "passed: only ITEM-1 was present",
+    "guestShellProjection": "passed: the running background shell appeared in the panel across the project directory scope",
+    "guestShellOutputAndStop": "blocked: Guest host-bridge request timeout, not a Task73 projection defect",
+    "task73": "paused and unarchived; the connected Guest Shell acceptance row remains open"
+  },
+  "reviews": {
+    "briefA": "not run by this worker",
+    "briefB": "not run by this worker",
+    "security": "not run by this worker"
+  },
+  "cleanup": "Host 3230, fixture 4630 and Chrome CDP 9340 stopped after evidence capture; isolated HOME, data, chats, worktree and screenshots retained under /tmp/ohpi-task73"
+}

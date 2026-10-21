@@ -3,50 +3,57 @@ import { GUEST_SHELLS_MAX, HostRequestError } from '@openchamber/sdk';
 import type { Session } from '@openchamber/agent-contract';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useBackgroundShellsStore, type EndedShell, type TrackedShell } from '@/sync/background-shells';
 import { observeGuestShells, readGuestShellOutput, readGuestShells } from './shells';
 
-const session = (sessionId: string, displayPath: string, projectId: string, parentSessionId?: string): Session => ({
-  sessionId, projectId, workspaceId: `workspace-${projectId}`, displayPath, rootSessionId: parentSessionId ? 'root' : sessionId,
-  ...(parentSessionId ? { parentSessionId } : {}),
-  createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
-  metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
-});
-const shell = (jobId: string, sessionId: string, startedAt: number, background: boolean): TrackedShell => ({
+const session = (sessionId: string, displayPath: string, projectId: string, workspaceId: string, parentSessionId?: string): Session => {
+  const value: Session = {
+    sessionId, projectId, workspaceId, displayPath, rootSessionId: parentSessionId ? 'root' : sessionId,
+    createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+    metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
+  };
+  return parentSessionId ? { ...value, parentSessionId } : value;
+};
+const shell = (jobId: string, sessionId: string, startedAt: number, background: boolean, directory: string): TrackedShell => ({
   jobId, sessionId, epoch: 'epoch-1', workerGeneration: 'worker-1', workspaceId: 'workspace-opencode-app', projectId: 'opencode-app',
-  command: `run ${jobId}`, startedAt, outputCursor: '0', status: 'running', directory: '/repo', background,
+  command: `run ${jobId}`, startedAt, outputCursor: '0', status: 'running', directory, background,
 });
-const ended = (jobId: string, sessionId: string, reason: 'exit' | 'stopped' | 'timeout', endedAt: number, exitCode: number | null = null): EndedShell => ({
-  ...shell(jobId, sessionId, 1, true), status: 'ended', endedAt,
+const ended = (jobId: string, sessionId: string, reason: 'exit' | 'stopped' | 'timeout', endedAt: number, exitCode: number | null = null, directory = '/repo'): EndedShell => ({
+  ...shell(jobId, sessionId, 1, true, directory), status: 'ended', endedAt,
   termination: reason === 'exit' ? { reason, exitCode: exitCode ?? 0 } : { reason, exitCode },
 });
 
 beforeEach(() => {
+  resetWorkspaceDirectories();
   useProjectsStore.setState({ hasServerSnapshot: true, serverSnapshotFailed: false, projects: [{ id: 'path_/repo', path: '/repo', label: 'Repo', addedAt: 1 }] });
   useSessionUIStore.setState({ availableWorktreesByProject: new Map([['/repo', [{ path: '/repo-tree', projectDirectory: '/repo', branch: 'fix', name: 'fix', label: 'fix', worktreeStatus: 'ready' }]]]) });
+  registerWorkspaceDirectory('ws-repo', '/repo');
+  registerWorkspaceDirectory('ws-tree', '/repo-tree');
+  registerWorkspaceDirectory('ws-other', '/other');
   useGlobalSessionsStore.getState().applySnapshot([
-    session('root', '/repo', 'opencode-app'),
-    session('child', '/repo', 'opencode-app', 'root'),
-    session('grandchild', '/repo', 'opencode-app', 'child'),
-    session('tree', '/repo-tree', 'opencode-app'),
-    session('other', '/other', 'opencode-other'),
+    session('root', '.', 'pro_app', 'ws-repo'),
+    session('child', '.', 'pro_app', 'ws-repo', 'root'),
+    session('grandchild', '.', 'pro_app', 'ws-repo', 'child'),
+    session('tree', 'fix', 'pro_app', 'ws-tree'),
+    session('other', '.', 'pro_other', 'ws-other'),
   ], [], 'ready');
   useBackgroundShellsStore.setState({
     byId: new Map([
-      ['sh_1', shell('sh_1', 'root', 2, true)],
-      ['sh_2', shell('sh_2', 'child', 1, true)],
-      ['sh_3', shell('sh_3', 'other', 3, true)],
-      ['sh_4', shell('sh_4', 'root', 4, false)],
-      ['sh_5', shell('sh_5', 'ghost', 5, true)],
-      ['sh_6', shell('sh_6', 'tree', 6, true)],
+      ['sh_1', shell('sh_1', 'root', 2, true, '/repo')],
+      ['sh_2', shell('sh_2', 'child', 1, true, '/repo')],
+      ['sh_3', shell('sh_3', 'other', 3, true, '/other')],
+      ['sh_4', shell('sh_4', 'root', 4, false, '/repo')],
+      ['sh_5', shell('sh_5', 'ghost', 5, true, '/ghost')],
+      ['sh_6', shell('sh_6', 'tree', 6, true, '/repo-tree')],
     ]),
     sessionIds: new Set(['root', 'child', 'tree', 'other', 'ghost']),
     ended: new Map([
-      ['sh_done', ended('sh_done', 'grandchild', 'exit', 20, 1)],
-      ['sh_stopped', ended('sh_stopped', 'root', 'stopped', 10)],
-      ['sh_elsewhere', ended('sh_elsewhere', 'other', 'timeout', 30)],
+      ['sh_done', ended('sh_done', 'grandchild', 'exit', 20, 1, '/repo')],
+      ['sh_stopped', ended('sh_stopped', 'root', 'stopped', 10, null, '/repo')],
+      ['sh_elsewhere', ended('sh_elsewhere', 'other', 'timeout', 30, null, '/other')],
     ]),
   });
 });
@@ -87,7 +94,7 @@ describe('extension shell output', () => {
     const identity = { jobId: 'sh_done', sessionId: 'grandchild', epoch: 'epoch-1', workerGeneration: 'worker-1' };
     const read = spyOn(canonicalClient, 'getShellOutput').mockResolvedValue({ job: identity, requestedCursor: '0', startCursor: '0', cursor: '2', skippedBytes: '0', output: 'ok', ended: true });
     try {
-      expect(await readGuestShellOutput('sh_done', undefined, 100)).toEqual({ shellId: 'sh_done', output: 'ok', cursor: 2, ended: true });
+      expect(await readGuestShellOutput('sh_done', undefined, 100)).toEqual({ output: 'ok', cursor: 2, skipped: false });
       expect(read.mock.calls[0]).toEqual(['grandchild', { jobId: 'sh_done', epoch: 'epoch-1', workerGeneration: 'worker-1' }, '0', 100]);
     } finally { read.mockRestore(); }
   });
@@ -131,6 +138,14 @@ describe('extension shells projection', () => {
     expect(() => observeGuestShells({ kind: 'project', projectId: 'path_/nope' }, () => {})).toThrow();
   });
 
+  test('a project scope follows each shell\'s recorded directory', () => {
+    useBackgroundShellsStore.setState((state) => ({
+      byId: new Map(state.byId).set('sh_bg', shell('sh_bg', 'other', 7, true, '/repo-tree')),
+    }));
+    expect(readGuestShells({ kind: 'project', projectId: 'path_/repo' }).shells.map((entry) => entry.id)).toContain('sh_bg');
+    expect(readGuestShells({ kind: 'project', projectId: 'path_/repo' }).shells.map((entry) => entry.id)).not.toContain('sh_3');
+  });
+
   test('a global scope lists every shell, including sessions the store does not know', () => {
     expect(readGuestShells({ kind: 'global' }).shells.map((entry) => entry.id)).toEqual(['sh_2', 'sh_1', 'sh_3', 'sh_4', 'sh_5', 'sh_6']);
   });
@@ -138,7 +153,7 @@ describe('extension shells projection', () => {
   test('caps the projection at the documented shell bound', () => {
     const byId = new Map<string, TrackedShell>();
     for (let index = 0; index < GUEST_SHELLS_MAX + 50; index += 1) {
-      byId.set(`sh_${index}`, shell(`sh_${index}`, 'root', index, true));
+      byId.set(`sh_${index}`, shell(`sh_${index}`, 'root', index, true, '/repo'));
     }
     useBackgroundShellsStore.setState({ byId, sessionIds: new Set(['root']) });
     expect(readGuestShells({ kind: 'session', sessionId: 'root' }).shells).toHaveLength(GUEST_SHELLS_MAX);

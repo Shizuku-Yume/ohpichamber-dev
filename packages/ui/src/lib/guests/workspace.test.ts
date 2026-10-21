@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -12,31 +13,40 @@ import { readGuestWorkspace, observeGuestWorkspace } from './workspace';
 import { guestMay } from './capabilities';
 import { buildLinkedGuestIssue, buildLinkedIssue, buildLinkedLinearIssue } from '@/lib/linkedIssues';
 
-const session = (sessionId: string, displayPath: string, projectId: string): Session => ({
-  sessionId, projectId, workspaceId: `workspace-${projectId}`, displayPath, rootSessionId: sessionId,
+const session = (sessionId: string, displayPath: string, projectId: string, workspaceId: string): Session => ({
+  sessionId, projectId, workspaceId, displayPath, rootSessionId: sessionId,
   createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
   metadata: { title: sessionId }, metadataRevision: '1', archiveRevision: '0',
 });
 let manager: ChildStoreManager;
+let bSession: Session;
 beforeEach(() => {
   manager = new ChildStoreManager();
   setSyncRefs(manager, '/a');
+  resetWorkspaceDirectories();
   useProjectsStore.setState({ hasServerSnapshot: true, serverSnapshotFailed: false, projects: [
-    { id: 'a', path: '/a', label: 'A', addedAt: 1 }, { id: 'b', path: '/b', label: 'B', addedAt: 1 },
+    { id: 'path_/a', path: '/a', label: 'A', addedAt: 1 },
+    { id: 'path_/b', path: '/b', label: 'B', addedAt: 1 },
+    { id: 'path_/other', path: '/other', label: 'Other', addedAt: 1 },
   ] });
-  useSessionUIStore.setState({ availableWorktreesByProject: new Map([['/b', [{ path: '/b-tree', projectDirectory: '/b', branch: 'fix', name: 'fix', label: 'fix', worktreeStatus: 'ready' }]]]), worktreeDiscoveryByProject: new Map([['/a', 'ready'], ['/b', 'ready']]) });
-  const aSession = session('a-session', '/a', 'a');
-  const bSession = session('b-session', '/b-tree', 'b');
-  useGlobalSessionsStore.getState().applySnapshot([aSession, bSession], [], 'ready');
+  useSessionUIStore.setState({ availableWorktreesByProject: new Map([['/b', [{ path: '/b-tree', projectDirectory: '/b', branch: 'fix', name: 'fix', label: 'fix', worktreeStatus: 'ready' }]]]), worktreeDiscoveryByProject: new Map([['/a', 'ready'], ['/b', 'ready'], ['/other', 'ready']]) });
+  const aSession = session('a-session', '.', 'pro_a', 'ws-a');
+  bSession = session('b-session', 'fix', 'pro_b', 'ws-b-tree');
+  const unrelatedSession = session('unrelated-session', '.', 'pro_other', 'ws-other');
+  registerWorkspaceDirectory('ws-a', '/a');
+  registerWorkspaceDirectory('ws-b-tree', '/b-tree');
+  registerWorkspaceDirectory('ws-other', '/other');
+  useGlobalSessionsStore.getState().applySnapshot([aSession, bSession, unrelatedSession], [], 'ready');
   manager.ensureChild('/a', { bootstrap: false }).setState({ session: [aSession], sessionTotal: 1, sessionStatusReady: true });
   manager.ensureChild('/b-tree', { bootstrap: false }).setState({ session: [bSession], sessionTotal: 1, sessionStatusReady: true });
+  manager.ensureChild('/other', { bootstrap: false }).setState({ session: [unrelatedSession], sessionTotal: 1, sessionStatusReady: true });
   // The legacy diagnostic field is not maintained by the current sync pipeline.
   useUIStore.setState({ eventStreamStatus: 'idle' });
   replaceGlobalSessionStatusById(new Map());
 });
 afterEach(() => manager.disposeAll());
 const readB = () => {
-  const snapshot = readGuestWorkspace({ kind: 'sessions', projectId: 'b' }, 'board');
+  const snapshot = readGuestWorkspace({ kind: 'sessions', projectId: 'path_/b' }, 'board');
   if (snapshot.kind !== 'sessions') throw new Error('Expected sessions');
   return snapshot;
 };
@@ -53,11 +63,48 @@ describe('extension workspace projection', () => {
       for (let i = 0; i < 100; i++) {
         const snapshot = readB();
         expect(snapshot.sessions.map((entry) => entry.id)).toEqual(['b-session']);
+        expect(snapshot.sessions[0]).toMatchObject({ projectId: 'path_/b', directory: '/b-tree' });
         expect(snapshot.sessions[0].worktree?.branch).toBe('fix');
         expect(snapshot.sessions[0].activity).toBe('unknown');
       }
       expect(fetch.mock.calls.length).toBe(0);
     } finally { fetch.mockRestore(); }
+  });
+  test('projects canonical sessions by resolved workspace directory, not canonical project ids', () => {
+    const aliasSession = session('alias-session', 'fix', 'pro_b', 'ws-b-alias');
+    registerWorkspaceDirectory('ws-b-alias', '/b-alias');
+    manager.ensureChild('/b-alias', { bootstrap: false }).setState({ session: [aliasSession], sessionTotal: 1, sessionStatusReady: true });
+
+    const b = readB();
+    expect(b.sessions.map((entry) => [entry.id, entry.projectId, entry.directory])).toEqual([
+      ['b-session', 'path_/b', '/b-tree'],
+    ]);
+    expect(b.coverage.map((entry) => entry.directory)).toEqual(['/b', '/b-tree']);
+
+    const a = readGuestWorkspace({ kind: 'sessions', projectId: 'path_/a' }, 'board');
+    if (a.kind !== 'sessions') throw new Error('Expected sessions');
+    expect(a.sessions.map((entry) => [entry.id, entry.projectId, entry.directory, entry.worktree])).toEqual([
+      ['a-session', 'path_/a', '/a', null],
+    ]);
+
+    const other = readGuestWorkspace({ kind: 'sessions', projectId: 'path_/other' }, 'board');
+    if (other.kind !== 'sessions') throw new Error('Expected sessions');
+    expect(other.sessions.map((entry) => entry.id)).toEqual(['unrelated-session']);
+    expect(readGuestWorkspace({ kind: 'sessions', projectId: 'path_/nope' }, 'board')).toMatchObject({ state: 'error', sessions: [] });
+  });
+  test('observer publishes a session added to a project directory', async () => {
+    const child = manager.ensureChild('/b-tree', { bootstrap: false });
+    child.setState({ session: [] });
+    const seen: string[][] = [];
+    const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'path_/b' }, 'board', (snapshot) => {
+      if (snapshot.kind === 'sessions') seen.push(snapshot.sessions.map((entry) => entry.id));
+    });
+    try {
+      expect(seen).toEqual([[]]);
+      child.setState({ session: [bSession] });
+      await Promise.resolve();
+      expect(seen.at(-1)).toEqual(['b-session']);
+    } finally { stop(); }
   });
   test('projects only the subscribing guest linked items with guest-visible ids and data', () => {
     const linkedIssues: NonNullable<NonNullable<Session['metadata']>['openchamber']>['linked_issues'] = [
@@ -67,8 +114,8 @@ describe('extension workspace projection', () => {
       buildLinkedLinearIssue({ identifier: 'ENG-1', title: 'Linear', url: 'https://linear.app/acme/ENG-1', linkedAt: 5 }),
       buildLinkedGuestIssue({ providerId: 'board', identifier: 'ITEM-3', title: 'No data', url: 'https://guest.example/3', linkedAt: 6 }),
     ];
-    const bSession = { ...session('b-session', '/b-tree', 'b'), metadata: { title: 'b-session', openchamber: { linked_issues: linkedIssues } } };
-    manager.ensureChild('/b-tree', { bootstrap: false }).setState({ session: [bSession] });
+    const linkedSession = { ...bSession, metadata: { title: 'b-session', openchamber: { linked_issues: linkedIssues } } };
+    manager.ensureChild('/b-tree', { bootstrap: false }).setState({ session: [linkedSession] });
 
     const own = readB().sessions[0].items;
     expect(own).toEqual([
@@ -77,7 +124,7 @@ describe('extension workspace projection', () => {
     ]);
     expect('data' in own[1]).toBe(false);
 
-    const other = readGuestWorkspace({ kind: 'sessions', projectId: 'b' }, 'other');
+    const other = readGuestWorkspace({ kind: 'sessions', projectId: 'path_/b' }, 'other');
     if (other.kind !== 'sessions') throw new Error('Expected sessions');
     expect(other.sessions[0].items).toEqual([{ id: 'ITEM-2', data: { secret: true } }]);
   });
@@ -104,7 +151,7 @@ describe('extension workspace projection', () => {
     const child = manager.ensureChild('/b-tree', { bootstrap: false });
     child.setState({ sessionStatusReady: true });
     const activity: string[] = [];
-    const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'b' }, 'board', (snapshot) => {
+    const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'path_/b' }, 'board', (snapshot) => {
       if (snapshot.kind === 'sessions') activity.push(snapshot.sessions[0].activity);
     });
     try {
@@ -120,7 +167,7 @@ describe('extension workspace projection', () => {
   });
   test('worktree loading and errors retain data, and token updates do not publish', async () => {
     const snapshots: number[] = [];
-    const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'b' }, 'board', () => snapshots.push(1));
+    const stop = observeGuestWorkspace({ kind: 'sessions', projectId: 'path_/b' }, 'board', () => snapshots.push(1));
     const child = manager.ensureChild('/b-tree', { bootstrap: false });
     await Promise.resolve();
     const baseline = snapshots.length;
