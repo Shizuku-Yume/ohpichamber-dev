@@ -61,7 +61,7 @@
     "start": "UI composer on the T15-SHELL session sent 'T15-SHELL please run the long command via the UI'; the fixture provider answered with bash {command:'for i in $(seq 1 300); do echo t15-line-$i; sleep 1; done', async:true}",
     "approval": "GET /approvals returned a bash_command request; POST /approvals/:id/respond returned 200 with decision approve using the returned version/epoch/workerGeneration",
     "job": "GET /shell/jobs returned native:[\"Main\",\"bg_3\"] running with epoch 1e699b1f-9bd6-441b-a7b8-a941e7ee2292 and outputCursor above 0; the host kept it running",
-    "directRouteCheck": "GET /shell/jobs/:jobId/output with the same epoch/workerGeneration, cursor=0 and tailBytes=2048 returned 200 in 2205 ms",
+    "directRouteCheck": "DIAGNOSIS ONLY, not Guest UI acceptance: GET /shell/jobs/:jobId/output with the same epoch/workerGeneration, cursor=0 and tailBytes=2048 returned 200 in 2205 ms. It shows the canonical route answers outside the Guest bridge; it does not satisfy the connected Guest Shell output/stop row.",
     "guestReason": "The running shell reached the Guest projection, but both Guest SDK shell operations timed out at the host bridge (GUEST_REQUEST_TIMEOUT_MS = 20 s). The observed error was 'HostRequestError: Host did not answer in time.' for readShellOutput and stopShell. This is outside the Task73 projection mapping: the panel source is packages/ui/src/lib/guests/shells.ts, which returned the correct directory-scoped running shell, and the failure is in the Guest host bridge/canonical shell output round trip."
   },
   "sourceChanges": [
@@ -85,8 +85,8 @@
     "guestProjectAndSessions": "passed: project and canonical root sessions rendered; the worktree session was also rendered by the projection in a connected panel instance, and permanent tests cover root/worktree membership",
     "guestOwnItems": "passed: only ITEM-1 was present",
     "guestShellProjection": "passed: the running background shell appeared in the panel across the project directory scope",
-    "guestShellOutputAndStop": "blocked: Guest host-bridge request timeout, not a Task73 projection defect",
-    "task73": "paused and unarchived; the connected Guest Shell acceptance row remains open"
+    "guestShellOutputAndStop": "blocked and open: Guest host-bridge request timeout; the direct canonical GET was diagnosis only, not Guest UI acceptance",
+    "task73": "paused and unarchived while Task74 is planned; the connected Guest Shell acceptance row remains open and unticked"
   },
   "reviews": {
     "briefA": "not run by this worker",
