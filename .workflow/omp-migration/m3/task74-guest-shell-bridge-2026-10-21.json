@@ -4,7 +4,7 @@
   "status": "passed-connected-guest-shell-output-stop",
   "observedAt": "2026-10-21T13:50:00+08:00",
   "baseCommit": "81bd52d5fa31b4452b8a244fcc778ab9904c1222",
-  "commit": "landed on omp-through-m3/verified-integration-20261021; exact HEAD reported in the Task74 Progress",
+  "commit": "0152a07183004e667bb1b1b1bfbbc68b3e43807d on omp-through-m3/verified-integration-20261021",
   "environment": {
     "worktree": "/home/shizuku/Project/ohpichamber-worktrees/74-guest-shell-bridge-timeout",
     "branch": "omp-through-m3/74-guest-shell-bridge-timeout",
