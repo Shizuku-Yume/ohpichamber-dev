@@ -14,6 +14,7 @@ import type { RuntimeAPIs } from '@/lib/api/types';
 import { useGuestsStore } from '@/lib/guests/store';
 import { SyncProvider } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useUIStore } from '@/stores/useUIStore';
 
 plugin({
     name: 'tool-rich-worker-url',
@@ -146,6 +147,11 @@ const editResult = (diff: string, isError = false): ToolResultPart => ({
     error: isError ? 'Permission denied' : undefined,
 });
 
+const sentinelEditResult = (path: string): ToolResultPart => ({
+    type: 'tool_result', partId: 'edit-result', toolCallId: 'edit-call', toolName: 'edit', isError: false,
+    output: { content: [{ type: 'text', text: `Updated ${path}` }], details: { path, diff: '-1|old\n+1|new' } },
+});
+
 const runtimeForEditor = (openFile: (path: string, line?: number) => Promise<void>): RuntimeAPIs => {
     const unexpected = (): never => { throw new Error('File navigation must only use the editor'); };
     return {
@@ -204,6 +210,84 @@ test('a mismatched call never lends its input to a result, and quick-open uses t
         if (!quickOpen) throw new Error('Expected the file quick-open action');
         await act(async () => { quickOpen.click(); });
         expect(opened).toEqual([{ path: '/project/src/a.ts', line: 11 }]);
+    });
+});
+
+test('a sanitized workspace result path labels the relative file and opens the real workspace path', async () => {
+    const opened: Array<{ path: string; line?: number }> = [];
+    const runtime = runtimeForEditor(async (path, line) => { opened.push({ path, line }); });
+
+    await withToolHarness(async ({ container, render }) => {
+        await render(sentinelEditResult('[workspace]/NOTES.md'), {
+            pairedCall: editCall({ path: '[workspace]/NOTES.md' }),
+            expanded: true,
+            runtime,
+        });
+
+        const headerPath = container.querySelector('[title="NOTES.md"]');
+        expect(headerPath?.textContent).toContain('NOTES.md');
+        expect(container.querySelector('[title="[workspace]/NOTES.md"]')).toBeNull();
+
+        const quickOpen = container.querySelector<HTMLButtonElement>('button[aria-label="Open file"]');
+        if (!quickOpen) throw new Error('Expected the file quick-open action');
+        await act(async () => { quickOpen.click(); });
+        expect(opened).toEqual([{ path: '/project/NOTES.md', line: 1 }]);
+    });
+});
+
+test('quick-open on a sanitized path hands the real absolute path to the Web context file action', async () => {
+    const previous = useUIStore.getState();
+    try {
+        await withToolHarness(async ({ container, render }) => {
+            await render(sentinelEditResult('[workspace]/NOTES.md'), {
+                pairedCall: editCall({ path: '[workspace]/NOTES.md' }),
+            });
+
+            const quickOpen = container.querySelector<HTMLButtonElement>('button[aria-label="Open file"]');
+            if (!quickOpen) throw new Error('Expected the file quick-open action');
+            await act(async () => { quickOpen.click(); });
+
+            expect(useUIStore.getState().pendingFileNavigation).toEqual({ path: '/project/NOTES.md', line: 1, column: 1 });
+            const tabs = useUIStore.getState().contextPanelByDirectory['/project']?.tabs ?? [];
+            expect(tabs.some((tab) => tab.mode === 'file' && tab.targetPath === '/project/NOTES.md')).toBe(true);
+            expect(tabs.some((tab) => tab.targetPath?.includes('[workspace]'))).toBe(false);
+        });
+    } finally {
+        useUIStore.setState({
+            contextPanelByDirectory: previous.contextPanelByDirectory,
+            pendingFileNavigation: previous.pendingFileNavigation,
+            pendingFileFocusPath: previous.pendingFileFocusPath,
+            contextEditorVisible: previous.contextEditorVisible,
+        });
+    }
+});
+
+test('a sentinel target that re-normalizes to another root offers no file action', async () => {
+    await withToolHarness(async ({ container, render }) => {
+        await render(sentinelEditResult('[workspace]//etc/passwd'), {
+            pairedCall: editCall({ path: '[workspace]//etc/passwd' }),
+            expanded: true,
+        });
+
+        expect(container.querySelector('button[aria-label="Open file"]')).toBeNull();
+        expect(container.querySelector('button[aria-label="Open file at first change"]')).toBeNull();
+    });
+});
+
+test('a sanitized traversal path offers no file action instead of escaping the workspace', async () => {
+    const opened: Array<{ path: string; line?: number }> = [];
+    const runtime = runtimeForEditor(async (path, line) => { opened.push({ path, line }); });
+
+    await withToolHarness(async ({ container, render }) => {
+        await render(sentinelEditResult('[workspace]/../outside.md'), {
+            pairedCall: editCall({ path: '[workspace]/../outside.md' }),
+            expanded: true,
+            runtime,
+        });
+
+        expect(container.querySelector('button[aria-label="Open file"]')).toBeNull();
+        expect(container.querySelector('button[aria-label="Open file at first change"]')).toBeNull();
+        expect(opened).toEqual([]);
     });
 });
 

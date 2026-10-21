@@ -65,6 +65,7 @@ import {
     extractFirstChangedLineFromDiff,
     getToolDiffs,
     getToolFileChanges,
+    normalizeWorkspaceToolPath,
     resolveToolQuickOpenTarget,
     type ToolFileChange,
 } from './toolDiffUtils';
@@ -1115,7 +1116,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
     const described = React.useMemo(() => toolDescription(part, call), [call, part]);
     const describedPath = described?.kind === 'path'
-        ? (toolName === NATIVE_TOOLS.read ? parseNativeReadPath(described.value).path : described.value)
+        ? normalizeWorkspaceToolPath(toolName === NATIVE_TOOLS.read ? parseNativeReadPath(described.value).path : described.value)
         : null;
     const descriptionPath = describedPath ? getRelativeFilePath(describedPath, currentDirectory) : null;
     const builtInDescription = described?.kind === 'path'

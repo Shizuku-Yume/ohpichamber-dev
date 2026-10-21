@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 import {
     extractFirstChangedLineFromDiff, getPrimaryToolPath, getToolDiffs,
-    getToolFileChanges, resolveToolQuickOpenTarget,
+    getToolFileChanges, normalizeWorkspaceToolPath, resolveToolQuickOpenTarget,
 } from './toolDiffUtils';
 import { getToolDiffPreviewText, isToolDiffPreviewOversized, TOOL_DIFF_PREVIEW_MAX_CHARS, TOOL_DIFF_PREVIEW_MAX_LINES } from './toolDiffPreview';
 
@@ -78,6 +78,58 @@ describe('native tool diffs', () => {
             input: { path: 'src/file.ts:50-100' }, status: 'completed',
         };
         expect(resolveToolQuickOpenTarget(read)).toEqual({ filePath: 'src/file.ts', line: 50 });
+    });
+    test('strips the privacy-sanitized workspace sentinel from result and write targets', () => {
+        const part = result({ path: '[workspace]/NOTES.md', diff: '-1|old\n+1|new' });
+        expect(getToolFileChanges(part)[0]?.path).toBe('NOTES.md');
+        expect(getToolDiffs(part)[0]?.path).toBe('NOTES.md');
+        expect(resolveToolQuickOpenTarget(part)).toEqual({ filePath: 'NOTES.md', line: 1 });
+
+        const batch = result({ diff: 'combined', perFileResults: [
+            { path: '[workspace]/src/a.ts', move: '[workspace]/src/b.ts', sourcePath: '[workspace]/src/a.ts', diff: '+1|new' },
+        ] });
+        expect(getToolFileChanges(batch)).toMatchObject([{ path: 'src/b.ts', sourcePath: 'src/a.ts' }]);
+
+        const write = result({ resolvedPath: '[workspace]/NOTES.md' }, 'write');
+        expect(resolveToolQuickOpenTarget(write, call('write', '[workspace]/NOTES.md'))).toEqual({ filePath: 'NOTES.md', line: undefined });
+        expect(resolveToolQuickOpenTarget(result({}, 'write'), call('write', '[workspace]/NOTES.md'))).toEqual({ filePath: 'NOTES.md', line: undefined });
+
+        const read: ToolCallPart = {
+            type: 'tool_call', partId: 'read-sentinel', toolCallId: 'read-sentinel', toolName: 'read',
+            input: { path: '[workspace]/src/file.ts:50-100' }, status: 'completed',
+        };
+        expect(resolveToolQuickOpenTarget(read)).toEqual({ filePath: 'src/file.ts', line: 50 });
+    });
+    test('keeps unrelated placeholders and resolved absolute or relative paths unchanged', () => {
+        expect(getToolFileChanges(result({ path: '[agent-directory]/settings.json', diff: '' }))[0]?.path)
+            .toBe('[agent-directory]/settings.json');
+        expect(getToolFileChanges(result({}, 'write'), call('write', 'agent://worker'))).toEqual([]);
+        expect(resolveToolQuickOpenTarget(result({ path: '/project/src/a.ts', diff: '+1|new' })))
+            .toEqual({ filePath: '/project/src/a.ts', line: 1 });
+        expect(resolveToolQuickOpenTarget(result({ path: 'src/a.ts', diff: '+1|new' })))
+            .toEqual({ filePath: 'src/a.ts', line: 1 });
+    });
+    test('keeps sentinel traversal on its existing contained resolution', () => {
+        expect(normalizeWorkspaceToolPath('[workspace]/../outside.ts')).toBe('[workspace]/../outside.ts');
+        expect(resolveToolQuickOpenTarget(result({ path: '[workspace]/../outside.ts', diff: '+1|new' }))).toBeNull();
+        expect(getToolFileChanges(result({ path: '[workspace]/../outside.ts', diff: '+1|new' }))).toEqual([]);
+        // A non-sentinel relative escape keeps the resolution and the Host-owned containment check it already had.
+        expect(resolveToolQuickOpenTarget(result({ path: '../outside.ts', diff: '+1|new' })))
+            .toEqual({ filePath: '../outside.ts', line: 1 });
+    });
+    test('refuses sentinel targets that spell another root or rely on path re-normalization', () => {
+        for (const path of [
+            '[workspace]//etc/passwd',
+            '[workspace]/ /etc/passwd',
+            '[workspace]/..\\etc\\passwd',
+            '[workspace]/src\\..\\..\\..\\etc\\passwd',
+            '[workspace]/C:/Users/me/notes.md',
+            '[workspace]/src/../../etc/passwd',
+        ]) {
+            expect(normalizeWorkspaceToolPath(path)).toBe(path);
+            expect(resolveToolQuickOpenTarget(result({ path, diff: '+1|new' }))).toBeNull();
+            expect(getToolFileChanges(result({ path, diff: '+1|new' }))).toEqual([]);
+        }
     });
 });
 

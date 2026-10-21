@@ -23,6 +23,41 @@ const editResultSchema = z.object({
 const writeResultSchema = z.object({ details: z.object({ resolvedPath: z.string().min(1) }) });
 const pathValueSchema = z.string();
 
+const WORKSPACE_PATH_SENTINEL = '[workspace]/';
+
+/** The relative path a privacy-sanitized `[workspace]/…` tool target names.
+ * The placeholder stands for the session workspace root, never a directory of
+ * its own: a target that climbs above that root, starts another root (POSIX,
+ * UNC, Windows drive), or carries a backslash separator names no workspace file
+ * and is refused (null). Every path without the sentinel is unrelated
+ * (undefined). `normalizeFilePath` later trims, collapses and re-splits the
+ * value, so the checks run against that same shape.
+ */
+function workspaceRelativePath(path: string): string | null | undefined {
+    if (!path.startsWith(WORKSPACE_PATH_SENTINEL)) return undefined;
+    const relative = path.slice(WORKSPACE_PATH_SENTINEL.length);
+    if (!relative || relative !== relative.trim() || relative.includes('\\') || relative.startsWith('/') || /^[A-Za-z]:/.test(relative)) return null;
+    let depth = 0;
+    for (const part of relative.split('/')) {
+        if (!part || part === '.') continue;
+        if (part === '..') {
+            if (depth === 0) return null;
+            depth -= 1;
+        } else {
+            depth += 1;
+        }
+    }
+    return relative;
+}
+
+/** Display/quick-open form of a tool path. Sanitized workspace targets become
+ * their workspace-relative path; every other path, including a sentinel target
+ * that names something outside the workspace, is returned unchanged. */
+export function normalizeWorkspaceToolPath(path: string): string {
+    return workspaceRelativePath(path) ?? path;
+}
+
+
 type ToolPart = ToolCallPart | ToolResultPart;
 export interface ToolFileChange {
     path: string;
@@ -95,7 +130,7 @@ export function getToolFileChanges(part: ToolPart, pairedCall?: ToolCallPart): T
         const inputPath = pathValueSchema.safeParse(call?.input.path).data;
         // Writes to tool devices/coordination URLs do not mutate project files.
         const path = resolved ?? (inputPath && !/^[a-z][a-z0-9+.-]*:\/\//i.test(inputPath) ? inputPath : undefined);
-        return path ? [{ path }] : [];
+        return path && workspaceRelativePath(path) !== null ? [{ path: normalizeWorkspaceToolPath(path) }] : [];
     }
     if (part.toolName !== 'edit') return [];
     const details = editResultSchema.safeParse(part.output).data?.details;
@@ -104,8 +139,14 @@ export function getToolFileChanges(part: ToolPart, pairedCall?: ToolCallPart): T
     return files.flatMap((file): ToolFileChange[] => {
         if (!file || ('isError' in file && file.isError)) return [];
         const path = file.move ?? file.path;
+        if (workspaceRelativePath(path) === null) return [];
         const parsed = parseNativeDiff(path, file.diff);
-        return [{ path, sourcePath: file.sourcePath, op: file.op, ...parsed }];
+        return [{
+            path: normalizeWorkspaceToolPath(path),
+            sourcePath: file.sourcePath ? normalizeWorkspaceToolPath(file.sourcePath) : undefined,
+            op: file.op,
+            ...parsed,
+        }];
     });
 }
 
@@ -119,7 +160,9 @@ export function getToolDiffs(part: ToolPart, pairedCall?: ToolCallPart): ToolDif
 export function getPrimaryToolPath(part: ToolPart, pairedCall?: ToolCallPart): string | null {
     if (part.type === 'tool_result') return getToolFileChanges(part, pairedCall).find((file) => file.op !== 'delete')?.path ?? null;
     const path = pathValueSchema.safeParse(part.input.path).data;
-    return (part.toolName === 'edit' || part.toolName === 'write') && path ? path : null;
+    return (part.toolName === 'edit' || part.toolName === 'write') && path && workspaceRelativePath(path) !== null
+        ? normalizeWorkspaceToolPath(path)
+        : null;
 }
 
 export function extractFirstChangedLineFromDiff(diff: string): number | undefined {
@@ -143,7 +186,8 @@ export function resolveToolQuickOpenTarget(part: ToolPart, pairedCall?: ToolCall
     const readPath = pathValueSchema.safeParse(call?.input.path).data;
     if (call?.toolName === NATIVE_TOOLS.read && readPath) {
         const parsed = parseNativeReadPath(readPath);
-        return parsed.path ? { filePath: parsed.path, line: parsed.line } : null;
+        if (!parsed.path || workspaceRelativePath(parsed.path) === null) return null;
+        return { filePath: normalizeWorkspaceToolPath(parsed.path), line: parsed.line };
     }
     const filePath = getPrimaryToolPath(part, pairedCall);
     if (!filePath) return null;
