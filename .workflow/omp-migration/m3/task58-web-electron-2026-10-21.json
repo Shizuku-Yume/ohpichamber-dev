@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/58",
+  "observedAt": "2026-10-21T02:00:00.000Z",
+  "status": "web-and-dev-electron-interaction-verified-packaged-electron-not-current",
+  "evidenceBase": {
+    "taskBranchCommit": "4d99b9827",
+    "webDistIndexSha256": "ce94191ae8ea5632e72e83a2976b727010c75a7958eda384004e3e08a2382a68",
+    "webDistBuiltAt": "2026-10-21T09:20:42+08:00",
+    "integrationHeadAtLanding": "0c7efa29b",
+    "laterIntegrationCommits": [
+      "b8eb11818 fix(ui): inspect canonical tool arguments in the output dialog",
+      "0c7efa29b fix(host): authorize fork child approval-policy scope"
+    ],
+    "limitation": "The Web dist, Web scenarios and dev Electron scenarios were produced from 4d99b9827. The two later integration commits do not modify the Task58 interaction files; packaged Electron was not rebuilt and is not claimed current."
+  },
+  "checks": {
+    "focusedTests": {
+      "command": "bun test src/components/chat/questionRequest.test.ts src/components/chat/PermissionCard.test.ts src/components/chat/FormMarkdown.test.tsx src/components/chat/formTextareaSizing.test.ts",
+      "result": "20 pass, 0 fail, 44 expect() calls (4 files)"
+    },
+    "uiTypeCheck": {
+      "command": "bun run --cwd packages/ui type-check",
+      "result": "pass (tsc -b, exit 0)"
+    },
+    "uiBuild": {
+      "command": "bun run --cwd packages/ui build",
+      "result": "pass (tsc -b, exit 0)"
+    },
+    "localeParity": {
+      "command": "bun test src/lib/i18n/messages.test.ts",
+      "result": "6 pass, 0 fail, 536 expect() calls"
+    },
+    "uiTextStyleReview": {
+      "result": "No hardcoded user-facing copy in the Task58 approval/question components; all 31 literal t() keys and 9 dynamic keys resolve in en.ts and all dictionaries pass parity.",
+      "nonblockingNotes": [
+        "The public approval contract intentionally exposes the opaque policy pattern 'native-input'; the exact command is shown in the parameter preview while the private policy target stays in the Agent Service.",
+        "Tab focus leaves the dock after the footer actions; the restored baseline has no focus trap."
+      ]
+    },
+    "securityPass": {
+      "result": "No blocking findings. UI renders sanitized ApprovalRequest details and option labels as text, parses omp.ask schema with zod, submits version/epoch/workerGeneration read from the authoritative pending record, keeps authorization in the Host authorizer, and never logs credentials or raw private targets.",
+      "nonblockingNotes": [
+        "Escape neither dismisses nor cancels a pending request; this matches the pre-M1 baseline and no accidental submission was observed.",
+        "One CAS run left the resolved question dock visible until the next reload; two subsequent reruns cleared it within 600 ms via the recovery snapshot. Recorded as an intermittent observation, not reproduced."
+      ]
+    },
+    "externalBriefs": "flow-verify Brief A/B not run: no reviewer worker was running and the user directed no new review agent waits. Owner performed the quality and security pass."
+  },
+  "web": {
+    "environment": {
+      "host": "http://127.0.0.1:3190",
+      "home": "/tmp/ohpi-task58/home",
+      "dataDir": "/tmp/ohpi-task58/data",
+      "chatsDir": "/tmp/ohpi-task58/chats",
+      "workspace": "managed chats root via /api/agent/v1/workspaces/resolve (ws_d820a729-e559-411b-9bc5-73a6fdf63933)",
+      "session": "782bb5d1-ef5b-48d0-b578-1a0bebbb2126",
+      "model": "task58/task58-fixture -> loopback http://127.0.0.1:4615/v1",
+      "auth": "UI password session; isolated HOME/data, no external provider"
+    },
+    "approvalAllow": {
+      "observed": "Dock exposed role=dialog aria-label 'Permission required', tool 'bash', reason 'The native tool operation requires approval.', summary 'Native tool operation requires approval', exact command preview, and Deny / Always allow / Allow once actions.",
+      "action": "Clicked Allow once",
+      "result": "snapshot 200 idle, pendingApprovals 0; history tool_result bash isError=false text TASK58_ALLOWED; marker file contained TASK58_ALLOWED; dock removed.",
+      "screenshots": ["01-permission-pending.png", "02-permission-allowed.png"]
+    },
+    "approvalDeny": {
+      "observed": "Pending approval version 1 with epoch/workerGeneration.",
+      "action": "Clicked Deny",
+      "result": "snapshot 200 idle, pendingApprovals 0; tool_result bash isError=true text 'Native command approval was rejected'; marker file absent, so the command did not execute; dock removed.",
+      "screenshots": ["03-permission-deny-pending.png", "04-permission-denied.png"]
+    },
+    "sessionAllow": {
+      "action": "Clicked Always allow on the first bash approval; repeated the identical command in a second run",
+      "result": "First run executed (marker TASK58_SESSION_OK). Second run completed idle with zero pending-approval samples and recreated the marker, proving the same-input session policy resolves without a dock.",
+      "screenshots": ["05-permission-session-pending.png", "06-permission-session-second.png"]
+    },
+    "approvalKeyboard": {
+      "action": "Alt+Enter on a pending bash approval",
+      "result": "Approval resolved, snapshot idle/pending 0, marker TASK58_ALLOWED created.",
+      "screenshots": []
+    },
+    "questionAnswer": {
+      "observed": "Two-question omp.ask dock: step 1 radiogroup aria-label 'Panel style' with radios Original panel / Compact panel and recommended marker; step 2 freeform textarea auto-focused.",
+      "action": "Selected Original panel, clicked Next, typed CJK text '自由入力の回答', pressed Enter",
+      "result": "Dock dismissed; snapshot 200 idle with pendingQuestions 0; ask tool_result text 'User answers: panel: Original panel, note: \"自由入力の回答\"' with selectedOptions ['Original panel'] and customInput '自由入力の回答'.",
+      "screenshots": ["07-question-step1.png", "08-question-selected.png", "09-question-step2.png", "10-question-answered.png"]
+    },
+    "keyboardFocusEscape": {
+      "tabSequence": "Radiogroup controls -> Other -> Dismiss -> Next -> focus leaves the dock to app chrome (no focus trap, baseline parity).",
+      "escape": "Escape on the focused freeform textarea left the request pending (snapshot questions 1), did not submit, and did not clear the input.",
+      "accessibility": "Dialog and radiogroup expose role/aria-label; radios expose aria-checked; the freeform answer textarea is focused when its step mounts.",
+      "screenshots": ["09-question-step2.png"]
+    },
+    "imeComposition": {
+      "method": "CDP Input.imeSetComposition('にほんご') into the focused textarea; Enter via Input.dispatchKeyEvent; a capture listener recorded {key:'Enter', isComposing:true, keyCode:13}. This simulates an IME composition; no system IME was used.",
+      "result": "During composition the pending count stayed 1 and the value stayed 'にほんご'; Enter did not submit. After committing via Input.insertText('にほんご入力'), Enter submitted and the ask result carried customInput 'にほんご入力'.",
+      "screenshots": ["11-ime-composing.png", "12-ime-committed.png", "13-ime-answered.png"]
+    },
+    "casStaleRejection": {
+      "method": "The UI reply POST was paused with CDP Fetch interception after the UI read version 1; a competing direct reply with the same version was resolved first (200); the paused UI reply was then released.",
+      "result": "UI reply rejected with 409 QUESTION_CONFLICT; visible toast 'Failed to send response / Try again.'; the dock was cleared by recovery (dialog null within 600 ms in the reproducible rerun). A subsequent old-version reply also returned 409. Terminal tool result contains only the accepted 'Alpha' selection, never the rejected 'Beta'.",
+      "screenshots": ["14-cas-pending.png", "15-cas-rejected-toast.png", "16-cas-settled.png"],
+      "limitation": "One earlier CAS run kept the stale dock visible until reload; not reproduced in two reruns."
+    },
+    "restartExpiry": {
+      "method": "Pending bash approval, then the isolated Host was stopped and restarted on the same data dir.",
+      "result": "After restart snapshot 200 had 0 pending approvals/questions; the old reply returned 410 APPROVAL_EXPIRED ('Request belongs to an expired worker generation'); the deny marker remained absent, so the rejected action did not execute; final snapshot 0 pending.",
+      "screenshots": ["17-restart-reloaded.png"]
+    }
+  },
+  "electron": {
+    "environment": "Dev Electron 43.7.0 from 4d99b9827, renderer http://127.0.0.1:5199, in-process Host 3911, isolated HOME/data/chats, loopback fixture, CDP 9241. Not a packaged AppImage.",
+    "question": {
+      "observed": "Native two-question dock rendered in the Electron window (1 of 2, radios, progress).",
+      "action": "Selected Original panel, Next, typed 'Electron freeform answer', Enter",
+      "result": "Dock dismissed; ask tool_result carried selectedOptions ['Original panel'] and customInput 'Electron freeform answer'; snapshot idle.",
+      "screenshots": ["electron-01-question-step1.png", "electron-02-question-step2.png", "electron-03-question-answered.png"]
+    },
+    "approval": {
+      "observed": "Permission dock with reason, summary, command preview and all three actions.",
+      "action": "Clicked Allow once",
+      "result": "bash tool_result isError=false text TASK58_ALLOWED; snapshot idle/pending 0; dock removed.",
+      "screenshots": ["electron-04-permission-pending.png", "electron-05-permission-allowed.png"]
+    },
+    "packagedElectron": "Not verified at this HEAD. No AppImage was built for this run; earlier packaged screenshots and receipts are stale and not reused."
+  },
+  "artifacts": {
+    "hostCopies": "/home/shizuku/.cache/ohpi-acceptance/evidence-task58/",
+    "scenarioFiles": [
+      "approval-allow.json", "approval-deny.json", "approval-session.json", "approval-keyboard.json",
+      "question-flow.json", "question-ime.json", "ime-event-proof.json", "question-cas.json",
+      "cas-monitor.json", "restart-expiry.json", "electron-question.json", "electron-approval.json"
+    ]
+  }
+}
