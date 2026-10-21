@@ -4,13 +4,12 @@
 **Task type:** bugfix
 **Base commit:** 84b3d4046d4d31f18b0f5c0ff3c050195885f4e6
 **Started:** 2026-10-21T04:42:53+08:00
-**Status:** complete
 **Integration base:** `385137185` plus Task70 `34b540d03`/`a172e6ae5` (cherry-picked as `5bad87048`/`0cda40811`)
 **Resume branch/worktree:** `omp-through-m3/65-live-run-control-reconnect-integrated` at `/home/shizuku/Project/ohpichamber-worktrees/m3-65-live-run-control-integrated`
 
 **Delivers:** A snapshot requested before a run acknowledgement can no longer erase a live run's Stop/abort control, and a disconnected Web/Electron client resumes startup recovery and stream recovery automatically on reconnect. The committed Task 62 snapshot-race regression passes at HEAD after the change, Stop remains available through the in-flight window, and abort still reaches the active run.
 
-**Blocked by:** None (Task70 archived)
+**Blocked by:** None
 **Files:** `packages/ui/src/sync/session-message-loader.ts`, `packages/ui/src/sync/sync-context.tsx`, `packages/ui/src/sync/DOCUMENTATION.md`, `packages/ui/src/sync/run-control-snapshot-race.test.ts` (verify, do not rewrite), focused sync tests for reconnect subscription, `.workflow/omp-migration/m3/task36-recovery-guest-2026-10-20.json` (retain as Task 36 evidence, not as this task's result)
 
 **Read first:** `.workflow/specs/omp-through-m3.md` W7, W8, W10; `packages/ui/src/sync/run-control-snapshot-race.test.ts`; `packages/ui/src/sync/session-message-loader.ts` snapshot install path; `packages/ui/src/sync/sync-context.tsx` connection/resume path; `packages/ui/src/sync/DOCUMENTATION.md` run-control invariants
