@@ -274,10 +274,7 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
 
   const BUSY_INDICATOR = 'animate-busy-wave';
 
-  const makeReasoningPart = (
-    _time: { start: number; end?: number },
-    text: string = SHORT_REASONING,
-  ): ReasoningPartFixture => ({
+  const makeReasoningPart = (text: string = SHORT_REASONING): ReasoningPartFixture => ({
     type: 'reasoning',
     partId: 'prt_reasoning_2020',
     content: text,
@@ -297,7 +294,7 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
     // Freshly opened completed session: cached part never received `time.end`
     // and no message-level stream phase is available. The full text is already
     // local, so the block must render as finished content on first paint.
-    const markup = renderPart(makeReasoningPart({ start: 1_000 }), undefined);
+    const markup = renderPart(makeReasoningPart(), undefined);
 
     expect(markup).not.toContain(BUSY_INDICATOR);
     expect(markup).toContain('aria-expanded="false"');
@@ -305,19 +302,19 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
   });
 
   test('reasoning without time.end in a completed message renders complete, not streaming', () => {
-    const markup = renderPart(makeReasoningPart({ start: 1_000 }), 'completed');
+    const markup = renderPart(makeReasoningPart(), 'completed');
 
     expect(markup).not.toContain(BUSY_INDICATOR);
     expect(markup).toContain('aria-expanded="false"');
     expect(markup).toContain(SHORT_REASONING);
   });
 
-  test('reasoning with time.end is never treated as streaming, even when the phase claims streaming', () => {
-    const markup = renderPart(makeReasoningPart({ start: 1_000, end: 2_000 }), 'streaming');
+  test('canonical reasoning carries no persisted timing: only a live phase streams it', () => {
+    // Canonical reasoning parts have no `time`, so the message-level live
+    // phase is the only authority that can mark this block as streaming.
+    const markup = renderPart(makeReasoningPart(), 'streaming');
 
-    expect(markup).not.toContain(BUSY_INDICATOR);
-    expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toContain(SHORT_REASONING);
+    expect(markup).toContain(BUSY_INDICATOR);
   });
 
   // The setting reaches the block as `expandWhileStreaming`; server rendering
@@ -339,7 +336,7 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
     // Genuinely live: the message-level stream phase reports streaming and the
     // part has not ended. The header shows the busy indicator; the body stays
     // folded so its closing at the end does not move the chat.
-    const markup = renderPart(makeReasoningPart({ start: 1_000 }), 'streaming');
+    const markup = renderPart(makeReasoningPart(), 'streaming');
 
     expect(markup).toContain(BUSY_INDICATOR);
     expect(markup).toContain('aria-expanded="false"');
@@ -366,8 +363,8 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
     // The streaming early-return keeps the block mounted before the block-level
     // reveal commits a first line. The header must read as busy and must not
     // paint an empty summary row.
-    const markup = renderPart(makeReasoningPart({ start: 1_000 }, ''), 'streaming');
-    const withText = renderPart(makeReasoningPart({ start: 1_000 }), undefined);
+    const markup = renderPart(makeReasoningPart(''), 'streaming');
+    const withText = renderPart(makeReasoningPart(), undefined);
 
     expect(markup).toContain(BUSY_INDICATOR);
     expect(markup).toContain('role="button"');
@@ -383,7 +380,7 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
     // remount a real client root instead, watching the busy indicator across
     // every commit.
     const dom = installDomStub();
-    const part = makeReasoningPart({ start: 1_000 });
+    const part = makeReasoningPart();
     const busySeen: boolean[] = [];
     const root = createRoot(dom.container);
 

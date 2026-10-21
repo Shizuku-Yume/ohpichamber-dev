@@ -10,7 +10,7 @@ function createMessageEntry({ id, role, createdAt, turnId = id }: { id: string; 
 describe('projectTurnRecords', () => {
     test('groups assistant replies under their parent user turn', () => {
         const user = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
-        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
 
         const projection = projectTurnRecords([user, assistant]);
 
@@ -22,9 +22,9 @@ describe('projectTurnRecords', () => {
 
     test('splits consecutive assistant replies across the user turns they follow', () => {
         const user1 = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
-        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
         const user2 = createMessageEntry({ id: 'u2', role: 'user', createdAt: 3 });
-        const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4 });
+        const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4, turnId: 'u2' });
 
         const projection = projectTurnRecords([user1, assistant1, user2, assistant2]);
 
@@ -41,7 +41,7 @@ describe('projectTurnRecords', () => {
         // message; it has no turn to belong to and must not invent one.
         const orphan = createMessageEntry({ id: 'a0', role: 'assistant', createdAt: 1 });
         const user1 = createMessageEntry({ id: 'u1', role: 'user', createdAt: 2 });
-        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 3 });
+        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 3, turnId: 'u1' });
 
         const projection = projectTurnRecords([orphan, user1, assistant1]);
 
@@ -64,7 +64,7 @@ describe('projectTurnRecords', () => {
 
     test('opens a turn at a subagent run report so the parent reply renders under it', () => {
         const user = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
-        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
         const report = createMessageEntry({ id: 's1', role: 'user', createdAt: 3 });
         const reaction = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4, turnId: 's1' });
 
@@ -79,7 +79,7 @@ describe('projectTurnRecords', () => {
         // OpenCode compacts mid-run and the agent carries on; those steps must
         // not rejoin the prompt's turn and push the compaction above the prompt.
         const user = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
-        const before = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        const before = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
         const compaction = createMessageEntry({ id: 'c1', role: 'user', createdAt: 3 });
         const after = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4, turnId: 'c1' });
 
@@ -102,9 +102,9 @@ describe('projectTurnRecords', () => {
 
     test('reuses unchanged turn records from the previous projection', () => {
         const user1 = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
-        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
         const user2 = createMessageEntry({ id: 'u2', role: 'user', createdAt: 3 });
-        const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4 });
+        const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4, turnId: 'u2' });
         const initial = projectTurnRecords([user1, assistant1, user2, assistant2]);
         const updatedAssistant2: ChatMessageEntry = {
             ...assistant2,
@@ -121,7 +121,7 @@ describe('projectTurnRecords', () => {
 
     test('hydrates updated turns when a previous projection exists but no turn is reusable', () => {
         const user = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
-        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
         const initial = projectTurnRecords([user, assistant]);
         const updatedAssistant: ChatMessageEntry = {
             ...assistant,
@@ -136,7 +136,7 @@ describe('projectTurnRecords', () => {
         expect(next.turns[0]).not.toBe(initial.turns[0]);
         expect(next.turns[0]?.hasTools).toBe(true);
         expect(next.turns[0]?.activityParts).toHaveLength(1);
-        expect(next.turns[0]?.stream.isStreaming).toBe(true);
+        expect(next.turns[0]?.stream.isStreaming).toBe(false);
         expect(next.turns[0]?.stream.isRetrying).toBe(false);
     });
 
@@ -156,9 +156,9 @@ describe('projectTurnRecords', () => {
     test('merges turns started by hidden user messages when merging is enabled', () => {
         const user1 = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
         user1.parts = [{ type: 'text', partId: 'p1', content: 'visible prompt' }];
-        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
         const hiddenUser = createMessageEntry({ id: 'u2', role: 'user', createdAt: 3 });
-        const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4 });
+        const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4, turnId: 'u2' });
 
         const projection = projectTurnRecords([user1, assistant1, hiddenUser, assistant2], {
             mergeHiddenUserTurns: true,
@@ -172,9 +172,9 @@ describe('projectTurnRecords', () => {
 
     test('keeps hidden user messages as separate turns when merging is disabled', () => {
         const user1 = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
-        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
         const hiddenUser = createMessageEntry({ id: 'u2', role: 'user', createdAt: 3 });
-        const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4 });
+        const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4, turnId: 'u2' });
 
         const projection = projectTurnRecords([user1, assistant1, hiddenUser, assistant2]);
 
@@ -184,7 +184,7 @@ describe('projectTurnRecords', () => {
 
     test('does not merge a hidden user message when there is no previous turn', () => {
         const hiddenUser = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
-        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
 
         const projection = projectTurnRecords([hiddenUser, assistant], {
             mergeHiddenUserTurns: true,
@@ -198,11 +198,11 @@ describe('projectTurnRecords', () => {
     test('chains merges across consecutive hidden user messages', () => {
         const user1 = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
         user1.parts = [{ type: 'text', partId: 'p1', content: 'visible prompt' }];
-        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
         const hidden1 = createMessageEntry({ id: 'u2', role: 'user', createdAt: 3 });
-        const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4 });
+        const assistant2 = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 4, turnId: 'u2' });
         const hidden2 = createMessageEntry({ id: 'u3', role: 'user', createdAt: 5 });
-        const assistant3 = createMessageEntry({ id: 'a3', role: 'assistant', createdAt: 6 });
+        const assistant3 = createMessageEntry({ id: 'a3', role: 'assistant', createdAt: 6, turnId: 'u3' });
 
         const projection = projectTurnRecords([user1, assistant1, hidden1, assistant2, hidden2, assistant3], {
             mergeHiddenUserTurns: true,
@@ -215,7 +215,7 @@ describe('projectTurnRecords', () => {
     test('keeps text inline (not justification) when a message is blocked on a pending question', () => {
         const user = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
         user.parts = [{ type: 'text', partId: 'p1', content: 'prompt' }];
-        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
         // The turn is blocked waiting for the user's answer: no finish and a
         // pending question tool part, with context text before the question.
         assistant.parts = [

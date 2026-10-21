@@ -194,6 +194,11 @@ describe('restored transcript composition', () => {
         for (const toolToggle of toolToggles) {
             await act(async () => toolToggle.click());
         }
+        // A later click mounts the heavy body on the next animation frame;
+        // flush both frames before inspecting the expanded row.
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        });
         expect(Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]'))
             .every((toggle) => toggle.getAttribute('aria-expanded') === 'true')).toBe(true);
         expect(container.textContent).toContain('RICH TOOL OUTPUT BODY');

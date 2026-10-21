@@ -267,7 +267,10 @@ export const projectTurnRecords = (
     const projection = projectTurnIndexes(stableTurns);
     const ungroupedMessageIds = new Set<string>();
     messages.forEach((message) => {
-        if (!groupedMessageIds.has(message.messageId)) {
+        // An assistant reply without a canonical user turn has nothing to
+        // anchor it; render it neither as a turn nor as a standalone row. A
+        // page loaded from the middle of a session starts on such a reply.
+        if (message.role !== 'assistant' && !groupedMessageIds.has(message.messageId)) {
             ungroupedMessageIds.add(message.messageId);
         }
     });
