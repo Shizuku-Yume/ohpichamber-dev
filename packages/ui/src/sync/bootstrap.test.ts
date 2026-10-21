@@ -40,7 +40,7 @@ describe("native canonical bootstrap", () => {
     const { input, store } = inputFor(client)
     const result = bootstrapDirectory({ ...input, loadSessions: async () => { calls.push("sessions") } })
     expect(await result.sessions).toBe("complete")
-    expect(await result.environment).toBe("complete")
+    expect(await result.environment).toEqual({ status: "complete", retryable: false })
     expect(calls.indexOf("resolve")).toBeLessThan(calls.indexOf("sessions"))
     expect(calls).toContain('shell:{"kind":"workspace","workspaceId":"workspace-1"}')
     expect(store.getState().workspace).toEqual(workspace)
@@ -56,7 +56,7 @@ describe("native canonical bootstrap", () => {
     stale = true
     resolve(workspace)
     expect(await result.sessions).toBe("stale")
-    expect(await result.environment).toBe("stale")
+    expect(await result.environment).toEqual({ status: "stale", retryable: false })
     expect(store.getState().workspace).toBeUndefined()
     expect(patches).toEqual([])
   })
@@ -65,7 +65,7 @@ describe("native canonical bootstrap", () => {
     const { input, store } = inputFor(nativeClient({ getShellSnapshot: async () => { throw new Error("shell unavailable") } }))
     const result = bootstrapDirectory(input)
     expect(await result.sessions).toBe("complete")
-    expect(await result.environment).toBe("failed")
+    expect(await result.environment).toEqual({ status: "failed", retryable: true })
     expect(store.getState().status).toBe("partial")
     expect(store.getState().workspace).toEqual(workspace)
   })
@@ -79,9 +79,54 @@ describe("native canonical bootstrap", () => {
     } }))
     const result = bootstrapDirectory(input)
     expect(await result.sessions).toBe("complete")
-    expect(await result.environment).toBe("complete")
+    expect(await result.environment).toEqual({ status: "complete", retryable: false })
     expect(calls).toBe(2)
     expect(store.getState().workspace).toEqual(workspace)
+  })
+
+  test("retries retryable environment readiness and commits the eventual catalog", async () => {
+    let modelCalls = 0
+    const retryable = () => new CanonicalApiError({ type: "urn:test:warmup", title: "Warmup", status: 503, detail: "Agent Service is not ready", code: "SERVICE_UNAVAILABLE", retryable: true })
+    const { input, store } = inputFor(nativeClient({ getModels: async () => {
+      modelCalls += 1
+      if (modelCalls === 1) throw retryable()
+      return { workspaceId: workspace.workspaceId, revision: "1", models: [] }
+    } }))
+    const result = bootstrapDirectory(input)
+    expect(await result.sessions).toBe("complete")
+    expect(await result.environment).toEqual({ status: "complete", retryable: false })
+    expect(modelCalls).toBe(2)
+    expect(store.getState().models).toEqual({ workspaceId: workspace.workspaceId, revision: "1", models: [] })
+    expect(store.getState().status).toBe("complete")
+  })
+
+  test("non-retryable environment failure fails immediately and preserves healthy siblings", async () => {
+    let providerCalls = 0
+    const nonRetryable = new CanonicalApiError({ type: "urn:test:denied", title: "Denied", status: 403, detail: "Forbidden", code: "UNAUTHORIZED", retryable: false })
+    const { input, store } = inputFor(nativeClient({
+      getProviders: async () => { providerCalls += 1; throw nonRetryable },
+      getModels: async () => ({ workspaceId: workspace.workspaceId, revision: "1", models: [] }),
+    }))
+    const result = bootstrapDirectory(input)
+    expect(await result.sessions).toBe("complete")
+    expect(await result.environment).toEqual({ status: "failed", retryable: false })
+    expect(providerCalls).toBe(1)
+    expect(store.getState().models).toEqual({ workspaceId: workspace.workspaceId, revision: "1", models: [] })
+    expect(store.getState().status).toBe("partial")
+  })
+
+  test("ignores environment completion after the runtime scope turns stale", async () => {
+    let stale = false
+    let resolveAgents!: (value: { workspaceId: string; revision: string; agents: never[] }) => void
+    const pendingAgents = new Promise<{ workspaceId: string; revision: string; agents: never[] }>((resolve) => { resolveAgents = resolve })
+    const { input, store, patches } = inputFor(nativeClient({ getAgents: () => pendingAgents }), () => stale)
+    const result = bootstrapDirectory(input)
+    await Promise.resolve()
+    stale = true
+    resolveAgents({ workspaceId: workspace.workspaceId, revision: "1", agents: [] })
+    expect(await result.environment).toEqual({ status: "stale", retryable: false })
+    expect(patches.some((patch) => "agents" in patch)).toBe(false)
+    expect(store.getState().agents).toBeUndefined()
   })
 
   test("global failed and partial discovery preserve their own cached scopes", async () => {

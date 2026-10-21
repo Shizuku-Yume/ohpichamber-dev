@@ -3,7 +3,7 @@ import { canonicalClient } from "@/api/canonicalClient"
 import { registerWorkspaceDirectory } from "@/stores/globalSessions"
 import { refreshBackgroundShells } from "./background-shells"
 import type { GlobalState, State } from "./types"
-import { retry } from "./retry"
+import { isRetryableBootstrapError, retry, STARTUP_RETRY } from "./retry"
 
 /** Discovery failures are scoped, never permission to erase a failed sibling. */
 export async function bootstrapGlobal(
@@ -52,6 +52,7 @@ export type DirectoryBootstrapInput = {
 }
 
 export type BootstrapResult = "complete" | "failed" | "stale"
+export type EnvironmentBootstrapResult = { status: BootstrapResult; retryable: boolean }
 
 /** Resolve an authorized directory before any workspace-scoped operation. */
 export function bootstrapDirectory(input: DirectoryBootstrapInput) {
@@ -82,27 +83,38 @@ export function bootstrapDirectory(input: DirectoryBootstrapInput) {
       return input.isStale?.() ? "stale" : "failed"
     }
   })()
-  const environment = (async (): Promise<BootstrapResult> => {
+  const environment = (async (): Promise<EnvironmentBootstrapResult> => {
     try {
       const workspace = await resolved
-      if (!workspace || input.isStale?.()) return "stale"
+      if (!workspace || input.isStale?.()) return { status: "stale", retryable: false }
+      const startupRead = <T>(read: () => Promise<T>): Promise<T> => retry(() => {
+        if (input.isStale?.()) throw new Error("Workspace bootstrap is no longer current")
+        return read()
+      }, STARTUP_RETRY)
       const reads = await Promise.allSettled([
-        client.getModels(workspace.workspaceId).then((models) => { if (!input.isStale?.()) input.set({ models }) }),
-        client.getProviders(workspace.workspaceId).then((providers) => { if (!input.isStale?.()) input.set({ providers }) }),
-        client.getAgents(workspace.workspaceId).then((agents) => { if (!input.isStale?.()) input.set({ agents }) }),
-        refreshBackgroundShells(input.directory, async () => {
+        startupRead(() => client.getModels(workspace.workspaceId)).then((models) => { if (!input.isStale?.()) input.set({ models }) }),
+        startupRead(() => client.getProviders(workspace.workspaceId)).then((providers) => { if (!input.isStale?.()) input.set({ providers }) }),
+        startupRead(() => client.getAgents(workspace.workspaceId)).then((agents) => { if (!input.isStale?.()) input.set({ agents }) }),
+        startupRead(() => refreshBackgroundShells(input.directory, async () => {
           const snapshot = await client.getShellSnapshot({ kind: "workspace", workspaceId: workspace.workspaceId })
           if (input.isStale?.()) throw new Error("Workspace bootstrap is no longer current")
           return snapshot
-        }),
+        })),
       ])
-      if (input.isStale?.()) return "stale"
-      if (reads.some((result) => result.status === "rejected")) return "failed"
-      if (await sessions !== "complete") return "failed"
+      if (input.isStale?.()) return { status: "stale", retryable: false }
+      const rejected = reads.filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      if (rejected.length > 0) {
+        return {
+          status: "failed",
+          retryable: rejected.some((result) => isRetryableBootstrapError(result.reason)),
+        }
+      }
+      if (await sessions !== "complete") return { status: "failed", retryable: false }
       input.set({ status: "complete" })
-      return "complete"
-    } catch {
-      return input.isStale?.() ? "stale" : "failed"
+      return { status: "complete", retryable: false }
+    } catch (error) {
+      if (input.isStale?.()) return { status: "stale", retryable: false }
+      return { status: "failed", retryable: isRetryableBootstrapError(error) }
     }
   })()
   return { sessions, environment }

@@ -68,7 +68,7 @@ Directory bootstrap operates through `CanonicalClient` consuming `@openchamber/a
 - Demand is deduplicated by normalized directory path
 - Bootstrap completion returns separate `sessions` and `environment` status results
 
-Workspace resolution and session discovery retain bounded startup retries. Canonical `ProblemDetails.retryable` controls canonical failures; a stale runtime or directory owner stops subsequent attempts. Environment and session initialization remain separate lanes, and failed environment initialization is recorded as a failure rather than marked complete.
+Workspace resolution and session discovery retain bounded startup retries. Canonical `ProblemDetails.retryable` controls canonical failures; a stale runtime or directory owner stops subsequent attempts. Environment and session initialization remain separate lanes, and failed environment initialization is recorded as a failure rather than marked complete. Each environment read (models, providers, agents, background shells) runs inside `STARTUP_RETRY` (8 attempts, 1 s to 8 s backoff, about 39 s of waits) with an independent stale-scope guard, so one slow sibling does not cancel the others. After the list lane completes, a failed environment initialization is requeued once when its bootstrap state is complete or absent and no matching queue/running entry exists; a successful retry is idempotent and does not duplicate session reads. Requeueing follows `isRetryableBootstrapError`: network/transient messages, HTTP 408/429/5xx, canonical `retryable: true`, and unclassified failures get one recovery attempt per connection signal, while other 4xx and canonical `retryable: false` failures stay failed until their input changes.
 
 ## Ownership map
 

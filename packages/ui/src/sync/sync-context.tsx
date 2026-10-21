@@ -11,6 +11,7 @@ import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { resolveWorkspaceDirectory, subscribeWorkspaceDirectories } from "@/stores/globalSessions"
 import { ChildStoreManager, markDirectorySessionPartChanged, subscribeDirectorySessionMessages, subscribeDirectoryPermission, subscribeDirectoryForm, type DirectoryStore, type DirectoryBootstrapPriority, type DirectoryBootstrapReason } from "./child-store"
 import { bootstrapDirectory, bootstrapGlobal } from "./bootstrap"
+import { BootstrapFailureError } from "./retry"
 import { notifyFirstCanonicalBootstrap } from "./first-server-connect"
 import { useGlobalSyncStore } from "./global-sync-store"
 import { applyDirectoryEvent, compareCounters, mergeHostSession } from "./event-reducer"
@@ -312,8 +313,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
         const store = childStores.getChild(context.directory)
         if (!store) return
         const result = bootstrapDirectory({ directory: context.directory, store, client, set: (patch) => { if (context.isCurrent()) store.setState(patch) }, isStale: () => !context.isCurrent() || !isCurrent(), loadSessions })
-        context.trackInitialization(result.environment.then((status) => {
-          if (status === "failed") throw new Error("Canonical environment discovery failed")
+        context.trackInitialization(result.environment.then(({ status, retryable }) => {
+          if (status === "failed") throw new BootstrapFailureError("Canonical environment discovery failed", retryable)
         }))
         return result.sessions.then((status) => {
           if (status === "failed") throw new Error("Canonical session discovery failed")

@@ -8,6 +8,7 @@ import { startSessionLoadPerformanceEvent } from "./session-load-performance"
 import { countSyncPerformance } from "./performance-diagnostics"
 import { isFilesystemError } from "@/lib/api/files-errors"
 import { updateChangedStreamingSessions } from "./streaming"
+import { isRetryableBootstrapError } from "./retry"
 
 export type DirectoryStore = State & {
   /** Apply a partial state update */
@@ -259,7 +260,7 @@ export type DirectoryBootstrapContext = DirectoryBootstrapDemand & {
 
 type DirectoryInitialization =
   | { state: "running" | "complete"; token: symbol }
-  | { state: "failed"; token: symbol; reason: DirectoryBootstrapFailureReason }
+  | { state: "failed"; token: symbol; reason: DirectoryBootstrapFailureReason; retryable: boolean }
 
 const BOOTSTRAP_PRIORITY: Record<DirectoryBootstrapPriority, number> = {
   selected: 0,
@@ -355,6 +356,8 @@ export class ChildStoreManager {
   private readonly bootstrapStates = new Map<string, DirectoryBootstrapState>()
   private readonly bootstrapFailures = new Map<string, DirectoryBootstrapFailureReason>()
   private readonly initializations = new Map<string, DirectoryInitialization>()
+  /** Recovery signals received while an environment initialization is in flight. */
+  private readonly initializationRetryRequested = new Set<string>()
   /** Stores that may have missed events and re-read on their next demand. */
   private readonly staleDirectories = new Set<string>()
 
@@ -634,6 +637,20 @@ export class ChildStoreManager {
       }
       this.staleDirectories.add(directory)
     }
+    for (const [directory, initialization] of [...this.initializations]) {
+      if (initialization.state === "running") {
+        this.initializationRetryRequested.add(directory)
+        continue
+      }
+      if (initialization.state !== "failed" || !initialization.retryable || queued.has(directory)) continue
+      if (this.bootstrapStates.get(directory) === "failed") continue
+      if (this.bootstrapStates.get(directory) === "queued" || this.bootstrapStates.get(directory) === "running") continue
+      if (this.bootstrapQueue.has(directory) || this.runningBootstraps.has(directory)) continue
+      const demand = this.aggregateBootstrapDemand(directory)
+        ?? { directory, priority: "selected" as const, reason: "server-connected" as const }
+      this.queueBootstrap({ ...demand, force: true })
+      queued.add(directory)
+    }
     return queued
   }
 
@@ -880,15 +897,24 @@ export class ChildStoreManager {
     this.notifyBootstrapSubscribers()
     void initialization.then(() => {
       if (!canCommit()) return finish("stale")
+      this.initializationRetryRequested.delete(directory)
       this.initializations.set(directory, { state: "complete", token })
       finish("complete")
       this.notifyBootstrapSubscribers()
     }, (error) => {
       if (!canCommit()) return finish("stale")
+      const retryable = isRetryableBootstrapError(error)
+      const retryRequested = this.initializationRetryRequested.delete(directory)
       this.initializations.set(directory, {
         state: "failed", token,
         reason: isFilesystemError(error) && error.reason === "os-permission" ? "os-permission" : "generic",
+        retryable,
       })
+      if (retryable && retryRequested && !this.disposed && isCurrent()) {
+        const demand = this.aggregateBootstrapDemand(directory)
+          ?? { directory, priority: "selected" as const, reason: "server-connected" as const }
+        this.queueBootstrap({ ...demand, force: true })
+      }
       finish("error")
       this.notifyBootstrapSubscribers()
     })
@@ -917,6 +943,7 @@ export class ChildStoreManager {
     this.bootstrapFailures.delete(directory)
     this.directoryBootstrapRuns.delete(directory)
     this.initializations.delete(directory)
+    this.initializationRetryRequested.delete(directory)
     this.staleDirectories.delete(directory)
     for (const demands of this.bootstrapDemandsByOwner.values()) demands.delete(directory)
     this.children.delete(directory)
@@ -984,6 +1011,7 @@ export class ChildStoreManager {
     this.bootstrapStates.clear()
     this.bootstrapFailures.clear()
     this.initializations.clear()
+    this.initializationRetryRequested.clear()
     this.staleDirectories.clear()
     this.directoryBootstrapRuns.clear()
     this.bootstrapDemandsByOwner.clear()

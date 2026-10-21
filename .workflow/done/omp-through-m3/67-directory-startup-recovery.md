@@ -1,0 +1,42 @@
+# 67: Recover directory catalogs across Agent Service startup and reconnects
+
+**Effort:** omp-through-m3
+**Task type:** bugfix
+**Base commit:** 152a42cdbbaaef1e584f62b89e971ecedd38f5f5
+**Started:** 2026-10-21T08:19:57+08:00
+
+**Delivers:** When the Agent Service is still starting or briefly unavailable, each directory catalog read (models, providers, agents, background shells) retries within one bounded startup budget, keeps sibling reads independent, and preserves distinct failed/partial/empty states. After the session list completes, failed directory initializations are requeued once and become idempotent on success; a reconnect triggers the same recovery without a page reload. Task 66's landed admission-recovery branches stay intact and green.
+
+**Blocked by:** 65, 66
+**Files:** `packages/ui/src/sync/bootstrap.ts`, `packages/ui/src/sync/bootstrap.test.ts`, `packages/ui/src/sync/retry.ts`, `packages/ui/src/sync/retry.test.ts`, `packages/ui/src/sync/child-store.ts`, `packages/ui/src/sync/child-store.test.ts`, `packages/ui/src/sync/first-server-connect.test.ts`, `packages/ui/src/sync/DOCUMENTATION.md` (append after Task 65)
+
+**Read first:** `.workflow/specs/omp-through-m3.md` W7, W8, W9, W10; Task 66 `## Findings`; Task 65's landed `DOCUMENTATION.md` change; the open Task 17 finding on `first-server-connect.test.ts`; `packages/ui/src/sync/retry.ts` `STARTUP_RETRY`; `packages/ui/src/sync/bootstrap.ts` environment-read fan-out; `packages/ui/src/sync/child-store.ts` initialization queue
+**Covers:** W7, W8, W9, W10
+
+**Check:** From `packages/ui`, `bun test src/sync/bootstrap.test.ts src/sync/child-store.test.ts src/sync/retry.test.ts src/sync/first-server-connect.test.ts` passes, and `bun run --cwd packages/ui type-check` passes. One isolated Web run with Agent Service readiness delayed or returning 503 for more than 20 seconds, followed by one reconnect, loads the canonical directories without a page reload and records the receipt path in `## Progress`.
+
+- [x] Wrap each environment read in the bounded retry budget with the existing stale-scope guard; keep `Promise.allSettled` sibling isolation and the current `failed`/`partial` status meanings.
+- [x] Requeue failed initializations only when bootstrap state is complete or absent and no matching queue/running entry exists; make a successful retry idempotent and do not duplicate list/session reads.
+- [x] Keep Task 66's landed admission-recovery branches intact (`running` + no workspace -> `rerunRequested`; `failed` + no demand + no workspace -> forced requeue); the named case passes at Base and must stay green without weakening the "no readiness after rejection" assertion.
+- [x] Classify initialization failures as retryable (network/transient messages, HTTP 408/429/5xx, canonical `retryable: true`, unknown generic) or non-retryable (other 4xx and canonical `retryable: false`); requeue only retryable failures on recovery, once per signal, with the existing queue/state guards preventing self-loops. Cover both classes with durable tests.
+- [x] Update `packages/ui/src/sync/DOCUMENTATION.md` (owned by Task 65 first) with the actual attempt budget, environment-initialization requeue, retryability policy, and connection-triggered resume; do not repeat or contradict Task 65's run-control text.
+- [x] Keep the canonical catalogs as the only owner; no OpenCode-shaped fallback or silent empty catalog on failure.
+
+**Starting state:** This task runs in its own isolated worktree at Base `152a42cdb`, which includes Task 65's landed `DOCUMENTATION.md` text. `Dirty at start: none`. The user-owned startup-retry work lives in the dirty `m1-integration` tree and was preserved verbatim before implementation at `/tmp/task67-preserve/startup-retry.patch` (sha256 `29321becfdd6b16aa24926ac0cb2d0cb8d00dd3fbbc20733d31e27eca1ca7851`, verified with `git apply --check` at Base) plus `/tmp/task67-preserve/sha256.txt`. Never stash, restore, clean or discard the source tree; do not copy whole dirty files. Establish Check-before with test-only hunks, then apply the preserved implementation and extend it for the retryability policy. Append to Task 65's documentation text rather than reverting it.
+
+## Progress
+
+- `Dirty at start: none` (isolated worktree).
+- Preserved source: `/tmp/task67-preserve/startup-retry.patch` (bootstrap.ts/.test, child-store.ts/.test, retry.ts), sha256 verified and `git apply --check` clean at Base `152a42cdb`.
+- Task 65 landed at Base: `run-control-snapshot-race.test.ts`, `session-message-loader-run-control.test.ts`, `sync-context-connection-resume.test.tsx`, and its `DOCUMENTATION.md` text are present.
+- **Check before (test-only hunks at Base, no implementation):** from `packages/ui`, `bun test src/sync/bootstrap.test.ts src/sync/child-store.test.ts src/sync/retry.test.ts src/sync/first-server-connect.test.ts` reported `27 pass / 2 fail`: the retryable-read case expected environment `complete` and received `failed` (`bootstrap.test.ts:97`), and the failed-initialization requeue expected `retryFailedBootstraps().has("/workspace")` true and received false (`child-store.test.ts:194`). Task66's `first-server-connect` case passed before and after.
+- **Check after:** the same four-file suite passes `35 tests / 0 fail / 128 expect()` in 4.65 s; `bun run --cwd packages/ui type-check` exits 0; `bun run --cwd packages/ui build` exits 0. The policy additions cover canonical 403 (`retryable: false`), canonical 503, raw 404/408/429/500, network/unknown errors, and `BootstrapFailureError` tags; the child-store suite proves a non-retryable initialization is never requeued, a retryable failure requeues once and completes idempotently, and a recovery signal received while initialization is running is consumed on failure.
+- **Bounded live scenario (one attempt, not rerun):** isolated Web Host `127.0.0.1:3185`, 503/drop proxy `3186` control `3187`, HeadlessChrome CDP `9340`, isolated `/tmp/ohpi-task67/{home,data,workdir}`, Web dist index `6ab8ca659eb751ff5f57a3b9787eed6c34da9b1f13296d9153deb4e8e68f8a49`, readiness `200` with `ready:true`. The proxy returned 36 agent-API `503` responses across a 23.011 s window; a socket drop/resume occurred during startup and the page kept one document navigation. After `/pass`, the Host returned non-retryable `403 UNAUTHORIZED` for `resolve` and every catalog route because the isolated directory was not an authorized workspace, so catalog `200` recovery was not observed. Per the one-attempt instruction the harness was not rerun; this is a harness-authorization limitation, and the client correctly classified the 403 as non-retryable instead of requeueing it. Receipt: `task67-startup-recovery-2026-10-21.json` in the acceptance artifact root; artifacts `/tmp/ohpi-task67/*`.
+- **Check status:** focused suite, type-check, build, and unit/behavior policy pass. The live catalog-recovery observation in the task Check remains unverified; no claim is made that the live run recovered catalogs.
+- **Review boundary:** `152a42cdbbaaef1e584f62b89e971ecedd38f5f5..working tree`; paths listed under Files; deliverable is bounded environment-read retry, retryability-aware failed-initialization requeue, Task65/66 preservation, and the documentation update.
+- **Brief A (built as asked/process):** blocked, 1 finding. The required live catalog-recovery observation is absent; the receipt honestly records the 403 authorization limitation and the harness was not rerun under the explicit one-attempt instruction. Retained as a known verification gap, not waived.
+- **Brief B (quality):** initial blocking finding — a recovery signal received while environment initialization was running was dropped. Fixed by `initializationRetryRequested`, consumed on a retryable failure, with the new child-store regression; recheck passed with no remaining finding.
+- **Security pass:** pass, 0 blocking; the one nonblocking artifact-hygiene finding (developer home path) was fixed by making the task-record and receipt references repo/artifact-relative.
+- **Check status:** focused suite, type-check, build, and behavior/policy tests pass. The live catalog-recovery observation remains unverified; no claim is made beyond the recorded 503/reconnect/no-reload observations.
+
+**Finished:** 2026-10-21T08:34:48+08:00

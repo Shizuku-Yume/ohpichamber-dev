@@ -10,6 +10,7 @@ import {
 } from "./child-store"
 import { DIR_IDLE_TTL_MS, EVICTION_GRACE_MS, MAX_DIR_STORES, type State } from "./types"
 import { FilesystemError } from "@/lib/api/files-errors"
+import { CanonicalApiError } from "@/api/canonicalClient"
 import type { ApprovalRequest, QuestionRequest } from "@openchamber/agent-contract"
 import { nativeSnapshot } from "./session-message-loader-test-fixtures"
 
@@ -170,6 +171,87 @@ describe("ChildStoreManager bootstrap scheduler", () => {
     expect(started).toEqual(["/failed", "/healthy"])
     expect(manager.getBootstrapState("/failed")).toBe("failed")
     expect(manager.getBootstrapState("/healthy")).toBe("complete")
+    cleanup(); manager.disposeAll()
+  })
+
+  test("requeues a failed environment initialization when the bootstrap list phase completed", async () => {
+    const manager = new ChildStoreManager()
+    let runs = 0
+    let failEnvironment = true
+    const cleanup = manager.configure({
+      bootstrapConcurrency: 1,
+      onBootstrap: ({ trackInitialization }) => {
+        runs += 1
+        trackInitialization(failEnvironment ? Promise.reject(new Error("environment unavailable")) : Promise.resolve())
+      },
+    })
+    manager.requestBootstrap({ directory: "/workspace", priority: "selected", reason: "current-directory" })
+    await settle(); await settle(); await settle()
+    expect(runs).toBe(1)
+    expect(manager.getBootstrapState("/workspace")).toBe("complete")
+    expect(manager.getInitializationState("/workspace")).toBe("failed")
+
+    failEnvironment = false
+    expect(manager.retryFailedBootstraps().has("/workspace")).toBe(true)
+    expect(manager.retryFailedBootstraps().has("/workspace")).toBe(false)
+    await settle(); await settle(); await settle()
+    expect(runs).toBe(2)
+    expect(manager.getBootstrapState("/workspace")).toBe("complete")
+    expect(manager.getInitializationState("/workspace")).toBe("complete")
+
+    expect(manager.retryFailedBootstraps().has("/workspace")).toBe(false)
+    expect(runs).toBe(2)
+    cleanup(); manager.disposeAll()
+  })
+
+  test("consumes a recovery signal received while environment initialization is running", async () => {
+    const manager = new ChildStoreManager()
+    let runs = 0
+    let rejectInitialization!: (error: unknown) => void
+    const cleanup = manager.configure({
+      bootstrapConcurrency: 1,
+      onBootstrap: ({ trackInitialization }) => {
+        runs += 1
+        if (runs === 1) trackInitialization(new Promise<void>((_, reject) => { rejectInitialization = reject }))
+        else trackInitialization(Promise.resolve())
+      },
+    })
+    manager.requestBootstrap({ directory: "/workspace", priority: "selected", reason: "current-directory" })
+    await settle(); await settle()
+    expect(runs).toBe(1)
+    expect(manager.getInitializationState("/workspace")).toBe("running")
+    expect(manager.retryFailedBootstraps().has("/workspace")).toBe(false)
+
+    rejectInitialization(new Error("environment unavailable"))
+    await settle(); await settle(); await settle()
+    expect(runs).toBe(2)
+    expect(manager.getInitializationState("/workspace")).toBe("complete")
+    expect(manager.retryFailedBootstraps().has("/workspace")).toBe(false)
+    cleanup(); manager.disposeAll()
+  })
+
+  test("does not requeue a non-retryable initialization failure", async () => {
+    const manager = new ChildStoreManager()
+    let runs = 0
+    const denial = new CanonicalApiError({ type: "urn:test:denied", title: "Denied", status: 403, detail: "Forbidden", code: "UNAUTHORIZED", retryable: false })
+    const cleanup = manager.configure({
+      bootstrapConcurrency: 1,
+      onBootstrap: ({ trackInitialization }) => {
+        runs += 1
+        trackInitialization(Promise.reject(denial))
+      },
+    })
+    manager.requestBootstrap({ directory: "/workspace", priority: "selected", reason: "current-directory" })
+    await settle(); await settle(); await settle()
+    expect(runs).toBe(1)
+    expect(manager.getBootstrapState("/workspace")).toBe("complete")
+    expect(manager.getInitializationState("/workspace")).toBe("failed")
+
+    expect(manager.retryFailedBootstraps().has("/workspace")).toBe(false)
+    await settle(); await settle()
+    expect(manager.retryFailedBootstraps().has("/workspace")).toBe(false)
+    expect(runs).toBe(1)
+    expect(manager.getInitializationState("/workspace")).toBe("failed")
     cleanup(); manager.disposeAll()
   })
 
