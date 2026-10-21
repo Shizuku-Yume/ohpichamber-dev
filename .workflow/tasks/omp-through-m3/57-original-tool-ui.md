@@ -59,12 +59,15 @@ Native tool-call/result pairing and the restored tool presentation are integrate
 - Final Web dist provenance: `packages/web/dist` was built at `b8eb11818` (before `72cc0c0c7`); the only later source change is the dialog argument formatting, covered by the focused tests above. A current-dist visual recheck of bash dialog arguments was not run.
 - Remaining acceptance rows: hover disclosure not pointer-observed; subagent/task execution unavailable by Host policy; Electron not current; quick-open broken. Compact/running/completed row, bash/read/write/edit renderers, unified/split diff, stats, dialog arguments/output and error display are observed.
 
+**2026-10-21 continuation (hover row):** After rebasing onto integration `0c7efa29b`, the Host initially failed to start because `packages/agent-service/dist` predated Task71's protocol export; rebuilding `@openchamber/agent-contract` and `@openchamber/agent-service` restored startup (both builds exit 0). The existing session history remained readable through the canonical API, but the Web UI failed to open it (`Session could not be loaded`; console showed repeated 503s while the Agent Service restarted). The hover disclosure therefore remains unobserved; do not tick it. No source was changed for this attempt and no quick-open fix was made.
+
 ## Paused handoff
 
 - Branch: `omp-through-m3/57-original-tool-ui`, source HEAD `72cc0c0c7` with this task record committed after it (rebased on integration `0c7efa29b`); worktree `/home/shizuku/Project/ohpichamber-worktrees/57-original-tool-ui`.
 - Comparison base: `e848504602333955b1d134bba3345d8bbc2ed065`. Dirty at start: none.
 - Done: canonical tool popup arguments/metadata, complete-argument dialog fix, focused tests/type-check/build/oxlint, live Web verification of the running and completed edit/bash/read/write/task rows, unified/split diff, dialog output, flow-verify A/B (A blocked, B finding fixed).
 - Left: pointer hover disclosure, a successful subagent/task execution path (Host policy denies `task`), current-HEAD packaged Electron, quick-open `[workspace]` path binding (scoped above for a follow-up task), and a Brief B re-check if the boundary moves.
+- W7 limitation: Web canonical tool rendering is observed for compact/running/completed edit/bash/read/write rows and the task error row, but the hover disclosure, a successful canonical subagent/task row, and packaged Electron at this HEAD are not observed. Do not claim complete W7 timeline/tool coverage from this record.
 - Evidence: `/tmp/ohpi-task57/evidence/01-…13-*` screenshots plus `/tmp/ohpi-task57/setup.json`, `last-run.json`, `fixture.mjs`; do not archive until the quick-open defect and Check's Electron/verification rows are resolved.
 
 Task remains open.
