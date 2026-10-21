@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { spaceApiPath } from '@/lib/spaces/space-route';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeUrlResolver, type RuntimeUrlResolver } from '@/lib/runtime-url';
@@ -5,6 +6,15 @@ import { getRuntimeUrlResolver, type RuntimeUrlResolver } from '@/lib/runtime-ur
 const MAX_MARKDOWN_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_PREPARE_CACHE_ENTRIES = 1024;
 const NON_READY_CACHE_MS = 30_000;
+const GRANT_ASSET_PATH = /^\/api\/openchamber\/sessions\/[^/]+\/markdown-image-grants\/[^/]+\/raw$/;
+const GrantResponseSchema = z.object({
+  results: z.array(z.object({
+    sourceIndex: z.number().int().nonnegative(),
+    status: z.string(),
+    assetPath: z.string().optional(),
+    expiresAt: z.number().optional(),
+  })).optional(),
+});
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
   'image/png',
   'image/jpeg',
@@ -13,7 +23,7 @@ const SUPPORTED_IMAGE_MIME_TYPES = new Set([
 ]);
 
 export type PreparedMarkdownImage =
-  | { status: 'ready'; path: string; outsideFileGrant?: string; expiresAt?: number }
+  | { status: 'ready'; assetPath: string; expiresAt?: number }
   | { status: 'missing' | 'error' };
 
 type PrepareCacheEntry = {
@@ -112,29 +122,23 @@ export const prepareLocalMarkdownImages = async ({
     },
   );
   if (!response.ok) throw new Error(`Unable to prepare images (${response.status})`);
-  const payload = await response.json() as {
-    results?: Array<{
-      source?: string;
-      status?: string;
-      path?: string;
-      outsideFileGrant?: string;
-      expiresAt?: number;
-    }>;
-  };
+  const parsed = GrantResponseSchema.safeParse(await response.json());
+  const results = parsed.success ? parsed.data.results ?? [] : [];
   const prepared = new Map<string, PreparedMarkdownImage>();
-  for (const result of payload.results ?? []) {
-    if (!result.source) continue;
-    if (result.status === 'ready' && result.path) {
-      prepared.set(result.source, {
+  for (const result of results) {
+    const index = result.sourceIndex;
+    if (index >= sources.length) continue;
+    const source = sources[index];
+    if (result.status === 'ready' && result.assetPath && GRANT_ASSET_PATH.test(result.assetPath)) {
+      prepared.set(source, {
         status: 'ready',
-        path: result.path,
-        outsideFileGrant: result.outsideFileGrant,
+        assetPath: result.assetPath,
         expiresAt: result.expiresAt,
       });
     } else if (result.status === 'missing') {
-      prepared.set(result.source, { status: 'missing' });
+      prepared.set(source, { status: 'missing' });
     } else {
-      prepared.set(result.source, { status: 'error' });
+      prepared.set(source, { status: 'error' });
     }
   }
   for (const source of sources) {
@@ -169,12 +173,4 @@ export const resolveMarkdownImageSource = async (
 export const getPreparedMarkdownImageUrl = (
   image: Extract<PreparedMarkdownImage, { status: 'ready' }>,
   directory: string,
-): string => getRuntimeUrlResolver().authenticatedAsset(
-  spaceApiPath('/api/fs/raw', directory),
-  {
-    path: image.path,
-    directory,
-    allowOutsideWorkspace: image.outsideFileGrant ? 'true' : undefined,
-    outsideFileGrant: image.outsideFileGrant,
-  },
-  );
+): string => getRuntimeUrlResolver().authenticatedAsset(spaceApiPath(image.assetPath, directory));

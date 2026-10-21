@@ -334,6 +334,8 @@ const isGuestScopedAssetPath = (pathname, guestId) => {
 // An isolated space's raw file and its sockets, under `/api/spaces/<id>/`, matched by shape.
 const SPACE_RAW_FILE_PATH = /^\/api\/spaces\/[0-9a-f]{12}\/fs\/raw$/;
 const SPACE_WS_PATH = /^\/api\/spaces\/[0-9a-f]{12}\/(?:terminal\/ws|dev-tunnel|event\/ws|global\/event\/ws)$/;
+const MARKDOWN_IMAGE_GRANT_PATH = /^\/api\/openchamber\/sessions\/[^/]+\/markdown-image-grants\/[^/]+\/raw$/;
+const SPACE_MARKDOWN_IMAGE_GRANT_PATH = /^\/api\/spaces\/[0-9a-f]{12}\/openchamber\/sessions\/[^/]+\/markdown-image-grants\/[^/]+\/raw$/;
 
 const isUrlAuthReadableHttpPath = (pathname) => {
   return pathname === '/api/event'
@@ -346,6 +348,8 @@ const isUrlAuthReadableHttpPath = (pathname) => {
     || /^\/api\/projects\/[^/]+\/icon$/.test(pathname)
     || pathname === '/api/guests'
     || /^\/api\/guests\/[a-z][a-z0-9-]*\//.test(pathname)
+    || MARKDOWN_IMAGE_GRANT_PATH.test(pathname)
+    || SPACE_MARKDOWN_IMAGE_GRANT_PATH.test(pathname)
     || SPACE_RAW_FILE_PATH.test(pathname);
 };
 

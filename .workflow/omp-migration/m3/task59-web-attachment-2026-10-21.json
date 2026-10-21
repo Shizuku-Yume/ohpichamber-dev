@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/59",
+  "observedAt": "2026-10-21T03:40:00.000Z",
+  "status": "web-attachment-download-gallery-disposal-verified",
+  "surface": "Web",
+  "host": "http://127.0.0.1:3181",
+  "artifact": {
+    "finalWebDistIndexSha256": "7c2f8ab506431feedf9fd60c05798529c816c5b5e534976b41b273d12d7b751a",
+    "finalEntrySha256": "63a74c9f6e86a08dfaa72bf35485c5f4157e41b14cb545ccf68a1c93bffbfd7b",
+    "browserEvidenceDistIndexSha256": "3213e28e23c90281db75756b01941ecda7a71ab97733babe83489bb6ee84943a",
+    "sourceBaseCommit": "4d99b9827",
+    "browserEvidenceDelta": "spaceApiPath prefix plus host/space grant URL-token allowlist only; not reachable from a host-directory session"
+  },
+  "environment": {
+    "home": "/tmp/ohpi-task59/home",
+    "dataDir": "/tmp/ohpi-task59/data",
+    "workspace": "/tmp/ohpi-task59/data/chats",
+    "workspaceId": "ws_6739cbc8-3a1f-49ae-a4a2-855c7dae1874",
+    "provider": "m3fixture",
+    "model": "attachment-chat",
+    "fixture": "http://127.0.0.1:4603/v1",
+    "externalModelsDevBlocked": true,
+    "sessionId": "9306989e-3b4f-4b46-a242-c242e1005766"
+  },
+  "focusedChecks": {
+    "tests": "43 pass / 0 fail / 180 assertions across FileAttachment, attachmentCitations, attachmentCitationChips, markdownImageAssets, ui-auth",
+    "uiTypeCheck": "exit 0",
+    "uiBuild": "exit 0",
+    "webBuild": "exit 0",
+    "oxlintAuthoredFiles": "clean; pre-existing MarkdownImageGallery anti-slop findings at lines 61, 91, 212 untouched"
+  },
+  "uploads": [
+    { "name": "upload-text.txt", "bytes": 22, "sha256": "d83d7029d00ec3bade1ca5041299209bf9c8f82f391715eaf42a3a97ec0c6a19" },
+    { "name": "upload-image-a.png", "bytes": 919, "sha256": "6af4ed29fa82c3f1a9a3dbffd78835a1c543f0f324edd49d5d03436a07dda734" },
+    { "name": "upload-image-b.png", "bytes": 437, "sha256": "3a1491f5ae14eea4fbc191ace7a1e8a0d8bd515d66c2bc0e3ca985ec698d9765" }
+  ],
+  "evidence": {
+    "composerChips": {
+      "text": "upload-text.txt / 22 B and two image thumbnails",
+      "screenshot": "/tmp/ohpi-task59/01-composer-chips.png"
+    },
+    "sentTurn": {
+      "chip": "upload-text.txt / 22 B plus image thumbnails",
+      "screenshot": "/tmp/ohpi-task59/02-sent-turn-chips.png"
+    },
+    "attachmentRequests": {
+      "uploads": "3 x POST /api/agent/v1/attachments",
+      "reads": "GET /api/agent/v1/attachments/<id>?workspaceId=ws_6739cbc8-3a1f-49ae-a4a2-855c7dae1874",
+      "queryKeys": { "POST": [], "GET": ["workspaceId"] },
+      "tokenOrBearerQueryCount": 0
+    },
+    "open": {
+      "networkBytes": 22,
+      "networkSha256": "d83d7029d00ec3bade1ca5041299209bf9c8f82f391715eaf42a3a97ec0c6a19",
+      "popupText": "ATTACHMENT_BYTES_12345",
+      "screenshot": "/tmp/ohpi-task59/03-text-preview.png"
+    },
+    "download": {
+      "savedBytes": 22,
+      "savedSha256": "d83d7029d00ec3bade1ca5041299209bf9c8f82f391715eaf42a3a97ec0c6a19",
+      "path": "/tmp/ohpi-task59/downloads/upload-text.txt",
+      "screenshot": "/tmp/ohpi-task59/04-after-download.png"
+    },
+    "attachmentLightbox": {
+      "first": "upload-image-a.png",
+      "next": "upload-image-b.png",
+      "closed": true,
+      "screenshots": ["/tmp/ohpi-task59/05-attachment-lightbox.png", "/tmp/ohpi-task59/06-lightbox-second-image.png"]
+    },
+    "markdownGallery": {
+      "thumbnails": 2,
+      "layout": "100x95 side by side",
+      "states": ["ready", "ready"],
+      "naturalSizes": ["32x32", "16x16"],
+      "grantRequests": "POST grant + 2 GET grant raw; GET query only oc_url_token (scoped short-lived URL token)",
+      "lightboxOpenedAndClosed": true,
+      "screenshots": ["/tmp/ohpi-task59/07-markdown-gallery-grid.png", "/tmp/ohpi-task59/08-markdown-gallery-lightbox.png"]
+    },
+    "objectUrlDisposal": {
+      "method": "CDP-wrapped URL.createObjectURL/revokeObjectURL",
+      "afterSendAndDownload": { "createCalls": 3, "revokeCalls": 1 },
+      "afterSessionSwitch": { "revokeCalls": 4, "trackedLive": 0, "staleBlobImages": 0, "overlays": 0 },
+      "screenshot": "/tmp/ohpi-task59/09-after-session-switch.png"
+    }
+  },
+  "securityReview": {
+    "status": "completed-with-nonblocking-findings",
+    "findings": [
+      { "title": "space-hosted gallery asset URL not space-prefixed", "classification": "nonblocking", "outcome": "fixed with spaceApiPath and host/space allowlist tests" },
+      { "title": "popup blob URL survives dialog close until replacement/unmount/scope change", "classification": "nonblocking", "outcome": "accepted; task invariant covers unmount/runtime switch" }
+    ]
+  },
+  "flowReview": {
+    "briefA": "not-run: stopped before verdict at user request",
+    "briefB": "not-run: stopped before verdict at user request"
+  },
+  "notCurrent": {
+    "electronPackaged": "no AppImage built from this HEAD; stale packaged screenshots not reused"
+  }
+}

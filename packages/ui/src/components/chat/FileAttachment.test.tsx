@@ -161,6 +161,16 @@ describe('canonical MessageFilesDisplay attachments', () => {
     expect(popups).toHaveLength(1);
     expect(popups[0].image).toMatchObject({ filename: 'doc.pdf', mimeType: 'application/pdf' });
   });
+  test('compact file chip shows the file icon, truncated name and size label', async () => {
+    const part = file({ name: 'quarterly-report-2026.txt' }, 'abc');
+    await renderFiles([part], true);
+    const chip = namedChip(part.name);
+    expect(chip).toBeDefined();
+    expect(chip!.textContent).toContain(part.name);
+    expect(chip!.textContent).toContain('3 B');
+    expect(chip!.querySelector('svg')).not.toBeNull();
+    expect(chip!.querySelector('.truncate')?.textContent).toBe(part.name);
+  });
   test('compact PDF download saves the authenticated bytes under the attachment name', async () => {
     const pdf = file({ mediaType: 'application/pdf', name: 'doc.pdf' });
     const saved: Array<{ name: string | null; href: string | null }> = [];

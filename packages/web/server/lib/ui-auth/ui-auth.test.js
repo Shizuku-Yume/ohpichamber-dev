@@ -212,6 +212,46 @@ describe('ui auth client credential seam', () => {
     });
     expect(mountedRawCalled).toBe(true);
 
+    const grantRawReq = {
+      method: 'GET',
+      path: '/api/openchamber/sessions/session-1/markdown-image-grants/grant-1/raw',
+      url: `/api/openchamber/sessions/session-1/markdown-image-grants/grant-1/raw?oc_url_token=${encodeURIComponent(urlToken)}`,
+      headers: {},
+    };
+    const grantRawRes = createResponse();
+    let grantRawCalled = false;
+    await auth.requireAuth(grantRawReq, grantRawRes, () => {
+      grantRawCalled = true;
+    });
+    expect(grantRawCalled).toBe(true);
+
+    const spaceGrantRawReq = {
+      method: 'GET',
+      path: '/api/spaces/0123456789ab/openchamber/sessions/session-1/markdown-image-grants/grant-1/raw',
+      url: `/api/spaces/0123456789ab/openchamber/sessions/session-1/markdown-image-grants/grant-1/raw?oc_url_token=${encodeURIComponent(urlToken)}`,
+      headers: {},
+    };
+    const spaceGrantRawRes = createResponse();
+    let spaceGrantRawCalled = false;
+    await auth.requireAuth(spaceGrantRawReq, spaceGrantRawRes, () => {
+      spaceGrantRawCalled = true;
+    });
+    expect(spaceGrantRawCalled).toBe(true);
+
+    for (const denied of [
+      { method: 'POST', path: '/api/openchamber/sessions/session-1/markdown-image-grants/grant-1/raw', url: `/api/openchamber/sessions/session-1/markdown-image-grants/grant-1/raw?oc_url_token=${encodeURIComponent(urlToken)}`, headers: {} },
+      { method: 'GET', path: '/api/openchamber/sessions/session-1/markdown-image-grants/grant-1/raw/extra', url: `/api/openchamber/sessions/session-1/markdown-image-grants/grant-1/raw/extra?oc_url_token=${encodeURIComponent(urlToken)}`, headers: {} },
+      { method: 'GET', path: '/api/spaces/not-a-space/openchamber/sessions/session-1/markdown-image-grants/grant-1/raw', url: `/api/spaces/not-a-space/openchamber/sessions/session-1/markdown-image-grants/grant-1/raw?oc_url_token=${encodeURIComponent(urlToken)}`, headers: {} },
+    ]) {
+      const deniedRes = createResponse();
+      let deniedCalled = false;
+      await auth.requireAuth(denied, deniedRes, () => {
+        deniedCalled = true;
+      });
+      expect(deniedCalled).toBe(false);
+      expect(deniedRes.statusCode).toBe(401);
+    }
+
     const guestReq = { method: 'GET', path: '/api/guests/hello/panel/index.html', url: `/api/guests/hello/panel/index.html?oc_url_token=${encodeURIComponent(urlToken)}`, headers: {} };
     const guestRes = createResponse();
     let guestCalled = false;

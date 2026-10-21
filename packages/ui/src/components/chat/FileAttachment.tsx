@@ -445,6 +445,7 @@ const NativeAttachmentChip = memo(({ part, compact, onOpen, onDownload }: {
                 <FileTypeIcon filePath={part.name} extension={extension} className="h-3.5 w-3.5 text-muted-foreground" />
               )}
               <span className="block max-w-[140px] truncate" title={part.name}>{part.name}</span>
+              {sizeText && <span className="shrink-0 text-muted-foreground">{sizeText}</span>}
             </button>
           </TooltipTrigger>
           <TooltipContent>
@@ -676,57 +677,3 @@ export const MessageFilesDisplay = memo(({ files, workspaceId, onShowPopup, comp
 });
 
 MessageFilesDisplay.displayName = 'MessageFilesDisplay';
-
-interface ImageGalleryProps {
-  urls: string[];
-  caption?: string;
-  onShowPopup?: (content: ToolPopupContent) => void;
-}
-
-const ImageGallery = memo(({ urls, caption, onShowPopup }: ImageGalleryProps) => {
-  if (urls.length === 0) return null;
-
-  const getGridCols = () => {
-    if (urls.length === 1) return 'grid-cols-1';
-    if (urls.length === 2) return 'grid-cols-2';
-    if (urls.length <= 4) return 'grid-cols-2';
-    return 'grid-cols-3';
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className={cn("grid gap-2", getGridCols())}>
-        {urls.map((url, index) => (
-          <button
-            key={url}
-            type="button"
-            onClick={() => onShowPopup?.({
-              open: true,
-              title: caption || `Image ${index + 1} of ${urls.length}`,
-              content: '',
-              image: {
-                url,
-                gallery: urls.map(u => ({ url: u })),
-                index,
-              },
-            })}
-            className="relative aspect-square rounded-lg border border-border/40 bg-muted/10 overflow-hidden group"
-          >
-            <img
-              src={url}
-              alt={caption || `Image ${index + 1}`}
-              className="h-full w-full object-cover transition-transform group-hover:scale-105"
-              loading="lazy"
-            />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-          </button>
-        ))}
-      </div>
-      {caption && (
-        <p className="text-sm text-muted-foreground italic">{caption}</p>
-      )}
-    </div>
-  );
-});
-
-ImageGallery.displayName = 'ImageGallery';
