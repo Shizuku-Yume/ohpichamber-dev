@@ -1,4 +1,4 @@
-import type { ToolResultPart } from '@openchamber/agent-contract';
+import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 
 export type StreamPhase = 'streaming' | 'cooldown' | 'completed';
 
@@ -14,6 +14,10 @@ export interface ToolPopupContent {
     title: string;
     content: string;
     toolResult?: ToolResultPart;
+    /** Canonical tool identity, available even before a result exists. */
+    toolName?: string;
+    /** Canonical call arguments for deep inspection; never a legacy alias bag. */
+    input?: ToolCallPart['input'];
     language?: string;
     isDiff?: boolean;
     image?: {

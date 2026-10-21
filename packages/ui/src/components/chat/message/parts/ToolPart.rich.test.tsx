@@ -182,6 +182,8 @@ test('a paired completed edit renders its diff and opens the output dialog', asy
         expect(popups[0]?.open).toBe(true);
         expect(popups[0]?.content).toContain('old');
         expect(popups[0]?.content).toContain('new');
+        expect(popups[0]?.toolName).toBe('edit');
+        expect(popups[0]?.input).toEqual(call.input);
     });
 });
 

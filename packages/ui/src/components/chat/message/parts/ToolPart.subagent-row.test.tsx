@@ -85,6 +85,8 @@ async function withHarness(load: (sessionId: string) => Promise<Subagent[]>, run
         /> : <ToolPart part={{ ...call, status }} sessionId={sessionId} directory={directory} isExpanded={expanded} isMobile={mobile} onToggle={noAction} />}
       </ThemeSystemContext.Provider></I18nProvider>);
     });
+    await act(async () => { await new Promise<void>(resolve => happyWindow.requestAnimationFrame(() => resolve())); });
+    await act(async () => { await new Promise<void>(resolve => happyWindow.requestAnimationFrame(() => resolve())); });
   };
   try {
     registerWorkspaceDirectory(parent.workspaceId, '/workspace');
@@ -169,14 +171,19 @@ test('failed child refresh preserves known links and reports unavailability inst
   });
 });
 
-test('grouped task links follow the addressed session and directory when main selection is unchanged', async () => {
+test('task links follow the addressed session and directory while grouped activity leaves standalone task rows to MessageBody', async () => {
   await withHarness(async sessionId => [child(sessionId, call.toolCallId, sessionId)], async ({ container, render }) => {
+    // TurnActivity owns grouped activity, not the standalone task row: the
+    // projection extracts task calls so MessageBody renders them in place.
     await render({ grouped: true, sessionId: 'embedded-parent', directory: '/embedded' });
+    expect(container.querySelector('[aria-label="Open embedded-parent subtask"]')).toBeNull();
+
+    await render({ sessionId: 'embedded-parent', directory: '/embedded' });
     await act(async () => open(container, 'embedded-parent'));
     expect(useUIStore.getState().contextPanelByDirectory['/embedded']?.tabs).toMatchObject([
       { dedupeKey: 'session:embedded-parent-session', readOnly: true },
     ]);
-    await render({ grouped: true, sessionId: 'other-parent', directory: '/other' });
+    await render({ sessionId: 'other-parent', directory: '/other' });
     expect(container.querySelector('[aria-label="Open embedded-parent subtask"]')).toBeNull();
     await act(async () => open(container, 'other-parent'));
     expect(useUIStore.getState().contextPanelByDirectory['/other']?.tabs).toMatchObject([

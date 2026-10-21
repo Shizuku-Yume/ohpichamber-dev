@@ -831,6 +831,8 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                                         content: capToolOutputText(entry.diff ?? ''),
                                         language: 'diff',
                                         isDiff: true,
+                                        toolName,
+                                        input: call?.input,
                                     });
                                 }}
                                 aria-label={getRelativeFilePath(entry.path, currentDirectory)}
@@ -1347,6 +1349,8 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                             toolResult: result,
                                             content: popupContent,
                                             language: popupLanguage,
+                                            toolName,
+                                            input: call?.input,
                                         });
                                     }} aria-label={title}>
                                         <Icon name="external-link" className="h-3.5 w-3.5" />

@@ -2548,6 +2548,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.toolOutputDialog.mermaid.renderFailed": "Неможливо відобразити діаграму Mermaid.",
   "chat.toolOutputDialog.mermaid.retry": "Повторити спробу",
   "chat.toolOutputDialog.commandCompleted": "Команду виконано успішно",
+  "chat.toolOutputDialog.arguments": "Аргументи",
   "chat.toolOutputDialog.noOutputProduced": "Вивід відсутній",
   "chat.toolPart.background.label": "у фоні",
   "chat.toolPart.subagent.stop": "Зупинити сабагента",

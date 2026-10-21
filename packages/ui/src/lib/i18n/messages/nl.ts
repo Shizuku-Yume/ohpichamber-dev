@@ -2594,6 +2594,7 @@ export const dict = {
   'chat.toolOutputDialog.mermaid.renderFailed': 'Kan Mermaid-diagram niet weergeven.',
   'chat.toolOutputDialog.mermaid.retry': 'Opnieuw proberen',
   'chat.toolOutputDialog.commandCompleted': 'Opdracht succesvol uitgevoerd',
+  'chat.toolOutputDialog.arguments': 'Argumenten',
   'chat.toolOutputDialog.noOutputProduced': 'Geen uitvoer',
   'chat.toolPart.background.label': 'op de achtergrond',
   'chat.toolPart.subagent.stop': 'Subagent stoppen',

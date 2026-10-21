@@ -1507,6 +1507,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.todo.pending': 'Oczekujące',
   'chat.todo.total': 'Łącznie',
   'chat.toolOutputDialog.commandCompleted': 'Polecenie zakończone pomyślnie',
+  'chat.toolOutputDialog.arguments': 'Argumenty',
   'chat.toolOutputDialog.image.closeAria': 'Zamknij podgląd obrazu',
   'chat.toolOutputDialog.image.nextAria': 'Następny obraz',
   'chat.toolOutputDialog.image.previousAria': 'Poprzedni obraz',

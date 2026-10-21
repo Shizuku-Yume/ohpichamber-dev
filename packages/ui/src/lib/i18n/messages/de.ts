@@ -2330,6 +2330,7 @@ export const dict = {
   'chat.toolOutputDialog.mermaid.renderFailed': 'Kann Mermaid-Diagramm nicht rendern.',
   'chat.toolOutputDialog.mermaid.retry': 'Wiederholen',
   'chat.toolOutputDialog.commandCompleted': 'Befehl erfolgreich abgeschlossen',
+  'chat.toolOutputDialog.arguments': 'Argumente',
   'chat.toolOutputDialog.noOutputProduced': 'Keine Ausgabe erzeugt',
   'chat.toolPart.background.label': 'im Hintergrund',
   'chat.toolPart.background.stop': 'Befehl stoppen',

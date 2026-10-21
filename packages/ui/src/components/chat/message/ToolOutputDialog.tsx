@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { toolDisplayStyles } from '@/lib/typography';
-import { isSubagentTool } from '@/lib/toolHelpers';
+import { formatToolInput, isShellTool, isSubagentTool, isWriteTool } from '@/lib/toolHelpers';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
@@ -927,8 +927,20 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
     const { t } = useI18n();
     const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('unified');
     const pierreThemeConfig = usePierreThemeConfig();
-    const popupToolName = popup.toolResult?.toolName ?? null;
+    const popupToolName = popup.toolName ?? popup.toolResult?.toolName ?? null;
     const popupToolPresentation = useGuestToolPresentation(popupToolName);
+    const popupInput = popup.input;
+    const hasPopupInput = Boolean(popupInput && Object.keys(popupInput).length > 0);
+    const argumentsText = React.useMemo(() => {
+        if (!popupInput || Object.keys(popupInput).length === 0) return '';
+        if (!popupToolName) return JSON.stringify(popupInput, null, 2);
+        // Writes keep their complete path and content for inspection; other
+        // tools reuse the same native input formatting as the row.
+        if (isWriteTool(popupToolName)) return JSON.stringify(popupInput, null, 2);
+        return formatToolInput(popupInput, popupToolName);
+    }, [popupInput, popupToolName]);
+    const argumentsLanguage = popupToolName && isShellTool(popupToolName) ? 'bash' : 'json';
+    const popupError = popup.toolResult?.error;
 
     React.useEffect(() => {
         if (!popup.open) return;
@@ -971,6 +983,39 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                 </div>
                 <div className="flex-1 min-h-0 rounded-xl border border-border/30 bg-muted/10 overflow-hidden">
                     <div className="tool-output-surface h-full max-h-[75vh] overflow-y-auto px-3 pr-4">
+                        {hasPopupInput ? (
+                            <div className="border-b border-border/20 p-4">
+                                <div className="mb-2 typography-ui-label font-medium text-muted-foreground">
+                                    {t('chat.toolOutputDialog.arguments')}
+                                </div>
+                                <div className="tool-input-surface bg-transparent rounded-xl border border-border/20">
+                                    <WorkerHighlightedCode
+                                        language={argumentsLanguage}
+                                        code={argumentsText}
+                                        style={toolDisplayStyles.getPopupStyles()}
+                                        codeStyle={DIALOG_CODE_TAG_PROPS.style}
+                                        wrap
+                                    />
+                                </div>
+                            </div>
+                        ) : null}
+                        {popupError ? (
+                            <div className="border-b border-border/20 p-4">
+                                <div className="mb-2 typography-ui-label font-medium text-muted-foreground">
+                                    {t('chat.toolPart.error')}
+                                </div>
+                                <div
+                                    className="typography-meta whitespace-pre-wrap rounded-xl border p-2"
+                                    style={{
+                                        backgroundColor: 'var(--status-error-background)',
+                                        color: 'var(--status-error)',
+                                        borderColor: 'var(--status-error-border)',
+                                    }}
+                                >
+                                    {popupError}
+                                </div>
+                            </div>
+                        ) : null}
                         {popup.isDiff ? (
                             <DialogUnifiedDiff
                                 popup={popup}
@@ -979,6 +1024,9 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                             />
                         ) : popup.content ? (
                         <div className="p-4">
+                            <div className="mb-2 typography-ui-label font-medium text-muted-foreground">
+                                {t('chat.toolPart.output')}
+                            </div>
                             {(() => {
                                 if (popupToolName === 'grep') {
                                     return renderGrepOutput(popup.content, isMobile) ?? (

@@ -77,7 +77,10 @@ test('native search source links survive inline rendering and fullscreen inspect
         try {
             await render(renderWebSearchOutput(result.output));
             assertSourceCard(container);
-            expect(container.textContent).not.toContain('Flattened-only output has no source metadata.');
+            // Native search results keep the flattened text available under the
+            // Output disclosure; source cards remain the primary rendering.
+            expect(container.textContent).toContain('Output');
+            expect(container.textContent).toContain('Flattened-only output has no source metadata.');
             expect(container.textContent).not.toContain('"response"');
 
             await render(React.createElement(ToolOutputDialog, {

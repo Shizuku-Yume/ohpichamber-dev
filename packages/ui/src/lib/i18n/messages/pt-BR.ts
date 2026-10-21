@@ -2548,6 +2548,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.toolOutputDialog.mermaid.renderFailed": "Não foi possível renderizar o diagrama de Mermaid.",
   "chat.toolOutputDialog.mermaid.retry": "Tentar novamente",
   "chat.toolOutputDialog.commandCompleted": "Comando concluído com sucesso",
+  "chat.toolOutputDialog.arguments": "Argumentos",
   "chat.toolOutputDialog.noOutputProduced": "Nenhuma saída produzida",
   "chat.toolPart.background.label": "em segundo plano",
   "chat.toolPart.subagent.stop": "Parar subagente",

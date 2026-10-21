@@ -2593,6 +2593,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.toolOutputDialog.mermaid.renderFailed': 'Mermaidダイアグラムをレンダリングできません。',
   'chat.toolOutputDialog.mermaid.retry': '再試行',
   'chat.toolOutputDialog.commandCompleted': 'コマンドが正常に完了しました',
+  'chat.toolOutputDialog.arguments': '引数',
   'chat.toolOutputDialog.noOutputProduced': '出力は生成されませんでした',
   'chat.toolPart.background.label': 'バックグラウンド',
   'chat.toolPart.subagent.stop': 'サブエージェントを停止',

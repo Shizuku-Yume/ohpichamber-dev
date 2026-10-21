@@ -2569,6 +2569,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.toolOutputDialog.mermaid.renderFailed': '無法渲染 Mermaid 圖表。',
   'chat.toolOutputDialog.mermaid.retry': '重試',
   'chat.toolOutputDialog.commandCompleted': '命令已成功完成',
+  'chat.toolOutputDialog.arguments': '參數',
   'chat.toolOutputDialog.noOutputProduced': '沒有產生輸出',
   'chat.toolPart.background.label': '背景執行',
   'chat.toolPart.subagent.stop': '停止子代理',

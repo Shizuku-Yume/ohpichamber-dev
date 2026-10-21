@@ -2594,6 +2594,7 @@ export const dict = {
   'chat.toolOutputDialog.mermaid.renderFailed': 'Unable to render Mermaid diagram.',
   'chat.toolOutputDialog.mermaid.retry': 'Retry',
   'chat.toolOutputDialog.commandCompleted': 'Command completed successfully',
+  'chat.toolOutputDialog.arguments': 'Arguments',
   'chat.toolOutputDialog.noOutputProduced': 'No output was produced',
   'chat.toolPart.background.label': 'in background',
   'chat.toolPart.background.stop': 'Stop command',

@@ -2428,6 +2428,7 @@ export const dict = {
   'chat.toolOutputDialog.mermaid.renderFailed': 'Mermaid diyagramı oluşturulamadı.',
   'chat.toolOutputDialog.mermaid.retry': 'Yeniden dene',
   'chat.toolOutputDialog.commandCompleted': 'Komut başarıyla tamamlandı',
+  'chat.toolOutputDialog.arguments': 'Bağımsız değişkenler',
   'chat.toolOutputDialog.noOutputProduced': 'Çıktı üretilmedi',
   'chat.toolPart.background.label': 'arka planda',
   'chat.toolPart.subagent.stop': 'Alt ajanı durdur',

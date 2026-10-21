@@ -2594,6 +2594,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.toolOutputDialog.mermaid.renderFailed': 'Mermaid 다이어그램을 렌더링할 수 없습니다.',
   'chat.toolOutputDialog.mermaid.retry': '다시 시도',
   'chat.toolOutputDialog.commandCompleted': '명령이 성공적으로 완료되었습니다',
+  'chat.toolOutputDialog.arguments': '인수',
   'chat.toolOutputDialog.noOutputProduced': '출력 없음',
   'chat.toolPart.background.label': '백그라운드',
   'chat.toolPart.subagent.stop': '하위 에이전트 중지',
