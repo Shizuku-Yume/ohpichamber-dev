@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "task": "omp-through-m3/73",
-  "status": "connected-guest-partial-shell-timeout",
+  "status": "connected-guest-closed-shell-half-cited-from-task74",
   "observedAt": "2026-10-21T13:10:00+08:00",
   "baseCommit": "fb761a77cf800d549796e57221f7cd127dc23312",
-  "commit": "landed on omp-through-m3/verified-integration-20261021; exact HEAD reported in the Task73 Progress",
+  "commit": "implementation c6ab1d55e on omp-through-m3/verified-integration-20261021; connected run observed at 4c7dce22e; closure recorded at integration HEAD 36d30521f5cb4d14b5a1d35c2d23f6565c9cf8f9",
   "environment": {
     "worktree": "/home/shizuku/Project/ohpichamber-worktrees/73-guest-project-session-projection",
     "branch": "omp-through-m3/73-guest-project-session-projection",
@@ -85,8 +85,51 @@
     "guestProjectAndSessions": "passed: project and canonical root sessions rendered; the worktree session was also rendered by the projection in a connected panel instance, and permanent tests cover root/worktree membership",
     "guestOwnItems": "passed: only ITEM-1 was present",
     "guestShellProjection": "passed: the running background shell appeared in the panel across the project directory scope",
-    "guestShellOutputAndStop": "blocked and open: Guest host-bridge request timeout; the direct canonical GET was diagnosis only, not Guest UI acceptance",
-    "task73": "paused and unarchived while Task74 is planned; the connected Guest Shell acceptance row remains open and unticked"
+    "guestShellOutputAndStop": "closed through the Task74 connected receipt at observation commit 0152a0718 (Guest readShellOutput cursor 33 with t15-line-1..3, stopShell {stopped:true}, canonical job ended stopped); this receipt does not re-observe or re-claim those values",
+    "task73": "archived; the acceptance row is closed by composed evidence from the Task73 run at 4c7dce22e and the Task74 shell receipt, as recorded in closure"
+  },
+  "closure": {
+    "recordedAt": "2026-10-21T13:59:00+08:00",
+    "integrationHead": "36d30521f5cb4d14b5a1d35c2d23f6565c9cf8f9",
+    "method": "composed provenance; no new Guest service, Host or browser was started for this closure",
+    "task74Receipt": ".workflow/omp-migration/m3/task74-guest-shell-bridge-2026-10-21.json",
+    "task74ObservationCommit": "0152a07183004e667bb1b1b1bfbbc68b3e43807d",
+    "task74Status": "passed-connected-guest-shell-output-stop",
+    "reusedShellEvidence": {
+      "readShellOutput": { "cursor": 33, "output": "t15-line-1\nt15-line-2\nt15-line-3\n", "skipped": false },
+      "stopShell": { "stopped": true },
+      "afterStop": "no running jobs; bg_2 ended with reason stopped",
+      "note": "values cited from the Task74 receipt; not re-observed by Task73"
+    },
+    "sourceIdentity": {
+      "workspaceTs": "unchanged between 4c7dce22e and 0152a0718 (git diff empty)",
+      "sdkApiAndDocs": "unchanged between 4c7dce22e and 0152a0718",
+      "shellsTs": "only the optional AbortSignal parameter forwarded to canonicalClient.getShellOutput/stopShell was added; the directory-scoped projection is unchanged"
+    },
+    "split": {
+      "task73RunAt": "4c7dce22e",
+      "task73Proves": [
+        "registered path_* project resolving to canonical pro_22c41305 workspace",
+        "root T15-ITEMS and T15-SHELL sessions",
+        "own item links only (ITEM-1)",
+        "worktree T15-WORKTREE session in a connected panel instance",
+        "running background shell projected through the project directory scope"
+      ],
+      "task74Proves": [
+        "Guest readShellOutput content with cursor 33",
+        "Guest stopShell confirmed with the canonical job ended stopped"
+      ]
+    },
+    "limits": [
+      "no single run observed the project, root and worktree sessions, own items, and shell output/stop together",
+      "Task73 retained screenshots do not visibly render the Guest panel JSON log; that panel content is recorded in this receipt",
+      "Electron desktop shares the projection but was not packaged-run for this path",
+      "hosted and Capacitor Guest surfaces remain unsupported"
+    ],
+    "dependents": {
+      "task15": "may reuse this receipt for Guest item/project observations; must cite the Task74 receipt for shell output/stop",
+      "task18": "integrated gate remains open"
+    }
   },
   "reviews": {
     "briefA": "not run by this worker",
