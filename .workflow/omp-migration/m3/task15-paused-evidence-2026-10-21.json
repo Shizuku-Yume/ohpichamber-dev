@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/15",
+  "status": "paused-connected-rows-incomplete",
+  "observedAt": "2026-10-21T11:54:47+08:00",
+  "environment": {
+    "baseCommit": "877fa6a0004e6eb739616220a2c8cf555180b9b5",
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m3-task15-final",
+    "branch": "omp-through-m3/15-settings-board-guest-final",
+    "platform": "Linux x64, 7.2.8-200.fc44.x86_64",
+    "node": "24.18.0",
+    "bun": "1.4.2",
+    "webDistIndexSha256": "2024681ca7d9c815195a52909afc693688b42bc2fcccfd4cf56a806ef9ae193e",
+    "webHost": "http://127.0.0.1:3210, isolated HOME=/tmp/ohpi-task15/home, chats=/tmp/ohpi-task15/chats",
+    "fixtureProvider": "http://127.0.0.1:4610/v1, model t15fixture/t15-fixture",
+    "browser": "Chrome headless 155, CDP 9345"
+  },
+  "checksRun": [
+    { "command": "bun run --cwd packages/ui type-check", "result": "exit 0" },
+    { "command": "bun run --cwd packages/ui build", "result": "exit 0" },
+    { "command": "bun run --cwd packages/web build", "result": "exit 0, dist index 2024681c" },
+    { "command": "bunx vitest run src/api/files.test.ts (packages/web)", "result": "16 passed / 0 failed" },
+    { "command": "bunx vitest run server/lib/host/settings-routes.test.js (packages/web)", "result": "5 passed / 0 failed" },
+    { "command": "bunx vitest run server/lib/guests/files.test.js (packages/web)", "result": "15 passed / 0 failed" },
+    { "command": "bun test src/lib/host-filesystem.test.ts (packages/ui)", "result": "6 passed / 0 failed / 19 expect()" },
+    { "command": "bun test src/components/chat/fileReferenceStat.test.ts (packages/ui)", "result": "4 passed / 0 failed / 13 expect()" },
+    { "command": "bun test src/lib/contextFileOpenGuard.test.ts (packages/ui)", "result": "6 passed / 0 failed / 17 expect()" },
+    { "command": "bun test src/lib/guests/files.test.ts (packages/ui)", "result": "3 passed / 0 failed / 11 expect()" },
+    { "command": "bun test src/lib/guests/workspace.test.ts (packages/ui)", "result": "7 passed / 0 failed / 323 expect(); includes guest item scope projection" }
+  ],
+  "combinedUiRunNote": "Running the five UI files in one bun process reports 7 failures caused by module-level mock leakage between files (guests/files receives HOST_REJECTED). Every file passes when run in its own process, which is the repository-documented isolated mode (scripts/run-isolated-tests.mjs).",
+  "connectedWeb": {
+    "login": "passed; Unlock OpenChamber accepted the isolated UI password and rendered the authenticated composer/sidebar",
+    "hostFilesystemDirtyMove": {
+      "directoryQuery": "/tmp/ohpi-task15/chats/work",
+      "mkdir": "200",
+      "write": "200",
+      "rename": "200 (oldPath/newPath)",
+      "readNew": "200 body 'task15 dirty move\\n'",
+      "readOld": "404 File not found",
+      "list": "200, only b.txt",
+      "delete": "200",
+      "listAfterDelete": "404 Directory not found",
+      "result": "passed at current HEAD with explicit directory query; no x-opencode-directory header used"
+    },
+    "providerCatalog": {
+      "credentialWrite": "200 revision 1, credentialRef credential_c4b27dd920abbf6d410f50be",
+      "providerConfigure": "200 revision 2 after sending the returned credentialRef",
+      "models": "t15fixture/t15-fixture listed in canonical workspace catalog"
+    },
+    "board": {
+      "surface": "Issues and PRs opened; Linear provider chrome rendered",
+      "githubActivation": "POST /api/github/auth/activate 200 for gh-cli account github.com#cli:135561100; /auth/status connected true",
+      "githubItems": "not observed; after activation the Board still offered only the Linear team chooser ('All teams', 'Choose') and no #5304 item row",
+      "launch": "not observed (no item to select, so Attach to session -> New session did not run)"
+    },
+    "guest": {
+      "install": "POST /api/guests 201 t15-guest from /tmp/ohpi-task15-guest",
+      "grants": "sessions, shells granted; enabled true",
+      "panel": "panel iframe served at /api/guests/t15-guest/panel/index.html?oc_ui=issue-page; rendered T15 Guest Shell, boot marker, projects: [] and error 'no project'",
+      "itemProjection": "not observed connected: the panel's project snapshot was empty, so listSessions(projectId) never ran; the projection itself is covered by the isolated workspace suite",
+      "shell": "not observed: canonical POST /sessions/:id/shell/jobs returned 403 UNAUTHORIZED; a fixture bash turn produced no approval card and the turn ended failed, so no running shell existed for output/stop/reconnect"
+    },
+    "sidebarHierarchy": "not observed connected: Host authorizer treats only read/write/edit/grep/glob/bash/provider.use as native tools and policy.toolRequests is empty, so the fixture task tool is denied and no native child session exists; unit coverage remains the hierarchy proof"
+  },
+  "packagedElectron": "not run at current HEAD. No AppImage exists for 877fa6a00; the Task36 packaged artifact 598bf5823785ccf5b3f36d4e49bb950638e77b3eff35a5b3fc7b3e3259eabad9 predates Task59 and does not match current source.",
+  "task36ReuseBoundary": {
+    "task36WebDistIndexSha256": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+    "currentWebDistIndexSha256": "2024681ca7d9c815195a52909afc693688b42bc2fcccfd4cf56a806ef9ae193e",
+    "matches": false,
+    "consequence": "Task36's Board/Guest/sidebar observations were not reused for current-HEAD rows. Only the unchanged Host filesystem flow was checked again here at current HEAD."
+  },
+  "changesMade": "No source files changed. Only this receipt, the Task15 record and .workflow/development.md are committed.",
+  "blockers": [
+    "Connected Web Board did not expose GitHub items after the real gh CLI account was activated; only the Linear chooser rendered.",
+    "Guest fixture project snapshot was empty in the connected panel, so visible guest item projection and shell observation could not be reached.",
+    "Canonical shell start is denied by Host policy and the fixture bash turn did not produce an approval, leaving no running shell for guest output/stop/reconnect.",
+    "Host policy denies the task tool, so no native child session exists for connected sidebar hierarchy observation.",
+    "No current-HEAD packaged Electron artifact; rebuilding was not performed in this paused run."
+  ],
+  "advisoryReviews": "not run in this paused run",
+  "ephemeralEvidence": [
+    "/tmp/ohpi-task15/webflow.json",
+    "/tmp/ohpi-task15/boardguest2.json",
+    "/tmp/ohpi-task15/board3.json",
+    "/tmp/ohpi-task15/guestdirect.json",
+    "/tmp/ohpi-task15/setup.json",
+    "/tmp/ohpi-task15/evidence/10-after-unlock.png",
+    "/tmp/ohpi-task15/evidence/24-guest-panel.png",
+    "/tmp/ohpi-task15/evidence/30-github-board.png"
+  ],
+  "cleanup": "Web Host, fixture provider and headless Chrome were stopped after the run; ports 3210, 4610 and 9345 closed. /tmp/ohpi-task15 and /tmp/ohpi-task15-guest remain as scratch evidence."
+}
