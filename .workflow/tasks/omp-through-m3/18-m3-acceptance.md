@@ -6,7 +6,7 @@
 
 **Delivers:** One current acceptance packet proves M0-to-M3 behavior on Web and Electron, records platform/provider limitations, and closes only the gates supported by observed evidence.
 
-**Blocked by:** 15, 52, 56, 57, 58, 59, 60, 61, 64, 65, 66, 67, 68, 69, 70, 71
+**Blocked by:** 15, 52, 56, 57, 58, 59, 60, 61, 64, 65, 66, 67, 68, 69, 70, 71, 72
 **Files:** `.workflow/development.md`, `.workflow/omp-migration/implementation-plan.md`, `.workflow/specs/omp-through-m3.md`, acceptance artifacts under `.workflow/omp-migration/m3/`
 
 **Read first:** `.workflow/specs/omp-through-m3.md` W1-W10; `.workflow/tasks/omp-through-m3/32-m3-native-subagent-navigation.md`; tasks 15, 52, 56-61 and 64-70 with their `## Progress`/`## Findings`; Task60's Web Search defect handoff; all task artifacts; architecture/contracts/scope; package validation commands; existing M0 evidence
