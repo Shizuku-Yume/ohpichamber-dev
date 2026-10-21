@@ -259,6 +259,18 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     await expect(client.stopShell(sessionId, { job: { ...identity, sessionId } })).rejects.toThrow();
   });
 
+  test('propagates an abort signal to shell output and stop before dispatch', async () => {
+    const identity = { jobId: job.jobId, epoch, workerGeneration: generation };
+    const controller = new AbortController();
+    controller.abort();
+    respondWith({ job: identity, requestedCursor: '0', startCursor: '0', cursor: '0', skippedBytes: '0', output: '', ended: false });
+    await expect(client.getShellOutput(sessionId, identity, '0', 100, controller.signal)).rejects.toThrow();
+    expect(calls).toHaveLength(0);
+    respondWith({ job: { ...job, status: 'ended', endedAt: 2, termination: { reason: 'stopped', exitCode: null } } });
+    await expect(client.stopShell(sessionId, { job: { ...identity, sessionId } }, controller.signal)).rejects.toThrow();
+    expect(calls).toHaveLength(0);
+  });
+
   test('manages a workspace MCP catalog without creating or reading any session', async () => {
     const configuration = mcp.configuration;
     respondWith(configuration);

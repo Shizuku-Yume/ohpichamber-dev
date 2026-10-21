@@ -1770,6 +1770,7 @@ async function main(options = {}) {
       resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
       resolveWorkspaceDirectory: hostAgentRuntime.resolveWorkspaceDirectory,
       resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+      resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
       listProjects: agentScopeRuntime.listProjects,
       listWorkspaces: agentScopeRuntime.listWorkspaces,
       resolveCredentialHandoff,

@@ -75,6 +75,7 @@ beforeEach(async () => {
     },
     resolveWorkspaceDirectory: async () => null,
     resolveSessionScope: async () => { throw new Error('Workspace warming must not require session admission'); },
+    resolveHostSessionScope: async () => null,
     listProjects: async () => ({ items: [], errors: {} }),
     listWorkspaces: async () => ({ items: [], errors: {} }),
     resolveCredentialHandoff: async () => { throw new Error('Warming must not read credentials'); },

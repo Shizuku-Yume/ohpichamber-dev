@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/74",
+  "status": "passed-connected-guest-shell-output-stop",
+  "observedAt": "2026-10-21T13:50:00+08:00",
+  "baseCommit": "81bd52d5fa31b4452b8a244fcc778ab9904c1222",
+  "commit": "landed on omp-through-m3/verified-integration-20261021; exact HEAD reported in the Task74 Progress",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/74-guest-shell-bridge-timeout",
+    "branch": "omp-through-m3/74-guest-shell-bridge-timeout",
+    "webHost": "http://127.0.0.1:3230",
+    "isolatedHome": "/tmp/ohpi-task74/home",
+    "isolatedDataDir": "/tmp/ohpi-task74/data",
+    "projectDirectory": "/tmp/ohpi-task73/chats/work",
+    "guestFixture": "/tmp/ohpi-task74-guest (Task73 Guest fixture copy with CDP timing instrumentation)",
+    "fixtureProvider": "http://127.0.0.1:4630/v1, model t15fixture/t15-fixture",
+    "browser": "Chrome headless 155, CDP 9341",
+    "chatsReused": "/tmp/ohpi-task73/chats/work (Task73 fixture), new isolated HOME and data directory"
+  },
+  "webDist": {
+    "indexSha256": "d2c71cae09b8a3018cbc9c6ce301572828b9d935a1b96296f17d308198cf0065",
+    "sourceUnchangedSinceBuild": "all source, test and documentation changes were completed before the final UI/Web build; only the task record and this receipt changed afterwards"
+  },
+  "failureClassification": {
+    "before": "The Guest received HostRequestError: Host did not answer in time. from packages/sdk/src/host.ts send() after GUEST_REQUEST_TIMEOUT_MS (20 s). It was the SDK bridge timer, not an HTTP rejection, route mismatch or long-poll. The canonical GET /api/agent/v1/sessions/:id/shell/jobs/:jobId/output with the same epoch, workerGeneration, cursor=0 and tailBytes=2048 returned 200 in 2205 ms, and the stop never ended the running job.",
+    "owners": "The Host bridge shell effect (PluginPane -> shells.ts -> canonicalClient) had no deadline or AbortSignal, and every session-scoped canonical route re-ran admitWorkspace on the observation path. Both layers are removed by this task.",
+    "admissionOnBlockedPathBeforeFix": true,
+    "admissionOnObservationPathAfterFix": false
+  },
+  "sourceChanges": [
+    "packages/ui/src/lib/guests/shell-requests.ts (new)",
+    "packages/ui/src/lib/guests/shell-requests.test.ts (new)",
+    "packages/ui/src/lib/guests/shells.ts",
+    "packages/ui/src/lib/guests/shells.test.ts",
+    "packages/ui/src/components/layout/PluginPane.tsx",
+    "packages/ui/src/api/canonicalClient.ts",
+    "packages/ui/src/api/canonicalClient.transport.test.ts",
+    "packages/web/server/lib/host/canonical-routes.js",
+    "packages/web/server/lib/host/canonical-shell-routes.test.js (new)",
+    "packages/web/server/lib/host/DOCUMENTATION.md",
+    "packages/web/server/index.js (production wiring of resolveHostSessionScope)",
+    "packages/web/server/lib/host/agent-scope-runtime.test.js, canonical-plugins.test.js, canonical-usage-routes.test.js, canonical-warming-routes.test.js, packages/web/server/lib/ui-auth/canonical-host-routes.test.js (required resolver fixture)"
+  ],
+  "checks": {
+    "checkBefore": "shell-requests.test 2 fail / 6 pass: the abort signal was not forwarded to canonicalClient.getShellOutput; canonicalClient.getShellOutput/stopShell ignored the signal. canonicalClient.transport.test 1 fail / 29 pass: a pre-aborted shell output signal dispatched 1 request instead of 0. canonical-shell-routes.test 4 fail / 1 pass: observation routes called the admitting resolveSessionScope, never resolveHostSessionScope, and an unauthorized observation returned 200 instead of 403. Baseline shells.test 12 pass, host-bridge.test 29 pass, workspace.test 9 pass.",
+    "checkAfter": "shell-requests.test 8 pass / 0 fail; shells.test 13 pass / 0 fail; host-bridge.test 29 pass / 0 fail; workspace.test 9 pass / 0 fail; canonical-shell-routes.test 5 pass / 0 fail; canonicalClient.transport.test 30 pass / 0 fail; UI type-check clean; UI build clean; Web build clean; changed-file oxlint clean; dead-code reports no entry for the changed Guest shell files (the command still exits 1 on the pre-existing unused-export baseline); workflow validate valid (84 task files).",
+    "preExistingUnrelated": "packages/web vitest canonical-host-routes.test.js has 3 pre-existing usage-route failures (GET /usage sends the unsupported range query and returns 400); Task74 does not touch usage and the failures reproduce in the same fixture before and after the shell changes."
+  },
+  "connectedRun": {
+    "projectId": "path_L3RtcC9vaHBpLXRhc2s3My9jaGF0cy93b3Jr",
+    "canonicalProjectId": "pro_68be5eb2-2987-488a-9a1c-bcd3d940274f",
+    "workspaceId": "ws_3e05701a-3d35-46dc-9347-5cb13d1fe4e7",
+    "guest": {
+      "id": "t15-guest",
+      "grants": ["sessions", "shells"],
+      "path": "/tmp/ohpi-task74-guest"
+    },
+    "sessionId": "ad193297-92ef-4d83-a027-db1c1d02fd1b",
+    "start": "Canonical POST /api/agent/v1/sessions/:id/runs with t15fixture/t15-fixture; GET /approvals returned a bash_command approval; POST /approvals/:id/respond returned 200 approve; the job appeared as native:[\"Main\",\"bg_2\"] running.",
+    "guestOutput": {
+      "call": "Guest panel onRunningShells -> host.readShellOutput(job, { cursor: 0, tailBytes: 2048 })",
+      "result": { "cursor": 33, "output": "t15-line-1\nt15-line-2\nt15-line-3\n", "skipped": false },
+      "containsT15Line": true
+    },
+    "guestStop": {
+      "call": "Guest panel -> host.stopShell(job)",
+      "result": { "stopped": true }
+    },
+    "timings": {
+      "hostShellOutputApiMs": 9,
+      "hostShellStopApiMs": 3,
+      "approvedToGuestStopMs": 4,
+      "panelOpenedToGuestReplyMs": 1,
+      "guestDeadlineMs": 20000,
+      "hostBridgeDeadlineMs": 15000,
+      "verdict": "The bridge answered in single-digit milliseconds, far below both the 15 s Host deadline and the 20 s Guest request timer."
+    },
+    "trace": {
+      "description": "CDP Network on the top Web page captured the two shell calls made by the Guest bridge: GET /api/agent/v1/sessions/ad193297-92ef-4d83-a027-db1c1d02fd1b/shell/jobs/native%3A%5B%22Main%22%2C%22bg_2%22%5D/output?epoch=886b96d9-d0ca-4e32-ac7a-820752291121&workerGeneration=da22dfb8-82aa-441d-b8f8-1a8d74101ea4&cursor=0&tailBytes=2048 -> 200 in 9 ms; POST .../stop -> 200 in 3 ms. No request spent 20 s in the Host bridge, and no pre-forward admission stall appeared.",
+      "admissionFreeProof": "canonical-shell-routes.test asserts the shell observation routes call resolveHostSessionScope and never resolveSessionScope; shell start keeps the admitting resolver. The route response for each ShellSnapshot job is also authorized through the same admission-free resolver."
+    },
+    "afterStop": {
+      "running": [],
+      "ended": [
+        { "jobId": "native:[\"Main\",\"bg_1\"]", "reason": "stopped" },
+        { "jobId": "native:[\"Main\",\"bg_2\"]", "reason": "stopped" }
+      ]
+    },
+    "note": "The leftover bg_1 was the first diagnostic shell from the same session; it was stopped before the accepted run. The accepted Guest action stopped bg_2 and the canonical snapshot ended both jobs with termination reason stopped."
+  },
+  "screenshots": {
+    "/tmp/ohpi-task74/evidence/01-guest-ready.png": "0a8cbf0a62ce2e614dfda7e8f960e1a5fea1818b957743795e87fae53493fc54",
+    "/tmp/ohpi-task74/evidence/02-guest-shell-output-stop.png": "52e16395e93f927407005065dd4b5f6c6845b49edfbcc4e2b594f17d9ceef823"
+  },
+  "surfaces": {
+    "web": "fixed and connected-verified: Guest readShellOutput returned t15-line output and stopShell returned stopped; the canonical job ended stopped.",
+    "electronDesktop": "uses the same shared UI bridge and Host canonical routes fixed here; no separate packaged Electron run in this verification turn.",
+    "hostedMobile": "guest surfaces stay unsupported exactly as today; no new fallthrough.",
+    "capacitorMobile": "guest surfaces stay unsupported exactly as today; no new fallthrough.",
+    "notAdded": "no direct shell route, grant bypass, raised global timeout, generate-style deadline or Host loopback bypass."
+  },
+  "reviews": {
+    "briefA": "not run this turn (external review not awaited per operator instruction)",
+    "briefB": "not run this turn (external review not awaited per operator instruction)",
+    "security": "not run this turn; the change preserves Host auth, origin, guest grant and frame identity checks and adds no bypass"
+  },
+  "cleanup": "Stopped Host 3230, fixture 4630 and Chrome CDP 9341 after evidence capture; isolated HOME, data, chats, guest fixture and screenshots retained under /tmp/ohpi-task74 and /tmp/ohpi-task73."
+}

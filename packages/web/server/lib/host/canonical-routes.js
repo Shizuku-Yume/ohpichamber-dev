@@ -89,13 +89,13 @@ const AGENT_ROUTES = [
   { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/catalog$/, response: C.SkillsCatalogStateSchema },
   { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/apply$/, request: C.SkillsApplyRequestSchema, response: C.SkillsApplyResultSchema },
   { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/expand$/, request: C.SkillExpandRequestSchema, response: C.SkillExpandResultSchema },
-  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs$/, response: C.ShellSnapshotSchema },
+  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs$/, response: C.ShellSnapshotSchema, shellObservation: true },
   { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs$/, request: C.ShellStartRequestSchema, response: C.ShellJobSchema },
-  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/shell\/jobs$/, response: C.ShellSnapshotSchema },
-  { method: 'GET', pattern: /^\/projects\/(?<projectId>[^/]+)\/shell\/jobs$/, response: C.ShellSnapshotSchema },
-  { method: 'GET', pattern: /^\/shell\/jobs$/, response: C.ShellSnapshotSchema },
-  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs\/[^/]+\/output$/, response: C.ShellOutputSchema, query: ['epoch', 'workerGeneration', 'cursor', 'tailBytes'] },
-  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs\/[^/]+\/stop$/, request: C.ShellStopRequestSchema, response: C.ShellStopResultSchema },
+  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/shell\/jobs$/, response: C.ShellSnapshotSchema, shellObservation: true },
+  { method: 'GET', pattern: /^\/projects\/(?<projectId>[^/]+)\/shell\/jobs$/, response: C.ShellSnapshotSchema, shellObservation: true },
+  { method: 'GET', pattern: /^\/shell\/jobs$/, response: C.ShellSnapshotSchema, shellObservation: true },
+  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs\/[^/]+\/output$/, response: C.ShellOutputSchema, query: ['epoch', 'workerGeneration', 'cursor', 'tailBytes'], shellObservation: true },
+  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs\/[^/]+\/stop$/, request: C.ShellStopRequestSchema, response: C.ShellStopResultSchema, shellObservation: true },
 ];
 
 function problem(res, status, code, detail) {
@@ -122,7 +122,7 @@ function capturedScope(value, expectedWorkspaceId) {
 /** The external Host owns authentication, trusted selection and local delivery before private agent forwarding. */
 export function registerCanonicalHostRoutes(app, {
   express, service, uiAuthController, tunnelAuthController, isRequestOriginAllowed, enterprisePolicyOptions,
-  resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, listProjects, listWorkspaces,
+  resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope, listProjects, listWorkspaces,
   resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes,
   skillFileOwner, getSkillRepositoryDependencies,
  }) {
@@ -133,6 +133,8 @@ export function registerCanonicalHostRoutes(app, {
     && z.function().safeParse(tunnelAuthController?.classifyRequestScope).success
     && z.function().safeParse(tunnelAuthController?.getTunnelSessionFromRequest).success;
   if (!validHttp) throw new TypeError('Canonical gateway requires the production HTTP and auth owners');
+  if (!z.function().safeParse(resolveHostSessionScope).success)
+    throw new TypeError('Canonical gateway requires the authorized Host session scope');
   const owners = [isRequestOriginAllowed, resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, listProjects, listWorkspaces,
      resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes];
   const router = express.Router();
@@ -247,6 +249,7 @@ export function registerCanonicalHostRoutes(app, {
   router.use(express.json({ limit: '1mb', strict: true }));
   router.use(async (req, res) => {
     const route = res.locals.canonicalProxyRoute;
+    const resolveRouteSessionScope = route.shellObservation ? resolveHostSessionScope : resolveSessionScope;
     const controller = new AbortController();
     const disconnect = () => controller.abort();
     req.once('aborted', disconnect);
@@ -260,7 +263,7 @@ export function registerCanonicalHostRoutes(app, {
         if (!scope) return problem(res, 403, 'UNAUTHORIZED', 'The selected workspace is not authorized.');
       } else if (groups?.sessionId) {
         const sessionId = C.EntityIdSchema.parse(decodeURIComponent(groups.sessionId));
-        scope = capturedScope(await resolveSessionScope(sessionId));
+        scope = capturedScope(await resolveRouteSessionScope(sessionId));
         if (!scope) return problem(res, 403, 'UNAUTHORIZED', 'The selected session is not authorized.');
       } else if (groups?.projectId) {
         const projectId = C.EntityIdSchema.parse(decodeURIComponent(groups.projectId));
@@ -363,7 +366,7 @@ export function registerCanonicalHostRoutes(app, {
         return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The search response does not match its selected workspace.');
       if (route.response === C.ShellSnapshotSchema) {
         for (const job of [...result.running, ...result.ended]) {
-          const jobScope = capturedScope(await resolveSessionScope(job.sessionId));
+          const jobScope = capturedScope(await resolveRouteSessionScope(job.sessionId));
           if (!jobScope || jobScope.projectId !== job.projectId || jobScope.workspaceId !== job.workspaceId)
             return problem(res, 403, 'UNAUTHORIZED', 'The shell observation includes an unauthorized session.');
         }

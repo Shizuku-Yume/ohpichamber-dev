@@ -95,7 +95,7 @@ The composed Node Host/Bun scenario has verified these boundaries on Linux, incl
 
 ## Canonical gateway and credential handoff
 
-`registerCanonicalHostRoutes(app, { express, service, uiAuthController, tunnelAuthController, isRequestOriginAllowed, enterprisePolicyOptions, resolveWorkspaceScope, resolveSessionScope, listProjects, listWorkspaces, resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes })` registers the `/api/agent/v1` namespace.
+`registerCanonicalHostRoutes(app, { express, service, uiAuthController, tunnelAuthController, isRequestOriginAllowed, enterprisePolicyOptions, resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope, listProjects, listWorkspaces, resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes })` registers the `/api/agent/v1` namespace.
 
 ### Status and authentication
 
@@ -137,6 +137,10 @@ For Host consumers (quotas, TTS, routing), `createSelectedCredentialResolver` re
 ### Proxied agent routes and Native Host Action bridge
 
 Authorized requests for models, providers, agent profiles, completions, session history, SSE events, run abort, approvals, questions, MCP, skills, and shell jobs are forwarded to the Bun Agent Service. Path parameters (`workspaceId`, `sessionId`, `projectId`) are validated against authorized Host scopes. Queries and bodies are validated against strict `@openchamber/agent-contract` schemas. SSE event streams use `node:stream/promises` pipeline to preserve backpressure; client disconnect triggers request abort.
+
+Shell observation - `GET /shell/jobs` at session, workspace, project and global scope, `GET /sessions/:sessionId/shell/jobs/:jobId/output`, and `POST /sessions/:sessionId/shell/jobs/:jobId/stop` - resolves session scope through `resolveHostSessionScope`, the already-authorized Host session scope also used by queue routes, instead of running `resolveSessionScope`'s workspace admission. Authorization still requires the Host session/workspace binding, and the Agent Service still validates root ownership, epoch and worker generation. Shell start (`POST /sessions/:sessionId/shell/jobs`) and every non-shell canonical route keep the admitting session resolver.
+
+The Guest Host bridge bounds `readShellOutput` and `stopShell` below the Guest request deadline, aborts that canonical work when the frame, pane or runtime goes away, and answers `HOST_TIMEOUT` rather than letting the Guest timer expire silently. A completed reply is posted to the captured port while it is still current; a replaced port, endpoint switch or disposed frame never receives it.
 
 Native file-resource gateway projections live in `file-resource-agent-routes.js`. Commands, prompt templates, native skill discovery and expansion execute only in Bun workers; the Host never imports the native SDK. UI-visible expansion is submitted through the ordinary canonical delivery owner.
 

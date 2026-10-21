@@ -68,7 +68,8 @@ import { useGuestOauthStore } from '@/lib/guests/oauth-store';
 import { linkGuestSession, promptGuestSession, startGuestSession } from '@/lib/guests/start-session';
 import { useGuestsStore } from '@/lib/guests/store';
 import { readGuestWorkspace, observeGuestWorkspace, openGuestSession } from '@/lib/guests/workspace';
-import { observeGuestShells, readGuestShellOutput } from '@/lib/guests/shells';
+import { observeGuestShells } from '@/lib/guests/shells';
+import { createGuestShellRequests, postGuestShellReply } from '@/lib/guests/shell-requests';
 import { guestStorageOperation } from '@/lib/guests/storage';
 import { getGuestPopoverController, guestPopoverOwnerBlocked, positionGuestPopover, type GuestPopoverActivation, type GuestPopoverPosition } from '@/lib/guests/popovers';
 import { createGuestStatusControls, type GuestStatusControlBinding } from '@/lib/guests/status-controls';
@@ -80,9 +81,7 @@ import { closeGuestTabsEverywhere } from '@/lib/guests/tabs';
 import { pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/modes';
 import { useUIStore } from '@/stores/useUIStore';
 import { useInputStore } from '@/sync/input-store';
-import { useBackgroundShellsStore } from '@/sync/background-shells';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { canonicalClient } from '@/api/canonicalClient';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSession, useSessionStatus } from '@/sync/sync-context';
 import { GuestPopover } from './GuestPopover';
@@ -502,6 +501,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   React.useEffect(() => {
     const subscriptions = new Map<string, () => void>();
     const childPopover = popoverHostRef.current;
+    const shellRequests = createGuestShellRequests();
     let disposed = false;
     const runtimeKey = getRuntimeKey();
     const requestingGuestId = guestIdRef.current;
@@ -538,7 +538,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     });
     statusControlsRef.current = statusControls;
     const clearSubscriptions = () => { for (const unsubscribe of subscriptions.values()) unsubscribe(); subscriptions.clear(); };
-    const runtimeUnsubscribe = subscribeRuntimeEndpointChanged(() => { disposed = true; closeActivePopover('owner'); statusControls.dispose(); clearSubscriptions(); stopOauthPoll(); });
+    const runtimeUnsubscribe = subscribeRuntimeEndpointChanged(() => { disposed = true; shellRequests.abortAll(); closeActivePopover('owner'); statusControls.dispose(); clearSubscriptions(); stopOauthPoll(); });
     const requireSessions = () => {
       if (!guestMay(currentGuest(), 'sessions')) throw new HostRequestError('NOT_GRANTED', NOT_GRANTED_MESSAGE);
     };
@@ -548,6 +548,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     const closeGuestPort = () => {
       const port = guestPortRef.current;
       if (!port) return;
+      shellRequests.abortAll();
       port.removeEventListener('message', onMessage);
       port.close();
       guestPortRef.current = null;
@@ -618,23 +619,13 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
           }));
         },
         shellsUnsubscribe: (id) => { subscriptions.get(id)?.(); subscriptions.delete(id); },
-        shellOutput: async ({ shellId, cursor, tailBytes }) => {
+        shellOutput: ({ shellId, cursor, tailBytes }) => {
           requireShells();
-          return readGuestShellOutput(shellId, cursor, tailBytes);
+          return shellRequests.readOutput({ shellId, cursor, tailBytes });
         },
-        shellStop: async ({ shellId }) => {
+        shellStop: ({ shellId }) => {
           requireShells();
-          const shell = [...useBackgroundShellsStore.getState().byId.values()].find((entry) => entry.jobId === shellId);
-          if (!shell) throw new HostRequestError('NOT_FOUND', 'That shell is not running.');
-          await canonicalClient.stopShell(shell.sessionId, {
-            job: {
-              sessionId: shell.sessionId,
-              jobId: shell.jobId,
-              epoch: shell.epoch,
-              workerGeneration: shell.workerGeneration,
-            },
-          });
-          return { stopped: true as const };
+          return shellRequests.stop({ shellId });
         },
         storage: (request) => guestStorageOperation(requestingGuestId, request,
           installation?.storageId ? { runtimeKey, storageId: installation.storageId, authorize: ownsFrame } : undefined),
@@ -910,6 +901,13 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
           }
         },
       }).then((reply) => {
+        if (message.type === 'shell-output' || message.type === 'shell-stop') {
+          postGuestShellReply(reply, {
+            port: guestPortRef.current, expectedPort: messagePort, runtimeKey,
+            currentRuntimeKey: getRuntimeKey(), disposed,
+          });
+          return;
+        }
         if (reply && ownsFrame() && guestPortRef.current === messagePort) messagePort.postMessage(reply);
       });
     };
@@ -969,6 +967,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     return () => {
       window.removeEventListener('message', onBootstrap);
       disposed = true;
+      shellRequests.abortAll();
       runtimeUnsubscribe();
       if (!childPopover) closeActivePopover('owner');
       statusControls.dispose();

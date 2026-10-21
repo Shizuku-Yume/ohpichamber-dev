@@ -76,6 +76,7 @@ beforeEach(async () => {
     },
     resolveWorkspaceDirectory: async () => null,
     resolveSessionScope: async () => null,
+    resolveHostSessionScope: async () => null,
     listProjects: async () => ({ items: [{ projectId: selectedScope.projectId, name: 'Project', workspaceIds: [selectedScope.workspaceId] }], errors: {} }),
     listWorkspaces: async projectId => {
       workspaceQueries.push(projectId);

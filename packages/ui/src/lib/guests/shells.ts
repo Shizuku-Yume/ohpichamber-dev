@@ -76,12 +76,12 @@ export const readGuestShells = (scope: GuestShellsScope): GuestRunningShellsSnap
  * command's output until it evicts the command (it retains the latest 25 per
  * directory); a stopped command's output goes with it at once.
  */
-export const readGuestShellOutput = async (shellId: string, cursor?: number, tailBytes?: number): Promise<GuestShellOutputResult> => {
+export const readGuestShellOutput = async (shellId: string, cursor?: number, tailBytes?: number, signal?: AbortSignal): Promise<GuestShellOutputResult> => {
   const store = useBackgroundShellsStore.getState();
   const shell = [...store.byId.values(), ...store.ended.values()].find((entry) => entry.jobId === shellId);
   if (!shell || ('termination' in shell && shell.termination.reason === 'stopped')) throw new HostRequestError('NOT_FOUND', 'OpenChamber has not seen that shell.');
   try {
-    const result = await canonicalClient.getShellOutput(shell.sessionId, { jobId: shell.jobId, epoch: shell.epoch, workerGeneration: shell.workerGeneration }, String(cursor ?? 0), tailBytes ?? 65536);
+    const result = await canonicalClient.getShellOutput(shell.sessionId, { jobId: shell.jobId, epoch: shell.epoch, workerGeneration: shell.workerGeneration }, String(cursor ?? 0), tailBytes ?? 65536, signal);
     return { cursor: Number(result.cursor), output: result.output, skipped: false };
   } catch (error) {
     if (error instanceof CanonicalApiError && error.problem.status === 404) throw new HostRequestError('NOT_FOUND', 'The host no longer keeps that shell output.');

@@ -370,13 +370,13 @@ export class CanonicalClient {
   startShell(sessionId: string, input: ShellStartRequest, commandId?: string): Promise<ShellJob> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs`, scoped(C.ShellJobSchema, result => result.sessionId === sessionId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.ShellStartRequestSchema, input) });
   }
-  getShellOutput(sessionId: string, job: { jobId: string; epoch: string; workerGeneration: string }, cursor: string, tailBytes: number): Promise<ShellOutput> {
+  getShellOutput(sessionId: string, job: { jobId: string; epoch: string; workerGeneration: string }, cursor: string, tailBytes: number, signal?: AbortSignal): Promise<ShellOutput> {
     const expected = { ...job, sessionId };
-    return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs/${id(job.jobId)}/output${query({ epoch: job.epoch, workerGeneration: job.workerGeneration, cursor, tailBytes })}`, scoped(C.ShellOutputSchema, result => sameJob(result.job, expected) && result.requestedCursor === cursor));
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs/${id(job.jobId)}/output${query({ epoch: job.epoch, workerGeneration: job.workerGeneration, cursor, tailBytes })}`, scoped(C.ShellOutputSchema, result => sameJob(result.job, expected) && result.requestedCursor === cursor), { signal });
   }
-  stopShell(sessionId: string, job: ShellStopRequest): Promise<ShellJob> {
+  stopShell(sessionId: string, job: ShellStopRequest, signal?: AbortSignal): Promise<ShellJob> {
     const expected = { ...job.job };
-    return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs/${id(expected.jobId)}/stop`, scoped(C.ShellStopResultSchema, result => sameJob(result.job, expected)), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ShellStopRequestSchema, job, body => body.job.sessionId === sessionId) }).then((result) => result.job);
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/shell/jobs/${id(expected.jobId)}/stop`, scoped(C.ShellStopResultSchema, result => sameJob(result.job, expected)), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ShellStopRequestSchema, job, body => body.job.sessionId === sessionId), signal }).then((result) => result.job);
   }
   getWorkspaceMcpConfig(workspaceId: string): Promise<C.MCPConfigurationState> {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/mcp/config`, scoped(C.MCPConfigurationStateSchema, result => result.workspaceId === workspaceId));

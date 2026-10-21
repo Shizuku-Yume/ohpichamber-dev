@@ -73,6 +73,7 @@ beforeEach(async () => {
     resolveWorkspaceScope: async workspaceId => scopes.get(workspaceId) ?? null,
     resolveWorkspaceDirectory: async () => null,
     resolveSessionScope: async () => null,
+    resolveHostSessionScope: async () => null,
     listProjects: async () => ({ items: [], errors: {} }),
     listWorkspaces: async () => ({ items: [], errors: {} }),
     resolveCredentialHandoff: async () => { throw new Error('Plugin routes cannot read credentials'); },

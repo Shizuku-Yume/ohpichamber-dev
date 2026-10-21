@@ -99,6 +99,16 @@ describe('extension shell output', () => {
     } finally { read.mockRestore(); }
   });
 
+  test('forwards the caller abort signal to the canonical read', async () => {
+    const identity = { jobId: 'sh_done', sessionId: 'grandchild', epoch: 'epoch-1', workerGeneration: 'worker-1' };
+    const controller = new AbortController();
+    const read = spyOn(canonicalClient, 'getShellOutput').mockResolvedValue({ job: identity, requestedCursor: '0', startCursor: '0', cursor: '2', skippedBytes: '0', output: 'ok', ended: true });
+    try {
+      await readGuestShellOutput('sh_done', 0, 100, controller.signal);
+      expect(read.mock.calls[0]?.[4]).toBe(controller.signal);
+    } finally { read.mockRestore(); }
+  });
+
   test('an unseen shell, a stopped one, and dropped output are NOT_FOUND', async () => {
     const read = spyOn(canonicalClient, 'getShellOutput').mockRejectedValue(new CanonicalApiError({
       type: 'urn:ohpichamber:problem:SESSION_NOT_FOUND', title: 'Not found', status: 404, detail: 'gone', code: 'SESSION_NOT_FOUND', retryable: false,

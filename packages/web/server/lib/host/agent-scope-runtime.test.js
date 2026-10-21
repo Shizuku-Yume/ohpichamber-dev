@@ -74,6 +74,7 @@ describe('configured Host scope authority', () => {
       resolveWorkspaceDirectory: runtime.resolveWorkspaceDirectory,
       resolveWorkspaceScope: runtime.resolveWorkspaceScope,
       resolveSessionScope: runtime.resolveSessionScope,
+      resolveHostSessionScope: runtime.resolveSessionScope,
       listProjects: runtime.listProjects,
       listWorkspaces: runtime.listWorkspaces,
       resolveCredentialHandoff: async () => { throw new Error('Unexpected credential handoff'); },
@@ -289,7 +290,8 @@ describe('configured Host scope authority', () => {
       tunnelAuthController: { classifyRequestScope: () => 'local', getTunnelSessionFromRequest: () => null },
       isRequestOriginAllowed: () => true,
       resolveWorkspaceScope: runtime.resolveWorkspaceScope, resolveWorkspaceDirectory: runtime.resolveWorkspaceDirectory,
-      resolveSessionScope: runtime.resolveSessionScope, listProjects: runtime.listProjects, listWorkspaces: runtime.listWorkspaces,
+      resolveSessionScope: runtime.resolveSessionScope, resolveHostSessionScope: runtime.resolveSessionScope,
+      listProjects: runtime.listProjects, listWorkspaces: runtime.listWorkspaces,
       resolveCredentialHandoff: async () => { throw new Error('Unexpected credential handoff'); },
       queueRoutes: (router) => router, sessionRoutes: (router) => router, attachmentRoutes: (router) => router,
     });
