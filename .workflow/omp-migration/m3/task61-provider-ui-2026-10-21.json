@@ -2,177 +2,160 @@
   "schemaVersion": 1,
   "task": "omp-through-m3/61",
   "observedAt": "2026-10-21",
-  "status": "provider-ui-proof-pass-check-partial-no-archive",
+  "status": "provider-ui-proof-pass-check-green-on-current-head",
   "environment": {
-    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m1-integration",
-    "branch": "omp-through-m3/recovery-20261013",
-    "head": "ac33b1c73",
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/61-provider-ui",
+    "branch": "omp-through-m3/61-provider-ui",
+    "head": "1ecca6ec23083b2798942e98973801a6e22c777f",
+    "integrationBranch": "omp-through-m3/verified-integration-20261021",
     "taskBase": "e848504602333955b1d134bba3345d8bbc2ed065",
     "providerRestoreCommit": "6f1fe19fe",
     "webArtifact": "packages/web/dist/index.html",
-    "webDistIndexSha256": "c438247e7abd698759fc8fe55e50a4b08ed147a86d213906732d9789fdfa478e",
+    "webDistIndexSha256": "50070284479181b177d24ba930ea67054d3f27a16356c6b43f8fb96dc4353a53",
     "electronArtifact": "packages/electron/dist/OpenChamber-2.2.0-linux-x86_64.AppImage",
-    "electronArtifactSha256": "598bf5823785ccf5b3f36d4e49bb950638e77b3eff35a5b3fc7b3e3259eabad9",
-    "packagedWebDistIndexSha256": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
-    "provenanceNote": "The packaged AppImage is the current Task55 rebundle and embeds packaging-time UI 42170a97; the current Web dist c438247e is newer. Both bundles contain the restored provider grid/picker/custom-provider i18n keys. Electron evidence is labelled against the current packaged artifact, not the newer Web dist."
+    "electronArtifactSha256": "09ac4dad3c820540fbf73391c8b4153bb63216f6027f7ee89d2455b8aec54006",
+    "packagedWebDistIndexSha256": "50070284479181b177d24ba930ea67054d3f27a16356c6b43f8fb96dc4353a53",
+    "provenanceNote": "Both the Web dist and the packaged Electron AppImage were built from this HEAD; the packaged UI byte-identically embeds the current Web dist index (50070284...). The earlier AppImage 598bf582 and Web dist c438247e evidence is superseded history.",
+    "packagingNote": "bun run --cwd packages/electron package produced the AppImage and linux-unpacked, then exited 1 only because electron-builder's implicit CI publishing required GH_TOKEN. bun run --cwd packages/electron verify:linux-appimage passed on the artifact (Bun 1.4.2, 158 Agent packages, 29 Host native modules)."
   },
-  "focusedTests": {
-    "command": "bun test src/components/sections/providers/ProvidersPage.test.ts src/components/sections/providers/custom-provider-form.test.ts ; bun test src/hooks/useSettingsDirectory.test.ts src/components/sections/providers/ProviderOAuthMethods.test.tsx",
-    "cwd": "packages/ui",
-    "result": "19 pass / 0 fail / 43 expect() calls",
-    "files": [
-      "src/components/sections/providers/ProvidersPage.test.ts",
-      "src/components/sections/providers/custom-provider-form.test.ts",
-      "src/hooks/useSettingsDirectory.test.ts",
-      "src/components/sections/providers/ProviderOAuthMethods.test.tsx"
-    ],
-    "scopeNote": "Task61-specific classification/provider/settings tests only; no provider backend/API suite was duplicated."
+  "check": {
+    "focusedTests": {
+      "command": "bun test src/components/sections/providers/ProvidersPage.test.ts src/components/sections/providers/custom-provider-form.test.ts src/hooks/useSettingsDirectory.test.ts src/components/sections/providers/ProviderOAuthMethods.test.tsx",
+      "cwd": "packages/ui",
+      "result": "19 pass / 0 fail / 43 expect() calls",
+      "scopeNote": "Task61-only packet; no provider backend/API suite (Task49) duplicated."
+    },
+    "typeCheck": {
+      "command": "bun run --cwd packages/ui type-check",
+      "result": "exit 0 (tsc -b, 41 s)"
+    },
+    "build": {
+      "command": "bun run --cwd packages/ui build",
+      "result": "exit 0 (tsc -b)"
+    },
+    "webBuild": {
+      "command": "bun run --cwd packages/web build",
+      "result": "exit 0 (vite build, 56 s); dist index sha256 50070284..."
+    }
   },
   "web": {
-    "surface": "Web",
-    "host": "http://127.0.0.1:3171 (isolated HOME /tmp/ohpi-task61-home, passwordless signed session, no provider network)",
-    "workspaceId": "ws_10bdba9b-1d54-4741-a516-141b270d475e",
-    "project": "/tmp/ohpi-task61-project",
+    "surface": "Web from HEAD build",
+    "host": "http://127.0.0.1:3171, isolated HOME /tmp/ohpi-t61-resume/home, data /tmp/ohpi-t61-resume/data, chats $OPENCHAMBER_DATA_DIR/chats/campus-workspace, passwordless session via POST /auth/session",
+    "workspaceAdmission": "POST /api/openchamber/directory { path: /tmp/ohpi-t61-resume/data/chats/campus-workspace, create: true } -> 200",
     "providerCards": {
       "total": 96,
-      "logos": 98,
+      "logos": 97,
       "statuses": ["Not signed in", "Connected"],
-      "examples": ["Not signed in\\nabliteration\\n3", "Not signed in\\nanthropic\\n28", "Connected\\nCampus Local\\n2"],
-      "screenshots": ["t61-04-providers.png", "t61-05-providers-top.png", "t61-23-grid-final.png"]
+      "examples": ["Not signed in | anthropic | 28", "Connected | Campus Local | 2"],
+      "screenshots": ["61r-01-providers.png", "61r-26-grid-final.png"]
     },
     "connectPicker": {
       "popular": ["openai (Recommended)", "opencode-go (Recommended)", "openrouter (Recommended)", "anthropic", "github-copilot", "google"],
       "custom": "Custom provider — Any OpenAI- or Anthropic-compatible endpoint",
       "allProvidersCount": 89,
-      "screenshot": "t61-08-connect-picker.png"
-    },
-    "customProvider": {
-      "formFieldsObserved": ["Provider ID", "API protocol", "Display name", "Provider icon", "Base URL", "API key (password, write-only)", "Models", "find models", "New model", "Model ID/name/context/output/capabilities/tool calls", "Headers (name + password value)", "back", "save provider"],
-      "rawJsonEditorAbsent": true,
-      "discovery": "clicking find models issued GET http://127.0.0.1:4621/v1/models with Authorization: Bearer sk-local-secret; result showed 2 of 2 models selected with limits (Campus Fast 33K/4.1K, Campus Research 131K/16K)",
-      "savedProvider": "campus-local / Campus Local, Connected card with 2 models",
-      "detail": "Accounts roster + Available Models (2) with Campus Fast and Campus Research",
-      "cancel": "a second form filled with discard-me/sk-discard returned to the picker; no discard card or password input remained and the canonical provider list contained no discard provider",
-      "screenshots": ["t61-09-custom-form.png", "t61-11-discovery.png", "t61-12-saved.png", "t61-14-custom-detail.png", "t61-25-cancelled-custom.png"]
-    },
-    "accountRoster": {
-      "firstSave": "canonical revision 2, one account credential_0ecc7e52e49250a321e37ada, active true",
-      "secondAccount": "canonical revision 3, second account credential_94fac7e0c68bd988a0780688, active false; UI showed API key 1 (Active) and API key 2 plus use",
-      "rename": "API key 2 renamed to Campus Secondary through the row actions menu",
-      "defaultSwitch": "use moved Active to Campus Secondary; UI then offered use on API key 1",
-      "remove": "Actions → Remove deleted API key 1; roster returned to one Campus Secondary account",
-      "secretBoundary": "canonical accounts responses contained only opaque credentialRef/method/active/disabled (plus label after rename); no sk-* value appeared in DOM or API responses, and password inputs were empty after save",
-      "screenshots": ["t61-15-two-accounts.png", "t61-16-roster.png", "t61-17-rename.png", "t61-18-default-switched.png"]
-    },
-    "oauth": {
-      "provider": "anthropic / Anthropic (Claude Pro/Max)",
-      "modalStates": "browser instructions, open/copy, Waiting for authorization…, cancel, and 'Copy the authorization code from your browser and paste it here.' with continue",
-      "authorizationLink": "https://claude.ai/oauth/authorize?client_id=…&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A54545%2Fcallback… (host claude.ai)",
-      "manualCallbackInput": "Paste authorization code",
-      "cancel": "cancel removed the pending panel and authorization link; no external OAuth grant was performed",
-      "screenshots": ["t61-21-oauth.png", "t61-22-oauth-cancelled.png"]
-    },
-    "modelSelection": {
-      "before": "2 Hide model controls",
-      "afterHide": "first row dimmed with opacity-50 and its control changed to Show model; second row remained Hide model",
-      "afterShowAll": "both rows restored to Hide model",
-      "screenshot": "t61-19-models.png"
-    }
-  },
-  "electron": {
-    "surface": "Packaged Electron",
-    "launch": "linux-unpacked openchamber (from current AppImage rebundle 598bf582…) under xvfb-run 1600x1000, --remote-debugging-port=9251, isolated HOME /tmp/ohpi-task61-electron-home",
-    "uiDocument": "openchamber-ui://app/index.html",
-    "embeddedHost": "127.0.0.1:57123 desktop Local, bearer-authenticated",
-    "workspaceId": "ws_ccc1e3f2-17b5-4480-b2a4-3fa68deccbf1",
-    "project": "/tmp/ohpi-task61-electron-project",
-    "providerCards": {
-      "total": 95,
-      "logos": 97,
-      "statuses": ["Not signed in", "Connected"],
-      "screenshot": "t61-33-electron-providers.png"
-    },
-    "connectPicker": {
-      "popular": ["openai", "opencode-go", "openrouter", "anthropic", "github-copilot", "google"],
-      "custom": "Custom provider",
-      "allProvidersCount": 89,
       "search": "typing anth filtered to anthropic, bedrock-mantle, google-antigravity, synthetic, xai-oauth",
-      "screenshot": "t61-34-electron-picker.png"
+      "screenshots": ["61r-02-picker.png", "61r-03-picker-all.png", "61r-04-picker-search.png"]
     },
     "customProvider": {
-      "cancel": "discard-electron plus sk-discard-electron cleared; picker returned with no password input and no discard card",
-      "created": "campus-electron / Campus Electron via the same local fixture discovery; 2 of 2 models selected and saved",
-      "detail": "Accounts roster + Available Models (2) with Campus Fast and Campus Research",
-      "screenshots": ["t61-35-electron-custom-saved.png", "t61-36-electron-detail.png"]
+      "formFieldsObserved": ["Search settings", "Provider ID", "API protocol (chat-completions)", "Display name", "Provider icon", "Base URL", "API key (password, write-only)", "Models", "Find models", "New model", "Model ID/name/context/output/capabilities/tool calls", "Headers (name + password value)", "Back", "Save provider"],
+      "rawJsonEditorAbsent": true,
+      "discovery": "GET http://127.0.0.1:4621/v1/models with bearer key and X-Campus-Trace header; result 2 of 2 models selected (Campus Fast 32.8K/4.1K, Campus Research 131.1K/16.4K)",
+      "savedProvider": "campus-local / Campus Local, Connected card with 2 models; detail showed Accounts + Available Models (2)",
+      "cancel": "second form filled with discard-local/sk-discard-resume returned to the picker; no password input, no discard card, canonical provider list had no discard-local and revision stayed 6",
+      "screenshots": ["61r-05-custom-form.png", "61r-07-discovery.png", "61r-09-saved-detail.png", "61r-10-detail.png", "61r-21-discard-filled.png", "61r-22-discard-cancelled.png"]
     },
     "accountRoster": {
-      "secondAccount": "API key 2 added; canonical roster revision 5 with credential_365533835e00332cbcab339f and credential_fe8a9e2dd84da8c0d8a77080",
-      "rename": "API key 2 renamed to Electron Secondary",
-      "defaultSwitch": "use moved Active to Electron Secondary",
-      "remove": "Actions → Remove deleted API key 1; roster returned to one Electron Secondary account",
-      "secretBoundary": "canonical response contained only opaque credentialRef/label; no sk-electron value appeared",
-      "screenshot": "t61-38-electron-roster.png"
+      "firstSave": "canonical revision 2, one API key account credential_0ecc7e52e49250a321e37ada active",
+      "secondAccount": "canonical revision 3, credential_94fac7e0c68bd988a0780688 active false; UI showed API key 1 (Active) and API key 2 with use",
+      "rename": "API key 2 renamed to Campus Secondary through Actions → Rename",
+      "defaultSwitch": "use moved Active to Campus Secondary",
+      "remove": "Actions → Remove deleted API key 1; canonical revision 6 with only credential_94fac7e0c68bd988a0780688 labeled Campus Secondary active",
+      "secretBoundary": "canonical accounts responses contained only credentialRef/method/active/disabled/label; no sk-* value in DOM or responses, and password inputs were empty after save",
+      "screenshots": ["61r-14-two-accounts.png", "61r-15-roster.png", "61r-16-rename.png", "61r-18-default-switched.png", "61r-19-removed.png"]
     },
     "oauth": {
       "provider": "anthropic / Anthropic (Claude Pro/Max)",
-      "authorizationLink": "https://claude.ai/oauth/authorize?… (host claude.ai)",
-      "manualCallbackInput": "Paste authorization code",
-      "cancel": "removed the pending panel and link; no external OAuth grant was performed",
-      "screenshot": "t61-40-electron-oauth.png"
+      "authorizationLink": "https://claude.ai/oauth/authorize?client_id=9d1c250a-… (host claude.ai)",
+      "modalStates": "browser instructions, open/copy, Waiting for authorization…, clean cancel; manual 'Paste authorization code' input and continue present",
+      "cancel": "cancel cleared the pending panel, authorization link and waiting state; no external OAuth grant performed",
+      "observation": "One cancel click landed while a status poll held the button disabled and had no effect; a second click cancelled cleanly. This is a shared OAuth polling interaction, not a credential or flow defect.",
+      "screenshots": ["61r-23-anthropic-auth.png", "61r-24-oauth-pending.png", "61r-25-oauth-cancelled.png"]
     },
     "modelSelection": {
       "before": "2 Hide model controls",
       "afterHide": "first row dimmed with opacity-50 and control changed to Show model",
       "afterShowAll": "both rows restored to Hide model",
-      "screenshot": "t61-39-electron-models.png"
+      "screenshot": "61r-11-model-hidden.png, 61r-12-models-restored.png"
+    }
+  },
+  "electron": {
+    "surface": "Packaged Electron from this HEAD",
+    "launch": "packages/electron/dist/linux-unpacked/openchamber under xvfb-run 1600x1000, --remote-debugging-port=9251, isolated HOME /tmp/ohpi-t61-resume/electron-home, data /tmp/ohpi-t61-resume/electron-data, managed chats electron-workspace",
+    "uiDocument": "openchamber-ui://app/index.html; embedded host 127.0.0.1:57123",
+    "providerCards": {
+      "total": 96,
+      "logos": 97,
+      "statuses": ["Not signed in", "Connected"],
+      "examples": ["Not signed in | anthropic | 28", "Connected | Campus Electron | 2"],
+      "screenshots": ["61r-31-electron-grid.png", "61r-44-electron-grid-final.png"]
     },
-    "screenshots": ["t61-31-electron-local.png", "t61-32-electron-settings.png"]
+    "connectPicker": {
+      "popular": ["openai", "opencode-go", "openrouter", "anthropic", "github-copilot", "google"],
+      "custom": "Custom provider",
+      "allProvidersCount": 89,
+      "search": "anth → anthropic, bedrock-mantle, google-antigravity, synthetic, xai-oauth",
+      "screenshot": "61r-32-electron-picker.png"
+    },
+    "customProvider": {
+      "fields": "Provider ID, protocol, display name, Base URL, write-only API key, model rows, headers; no textarea/raw JSON",
+      "discovery": "2 of 2 models from the local loopback fixture after entering the fixture key; earlier attempts failed because a placeholder key was entered and the fixture rejected it (401) — the UI reported the failure correctly",
+      "saved": "campus-electron / Campus Electron, Connected card with 2 models; detail showed Accounts + Available Models (2)",
+      "cancel": "discard-electron/sk-discard-electron cleared; no password input, no discard card, canonical providers unchanged at revision 6",
+      "screenshots": ["61r-34-electron-discovery.png", "61r-33-electron-saved.png", "61r-35-electron-detail.png", "61r-41-electron-cancel.png"]
+    },
+    "accountRoster": {
+      "secondAccount": "API key 2 added; canonical roster revision 5 with credential_365533835e00332cbcab339f and credential_fe8a9e2dd84da8c0d8a77080",
+      "rename": "API key 2 renamed to Electron Secondary; use switched Active to it",
+      "remove": "Actions → Remove deleted API key 1; canonical revision 6 with only credential_fe8a9e2dd84da8c0d8a77080 labeled Electron Secondary active",
+      "secretBoundary": "canonical response contained only credentialRef/method/active/disabled/label; no sk-electron value appeared",
+      "screenshots": ["61r-37-electron-two-accounts.png", "61r-38-electron-renamed.png", "61r-39-electron-switched.png", "61r-40-electron-roster.png"]
+    },
+    "oauth": {
+      "provider": "anthropic / Anthropic (Claude Pro/Max)",
+      "authorizationLink": "https://claude.ai/oauth/authorize?… (host claude.ai)",
+      "manualCallbackInput": "Paste authorization code",
+      "cancel": "cleared the waiting state and authorization link; no external grant performed",
+      "screenshot": "61r-42-electron-oauth.png, 61r-43-electron-oauth-cancelled.png"
+    },
+    "modelSelection": {
+      "before": "2 Hide model controls",
+      "afterHide": "first row dimmed, control changed to Show model",
+      "afterShowAll": "both rows restored to Hide model",
+      "screenshot": "61r-36-electron-models.png"
+    }
   },
-  "localeAndStyleReview": {
-    "result": "pass",
-    "method": "Loaded every merged locale dictionary and checked the 157 settings.providers keys used by the provider surfaces.",
-    "missingKeys": "none in de/es/fr/ja/ko/nl/pl/pt-BR/tr/uk/zh-CN/zh-TW",
-    "englishIdenticalValues": "Only placeholders/product/protocol literals (sk-..., URLs, gpt-4o, Anthropic Messages, OpenAI Chat Completions, X-Custom-Header, ctx/out); no untranslated English sentences.",
-    "hardcodedCopyScan": "No user-facing JSX literals found in the provider .tsx files; all copy and aria labels resolve through t().",
-    "sharedSurfaceBoundary": "No SettingsView, shared primitive, or i18n dictionary changes were made by Task61 verification."
+  "task68Boundary": {
+    "finding": "Task68 changed packages/agent-service/src/worker/catalog-websearch.ts readCurrent to use search-kind models only. The Providers grid/picker/forms read the provider catalog (/api/agent/v1/workspaces/:id/providers) and model catalog, not the web-search catalog; live grids at this HEAD show 96 provider cards with provider counts (anthropic 28) and no chat-model entries.",
+    "status": "provider surface unaffected; no provider UI filtering/masking added"
   },
-  "checkStatus": {
-    "focusedBehavioralTests": "pass",
-    "webVisual": "pass for cards, picker, custom discovery, roster, OAuth modal states, model selection",
-    "electronVisual": "pass for cards, picker, custom discovery, roster, OAuth modal states, model selection on the current packaged artifact",
-    "strictUiTypeCheck": "not run: packages/ui contains unrelated dirty sync files (bootstrap/child-store/retry/session-message-loader/sync-context) and the instruction forbids a workspace-wide typecheck while that work is in flight",
-    "singleUiBuild": "not run for the same dirty-sync reason; the current Web dist c438247e and packaged UI 42170a97 are the artifacts exercised",
-    "archive": "not archived; the Check's type-check/build item remains unverified"
+  "localeReview": {
+    "hardcodedCopy": "none in provider .tsx (only product literal 'jev' subtitle and code identifiers matched)",
+    "keys": "167 settings.providers.* references; all static keys resolve in English; the only dynamic template is icon option.${entry.id} with server/cloud/database/terminal/code/ai present",
+    "parity": "bun test src/lib/i18n/messages.test.ts → 6 pass / 536 expect() calls, including all-locale key parity"
   },
-  "dependency": {
-    "owner": "omp-through-m3/60",
-    "status": "confirmed outside Task61 UI-only scope; no backend/catalog change made",
-    "summary": "The Web Search provider catalog lists chat models as providers.",
-    "exactSource": "packages/agent-service/src/worker/catalog-websearch.ts readCurrent filters runtime.modelRegistry.getAll('all') by the web role, so entries such as anthropic/claude-3-5-sonnet-20240620 and openai/... appear as providers while fallbackProviderIds are web/parallel, web/hosted, web/exa.",
-    "task61Impact": "None observed in the Providers management grid/picker; Task61 added no UI filtering or masking for this catalog defect."
+  "security": {
+    "trigger": "provider credential/OAuth surface touches secrets and the OAuth trust flow",
+    "method": "security-reviewer subagent over packages/ui/src/components/sections/providers and canonicalClient usage",
+    "result": "no blocking findings; one nonblocking pre-existing logo egress (useProviderLogo requests models.dev/logos/<id>.svg for unknown provider ids, no secret or credential data). Write-only key handling, OAuth flowId/generation checks, revision CAS, enterprise gates, and canonical-route-only access reported clean."
+  },
+  "reviews": {
+    "briefA": "blocked round 1: packaged Electron evidence predated HEAD and type-check/build had not run. Resolved by building AppImage 09ac4dad from this HEAD (embedded UI 50070284) and verifying packaged flows, plus green UI type-check/build. Nonblocking: 6f1fe19fe edits en/zh-CN settings dictionaries for the OMP nav label; locale parity passes and this verification made no dictionary edits.",
+    "briefB": "see ## Progress (quality pass recorded there)"
   },
   "limitations": [
     "No official external provider key or OAuth consent grant was used; OAuth proof covers the native modal, real authorization URL, manual callback prompt, and cancel only.",
     "Model discovery used a deterministic local OpenAI-compatible fixture at 127.0.0.1:4621; no third-party endpoint was contacted.",
-    "Electron proof is the current packaged artifact whose embedded UI (42170a97) predates the current Web dist (c438247e).",
+    "Electron evidence is the current-HEAD rebundle AppImage 09ac4dad.../linux-unpacked; the packaging script exit 1 after artifact creation was electron-builder implicit publish requiring GH_TOKEN, not a packaging failure.",
     "Hosted/Capacitor surfaces share the Host/UI but were not launched; they do not run the local worker."
-  ],
-  "evidenceHygiene": {
-    "overwrittenLegacyScreenshots": [
-      "04-providers.png",
-      "05-providers-top.png",
-      "09-custom-form.png",
-      "11-discovery.png",
-      "14-custom-detail.png",
-      "16-roster.png",
-      "19-models.png",
-      "21-oauth.png",
-      "22-oauth-cancelled.png",
-      "25-cancelled-custom.png"
-    ],
-    "cause": "An initial copy into ~/.cache/ohpi-acceptance/evidence used filenames without a prefix and replaced same-named legacy files from earlier acceptance runs.",
-    "retainedAlternatives": "All Task61 screenshots were copied again with the t61- prefix and are the evidence paths named in this receipt. The overwritten legacy files were not restored or guessed.",
-    "repoImpact": "None; this evidence directory is outside the repository and no tracked file was affected."
-  },
-  "cleanup": "Web Host 3171, Chrome 9241, Electron 9251, embedded Host 57123 and fixture 4621 stopped; ports closed; isolated HOMEs, project dirs, Chrome profile and temporary proof scripts removed; screenshots retained under /home/shizuku/.cache/ohpi-acceptance/evidence/t61-*.png."
+  ]
 }
