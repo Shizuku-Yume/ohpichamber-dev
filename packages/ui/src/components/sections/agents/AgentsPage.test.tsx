@@ -20,7 +20,7 @@ Object.assign(globalThis, {
 });
 const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
   const url = String(input instanceof Request ? input.url : input);
-  return Response.json(url.includes('/config/mcp') ? [] : { home: '/test' });
+  return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
 });
 // These loading boundaries must run after the browser globals and the Bun asset-loader plugin are installed.
 const { act } = await import('react');
@@ -50,12 +50,12 @@ const container = document.createElement('div');
 document.body.appendChild(container);
 let root: Root;
 beforeEach(() => {
-  useProjectsStore.setState({ projects: [], activeProjectId: null });
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
   root = createRoot(container);
   useAgentsStore.setState({
     selectedAgentName: 'test', agentDraft: null,
-    agentsByDirectory: { __default__: [initialAgent] },
-    revisionsByDirectory: { __default__: '1' }, errorsByDirectory: {},
+    agentsByDirectory: { '/project': [initialAgent] },
+    revisionsByDirectory: { '/project': '1' }, errorsByDirectory: {},
     loadAgents: async () => true,
     updateAgent: async () => ({ ok: true, revision: '2' }),
     createAgent: async () => ({ ok: true, revision: '2' }),
@@ -105,8 +105,8 @@ test('native catalog refresh during save preserves newer draft and advances only
   await edit(system, 'newer');
   expect(writes.map((write) => write.agent.systemPromptOverride)).toEqual(['older']);
   await act(async () => { useAgentsStore.setState({
-    agentsByDirectory: { __default__: [{ ...initialAgent, systemPromptOverride: 'older' }] },
-    revisionsByDirectory: { __default__: '99' },
+    agentsByDirectory: { '/project': [{ ...initialAgent, systemPromptOverride: 'older' }] },
+    revisionsByDirectory: { '/project': '99' },
   }); });
   expect(system.value).toBe('newer');
   await act(async () => { writes[0].finish(); });
@@ -115,7 +115,7 @@ test('native catalog refresh during save preserves newer draft and advances only
   expect(writes[1].agent.allowedTools).toEqual(initialAgent.allowedTools);
   expect(writes[1].agent.permissionPresetId).toBe(initialAgent.permissionPresetId);
   await act(async () => { useAgentsStore.setState({
-    selectedAgentName: 'other', agentsByDirectory: { __default__: [{ ...initialAgent, agentId: 'other', name: 'other', systemPromptOverride: 'other prompt' }] },
+    selectedAgentName: 'other', agentsByDirectory: { '/project': [{ ...initialAgent, agentId: 'other', name: 'other', systemPromptOverride: 'other prompt' }] },
   }); });
   expect(system.value).toBe('other prompt');
   await act(async () => { writes[1].finish(); });
@@ -131,8 +131,8 @@ test('dirty native fields keep hydration revision on concurrent refresh and disp
   const description = field('Initial description');
   await edit(description, '', false);
   await act(async () => { useAgentsStore.setState({
-    agentsByDirectory: { __default__: [{ ...initialAgent, description: 'External edit', allowedTools: ['external'] }] },
-    revisionsByDirectory: { __default__: '2' },
+    agentsByDirectory: { '/project': [{ ...initialAgent, description: 'External edit', allowedTools: ['external'] }] },
+    revisionsByDirectory: { '/project': '2' },
   }); });
   expect(description.value).toBe('');
   await act(async () => { description.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
@@ -150,8 +150,8 @@ test('clean refresh hydrates native fields, actual preset and optional prompt re
   expect(container.querySelector<HTMLInputElement>('input[aria-label="Permission preset ID"]')?.value).toBe('actual-native-preset');
   expect(container.querySelectorAll('textarea')).toHaveLength(2);
   await act(async () => { useAgentsStore.setState({
-    agentsByDirectory: { __default__: [{ ...initialAgent, description: 'Refreshed description', systemPromptOverride: 'refreshed' }] },
-    revisionsByDirectory: { __default__: '2' },
+    agentsByDirectory: { '/project': [{ ...initialAgent, description: 'Refreshed description', systemPromptOverride: 'refreshed' }] },
+    revisionsByDirectory: { '/project': '2' },
   }); });
   expect(field('Refreshed description')).toBeDefined();
   await edit(field('refreshed'), '');
@@ -162,7 +162,7 @@ test('clean refresh hydrates native fields, actual preset and optional prompt re
 });
 
 test('unavailable catalog is visible and never renders editable stale fields', async () => {
-  useAgentsStore.setState({ agentsByDirectory: {}, revisionsByDirectory: {}, errorsByDirectory: { __default__: 'SERVICE_UNAVAILABLE' } });
+  useAgentsStore.setState({ agentsByDirectory: {}, revisionsByDirectory: {}, errorsByDirectory: { '/project': 'SERVICE_UNAVAILABLE' } });
   await render();
   expect(container.querySelector('[role="alert"]')?.textContent).toBe('SERVICE_UNAVAILABLE');
   expect(container.querySelector('[role="status"]')?.textContent).toBe('Unavailable');

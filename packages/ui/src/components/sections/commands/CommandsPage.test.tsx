@@ -32,7 +32,7 @@ const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, ini
   const request = new Request(input instanceof Request ? input : new URL(input, window.location.href), init);
   const path = new URL(request.url).pathname;
   if (path === '/api/fs/home') return Response.json({ home: '/test' });
-  if (path === '/api/config/settings') return Response.json({});
+  if (path === '/api/config/settings') return Response.json({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
   throw new Error(`Unexpected request: ${request.method} ${path}`);
 });
 
@@ -55,6 +55,8 @@ plugin({
 });
 const { CommandsPage } = await import('./CommandsPage');
 const { useCommandsStore } = await import('@/stores/useCommandsStore');
+const { useProjectsStore } = await import('@/stores/useProjectsStore');
+const { SyncProvider } = await import('@/sync/sync-context');
 const initialStore = useCommandsStore.getState();
 const container = document.createElement('div');
 document.body.appendChild(container);
@@ -71,18 +73,19 @@ afterEach(async () => {
 test('a command refresh during save preserves the newer draft for the queued save', async () => {
   const writes: Array<{ template: string; publish: () => void; finish: (success?: boolean) => void }> = [];
   const command: CommandEntry = { commandId: 'command_example', name: 'example', content: 'initial', description: '', scope: 'agent', source: 'agent', editable: true };
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
   useCommandsStore.setState({
     selectedCommandName: command.name,
     commands: [command],
-    commandsByDirectory: { __default__: [command] },
+    commandsByDirectory: { '/project': [command] },
     updateCommand: async (_name, config) => new Promise<boolean>((resolve) => {
       writes.push({ template: config.content || '', publish: () => {
         const updated = { ...command, ...config };
-        useCommandsStore.setState({ commands: [updated], commandsByDirectory: { __default__: [updated] } });
+        useCommandsStore.setState({ commands: [updated], commandsByDirectory: { '/project': [updated] } });
       }, finish: (success = true) => resolve(success) });
     }),
   });
-  await act(async () => { root.render(<I18nProvider><CommandsPage /></I18nProvider>); });
+  await act(async () => { root.render(<SyncProvider directory="/project"><I18nProvider><CommandsPage /></I18nProvider></SyncProvider>); });
   const prompt = container.querySelector<HTMLTextAreaElement>('textarea[rows="12"]');
   if (!prompt) throw new Error('Missing command template');
   const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
@@ -126,7 +129,7 @@ test('a command refresh during save preserves the newer draft for the queued sav
   await edit('pending');
   const other: CommandEntry = { ...command, commandId: 'command_other', name: 'other', content: 'other initial' };
   await act(async () => {
-    useCommandsStore.setState({ selectedCommandName: other.name, commands: [other], commandsByDirectory: { __default__: [other] } });
+    useCommandsStore.setState({ selectedCommandName: other.name, commands: [other], commandsByDirectory: { '/project': [other] } });
   });
   expect(prompt.value).toBe('other initial');
   await act(async () => { writes[6].finish(); });

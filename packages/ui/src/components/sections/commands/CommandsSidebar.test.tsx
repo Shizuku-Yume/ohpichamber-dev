@@ -153,3 +153,11 @@ test('a built-in command exposes no delete action', async () => {
   expect([...document.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemradio"]')]
     .some((item) => item.textContent?.trim() === 'Delete')).toBe(false);
 });
+
+test('icon-only command actions carry accessible names', async () => {
+  await render(async () => true);
+  const create = container!.querySelector<HTMLButtonElement>('button[aria-label="Create"]');
+  expect(create).not.toBeNull();
+  const trigger = container!.querySelector<HTMLButtonElement>('button svg use[href="#oc-more-2"]')?.closest('button');
+  expect(trigger?.getAttribute('aria-label')).toBe('custom');
+});
