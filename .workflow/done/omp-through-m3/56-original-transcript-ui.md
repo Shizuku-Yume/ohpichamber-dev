@@ -61,6 +61,8 @@ The original transcript composition and native canonical bindings are integrated
 
 **Own quality and security pass:** pass, no findings. The projection exclusion only removes assistant messages from the standalone ungrouped set; turn grouping, streaming-tail rendering, non-assistant ungrouped rows, tool/result pairing and reasoning rendering are unchanged. The test corrections assert canonical `turnId` identity and live-phase reasoning rather than weakening either guard. No trust boundary, credential, route, runtime transport or persisted format is touched, so the CONVENTIONS security pass is not applicable.
 
-**Review briefs:** Brief A (requirements/correctness) and Brief B (quality/regression) were started at the exact task base `e848504602333955b1d134bba3345d8bbc2ed065`; neither produced a verdict before the user-directed handoff, so no brief verdict is claimed. The own quality pass above covers the same five-file boundary.
+**Review briefs:** Brief A (requirements/correctness) and Brief B (quality/regression) were started at the exact task base `e848504602333955b1d134bba3345d8bbc2ed065`. Brief B returned **correct**, confidence 0.94, with no actionable patch-introduced findings: the orphan filter preserves non-assistant ungrouped rows, the fixtures match canonical shared `turnId`, the reasoning test asserts canonical live-phase behavior, and the timer flush only observes the existing deferred tool-body mount. Brief A produced no verdict before the user-directed handoff, so no Brief A verdict is claimed. The own quality pass above covers the same five-file boundary.
+
+**Web screenshot:** `/tmp/ohpi-task56/task56-transcript-web.png` (current isolated Web transcript after the live/reload/action checks).
 
 **Finished:** 2026-10-21T01:02:00Z
