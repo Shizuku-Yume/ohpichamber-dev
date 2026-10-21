@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { toolDisplayStyles } from '@/lib/typography';
-import { formatToolInput, isShellTool, isSubagentTool, isWriteTool } from '@/lib/toolHelpers';
+import { isSubagentTool } from '@/lib/toolHelpers';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
@@ -933,13 +933,10 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
     const hasPopupInput = Boolean(popupInput && Object.keys(popupInput).length > 0);
     const argumentsText = React.useMemo(() => {
         if (!popupInput || Object.keys(popupInput).length === 0) return '';
-        if (!popupToolName) return JSON.stringify(popupInput, null, 2);
-        // Writes keep their complete path and content for inspection; other
-        // tools reuse the same native input formatting as the row.
-        if (isWriteTool(popupToolName)) return JSON.stringify(popupInput, null, 2);
-        return formatToolInput(popupInput, popupToolName);
-    }, [popupInput, popupToolName]);
-    const argumentsLanguage = popupToolName && isShellTool(popupToolName) ? 'bash' : 'json';
+        // Deep inspection shows the complete canonical input. Tool-specific
+        // formatting would hide fields the native tool also received.
+        return JSON.stringify(popupInput, null, 2);
+    }, [popupInput]);
     const popupError = popup.toolResult?.error;
 
     React.useEffect(() => {
@@ -990,7 +987,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 </div>
                                 <div className="tool-input-surface bg-transparent rounded-xl border border-border/20">
                                     <WorkerHighlightedCode
-                                        language={argumentsLanguage}
+                                        language="json"
                                         code={argumentsText}
                                         style={toolDisplayStyles.getPopupStyles()}
                                         codeStyle={DIALOG_CODE_TAG_PROPS.style}

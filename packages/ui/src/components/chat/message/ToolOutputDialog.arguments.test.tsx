@@ -60,7 +60,7 @@ test('the output dialog inspects canonical arguments, output and failure metadat
         try {
             await render(React.createElement(ToolOutputDialog, {
                 popup: {
-                    open: true, title: 'bash', toolName: 'bash', input: { command: 'printf task57\\n' },
+                    open: true, title: 'bash', toolName: 'bash', input: { command: 'printf task57\\n', timeout: 5000 },
                     content: 'task57 bash output', toolResult: bashResult, language: 'bash',
                 },
                 onOpenChange: () => {}, isMobile: false,
@@ -68,6 +68,7 @@ test('the output dialog inspects canonical arguments, output and failure metadat
             expect(document.querySelector('[role="dialog"]')).not.toBeNull();
             expect(dialogText()).toContain('Arguments');
             expect(dialogText()).toContain('printf task57');
+            expect(dialogText()).toContain('5000');
             expect(dialogText()).toContain('Output');
             expect(dialogText()).toContain('task57 bash output');
 
