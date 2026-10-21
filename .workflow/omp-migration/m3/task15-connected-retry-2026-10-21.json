@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "task": "omp-through-m3/15",
+  "status": "connected-retry-partial-guest-projection-defect",
+  "observedAt": "2026-10-21T12:27:00+08:00",
+  "base": "a48d0122f",
+  "environment": {
+    "worktree": "/home/shizuku/Project/ohpichamber-worktrees/m3-task15-final",
+    "branch": "omp-through-m3/15-settings-board-guest-final",
+    "sourceUnchangedSinceWebBuild": "git diff 877fa6a00..HEAD -- packages scripts is empty",
+    "webDistIndexSha256": "2024681ca7d9c815195a52909afc693688b42bc2fcccfd4cf56a806ef9ae193e",
+    "webHost": "http://127.0.0.1:3220, isolated HOME=/tmp/ohpi-task15b/home, chats=/tmp/ohpi-task15b/chats",
+    "fixtureProvider": "http://127.0.0.1:4610/v1, model t15fixture/t15-fixture, started with setsid and reachable before the turn",
+    "browser": "Chrome headless 155, CDP 9346"
+  },
+  "projectRegistration": {
+    "request": "POST /api/openchamber/directory {path:'/tmp/ohpi-task15b/chats/work',create:false}",
+    "status": 200,
+    "projectId": "path_L3RtcC9vaHBpLXRhc2sxNWIvY2hhdHMvd29yaw",
+    "settings": "GET /api/config/settings returned that single project and activeProjectId",
+    "workspace": "POST /api/agent/v1/workspaces/resolve returned workspace ws_8a1ba970-b836-4c6e-a7f9-4d0dee8d462c, canonical project pro_86c8517e-4725-4712-860e-6ad2f1f1a788",
+    "binding": "GET /api/source-control/binding 200; repository.supported true; origin fetch https://github.com/openchamber/openchamber",
+    "github": "GET /api/github/auth/status connected false with ghCli available; POST /api/github/auth/activate 200, connected true for github.com#cli:135561100"
+  },
+  "board": {
+    "surface": "Issues and PRs opened with repository project work; issues list rendered real openchamber/openchamber rows including #5304 Mobile Tree promotes subagent sessions to top-level rows when parent is in another worktree",
+    "itemSelection": "#5304 preview opened with its body and an Attach to session control",
+    "attachMenu": "role=menu items [New session, New session in worktree…]; role=menuitem New session clicked",
+    "draft": "What are we working on in work? / project work / branch main / linked #5304 by sdhector / composer placeholder",
+    "verdict": "passed at current HEAD",
+    "screenshot": "/tmp/ohpi-task15b/evidence/09-board-draft-final.png sha256 c0336d700df81271e20870c7e7fa008a60bca9ebdd8e91742c500b24ccfb5a38"
+  },
+  "guest": {
+    "install": "POST /api/guests 201 t15-guest from /tmp/ohpi-task15b-guest; granted sessions+shells; enabled",
+    "panel": "GET /api/guests/t15-guest/panel/index.html?oc_ui=issue-page&oc_url_token=… rendered T15 Guest Shell",
+    "projects": "one project, id path_L3RtcC9vaHBpLXRhc2sxNWIvY2hhdHMvd29yaw, directory /tmp/ohpi-task15b/chats/work",
+    "sessions": "[]",
+    "liveSessions": "[]",
+    "ready": "T15-GUEST-READY",
+    "observedCause": "Guest projects come from useProjectsStore (settings ids path_*), while canonical sessions carry projectId pro_*. packages/ui/src/lib/guests/workspace.ts:86 filters sessions by strict equality session.projectId === query.projectId, so every configured-project query returns no sessions.",
+    "classification": "product defect in the Guest session/item projection (Task15-owned caller); not a timing issue: the panel reported ready, the project was present, and the sidebar showed T15-SHELL/T15-ITEMS sessions.",
+    "impact": "Guest visible item projection and Guest Shell session-scope subscription cannot be reached because the guest can never find a session for its project.",
+    "screenshot": "/tmp/ohpi-task15b/evidence/10-guest-panel.png sha256 96b148a14b9ba7146117741a899a674115119bcb737f9f10ded94a1cc7c9c1df"
+  },
+  "shell": {
+    "directPost": "Retained from the paused run: POST /api/agent/v1/sessions/:id/shell/jobs 403 UNAUTHORIZED. Host policy fixes shellCommands to [] and requires a descriptor command plus an exact approval grant, so direct start is intentionally refused.",
+    "supportedFlow": {
+      "fixture": "tool args {command, async:true}; foreground bash is hidden by the service (foreground !== true visibility rule)",
+      "run": "POST /runs 200 runId 6ea32bf0-5a8d-4f65-bc34-96225549c96b",
+      "approval": "GET /approvals returned bash_command request; POST /approvals/:id/respond with {version,epoch,workerGeneration,decision:'approve'} returned 200 version 2",
+      "job": "GET /shell/jobs returned running native:[\"Main\",\"bg_2\"] command 'for i in $(seq 1 60); do echo t15-line-$i; sleep 2; done'",
+      "output": "GET output with epoch/workerGeneration/cursor=0/tailBytes=2048 returned 200, startCursor 0, cursor 15, text t15-line-1 through t15-line-16",
+      "stop": "POST stop {job:{jobId,sessionId,epoch,workerGeneration}} returned 200, termination {reason:'stopped',exitCode:null}",
+      "after": "GET /shell/jobs returned running [] and ended includes bg_2 with reason stopped"
+    },
+    "verdict": "canonical shell observation works through the supported bash approval flow; Guest Shell UI remains blocked by the Guest session projection defect"
+  },
+  "outcome": {
+    "hostFilesystemDirtyMove": "passed in the previous current-HEAD run (mkdir/write/rename/read/delete, old path 404)",
+    "boardGitHubItemAndLaunch": "passed this retry",
+    "guestProjectVisible": "passed this retry",
+    "guestSessionAndItemProjection": "failed: product defect at workspace.ts:86",
+    "guestShellOutputStop": "canonical shell path passed; guest UI path unreachable due to the same projection defect",
+    "sidebarChildHierarchy": "unchanged: Host policy denies task, so no native child session can be created",
+    "packagedElectron": "not run at current HEAD"
+  },
+  "task36Provenance": {
+    "receipt": ".workflow/omp-migration/m3/task36-connected-acceptance-2026-10-21.json",
+    "recordedWebDist": "42170a9705ca7e6586cf960f9574581888cbba3bb873bf411dd2fc322e6b71ef",
+    "currentWebDist": "2024681ca7d9c815195a52909afc693688b42bc2fcccfd4cf56a806ef9ae193e",
+    "matches": false,
+    "applies": "No Task36 Board/Guest/sidebar observation is reused as current evidence. Task36's configured project /tmp/ohpi-task36-board-repo plus active gh account corroborates the Board setup pattern, and its own gaps record that no shell output/stop was exercised."
+  },
+  "sourceChanges": "none",
+  "cleanup": "Host 3220, fixture 4610 and Chrome 9346 stopped; ports closed; scratch /tmp/ohpi-task15b and /tmp/ohpi-task15b-guest retained"
+}
