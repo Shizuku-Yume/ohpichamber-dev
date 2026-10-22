@@ -1,29 +1,30 @@
-import type { Agent } from '@opencode-ai/sdk/v2';
+import type { Agent } from '@openchamber/agent-contract';
 import type { Theme } from '@/types/theme';
 import { chromaticDistance, contrastRatio } from './theme/color';
 
-const BUILD_COLOR = { var: '--status-success', class: 'agent-success' } as const;
+/** A theme token used to distinguish agents in the UI. */
+export type AgentColor = { color: string };
+
+const BUILD_COLOR: AgentColor = { color: 'var(--status-success)' };
 const SYNTAX_COLORS = [
-  { key: 'keyword', var: '--syntax-keyword', class: 'agent-keyword' },
-  { key: 'type', var: '--syntax-type', class: 'agent-type' },
-  { key: 'function', var: '--syntax-function', class: 'agent-function' },
-  { key: 'number', var: '--syntax-number', class: 'agent-number' },
-  { key: 'string', var: '--syntax-string', class: 'agent-string' },
-  { key: 'operator', var: '--syntax-operator', class: 'agent-operator' },
-  { key: 'variable', var: '--syntax-variable', class: 'agent-variable' },
+  { key: 'keyword', color: 'var(--syntax-keyword)' },
+  { key: 'type', color: 'var(--syntax-type)' },
+  { key: 'function', color: 'var(--syntax-function)' },
+  { key: 'number', color: 'var(--syntax-number)' },
+  { key: 'string', color: 'var(--syntax-string)' },
+  { key: 'operator', color: 'var(--syntax-operator)' },
+  { key: 'variable', color: 'var(--syntax-variable)' },
 ] as const;
 const MIN_SEPARATION = 0.055;
-type AgentColor = typeof BUILD_COLOR | (typeof SYNTAX_COLORS)[number];
 
-function hashName(name: string): number {
+function hashId(id: string): number {
   let hash = 0;
-  for (let index = 0; index < name.length; index++) hash = Math.imul(hash, 31) + name.charCodeAt(index) | 0;
+  for (let index = 0; index < id.length; index++) hash = Math.imul(hash, 31) + id.charCodeAt(index) | 0;
   return hash >>> 0;
 }
 
-/** Allocate against the complete visible roster, never a filtered picker list.
- * Build owns success; other agents exhaust distinct syntax colors before reuse. */
-export function createAgentColorResolver(theme: Theme, agents: readonly (Pick<Agent, 'name'> & Partial<Pick<Agent, 'mode'>>)[]) {
+/** Allocate stable theme colors by native agent identity, independent of roster order. */
+export function createAgentColorResolver(theme: Theme, agents: readonly Pick<Agent, 'agentId' | 'name'>[]) {
   const { surface, syntax, status } = theme.colors;
   const backgrounds = [surface.background, surface.muted, surface.elevated];
   const distance = (a: string, b: string) => Math.min(...backgrounds.map((background) =>
@@ -46,27 +47,23 @@ export function createAgentColorResolver(theme: Theme, agents: readonly (Pick<Ag
     palette.push(color);
     chosen.push(color.value);
   }
-  // Monochrome or very sparse themes may have no alternative to success.
-  // Reuse a syntax role rather than inventing an unrelated decorative color.
   if (!palette.length) palette.push(visible[0] ?? candidates[0]);
 
-  const ordered = [...agents].sort((a, b) => Number(a.mode === 'subagent') - Number(b.mode === 'subagent')
-    || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const hasBuildAgent = agents.some((agent) => agent.agentId === 'build');
   const assigned = new Map<string, AgentColor>();
   const used = new Set<number>();
-  for (const agent of ordered) {
-    if (agent.name === 'build' || assigned.has(agent.name)) continue;
+  for (const { agentId } of [...agents].sort((a, b) => a.agentId < b.agentId ? -1 : a.agentId > b.agentId ? 1 : 0)) {
+    if (agentId === 'build' || assigned.has(agentId)) continue;
     if (used.size === palette.length) used.clear();
     const available = palette.map((_, index) => index).filter((index) => !used.has(index));
-    // Prefer colored syntax accents to the neutral code foreground while possible.
     const colorful = available.filter((index) => distance(palette[index].value, '#808080') >= 0.035);
     const choices = colorful.length ? colorful : available;
-    const index = choices[hashName(agent.name) % choices.length];
-    assigned.set(agent.name, palette[index]);
+    const index = choices[hashId(agentId) % choices.length];
+    assigned.set(agentId, { color: palette[index].color });
     used.add(index);
   }
-  return (name: string | undefined) => {
-    if (!name || name === 'build') return BUILD_COLOR;
-    return assigned.get(name) ?? palette[hashName(name) % palette.length];
+  return (agentId: string | undefined): AgentColor => {
+    if (agentId === 'build' && hasBuildAgent) return { color: 'var(--status-success)' };
+    return assigned.get(agentId ?? '') ?? { color: palette[hashId(agentId ?? '') % palette.length].color };
   };
 }

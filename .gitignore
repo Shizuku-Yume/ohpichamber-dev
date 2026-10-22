@@ -41,6 +41,8 @@ docs/personal/*
 SECURITY_HARDENING_IMPLEMENTATION_PLAN.md
 
 # Build outputs
+*.tsbuildinfo
+packages/ui/.tsbuild/
 packages/web/server/built-in-extensions/
 packages/web/server/built-in-extensions.previous-*/
 packages/web/server/.builtin-build-*/
@@ -76,6 +78,7 @@ workspaces/
 .openchamber/screenshots/
 
 # Marks a disposable clone dedicated to unattended maintenance tasks.
+/secret/
 .maintenance-clone
 test-results/
 artifacts/

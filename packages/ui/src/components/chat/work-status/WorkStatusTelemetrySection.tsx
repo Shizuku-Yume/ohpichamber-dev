@@ -1,7 +1,7 @@
 import React from 'react';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useDirectorySync, useSessionMessageRecords, useSyncDirectory, useSyncRuntime } from '@/sync/sync-context';
+import { useSessionMessageRecords, useSessionStatus, useSyncDirectory, useSyncRuntime } from '@/sync/sync-context';
 import { normalizePath } from '@/lib/pathNormalization';
 import { useUIStore } from '@/stores/useUIStore';
 import {
@@ -46,12 +46,7 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
   const { runtimeKey } = useSyncRuntime();
   const syncDirectory = useSyncDirectory();
   const scope = JSON.stringify([runtimeKey, normalizePath(directory ?? syncDirectory), sessionId]);
-  const status = useDirectorySync(
-    React.useCallback((state) => sessionId
-      ? state.session_status[sessionId]?.type ?? (state.sessionStatusReady ? 'idle' : 'unknown')
-      : 'unknown', [sessionId]),
-    directory ?? undefined,
-  );
+  const status = useSessionStatus(sessionId ?? '', directory ?? undefined) ?? 'unavailable';
   const eligibleForStats = Boolean(sessionId && expanded && status === 'idle');
 
   const records = useSessionMessageRecords(
@@ -105,6 +100,13 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
               label={t('chat.workStatus.telemetry.speed')}
               description={t('chat.workStatus.telemetry.speedDescription')}
               value={<WorkStatusValue>{formatThroughputRate(stats.tokensPerSecond)}</WorkStatusValue>}
+            />
+          ) : null}
+          {stats.elapsedDurationMs !== null ? (
+            <TelemetryRow
+              label={t('chat.workStatus.telemetry.elapsed')}
+              description={t('chat.workStatus.telemetry.elapsedDescription')}
+              value={<WorkStatusValue>{formatTelemetryDuration(stats.elapsedDurationMs)}</WorkStatusValue>}
             />
           ) : null}
 

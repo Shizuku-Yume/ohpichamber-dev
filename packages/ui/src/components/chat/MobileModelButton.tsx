@@ -17,7 +17,7 @@ export const MobileModelButton: React.FC<MobileModelButtonProps> = ({ onOpenMode
     const currentModelId = useConfigStore((state) => model === undefined ? state.currentModelId : model?.modelId);
     const currentProviderId = useConfigStore((state) => model === undefined ? state.currentProviderId : model?.providerId);
     const providers = useConfigStore((state) => state.providers);
-    const currentProvider = providers.find((provider) => provider.id === currentProviderId);
+    const currentProvider = providers.find((provider) => provider.providerId === currentProviderId);
     const isAuto = isAutoModel(currentProviderId, currentModelId);
     const modelLabel = isAuto
         ? t('chat.modelControls.autoModel')

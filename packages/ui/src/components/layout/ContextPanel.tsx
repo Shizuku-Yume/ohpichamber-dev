@@ -18,40 +18,28 @@ const FilesView = lazyWithChunkRecovery(() => import('@/components/views/FilesVi
 const GitView = lazyWithChunkRecovery(() => import('@/components/views/GitView').then((m) => ({ default: m.GitView })));
 // The Linear rail icon stays hidden until a workspace is connected, so most
 // users never render this panel; keep it out of the main bundle.
-const LinearIssuesView = lazyWithChunkRecovery(() => import('@/components/views/LinearIssuesView').then((m) => ({ default: m.LinearIssuesView })));
 const PlanView = lazyWithChunkRecovery(() => import('@/components/views/PlanView').then((m) => ({ default: m.PlanView })));
+import { areTitleMapsEqual, buildSessionTitleMap, EMPTY_SESSION_TITLE_MAP } from './contextPanelSessionTitles';
 import { ProjectContextPanel } from './RightSidebarTabs';
 import { SidebarFilesTree } from './SidebarFilesTree';
-import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useRepositoryReferenceProvider } from '@/components/references/referenceSources';
 import { useGuestSurfaces } from '@/hooks/useGuestSurfaces';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { useBrowserFaviconStore } from '@/stores/useBrowserFaviconStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
-import { clampContextEditorTreeWidth, useUIStore, type ContextPanelMode, type PendingDiffScope } from '@/stores/useUIStore';
+import { clampContextEditorTreeWidth, normalizeContextPanelDirectoryKey, useUIStore, type ContextPanelMode, type PendingDiffScope } from '@/stores/useUIStore';
 import { markSessionViewed } from '@/sync/notification-store';
-import { setExternallyViewedSession, useDirectoryStore } from '@/sync/sync-context';
+import { setExternallyViewedSession, useChildStoreManager } from '@/sync/sync-context';
 import { ContextPanelContent } from './ContextSidebarTab';
 import { BrowserPane } from '@/components/browser/BrowserPane';
 import { browserUrlLabel } from '@/lib/browser/url';
-import { registerBrowserOpener } from '@/lib/browser/controlClient';
+import { registerBrowserOpener, registerSleepingBrowserTab, setShownBrowserTab } from '@/lib/browser/controlClient';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
-import { getRuntimeBearerTokenSync, getRuntimeExtraHeadersSync } from '@/lib/runtime-auth';
-import { getRuntimeApiBaseUrl, getRuntimeKey } from '@/lib/runtime-switch';
-import { getActiveRelayDescriptor } from '@/lib/relay/runtime-tunnel';
 import { Icon } from "@/components/icon/Icon";
 import { GuestIcon } from './GuestRailIcon';
-import {
-  EMBEDDED_RUNTIME_BOOTSTRAP_REQUEST,
-  EMBEDDED_RUNTIME_BOOTSTRAP_RESPONSE,
-  EMBEDDED_VISIBILITY_REQUEST,
-  EMBEDDED_VISIBILITY_UPDATE,
-  getActiveEmbeddedSessionChatTab,
-  getOrCreateEmbeddedSessionChatURL,
-  type EmbeddedSessionChatURLCacheEntry,
-  type EmbeddedSessionRuntimeBootstrap,
-} from './contextPanelEmbeddedChat';
+import { ChatView } from '@/components/views/ChatView';
 const PluginPane = React.lazy(() => import('./PluginPane').then((module) => ({ default: module.PluginPane })));
 // How an extension page sits beside its shared surface: flex direction puts
 // the page first on top/left and last on bottom/right; the page's size is
@@ -63,14 +51,45 @@ const DOCK_LAYOUT = {
   right: { container: 'flex-row-reverse', page: 'border-l border-border', vertical: false },
 } as const;
 
+/**
+ * A shared-surface extension's own page, docked to one edge of the picture.
+ * It starts at the manifest's `panel.size` and follows the page's
+ * `host.setHeight` after that (the thickness across its edge, so a width
+ * for a left or right dock), never below the manifest minimum and never past
+ * half the panel, so the picture always stays in view.
+ */
+const DockedGuestPage: React.FC<{ mode: PluginContextPanelMode; docking: GuestSurfaceDocking }> = ({ mode, docking }) => {
+  const [requested, setRequested] = React.useState<number | null>(null);
+  const layout = DOCK_LAYOUT[docking.dock];
+  const size = Math.max(GUEST_SURFACE_DOCK_SIZE_MIN, requested ?? docking.size);
+  return (
+    <div
+      className={cn(
+        'shrink-0 overflow-hidden duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+        layout.vertical ? 'max-h-[50%] transition-[height]' : 'max-w-[50%] transition-[width]',
+        layout.page,
+      )}
+      style={layout.vertical ? { height: size } : { width: size }}
+    >
+      <PluginPane mode={mode} onResize={setRequested} />
+    </div>
+  );
+};
+
 const GuestSurfacePane = React.lazy(() => import('./GuestSurfacePane').then((module) => ({ default: module.GuestSurfacePane })));
 import { useGuestsStore } from '@/lib/guests/store';
 import { guestHasSharedSurface, guestSurfaceDocking, type GuestSurfaceDocking } from '@/lib/guests/surfaces';
 import { FALLBACK_GUEST_ICON } from '@/lib/guests/icon';
-import { isPluginContextPanelMode, pluginIdFromMode } from '@/lib/surfaces/modes';
-import { getContextSurfaceWidthFraction } from '@/lib/surfaces/registry';
-import { isVimEditorEventTarget } from '@/lib/editorFocus';
+import { GUEST_SURFACE_DOCK_SIZE_MIN } from '@openchamber/sdk';
+import { isPluginContextPanelMode, pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/modes';
+import { getContextSurfaceDefaultWidth } from '@/lib/surfaces/registry';
+import { beginLayoutAnimation, cancelWhenLayoutSettled, LAYOUT_ANIMATION_EASING, LAYOUT_ANIMATION_MS, runWhenLayoutSettled } from '@/lib/layoutAnimation';
+import { WORK_STATUS_COLUMN_WIDTH } from '@/components/chat/work-status/useWorkStatusVisibility';
+import { setWorkStatusHost, useRightSlotStore } from './rightSlot';
+import { useOpenUntilSettled } from './useOpenUntilSettled';
+import { isEditorEventTarget } from '@/lib/editorFocus';
 import { isTerminalEventTarget } from '@/lib/terminalFocus';
+import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
 
 const CONTEXT_PANEL_MIN_WIDTH = 320;
 const CONTEXT_PANEL_DEFAULT_WIDTH = 600;
@@ -81,7 +100,14 @@ const CONTEXT_CHAT_MIN_WIDTH = 400;
 const RESIZE_FOLLOW_INTERVAL_MS = 100;
 const CONTEXT_TAB_LABEL_MAX_CHARS = 24;
 type TranslateFn = ReturnType<typeof useI18n>['t'];
-const EMPTY_SESSION_TITLE_MAP = new Map<string, string>();
+
+/** A browser tab with the project it belongs to, which may not be the one on screen. */
+type PanelBrowserTab = {
+  directory: string;
+  id: string;
+  targetPath: string | null;
+  ownerSessionId: string | null;
+};
 
 
 
@@ -114,10 +140,10 @@ const clampWidth = (width: number, maxWidth: number): number => {
 
 // Ceiling derived from the space the panel actually shares with the chat:
 // everything except a minimum chat column, never below the panel minimum.
-const maxPanelWidth = (availableWidth?: number | null): number => {
-  const base = availableWidth
-    ?? (typeof window !== 'undefined' ? window.innerWidth : CONTEXT_PANEL_DEFAULT_WIDTH * 2);
-  return Math.max(CONTEXT_PANEL_MIN_WIDTH, base - CONTEXT_CHAT_MIN_WIDTH);
+// Without a measured area there is no ceiling (see `areaWidth` below).
+const maxPanelWidth = (availableWidth: number | null): number => {
+  if (availableWidth === null) return Number.POSITIVE_INFINITY;
+  return Math.max(CONTEXT_PANEL_MIN_WIDTH, availableWidth - CONTEXT_CHAT_MIN_WIDTH);
 };
 
 const getAvailablePanelWidth = (panel: HTMLElement | null): number | null => {
@@ -153,7 +179,6 @@ const getModeLabel = (
   if (mode === 'browser') return t('contextPanel.mode.browser');
   if (mode === 'git') return t('layout.rightSidebar.git');
   if (mode === 'pr') return t('contextPanel.mode.pr');
-  if (mode === 'linear') return t('contextPanel.mode.linear');
   if (mode === 'notes') return t('contextRail.surface.notes');
   if (mode === 'terminal') return t('layout.mainTab.terminal');
   if (isPluginContextPanelMode(mode)) {
@@ -256,10 +281,6 @@ const getTabIcon = (
 
   if (tab.mode === 'pr') {
     return <Icon name="github" className="h-3.5 w-3.5" />;
-  }
-
-  if (tab.mode === 'linear') {
-    return <Icon name="linear" className="h-3.5 w-3.5" />;
   }
 
   if (tab.mode === 'notes') {
@@ -438,43 +459,30 @@ const getSessionIDFromDedupeKey = (dedupeKey: string | undefined): string | null
   return sessionID || null;
 };
 
-const areTitleMapsEqual = (a: ReadonlyMap<string, string>, b: ReadonlyMap<string, string>): boolean => {
-  if (a.size !== b.size) return false;
-  for (const [key, value] of a) {
-    if (b.get(key) !== value) return false;
-  }
-  return true;
-};
-
-const buildSessionTitleMap = (sessions: Array<{ id: string; title?: string | null }>, sessionIDs: readonly string[]): Map<string, string> => {
-  if (sessionIDs.length === 0) return EMPTY_SESSION_TITLE_MAP;
-  const wanted = new Set(sessionIDs);
-  const next = new Map<string, string>();
-  for (const session of sessions) {
-    if (!wanted.has(session.id)) continue;
-    const title = session.title?.trim();
-    if (title) next.set(session.id, title);
-  }
-  return next.size === 0 ? EMPTY_SESSION_TITLE_MAP : next;
-};
-
-const useSessionTitleMap = (directory: string | undefined, sessionIDs: readonly string[]): ReadonlyMap<string, string> => {
-  const store = useDirectoryStore(directory);
+// Titles come from every live directory because a chat tab may show a
+// session from another project; an inactive tab whose directory is not
+// loaded keeps its sessionTitleFallback.
+const useSessionTitleMap = (sessionIDs: readonly string[]): ReadonlyMap<string, string> => {
+  const childStores = useChildStoreManager();
   const snapshotRef = React.useRef<ReadonlyMap<string, string>>(EMPTY_SESSION_TITLE_MAP);
   const sessionIDsRef = React.useRef<readonly string[]>(sessionIDs);
 
   sessionIDsRef.current = sessionIDs;
 
   return React.useSyncExternalStore(
-    store.subscribe,
+    React.useCallback(
+      (notify: () => void) => childStores.subscribeAllSelected((state) => state.session, notify),
+      [childStores],
+    ),
     React.useCallback(() => {
-      const next = buildSessionTitleMap(store.getState().session, sessionIDsRef.current);
+      const liveStates = Array.from(childStores.children.values(), (store) => store.getState());
+      const next = buildSessionTitleMap(liveStates, sessionIDsRef.current);
       if (areTitleMapsEqual(snapshotRef.current, next)) {
         return snapshotRef.current;
       }
       snapshotRef.current = next;
       return next;
-    }, [store]),
+    }, [childStores]),
     () => EMPTY_SESSION_TITLE_MAP,
   );
 };
@@ -492,26 +500,49 @@ const truncateTabLabel = (value: string, maxChars: number): string => {
 export const ContextPanel: React.FC = () => {
   const { t } = useI18n();
   const effectiveDirectory = useEffectiveDirectory() ?? '';
+  const repositoryProvider = useRepositoryReferenceProvider(effectiveDirectory || null);
+  // Tab names in this repository's words: a GitLab project's change request tab is a merge request.
+  const tabT = React.useCallback<TranslateFn>(
+    (key, params) => t(changeRequestCopy(key, repositoryProvider), params),
+    [repositoryProvider, t],
+  );
   const directoryKey = React.useMemo(() => normalizeDirectoryKey(effectiveDirectory), [effectiveDirectory]);
 
   const panelState = useUIStore((state) => (directoryKey ? state.contextPanelByDirectory[directoryKey] : undefined));
   const closeContextPanel = useUIStore((state) => state.closeContextPanel);
   const closeContextPanelTab = useUIStore((state) => state.closeContextPanelTab);
+  const closeContextFile = useUIStore((state) => state.closeContextFile);
+  const pinContextPanelTab = useUIStore((state) => state.pinContextPanelTab);
   const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
   const toggleContextPanelExpanded = useUIStore((state) => state.toggleContextPanelExpanded);
   const setContextPanelWidth = useUIStore((state) => state.setContextPanelWidth);
   const setActiveContextPanelTab = useUIStore((state) => state.setActiveContextPanelTab);
-  const openContextBrowser = useUIStore((state) => state.openContextBrowser);
+  const openAgentBrowserTab = useUIStore((state) => state.openAgentBrowserTab);
 
-  // Lets an agent's browser.open create the tab it needs when none is open yet.
-  // Registered from the panel because opening a tab is panel state, not
-  // something the browser view itself can do before it exists. Reveal the
-  // panel so Electron gives the webview a composited surface; capturePage()
-  // cannot capture the zero-width webview inside a closed panel.
-  React.useEffect(() => {
-    if (!effectiveDirectory) return;
-    return registerBrowserOpener((url) => openContextBrowser(effectiveDirectory, url));
-  }, [effectiveDirectory, openContextBrowser]);
+  // A browser tab loads its page only once it is needed: shown in the open
+  // panel, opened by the agent, or woken by an agent action. Tabs restored
+  // from a previous run otherwise stay asleep, since every loaded tab costs a
+  // Chromium process. Once loaded, a tab stays loaded until it is closed.
+  const [wokenBrowserTabIds, setWokenBrowserTabIds] = React.useState<ReadonlySet<string>>(() => new Set());
+  const wakeBrowserTab = React.useCallback((tabId: string) => {
+    setWokenBrowserTabIds((current) => (current.has(tabId) ? current : new Set(current).add(tabId)));
+  }, []);
+
+  // Lets an agent's browser.open create its own tab; the id goes back to the
+  // agent so it keeps working there. Registered from the panel because opening a tab is panel state, not
+  // something the browser view itself can do before it exists. Background on
+  // purpose: an agent working a page must not pop the panel open or steal the
+  // active tab while the user reads something else, and that includes taking
+  // a screenshot of it. The tab appears in the strip of the calling session's
+  // project, which is not always the project on screen, and belongs to that
+  // session.
+  React.useEffect(() => registerBrowserOpener((url, context) => {
+    const directory = context.directory ? normalizeContextPanelDirectoryKey(context.directory) : directoryKey;
+    if (!directory) return null;
+    const tabId = openAgentBrowserTab(directory, url, context.sessionId);
+    if (tabId) wakeBrowserTab(tabId);
+    return tabId;
+  }), [directoryKey, openAgentBrowserTab, wakeBrowserTab]);
   // The agent asked for a file to be shown. It opens in front of whatever tab
   // the user had, on purpose: the agent is pointing at a result, and the prior
   // tab is one click away.
@@ -532,13 +563,20 @@ export const ContextPanel: React.FC = () => {
   const toggleContextEditor = useUIStore((state) => state.toggleContextEditor);
   const openNewContextBrowserTab = useUIStore((state) => state.openNewContextBrowserTab);
   const faviconByOrigin = useBrowserFaviconStore((state) => state.byOrigin);
-  const allowPromptingSubagentSessions = useUIStore((state) => state.allowPromptingSubagentSessions);
-  const { themeMode, setThemeMode, lightThemeId, darkThemeId, currentTheme } = useThemeSystem();
 
   const tabs = React.useMemo(() => panelState?.tabs ?? [], [panelState?.tabs]);
   const activeTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? tabs[tabs.length - 1] ?? null;
+  // Tells agent browser control which project is on screen and which browser
+  // tab the user last had in front of them there; a session without a tab of
+  // its own may use that tab only when it is the user's and in its project.
+  const shownBrowserTabId = activeTab?.mode === 'browser' ? activeTab.id : null;
+  React.useEffect(() => {
+    setShownBrowserTab(directoryKey, shownBrowserTabId);
+  }, [directoryKey, shownBrowserTabId]);
+  // The issues and PRs board stays beside it and narrows instead.
   const isOpen = Boolean(panelState?.isOpen && activeTab);
-  const [availablePanelAreaWidth, setAvailablePanelAreaWidth] = React.useState<number | null>(null);
+  const workStatusReserved = useRightSlotStore((state) => state.workStatusReserved);
+  const chatCovered = useRightSlotStore((state) => state.chatCovered);
   const hasOpenEditorFile = React.useMemo(
     () => tabs.some((tab) => tab.mode === 'file' && tab.targetPath),
     [tabs],
@@ -549,24 +587,29 @@ export const ContextPanel: React.FC = () => {
   const activeModeForWidth = activeTab?.mode ?? null;
   const isTreeOnly = activeModeForWidth === 'file' && !showsEditor;
   const isExpanded = Boolean(isOpen && panelState?.expanded && !isTreeOnly);
+  // A fixed width in px: the one the user resized this surface to, else the
+  // surface's default. It does not follow the chat area, so a sidebar toggle
+  // or a window resize leaves it alone unless the chat would get too narrow.
   const manualWidth = activeModeForWidth ? panelState?.widthByMode?.[activeModeForWidth] : undefined;
-  const manualWidthFraction = activeModeForWidth ? panelState?.widthFractionByMode?.[activeModeForWidth] : undefined;
-  const widthFraction = activeModeForWidth ? getContextSurfaceWidthFraction(activeModeForWidth) : 0.5;
-  const widthFallbackBase = availablePanelAreaWidth
-    ?? (typeof window !== 'undefined' ? window.innerWidth : CONTEXT_PANEL_DEFAULT_WIDTH * 2);
-  const effectiveManualWidth = manualWidthFraction != null && availablePanelAreaWidth != null
-    ? Math.round(manualWidthFraction * availablePanelAreaWidth)
-    : manualWidth;
-  const width = isTreeOnly
+  const desiredWidth = isTreeOnly
     ? contextEditorTreeWidth
-    : clampWidth(effectiveManualWidth ?? Math.round(widthFraction * widthFallbackBase), maxPanelWidth(availablePanelAreaWidth ?? widthFallbackBase));
+    : clampWidth(manualWidth ?? (activeModeForWidth ? getContextSurfaceDefaultWidth(activeModeForWidth) : CONTEXT_PANEL_DEFAULT_WIDTH), Number.POSITIVE_INFINITY);
 
-  // Convert legacy pixel-only preferences to a ratio the first time the
-  // available area is known, so existing users also get responsive sizing.
-  React.useEffect(() => {
-    if (!directoryKey || !activeModeForWidth || isTreeOnly || manualWidthFraction != null || manualWidth == null || availablePanelAreaWidth == null) return;
-    setContextPanelWidth(directoryKey, activeModeForWidth, manualWidth, availablePanelAreaWidth);
-  }, [activeModeForWidth, availablePanelAreaWidth, directoryKey, isTreeOnly, manualWidth, manualWidthFraction, setContextPanelWidth]);
+  // The chat area's width, as state only while it decides something: the
+  // panel is expanded over it, or the ceiling binds (the panel would leave
+  // the chat less than its minimum). Otherwise it is null, so the many width
+  // changes that cannot matter (every frame of a sidebar animation, most
+  // window resizes) do not re-render the panel and everything in it. Changes
+  // that arrive during a side-column animation are applied once it ends.
+  const [areaWidth, setAreaWidth] = React.useState<number | null>(null);
+  const measuredAreaWidthRef = React.useRef<number | null>(null);
+  const areaDecidesRef = React.useRef<(areaWidth: number) => boolean>(() => false);
+  areaDecidesRef.current = (measured) => isExpanded || (!isTreeOnly && measured - CONTEXT_CHAT_MIN_WIDTH < desiredWidth);
+  const applyAreaWidth = React.useCallback(() => {
+    const measured = measuredAreaWidthRef.current;
+    setAreaWidth(measured !== null && areaDecidesRef.current(measured) ? measured : null);
+  }, []);
+  const width = isTreeOnly ? desiredWidth : clampWidth(desiredWidth, maxPanelWidth(areaWidth));
   const chatSessionIDs = React.useMemo(() => {
     const ids: string[] = [];
     for (const tab of tabs) {
@@ -576,7 +619,7 @@ export const ContextPanel: React.FC = () => {
     }
     return ids;
   }, [tabs]);
-  const sessionTitleById = useSessionTitleMap(directoryKey || undefined, chatSessionIDs);
+  const sessionTitleById = useSessionTitleMap(chatSessionIDs);
 
   const [isResizing, setIsResizing] = React.useState(false);
   const startXRef = React.useRef(0);
@@ -584,25 +627,33 @@ export const ContextPanel: React.FC = () => {
   const resizingWidthRef = React.useRef<number | null>(null);
   const activeResizePointerIDRef = React.useRef<number | null>(null);
   const panelRef = React.useRef<HTMLElement | null>(null);
-  const chatFrameRefs = React.useRef<Map<string, HTMLIFrameElement>>(new Map());
-  const chatFrameSrcByTabIDRef = React.useRef<Map<string, EmbeddedSessionChatURLCacheEntry>>(new Map());
   const wasOpenRef = React.useRef(false);
 
-  // Defaults and manually resized surfaces track the same available area.
   React.useLayoutEffect(() => {
     const parent = panelRef.current?.parentElement;
     if (!parent || typeof ResizeObserver === 'undefined') {
       return;
     }
 
-    const observer = new ResizeObserver(() => {
-      setAvailablePanelAreaWidth(parent.clientWidth || null);
+    const observer = new ResizeObserver((entries) => {
+      const measured = entries[entries.length - 1]?.contentRect.width;
+      measuredAreaWidthRef.current = measured ? Math.round(measured) : null;
+      runWhenLayoutSettled(applyAreaWidth);
     });
     observer.observe(parent);
-    setAvailablePanelAreaWidth(parent.clientWidth || null);
+    measuredAreaWidthRef.current = parent.clientWidth || null;
+    applyAreaWidth();
 
-    return () => observer.disconnect();
-  }, []);
+    return () => {
+      observer.disconnect();
+      cancelWhenLayoutSettled(applyAreaWidth);
+    };
+  }, [applyAreaWidth]);
+
+  // Expanding, or a surface wanting another width, may make the area matter.
+  React.useLayoutEffect(() => {
+    applyAreaWidth();
+  }, [applyAreaWidth, desiredWidth, isExpanded]);
 
   React.useEffect(() => {
     if (!isOpen || wasOpenRef.current) {
@@ -670,7 +721,6 @@ export const ContextPanel: React.FC = () => {
     // Apply the final width once, letting the regular 200ms width transition
     // carry the panel to the release position.
     const finalWidth = clampWidthForDrag(resizingWidthRef.current ?? width);
-    const availableWidth = resizeAvailableWidthRef.current;
     resizingWidthRef.current = null;
     resizeAvailableWidthRef.current = null;
     if (resizeFollowTimerRef.current !== null) {
@@ -681,7 +731,7 @@ export const ContextPanel: React.FC = () => {
     if (isTreeOnly) {
       setContextEditorTreeWidth(finalWidth);
     } else if (directoryKey && activeModeForWidth) {
-      setContextPanelWidth(directoryKey, activeModeForWidth, finalWidth, availableWidth ?? undefined);
+      setContextPanelWidth(directoryKey, activeModeForWidth, finalWidth);
     }
     setIsResizing(false);
     activeResizePointerIDRef.current = null;
@@ -741,6 +791,12 @@ export const ContextPanel: React.FC = () => {
     }
   }, [isResizing]);
 
+  // The editor's Cmd/Ctrl+W and its unsaved-changes prompt close the file's
+  // tab here, so the strip and the next file follow as with the close button.
+  const handleCloseEditorFile = React.useCallback((filePath: string) => {
+    if (directoryKey) closeContextFile(directoryKey, filePath);
+  }, [closeContextFile, directoryKey]);
+
   const handleClose = React.useCallback(() => {
     if (!directoryKey) {
       return;
@@ -756,7 +812,9 @@ export const ContextPanel: React.FC = () => {
   }, [directoryKey, toggleContextPanelExpanded]);
 
   const handlePanelKeyDownCapture = React.useCallback((event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Escape') {
+    // Closed, the slot holds only the work-status card, whose Escape is not
+    // the panel's to take.
+    if (event.key !== 'Escape' || !isOpen) {
       return;
     }
 
@@ -772,16 +830,21 @@ export const ContextPanel: React.FC = () => {
     if (isTerminalEventTarget(event.target)) {
       return;
     }
-    // Same for the file editor on the Vim keymap: Escape leaves INSERT mode
-    // there, and CodeMirror only sees it if this handler stays out of the way.
-    if (isVimEditorEventTarget(event.target)) {
+    // Same for the file editor and what it opens over itself (search, the
+    // symbol list, go to line): Escape closes those, leaves Vim's INSERT mode
+    // or collapses several cursors, and must not close the whole panel.
+    if (isEditorEventTarget(event.target)) {
+      return;
+    }
+    // Something under the panel already handled this Escape.
+    if (event.defaultPrevented) {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
     handleClose();
-  }, [handleClose]);
+  }, [handleClose, isOpen]);
 
   React.useEffect(() => {
     if (!directoryKey || !activeTab) {
@@ -801,21 +864,31 @@ export const ContextPanel: React.FC = () => {
   );
   const activeChatTabID = isOpen && activeTab?.mode === 'chat' ? activeTab.id : null;
   const activeChatSessionID = isOpen && activeTab?.mode === 'chat' ? getSessionIDFromDedupeKey(activeTab.dedupeKey) : null;
-  const activeChatTab = getActiveEmbeddedSessionChatTab(chatTabs, activeChatTabID);
+  const activeChatTab = activeChatTabID ? chatTabs.find((tab) => tab.id === activeChatTabID) ?? null : null;
+  // A chat opened from another project (or Chat) carries its own directory;
+  // tabs opened without one (subtasks, reviews) belong to this panel's.
+  const activeChatDirectory = React.useMemo(() => {
+    const own = activeChatTab?.targetDirectory ? normalizeDirectoryKey(activeChatTab.targetDirectory) : '';
+    return own || directoryKey || null;
+  }, [activeChatTab?.targetDirectory, directoryKey]);
+  const activeChatPinnedSession = React.useMemo(
+    () => (activeChatSessionID ? { sessionId: activeChatSessionID, directory: activeChatDirectory } : null),
+    [activeChatSessionID, activeChatDirectory],
+  );
 
   React.useEffect(() => {
-    if (!isOpen || !directoryKey || !activeChatSessionID || typeof window === 'undefined') {
+    if (!isOpen || !activeChatDirectory || !activeChatSessionID || typeof window === 'undefined') {
       return;
     }
 
     const markActiveChatViewed = () => {
       if (document.visibilityState === 'hidden' || !document.hasFocus()) {
-        setExternallyViewedSession(directoryKey, activeChatSessionID, false);
+        setExternallyViewedSession(activeChatDirectory, activeChatSessionID, false);
         return;
       }
 
       markSessionViewed(activeChatSessionID);
-      setExternallyViewedSession(directoryKey, activeChatSessionID, true);
+      setExternallyViewedSession(activeChatDirectory, activeChatSessionID, true);
     };
 
     markActiveChatViewed();
@@ -829,31 +902,10 @@ export const ContextPanel: React.FC = () => {
       window.removeEventListener('focus', markActiveChatViewed);
       window.removeEventListener('blur', markActiveChatViewed);
       document.removeEventListener('visibilitychange', markActiveChatViewed);
-      setExternallyViewedSession(directoryKey, activeChatSessionID, false);
+      setExternallyViewedSession(activeChatDirectory, activeChatSessionID, false);
     };
-  }, [activeChatSessionID, directoryKey, isOpen]);
+  }, [activeChatDirectory, activeChatSessionID, isOpen]);
 
-  const getEmbeddedChatSrc = React.useCallback((tabID: string, sessionID: string, readOnly: boolean): string => {
-    return getOrCreateEmbeddedSessionChatURL(chatFrameSrcByTabIDRef.current, tabID, sessionID, directoryKey || null, readOnly, {
-      mode: themeMode,
-      lightThemeId,
-      darkThemeId,
-      currentTheme,
-    }, { allowPromptingSubagentSessions });
-  }, [allowPromptingSubagentSessions, currentTheme, darkThemeId, directoryKey, lightThemeId, themeMode]);
-
-  const activeChatSrc = activeChatTab && activeChatSessionID
-    ? getEmbeddedChatSrc(activeChatTab.id, activeChatSessionID, activeChatTab.readOnly)
-    : null;
-
-  React.useEffect(() => {
-    const liveTabIDs = new Set(tabs.map((tab) => tab.id));
-    for (const tabID of chatFrameSrcByTabIDRef.current.keys()) {
-      if (!liveTabIDs.has(tabID)) {
-        chatFrameSrcByTabIDRef.current.delete(tabID);
-      }
-    }
-  }, [tabs]);
 
   const handleDiffScopeChange = React.useCallback((nextScope: PendingDiffScope) => {
     if (!directoryKey || activeTab?.mode !== 'diff') {
@@ -868,149 +920,6 @@ export const ContextPanel: React.FC = () => {
     });
   }, [activeTab, directoryKey, openContextPanelTab]);
 
-  const postThemeSyncToEmbeddedChat = React.useCallback(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const payload = {
-      themeMode,
-      lightThemeId,
-      darkThemeId,
-      currentTheme,
-    };
-
-    for (const frame of chatFrameRefs.current.values()) {
-      const frameWindow = frame.contentWindow;
-      if (!frameWindow) {
-        continue;
-      }
-
-      frameWindow.postMessage(
-        {
-          type: 'openchamber:theme-sync',
-          payload,
-        },
-        window.location.origin,
-      );
-    }
-  }, [currentTheme, darkThemeId, lightThemeId, themeMode]);
-
-  const postChatSettingsSyncToEmbeddedChat = React.useCallback(() => {
-    if (typeof window === 'undefined') return;
-
-    const payload = { allowPromptingSubagentSessions };
-    for (const frame of chatFrameRefs.current.values()) {
-      const frameWindow = frame.contentWindow;
-      if (!frameWindow) continue;
-
-      frameWindow.postMessage({ type: 'openchamber:chat-settings-sync', payload }, window.location.origin);
-    }
-  }, [allowPromptingSubagentSessions]);
-
-  const postEmbeddedVisibilityToChat = React.useCallback((
-    tabID: string,
-    frame: HTMLIFrameElement,
-    targetOrigin: string,
-  ) => {
-    const frameWindow = frame.contentWindow;
-    if (!frameWindow) {
-      return;
-    }
-
-    frameWindow.postMessage(
-      {
-        type: EMBEDDED_VISIBILITY_UPDATE,
-        payload: { visible: activeChatTabID === tabID },
-      },
-      targetOrigin,
-    );
-  }, [activeChatTabID]);
-
-  const postEmbeddedVisibilityToChats = React.useCallback(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    for (const [tabID, frame] of chatFrameRefs.current.entries()) {
-      postEmbeddedVisibilityToChat(tabID, frame, window.location.origin);
-    }
-  }, [postEmbeddedVisibilityToChat]);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) {
-        return;
-      }
-
-      const sourceChatFrame = Array.from(chatFrameRefs.current.entries())
-        .find(([, frame]) => frame.contentWindow === event.source);
-      if (!sourceChatFrame) {
-        return;
-      }
-
-      const data = event.data as { type?: unknown; requestId?: unknown };
-      if (data?.type === EMBEDDED_VISIBILITY_REQUEST) {
-        const [tabID, frame] = sourceChatFrame;
-        postEmbeddedVisibilityToChat(tabID, frame, event.origin);
-        return;
-      }
-      if (data?.type === EMBEDDED_RUNTIME_BOOTSTRAP_REQUEST) {
-        if (typeof data.requestId !== 'string' || !data.requestId) return;
-        const runtimeKey = getRuntimeKey();
-        const payload: EmbeddedSessionRuntimeBootstrap = {
-          apiBaseUrl: getRuntimeApiBaseUrl(),
-          clientToken: getRuntimeBearerTokenSync(),
-          localOrigin: typeof window.__OPENCHAMBER_LOCAL_ORIGIN__ === 'string'
-            ? window.__OPENCHAMBER_LOCAL_ORIGIN__
-            : '',
-          runtimeHeaders: getRuntimeExtraHeadersSync(),
-          relayHostId: runtimeKey.startsWith('host:') ? runtimeKey.slice('host:'.length) : '',
-          relay: getActiveRelayDescriptor() ?? undefined,
-        };
-        (event.source as WindowProxy | null)?.postMessage({
-          type: EMBEDDED_RUNTIME_BOOTSTRAP_RESPONSE,
-          requestId: data.requestId,
-          payload,
-        }, event.origin);
-        return;
-      }
-      if (data?.type === 'openchamber:theme-sync-request') {
-        postThemeSyncToEmbeddedChat();
-        return;
-      }
-      if (data?.type === 'openchamber:chat-settings-request') {
-        postChatSettingsSyncToEmbeddedChat();
-        return;
-      }
-      if (data?.type !== 'openchamber:cycle-theme-request') {
-        return;
-      }
-
-      const modes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
-      const currentIndex = modes.indexOf(themeMode);
-      const nextIndex = (currentIndex + 1) % modes.length;
-      setThemeMode(modes[nextIndex]);
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [postChatSettingsSyncToEmbeddedChat, postEmbeddedVisibilityToChat, postThemeSyncToEmbeddedChat, setThemeMode, themeMode]);
-
-  React.useLayoutEffect(() => {
-    const hasAnyChatTab = tabs.some((tab) => tab.mode === 'chat');
-    if (!hasAnyChatTab) {
-      return;
-    }
-
-    postThemeSyncToEmbeddedChat();
-    postChatSettingsSyncToEmbeddedChat();
-    postEmbeddedVisibilityToChats();
-  }, [darkThemeId, lightThemeId, postChatSettingsSyncToEmbeddedChat, postEmbeddedVisibilityToChats, postThemeSyncToEmbeddedChat, tabs, themeMode]);
 
   // The rail switches between surfaces (modes); the in-panel strip only lists
   // instances of the active multi-instance surface (open files, split chats,
@@ -1022,7 +931,7 @@ export const ContextPanel: React.FC = () => {
   );
 
   const tabItems = React.useMemo(() => activeModeTabs.map((tab) => {
-    const rawLabel = getTabLabel(tab, sessionTitleById, t);
+    const rawLabel = getTabLabel(tab, sessionTitleById, tabT);
     const label = truncateTabLabel(rawLabel, CONTEXT_TAB_LABEL_MAX_CHARS);
     const tabPathLabel = getRelativePathLabel(tab.targetPath, effectiveDirectory);
     return {
@@ -1031,8 +940,9 @@ export const ContextPanel: React.FC = () => {
       icon: getTabIcon(tab, faviconByOrigin),
       title: tabPathLabel ? `${rawLabel}: ${tabPathLabel}` : rawLabel,
       closeLabel: t('contextPanel.tab.closeTabAria', { label }),
+      preview: tab.preview,
     };
-  }), [activeModeTabs, effectiveDirectory, faviconByOrigin, sessionTitleById, t]);
+  }), [activeModeTabs, effectiveDirectory, faviconByOrigin, sessionTitleById, t, tabT]);
 
   const activeNonChatContent = activeTab?.mode === 'context'
         ? <ContextPanelContent />
@@ -1040,10 +950,8 @@ export const ContextPanel: React.FC = () => {
             ? <React.Suspense fallback={null}><GitView isActive={isOpen} /></React.Suspense>
             : activeTab?.mode === 'pr'
                 ? <PullRequestView />
-            : activeTab?.mode === 'linear'
-                ? <React.Suspense fallback={null}><LinearIssuesView /></React.Suspense>
             : activeTab?.mode === 'notes'
-                ? <ProjectContextPanel />
+                ? <ProjectContextPanel visible={isOpen} />
         : activeTab?.mode === 'plan'
             ? <React.Suspense fallback={null}><PlanView
                 targetPath={activeTab.targetPath}
@@ -1053,10 +961,46 @@ export const ContextPanel: React.FC = () => {
               /></React.Suspense>
             : null;
 
-  const browserTabs = React.useMemo(
-    () => tabs.filter((tab) => tab.mode === 'browser'),
-    [tabs],
-  );
+  const visibleBrowserTabId = isOpen && activeTab?.mode === 'browser' ? activeTab.id : null;
+  React.useEffect(() => {
+    if (visibleBrowserTabId) wakeBrowserTab(visibleBrowserTabId);
+  }, [visibleBrowserTabId, wakeBrowserTab]);
+  // The browser tabs agents can reach: this project's, and every other
+  // project's agent tabs, so a session working in a project the user is not
+  // looking at keeps its page. The user's own tabs in other projects are left
+  // out and unload with their project, as before. Sorted by directory and tab
+  // id, an order that neither the project on screen nor the store's own
+  // reordering of directories can change: a moved webview reloads its page.
+  const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory);
+  const { loadedBrowserTabs, sleepingBrowserTabs } = React.useMemo(() => {
+    const loaded: PanelBrowserTab[] = [];
+    const sleeping: PanelBrowserTab[] = [];
+    for (const [directory, directoryState] of Object.entries(contextPanelByDirectory)) {
+      const isShownDirectory = directory === directoryKey;
+      for (const tab of directoryState.tabs) {
+        if (tab.mode !== 'browser' || (!isShownDirectory && tab.ownerSessionId === null)) continue;
+        const entry = { directory, id: tab.id, targetPath: tab.targetPath, ownerSessionId: tab.ownerSessionId };
+        const isLoaded = wokenBrowserTabIds.has(tab.id) || (isShownDirectory && tab.id === visibleBrowserTabId);
+        (isLoaded ? loaded : sleeping).push(entry);
+      }
+    }
+    const renderKeyOf = (tab: PanelBrowserTab) => `${tab.directory}\u0000${tab.id}`;
+    loaded.sort((a, b) => (renderKeyOf(a) < renderKeyOf(b) ? -1 : 1));
+    return { loadedBrowserTabs: loaded, sleepingBrowserTabs: sleeping };
+  }, [contextPanelByDirectory, directoryKey, visibleBrowserTabId, wokenBrowserTabIds]);
+  React.useEffect(() => {
+    // Only a Chromium host mounts views that agents can drive, so only it may
+    // offer to wake a tab; anywhere else a claimed action could never run.
+    if (!window.__OPENCHAMBER_ELECTRON__) return;
+    const unregister = sleepingBrowserTabs.map((tab) => registerSleepingBrowserTab({
+      tabId: tab.id,
+      directory: tab.directory,
+      ownerSessionId: tab.ownerSessionId,
+      describe: () => ({ title: '', url: tab.targetPath ?? '' }),
+      wake: () => wakeBrowserTab(tab.id),
+    }));
+    return () => unregister.forEach((release) => release());
+  }, [sleepingBrowserTabs, wakeBrowserTab]);
   const diffTabs = React.useMemo(
     () => tabs.filter((tab) => tab.mode === 'diff'),
     [tabs],
@@ -1164,15 +1108,23 @@ export const ContextPanel: React.FC = () => {
             }
             reorderContextPanelTabs(directoryKey, activeTabID, overTabID);
           }}
+          onDoubleClickTab={(tabID) => {
+            if (directoryKey) pinContextPanelTab(directoryKey, tabID);
+          }}
           layoutMode="scrollable"
           variant="default"
           tabContextMenu={renderTabContextMenu}
         />
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-1.5 px-3">
-          {activeTab ? getTabIcon(activeTab, faviconByOrigin) : null}
+          {/* A GitLab project's change requests are merge requests. */}
+          {activeTab?.mode === 'pr' && repositoryProvider === 'gitlab'
+            ? <Icon name="gitlab" className="h-3.5 w-3.5" />
+            : activeTab ? getTabIcon(activeTab, faviconByOrigin) : null}
           <span className="truncate typography-ui-label text-foreground">
-            {activeTab ? getModeLabel(activeTab.mode, t) : null}
+            {activeTab?.mode === 'pr' && repositoryProvider === 'gitlab'
+              ? t('contextPanel.mode.mr')
+              : activeTab ? getModeLabel(activeTab.mode, tabT) : null}
           </span>
         </div>
       )}
@@ -1249,51 +1201,88 @@ export const ContextPanel: React.FC = () => {
     </header>
   );
 
-  // width/min/max stay interpolable across open/close (no instant min/max
-  // jumps) so the 200ms width transition matches the sidebars.
-  const panelStyle: React.CSSProperties = !isOpen
-    ? {
-        ['--oc-context-panel-width' as string]: `${width}px`,
-        width: 0,
-        maxWidth: '100%',
-        overflowX: 'clip',
-      }
+  // The right slot: this aside holds the context panel and the inline
+  // work-status card (rendered into the host below by ChatContainer), and
+  // animates one width for both (rightSlot.ts). Closed, it keeps the card's
+  // column when the card wants it and the chat is on screen; open, it is the
+  // panel's width. Every value stays interpolable across open/close (no
+  // instant min/max jumps).
+  const workStatusColumn = workStatusReserved && !chatCovered;
+  const expandedWidth = areaWidth !== null ? `${areaWidth}px` : '100%';
+  const slotWidth = !isOpen
+    ? (workStatusColumn ? `${WORK_STATUS_COLUMN_WIDTH}px` : '0px')
     : isExpanded
-      ? {
-          // px, not '100%': px↔% width changes do not interpolate, which
-          // would make the expand/collapse width snap instead of animating.
-          ['--oc-context-panel-width' as string]: availablePanelAreaWidth !== null ? `${availablePanelAreaWidth}px` : '100%',
-          width: availablePanelAreaWidth !== null ? `${availablePanelAreaWidth}px` : '100%',
-          maxWidth: '100%',
-        }
-      : {
-          width: 'min(var(--oc-context-panel-width), 100%)',
-          maxWidth: '100%',
-          overflowX: 'clip',
-          ['--oc-context-panel-width' as string]: `${width}px`,
-        };
+      // px, not '100%': px↔% width changes do not interpolate, which
+      // would make the expand/collapse width snap instead of animating.
+      ? expandedWidth
+      : 'min(var(--oc-context-panel-width), 100%)';
+
+  // What the user changed, as opposed to the slot following the window: a
+  // toggle, expanding, the card's column, another surface's or a dragged
+  // width. Only these animate as an announced layout animation; the chat area
+  // resizing (a window drag, a clamp) is tracked without one, so the work
+  // that waits for an animation's end is not held back for the whole drag.
+  const animationKey = `${isOpen}|${isExpanded}|${workStatusColumn}|${isOpen ? desiredWidth : ''}`;
+  const animationKeyRef = React.useRef(animationKey);
+  // A surface page covering or uncovering the chat moves the slot while the
+  // chat is not on screen: that change snaps.
+  const coveredRef = React.useRef(chatCovered);
+  const coverChanged = coveredRef.current !== chatCovered;
+  React.useLayoutEffect(() => {
+    coveredRef.current = chatCovered;
+  }, [chatCovered]);
+  React.useLayoutEffect(() => {
+    if (animationKeyRef.current === animationKey) return;
+    animationKeyRef.current = animationKey;
+    if (!coverChanged) beginLayoutAnimation(LAYOUT_ANIMATION_MS);
+  }, [animationKey, coverChanged]);
+
+  // A closing panel's content fades out and only then leaves the
+  // accessibility tree, in the same commit that takes the file editor's DOM
+  // out (CodeMirrorEditor `detached`). Hiding the editor from accessibility
+  // while it is still in the document costs Chrome a 200 to 300 ms frame
+  // whenever an accessibility client is on (a screen reader, or any app
+  // that reads other windows, common on macOS); removing it costs a few ms.
+  // After the layout effect above, which begins the animation.
+  const contentHidden = !useOpenUntilSettled(isOpen);
+
+  const panelStyle: React.CSSProperties = {
+    ['--oc-context-panel-width' as string]: isOpen && isExpanded ? expandedWidth : `${width}px`,
+    width: slotWidth,
+    maxWidth: '100%',
+    transitionDuration: coverChanged ? '0ms' : `${LAYOUT_ANIMATION_MS}ms`,
+    transitionTimingFunction: LAYOUT_ANIMATION_EASING,
+  };
 
   return (
     <aside
       ref={panelRef}
       data-context-panel="true"
+      data-right-slot=""
+      data-context-panel-open={isOpen ? 'true' : 'false'}
       tabIndex={-1}
-      inert={!isOpen || undefined}
       className={cn(
-        'flex min-h-0 flex-col overflow-hidden bg-background',
+        // `overflow-clip` on both axes, never `hidden`: a `hidden` axis makes
+        // the slot a scroll container, and an `overflow-x: clip` beside an
+        // `overflow-y: hidden` computes to `hidden` too. The closed panel's
+        // content is wider than the card's column, so a `scrollIntoView`
+        // inside it (the tab strip revealing its active tab on mount)
+        // scrolled the slot sideways and dragged the card left, clipped.
+        'flex min-h-0 flex-col overflow-clip bg-background',
         // Right-anchored while expanded: `inset-0` would teleport the left
         // edge instantly (position does not transition), so only the width
         // animates and the panel grows leftwards from its docked position.
         isExpanded
           ? 'absolute inset-y-0 right-0 z-20 min-w-0'
           : 'relative h-full flex-shrink-0',
-        !isOpen && 'pointer-events-none',
-        'will-change-[width] motion-reduce:transition-none',
-        'transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]'
+        'transition-[width] motion-reduce:transition-none',
       )}
       onKeyDownCapture={handlePanelKeyDownCapture}
       style={panelStyle}
     >
+      {/* The inline work-status card's host, right-anchored under the panel:
+          the card fades out while the panel fades in over it, and back. */}
+      <div ref={setWorkStatusHost} className={cn('absolute inset-y-0 right-0 z-0 flex', chatCovered && 'invisible')} />
       {/* Painted divider instead of border-l: a real border eats 1px of the
           content box only while collapsed, shifting the header controls by
           1px between the collapsed and expanded states. */}
@@ -1304,7 +1293,7 @@ export const ContextPanel: React.FC = () => {
       {isOpen && (
         <div aria-hidden="true" className="absolute right-0 top-0 z-40 h-full w-px bg-border" />
       )}
-      {!isExpanded && (
+      {isOpen && !isExpanded && (
         <div
           className={cn(
             'absolute left-0 top-0 z-50 h-full w-[3px] cursor-col-resize transition-colors hover:bg-[var(--interactive-border)]/80',
@@ -1318,7 +1307,7 @@ export const ContextPanel: React.FC = () => {
       )}
       <div
         className={cn(
-          'relative z-10 flex h-full min-h-0 shrink-0 flex-col duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+          'relative z-10 flex h-full min-h-0 shrink-0 flex-col bg-background motion-reduce:transition-none',
           // Width animates in sync with the panel (surface switches, resize
           // release); during the drag itself nothing resizes — only the ghost
           // guide line moves.
@@ -1328,11 +1317,12 @@ export const ContextPanel: React.FC = () => {
         // px in the expanded state too: px↔% width changes cannot interpolate,
         // so the header controls would snap instead of riding the animation.
         style={{
-          width: isExpanded
-            ? (availablePanelAreaWidth !== null ? `${availablePanelAreaWidth}px` : '100%')
-            : 'var(--oc-context-panel-width)',
+          width: isExpanded ? expandedWidth : 'var(--oc-context-panel-width)',
+          transitionDuration: `${LAYOUT_ANIMATION_MS}ms`,
+          transitionTimingFunction: LAYOUT_ANIMATION_EASING,
         }}
-        aria-hidden={!isOpen}
+        aria-hidden={contentHidden}
+        inert={contentHidden || undefined}
       >
       {header}
       <div className={cn('relative min-h-0 flex-1 overflow-hidden', isResizing && 'pointer-events-none')}>
@@ -1342,7 +1332,7 @@ export const ContextPanel: React.FC = () => {
               // Hidden rather than unmounted so a hidden editor keeps its state.
               <div className={cn('h-full min-w-0 flex-1', hasOpenEditorFile && !showsEditor && 'hidden')}>
                 {hasOpenEditorFile ? (
-                  <React.Suspense fallback={null}><FilesView mode="editor-only" visible={isOpen && isFileTabActive && showsEditor} /></React.Suspense>
+                  <React.Suspense fallback={null}><FilesView mode="editor-only" visible={!contentHidden && isFileTabActive && showsEditor} onCloseFile={handleCloseEditorFile} /></React.Suspense>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
                     <Icon name="file-code" className="h-12 w-12 text-muted-foreground/50" />
@@ -1355,37 +1345,45 @@ export const ContextPanel: React.FC = () => {
             <EditorTreeColumn visible={contextEditorTreeVisible} active={isOpen && isFileTabActive} fill={!showsEditor} />
           </div>
         ) : null}
-        {activeChatTab && activeChatSessionID && activeChatSrc ? (
-          <iframe
+        {activeChatTab && activeChatSessionID && activeChatPinnedSession ? (
+          // The chat renders in this app, pinned to its session: it shares
+          // the app's connection, stores and theme, and opens like a session
+          // switch instead of booting a second app.
+          <section
             key={activeChatTab.id}
-            ref={(node) => {
-              if (!node) {
-                chatFrameRefs.current.delete(activeChatTab.id);
-                return;
-              }
-              chatFrameRefs.current.set(activeChatTab.id, node);
-            }}
-            src={activeChatSrc}
-            title={t('contextPanel.iframe.sessionChatTitle', { sessionID: activeChatSessionID })}
-            className="absolute inset-0 h-full w-full border-0 bg-background"
-            onLoad={() => {
-              postThemeSyncToEmbeddedChat();
-              postChatSettingsSyncToEmbeddedChat();
-              postEmbeddedVisibilityToChats();
-            }}
-          />
-        ) : null}
-        {browserTabs.map((tab) => (
-          <div
-            key={tab.id}
-            className={cn(
-              'absolute inset-0',
-              activeTab?.id !== tab.id && 'hidden'
-            )}
+            aria-label={t('contextPanel.iframe.sessionChatTitle', { sessionID: activeChatSessionID })}
+            className="absolute inset-0 bg-background"
           >
-            <BrowserPane initialUrl={tab.targetPath ?? ''} directory={directoryKey} tabID={tab.id} />
-          </div>
-        ))}
+            <ChatView
+              pinnedSession={activeChatPinnedSession}
+              readOnly={activeChatTab.readOnly}
+            />
+          </section>
+        ) : null}
+        {loadedBrowserTabs.map((tab) => {
+          const shown = tab.directory === directoryKey && activeTab?.id === tab.id;
+          return (
+            <div
+              // Keyed by the directory as well: a tab of the next directory with the
+              // same id is another tab, with its own view and its own session. Kept
+              // on the same instance, the view went on showing the previous
+              // directory's page, and a space's page would run in the host's
+              // session instead of the space's own.
+              key={`${tab.directory}\u0000${tab.id}`}
+              // Invisible rather than display:none, so a background tab the agent
+              // is working keeps its layout and its snapshots read a real page.
+              className={cn('absolute inset-0', !shown && 'invisible pointer-events-none')}
+              aria-hidden={!shown || undefined}
+            >
+              <BrowserPane
+                initialUrl={tab.targetPath ?? ''}
+                directory={tab.directory}
+                tabID={tab.id}
+                ownerSessionId={tab.ownerSessionId}
+              />
+            </div>
+          );
+        })}
         {diffTabs.map((tab) => (
           <div
             key={tab.id}
@@ -1411,7 +1409,11 @@ export const ContextPanel: React.FC = () => {
         ))}
         {terminalTab ? (
           <div className={cn('absolute inset-0', activeTab?.mode === 'terminal' ? 'block' : 'hidden')}>
-            <TerminalView visible={isOpen && activeTab?.mode === 'terminal'} directory={terminalTab.targetDirectory} />
+            <TerminalView
+              visible={isOpen && activeTab?.mode === 'terminal'}
+              directory={terminalTab.targetDirectory}
+              onLastTabClosed={() => { if (directoryKey) closeContextPanelTab(directoryKey, terminalTab.id); }}
+            />
           </div>
         ) : null}
         {hasWalkthroughTab ? (
@@ -1446,12 +1448,7 @@ export const ContextPanel: React.FC = () => {
                   <GuestSurfacePane mode={tab.mode} />
                 ) : (
                   <div className={cn('flex h-full', DOCK_LAYOUT[docking.dock].container)}>
-                    <div
-                      className={cn('shrink-0', DOCK_LAYOUT[docking.dock].page)}
-                      style={DOCK_LAYOUT[docking.dock].vertical ? { height: docking.size } : { width: docking.size }}
-                    >
-                      <PluginPane mode={tab.mode} />
-                    </div>
+                    <DockedGuestPage mode={tab.mode} docking={docking} />
                     <div className="min-h-0 min-w-0 flex-1">
                       {surfaceMounted ? <GuestSurfacePane mode={tab.mode} /> : null}
                     </div>

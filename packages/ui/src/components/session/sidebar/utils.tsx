@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@openchamber/agent-contract';
 import { getCurrentIntlLocale } from '@/lib/i18n';
 import { formatMessage, useI18nStore } from '@/lib/i18n/store';
 
@@ -129,10 +129,10 @@ export const isBranchDifferentFromLabel = (branch: string | null, label: string)
   return normalizeForBranchComparison(branch) !== normalizeForBranchComparison(label);
 };
 
-export const dedupeSessionsById = (sessions: Session[]): Session[] => {
+export const dedupeSessionsById = (sessions: readonly Session[]): Session[] => {
   const byId = new Map<string, Session>();
   sessions.forEach((session) => {
-    byId.set(session.id, session);
+    byId.set(session.sessionId, session);
   });
   return Array.from(byId.values());
 };
@@ -140,9 +140,8 @@ export const dedupeSessionsById = (sessions: Session[]): Session[] => {
 export const getArchivedScopeKey = (projectRoot: string): string => `__archived__:${projectRoot}`;
 
 export const resolveArchivedFolderName = (session: Session, projectRoot: string | null): string => {
-  const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
-  const projectWorktree = normalizePath((session as Session & { project?: { worktree?: string | null } | null }).project?.worktree ?? null);
-  const resolved = sessionDirectory ?? projectWorktree;
+  const sessionDirectory = normalizePath(session.displayPath);
+  const resolved = sessionDirectory;
   if (!resolved) {
     return 'unassigned';
   }

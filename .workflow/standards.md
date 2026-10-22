@@ -40,6 +40,7 @@ bun run lint
 
 Keep host-owned capabilities behind the Host Gateway and keep agent SDK objects private to the Agent Service.
 Use package scripts as the command source of truth; validate the narrowest affected surface before broader checks.
+Keep one current acceptance receipt per Check, bound to the code path, inputs and environment it exercised; re-run it only when one of those changes. Record a superseded receipt as one history line in `## Progress` instead of re-running it.
 
 ## What we do not do
 
@@ -47,8 +48,8 @@ Do not add OMP compatibility layers, dual-engine selectors or fallback engines, 
 
 ## Branches and landing
 
-Landing: direct
+Landing: local-merge
 
 Local Git work follows the landing mode below. GitHub commands still require explicit user instruction under the root guide. Preserve unrelated worktree changes and use focused commits.
 
-Work lands on the current branch. `.workflow/merge-strategy.md` describes alternate task-branch modes. Parallel implementation needs separate worktrees; parallel read-only research does not.
+Task branches are integrated on an effort branch and merged into `main` at that effort's gate. Until then `next` reports those tasks as finished on a branch, not landed: that is expected, not a stalled task. Parallel implementation needs separate worktrees; parallel read-only research does not. `.workflow/merge-strategy.md` describes the modes.

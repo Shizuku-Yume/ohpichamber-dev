@@ -13,10 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
+import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 
 export type ReviewFlowExecution = {
   providerID: string;
@@ -49,7 +49,7 @@ const getInitialExecution = (params: {
   autoReview: false,
 });
 
-export function ReviewFlowDialog({
+function ReviewFlowDialogView({
   open,
   onOpenChange,
   projectDirectory,
@@ -108,12 +108,11 @@ export function ReviewFlowDialog({
     }));
   }, [open, providers, execution.providerID, execution.modelID]);
 
-  const agentFilter = React.useCallback((agent: { mode?: string }) => isPrimaryMode(agent.mode), []);
 
   const variantOptions = React.useMemo(() => {
     const provider = providers.find((item) => item.id === execution.providerID);
-    const model = provider?.models?.find((item) => item.id === execution.modelID) as { variants?: Record<string, unknown> } | undefined;
-    return model?.variants ? Object.keys(model.variants) : [];
+    const model = provider?.models?.find((item) => item.id === execution.modelID) as { variants?: ModelVariantSource } | undefined;
+    return listModelVariantIds(model?.variants);
   }, [providers, execution.providerID, execution.modelID]);
 
   const hasVariantOptions = variantOptions.length > 0;
@@ -203,10 +202,9 @@ export function ReviewFlowDialog({
           <div className="flex flex-col gap-1.5">
             <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
             <AgentSelector
-              agentName={execution.agent}
-              filter={agentFilter}
+              agentId={execution.agent}
               dropdownPortalToBody
-              onChange={(agent) => setExecution((prev) => ({ ...prev, agent }))}
+              onChange={(agentId) => setExecution((prev) => ({ ...prev, agent: agentId }))}
             />
           </div>
         </div>
@@ -223,3 +221,6 @@ export function ReviewFlowDialog({
     </Dialog>
   );
 }
+
+/** Memoized: the composer re-renders on every keystroke, and nothing here depends on the draft text. */
+export const ReviewFlowDialog = React.memo(ReviewFlowDialogView);

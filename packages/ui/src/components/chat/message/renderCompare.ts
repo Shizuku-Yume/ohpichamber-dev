@@ -1,4 +1,4 @@
-import type { Message, Part } from '@opencode-ai/sdk/v2';
+import type { Message, Part } from '@/lib/opencode/model';
 import type { TurnActivityGroup, TurnActivityRecord, TurnChangedFile, TurnDiffStats, TurnGroupingContext } from '../lib/turns/types';
 
 type MessageRecord = {
@@ -126,6 +126,8 @@ const areRenderRelevantMessageInfoEqual = (left: Message, right: Message): boole
     && left.sessionID === right.sessionID
     && (left as { finish?: unknown }).finish === (right as { finish?: unknown }).finish
     && (left as { status?: unknown }).status === (right as { status?: unknown }).status
+    // A running compaction streams its summary into the message itself.
+    && (left.role !== 'compaction' || right.role !== 'compaction' || left.summary === right.summary)
     && (left as { mode?: unknown }).mode === (right as { mode?: unknown }).mode
     && (left as { agent?: unknown }).agent === (right as { agent?: unknown }).agent
     && (left as { providerID?: unknown }).providerID === (right as { providerID?: unknown }).providerID
@@ -299,7 +301,7 @@ export const areRelevantTurnGroupingContextsEqual = (
   if (left.hasTools !== right.hasTools) return false;
   if (left.hasReasoning !== right.hasReasoning) return false;
   if (left.userMessageCreatedAt !== right.userMessageCreatedAt) return false;
-  if (left.userMessageVariant !== right.userMessageVariant) return false;
+  if (left.assistantVariant !== right.assistantVariant) return false;
 
   const headerRelevant = left.headerMessageId === messageId || right.headerMessageId === messageId;
   if (headerRelevant && left.headerMessageId !== right.headerMessageId) {

@@ -4,11 +4,10 @@ import { plugin } from 'bun';
 import { pathToFileURL } from 'node:url';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { createOpencodeClient, type ToolPart as ToolPartData } from '@opencode-ai/sdk/v2';
+import type { ToolPart as ToolPartData } from '@/lib/opencode/model';
 import { SyncProvider } from '@/sync/sync-context';
 import { I18nProvider } from '@/lib/i18n';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
-import { getDefaultTheme } from '@/lib/theme/themes';
 
 // Bun does not implement Vite's worker asset-query imports.
 plugin({
@@ -44,7 +43,7 @@ const themeContext: ThemeContextValue = {
   setDarkThemePreference: unexpectedThemeChange,
 };
 
-test('expanded bash output follows growth until the reader scrolls up', async () => {
+test('expanded shell output follows growth until the reader scrolls up', async () => {
   const happyWindow = new Window({ url: 'http://localhost' });
   const globals = {
     window: happyWindow,
@@ -74,21 +73,17 @@ test('expanded bash output follows growth until the reader scrolls up', async ()
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  const sdk = createOpencodeClient({
-    baseUrl: 'http://localhost',
-    fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
-  });
   const renderOutput = async (output: string, completed = false) => {
     const part: ToolPartData = {
       id: 'prt_bash_follow', sessionID: 'ses_bash_follow', messageID: 'msg_bash_follow',
-      type: 'tool', tool: 'bash', callID: 'call_bash_follow',
+      type: 'tool', tool: 'shell', callID: 'call_bash_follow',
       state: completed
-        ? { status: 'completed', input: { command: 'bun test' }, output, title: 'Tests', metadata: {}, time: { start: 1, end: 2 } }
-        : { status: 'running', input: { command: 'bun test' }, title: 'Tests', metadata: { output }, time: { start: 1 } },
+        ? { status: 'completed', input: { command: 'bun test' }, output, metadata: {}, time: { start: 1, end: 2 } }
+        : { status: 'running', input: { command: 'bun test' }, metadata: { output }, time: { start: 1 } },
     };
     await act(async () => {
       root.render(
-        <SyncProvider sdk={sdk} directory="">
+        <SyncProvider directory="">
           <I18nProvider>
             <ThemeSystemContext.Provider value={themeContext}>
               <ToolPart part={part} isExpanded isMobile={false} onToggle={() => {}} />
@@ -105,7 +100,7 @@ test('expanded bash output follows growth until the reader scrolls up', async ()
     await renderOutput('Starting tests');
     const scroller = Array.from(container.querySelectorAll<HTMLElement>('.tool-output-surface'))
       .find((element) => element.textContent?.includes('Starting tests'));
-    if (!scroller) throw new Error('Expected expanded bash output');
+    if (!scroller) throw new Error('Expected expanded shell output');
     let height = 800;
     let top = 0;
     Object.defineProperties(scroller, {

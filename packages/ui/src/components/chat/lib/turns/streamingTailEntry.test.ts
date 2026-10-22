@@ -1,38 +1,20 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, Part } from '@opencode-ai/sdk/v2';
+import type { Part } from '@/lib/opencode/model';
 
 import { buildLiveStreamingEntry, type StreamingTailEntry } from './streamingTailEntry';
 import type { ChatMessageEntry, TurnRecord } from './types';
 
-const message = (id: string, role: 'user' | 'assistant', parentID?: string, parts: Part[] = []): ChatMessageEntry => ({
-    info: {
-        id,
-        role,
-        sessionID: 'ses_1',
-        ...(parentID ? { parentID } : {}),
-        time: { created: 1 },
-    } as Message,
-    parts,
-});
+const message = (id: string, role: 'user' | 'assistant', parentID?: string, parts: Part[] = []): ChatMessageEntry => {
+    const info = role === 'user'
+        ? { id, sessionID: 'ses_1', role, time: { created: 1 } }
+        : { id, sessionID: 'ses_1', role, ...(parentID ? { parentID } : {}), agent: 'build', providerID: 'p', modelID: 'm', time: { created: 1 } };
+    return { info, parts };
+};
 
-const textPart = (id: string, text: string): Part => ({
-    id,
-    type: 'text',
-    text,
-} as Part);
+const textPart = (id: string, text: string): Part => ({ id, sessionID: 'ses_1', messageID: 'msg', type: 'text', text });
 
-const syntheticTextPart = (id: string, text: string): Part => ({
-    id,
-    type: 'text',
-    text,
-    synthetic: true,
-} as Part);
+const reasoningPart = (id: string, text: string): Part => ({ id, sessionID: 'ses_1', messageID: 'msg', type: 'reasoning', text, time: { start: 1 } });
 
-const reasoningPart = (id: string, text: string): Part => ({
-    id,
-    type: 'reasoning',
-    text,
-} as Part);
 
 const turnEntry = (assistant: ChatMessageEntry): StreamingTailEntry => {
     const user = message('user_1', 'user');
@@ -115,10 +97,9 @@ describe('buildLiveStreamingEntry', () => {
         const stale = message('assistant_1', 'assistant', 'user_1', [textPart('part_1', 'old')]);
         const entry = turnEntry(stale);
         const visible = textPart('part_visible', 'visible');
-        const synthetic = syntheticTextPart('part_synthetic', 'hidden while streaming');
 
         const next = buildLiveStreamingEntry(entry, {
-            livePartsByMessageId: { assistant_1: [synthetic, visible] },
+            livePartsByMessageId: { assistant_1: [visible] },
             showTextJustificationActivity: true,
             showTurnChangedFiles: false,
         });
@@ -161,5 +142,26 @@ describe('buildLiveStreamingEntry', () => {
         });
 
         expect(next).toBe(entry);
+    });
+});
+
+describe('buildLiveStreamingEntry reuse across publishes', () => {
+    const options = (liveParts: Part[]) => ({
+        livePartsByMessageId: { asst_1: liveParts },
+        showTextJustificationActivity: false,
+        showTurnChangedFiles: false,
+    });
+
+    test('an unchanged record and live parts normalize to the same message object', () => {
+        const record = message('asst_1', 'assistant', 'user_1', [textPart('p1', 'old')]);
+        const entry: StreamingTailEntry = { kind: 'ungrouped', key: 'asst_1', message: record };
+        const liveParts = [textPart('p1', 'new text')];
+
+        const first = buildLiveStreamingEntry(entry, options(liveParts));
+        const second = buildLiveStreamingEntry(entry, options(liveParts));
+        expect(first.kind === 'ungrouped' && second.kind === 'ungrouped' && first.message === second.message).toBe(true);
+
+        const changed = buildLiveStreamingEntry(entry, options([textPart('p1', 'newer text')]));
+        expect(changed.kind === 'ungrouped' && first.kind === 'ungrouped' && changed.message !== first.message).toBe(true);
     });
 });

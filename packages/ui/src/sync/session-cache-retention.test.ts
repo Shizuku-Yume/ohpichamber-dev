@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { createOpencodeClient, type Message, type Part } from "@opencode-ai/sdk/v2/client"
+import type { MessagePage } from "@/lib/opencode/client"
+import type { FormRequest, Message, Part } from "@/lib/opencode/model"
 import { ChildStoreManager } from "./child-store"
 import { SessionMessageLoader, type SessionMessageTarget } from "./session-message-loader"
 import { SessionCacheRetention } from "./session-cache-retention"
@@ -23,16 +24,15 @@ function transcript(sessionID: string, turns = 8, steps = 12) {
       const created = turn * (steps + 1) + step
       const id = step === 0 ? parentID : `msg_${sessionID}_${turn}_${step}`
       const info: Message = step === 0
-        ? { id, sessionID, role: "user", time: { created }, agent: "build", model: { providerID: "test", modelID: "test" } }
+        ? { id, sessionID, role: "user", time: { created } }
         : {
-          id, sessionID, role: "assistant", time: { created, completed: created + 0.5 }, parentID,
-          modelID: "test", providerID: "test", mode: "build", agent: "build", path: { cwd: "/repo", root: "/repo" },
-          cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          id, sessionID, role: "assistant", time: { created, completed: created + 0.5 },
+          modelID: "test", providerID: "test", agent: "build",
         }
       const part: Part = step > 0 && step < steps
         ? {
           id: `prt_${id}`, messageID: id, sessionID, type: "tool", tool: "read", callID: `call_${id}`,
-          state: { status: "completed", input: {}, output: "x".repeat(1024), title: "read", metadata: {}, time: { start: created, end: created + 0.5 } },
+          state: { status: "completed", input: {}, output: "x".repeat(1024), metadata: {}, time: { start: created, end: created + 0.5 } },
         }
         : { id: `prt_${id}`, messageID: id, sessionID, type: "text", text: "x".repeat(1024) }
       records.push({ info, parts: [part] })
@@ -51,36 +51,37 @@ function setup(surface: "desktop" | "mobile" | "vscode" = "desktop", recordsFor 
     if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow)
     else Reflect.deleteProperty(globalThis, "window")
   })
-  const requests: URL[] = []
+  const requests: Array<{ sessionID: string; limit: number; cursor?: string }> = []
   let requestsUntilFailure = 0
   let hold: Promise<void> | undefined
   const childStores = new ChildStoreManager()
   // Directory metadata persistence outlives managers; each fixture starts with
   // its own empty session list, including no revert marker from another test.
   childStores.ensureChild("/repo", { bootstrap: false }).setState({ session: [] })
-  const sdk = createOpencodeClient({ baseUrl: "http://cache.test", fetch: async (request) => {
-    const url = new URL(request instanceof Request ? request.url : String(request))
-    requests.push(url)
-    if (hold) await hold
-    if (requestsUntilFailure > 0 && --requestsUntilFailure === 0) {
-      return Response.json({ message: "rejected" }, { status: 400 })
-    }
-    const sessionID = url.pathname.split("/").at(-2) ?? ""
-    const all = recordsFor(sessionID)
-    const before = url.searchParams.get("before")
-    // The fixture uses the upstream cursor's time boundary; IDs intentionally
-    // do not sort chronologically across assistant steps.
-    const boundary: { id: string; time: number } | null = before
-      ? JSON.parse(Buffer.from(before, "base64url").toString()) : null
-    const eligible = boundary ? all.filter(({ info }) => info.time.created < boundary.time
-      || (info.time.created === boundary.time && info.id < boundary.id)) : all
-    const limit = Number(url.searchParams.get("limit"))
-    const page = eligible.slice(-limit)
-    const oldest = page[0]?.info
-    const cursor = eligible.length > page.length && oldest
-      ? Buffer.from(JSON.stringify({ id: oldest.id, time: oldest.time.created })).toString("base64url") : undefined
-    return Response.json(page, { headers: cursor ? { "x-next-cursor": cursor } : {} })
-  } })
+  // Mirrors the adapter's page contract: newest first, an opaque cursor that
+  // walks toward older history, and `next` only while older records remain.
+  const sdk = {
+    getSessionMessages: async (sessionID: string, options?: { limit?: number; cursor?: string }): Promise<MessagePage> => {
+      const limit = options?.limit ?? 100
+      requests.push({ sessionID, limit, cursor: options?.cursor })
+      if (hold) await hold
+      if (requestsUntilFailure > 0 && --requestsUntilFailure === 0) {
+        throw Object.assign(new Error("message.list failed (400): rejected"), { status: 400 })
+      }
+      const all = recordsFor(sessionID)
+      // The fixture uses the upstream cursor's time boundary; IDs intentionally
+      // do not sort chronologically across assistant steps.
+      const boundary: { id: string; time: number } | null = options?.cursor
+        ? JSON.parse(Buffer.from(options.cursor, "base64url").toString()) : null
+      const eligible = boundary ? all.filter(({ info }) => info.time.created < boundary.time
+        || (info.time.created === boundary.time && info.id < boundary.id)) : all
+      const page = eligible.slice(-limit)
+      const oldest = page[0]?.info
+      const next = eligible.length > page.length && oldest
+        ? Buffer.from(JSON.stringify({ id: oldest.id, time: oldest.time.created })).toString("base64url") : undefined
+      return { items: page, cursor: next ? { next } : {} }
+    },
+  }
   const loader = new SessionMessageLoader(childStores, { sdk, runtimeKey: "cache-test" })
   let viewed = { directory: "/repo", sessionID: "a" }
   let current = true
@@ -175,11 +176,12 @@ describe("session cache retention", () => {
     await env.select("b")
     await waitIdle()
     expect(env.messages("a")).toHaveLength(104)
-    store.setState({ question: { a: [{ id: "q", sessionID: "a", questions: [] }] } })
+    const form: FormRequest = { id: "q", sessionID: "a", title: "Pick", fields: [{ key: "answer", type: "boolean" }] }
+    store.setState({ form: { a: [form] } })
     store.setState({ session_status: { a: { type: "idle" } } })
     await waitIdle()
     expect(env.messages("a")).toHaveLength(104)
-    store.setState({ question: {} })
+    store.setState({ form: {} })
     await flush()
     expect(env.messages("a")).toHaveLength(104)
     await waitIdle()
@@ -336,7 +338,10 @@ describe("session cache retention", () => {
     expect(env.messages("s0")).toBeDefined()
   })
 
-  for (const [surface, expected] of [["desktop", 200], ["mobile", 150]] as const) {
+  // One extension sized from the prompt density of the first page, with 20%
+  // headroom, capped by the surface's record ceiling. 13-record turns: desktop
+  // reads 100 + 72 (13 turns), mobile 50 + 150 (15 turns, at its 200 ceiling).
+  for (const [surface, expected, limits] of [["desktop", 172, [100, 72]], ["mobile", 200, [50, 150]]] as const) {
     test(`${surface}: cold navigation expands toward ten turns and publishes once`, async () => {
       const env = setup(surface, (id) => transcript(id, 20, 12))
       const store = env.childStores.ensureChild("/repo", { bootstrap: false })
@@ -345,10 +350,37 @@ describe("session cache retention", () => {
         if (state.message.a !== previous.message.a) publications.push(state.message.a?.length ?? 0)
       }))
       await env.select("a")
+      expect(env.requests.map((request) => request.limit)).toEqual([...limits])
       expect(publications).toEqual([expected])
       expect(env.loader.getSnapshot(env.target("a")).complete).toBe(false)
     })
   }
+
+  for (const surface of ["desktop", "mobile"] as const) {
+    test(`${surface}: a last turn longer than the window is read back to its prompt and published once`, async () => {
+      const env = setup(surface, (id) => transcript(id, 3, 400))
+      const store = env.childStores.ensureChild("/repo", { bootstrap: false })
+      const publications: number[] = []
+      cleanups.push(store.subscribe((state, previous) => {
+        if (state.message.a !== previous.message.a) publications.push(state.message.a?.length ?? 0)
+      }))
+      await env.select("a")
+      expect(publications).toHaveLength(1)
+      expect(env.messages("a")?.some((message) => message.id === "msg_a_2_user")).toBe(true)
+      expect(env.messages("a")?.some((message) => message.id === "msg_a_1_user")).toBe(false)
+      expect(env.loader.getSnapshot(env.target("a")).complete).toBe(false)
+    })
+  }
+
+  test("an evicted session whose last turn outgrew the window reopens with that turn", async () => {
+    const env = setup("desktop", (id) => transcript(id, 3, 400), IDLE_TTL_MS)
+    await env.select("a")
+    await env.select("b")
+    await waitIdle()
+    expect(env.messages("a")).toBeUndefined()
+    await env.select("a")
+    expect(env.messages("a")?.some((message) => message.id === "msg_a_2_user")).toBe(true)
+  })
 
   test("a short session loads completely without expansion past its end", async () => {
     const env = setup("desktop", (id) => transcript(id, 2, 30))
@@ -378,9 +410,9 @@ describe("session cache retention", () => {
     await env.select("a")
     const before = env.requests.length
     await env.loader.loadOlder(env.target("a"))
-    const limits = env.requests.slice(before).map((url) => url.searchParams.get("limit"))
+    const limits = env.requests.slice(before).map((request) => request.limit)
     expect(limits.length).toBeGreaterThanOrEqual(2)
-    expect(limits.every((limit) => limit === "100")).toBe(true)
+    expect(limits.every((limit) => limit === 100)).toBe(true)
     const ids = env.messages("a")?.map((message) => message.id) ?? []
     expect(env.messages("a")?.[0].role).toBe("user")
     expect(ids).toEqual(full.slice(full.length - ids.length))
@@ -409,6 +441,17 @@ describe("session cache retention", () => {
     expect(env.loader.getSnapshot(env.target("a")).complete).toBe(false)
   })
 
+  test("an older turn longer than the alignment bound is read back to its prompt", async () => {
+    const env = setup("desktop", (id) => transcript(id, 4, 500))
+    await env.select("a")
+    expect(env.messages("a")?.some((message) => message.id === "msg_a_2_user")).toBe(false)
+    const initial = env.messages("a")?.length ?? 0
+    await env.loader.loadOlder(env.target("a"))
+    const ids = env.messages("a")?.map((message) => message.id) ?? []
+    expect(ids).toContain("msg_a_2_user")
+    expect(ids.length - initial).toBeLessThan(600)
+  })
+
   test("a failed page preserves the previous history and its retry cursor", async () => {
     const env = setup("desktop", (id) => transcript(id, 30, 12))
     await env.select("a")
@@ -435,10 +478,7 @@ describe("evicted history after background events", () => {
     // A background turn lands for the evicted session through the event
     // reducer: one message with its part, never the earlier history.
     const store = env.childStores.getChild("/repo")!
-    const late: Message = {
-      id: "msg_s0_late", sessionID: "s0", role: "user", time: { created: 10_000 },
-      agent: "build", model: { providerID: "test", modelID: "test" },
-    }
+    const late: Message = { id: "msg_s0_late", sessionID: "s0", role: "user", time: { created: 10_000 } }
     store.setState({
       message: { ...store.getState().message, s0: [late] },
       part: { ...store.getState().part, [late.id]: [{ id: "prt_late", messageID: late.id, sessionID: "s0", type: "text", text: "late" }] },

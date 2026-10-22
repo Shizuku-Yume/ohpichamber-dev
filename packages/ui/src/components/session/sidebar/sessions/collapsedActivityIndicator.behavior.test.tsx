@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@/lib/opencode/model';
 import { replaceGlobalSessionStatusById } from '@/sync/global-session-status';
 import { applyGlobalBlockingRequestEvents, resetGlobalBlockingRequests } from '@/sync/global-blocking-requests';
 import { useNotificationStore } from '@/sync/notification-store';
@@ -31,7 +31,7 @@ describe('collapsed activity scalar selector', () => {
     try {
       await act(async () => root.render(React.createElement(Harness)));
       const initialRenders = capture.renders;
-      await act(async () => replaceGlobalSessionStatusById(new Map([['unrelated', { status: { type: 'busy' }, directory: '/other' }]])));
+      await act(async () => replaceGlobalSessionStatusById(new Map([['unrelated', { status: { type: 'busy' as const }, directory: '/other' }]])));
       await act(async () => useNotificationStore.getState().append({
         type: 'turn-complete', session: 'unrelated', time: Date.now(), viewed: false,
       }));
@@ -42,29 +42,28 @@ describe('collapsed activity scalar selector', () => {
       }));
       expect(capture.state).toBe('unread');
       const unreadRenders = capture.renders;
-      await act(async () => replaceGlobalSessionStatusById(new Map([['relevant', { status: { type: 'busy' }, directory: '/workspace' }]])));
+      await act(async () => replaceGlobalSessionStatusById(new Map([['relevant', { status: { type: 'busy' as const }, directory: '/workspace' }]])));
       expect(capture.state).toBe('active');
       expect(capture.renders).toBe(unreadRenders + 1);
 
       // A pending request outranks a running turn, and a request elsewhere is ignored.
       const activeRenders = capture.renders;
       await act(async () => applyGlobalBlockingRequestEvents('/other', [{
-        id: 'e1', type: 'question.asked', properties: { id: 'q-other', sessionID: 'unrelated', questions: [] },
+        type: 'form.created', properties: { form: { id: 'q-other', sessionID: 'unrelated', title: 'Pick', fields: [{ key: 'answer', type: 'boolean' }] } },
       }]));
       expect(capture.state).toBe('active');
       expect(capture.renders).toBe(activeRenders);
       await act(async () => applyGlobalBlockingRequestEvents('/workspace', [{
-        id: 'e2', type: 'question.asked', properties: { id: 'q1', sessionID: 'relevant', questions: [] },
+        type: 'form.created', properties: { form: { id: 'q1', sessionID: 'relevant', title: 'Pick', fields: [{ key: 'answer', type: 'boolean' }] } },
       }]));
-      expect(capture.state).toBe('question');
-      await act(async () => applyGlobalBlockingRequestEvents('/workspace', [{
-        id: 'e3', type: 'permission.asked',
-        properties: { id: 'p1', sessionID: 'relevant', permission: 'bash', patterns: [], metadata: {}, always: [] },
-      }]));
+      expect(capture.state).toBe('form');
+      await act(async () => applyGlobalBlockingRequestEvents('/workspace', [
+        { type: 'permission.asked', properties: { id: 'p1', sessionID: 'relevant', action: 'bash', resources: [] } },
+      ]));
       expect(capture.state).toBe('permission');
       await act(async () => applyGlobalBlockingRequestEvents('/workspace', [
-        { id: 'e4', type: 'permission.replied', properties: { sessionID: 'relevant', requestID: 'p1', reply: 'once' } },
-        { id: 'e5', type: 'question.replied', properties: { sessionID: 'relevant', requestID: 'q1', answers: [] } },
+        { type: 'permission.replied', properties: { sessionID: 'relevant', requestID: 'p1' } },
+        { type: 'form.settled', properties: { sessionID: 'relevant', formID: 'q1' } },
       ]));
       expect(capture.state).toBe('active');
     } finally {
@@ -75,6 +74,34 @@ describe('collapsed activity scalar selector', () => {
         list: [],
         index: { session: { unseenCount: {}, unseenHasError: {} }, project: { unseenCount: {}, unseenHasError: {} } },
       });
+      dom.restore();
+    }
+  });
+
+  test('counts a request from a session that is listed only as blocking, such as a hidden subagent', async () => {
+    const dom = installHookTestDom();
+    const root = createRoot(dom.container);
+    replaceGlobalSessionStatusById(new Map());
+    const capture: { state: string | null } = { state: null };
+    const Harness = () => {
+      capture.state = useCollapsedSessionActivityState({
+        nodes: [node('lane')],
+        blockingSessionIds: ['lane', 'lane-subagent'],
+        includeUnreadSubtasks: true,
+      });
+      return null;
+    };
+    try {
+      await act(async () => root.render(React.createElement(Harness)));
+      expect(capture.state).toBeNull();
+      await act(async () => applyGlobalBlockingRequestEvents('/workspace', [{
+        type: 'permission.asked',
+        properties: { id: 'p-sub', sessionID: 'lane-subagent', action: 'bash', resources: [] },
+      }]));
+      expect(capture.state).toBe('permission');
+    } finally {
+      await act(async () => root.unmount());
+      resetGlobalBlockingRequests();
       dom.restore();
     }
   });

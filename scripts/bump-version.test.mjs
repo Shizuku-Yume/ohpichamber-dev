@@ -11,7 +11,8 @@ afterEach(async () => {
 });
 
 test('a release bump packs workspace dependencies at the new version after a frozen install', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-release-pack-'));
+  // The real path: on Windows it also expands an 8.3 TEMP such as C:\Users\BOHDAN~1, which bun's workspace links need.
+  const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'oc-release-pack-')));
   roots.push(root);
   await fs.mkdir(path.join(root, 'scripts'));
   await fs.copyFile(new URL('./bump-version.mjs', import.meta.url), path.join(root, 'scripts/bump-version.mjs'));
@@ -39,7 +40,14 @@ test('a release bump packs workspace dependencies at the new version after a fro
   for (const [workspace, dependency] of [['web', 'sdk'], ['electron', 'web']]) {
     const archive = path.join(root, `${workspace}.tgz`);
     runBun(['pm', 'pack', '--ignore-scripts', '--filename', archive], path.join(root, 'packages', workspace));
-    const packed = JSON.parse(execFileSync('tar', ['-xOf', archive, 'package/package.json'], { encoding: 'utf8' }));
+    // Address the archive relative to its directory: under Git Bash on Windows
+    // `tar` is GNU tar, which reads an absolute `C:\...` path as a remote host
+    // ("Cannot connect to C:"). Windows bsdtar accepts the absolute form, which
+    // is why this looked like a flake.
+    const packed = JSON.parse(execFileSync('tar', ['-xOf', path.basename(archive), 'package/package.json'], {
+      cwd: path.dirname(archive),
+      encoding: 'utf8',
+    }));
     expect(packed.version).toBe('1.24.0');
     expect(packed.dependencies[`@openchamber/${dependency}`]).toBe('1.24.0');
   }

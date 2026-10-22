@@ -79,6 +79,8 @@ Each boundary gets one focused proof that exercises its real path. Keep permanen
 
 Run package checks after a slice lands, not from each concurrent worker. Run workspace type-check, lint, affected builds and dead-code once after the cross-workspace integration. Re-run only the checks invalidated by a subsequent fix. Final Web and Electron scenarios may cover multiple acceptance IDs in one connected run.
 
+Gate and close reviews reuse the tasks' `Review boundary` records and run the assembly checklist: the spec's checks, the integration diff from the effort's true base, the interfaces between slices, and the aggregate trust-boundary inventory. A gate task's own Check is evidence assembly and gap judgement; it does not replay a task brief whose boundary is unchanged.
+
 ## What it must not do
 
 - Add OpenCode-shaped adapters, field aliases, dual-engine selectors, a fallback engine or automatic transcript/credential import.

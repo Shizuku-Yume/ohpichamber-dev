@@ -1,8 +1,7 @@
-import type { Agent } from '@opencode-ai/sdk/v2';
+import type { Agent } from '@openchamber/agent-contract';
 import type { Theme } from '@/types/theme';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { filterVisibleAgents } from '@/stores/useAgentsStore';
 import { createAgentColorResolver } from '@/lib/agentColors';
 
 // Message footers share one allocation with the composer. Immutable theme and
@@ -19,7 +18,7 @@ export function useAgentColors() {
   }
   let resolver = byRoster.get(agents);
   if (!resolver) {
-    resolver = createAgentColorResolver(currentTheme, filterVisibleAgents(agents));
+    resolver = createAgentColorResolver(currentTheme, agents);
     byRoster.set(agents, resolver);
   }
   return resolver;

@@ -1,7 +1,15 @@
+import type { ContextFillMessage } from '@/stores/utils/tokenUtils';
 import { describe, expect, test } from 'bun:test';
 import { computeContextUsage, DEFAULT_CONTEXT_LIMIT } from './contextUsage';
 
-const assistant = (tokens: Record<string, unknown>, id = 'msg') => ({ id, role: 'assistant', tokens });
+const assistant = (tokens: NonNullable<ContextFillMessage['tokens']>, id = 'msg'): ContextFillMessage => ({
+  id, role: 'assistant', tokens,
+});
+
+// v2 records a compaction as its own message with an explicit lifecycle.
+const compaction = (tokens: NonNullable<ContextFillMessage['tokens']>, id = 'summary'): ContextFillMessage => ({
+  id, role: 'compaction', status: 'completed', tokens,
+});
 
 const measured = (usage: ReturnType<typeof computeContextUsage>) => {
   if (usage?.state !== 'measured') throw new Error(`expected a measured reading, got ${usage?.state ?? 'null'}`);
@@ -35,8 +43,7 @@ describe('computeContextUsage', () => {
     const usage = computeContextUsage(
       [
         assistant({ input: 300, output: 0, reasoning: 0 }, 'real'),
-        assistant({ input: 0, output: 0, reasoning: 0 }, 'zeroed'),
-        { id: 'user', role: 'user' },
+        { id: 'user', role: 'user' } satisfies ContextFillMessage,
       ],
       1000,
     );
@@ -58,7 +65,7 @@ describe('computeContextUsage', () => {
 
   test('returns null when no message carries usable tokens', () => {
     expect(computeContextUsage([], 1000)).toBeNull();
-    expect(computeContextUsage([{ id: 'u', role: 'user' }], 1000)).toBeNull();
+    expect(computeContextUsage([{ id: 'u', role: 'user' } satisfies ContextFillMessage], 1000)).toBeNull();
     expect(computeContextUsage([assistant({ input: 0, output: 0, reasoning: 0 })], 1000)).toBeNull();
   });
 
@@ -94,8 +101,8 @@ describe('computeContextUsage', () => {
     const usage = computeContextUsage(
       [
         assistant({ total: 11_837, input: 138, output: 691, reasoning: 0, cache: { read: 11_008, write: 0 } }, 'reply'),
-        { id: 'compact-request', role: 'user' },
-        { ...assistant({ total: 2_392, input: 1_481, output: 911, reasoning: 0 }, 'summary'), summary: true, finish: 'stop' },
+        { id: 'compact-request', role: 'user' } satisfies ContextFillMessage,
+        compaction({ total: 2_392, input: 1_481, output: 911, reasoning: 0 }),
       ],
       200_000,
     );
@@ -105,7 +112,7 @@ describe('computeContextUsage', () => {
   test('measures again once a response after the compaction reports tokens', () => {
     const usage = computeContextUsage(
       [
-        { ...assistant({ total: 2_392, input: 1_481, output: 911 }, 'summary'), summary: true, finish: 'stop' },
+        compaction({ total: 2_392, input: 1_481, output: 911 }),
         assistant({ total: 12_100, input: 12_000, output: 100 }, 'next'),
       ],
       200_000,

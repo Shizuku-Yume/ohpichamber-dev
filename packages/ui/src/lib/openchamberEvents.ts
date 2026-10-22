@@ -1,8 +1,13 @@
 import { getRuntimeUrlResolver } from './runtime-url';
+import { runtimeFetch } from './runtime-fetch';
+import { useAuthSessionStore, waitForAuthSession } from './runtime-auth-expiry';
+import { isRelayModeActive } from './relay/runtime-tunnel';
 import { subscribeRuntimeEndpointChanged } from './runtime-switch';
 import { isVSCodeRuntime } from './desktop';
+import { canDriveBrowserPage } from './browser/hostCapability';
 import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
 import { z } from 'zod';
+import { trackedItemRecordsSchema } from './trackedItems/model';
 
 type ScheduledTaskRanEvent = {
   type: 'scheduled-task-ran';
@@ -44,7 +49,19 @@ type BrowserControlRequestEvent = {
   requestId: string;
   action: string;
   parameters: Record<string, unknown>;
+  context: BrowserControlRequestContext;
 };
+
+/**
+ * The session that called the browser tool and the project it works in, each
+ * null when unknown (an older server, or a caller with no session).
+ */
+const browserControlRequestContextSchema = z.object({
+  directory: z.string().min(1).nullable().catch(null),
+  sessionId: z.string().min(1).nullable().catch(null),
+});
+export type BrowserControlRequestContext = z.infer<typeof browserControlRequestContextSchema>;
+const UNKNOWN_BROWSER_CONTROL_CONTEXT: BrowserControlRequestContext = { directory: null, sessionId: null };
 
 /**
  * The agent asked for a file to be shown in the user's file panel. Every
@@ -68,6 +85,9 @@ type AgentMemoryChangedEvent = {
   projectId?: string;
 };
 
+const projectContextChangedSchema = z.object({ projectId: z.string().min(1) });
+type ProjectContextChangedEvent = { type: 'project-context-changed' } & z.infer<typeof projectContextChangedSchema>;
+
 /**
  * The extension chosen as browser provider can no longer serve (paused,
  * removed, or approval withdrawn), so the server put the in-app browser back.
@@ -83,7 +103,10 @@ type BrowserProviderResetEvent = { type: 'browser-provider-reset' } & z.infer<ty
 const routingUpdatedSchema = z.object({
   available: z.boolean(),
   autoReady: z.boolean(),
+  // Absent from servers before the classifier pick, where Jev always answered.
+  jevAvailable: z.boolean().default(true),
   tokenPresent: z.boolean(),
+  jevSource: z.enum(['typesafe', 'zen-free']),
 });
 
 const routingDecisionSchema = z.object({
@@ -102,6 +125,8 @@ const routingDecisionSchema = z.object({
 const routingPermissionHeldSchema = z.object({
   permissionId: z.string().min(1),
   sessionId: z.string().min(1),
+  // Where the request lives, so the held request can be announced from its directory's store.
+  directory: z.string().nullable().default(null),
   score: z.number(),
   kind: z.string().nullable(),
 });
@@ -109,6 +134,7 @@ const routingPermissionHeldSchema = z.object({
 const routingSafetySkippedSchema = z.object({
   permissionId: z.string().min(1),
   sessionId: z.string().min(1),
+  directory: z.string().nullable().default(null),
   error: z.string(),
 });
 
@@ -116,6 +142,12 @@ type RoutingUpdatedEvent = { type: 'routing-updated' } & z.infer<typeof routingU
 type RoutingDecisionEvent = { type: 'routing-decision'; decision: z.infer<typeof routingDecisionSchema> };
 type RoutingPermissionHeldEvent = { type: 'routing-permission-held' } & z.infer<typeof routingPermissionHeldSchema>;
 type RoutingSafetySkippedEvent = { type: 'routing-safety-skipped' } & z.infer<typeof routingSafetySkippedSchema>;
+
+/** Followed pull requests, merge requests or issues whose state the server saw move. */
+type TrackedItemsChangedEvent = { type: 'tracked-items-changed'; records: z.infer<typeof trackedItemRecordsSchema> };
+
+const eventStreamReadySchema = z.object({ connectionId: z.string().min(1).optional() });
+const sourceControlActivitySchema = z.object({ directory: z.string().min(1) });
 
 const notificationPropertiesSchema = z.object({
   title: z.string().optional(),
@@ -125,11 +157,16 @@ const notificationPropertiesSchema = z.object({
   sessionId: z.string().optional(),
   directory: z.string().optional(),
   requireHidden: z.boolean().optional(),
+  showWhenFocused: z.boolean().optional(),
 });
 
 type OpenChamberEvent =
   | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
-  | { type: 'event-stream-ready' }
+  /** `connectionId` names this connection on the server; absent from servers before tracked items. */
+  | { type: 'event-stream-ready'; connectionId: string | null }
+  | TrackedItemsChangedEvent
+  /** An agent turn finished in `directory`; its branches may have a new pull request. */
+  | { type: 'source-control-activity'; directory: string }
   | RoutingUpdatedEvent
   | RoutingDecisionEvent
   | RoutingPermissionHeldEvent
@@ -141,6 +178,7 @@ type OpenChamberEvent =
   | BrowserControlRequestEvent
   | FileOpenRequestEvent
   | BrowserProviderResetEvent
+  | ProjectContextChangedEvent
   | AgentMemoryChangedEvent;
 type Listener = (event: OpenChamberEvent) => void;
 
@@ -150,7 +188,9 @@ const worktreeChangedPropertiesSchema = z.object({
 });
 
 let eventSource: EventSource | null = null;
+let relayAbortController: AbortController | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let authSessionWait: AbortController | null = null;
 let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
 let runtimeChangeUnsubscribe: (() => void) | null = null;
@@ -167,8 +207,26 @@ const clearHeartbeatTimer = () => {
   heartbeatTimer = null;
 };
 
+const cancelAuthSessionWait = () => {
+  authSessionWait?.abort();
+  authSessionWait = null;
+};
+
 const scheduleReconnect = () => {
-  if (reconnectTimer || listeners.size === 0) {
+  if (reconnectTimer || authSessionWait || listeners.size === 0) {
+    return;
+  }
+  // An expired session answers every attempt with 401; wait for the login
+  // instead and reconnect right after it.
+  if (useAuthSessionStore.getState().state !== 'ok') {
+    const wait = new AbortController();
+    authSessionWait = wait;
+    void waitForAuthSession(wait.signal).then(() => {
+      if (wait.signal.aborted) return;
+      authSessionWait = null;
+      reconnectAttempt = 0;
+      connect();
+    });
     return;
   }
   const delay = Math.min(1_000 * Math.pow(2, Math.min(reconnectAttempt, 5)), MAX_RECONNECT_DELAY_MS);
@@ -181,10 +239,70 @@ const scheduleReconnect = () => {
 
 const cleanupSource = () => {
   clearHeartbeatTimer();
+  relayAbortController?.abort();
+  relayAbortController = null;
   if (eventSource) {
     eventSource.close();
   }
   eventSource = null;
+};
+
+const connectRelay = (canControlBrowser: boolean) => {
+  const controller = new AbortController();
+  relayAbortController = controller;
+  void (async () => {
+    try {
+      const response = await runtimeFetch('/api/openchamber/events', {
+        query: canControlBrowser ? { browser: '1' } : undefined,
+        headers: { Accept: 'text/event-stream' },
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) {
+        await response.body?.cancel();
+        return;
+      }
+      if (!response.ok || !response.body) {
+        await response.body?.cancel();
+        throw new Error(`OpenChamber events returned ${response.status}`);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let pending = '';
+      let data: string[] = [];
+      resetHeartbeatTimer();
+      try {
+        while (!controller.signal.aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          pending += decoder.decode(value, { stream: true });
+          let newline = pending.indexOf('\n');
+          while (newline !== -1) {
+            const line = pending.slice(0, newline).replace(/\r$/, '');
+            pending = pending.slice(newline + 1);
+            if (line === '') {
+              if (data.length && !controller.signal.aborted) {
+                resetHeartbeatTimer();
+                const envelope = parseEnvelope(data.join('\n'));
+                if (envelope) dispatchFromEnvelope(envelope);
+              }
+              data = [];
+            } else if (line === 'data' || line.startsWith('data:')) {
+              data.push(line === 'data' ? '' : line.slice(5).replace(/^ /, ''));
+            }
+            newline = pending.indexOf('\n');
+          }
+        }
+      } finally {
+        if (!controller.signal.aborted) await reader.cancel();
+        reader.releaseLock();
+      }
+    } catch {
+      // A failed or ended stream follows the same reconnect path as EventSource.
+    }
+    if (relayAbortController !== controller) return;
+    cleanupSource();
+    scheduleReconnect();
+  })();
 };
 
 const resetHeartbeatTimer = () => {
@@ -234,7 +352,21 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
 
   if (envelope.type === 'openchamber:event-stream-ready') {
     reconnectAttempt = 0;
-    for (const listener of listeners) listener({ type: 'event-stream-ready' });
+    const ready = eventStreamReadySchema.safeParse(envelope.properties);
+    const connectionId = ready.success ? ready.data.connectionId ?? null : null;
+    for (const listener of listeners) listener({ type: 'event-stream-ready', connectionId });
+    return;
+  }
+
+  if (envelope.type === 'openchamber:source-control.activity') {
+    const parsed = sourceControlActivitySchema.safeParse(envelope.properties);
+    if (parsed.success) for (const listener of listeners) listener({ type: 'source-control-activity', directory: parsed.data.directory });
+    return;
+  }
+
+  if (envelope.type === 'openchamber:tracked-items.changed') {
+    const records = trackedItemRecordsSchema.parse(getEventProperties(envelope.properties)?.states);
+    if (records.length > 0) for (const listener of listeners) listener({ type: 'tracked-items-changed', records });
     return;
   }
 
@@ -283,6 +415,12 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   if (envelope.type === 'openchamber:browser-provider-reset') {
     const parsed = browserProviderResetSchema.safeParse(envelope.properties);
     if (parsed.success) for (const listener of listeners) listener({ type: 'browser-provider-reset', ...parsed.data });
+    return;
+  }
+
+  if (envelope.type === 'openchamber:project-context-changed') {
+    const parsed = projectContextChangedSchema.safeParse(envelope.properties);
+    if (parsed.success) for (const listener of listeners) listener({ type: 'project-context-changed', ...parsed.data });
     return;
   }
 
@@ -355,6 +493,7 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
       parameters: rawParameters && typeof rawParameters === 'object' && !Array.isArray(rawParameters)
         ? rawParameters as Record<string, unknown>
         : {},
+      context: browserControlRequestContextSchema.safeParse(properties?.context).data ?? UNKNOWN_BROWSER_CONTROL_CONTEXT,
     };
     for (const listener of listeners) {
       listener(nextEvent);
@@ -395,11 +534,7 @@ const connect = () => {
   if (typeof window === 'undefined' || listeners.size === 0) {
     return;
   }
-  if (typeof EventSource !== 'function') {
-    return;
-  }
-
-  if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
+  if (relayAbortController || (eventSource && eventSource.readyState !== EventSource.CLOSED)) {
     return;
   }
 
@@ -409,7 +544,12 @@ const connect = () => {
   // Chromium host can drive a page; a browser tab can display one but not be
   // driven, and the agent tool needs to know which it is talking to without a
   // setting anyone has to remember to change.
-  const canControlBrowser = typeof window !== 'undefined' && Boolean(window.__OPENCHAMBER_ELECTRON__);
+  const canControlBrowser = canDriveBrowserPage();
+  if (isRelayModeActive()) {
+    connectRelay(canControlBrowser);
+    return;
+  }
+  if (typeof EventSource !== 'function') return;
   const source = new EventSource(getRuntimeUrlResolver().sse(
     '/api/openchamber/events',
     canControlBrowser ? { browser: '1' } : undefined,
@@ -441,6 +581,7 @@ const ensureRuntimeChangeSubscription = () => {
   if (runtimeChangeUnsubscribe || typeof window === 'undefined') return;
   runtimeChangeUnsubscribe = subscribeRuntimeEndpointChanged(() => {
     cleanupSource();
+    cancelAuthSessionWait();
     reconnectAttempt = 0;
     connect();
   });
@@ -467,6 +608,7 @@ export const subscribeOpenchamberEvents = (listener: Listener): (() => void) => 
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
       }
+      cancelAuthSessionWait();
       reconnectAttempt = 0;
       cleanupSource();
       cleanupRuntimeChangeSubscription();

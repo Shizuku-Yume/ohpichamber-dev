@@ -5,6 +5,7 @@ import { normalizePath } from '@/lib/pathNormalization';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { getPinnedSessionKey } from '@/stores/useSessionPinnedStore';
+import type { WorktreeMetadata } from '@/types/worktree';
 import type { SessionNode } from '../types';
 
 /**
@@ -20,6 +21,7 @@ export type SessionNodeChildRenderExtras = {
   subtreeContainsEditing: Set<string>;
   menuOpenSessionId: string | null;
   nodeStructureKey: string;
+  blockingBadgeSessionScopes?: readonly BlockingBadgeSessionScope[];
   /**
    * Bumped once a minute by the owning list so rows that render a relative
    * timestamp ("5m") re-render and recompute it. Only the Recent list
@@ -33,7 +35,7 @@ export type SessionNodeRenderExtras<TNode = SessionNode> = SessionNodeChildRende
 };
 
 /**
- * Walk `nodes` and add `node.session.id` to `result` for every node
+ * Walk `nodes` and add `node.session.sessionId` to `result` for every node
  * whose subtree contains `targetId`. This is used to precompute, once
  * per SessionGroupSection render, which rows need to update when
  * `editingId` changes. With M visible rows, this
@@ -48,12 +50,12 @@ export const collectSubtreeContainingId = (
   if (!targetId) return;
 
   const visit = (node: SessionNode): boolean => {
-    let containsTarget = node.session.id === targetId;
+    let containsTarget = node.session.sessionId === targetId;
     for (const child of node.children) {
       containsTarget = visit(child) || containsTarget;
     }
     if (containsTarget) {
-      result.add(node.session.id);
+      result.add(node.session.sessionId);
     }
     return containsTarget;
   };
@@ -68,7 +70,7 @@ export const nodeContainsSessionId = (node: SessionNode, sessionId: string | nul
     return false;
   }
 
-  if (node.session.id === sessionId) {
+  if (node.session.sessionId === sessionId) {
     return true;
   }
 
@@ -81,7 +83,7 @@ export const nodeContainsSessionId = (node: SessionNode, sessionId: string | nul
   return false;
 };
 
-export type QuestionBadgeSessionScope = {
+export type BlockingBadgeSessionScope = {
   directory: string;
   sessionIDs: string[];
 };
@@ -112,18 +114,16 @@ export const getSessionWorktreeMenuDisabled = ({
 }): boolean => !sessionDirectory || isStreaming || isMovingToWorktree;
 
 /**
- * Choose which (directory, sessionIDs) scopes a sidebar row's pending-question
- * badge should count. An expanded row counts only its own session; a collapsed
+ * Choose which (directory, sessionIDs) scopes a sidebar row's blocking-request
+ * badges should count. An expanded row counts only its own session; a collapsed
  * parent row additionally rolls up the hidden descendants of its subtree,
- * grouped by the directory store each descendant actually lives in, so badges
- * stay correct for worktree/subtask sessions without bootstrapping their
- * directory stores.
+ * grouped by the directory store each descendant actually lives in.
  */
-export const selectQuestionBadgeSessionScopes = (
+export const selectBlockingBadgeSessionScopes = (
   node: SessionNode,
   isExpanded: boolean,
   fallbackDirectory: string | null,
-): QuestionBadgeSessionScope[] => {
+): BlockingBadgeSessionScope[] => {
   const sessionIDsByDirectory = new Map<string, string[]>();
   const visit = (current: SessionNode): void => {
     const directory = resolveGlobalSessionDirectory(current.session)
@@ -131,7 +131,7 @@ export const selectQuestionBadgeSessionScopes = (
       ?? fallbackDirectory;
     if (directory) {
       const sessionIDs = sessionIDsByDirectory.get(directory) ?? [];
-      sessionIDs.push(current.session.id);
+      sessionIDs.push(current.session.sessionId);
       sessionIDsByDirectory.set(directory, sessionIDs);
     }
     if (current === node && isExpanded) return;
@@ -153,12 +153,12 @@ export const selectFolderRootNodes = (
       if (!node) return false;
 
       const visited = new Set<string>();
-      let parentID = (node.session as SessionNode['session'] & { parentID?: string | null }).parentID ?? null;
-      while (parentID && !visited.has(parentID)) {
-        if (assignedSessionIds.has(parentID) && nodeBySessionId.has(parentID)) return false;
-        visited.add(parentID);
-        const parentNode = nodeBySessionId.get(parentID);
-        parentID = (parentNode?.session as (SessionNode['session'] & { parentID?: string | null }) | undefined)?.parentID ?? null;
+      let parentSessionId = node.session.parentSessionId ?? null;
+      while (parentSessionId && !visited.has(parentSessionId)) {
+        if (assignedSessionIds.has(parentSessionId) && nodeBySessionId.has(parentSessionId)) return false;
+        visited.add(parentSessionId);
+        const parentNode = nodeBySessionId.get(parentSessionId);
+        parentSessionId = parentNode?.session.parentSessionId ?? null;
       }
       return true;
   });
@@ -300,9 +300,9 @@ export const computeNodeStructureKey = (node: SessionNode): string => {
   const childKeys = node.children.map((child) => {
     const childVersion = getSessionObjectVersion(child.session);
     if (child.children.length === 0) {
-      return `${child.session.id}@${childVersion}`;
+      return `${child.session.sessionId}@${childVersion}`;
     }
-    return `${child.session.id}@${childVersion}:${computeNodeStructureKey(child)}`;
+    return `${child.session.sessionId}@${childVersion}:${computeNodeStructureKey(child)}`;
   });
 
   return childKeys.join('|');
@@ -318,16 +318,14 @@ export const nodeHasPinnedMembershipChange = (
 ): boolean => {
   const runtimeKey = getRuntimeKey();
   const visit = (previous: SessionNode, current: SessionNode): boolean => {
-    if (previous.session.id !== current.session.id || previous.children.length !== current.children.length) {
+    if (previous.session.sessionId !== current.session.sessionId || previous.children.length !== current.children.length) {
       return true;
     }
 
-    const prevDirectory = (previous.session as SessionNode['session'] & { directory?: string | null }).directory
-      ?? prevGroupDirectory;
-    const nextDirectory = (current.session as SessionNode['session'] & { directory?: string | null }).directory
-      ?? nextGroupDirectory;
-    const prevKey = getPinnedSessionKey(runtimeKey, prevDirectory ?? '', previous.session.id);
-    const nextKey = getPinnedSessionKey(runtimeKey, nextDirectory ?? '', current.session.id);
+    const prevDirectory = resolveGlobalSessionDirectory(previous.session) ?? prevGroupDirectory;
+    const nextDirectory = resolveGlobalSessionDirectory(current.session) ?? nextGroupDirectory;
+    const prevKey = getPinnedSessionKey(runtimeKey, prevDirectory ?? '', previous.session.sessionId);
+    const nextKey = getPinnedSessionKey(runtimeKey, nextDirectory ?? '', current.session.sessionId);
     if (
       (prevKey ? prevPinnedSessionIds.has(prevKey) : false)
       !== (nextKey ? nextPinnedSessionIds.has(nextKey) : false)
@@ -361,6 +359,37 @@ export const selectRowBadgeVisibilityClass = (input: {
 };
 
 /**
+ * Branch line for a row's tooltip and recent-list marker. An explicit
+ * `secondaryMeta` means the owning projection already filtered the branch
+ * (Recent and Timeline hide HEAD; Recent also hides a branch equal to the
+ * project label), so a null `branchLabel` there is a deliberate filter and
+ * must not fall through to the raw worktree branch. Project and Chats rows
+ * pass no `secondaryMeta` and keep the worktree fallback.
+ */
+export const resolveTooltipBranchLabel = (
+  secondaryMeta: { projectLabel?: string | null; branchLabel?: string | null } | null | undefined,
+  worktreeBranch: string | null | undefined,
+): string | null => (
+  secondaryMeta
+    ? (secondaryMeta.branchLabel ?? null)
+    : (worktreeBranch ?? null)
+);
+
+/**
+ * The worktree directory and branch whose change request a row shows. The
+ * row's worktree is the only source of the pair; VS Code renders no PR badges.
+ */
+export const resolveSessionPrLookup = (
+  worktree: WorktreeMetadata | null | undefined,
+  isVSCode: boolean,
+): { directory: string; branch: string } | null => {
+  if (isVSCode) return null;
+  const branch = worktree?.branch?.trim();
+  const directory = normalizePath(worktree?.path ?? null);
+  return branch && directory ? { directory, branch } : null;
+};
+
+/**
  * Resolve the session id whose sidebar menu is open, or null if no
  * menu is open. Only one row can have its menu open at a time.
  */
@@ -374,9 +403,9 @@ export const resolveMenuOpenSessionId = (
   const bucketTag = archivedBucket ? 'archived' : 'active';
   let result: string | null = null;
   const visit = (node: SessionNode): boolean => {
-    const nodeMenuKey = `${renderContext}:${bucketTag}:${node.session.id}`;
+    const nodeMenuKey = `${renderContext}:${bucketTag}:${node.session.sessionId}`;
     if (nodeMenuKey === menuKey) {
-      result = node.session.id;
+      result = node.session.sessionId;
       return true;
     }
     for (const child of node.children) {

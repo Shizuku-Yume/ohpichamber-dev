@@ -12,18 +12,24 @@ import {
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
   SETTINGS_SELECT_SIZE,
   SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_FIELDS_STACK_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
+import { PermissionDefaultModeField } from './PermissionDefaultModeField';
+import { isVSCodeRuntime } from '@/lib/desktop';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useI18n } from '@/lib/i18n';
+import { agentLabel } from '@/lib/agentLabel';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { runtimeFetch } from '@/lib/runtime-fetch';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
+import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 
 const getDisplayModel = (
   storedModel: string | undefined
@@ -55,24 +61,20 @@ export const DefaultsSettings: React.FC = () => {
   const getSessionModelSelection = useSelectionStore((state) => state.getSessionModelSelection);
   const getSessionAgentSelection = useSelectionStore((state) => state.getSessionAgentSelection);
   const agentIsPicked = useConfigStore((state) => state.agentSelectionSource === 'manual');
-  // An agent picked for this chat brings the model its config pins, and a pin
-  // outranks the global default the same way it does in `setAgent`.
-  const pickedAgentPinsModel = useConfigStore((state) => {
-    if (state.agentSelectionSource !== 'manual') return false;
-    const agent = state.agents.find((candidate) => candidate.name === state.currentAgentName);
-    return Boolean(agent?.model?.providerID && agent.model.modelID);
-  });
   const chatHasOwnModel = Boolean(
-    pickedAgentPinsModel
-    || (selectionIsManual && currentSessionId && getSessionModelSelection(currentSessionId)),
+    selectionIsManual && currentSessionId && getSessionModelSelection(currentSessionId),
   );
   const chatHasOwnAgent = Boolean(
     agentIsPicked && currentSessionId && getSessionAgentSelection(currentSessionId),
   );
+  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+  const showChatsSection = useSessionDisplayStore((state) => state.showChatsSection);
+  const setShowChatsSection = useSessionDisplayStore((state) => state.setShowChatsSection);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
   const setShowDeletionDialog = useUIStore((state) => state.setShowDeletionDialog);
   const providers = useConfigStore((state) => state.providers);
   const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
+  const agents = useConfigStore((state) => state.agents);
 
   const [defaultModel, setDefaultModel] = React.useState<string | undefined>();
   const [defaultVariant, setDefaultVariant] = React.useState<string | undefined>();
@@ -174,13 +176,13 @@ export const DefaultsSettings: React.FC = () => {
   );
 
   const handleAgentChange = React.useCallback(
-    async (agentName: string) => {
-      const newValue = agentName || undefined;
+    async (agentId: string) => {
+      const newValue = agentId || undefined;
       setDefaultAgent(newValue);
       setSettingsDefaultAgent(newValue);
 
-      if (agentName && !chatHasOwnAgent) {
-        setAgent(agentName);
+      if (agentId && !chatHasOwnAgent) {
+        setAgent(agentId);
       }
 
       try {
@@ -275,11 +277,9 @@ export const DefaultsSettings: React.FC = () => {
     if (!parsedModel.providerId || !parsedModel.modelId) return [];
     const provider = providers.find((p) => p.id === parsedModel.providerId);
     const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === parsedModel.modelId) as
-      | { variants?: Record<string, unknown> }
+      | { variants?: ModelVariantSource }
       | undefined;
-    const variants = model?.variants;
-    if (!variants) return [];
-    return Object.keys(variants);
+    return listModelVariantIds(model?.variants);
   }, [parsedModel.modelId, parsedModel.providerId, providers]);
 
   const supportsVariants = availableVariants.length > 0;
@@ -292,7 +292,7 @@ export const DefaultsSettings: React.FC = () => {
     <>
       <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
         <div className="space-y-0">
-          <div className="mt-0 mb-1 typography-meta text-muted-foreground">
+          <div className="mt-0 mb-4 typography-meta text-muted-foreground">
             {t('settings.openchamber.defaults.summaryPrefix')}
             {' '}
             {parsedModel.providerId ? (
@@ -306,12 +306,12 @@ export const DefaultsSettings: React.FC = () => {
             {defaultAgent && (
               <>
                 {' / '}
-                <span className="text-foreground">{defaultAgent}</span>
+                <span className="text-foreground">{agentLabel(agents.find((agent) => agent.agentId === defaultAgent) ?? { agentId: defaultAgent, name: defaultAgent })}</span>
               </>
             )}
           </div>
 
-          <div>
+          <div className={SETTINGS_FIELDS_STACK_CLASS}>
             <SettingsFieldRow
               settingsItem="sessions.default-model"
               label={t('settings.openchamber.defaults.field.defaultModel')}
@@ -351,12 +351,13 @@ export const DefaultsSettings: React.FC = () => {
               label={t('settings.openchamber.defaults.field.defaultAgent')}
             >
               <AgentSelector
-                agentName={defaultAgent || ''}
+                agentId={defaultAgent || ''}
                 onChange={handleAgentChange}
-                filter={(agent) => isPrimaryMode(agent.mode)}
                 className={SETTINGS_CUSTOM_TRIGGER_CLASS}
               />
             </SettingsFieldRow>
+
+            {isVSCode ? null : <PermissionDefaultModeField agentId={defaultAgent} />}
           </div>
 
           <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
@@ -367,6 +368,19 @@ export const DefaultsSettings: React.FC = () => {
               label={t('settings.openchamber.defaults.field.showDeletionDialog')}
               ariaLabel={t('settings.openchamber.defaults.field.showDeletionDialogAria')}
             />
+            <SessionWarmingCheckbox />
+            {isVSCode ? null : (
+              <SettingsCheckboxRow
+                settingsItem="sessions.show-chats"
+                checked={showChatsSection}
+                onChange={(checked) => {
+                  setShowChatsSection(checked);
+                  void updateDesktopSettings({ sidebarShowChatsSection: checked });
+                }}
+                label={t('settings.openchamber.defaults.field.showChats')}
+                ariaLabel={t('settings.openchamber.defaults.field.showChats')}
+              />
+            )}
           </SettingsInset>
 
           <div className="space-y-3 pt-6">

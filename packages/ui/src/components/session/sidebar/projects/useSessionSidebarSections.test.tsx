@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@/lib/opencode/model';
 import { I18nProvider } from '@/lib/i18n';
 import { useSessionGrouping } from './useSessionGrouping';
 import { useSessionSidebarSections } from './useSessionSidebarSections';
@@ -10,15 +10,24 @@ import type { SessionFoldersMap } from '@/stores/useSessionFoldersStore';
 
 const CHATS_ROOT = '/home/user/.config/openchamber/chats';
 
-const chatSession = (id: string, title: string): Session => ({
-  id,
-  slug: id,
-  projectID: 'chats',
-  title,
-  version: '1',
-  directory: `${CHATS_ROOT}/2026-08-28/session-${id}`,
-  time: { created: 1, updated: 1 },
-});
+type FixtureSession = Session & {
+  sessionId?: string;
+  archivedAt?: number;
+};
+
+const chatSession = (id: string, title: string): Session => {
+  const value: FixtureSession = {
+    id,
+    sessionId: id,
+    projectID: 'chats',
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    title,
+    directory: `${CHATS_ROOT}/2026-08-28/session-${id}`,
+    time: { created: 1, updated: 1 },
+  };
+  return value;
+};
 
 const chatsGroup = (sessions: Session[]): SessionGroup => ({
   id: 'managed-chats',
@@ -53,6 +62,7 @@ const renderSections = (
       sessionOrderRanks: new Map(),
       gitBranches: new Map(),
       isVSCode: false,
+      worktreeSortOrder: 'recent' as const,
     });
     captured = useSessionSidebarSections({
       normalizedProjects: projectSessions ? [{ id: 'project', path: CHATS_ROOT, normalizedPath: CHATS_ROOT }] : [],
@@ -62,6 +72,7 @@ const renderSections = (
       projectRepoStatus: new Map(),
       projectRootBranches: new Map(),
       gitBranches: new Map(),
+      sessionOrderRanks: new Map(),
       lastRepoStatus: false,
       buildGroupedSessions: grouping.buildGroupedSessions,
       hasSessionSearchQuery: query.length > 0,
@@ -88,7 +99,7 @@ describe('sidebar search over standalone groups', () => {
 
   test('finds project sessions in flat results without searching their archived bucket', () => {
     const active = { ...chatSession(targetId, 'Active'), directory: CHATS_ROOT };
-    const archived = { ...chatSession('ses_archived', 'Archived'), directory: CHATS_ROOT, time: { created: 1, updated: 1, archived: 2 } };
+    const archived: FixtureSession = { ...chatSession('ses_archived', 'Archived'), directory: CHATS_ROOT, archivedAt: 2, time: { created: 1, updated: 1, archived: 2 } };
     const group = chatsGroup([]);
     const sections = renderSections(group, targetId, [active, archived]);
     expect(sections.flatSectionsForRender[0].groups[0].sessions.map((node) => node.session.id)).toEqual([targetId]);
@@ -136,8 +147,11 @@ describe('sidebar search over standalone groups', () => {
   });
 
   test('does not return archived sessions for an ID query', () => {
-    const archived = chatSession(targetId, 'Archived');
-    archived.time.archived = 2;
+    const archived: FixtureSession = {
+      ...chatSession(targetId, 'Archived'),
+      archivedAt: 2,
+      time: { created: 1, updated: 1, archived: 2 },
+    };
     const group = chatsGroup([archived]);
     expect(renderSections(group, targetId).searchMatchCount).toBe(0);
   });

@@ -5,9 +5,8 @@ import { pathToFileURL } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { createOpencodeClient, type Part } from '@opencode-ai/sdk/v2';
+import type { Part } from '@/lib/opencode/model';
 import { SyncProvider } from '@/sync/sync-context';
-
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import type { RuntimeAPIs } from '@/lib/api/types';
 
@@ -36,15 +35,11 @@ const runtimeApis: RuntimeAPIs = {
   get settings() { return unavailable(); },
   get permissions() { return unavailable(); },
   get notifications() { return unavailable(); },
-  get tools() { return unavailable(); },
+  get sourceControl() { return unavailable(); },
 };
-const sdk = createOpencodeClient({
-  baseUrl: 'http://localhost',
-  fetch: async () => new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
-});
 const TestProviders = ({ children }: { children: React.ReactNode }) => (
   <RuntimeAPIContext.Provider value={runtimeApis}>
-    <SyncProvider sdk={sdk} directory="">
+    <SyncProvider directory="">
       <I18nProvider>{children}</I18nProvider>
     </SyncProvider>
   </RuntimeAPIContext.Provider>
@@ -179,6 +174,25 @@ describe('ReasoningTimelineBlock', () => {
     expect(markup).not.toContain('data-message-text-export-source');
   });
 
+  test('opens a collapsed block with its body in the first render when search asks for it', () => {
+    const markup = renderToStaticMarkup(
+      <TestProviders>
+        <ReasoningTimelineBlock
+          text={LONG_REASONING}
+          variant="thinking"
+          blockId="reasoning-reveal"
+          showDuration={false}
+          revealRequest={1}
+          reasoningMessageId="msg_reveal"
+        />
+      </TestProviders>,
+    );
+
+    expect(markup).toContain('aria-expanded="true"');
+    expect(markup).toContain('data-message-text-export-source');
+    expect(markup).toContain('data-reasoning-message-id="msg_reveal"');
+  });
+
   test('renders "Justification" label for justification variant when pre-expanded and not streaming', () => {
     const markup = renderToStaticMarkup(
       <TestProviders>
@@ -308,10 +322,33 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
     expect(markup).toContain(SHORT_REASONING);
   });
 
-  test('live in-progress reasoning still renders as streaming', () => {
+  // The setting reaches the block as `expandWhileStreaming`; server rendering
+  // reads the store's initial state, so the opted-in path renders the block.
+  const renderExpandingWhileStreaming = (): string => renderToStaticMarkup(
+    <TestProviders>
+      <ReasoningTimelineBlock
+        text={SHORT_REASONING}
+        variant="thinking"
+        blockId="prt_reasoning_2020"
+        time={{ start: 1_000 }}
+        isStreaming
+        expandWhileStreaming
+      />
+    </TestProviders>,
+  );
+
+  test('live in-progress reasoning renders as streaming, folded to its header by default', () => {
     // Genuinely live: the message-level stream phase reports streaming and the
-    // part has not ended. The block auto-expands and shows the busy indicator.
+    // part has not ended. The header shows the busy indicator; the body stays
+    // folded so its closing at the end does not move the chat.
     const markup = renderPart(makeReasoningPart({ start: 1_000 }), 'streaming');
+
+    expect(markup).toContain(BUSY_INDICATOR);
+    expect(markup).toContain('aria-expanded="false"');
+  });
+
+  test('live in-progress reasoning opens while it streams when the setting asks for it', () => {
+    const markup = renderExpandingWhileStreaming();
 
     expect(markup).toContain(BUSY_INDICATOR);
     expect(markup).toContain('aria-expanded="true"');
@@ -321,7 +358,7 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
     // The box is capped while streaming too, so a long thought scrolls inside
     // its own box instead of growing the timeline; it is marked as a nested
     // scroller so an upward wheel over it scrolls the box before the chat.
-    const markup = renderPart(makeReasoningPart({ start: 1_000 }), 'streaming');
+    const markup = renderExpandingWhileStreaming();
 
     expect(markup).toContain('max-h-80');
     expect(markup).toContain('data-scrollable="true"');

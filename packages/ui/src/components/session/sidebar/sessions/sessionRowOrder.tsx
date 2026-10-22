@@ -12,7 +12,7 @@ export type SessionRowOrderEntry = {
 type SessionRowOrderRegistry = {
   getEntries: () => readonly SessionRowOrderEntry[];
   getDescendantIds: () => readonly string[];
-  getSessionsById: () => ReadonlyMap<string, { time?: { archived?: number | null } }>;
+  getSessionsById: () => ReadonlyMap<string, { archivedAt?: number }>;
 };
 
 const SessionRowOrderContext = React.createContext<SessionRowOrderRegistry | null>(null);
@@ -20,7 +20,7 @@ const SessionRowOrderContext = React.createContext<SessionRowOrderRegistry | nul
 export const SessionRowOrderProvider: React.FC<{
   entries: readonly SessionRowOrderEntry[];
   descendantIds: readonly string[];
-  sessionsById: ReadonlyMap<string, { time?: { archived?: number | null } }>;
+  sessionsById: ReadonlyMap<string, { archivedAt?: number }>;
   children: React.ReactNode;
 }> = ({ entries, descendantIds, sessionsById, children }) => {
   const entriesRef = React.useRef(entries);
@@ -69,11 +69,11 @@ export const deriveSessionRowBulkSelectAll = (
 
 export const deriveSessionRowSelectionArchived = (
   selectedIds: ReadonlySet<string>,
-  sessionsById: ReadonlyMap<string, { time?: { archived?: number | null } }>,
+  sessionsById: ReadonlyMap<string, { archivedAt?: number }>,
 ): boolean => {
   if (selectedIds.size === 0) return false;
   for (const id of selectedIds) {
-    if (!sessionsById.get(id)?.time?.archived) return false;
+    if (!sessionsById.get(id)?.archivedAt) return false;
   }
   return true;
 };

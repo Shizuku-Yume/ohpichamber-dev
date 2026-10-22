@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { buildCodeMirrorCommentWidgets, normalizeLineRange, useInlineCommentController } from '@/components/comments';
+import { buildCodeMirrorCommentWidgets, FilePreviewCommentMenu, normalizeLineRange, useInlineCommentController } from '@/components/comments';
 
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useDeviceInfo } from '@/lib/device';
@@ -75,33 +75,6 @@ const normalize = (value: string): string => {
   if (!value) return '';
   const replaced = value.replace(/\\/g, '/');
   return replaced === '/' ? '/' : replaced.replace(/\/+$/, '');
-};
-
-const joinPath = (base: string, segment: string): string => {
-  const normalizedBase = normalize(base);
-  const cleanSegment = segment.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
-  if (!normalizedBase || normalizedBase === '/') {
-    return `/${cleanSegment}`;
-  }
-  return `${normalizedBase}/${cleanSegment}`;
-};
-
-const buildRepoPlanPath = (directory: string, created: number, slug: string): string => {
-  return joinPath(joinPath(joinPath(directory, '.opencode'), 'plans'), `${created}-${slug}.md`);
-};
-
-const buildHomePlanPath = (created: number, slug: string): string => {
-  return `~/.opencode/plans/${created}-${slug}.md`;
-};
-
-const resolveTilde = (path: string, homeDir: string | null): string => {
-  const trimmed = path.trim();
-  if (!trimmed.startsWith('~')) return trimmed;
-  if (trimmed === '~') return homeDir || trimmed;
-  if (trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
-    return homeDir ? `${homeDir}${trimmed.slice(1)}` : trimmed;
-  }
-  return trimmed;
 };
 
 const toDisplayPath = (resolvedPath: string, options: { currentDirectory: string; homeDirectory: string }): string => {
@@ -241,6 +214,9 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
   // `resolvedPath` so nothing downstream can mistake a project plan for a file
   // the user could open, edit, or be shown a path for.
   const [loadedProjectPlanId, setLoadedProjectPlanId] = React.useState<string | null>(null);
+  // Where a saved plan's markdown lives, only to name it in comments: an
+  // agent given just "plan" cannot tell which plan a comment is about.
+  const [loadedProjectPlanPath, setLoadedProjectPlanPath] = React.useState<string | null>(null);
   const hasDocument = Boolean(resolvedPath) || Boolean(loadedProjectPlanId);
   const displayPath = React.useMemo(() => {
     if (!resolvedPath || !sessionDirectory || !homeDirectory) {
@@ -256,6 +232,8 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
   const planFileLabel = React.useMemo(() => {
     return displayPath ? displayPath.split('/').pop() || t('planView.file.defaultName') : t('planView.file.defaultName');
   }, [displayPath, t]);
+  // Comments name the plan by its full path, as Files does for a file.
+  const commentFileLabel = resolvedPath ?? loadedProjectPlanPath ?? planFileLabel;
   const parsedTitle = React.useMemo(() => {
     if (!content.trim()) {
       return t('planView.title.default');
@@ -271,6 +249,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
   const editorViewRef = React.useRef<EditorView | null>(null);
   const editorWrapperRef = React.useRef<HTMLDivElement | null>(null);
+  const previewRef = React.useRef<HTMLDivElement | null>(null);
 
   const MD_VIEWER_MODE_KEY = 'openchamber:plan:md-viewer-mode';
 
@@ -319,7 +298,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
 
   const commentController = useInlineCommentController<SelectedLineRange>({
     source: 'plan',
-    fileLabel: planFileLabel,
+    fileLabel: commentFileLabel,
     language: resolvedPath ? getLanguageFromExtension(resolvedPath) || 'markdown' : 'markdown',
     getCodeForRange: (range) => extractSelectedCode(content, normalizeLineRange(range)),
     toStoreRange: (range) => ({ startLine: range.start, endLine: range.end }),
@@ -512,6 +491,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
       docRef.current = { key: null, target: null, content: '', editRevision: 0, savedRevision: 0, runtimeKey: '' };
       setResolvedPath(null);
       setLoadedProjectPlanId(null);
+      setLoadedProjectPlanPath(null);
       setContent('');
       setLoading(false);
       return;
@@ -549,6 +529,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
       docRef.current = { key: null, target: null, content: '', editRevision: 0, savedRevision: 0, runtimeKey: '' };
       setResolvedPath(null);
       setLoadedProjectPlanId(null);
+      setLoadedProjectPlanPath(null);
       setContent('');
       setSaveError(null);
       setLoadError(null);
@@ -582,6 +563,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
           };
           setContent(plan.raw);
           setLoadedProjectPlanId(savedPlanId);
+          setLoadedProjectPlanPath(plan.path ?? null);
         } catch (error) {
           if (cancelled) return;
           setLoadError(error instanceof Error ? error.message : 'Plan load failed');
@@ -620,67 +602,8 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
         return;
       }
 
-      if (!session?.slug || !session?.time?.created || !sessionDirectory) {
-        setResolvedPath(null);
-        setContent('');
-        return;
-      }
-
-      setLoading(true);
-
-      try {
-        const repoPath = buildRepoPlanPath(sessionDirectory, session.time.created, session.slug);
-        const homePath = resolveTilde(buildHomePlanPath(session.time.created, session.slug), homeDirectory || null);
-
-        let resolved: string | null = null;
-
-        try {
-          await readText(repoPath);
-          resolved = repoPath;
-        } catch {
-          // ignore
-        }
-
-        if (!resolved) {
-          try {
-            await readText(homePath);
-            resolved = homePath;
-          } catch {
-            // ignore
-          }
-        }
-
-        if (cancelled) return;
-
-        if (!resolved) {
-          setResolvedPath(null);
-          setContent('');
-          return;
-        }
-
-        const sessionFileKey = JSON.stringify(['plan-file', activeRuntimeKey, resolved]);
-        await saveQueue.pendingFor(sessionFileKey);
-        if (cancelled) return;
-        const text = await readText(resolved);
-        if (cancelled) return;
-        saveQueue.reset(sessionFileKey);
-        docRef.current = {
-          key: sessionFileKey,
-          target: { filePath: resolved },
-          content: text,
-          editRevision: 0,
-          savedRevision: 0,
-          runtimeKey: activeRuntimeKey,
-        };
-        setResolvedPath(resolved);
-        setContent(text);
-      } catch {
-        if (cancelled) return;
-        setResolvedPath(null);
-        setContent('');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      setResolvedPath(null);
+      setContent('');
     };
 
     void run();
@@ -688,7 +611,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
     return () => {
       cancelled = true;
     };
-  }, [activeRuntimeKey, homeDirectory, planModeEnabled, runtimeApis.files, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, scheduleSave, session?.slug, session?.time?.created, sessionDirectory, targetPath]);
+  }, [activeRuntimeKey, homeDirectory, planModeEnabled, runtimeApis.files, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, scheduleSave, sessionDirectory, targetPath]);
 
   // Synchronous buffer tracking: if an edit and an unmount land in the same
   // batch, the passive content effect would never run and a flush would save
@@ -794,7 +717,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
           sessionId = created.id;
           directoryHint = created.path;
         } else {
-          const sessionResult = await createSession(undefined, sendTargetProject.path, null);
+          const sessionResult = await createSession(undefined, sendTargetProject.path, undefined, {
+            model: { providerId: execution.providerID, modelId: execution.modelID },
+            agent: execution.agent.trim() || undefined,
+          });
           if (!sessionResult?.id) {
             return;
           }
@@ -988,11 +914,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
                       }
                     }}
                   >
-                    {isTTSPlaying ? (
-                      <Icon name="stop" className="h-4 w-4 text-[color:var(--status-success)]" />
-                    ) : (
-                      <Icon name="volume-up" className="h-4 w-4" />
-                    )}
+                    <Icon name="volume-up" className={isTTSPlaying ? 'h-4 w-4 animate-pulse text-[var(--primary-text)]' : 'h-4 w-4'} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent sideOffset={8}>
@@ -1053,7 +975,13 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
             <div className="relative h-full">
               <div className="h-full">
                 {mdViewMode === 'preview' ? (
-                  <div className="h-full overflow-auto p-3">
+                  <div className="h-full overflow-auto p-3" ref={previewRef}>
+                    {/* Same comment-on-selection as a markdown file preview. */}
+                    <FilePreviewCommentMenu
+                      containerRef={previewRef}
+                      filePath={commentFileLabel}
+                      fileContent={content}
+                    />
                     <ErrorBoundary
                       fallback={
                         <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">

@@ -13,13 +13,13 @@ import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { EXECUTION_FORK_DEFAULT_INSTRUCTIONS, EXECUTION_FORK_GOAL_INSTRUCTIONS } from '@/lib/messages/executionMeta';
 import { useI18n } from '@/lib/i18n';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 
 export type ForkSessionExecution = {
   providerID: string;
@@ -126,12 +126,11 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
     setVariant('');
   }, [open, providers, providerID, modelID]);
 
-  const agentFilter = React.useCallback((candidate: { mode?: string }) => isPrimaryMode(candidate.mode), []);
 
   const variantOptions = React.useMemo(() => {
     const provider = providers.find((item) => item.id === providerID);
-    const model = provider?.models?.find((item) => item.id === modelID) as { variants?: Record<string, unknown> } | undefined;
-    return model?.variants ? Object.keys(model.variants) : [];
+    const model = provider?.models?.find((item) => item.id === modelID) as { variants?: ModelVariantSource } | undefined;
+    return listModelVariantIds(model?.variants);
   }, [providers, providerID, modelID]);
 
   const hasVariantOptions = variantOptions.length > 0;
@@ -203,8 +202,7 @@ export function ForkSessionDialog(props: ForkSessionDialogProps) {
           <div className="flex flex-col gap-1.5">
             <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
             <AgentSelector
-              agentName={agent}
-              filter={agentFilter}
+              agentId={agent}
               dropdownPortalToBody
               onChange={setAgent}
             />

@@ -25,7 +25,7 @@ When instructions materially conflict, stop and resolve the conflict instead of 
 | Module contract | Exported API/type or documented module invariant | Inspect consumers; update contract tests and owning docs |
 | Cross-workspace contract | Shared UI/runtime/package shape consumed by multiple workspaces | Trace every actual consumer and runtime; validate across workspaces |
 | Persisted or external behavior | Stored settings/data, routes, IDs, files, CLI output | Define compatibility, round-trip, failure, and conversion behavior for existing consumers |
-| Platform/runtime behavior | Electron, VS Code, mobile, relay, native or packaged behavior | Run the relevant runtime/build/integration validation |
+| Platform/runtime behavior | Electron, mobile, relay, native or packaged behavior | Run the relevant runtime/build/integration validation (do not extend retired VS Code support) |
 
 Apply every matching category. Do not escalate local work into workspace-wide ritual, and do not treat a type-only export as local merely because it emits no JavaScript.
 
@@ -47,7 +47,7 @@ Before broadening a change, ask:
 - Is the new abstraction reused or merely possible to reuse?
 - What concrete complexity, invariant, stable repetition, or boundary does each new helper, interface, layer, and file pay for?
 - Is the code in the package that owns the behavior?
-- Does the change alter shared UI contracts across web, desktop, VS Code, or mobile?
+- Does the change alter shared UI contracts across web, desktop, or mobile?
 - Does it change persisted data, IDs, routes, exports, generated files, or package entrypoints?
 - Can failure leave optimistic state, caches, files, or remote state stranded?
 

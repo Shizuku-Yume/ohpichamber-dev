@@ -5,7 +5,7 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useNestedGitDirectory } from '@/hooks/useNestedGitDirectory';
 import { useWorktreeBootstrapPending } from '@/hooks/useWorktreeBootstrapPending';
 import { runBackgroundNetworkTask } from '@/lib/background-network';
-import { useFreshestPrVisualSummaryForBranch } from '@/stores/useGitHubPrStatusStore';
+import { useFreshestSourceControlVisualSummaryForBranch } from '@/stores/useGitHubPrStatusStore';
 import { useSessionMessages } from '@/sync/sync-context';
 import { useContextWindowLimits } from '@/hooks/useContextWindowLimits';
 import { useUIStore } from '@/stores/useUIStore';
@@ -27,6 +27,8 @@ import {
   WorkStatusValue,
 } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
+import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
+import { formatChangeRequestReference } from '@/lib/source-control/identity';
 
 type Props = {
   sessionId: string | null;
@@ -159,19 +161,33 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
   // Read-only: PR watching is owned by the background tracker. Starting a watch
   // here would multiply GitHub requests per open session, which is exactly the
   // fan-out the PR-status concurrency gate exists to prevent.
-  const prSummary = useFreshestPrVisualSummaryForBranch(gitDirectory, branch);
+  const prSummary = useFreshestSourceControlVisualSummaryForBranch(gitDirectory, branch);
 
   const sessionMessages = useSessionMessages(sessionId ?? '', directory ?? undefined);
-  const { context: contextLimit } = useContextWindowLimits(sessionId, directory ?? undefined);
-
-  // Computed from this session's own messages rather than through
-  // `useSessionUIStore.getContextUsage`, which reads the *current* directory's
-  // store and so loses the readout for any session held elsewhere. See
-  // `contextUsage.ts`.
-  const contextUsage = React.useMemo(
-    () => computeContextUsage(sessionMessages, contextLimit),
-    [sessionMessages, contextLimit],
+   const { context: contextLimit } = useContextWindowLimits(sessionId, directory ?? undefined);
+ 
+   // Computed from this session's own messages rather than the header's
+   // reading, which reads the *current* directory's store and so loses the
+   // readout for any session held elsewhere. See `contextUsage.ts`.
+  // The context helper predates the canonical wire shape. Adapt its token
+  // vocabulary here: canonical messages expose billing/token usage under
+  // `usage`, while the helper reads the context fill under `tokens`.
+  const contextFillMessages = React.useMemo(
+    () => sessionMessages.map((message) => ({
+      role: message.role,
+      tokens: message.usage ? {
+        total: message.usage.totalTokens,
+        input: message.usage.input,
+        output: message.usage.output,
+        cache: { read: message.usage.cacheRead, write: message.usage.cacheWrite },
+      } : undefined,
+    })),
+    [sessionMessages],
   );
+   const contextUsage = React.useMemo(
+    () => computeContextUsage(contextFillMessages, contextLimit),
+    [contextFillMessages, contextLimit],
+   );
 
   const openContextSurface = useUIStore((state) => state.openContextSurface);
   const openContextOverview = useUIStore((state) => state.openContextOverview);
@@ -356,15 +372,15 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
               <WorkStatusRow
                 icon="git-pull-request"
                 onClick={directory ? () => openSurface('pr') : undefined}
-                ariaLabel={t('chat.workStatus.action.openPr')}
+                ariaLabel={t(changeRequestCopy('chat.workStatus.action.openPr', prSummary.provider))}
                 iconColor={`var(--pr-${prSummary.visualState})`}
-                label={prSummary.title ?? t('chat.workStatus.pr.untitled')}
+                label={prSummary.title ?? t(changeRequestCopy('chat.workStatus.pr.untitled', prSummary.provider))}
                 value={(
                   <WorkStatusPill
                     color={`var(--pr-${prSummary.visualState})`}
                     background={`color-mix(in srgb, var(--pr-${prSummary.visualState}) 18%, transparent)`}
                   >
-                    {prSummary.draft ? t('chat.workStatus.pr.draft') : `#${prSummary.number}`}
+                    {prSummary.draft ? t('chat.workStatus.pr.draft') : formatChangeRequestReference(prSummary.provider, prSummary.number)}
                   </WorkStatusPill>
                 )}
               />
@@ -372,7 +388,7 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
                 <WorkStatusRow
                   icon="checkbox-circle"
                   onClick={directory ? () => openSurface('pr') : undefined}
-                  ariaLabel={t('chat.workStatus.action.openPr')}
+                  ariaLabel={t(changeRequestCopy('chat.workStatus.action.openPr', prSummary.provider))}
                   label={t('chat.workStatus.pr.checks')}
                   muted
                   value={(

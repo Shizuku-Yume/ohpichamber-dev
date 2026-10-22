@@ -1,4 +1,4 @@
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@openchamber/agent-contract';
 import { getSessionMetadata, type SessionMetadataRecord } from '@/lib/sessionReviewMetadata';
 
 /**
@@ -6,7 +6,7 @@ import { getSessionMetadata, type SessionMetadataRecord } from '@/lib/sessionRev
  * link in `sessionReviewMetadata`:
  *
  * - The parent (the session `/btw` was typed into) carries
- *   `openchamber.btwSessionID` pointing at its active btw fork. The panel is
+export const wasPromotedBtwSession = (_session: Session | null | undefined): boolean => false;
  *   derived from this link, so it appears only in the parent session and
  *   survives reloads.
  * - The fork itself is marked `openchamber.kind = 'btw'` with
@@ -27,10 +27,12 @@ type BtwMetadata = {
 const getOpenChamberMetadata = (metadata: SessionMetadataRecord): BtwMetadata => {
   const value = metadata.openchamber;
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  // SAFETY: session metadata is persisted, externally writable data; this is
-  // its parsing boundary. `BtwMetadata` only declares optional fields and
-  // every reader re-validates the field it consumes in `nonEmpty`.
-  return value as BtwMetadata;
+export const withoutBtwSessionMarker = (metadata: SessionMetadata): SessionMetadata => {
+  if (metadata.openchamber?.kind !== 'btw') return metadata;
+  const { kind: _kind, originalSessionID: _originalSessionID, btwBoundaryMessageID: _boundary, ...rest } = metadata.openchamber;
+  if (Object.keys(rest).length > 0) return { ...metadata, openchamber: rest };
+  const { openchamber: _openchamber, ...without } = metadata;
+  return without;
 };
 
 const nonEmpty = (value: string | undefined): string | null =>

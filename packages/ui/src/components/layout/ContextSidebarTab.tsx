@@ -1,8 +1,7 @@
 import React from 'react';
-import type { Message, Part } from '@opencode-ai/sdk/v2';
+import type { ContextFillMessage } from '@/stores/utils/tokenUtils';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 
-import { deriveMessageRole } from '@/components/chat/message/messageRole';
 import { Icon } from "@/components/icon/Icon";
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -25,13 +24,13 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 type SessionMessage = { info: Message; parts: Part[] };
 
 type ProviderModelLike = {
-  id?: string;
+  modelId?: string;
   name?: string;
   limit?: { context?: number };
 };
 
 type ProviderLike = {
-  id?: string;
+  providerId?: string;
   name?: string;
   models?: ProviderModelLike[];
 };
@@ -75,13 +74,15 @@ const toNonNegativeNumber = (value: unknown): number => {
   return value;
 };
 
-const extractTokenBreakdown = (message: SessionMessage): TokenBreakdown => {
-  const tokenCandidate = (message.info as { tokens?: unknown }).tokens;
-  const source =
-    tokenCandidate !== undefined
-      ? tokenCandidate
-      : (message.parts.find((part) => (part as { tokens?: unknown }).tokens !== undefined) as { tokens?: unknown } | undefined)?.tokens;
+const readUnknownField = (value: unknown, key: string): unknown => {
+  if (!value || typeof value !== 'object' || !(key in value)) return undefined;
+  return Reflect.get(value, key);
+};
 
+const extractTokenBreakdown = (message: SessionMessage): TokenBreakdown => {
+  const tokenCandidate = readUnknownField(message.info, 'tokens');
+  const tokenPart = message.parts.find((part) => readUnknownField(part, 'tokens') !== undefined);
+  const source = tokenCandidate !== undefined ? tokenCandidate : readUnknownField(tokenPart, 'tokens');
   if (typeof source === 'number') {
     return {
       ...EMPTY_BREAKDOWN,
@@ -202,10 +203,8 @@ const addBuckets = (target: ContextBuckets, value: ContextBuckets): ContextBucke
 });
 
 const deriveRoleBucket = (message: SessionMessage): 'user' | 'assistant' | 'tool' | 'other' => {
-  const roleInfo = deriveMessageRole(message.info);
-  if (roleInfo.isUser) return 'user';
-  if (roleInfo.role === 'assistant') return 'assistant';
-  if (roleInfo.role === 'tool') return 'tool';
+  if (message.info.role === 'user') return 'user';
+  if (message.info.role === 'assistant') return 'assistant';
   return 'other';
 };
 
@@ -254,8 +253,8 @@ const resolveProviderAndModel = (
   providerID: string,
   modelID: string,
 ): { providerName: string; modelName: string; contextLimit: number | null } => {
-  const provider = providers.find((entry) => entry.id === providerID);
-  const model = provider?.models?.find((entry) => entry.id === modelID);
+  const provider = providers.find((entry) => entry.providerId === providerID);
+  const model = provider?.models?.find((entry) => entry.modelId === modelID);
 
   return {
     providerName: provider?.name || providerID || '-',
@@ -316,12 +315,23 @@ export const ContextPanelContent: React.FC = () => {
   const viewModel = React.useMemo(() => {
     const currentSession = currentSessionId ? sessions.find((session) => session.id === currentSessionId) ?? null : null;
 
-    const assistantMessages = sessionMessages.filter((entry) => deriveMessageRole(entry.info).role === 'assistant');
-    const userMessages = sessionMessages.filter((entry) => deriveMessageRole(entry.info).isUser);
+    const assistantMessages = sessionMessages.filter((entry) => entry.info.role === 'assistant');
+    const userMessages = sessionMessages.filter((entry) => entry.info.role === 'user');
 
     // After a compaction the fill is unknown until a response reports tokens;
     // the compaction record itself still supplies the last-turn breakdown.
-    const contextFill = findLatestContextFill(sessionMessages.map((entry) => entry.info));
+    const contextFill = findLatestContextFill(sessionMessages.map(({ info }) => {
+      const status = 'status' in info && typeof info.status === 'string' ? info.status : undefined;
+      const error = 'error' in info ? info.error : undefined;
+      const tokens = 'tokens' in info ? info.tokens : undefined;
+      return {
+        id: info.id,
+        role: info.role,
+        tokens,
+        status,
+        error,
+      } satisfies ContextFillMessage;
+    }));
     const contextMessage = contextFill ? sessionMessages[contextFill.index] ?? null : null;
     const isCompacted = contextFill?.state === 'compacted';
 
@@ -336,15 +346,17 @@ export const ContextPanelContent: React.FC = () => {
     });
 
     const totalAssistantCost = assistantMessages.reduce((sum, message) => {
-      const cost = toNonNegativeNumber((message.info as { cost?: unknown }).cost);
+      const cost = toNonNegativeNumber(readUnknownField(message.info, 'cost'));
       return sum + cost;
     }, 0);
 
-    const latestAssistantInfo = (contextMessage?.info ?? null) as (Message & { providerID?: string; modelID?: string }) | null;
+    const latestAssistantInfo = contextMessage?.info;
+    const providerId = readUnknownField(latestAssistantInfo, 'providerID');
+    const modelId = readUnknownField(latestAssistantInfo, 'modelID');
     const providerModel = resolveProviderAndModel(
       providers as ProviderLike[],
-      latestAssistantInfo?.providerID || '',
-      latestAssistantInfo?.modelID || '',
+      typeof providerId === 'string' ? providerId : '',
+      typeof modelId === 'string' ? modelId : '',
     );
 
     const contextLimit = providerModel.contextLimit;
@@ -354,9 +366,10 @@ export const ContextPanelContent: React.FC = () => {
         ? Math.min(999, (tokenBreakdown.total / contextLimit) * 100)
         : 0;
 
-    const systemPrompt = ([...sessionMessages].reverse().find(
-      (entry) => deriveMessageRole(entry.info).isUser && typeof (entry.info as { system?: unknown }).system === 'string',
-    )?.info as { system?: string } | undefined)?.system || '';
+    // OpenCode v2 delivers instruction text as its own `system` message
+    // instead of hanging a `system` string off the first user message.
+    const systemMessage = [...sessionMessages].reverse().find((entry) => entry.info.role === 'system');
+    const systemPrompt = systemMessage?.info.role === 'system' ? systemMessage.info.text : '';
 
     const computedBreakdown = computeContextBreakdown(sessionMessages, systemPrompt);
 
@@ -415,7 +428,7 @@ export const ContextPanelContent: React.FC = () => {
 
         {/* ── Session header ── */}
         <div className="mb-6">
-          <h2 className="typography-ui-header font-semibold text-foreground truncate">{viewModel.sessionTitle}</h2>
+          <h2 dir="auto" className="typography-ui-header font-semibold text-foreground truncate text-left">{viewModel.sessionTitle}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 typography-micro text-muted-foreground/70">
             <span>{viewModel.providerModel.providerName} / {viewModel.providerModel.modelName}</span>
             {viewModel.createdAt && (
@@ -535,8 +548,7 @@ export const ContextPanelContent: React.FC = () => {
           <div className="typography-micro text-muted-foreground">{t('contextSidebar.section.rawMessages')}</div>
           <div className="mt-2.5 space-y-1">
             {[...sessionMessages].reverse().map((message) => {
-              const roleInfo = deriveMessageRole(message.info);
-              const role = roleInfo.role;
+              const role = message.info.role;
               const isAssistant = role === 'assistant';
               const isUser = role === 'user';
               const isExpanded = expandedRawMessages[message.info.id] === true;

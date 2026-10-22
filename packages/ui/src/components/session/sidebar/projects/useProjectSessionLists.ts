@@ -1,11 +1,16 @@
 import React from 'react';
-import type { SessionOwnershipIndex } from '../sessions/sessionOwnership';
+import type { Session } from '@openchamber/agent-contract';
 
 type Args = {
   ownership: SessionOwnershipIndex;
 };
 
-export const useProjectSessionLists = (args: Args) => {
+export type ProjectSessionLists = {
+  getSessionsForProject: (projectId: string) => readonly Session[];
+  getArchivedSessionsForProject: (projectId: string) => readonly Session[];
+};
+
+export const useProjectSessionLists = (args: Args): ProjectSessionLists => {
   const {
     ownership,
   } = args;

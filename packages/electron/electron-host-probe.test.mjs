@@ -10,6 +10,7 @@ const response = (status, payload = null) => ({
 
 const compatibleVersion = {
   status: 'ok',
+  openchamberVersion: '2.1.1',
   compatibility: {
     capabilities: ['api.runtime-url.v1'],
     apiVersion: 1,
@@ -101,6 +102,9 @@ for (const [name, versionResponse, expected] of [
   ['numeric compatibility', response(200, { status: 'ok', compatibility: 1 }), 'wrong-service'],
   ['array compatibility', response(200, { status: 'ok', compatibility: [] }), 'incompatible'],
   ['missing capability', response(200, { ...compatibleVersion, compatibility: { ...compatibleVersion.compatibility, capabilities: [] } }), 'incompatible'],
+  ['server before OpenCode 2', response(200, { ...compatibleVersion, openchamberVersion: '1.24.2' }), 'incompatible'],
+  ['server without a readable version', response(200, { ...compatibleVersion, openchamberVersion: 'unknown' }), 'ok'],
+  ['server without a version field', response(200, { status: 'ok', compatibility: compatibleVersion.compatibility }), 'ok'],
   ['newer API', response(200, { ...compatibleVersion, compatibility: { ...compatibleVersion.compatibility, apiVersion: 2 } }), 'update-recommended'],
   ['newer minimum client', response(200, { ...compatibleVersion, compatibility: { ...compatibleVersion.compatibility, minClientApiVersion: 2 } }), 'update-recommended'],
 ]) {
@@ -140,15 +144,42 @@ test('rejects Electron manual-redirect errors before bearer-bearing requests', a
   assert.equal(calls, 1);
 });
 
-for (const serverId of [undefined, null, 123, true, {}, [], '', '   ', ' server-a ']) {
-  test(`preserves optional health identity parsing for ${JSON.stringify(serverId)}`, async () => {
+for (const [name, healthResponse, expected] of [
+  ['missing identity', response(200, {}), 'wrong-service'],
+  ['null identity', response(200, { serverId: null }), 'wrong-service'],
+  ['numeric identity', response(200, { serverId: 123 }), 'wrong-service'],
+  ['empty identity', response(200, { serverId: '' }), 'wrong-service'],
+  ['matching identity', response(200, { serverId: 'server-a' }), 'ok'],
+]) {
+  test(`requires exact health identity for ${name}`, async () => {
     const result = await baseProbe({
       expectedServerId: ' server-a ',
+      clientToken: 'secret-token',
       chromiumFetch: async (url) => url.endsWith('/health')
-        ? response(200, { serverId })
+        ? healthResponse
         : url.endsWith('/api/version') ? response(200, compatibleVersion) : response(200),
     });
-    assert.equal(result.status, 'ok');
+    assert.equal(result.status, expected);
+  });
+}
+
+for (const [name, healthResponse] of [
+  ['non-2xx health', response(503, { serverId: 'server-a' })],
+  ['malformed health JSON', { ...response(200), json: async () => { throw new SyntaxError('invalid health fixture JSON'); } }],
+]) {
+  test(`does not send bearer after ${name}`, async () => {
+    const calls = [];
+    const result = await baseProbe({
+      expectedServerId: 'server-a',
+      clientToken: 'secret-token',
+      chromiumFetch: async (url, options) => {
+        calls.push({ path: new URL(url).pathname, headers: options.headers });
+        return url.endsWith('/health') ? healthResponse : response(200, compatibleVersion);
+      },
+    });
+    assert.equal(result.status, 'wrong-service');
+    assert.deepEqual(calls.map((call) => call.path), ['/health']);
+    assert.equal(calls[0].headers.Authorization, undefined);
   });
 }
 

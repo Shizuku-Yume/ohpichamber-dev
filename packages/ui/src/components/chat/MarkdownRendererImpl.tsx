@@ -1,43 +1,52 @@
 import React from 'react';
 import morphdom from 'morphdom';
 import { renderMermaidASCII, renderMermaidSVG } from 'beautiful-mermaid';
-import type { Part } from '@opencode-ai/sdk/v2';
+import type { Part } from '@/lib/opencode/model';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { openExternalUrl } from '@/lib/url';
+import { isAppLinkUrl, openExternalUrl } from '@/lib/url';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import type { Theme } from '@/types/theme';
 import { openAppLinkWithConfirmation } from './appLinkConfirmation';
 import { attachAppLinkInteractions } from './appLinkInteractions';
+import { attachFileRefClickGuard, FILE_REFERENCE_LINK_SELECTOR } from './fileRefClickGuard';
 import type { ToolPopupContent } from './message/types';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import { useUIStore } from '@/stores/useUIStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { EditorAPI } from '@/lib/api/types';
-import { isVSCodeRuntime } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isVSCodeRuntime, openDesktopPath } from '@/lib/desktop';
+import { openSessionLink } from '@/lib/router/openSessionFromRoute';
+import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { getDirectoryForFilePath, isFilePathWithinDirectory, toAbsoluteFilePath } from '@/lib/path-utils';
 import {
   getCachedMarkdownBlocks,
   renderMarkdownBlocks,
-  renderMarkdownSync,
+  renderMarkdownBlocksSync,
   type MarkdownImageMode,
+  type MarkdownRawHtmlMode,
 } from './markdown/markdownCore';
 import { ensureMarkdownShikiTheme } from './markdown/markdownTheme';
 import { getMarkdownSyntaxVars } from './markdown/markdownSyntaxVars';
 import {
   attachMarkdownInteractions,
   applyMarkdownCodeBlockWrapState,
+  applyMarkdownTableWrapState,
   decorateMarkdown,
   getMarkdownCodeText,
+  layoutReservedCodeLines,
+  RESERVED_CODE_GUTTER_SELECTOR,
   stabilizeMarkdownTableWidths,
   type DecorateContext,
   type DecorateLabels,
   type MermaidControlOptions,
   type MermaidRender,
 } from './markdown/decorate';
+import type { RenderedCopyFormat } from './markdown/selectionMarkdown';
+import { observeMarkdownTableWidth } from './markdown/tableWidthObserver';
 import { findTextPosition } from './markdown/textPosition';
 import { createMermaidViewerRegistry, MERMAID_BLOCK_SELECTOR, shouldRefreshMermaidViewers } from './markdown/mermaidViewer';
 import {
@@ -48,10 +57,10 @@ import {
   parseFileReference,
   type ParsedFileReference,
 } from './fileReferenceParser';
-import { fileReferenceExists } from './fileReferenceStat';
+import { fileReferenceExists, findUniqueFileByName } from './fileReferenceStat';
 import { streamPerfCount, streamPerfObserve } from '@/stores/utils/streamDebug';
 import { detachedMarkdownDomCache, type DetachedMarkdownDomKey } from './markdown/detachedMarkdownDomCache';
-import { TimelineRevealGateContext } from './timelineRevealGate';
+import { applyOpenFencePatch } from './markdown/openFenceIncremental';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 
 const useCurrentMermaidTheme = () => {
@@ -63,6 +72,22 @@ const useCurrentMermaidTheme = () => {
     ?? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
       ? fallbackDark
       : fallbackLight);
+};
+
+// Addresses that serve the instance this chat belongs to: the page itself
+// (web), and the instance the app is connected to, which the desktop page,
+// living on its own scheme, does not share an origin with. A link to either
+// opens in place; one to another instance leaves the chat as before.
+const resolveOwnOrigins = (): string[] => {
+  if (typeof window === 'undefined') return [];
+  const origins = [window.location.origin];
+  try {
+    const apiOrigin = new URL(getRuntimeApiBaseUrl() || window.location.href, window.location.href).origin;
+    if (!origins.includes(apiOrigin)) origins.push(apiOrigin);
+  } catch {
+    // An unparseable runtime address adds nothing.
+  }
+  return origins;
 };
 
 const useLinkInteractions = ({
@@ -78,10 +103,16 @@ const useLinkInteractions = ({
       return;
     }
 
+    // VS Code keeps session links inert: its sessions live on its own OpenCode.
+    const opensSessionLinks = !isVSCodeRuntime();
     return attachAppLinkInteractions(container, {
       allowExternalHttp: enabled !== false,
       openAppLink: (href) => void openAppLinkWithConfirmation(href),
       openExternalHttp: (href) => void openExternalUrl(href),
+      openSessionLink: opensSessionLinks
+        ? (target) => void openSessionLink(target.sessionId, target.messageId)
+        : undefined,
+      ownOrigins: resolveOwnOrigins(),
     });
   }, [containerRef, enabled]);
 };
@@ -107,7 +138,7 @@ const stripLeadingFrontmatter = (markdown: string): string => {
 
 export type MarkdownVariant = 'assistant' | 'tool' | 'reasoning';
 
-interface MarkdownRendererProps {
+export interface MarkdownRendererProps {
   content: string;
   part?: Part;
   messageId: string;
@@ -121,7 +152,6 @@ interface MarkdownRendererProps {
   enableFileReferences?: boolean;
 }
 
-const FILE_LINK_SELECTOR = '[data-openchamber-file-link="true"]';
 const BLOCK_PATH_TOKEN_ATTR = 'data-openchamber-block-path-token';
 const BLOCK_PATH_TOKEN_SELECTOR = `[${BLOCK_PATH_TOKEN_ATTR}]`;
 const CODE_BLOCK_PATH_SCANNED_ATTR = 'data-openchamber-block-paths-scanned';
@@ -214,6 +244,7 @@ const unwrapBlockCodePathTokens = (container: HTMLElement): void => {
 const extractPathCandidateFromElement = (element: HTMLElement): string => {
   if (element.tagName.toLowerCase() === 'a') {
     const href = element.getAttribute('href')?.trim();
+    if (href && isAppLinkUrl(href)) return '';
     const fileUrlPath = href ? localPathFromFileUrl(href) : null;
     if (fileUrlPath) {
       return fileUrlPath;
@@ -224,6 +255,26 @@ const extractPathCandidateFromElement = (element: HTMLElement): string => {
   }
 
   return (element.textContent || '').trim();
+};
+
+// A click can land before the async annotation marks a file reference
+// (debounce + filesystem stat per candidate). Extract the href-derived
+// candidate so the click guard can still route it to the file viewer instead
+// of letting the renderer's `target="_blank"` open a new app window.
+// Unlike `extractPathCandidateFromElement`, this never falls back to the link
+// text: a link whose *text* is a path but whose href is a real URL keeps its
+// URL behavior.
+const extractHrefFileReferenceCandidate = (anchor: HTMLAnchorElement): string | null => {
+  const href = anchor.getAttribute('href')?.trim();
+  if (!href) {
+    return null;
+  }
+  if (isAppLinkUrl(href)) return null;
+  const fileUrlPath = localPathFromFileUrl(href);
+  if (fileUrlPath) {
+    return fileUrlPath;
+  }
+  return isLikelyFilePath(href) ? href : null;
 };
 
 // Walks text nodes inside `<pre><code>` subtrees and wraps any substring that
@@ -382,16 +433,74 @@ const useFileReferenceInteractions = ({
     };
 
     const clearAnnotatedFileLinks = () => {
-      const annotated = container.querySelectorAll<HTMLElement>(FILE_LINK_SELECTOR);
+      const annotated = container.querySelectorAll<HTMLElement>(FILE_REFERENCE_LINK_SELECTOR);
       for (const candidate of Array.from(annotated)) {
         clearFileLinkAttributes(candidate);
       }
       unwrapBlockCodePathTokens(container);
     };
 
+    const openFileReference = async (sourceElement: HTMLElement, options?: { external: boolean }) => {
+      const raw = sourceElement.getAttribute('data-openchamber-file-ref') || extractPathCandidateFromElement(sourceElement);
+      const parsedReference = getResolvedReference(raw, effectiveDirectory);
+      if (!parsedReference) {
+        return;
+      }
+      // Annotation stored where the file really is, which differs from the
+      // written path when a bare name was found elsewhere in the workspace.
+      const storedPath = sourceElement.getAttribute('data-openchamber-file-path');
+      const resolved = storedPath ? { ...parsedReference, resolvedPath: storedPath } : parsedReference;
+
+      // Cmd/Ctrl-click hands the file to the OS, which opens it with the app
+      // that owns its type; where that is not possible it opens here as usual.
+      if (options?.external && isDesktopLocalOriginActive() && await openDesktopPath(resolved.resolvedPath)) {
+        return;
+      }
+
+      const contextDirectory = getContextDirectory(effectiveDirectory, resolved.resolvedPath);
+      if (preferRuntimeEditor && editor) {
+        void editor.openFile(
+          resolved.resolvedPath,
+          Number.isFinite(resolved.line ?? Number.NaN)
+            ? Math.max(1, Math.trunc(resolved.line as number))
+            : undefined,
+          Number.isFinite(resolved.column ?? Number.NaN)
+            ? Math.max(1, Math.trunc(resolved.column as number))
+            : undefined,
+        );
+        return;
+      }
+
+      const uiStore = useUIStore.getState();
+      if (Number.isFinite(resolved.line ?? Number.NaN)) {
+        uiStore.openContextFileAtLine(
+          contextDirectory,
+          resolved.resolvedPath,
+          Math.max(1, Math.trunc(resolved.line as number)),
+          Number.isFinite(resolved.column ?? Number.NaN)
+            ? Math.max(1, Math.trunc(resolved.column as number))
+            : 1,
+        );
+      } else {
+        uiStore.openContextFile(contextDirectory, resolved.resolvedPath);
+      }
+    };
+
+    const attachClickGuard = () => attachFileRefClickGuard(container, {
+      hrefCandidate: extractHrefFileReferenceCandidate,
+      isResolvable: (raw) => getResolvedReference(raw, effectiveDirectory) !== null,
+      openFileReference,
+    });
+
     if (!fileReferencesEnabled) {
       clearAnnotatedFileLinks();
-      return;
+      if (!enabled) {
+        return;
+      }
+      // Mobile skips the probing annotation pass, but a markdown link whose
+      // href is a file path still has to open the file viewer: left to its
+      // default, the WebView navigates to the path as a URL and fails.
+      return attachClickGuard();
     }
 
     const scheduleAnnotation = (delayMs = 0) => {
@@ -450,12 +559,17 @@ const useFileReferenceInteractions = ({
         linkedCount += 1;
 
         const outsideWorkspace = !isFilePathWithinDirectory(resolved.resolvedPath, effectiveDirectory);
-        const existsPromise = outsideWorkspace
-          ? Promise.resolve(true)
-          : fileReferenceExists(resolved.resolvedPath, effectiveDirectory);
+        // A bare name (`Renderer.tsx:42`) that is not at the root is looked up
+        // by name in the workspace, once per name; only a unique match links.
+        const isBareName = !resolved.path.includes('/') && !resolved.path.includes('\\');
+        const targetPromise: Promise<string | null> = outsideWorkspace
+          ? Promise.resolve(resolved.resolvedPath)
+          : fileReferenceExists(resolved.resolvedPath, effectiveDirectory).then((exists) => (
+            exists ? resolved.resolvedPath : isBareName ? findUniqueFileByName(resolved.path, effectiveDirectory) : null
+          ));
 
-        void existsPromise.then((exists) => {
-          if (cancelled || !exists || !container.contains(candidate)) {
+        void targetPromise.then((targetPath) => {
+          if (cancelled || !targetPath || !container.contains(candidate)) {
             return;
           }
 
@@ -467,7 +581,7 @@ const useFileReferenceInteractions = ({
 
           candidate.setAttribute('data-openchamber-file-link', 'true');
           candidate.setAttribute('data-openchamber-file-ref', latestRawCandidate);
-          candidate.setAttribute('data-openchamber-file-path', latestResolved.resolvedPath);
+          candidate.setAttribute('data-openchamber-file-path', targetPath);
           candidate.setAttribute('title', 'Open file');
           if (candidate.tagName.toLowerCase() !== 'a') {
             candidate.setAttribute('role', 'button');
@@ -475,59 +589,6 @@ const useFileReferenceInteractions = ({
           }
         });
       }
-    };
-
-    const openFileReference = async (sourceElement: HTMLElement) => {
-      const raw = sourceElement.getAttribute('data-openchamber-file-ref') || extractPathCandidateFromElement(sourceElement);
-      const resolved = getResolvedReference(raw, effectiveDirectory);
-      if (!resolved) {
-        return;
-      }
-
-      const contextDirectory = getContextDirectory(effectiveDirectory, resolved.resolvedPath);
-      if (preferRuntimeEditor && editor) {
-        void editor.openFile(
-          resolved.resolvedPath,
-          Number.isFinite(resolved.line ?? Number.NaN)
-            ? Math.max(1, Math.trunc(resolved.line as number))
-            : undefined,
-          Number.isFinite(resolved.column ?? Number.NaN)
-            ? Math.max(1, Math.trunc(resolved.column as number))
-            : undefined,
-        );
-        return;
-      }
-
-      const uiStore = useUIStore.getState();
-      if (Number.isFinite(resolved.line ?? Number.NaN)) {
-        uiStore.openContextFileAtLine(
-          contextDirectory,
-          resolved.resolvedPath,
-          Math.max(1, Math.trunc(resolved.line as number)),
-          Number.isFinite(resolved.column ?? Number.NaN)
-            ? Math.max(1, Math.trunc(resolved.column as number))
-            : 1,
-        );
-      } else {
-        uiStore.openContextFile(contextDirectory, resolved.resolvedPath);
-      }
-    };
-
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-
-      const fileRefElement = target.closest(FILE_LINK_SELECTOR);
-      if (!(fileRefElement instanceof HTMLElement)) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      void openFileReference(fileRefElement);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -561,8 +622,8 @@ const useFileReferenceInteractions = ({
       subtree: true,
     });
 
-    container.addEventListener('click', handleClick);
     container.addEventListener('keydown', handleKeyDown);
+    const removeClickGuard = attachClickGuard();
 
     return () => {
       cancelled = true;
@@ -571,7 +632,7 @@ const useFileReferenceInteractions = ({
       }
       annotationDebounceRef.current = null;
       observer.disconnect();
-      container.removeEventListener('click', handleClick);
+      removeClickGuard();
       container.removeEventListener('keydown', handleKeyDown);
     };
   }, [containerRef, editor, effectiveDirectory, preferRuntimeEditor, enabled]);
@@ -692,6 +753,61 @@ const MARKDOWN_DECORATION_ID_ATTR = 'data-md-decoration-id';
 // current decoration. The first paint of a remounted message is served from
 // the block cache; when that paint is already final, the async render would
 // only parse, highlight, sanitize, and morph the same HTML into place again.
+/**
+ * Marks the last block wrapper so CSS can trim its trailing margin by
+ * attribute. `[data-md-block]:last-child` in a non-subject position made
+ * Chrome restyle the whole subtree of any element that stopped being a last
+ * child, which included the app root every time a tooltip or menu portal was
+ * appended to <body>.
+ */
+const markLastMarkdownBlock = (target: HTMLElement): void => {
+  const last = target.lastElementChild;
+  for (const child of Array.from(target.children)) {
+    if (child !== last && child.hasAttribute('data-md-last')) child.removeAttribute('data-md-last');
+  }
+  if (last?.hasAttribute('data-md-block') && !last.hasAttribute('data-md-last')) {
+    last.setAttribute('data-md-last', '');
+  }
+};
+
+// Safari has no requestIdleCallback; there a short timeout stands in and one
+// block is handled per task.
+const scheduleIdle = (run: (deadline?: IdleDeadline) => void): (() => void) => {
+  if ('requestIdleCallback' in window) {
+    const handle = window.requestIdleCallback(run, { timeout: 500 });
+    return () => window.cancelIdleCallback(handle);
+  }
+  const handle = setTimeout(() => run(), 16);
+  return () => clearTimeout(handle);
+};
+
+const BLOCK_ENTER_CLASS = 'oc-md-block-enter';
+
+/**
+ * Drops the entrance animation streamed blocks carry. Settled blocks now keep
+ * their streamed DOM, and re-attached DOM (the detached cache) would replay it.
+ */
+const clearBlockEnterAnimation = (target: HTMLElement): void => {
+  for (const element of Array.from(target.querySelectorAll<HTMLElement>(`.${BLOCK_ENTER_CLASS}`))) {
+    element.classList.remove(BLOCK_ENTER_CLASS);
+    element.style.removeProperty('--oc-md-enter-delay');
+  }
+};
+
+/**
+ * A morph to the next step's HTML drops the entrance animation of a block
+ * that just entered, since only new blocks carry it. A patched block drops it
+ * the same way, so both paths leave the same DOM.
+ */
+const clearPatchedBlockEnterAnimation = (block: HTMLElement): void => {
+  for (const child of Array.from(block.children)) {
+    if (!(child instanceof HTMLElement) || !child.classList.contains(BLOCK_ENTER_CLASS)) continue;
+    child.classList.remove(BLOCK_ENTER_CLASS);
+    child.style.removeProperty('--oc-md-enter-delay');
+    if (!child.getAttribute('style')) child.removeAttribute('style');
+  }
+};
+
 const domMatchesRenderedBlocks = (
   target: HTMLElement,
   blocks: ReadonlyArray<{ id: string }>,
@@ -752,6 +868,10 @@ const mermaidColorsFromTheme = (theme: Theme) => ({
   font: 'system-ui, sans-serif',
 });
 
+const readCopyFormat = (): RenderedCopyFormat => (
+  useUIStore.getState().copyMessagesAsPlainText ? 'plain' : 'markdown'
+);
+
 const useDecorateContext = (
   currentTheme: Theme,
   deferCodeLineNumberSync: boolean,
@@ -764,6 +884,8 @@ const useDecorateContext = (
     copied: t('markdownRenderer.code.actions.copiedTitle'),
     enableCodeWrap: t('markdownRenderer.code.actions.enableWrapTitle'),
     disableCodeWrap: t('markdownRenderer.code.actions.disableWrapTitle'),
+    enableTableWrap: t('markdownRenderer.table.actions.enableWrapTitle'),
+    disableTableWrap: t('markdownRenderer.table.actions.disableWrapTitle'),
     copyTable: t('markdownRenderer.table.actions.copyTitle'),
     downloadTable: t('markdownRenderer.table.actions.downloadTitle'),
     copyDiagram: t('markdownRenderer.mermaid.actions.copySourceTitle'),
@@ -780,8 +902,13 @@ const useDecorateContext = (
   const toggleCodeBlockLineWrap = React.useCallback(() => {
     setCodeBlockLineWrap(!useUIStore.getState().codeBlockLineWrap);
   }, [setCodeBlockLineWrap]);
+  const tableCellWrap = useUIStore((state) => state.tableCellWrap);
+  const setTableCellWrap = useUIStore((state) => state.setTableCellWrap);
+  const toggleTableCellWrap = React.useCallback(() => {
+    setTableCellWrap(!useUIStore.getState().tableCellWrap);
+  }, [setTableCellWrap]);
 
-  return React.useMemo<DecorateContext>(() => {
+  const ctx = React.useMemo<DecorateContext>(() => {
     const colors = mermaidColorsFromTheme(currentTheme);
     const mode = useUIStore.getState().mermaidRenderingMode;
     const themeId = currentTheme.metadata?.id ?? 'theme';
@@ -794,8 +921,28 @@ const useDecorateContext = (
           return {};
         }
       });
-    return { labels, mermaidControls, codeBlockLineWrap, deferCodeLineNumberSync, onToggleCodeBlockLineWrap: toggleCodeBlockLineWrap, renderMermaid, onPreviewLoopback };
-  }, [currentTheme, labels, mermaidControls, codeBlockLineWrap, deferCodeLineNumberSync, toggleCodeBlockLineWrap, onPreviewLoopback]);
+    return {
+      labels,
+      mermaidControls,
+      codeBlockLineWrap,
+      onToggleCodeBlockLineWrap: toggleCodeBlockLineWrap,
+      tableCellWrap,
+      onToggleTableCellWrap: toggleTableCellWrap,
+      renderMermaid,
+      onPreviewLoopback,
+      getCopyFormat: readCopyFormat,
+    };
+  }, [currentTheme, labels, mermaidControls, codeBlockLineWrap, toggleCodeBlockLineWrap, tableCellWrap, toggleTableCellWrap, onPreviewLoopback]);
+
+  // Streaming only defers code line numbers, which the settled pass fills in
+  // per block. Both variants share one decoration identity, so a finished
+  // stream keeps every block's DOM instead of decorating the reply again.
+  const streamingCtx = React.useMemo<DecorateContext>(() => {
+    const variant = { ...ctx, deferCodeLineNumberSync: true };
+    MARKDOWN_DECORATION_IDS.set(variant, getMarkdownDecorationId(ctx));
+    return variant;
+  }, [ctx]);
+  return deferCodeLineNumberSync ? streamingCtx : ctx;
 };
 
 // Runs the async render pipeline into the container and keeps a stable
@@ -805,15 +952,21 @@ const useMorphdomMarkdown = ({
   text,
   streaming,
   imageMode = 'inline',
+  rawHtml = 'escape',
   syntaxVars,
   ctx,
   domCacheKey,
   tableLayoutSettled,
+  growing = streaming,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
   text: string;
   streaming: boolean;
+  // The text is still streaming, though rendered as settled when `streaming`
+  // is false (the sorted chat mode): its steps stay out of settled caches.
+  growing?: boolean;
   imageMode?: MarkdownImageMode;
+  rawHtml?: MarkdownRawHtmlMode;
   syntaxVars: Record<string, string>;
   ctx: DecorateContext;
   domCacheKey?: DetachedMarkdownDomKey | null;
@@ -826,16 +979,7 @@ const useMorphdomMarkdown = ({
   const mermaidViewerRef = React.useRef<ReturnType<typeof createMermaidViewerRegistry> | null>(null);
   const renderRevisionRef = React.useRef(0);
   const tableLayoutFrameRef = React.useRef<number | null>(null);
-  // A provisional first paint (blocks not in the settled cache) holds the
-  // timeline reveal until the async render lands, so the session opens with
-  // final code highlighting instead of a visible restyle.
-  const revealGate = React.useContext(TimelineRevealGateContext);
-  const releaseRevealHoldRef = React.useRef<(() => void) | null>(null);
-  const releaseRevealHold = React.useCallback(() => {
-    releaseRevealHoldRef.current?.();
-    releaseRevealHoldRef.current = null;
-  }, []);
-  React.useEffect(() => releaseRevealHold, [releaseRevealHold]);
+  const stopTableWidthWatchRef = React.useRef<(() => void) | null>(null);
   // Only DOM that was actually restored or completed by the async pipeline is
   // eligible for capture. A fallback from an earlier content revision is not.
   const mountedDomRef = React.useRef<{
@@ -856,6 +1000,18 @@ const useMorphdomMarkdown = ({
     }
     mermaidViewerRef.current.refresh();
   }, [containerRef]);
+  const { tableCellWrap } = ctx;
+  const layoutTables = React.useCallback(() => {
+    const container = containerRef.current;
+    const target = container?.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
+    if (!target) return;
+    stabilizeMarkdownTableWidths(target, tableCellWrap);
+    // Column widths are fixed for the width they were laid out in, so a
+    // resized chat or document lays the tables out again.
+    if (!stopTableWidthWatchRef.current && target.querySelector('table[data-markdown="table"]')) {
+      stopTableWidthWatchRef.current = observeMarkdownTableWidth(target, () => scheduleTableLayoutRef.current());
+    }
+  }, [containerRef, tableCellWrap]);
   const scheduleTableLayout = React.useCallback(() => {
     if (!tableLayoutSettled) return;
     const previousFrame = tableLayoutFrameRef.current;
@@ -865,24 +1021,75 @@ const useMorphdomMarkdown = ({
       if (tableLayoutFrameRef.current !== frame) return;
       tableLayoutFrameRef.current = null;
       if (renderRevisionRef.current !== renderRevision) return;
-      const container = containerRef.current;
-      const target = container?.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
-      if (target) stabilizeMarkdownTableWidths(target);
+      layoutTables();
     });
     tableLayoutFrameRef.current = frame;
-  }, [containerRef, tableLayoutSettled]);
+  }, [layoutTables, tableLayoutSettled]);
+  // Lays tables out in the same task as the DOM change that reset them, so
+  // no frame paints them at their unmeasured width.
+  const layoutTablesNow = React.useCallback(() => {
+    const pendingFrame = tableLayoutFrameRef.current;
+    if (pendingFrame !== null) window.cancelAnimationFrame(pendingFrame);
+    tableLayoutFrameRef.current = null;
+    layoutTables();
+  }, [layoutTables]);
+  const scheduleTableLayoutRef = React.useRef(scheduleTableLayout);
+  React.useEffect(() => {
+    scheduleTableLayoutRef.current = scheduleTableLayout;
+  }, [scheduleTableLayout]);
 
   React.useEffect(() => () => {
+    stopTableWidthWatchRef.current?.();
+    stopTableWidthWatchRef.current = null;
     const frame = tableLayoutFrameRef.current;
     if (frame === null) return;
     window.cancelAnimationFrame(frame);
     tableLayoutFrameRef.current = null;
   }, []);
 
+  // Code blocks decorated while streaming reserve the line-number gutter but
+  // leave out the numbers. Once the message settles, the numbers are filled in
+  // one block at a time in idle time, not all in the task that ends the stream.
+  const latestCtxRef = React.useRef(ctx);
+  const streamingRef = React.useRef(streaming);
+  React.useLayoutEffect(() => {
+    latestCtxRef.current = ctx;
+    streamingRef.current = streaming;
+  }, [ctx, streaming]);
+  const cancelLineNumberTaskRef = React.useRef<(() => void) | null>(null);
+  const scheduleCodeLineNumbers = React.useCallback(() => {
+    if (cancelLineNumberTaskRef.current) return;
+    const run = (deadline?: IdleDeadline) => {
+      cancelLineNumberTaskRef.current = null;
+      if (streamingRef.current) return;
+      const container = containerRef.current;
+      const target = container?.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
+      if (!target) return;
+      const pending = target.querySelectorAll<HTMLPreElement>(RESERVED_CODE_GUTTER_SELECTOR);
+      let done = 0;
+      do {
+        const pre = pending[done];
+        if (!pre) break;
+        // Laying out lines rebuilds plain code text, which would drop file
+        // links already found in it; unwrap them so the annotation pass,
+        // woken by this mutation, finds them again.
+        if (pre.querySelector(`code[${CODE_BLOCK_PATH_SCANNED_ATTR}]`)) unwrapBlockCodePathTokens(pre);
+        layoutReservedCodeLines(pre, latestCtxRef.current);
+        done += 1;
+      } while (deadline && deadline.timeRemaining() > 4);
+      if (done < pending.length) cancelLineNumberTaskRef.current = scheduleIdle(run);
+    };
+    cancelLineNumberTaskRef.current = scheduleIdle(run);
+  }, [containerRef]);
+  React.useEffect(() => () => {
+    cancelLineNumberTaskRef.current?.();
+    cancelLineNumberTaskRef.current = null;
+  }, []);
+
   React.useLayoutEffect(() => {
     renderRevisionRef.current += 1;
     mountedDomRef.current = null;
-  }, [ctx, imageMode, streaming, text]);
+  }, [ctx, imageMode, rawHtml, streaming, text]);
 
   React.useLayoutEffect(() => {
     if (!domCacheKey) return;
@@ -893,12 +1100,14 @@ const useMorphdomMarkdown = ({
     const cached = detachedMarkdownDomCache.take(domCacheKey);
     if (cached) {
       target.appendChild(cached);
+      markLastMarkdownBlock(target);
       const decorationId = getMarkdownDecorationId(ctx);
       for (const block of Array.from(target.children)) {
         block.setAttribute(MARKDOWN_DECORATION_ID_ATTR, decorationId);
       }
       for (const [key, value] of Object.entries(syntaxVars)) target.style.setProperty(key, value);
       applyMarkdownCodeBlockWrapState(target, ctx.codeBlockLineWrap, ctx.labels);
+      applyMarkdownTableWrapState(target, ctx.tableCellWrap, ctx.labels);
       mountedDomRef.current = {
         key: domCacheKey,
         copiedLabel: ctx.labels.copied,
@@ -929,6 +1138,7 @@ const useMorphdomMarkdown = ({
         .some((button) => button.getAttribute('title') === mountedDom.copiedLabel);
       if (openMenu || copiedButton) return;
 
+      clearBlockEnterAnimation(target);
       const fragment = document.createDocumentFragment();
       fragment.append(...Array.from(target.childNodes));
       detachedMarkdownDomCache.store({ ...mountedDom.key, fragment });
@@ -936,52 +1146,48 @@ const useMorphdomMarkdown = ({
     };
   }, [containerRef]);
 
-  // Synchronous first paint: while the async parse is in-flight, show escaped
-  // plain text immediately so there is no blank frame on initial mount. Only
-  // runs when the target is empty — subsequent updates keep the prior rich DOM
-  // until the next async render morphs in (no flash). Mirrors OpenCode's
-  // `initialValue: fallback(text)` resource pattern.
+  // Synchronous first paint: while the async render (code highlighting) is in
+  // flight, show the parsed blocks without colour so there is no blank frame
+  // on initial mount. Only runs when the target is empty — subsequent updates
+  // keep the prior rich DOM until the next async render morphs in (no flash).
+  // Mirrors OpenCode's `initialValue: fallback(text)` resource pattern.
   React.useLayoutEffect(() => {
     const container = containerRef.current;
     const target = container?.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
     if (!target) return;
     const decorationId = getMarkdownDecorationId(ctx);
     if (text && target.childNodes.length === 0) {
-      const cachedBlocks = !streaming ? getCachedMarkdownBlocks(text, imageMode) : null;
-      if (cachedBlocks) {
-        let hasMermaidBlock = false;
-        for (const cachedBlock of cachedBlocks) {
-          const block = document.createElement('div');
-          block.setAttribute('data-md-block', '');
-          block.style.display = 'contents';
-          block.innerHTML = cachedBlock.html;
-          decorateMarkdown(block, ctx);
-          block.setAttribute('data-md-id', cachedBlock.id);
-          block.setAttribute(MARKDOWN_DECORATION_ID_ATTR, decorationId);
-          hasMermaidBlock ||= shouldRefreshMermaidViewers(block);
-          target.appendChild(block);
-        }
-        if (hasMermaidBlock) refreshMermaidViewers();
-      } else {
-        if (!streaming && !releaseRevealHoldRef.current) {
-          releaseRevealHoldRef.current = revealGate?.hold() ?? null;
-        }
+      // The first paint has the same blocks and ids as the async render. A
+      // block whose code is not highlighted yet carries an id that render
+      // does not match, so it recolours that block in place and keeps every
+      // other block's DOM (selection, file links, images, disclosures).
+      const blocks = renderMarkdownBlocksSync(text, streaming, imageMode, rawHtml, growing);
+      let hasMermaidBlock = false;
+      for (const renderedBlock of blocks) {
         const block = document.createElement('div');
         block.setAttribute('data-md-block', '');
         block.style.display = 'contents';
-        block.innerHTML = renderMarkdownSync(text, imageMode);
+        block.innerHTML = renderedBlock.html;
         decorateMarkdown(block, ctx);
+        block.setAttribute('data-md-id', renderedBlock.id);
         block.setAttribute(MARKDOWN_DECORATION_ID_ATTR, decorationId);
+        hasMermaidBlock ||= shouldRefreshMermaidViewers(block);
         target.appendChild(block);
-        if (shouldRefreshMermaidViewers(block)) refreshMermaidViewers();
       }
+      if (hasMermaidBlock) refreshMermaidViewers();
+      markLastMarkdownBlock(target);
+      // The first paint is shown as it is, without waiting for highlighting,
+      // so it must already have its final geometry. Code blocks do: the
+      // highlight pass only colours their lines. Tables get their measured
+      // column widths here, before the browser paints this commit.
+      if (tableLayoutSettled) layoutTablesNow();
     } else if (!mermaidViewerRef.current && shouldRefreshMermaidViewers(target)) {
       // StrictMode re-runs this setup after the cleanup probe. The DOM remains,
       // but the viewer registry does not, so recreate it without reinstalling
       // or re-decorating ordinary blocks.
       refreshMermaidViewers();
     }
-  }, [containerRef, text, streaming, imageMode, ctx, refreshMermaidViewers, revealGate]);
+  }, [containerRef, text, streaming, growing, imageMode, rawHtml, ctx, refreshMermaidViewers, tableLayoutSettled, layoutTablesNow]);
 
   React.useEffect(() => () => {
     mermaidViewerRef.current?.cleanup();
@@ -997,21 +1203,25 @@ const useMorphdomMarkdown = ({
     const decorationId = getMarkdownDecorationId(ctx);
 
     if (!streaming) {
-      const cachedBlocks = getCachedMarkdownBlocks(text, imageMode);
+      const cachedBlocks = getCachedMarkdownBlocks(text, imageMode, rawHtml, growing);
       if (cachedBlocks && domMatchesRenderedBlocks(target, cachedBlocks, decorationId)) {
         mountedDomRef.current = domCacheKey
           ? { key: domCacheKey, copiedLabel: ctx.labels.copied }
           : null;
         streamPerfCount('ui.markdown_renderer.settled_paint.reused');
+        scheduleCodeLineNumbers();
         scheduleTableLayout();
-        releaseRevealHold();
         return;
       }
     }
 
-    void renderMarkdownBlocks(text, streaming, imageMode).then((blocks) => {
+    void renderMarkdownBlocks(text, streaming, imageMode, rawHtml, growing).then((blocks) => {
       if (!active || renderRevisionRef.current !== renderRevision) return;
       const existing = Array.from(target.children) as HTMLElement[];
+      // Reconciling against freshly parsed HTML drops the measured column
+      // widths of tables already on screen (the first paint lays them out).
+      const resetsMeasuredTables = tableLayoutSettled
+        && target.querySelector('table[data-md-table-layout="fixed"]') !== null;
       // Capture before block reconciliation: streaming completion changes the
       // wrapper layout, and theme changes can replace entire decorated blocks.
       // Match by disclosure order plus heading so unrelated replacements cannot
@@ -1053,6 +1263,18 @@ const useMorphdomMarkdown = ({
           if (!mermaidViewerRef.current && shouldRefreshMermaidViewers(el)) {
             refreshMermaidViewers();
           }
+          return;
+        }
+
+        // A code fence still streaming: keep the lines already painted and
+        // add the new ones instead of rebuilding and diffing the whole block.
+        const paintedId = el.getAttribute('data-md-id');
+        const patch = paintedId && el.getAttribute(MARKDOWN_DECORATION_ID_ATTR) === decorationId
+          ? block.patchFrom?.(paintedId)
+          : null;
+        if (patch && applyOpenFencePatch(el, patch)) {
+          clearPatchedBlockEnterAnimation(el);
+          el.setAttribute('data-md-id', block.id);
           return;
         }
 
@@ -1104,6 +1326,7 @@ const useMorphdomMarkdown = ({
         }
         removed?.remove();
       }
+      markLastMarkdownBlock(target);
       if (removedMermaidBlock || (existing.length > blocks.length && hadMermaidBeforeTrailingCleanup)) {
         refreshMermaidViewers();
       }
@@ -1118,14 +1341,15 @@ const useMorphdomMarkdown = ({
       mountedDomRef.current = domCacheKey
         ? { key: domCacheKey, copiedLabel: ctx.labels.copied }
         : null;
-      scheduleTableLayout();
-      releaseRevealHold();
+      if (!streaming) scheduleCodeLineNumbers();
+      if (resetsMeasuredTables) layoutTablesNow();
+      else scheduleTableLayout();
     });
 
     return () => {
       active = false;
     };
-  }, [containerRef, ctx, domCacheKey, imageMode, refreshMermaidViewers, releaseRevealHold, scheduleTableLayout, streaming, text]);
+  }, [containerRef, ctx, domCacheKey, growing, imageMode, rawHtml, refreshMermaidViewers, layoutTablesNow, scheduleCodeLineNumbers, scheduleTableLayout, streaming, tableLayoutSettled, text]);
 
   React.useEffect(() => {
     const container = containerRef.current;
@@ -1143,13 +1367,11 @@ const useMorphdomMarkdown = ({
     }
   }, [containerRef, syntaxVars]);
 
+  // DOM painted before the stream ended may still hold code blocks whose
+  // numbers were deferred.
   React.useEffect(() => {
-    const container = containerRef.current;
-    const target = container?.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
-    if (!target) return;
-    if (ctx.deferCodeLineNumberSync) return;
-    applyMarkdownCodeBlockWrapState(target, ctx.codeBlockLineWrap, ctx.labels);
-  }, [containerRef, ctx.codeBlockLineWrap, ctx.deferCodeLineNumberSync, ctx.labels]);
+    if (!streaming) scheduleCodeLineNumbers();
+  }, [scheduleCodeLineNumbers, streaming]);
 
 };
 
@@ -1207,7 +1429,9 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
   const syntaxVars = React.useMemo(() => getMarkdownSyntaxVars(currentTheme), [currentTheme]);
   const ctx = useDecorateContext(currentTheme, live, effectiveDirectory ? handlePreviewLoopback : undefined, DEFAULT_MERMAID_CONTROLS);
   const { locale } = useI18n();
-  const imageMode: MarkdownImageMode = variant === 'assistant' ? 'label' : 'inline';
+  // Assistant images live in the gallery under the message; tool output and
+  // reasoning draw local images and link remote ones (see MarkdownImageMode).
+  const imageMode: MarkdownImageMode = variant === 'assistant' ? 'label' : 'local';
   const settledPart = part
     && (part.type === 'text' || part.type === 'reasoning')
     && part.time?.end !== undefined
@@ -1240,6 +1464,7 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
     containerRef,
     text: content,
     streaming: live,
+    growing: isStreaming,
     imageMode,
     syntaxVars,
     ctx,
@@ -1289,6 +1514,8 @@ const SimpleMarkdownRendererImpl: React.FC<{
   mermaidControls?: MermaidControlOptions;
   allowMermaidWheelEvents?: boolean;
   enableFileReferences?: boolean;
+  /** Render the document's raw HTML through the allowlist; only for documents a user opens to read. */
+  allowRawHtml?: boolean;
 }> = ({
   content,
   className,
@@ -1299,6 +1526,7 @@ const SimpleMarkdownRendererImpl: React.FC<{
   mermaidControls = DEFAULT_MERMAID_CONTROLS,
   allowMermaidWheelEvents = false,
   enableFileReferences = true,
+  allowRawHtml = false,
 }) => {
   const { editor, runtime } = useRuntimeAPIs();
   const currentTheme = useCurrentMermaidTheme();
@@ -1333,6 +1561,10 @@ const SimpleMarkdownRendererImpl: React.FC<{
     containerRef,
     text: renderedContent,
     streaming: false,
+    // A document a user opened (allowRawHtml) draws its images like GitHub
+    // does; everything else here is written by a model or a tool.
+    imageMode: 'local',
+    rawHtml: allowRawHtml ? 'sanitize' : 'escape',
     syntaxVars,
     ctx,
     tableLayoutSettled: true,
@@ -1340,11 +1572,12 @@ const SimpleMarkdownRendererImpl: React.FC<{
 
   return (
     <div className={cn('break-words w-full min-w-0', className)} ref={containerRef}>
-      <div className={markdownContentClassName(variant)} data-markdown-content />
+      <div className={markdownContentClassName(variant)} data-markdown-content data-markdown-html={allowRawHtml ? '' : undefined} />
     </div>
   );
 };
 
+/** @public Consumed as a named export by the lazy Markdown renderer loader. */
 export const SimpleMarkdownRenderer = React.memo(SimpleMarkdownRendererImpl, (prev, next) => {
   const prevMermaidControls = prev.mermaidControls ?? DEFAULT_MERMAID_CONTROLS;
   const nextMermaidControls = next.mermaidControls ?? DEFAULT_MERMAID_CONTROLS;
@@ -1359,5 +1592,6 @@ export const SimpleMarkdownRenderer = React.memo(SimpleMarkdownRendererImpl, (pr
     && prevMermaidControls.copy === nextMermaidControls.copy
     && prevMermaidControls.showPanZoomControls === nextMermaidControls.showPanZoomControls
     && prev.allowMermaidWheelEvents === next.allowMermaidWheelEvents
-    && prev.enableFileReferences === next.enableFileReferences;
+    && prev.enableFileReferences === next.enableFileReferences
+    && prev.allowRawHtml === next.allowRawHtml;
 });

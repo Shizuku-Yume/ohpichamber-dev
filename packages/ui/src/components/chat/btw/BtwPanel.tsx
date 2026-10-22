@@ -1,6 +1,8 @@
 import React from 'react';
+import { AnimatePresence } from 'motion/react';
 import { ComposerFloatingPanel } from '../composer/ui/ComposerFloatingPanel';
-import type { Message, Part } from '@opencode-ai/sdk/v2';
+import type { Message, Part } from '@/lib/opencode/model';
+import { getLastConversationRecord, isIncompleteAssistantTurn } from '@/lib/opencode/model';
 import { useI18n } from '@/lib/i18n';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { cn } from '@/lib/utils';
@@ -14,7 +16,7 @@ import {
     useSessionRenderable,
     useSessionStatus,
     useScopedBlockingPermissions,
-    useScopedBlockingQuestions,
+    useScopedBlockingForms,
 } from '@/sync/sync-context';
 import { useStreamingStore } from '@/sync/streaming';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
@@ -24,7 +26,8 @@ import { ChatSurfaceProvider } from '../ChatSurfaceContext';
 import { useMobileAutocompleteMaxHeight } from '../useMobileAutocompleteMaxHeight';
 import ChatMessage from '../ChatMessage';
 import { PermissionCard } from '../PermissionCard';
-import { QuestionCard } from '../QuestionCard';
+import { FormCard } from '../FormCard';
+import { SessionErrorNotice } from '../SessionErrorNotice';
 
 const IDLE_SESSION_STATUS = { type: 'idle' as const };
 
@@ -42,7 +45,7 @@ const IDLE_SESSION_STATUS = { type: 'idle' as const };
  * and the app navigates to it), destroy (the fork is deleted; the main
  * conversation is never touched).
  */
-export const BtwPanel: React.FC<{ parentSessionId: string; panel: BtwPanelState; onExit: () => void }> = ({
+const BtwPanelView: React.FC<{ parentSessionId: string; panel: BtwPanelState; onExit: () => void }> = ({
     parentSessionId,
     panel,
     onExit,
@@ -50,9 +53,12 @@ export const BtwPanel: React.FC<{ parentSessionId: string; panel: BtwPanelState;
     const { t } = useI18n();
     useEscapeToExit(onExit, !panel.collapsed && Boolean(panel.pending || panel.creating || panel.btwSessionId));
 
+    // Each stage is its own keyed panel, so moving between them cross-fades.
+    let stage: React.ReactNode = null;
     if (panel.btwSessionId && panel.btwDirectory) {
-        return (
+        stage = (
             <BtwSheet
+                key="sheet"
                 sessionRef={{
                     parentSessionId,
                     btwSessionId: panel.btwSessionId,
@@ -62,22 +68,19 @@ export const BtwPanel: React.FC<{ parentSessionId: string; panel: BtwPanelState;
                 collapsed={panel.collapsed}
             />
         );
-    }
-
-    if (panel.creating) {
-        return (
-            <BtwFrame>
+    } else if (panel.creating) {
+        stage = (
+            <BtwFrame key="creating">
                 <div className="flex items-center gap-2 px-4 py-4 text-sm text-muted-foreground">
                     <Icon name="loader-4" className="size-4 animate-spin" />
                     <span>{t('chat.btw.loading')}</span>
                 </div>
             </BtwFrame>
         );
-    }
-
-    if (panel.pending) {
-        return (
+    } else if (panel.pending) {
+        stage = (
             <BtwFrame
+                key="pending"
                 draftHint={t('chat.btw.draftHint')}
                 collapsed={panel.collapsed}
                 actions={(
@@ -96,7 +99,7 @@ export const BtwPanel: React.FC<{ parentSessionId: string; panel: BtwPanelState;
         );
     }
 
-    return null;
+    return <AnimatePresence>{stage}</AnimatePresence>;
 };
 
 const useBtwDestroy = (sessionRef: BtwSessionRef | null): (() => void) => {
@@ -115,7 +118,7 @@ type BtwSessionData = {
     streamingMessageId: string | null;
     activeStreamingPhase: 'streaming' | 'cooldown' | 'completed' | null;
     sessionPermissions: ReturnType<typeof useScopedBlockingPermissions>;
-    sessionQuestions: ReturnType<typeof useScopedBlockingQuestions>;
+    sessionForms: ReturnType<typeof useScopedBlockingForms>;
     isEmpty: boolean;
 };
 
@@ -148,7 +151,7 @@ const useBtwSessionData = (
         ),
     );
     const sessionPermissions = useScopedBlockingPermissions(sessionId, directory);
-    const sessionQuestions = useScopedBlockingQuestions(sessionId, directory);
+    const sessionForms = useScopedBlockingForms(sessionId, directory);
 
     const tailRecords = React.useMemo(
         () => filterBtwTailMessages(messageRecords, boundaryMessageID),
@@ -156,23 +159,17 @@ const useBtwSessionData = (
     );
 
     const sessionIsWorking = React.useMemo(() => {
-        if (sessionPermissions.length > 0 || sessionQuestions.length > 0) {
+        if (sessionPermissions.length > 0 || sessionForms.length > 0) {
             return false;
         }
         const statusType = status.type ?? 'idle';
         if (statusType === 'busy' || statusType === 'retry') {
             return true;
         }
-        // SAFETY: reads only the optional `time.completed` field, which the
-        // SDK Message union does not expose uniformly; a missing value means
-        // the assistant turn has not completed.
-        const lastMessage = tailRecords[tailRecords.length - 1]?.info as (Message & { time?: { completed?: number } }) | undefined;
-        return Boolean(
-            lastMessage
-            && lastMessage.role === 'assistant'
-            && typeof lastMessage.time?.completed !== 'number',
-        );
-    }, [sessionPermissions.length, sessionQuestions.length, status.type, tailRecords]);
+        // Plumbing roles trail the assistant message, so the working state
+        // follows the last conversation message, not the last record.
+        return isIncompleteAssistantTurn(getLastConversationRecord(tailRecords)?.info);
+    }, [sessionPermissions.length, sessionForms.length, status.type, tailRecords]);
 
     return {
         messageRecords: tailRecords,
@@ -180,7 +177,7 @@ const useBtwSessionData = (
         streamingMessageId,
         activeStreamingPhase,
         sessionPermissions,
-        sessionQuestions,
+        sessionForms,
         isEmpty: tailRecords.length === 0,
     };
 };
@@ -326,25 +323,29 @@ const BtwSheet: React.FC<{
         </div>
     );
 
-    if (collapsed) {
-        return (
-            <BtwCollapsedStrip
-                sessionRef={sessionRef}
-                actions={actions}
-                onExpand={handleToggleCollapsed}
-                expandLabel={toggleLabel}
-            />
-        );
-    }
-
+    // Collapsed strip and expanded sheet are separate panels: cross-fade
+    // between them, and let the whole sheet's exit reach whichever is shown.
     return (
-        <BtwExpandedSheet
-            sessionRef={sessionRef}
-            boundaryMessageID={boundaryMessageID}
-            actions={actions}
-            onTitleClick={handleToggleCollapsed}
-            titleClickLabel={toggleLabel}
-        />
+        <AnimatePresence propagate>
+            {collapsed ? (
+                <BtwCollapsedStrip
+                    key="collapsed"
+                    sessionRef={sessionRef}
+                    actions={actions}
+                    onExpand={handleToggleCollapsed}
+                    expandLabel={toggleLabel}
+                />
+            ) : (
+                <BtwExpandedSheet
+                    key="expanded"
+                    sessionRef={sessionRef}
+                    boundaryMessageID={boundaryMessageID}
+                    actions={actions}
+                    onTitleClick={handleToggleCollapsed}
+                    titleClickLabel={toggleLabel}
+                />
+            )}
+        </AnimatePresence>
     );
 };
 
@@ -399,6 +400,7 @@ const BtwExpandedSheet: React.FC<{
         <BtwFrame actions={actions} onTitleClick={onTitleClick} titleClickLabel={titleClickLabel} collapsed={false}>
             <ChatSurfaceProvider mode="peek">
                 <BtwMessages
+                    sessionRef={sessionRef}
                     data={data}
                     bodyRef={bodyRef}
                     contentRef={contentRef}
@@ -411,12 +413,13 @@ const BtwExpandedSheet: React.FC<{
 };
 
 const BtwMessages: React.FC<{
+    sessionRef: BtwSessionRef;
     data: BtwSessionData;
     bodyRef: React.RefObject<HTMLDivElement | null>;
     contentRef: React.RefObject<HTMLDivElement | null>;
     onBodyScroll: (event: React.UIEvent<HTMLDivElement>) => void;
     maxHeight?: number;
-}> = ({ data, bodyRef, contentRef, onBodyScroll, maxHeight }) => {
+}> = ({ sessionRef, data, bodyRef, contentRef, onBodyScroll, maxHeight }) => {
     const { t } = useI18n();
 
     if (data.isEmpty) {
@@ -451,16 +454,20 @@ const BtwMessages: React.FC<{
                         }
                     />
                 ))}
-                {data.sessionQuestions.length > 0 || data.sessionPermissions.length > 0 ? (
+                {data.sessionForms.length > 0 || data.sessionPermissions.length > 0 ? (
                     <div>
-                        {data.sessionQuestions.map((question) => (
-                            <QuestionCard key={question.id} question={question} />
+                        {data.sessionForms.map((form) => (
+                            <FormCard key={form.id} form={form} />
                         ))}
                         {data.sessionPermissions.map((permission) => (
                             <PermissionCard key={permission.id} permission={permission} />
                         ))}
                     </div>
                 ) : null}
+                {/* A turn OpenCode stops before any reply exists (an unusable
+                    model, a provider that fails to load) leaves only the
+                    question here; the same notice as the main chat says why. */}
+                <SessionErrorNotice sessionId={sessionRef.btwSessionId} directory={sessionRef.directory} />
                 {/* Always reserve this row so the content does not shift down
                     by a line when the indicator disappears. */}
                 <div
@@ -477,3 +484,6 @@ const BtwMessages: React.FC<{
         </ScrollShadow>
     );
 };
+
+/** Memoized: the composer re-renders on every keystroke, and nothing here depends on the draft text. */
+export const BtwPanel = React.memo(BtwPanelView);

@@ -2,15 +2,17 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@openchamber/agent-contract';
 import { useTraySync } from './useTraySync';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useNotificationStore } from '@/sync/notification-store';
 
-const session = (id: string, parentID?: string): Session => ({
-  id, parentID, slug: id, projectID: 'project', directory: '/project',
-  title: id, version: '1', time: { created: 1, updated: 1 },
+const session = (sessionId: string, parentSessionId?: string): Session => ({
+  sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId,
+  projectId: 'project', workspaceId: 'workspace:/project', displayPath: '/project',
+  createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
+  metadata: { title: sessionId }, metadataRevision: '0', archiveRevision: '0',
 });
 
 const Harness = () => {
@@ -24,9 +26,10 @@ describe('Dock badge with the macOS menu bar disabled', () => {
   const counts: number[] = [];
   let listenerCount = 0;
   let intervalCount = 0;
-  const invoke = async (command: string, args?: { dockBadgeCount?: number }) => {
+  const invoke = async (command: string, args?: Record<string, unknown>): Promise<null> => {
     expect(command).toBe('desktop_tray_update');
-    if (args?.dockBadgeCount !== undefined) counts.push(args.dockBadgeCount);
+    const dockBadgeCount = args?.dockBadgeCount;
+    if (typeof dockBadgeCount === 'number') counts.push(dockBadgeCount);
     return null;
   };
   const listen = async () => { listenerCount += 1; return () => {}; };
@@ -51,7 +54,7 @@ describe('Dock badge with the macOS menu bar disabled', () => {
       IS_REACT_ACT_ENVIRONMENT: true,
     });
     useNotificationStore.setState(useNotificationStore.getInitialState());
-    useGlobalSessionsStore.setState({ activeSessions: [session('root'), session('child', 'root')] });
+    useGlobalSessionsStore.getState().applySnapshot([session('root'), session('child', 'root')], []);
     useUIStore.setState({ dockBadgeEnabled: true, notifyOnSubtasks: false });
     counts.length = 0;
     listenerCount = 0;

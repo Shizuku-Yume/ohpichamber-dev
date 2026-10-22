@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -9,14 +10,15 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
 import { useI18n } from '@/lib/i18n';
 import { ModelPickerList, type ModelPickerEntry, type ModelPickerProvider } from '@/components/model-picker/ModelPickerList';
+import { listModelVariantIds } from '@/lib/modelVariants';
 
 /** Chip height class - shared between chips and add button */
 const CHIP_HEIGHT_CLASS = 'h-7';
 
 /** UI-only type with instanceId for React keys and duplicate tracking */
 export interface ModelSelectionWithId {
-  providerID: string;
-  modelID: string;
+  providerId: string;
+  modelId: string;
   displayName?: string;
   variant?: string;
   instanceId: string;
@@ -37,12 +39,12 @@ const ModelChip: React.FC<{
   totalSameModel: number;
   onRemove: () => void;
 }> = ({ model, instanceIndex, totalSameModel, onRemove }) => {
-  const displayName = model.displayName || `${model.providerID}/${model.modelID}`;
+  const displayName = model.displayName || `${model.providerId}/${model.modelId}`;
   const label = totalSameModel > 1 ? `${displayName} (${instanceIndex})` : displayName;
 
   return (
     <div className={cn('flex items-center gap-1.5 px-2 rounded-md bg-interactive-selection/20 border border-border/30', CHIP_HEIGHT_CLASS)}>
-      <ProviderLogo providerId={model.providerID} className="h-3.5 w-3.5" />
+      <ProviderLogo providerId={model.providerId} className="h-3.5 w-3.5" />
       <span className="typography-meta font-medium truncate max-w-[140px]">
         {label}
       </span>
@@ -57,7 +59,7 @@ const ModelChip: React.FC<{
   );
 };
 
-export interface ModelMultiSelectProps {
+interface ModelMultiSelectProps {
   selectedModels: ModelSelectionWithId[];
   onAdd: (model: ModelSelectionWithId) => void;
   onRemove: (index: number) => void;
@@ -80,6 +82,13 @@ export interface ModelMultiSelectProps {
   containerClassName?: string;
   /** Optional trigger icon override. */
   triggerIcon?: React.ReactNode;
+  /**
+   * Render the picker over the page instead of inside the trigger's container.
+   * Needed inside the composer box, which clips its content.
+   */
+  portal?: boolean;
+  /** Accessible name when the trigger shows only an icon. */
+  addButtonAriaLabel?: string;
 }
 
 /**
@@ -99,10 +108,11 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   dropdownClassName,
   containerClassName,
   triggerIcon,
+  portal = false,
+  addButtonAriaLabel,
 }) => {
   const { t } = useI18n();
-  const providers = useConfigStore((state) => state.providers) as ModelPickerProvider[];
-  const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
+  const providers = useConfigStore((state): ModelPickerProvider[] => state.providers);
   const toggleFavoriteModel = useUIStore((state) => state.toggleFavoriteModel);
   const isFavoriteModel = useUIStore((state) => state.isFavoriteModel);
   const { favoriteModelsList, recentModelsList } = useModelLists();
@@ -112,6 +122,8 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   const [searchQuery, setSearchQuery] = React.useState('');
   const [availableHeight, setAvailableHeight] = React.useState<number | null>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const popupRef = React.useRef<HTMLDivElement>(null);
+  const [portalStyle, setPortalStyle] = React.useState<React.CSSProperties | null>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const isSingleSelect = maxModels === 1;
   const canAddModel = maxModels === undefined || selectedModels.length < maxModels || isSingleSelect;
@@ -120,7 +132,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   const modelCounts = React.useMemo(() => {
     const counts = new Map<string, number>();
     for (const m of selectedModels) {
-      const key = `${m.providerID}:${m.modelID}`;
+      const key = `${m.providerId}:${m.modelId}`;
       counts.set(key, (counts.get(key) || 0) + 1);
     }
     return counts;
@@ -129,7 +141,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   // Get instance index for a specific model selection
   const getInstanceIndex = React.useCallback((model: ModelSelectionWithId): number => {
     const sameModels = selectedModels.filter(
-      m => m.providerID === model.providerID && m.modelID === model.modelID
+      m => m.providerId === model.providerId && m.modelId === model.modelId
     );
     return sameModels.findIndex(m => m.instanceId === model.instanceId) + 1;
   }, [selectedModels]);
@@ -139,6 +151,20 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
     if (!isOpen || !triggerRef.current) return;
 
     const triggerRect = triggerRef.current.getBoundingClientRect();
+
+    if (portal) {
+      const viewportHeight = window.visualViewport?.height ?? document.documentElement.clientHeight ?? window.innerHeight;
+      const popupWidth = Math.min(420, window.innerWidth - 32);
+      const left = Math.max(16, Math.min(triggerRect.left, window.innerWidth - popupWidth - 16));
+      const opensUp = dropdownSide === 'top';
+      const space = opensUp ? triggerRect.top - 16 : viewportHeight - triggerRect.bottom - 16;
+      // The list is the scrollable part; reserve room for the search and hint rows.
+      setAvailableHeight(Math.max(160, Math.min(320, space - 112)));
+      setPortalStyle(opensUp
+        ? { position: 'fixed', left, bottom: viewportHeight - triggerRect.top + 4, width: popupWidth }
+        : { position: 'fixed', left, top: triggerRect.bottom + 4, width: popupWidth });
+      return;
+    }
 
     if (dropdownSide === 'bottom') {
       const viewportHeight = window.visualViewport?.height ?? document.documentElement.clientHeight ?? window.innerHeight;
@@ -166,7 +192,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
     const spaceAbove = triggerRect.top - topBound - 16;
     // Cap: min 150, max 300
     setAvailableHeight(Math.max(150, Math.min(300, spaceAbove)));
-  }, [dropdownSide, isOpen]);
+  }, [dropdownSide, isOpen, portal]);
 
   React.useEffect(() => {
     if (!canAddModel && isOpen) {
@@ -180,7 +206,9 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
     if (!isOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (dropdownRef.current && !dropdownRef.current.contains(target) && !popupRef.current?.contains(target)) {
         setIsOpen(false);
         setSearchQuery('');
       }
@@ -192,8 +220,8 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
 
   const handleSelectModel = React.useCallback((entry: ModelPickerEntry) => {
     const nextModel = {
-      providerID: entry.providerID,
-      modelID: entry.modelID,
+      providerId: entry.providerID,
+      modelId: entry.modelID,
       displayName: (entry.model.name as string) || entry.modelID,
       instanceId: generateInstanceId(),
     };
@@ -207,6 +235,9 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
       setSearchQuery('');
     }
   }, [isSingleSelect, onAdd, onUpdate, selectedModels.length]);
+
+  // In portal mode the popup leaves the clipping container and sits over the page.
+  const mountPopup = (popup: React.ReactElement): React.ReactNode => (portal ? createPortal(popup, document.body) : popup);
 
   const labels = React.useMemo(() => ({
     searchPlaceholder: t('multirun.modelMultiSelect.search.placeholder'),
@@ -239,6 +270,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
               addButtonClassName,
             )}
             disabled={!canAddModel}
+            aria-label={addButtonAriaLabel}
             onClick={() => {
               setIsOpen(!isOpen);
             }}
@@ -247,14 +279,18 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
             {addButtonLabel ?? t('multirun.modelMultiSelect.actions.addModel')}
           </button>
 
-          {isOpen ? (
+          {isOpen && (!portal || portalStyle) ? mountPopup(
             <div
+              ref={popupRef}
               className={cn(
-                'absolute left-0 z-50 w-[min(420px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex flex-col overflow-hidden rounded-xl border border-border/50 shadow-lg',
-                dropdownSide === 'top' ? 'bottom-full mb-1' : 'top-full mt-1',
+                'flex flex-col overflow-hidden rounded-xl border border-border/50 shadow-lg',
+                portal
+                  ? 'z-[60]'
+                  : cn('absolute left-0 z-50 w-[min(420px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]', dropdownSide === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'),
                 dropdownClassName,
               )}
               style={{
+                ...(portal ? portalStyle : null),
                 background: 'linear-gradient(var(--surface-elevated),var(--surface-elevated)),linear-gradient(var(--surface-background),var(--surface-background))',
               }}
             >
@@ -263,26 +299,25 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
                 providerOrder={providerOrder}
                 favoriteModels={favoriteModelsList}
                 recentModels={recentModelsList}
-                modelsMetadata={modelsMetadata}
                 hiddenModels={hiddenModels}
                 searchQuery={searchQuery}
                 onSearchQueryChange={setSearchQuery}
                 onSelect={handleSelectModel}
                 labels={labels}
-                selectionCount={(entry) => modelCounts.get(`${entry.providerID}:${entry.modelID}`) || 0}
+                selectionCount={(entry) => modelCounts.get(`${entry.providerId}:${entry.modelId}`) || 0}
                 disabled={!canAddModel}
                 maxHeightClassName="flex-1"
                 maxHeightStyle={{ maxHeight: availableHeight ? `${availableHeight}px` : '300px' }}
                 stickyHeaders
                 tooltipsEnabled={isOpen}
-                isFavorite={(entry) => isFavoriteModel(entry.providerID, entry.modelID)}
-                onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerID, entry.modelID)}
+                isFavorite={(entry) => isFavoriteModel(entry.providerId, entry.modelId)}
+                onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerId, entry.modelId)}
                 onEscape={() => {
                   setIsOpen(false);
                   setSearchQuery('');
                 }}
               />
-            </div>
+            </div>,
           ) : null}
         </div>
 
@@ -290,15 +325,13 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
         {showChips && selectedModels.length > 0 && (
           <div className="flex flex-col gap-2 w-full">
             {selectedModels.map((model, index) => {
-              const key = `${model.providerID}:${model.modelID}`;
+              const key = `${model.providerId}:${model.modelId}`;
               const totalSameModel = modelCounts.get(key) || 1;
               const instanceIndex = getInstanceIndex(model);
 
-              const provider = providers.find((p) => p.id === model.providerID);
-              const providerModel = provider?.models?.find((m: Record<string, unknown>) => (m as { id?: string }).id === model.modelID) as
-                | { variants?: Record<string, unknown> }
-                | undefined;
-              const variantKeys = providerModel?.variants ? Object.keys(providerModel.variants) : [];
+              const provider = providers.find((p) => p.id === model.providerId);
+              const providerModel = provider?.models?.find((entry) => entry.id === model.modelId);
+              const variantKeys = listModelVariantIds(providerModel?.variants);
               const hasVariants = variantKeys.length > 0;
 
               const DEFAULT_VARIANT_VALUE = '__default__';

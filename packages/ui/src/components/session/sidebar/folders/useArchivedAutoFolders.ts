@@ -3,7 +3,11 @@ import {
   getArchivedScopeKey,
   resolveArchivedFolderName,
 } from '../utils';
-import type { SessionOwnershipIndex } from '../sessions/sessionOwnership';
+import type { Session } from '@openchamber/agent-contract';
+
+type ArchivedSessionOwnership = {
+  archivedSessionsByProject: ReadonlyMap<string, readonly Session[]>;
+};
 
 type ProjectForArchivedFolders = {
   id: string;
@@ -18,8 +22,8 @@ type FolderEntry = {
 
 type Args = {
   enabled?: boolean;
-  normalizedProjects: ProjectForArchivedFolders[];
-  ownership: SessionOwnershipIndex;
+  normalizedProjects: readonly ProjectForArchivedFolders[];
+  ownership: ArchivedSessionOwnership;
   isSessionsLoading: boolean;
   hasAuthoritativeGlobalSessions: boolean;
   isWorktreeTopologyLoading: boolean;
@@ -66,8 +70,8 @@ export const useArchivedAutoFolders = (args: Args): void => {
           folderByName.set(key, folder);
         }
 
-        if (!folder.sessionIds.includes(session.id)) {
-          addSessionToFolder(scopeKey, folder.id, session.id);
+        if (!folder.sessionIds.includes(session.sessionId)) {
+          addSessionToFolder(scopeKey, folder.id, session.sessionId);
         }
       });
     });

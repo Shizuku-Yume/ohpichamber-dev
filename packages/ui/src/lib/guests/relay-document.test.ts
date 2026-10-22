@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import { GUEST_SCROLLBAR_CSS } from '@openchamber/sdk';
+import { GUEST_BOOTSTRAP_SCRIPT, GUEST_SCROLLBAR_CSS, guestFramePolicy } from '@openchamber/sdk';
 
 import { loadRelayGuestDocument } from './relay-document';
 
@@ -39,6 +39,34 @@ describe('relay guest documents', () => {
     expect(requests).toEqual([`${prefix}index.html`]);
   });
 
+  test('locks the relay document off the network and bootstraps before authored metadata and scripts', async () => {
+    const assets = new Map<string, Asset>([
+      [`${prefix}index.html`, { type: 'text/html', body: '<!doctype html><html><head><script type="text/plain">inert</script><meta http-equiv="Content-Security-Policy" content="script-src &#x27;none&#x27;"><script>1</script></head><body></body></html>' }],
+    ]);
+    const html = await loadRelayGuestDocument('demo', 'index.html', loader(assets, []));
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    const first = document.head.firstElementChild;
+    expect(first?.tagName).toBe('META');
+    const policy = document.head.querySelector('meta[http-equiv="Content-Security-Policy"]');
+    expect(policy?.getAttribute('content')).toBe(guestFramePolicy(null));
+    expect(policy?.getAttribute('content')).toContain("connect-src 'none'");
+    const scripts = [...document.head.querySelectorAll('script')];
+    const authoredPolicy = [...document.head.querySelectorAll('meta[http-equiv]')].find((node) => node !== policy);
+    const bootstrapScript = scripts.find((node) => node.getAttribute('data-openchamber-guest-bootstrap') === '');
+    const inertScript = scripts.find((node) => node.textContent === 'inert');
+    if (!policy || !authoredPolicy || !bootstrapScript || !inertScript) throw new Error('Relay bootstrap or CSP missing');
+    expect(policy.compareDocumentPosition(bootstrapScript) & 4).toBe(4);
+    expect(bootstrapScript.compareDocumentPosition(authoredPolicy) & 4).toBe(4);
+    expect(bootstrapScript.compareDocumentPosition(inertScript) & 4).toBe(4);
+    expect(bootstrapScript.textContent).toBe(GUEST_BOOTSTRAP_SCRIPT);
+    expect(scripts.find((node) => node.textContent === '1')?.textContent).toBe('1');
+
+    const approved = await loadRelayGuestDocument('demo', 'index.html', loader(assets, []), ['https://fonts.example.com']);
+    const approvedPolicy = new DOMParser().parseFromString(approved, 'text/html').head.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content');
+    expect(approvedPolicy).toBe(guestFramePolicy(null, ['https://fonts.example.com']));
+    expect(approvedPolicy).toContain('connect-src https://fonts.example.com');
+  });
+
   test('embeds scripts, nested CSS, images and fonts without requesting host UI paths', async () => {
     const assets = new Map<string, Asset>([
       [`${prefix}panel/index.html`, { type: 'text/html', body: '<script src="main.js"></script><link rel="stylesheet" href="css/main.css"><img src="../icon.svg"><div style="background:url(../icon.svg)"></div>' }],
@@ -51,7 +79,7 @@ describe('relay guest documents', () => {
     const requests: string[] = [];
     const html = await loadRelayGuestDocument('demo', 'panel/index.html', loader(assets, requests));
     const document = new DOMParser().parseFromString(html, 'text/html');
-    expect(decode(document.querySelector('script')?.getAttribute('src') ?? '')).toBe('document.body.dataset.ready = "yes";');
+    expect(decode(document.querySelector('script[src]')?.getAttribute('src') ?? '')).toBe('document.body.dataset.ready = "yes";');
     const css = decode(document.querySelector('link')?.getAttribute('href') ?? '');
     expect(css).toContain('data:text/css');
     expect(css).toContain('data:image/svg+xml;base64,');

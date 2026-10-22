@@ -20,7 +20,7 @@ import { useStreamingStore } from '@/sync/streaming';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
-export interface DebugMessageInfo {
+interface DebugMessageInfo {
   messageId: string;
   role: string;
   timestamp: number;
@@ -37,8 +37,13 @@ export interface DebugMessageInfo {
   isEmptyResponse: boolean;
   raw: any;
 }
+interface DebugUtils {
+  [key: string]: unknown;
+  buildDiagnosticsReport: () => Promise<string>;
+  copyTextToClipboard: (text: string) => Promise<{ ok: boolean; error?: string }>;
+}
 
-export const debugUtils = {
+export const debugUtils: DebugUtils = {
 
   getLastAssistantMessage(): DebugMessageInfo | null {
     const state = useSessionUIStore.getState();
@@ -58,10 +63,10 @@ export const debugUtils = {
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       if (msg.role === 'assistant') {
-        const msgParts = getSyncParts(msg.id) || [];
+        const msgParts = getSyncParts(msg.messageId) || [];
         const parts = msgParts.map((part: any) => {
           const info: any = {
-            id: part.id,
+            id: part.partId,
             type: part.type,
           };
 
@@ -85,9 +90,9 @@ export const debugUtils = {
         const isEmptyResponse = !hasText && !hasTools && (!isEmpty || hasStepMarkers);
 
         const info: DebugMessageInfo = {
-          messageId: msg.id,
+          messageId: msg.messageId,
           role: msg.role,
-          timestamp: (msg as any).time?.created || 0,
+          timestamp: msg.createdAt,
           partsCount: parts.length,
           parts,
           isEmpty,
@@ -138,7 +143,7 @@ export const debugUtils = {
   truncateMessages(messages: any[]): any[] {
     return messages.map((msg) => ({
       ...msg,
-      parts: (getSyncParts(msg.id) || []).map((part: any) => {
+      parts: (getSyncParts(msg.messageId) || []).map((part: any) => {
         const truncatedPart: any = { ...part };
 
         if ('text' in part) {
@@ -189,8 +194,8 @@ export const debugUtils = {
     console.log(`[MESSAGES] Total messages in session: ${messages.length}`);
 
     messages.forEach((msg, idx) => {
-      const msgParts = getSyncParts(msg.id) || [];
-      console.log(`[${idx}] ${msg.role} - ${msg.id} - ${msgParts.length} parts`);
+      const msgParts = getSyncParts(msg.messageId) || [];
+      console.log(`[${idx}] ${msg.role} - ${msg.messageId} - ${msgParts.length} parts`);
     });
 
     return truncate ? this.truncateMessages(messages as any[]) : messages;
@@ -269,19 +274,13 @@ export const debugUtils = {
     let opencodeHealth: unknown = null;
 
     try {
-      const pathResult = await opencodeClient.getSdkClient().path.get(
-        currentDirectory ? { directory: currentDirectory } : undefined
-      );
-      pathInfo = pathResult.error ? { error: pathResult.error } : pathResult.data;
+      pathInfo = await opencodeClient.getLocation(currentDirectory);
     } catch (error) {
       pathInfo = { error: error instanceof Error ? error.message : String(error) };
     }
 
     try {
-      const projectResult = await opencodeClient.getSdkClient().project.current(
-        currentDirectory ? { directory: currentDirectory } : undefined
-      );
-      projectInfo = projectResult.error ? { error: projectResult.error } : projectResult.data;
+      projectInfo = await opencodeClient.getCurrentProject(currentDirectory);
     } catch (error) {
       projectInfo = { error: error instanceof Error ? error.message : String(error) };
     }
@@ -289,7 +288,10 @@ export const debugUtils = {
     settingsInfo = await safeFetchJson('/api/config/settings');
 
     try {
-      const resp = await runtimeFetch('/api/health');
+      // OpenChamber's own health route. Every field read below
+      // (`openCodePort`, `openCodeRunning`, `isOpenCodeReady`, ...) is
+      // OpenChamber's; OpenCode 2.0.8 removed `/api/health` entirely.
+      const resp = await runtimeFetch('/health');
       const contentType = resp.headers.get('content-type') || '';
       const body = await safeText(resp);
       const isJson = contentType.toLowerCase().includes('application/json');
@@ -407,7 +409,7 @@ export const debugUtils = {
   },
 
   /**
-   * The same text the status report dialog (Ctrl/Cmd+Shift+L) shows, for a
+   * The same text the status report dialog ("Show OpenCode status") shows, for a
    * console or remote session that cannot press the shortcut.
    */
   async statusReport() {
@@ -451,8 +453,8 @@ export const debugUtils = {
     );
     const worktreeMetadata = sessionState.worktreeMetadata.get(targetSessionId)?.path ?? null;
     const owningStoreDirectory = getSyncSessionDirectory(targetSessionId);
-    const sessionRecord = getAllSyncSessions().find((session) => session.id === targetSessionId);
-    const recordDirectory = (sessionRecord as { directory?: string | null } | undefined)?.directory ?? null;
+    const sessionRecord = getAllSyncSessions().find((session) => session.sessionId === targetSessionId);
+    const recordDirectory = sessionRecord?.displayPath ?? null;
     const selected = targetSessionId === sessionState.currentSessionId
       ? sessionState.currentSessionDirectory
       : null;
@@ -579,7 +581,7 @@ export const debugUtils = {
     const emptyMessages = messages
       .filter((msg) => msg.role === 'assistant')
       .filter((msg) => {
-        const parts = getSyncParts(msg.id) || [];
+        const parts = getSyncParts(msg.messageId) || [];
         const hasTextContent = parts.some(
           (p: any) => p.type === 'text' && p.text && p.text.trim().length > 0
         );
@@ -591,13 +593,13 @@ export const debugUtils = {
     console.log(`[INSPECT] Found ${emptyMessages.length} empty assistant messages`);
 
     emptyMessages.forEach((msg, idx) => {
-      const parts = getSyncParts(msg.id) || [];
+      const parts = getSyncParts(msg.messageId) || [];
       console.log(`[${idx}] Empty message:`, {
-        messageId: msg.id,
+        messageId: msg.messageId,
         partsCount: parts.length,
-        provider: (msg as any).providerID,
-        model: (msg as any).modelID,
-        timestamp: (msg as any).time?.created,
+        provider: msg.providerId,
+        model: msg.modelId,
+        timestamp: msg.createdAt,
       });
     });
 
@@ -662,7 +664,7 @@ export const debugUtils = {
 
     const rows = targetMessages.map((message, index) => {
       const info = message as any;
-      const parts = getSyncParts(message.id) || [];
+      const parts = getSyncParts(message.messageId) || [];
 
       const timeInfo = (info.time ?? {}) as { completed?: number };
       const completedAt = toNumber(timeInfo.completed);
@@ -773,7 +775,7 @@ export const debugUtils = {
     }
 
     const lastMessage = assistantMessages[assistantMessages.length - 1];
-    const lastParts = getSyncParts(lastMessage.id) || [];
+    const lastParts = getSyncParts(lastMessage.messageId) || [];
     const stepFinishParts = lastParts.filter((p: any) => p.type === 'step-finish');
     const hasStopReason = (lastMessage as any).finish === 'stop';
 
@@ -787,11 +789,11 @@ export const debugUtils = {
     const streamingMessageId = (lastMessage as any).sessionID
       ? streamingState.streamingMessageIds.get((lastMessage as any).sessionID as string) ?? null
       : null;
-    const lifecycle = streamingState.messageStreamStates.get(lastMessage.id);
-    const isStreamingCandidate = lastMessage.id === streamingMessageId;
+    const lifecycle = streamingState.messageStreamStates.get(lastMessage.messageId);
+    const isStreamingCandidate = lastMessage.messageId === streamingMessageId;
 
     console.log('[SUMMARY] Completion Status:');
-    console.log('Message ID:', lastMessage.id);
+    console.log('Message ID:', lastMessage.messageId);
     console.log('time.completed:', completedAt, '(type:', typeof completedAt, ')');
     console.log('status:', messageStatus);
     console.log('hasCompletedFlag:', hasCompletedFlag);
@@ -803,7 +805,7 @@ export const debugUtils = {
     console.log('Step-finish parts:', stepFinishParts);
 
     return {
-      messageId: lastMessage.id,
+      messageId: lastMessage.messageId,
       completed: completedAt,
       status: messageStatus,
       hasCompletedFlag,

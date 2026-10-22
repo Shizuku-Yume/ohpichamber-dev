@@ -1,13 +1,15 @@
-import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
 import { Window } from 'happy-dom';
+import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, GUEST_BOOTSTRAP_SCRIPT } from '@openchamber/sdk';
 import { guestMessageSchema } from '@openchamber/sdk/schemas';
 import type { GuestMessage, HostMessage, HostReadyContext, HostResultPayload, GuestWorkspaceSnapshot } from '@openchamber/sdk';
 
 const examples = new URL('../../../../sdk/examples/', import.meta.url);
 const windows: Window[] = [];
-const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const channels: MessageChannel[] = [];
+const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 const context: HostReadyContext = {
   locale: 'en', directory: '/repo', session: null, surface: 'panel', connection: { connected: false, account: '' }, settings: {}, item: null,
   theme: { mode: 'light', tokens: {
@@ -19,19 +21,52 @@ const context: HostReadyContext = {
 };
 
 afterEach(async () => {
+  for (const channel of channels.splice(0)) {
+    channel.port1.close();
+    channel.port2.close();
+  }
   for (const window of windows.splice(0)) await window.happyDOM.close();
 });
 
 const load = async (name: string, script = 'main', folder = 'panel') => {
-  const parent = new Window();
   const window = new Window({ settings: { disableJavaScriptEvaluation: false } });
-  windows.push(window, parent);
-  Object.defineProperty(window, 'parent', { value: parent });
+  const parentWindow = new Window();
+  windows.push(window, parentWindow);
+  Object.defineProperty(window, 'parent', { value: parentWindow });
   window.document.body.innerHTML = '<div id="root"></div>';
   const messages: GuestMessage[] = [];
-  spyOn(parent, 'postMessage').mockImplementation((data) => { messages.push(guestMessageSchema.parse(data)); });
-  const send = (message: HostMessage) => window.dispatchEvent(new window.MessageEvent('message', { source: parent, data: message }));
-  const ready = (next: HostReadyContext = context) => send({ channel: 'openchamber.sdk', v: 1, type: 'ready', payload: next });
+  let hostPort: MessagePort | null = null;
+  Object.defineProperty(parentWindow, 'postMessage', {
+    configurable: true,
+    value: (message: unknown, _targetOrigin?: string, transfer?: readonly Transferable[]) => {
+      if (!message || typeof message !== 'object' || !('channel' in message)
+        || message.channel !== GUEST_BOOTSTRAP_CHANNEL || !('v' in message) || message.v !== GUEST_BOOTSTRAP_API_VERSION
+        || !('type' in message) || message.type !== 'bootstrap') return;
+      const transferred = transfer?.[0];
+      if (!(transferred instanceof MessagePort)) return;
+      const bootstrapPort = transferred;
+      const sdkChannel = new MessageChannel();
+      channels.push(sdkChannel);
+      const sdkHostPort = sdkChannel.port2;
+      hostPort = sdkHostPort;
+      sdkHostPort.addEventListener('message', (event) => { messages.push(guestMessageSchema.parse(event.data)); });
+      sdkHostPort.start();
+      bootstrapPort.postMessage({
+        channel: GUEST_BOOTSTRAP_CHANNEL,
+        v: GUEST_BOOTSTRAP_API_VERSION,
+        type: 'connect-port',
+      }, [sdkChannel.port1]);
+      bootstrapPort.start();
+    },
+  });
+  const send = (message: HostMessage) => {
+    if (!hostPort) throw new Error('Guest SDK port is not connected');
+    hostPort.postMessage(message);
+  };
+  const ready = async (next: HostReadyContext = context) => {
+    send({ channel: 'openchamber.sdk', v: 1, type: 'ready', payload: next });
+    await tick();
+  };
   const reply = (message: GuestMessage, payload?: HostResultPayload) => {
     if (!('id' in message)) throw new Error('Cannot reply to hello');
     send({ channel: 'openchamber.sdk', v: 1, type: 'result', id: message.id, ok: true, payload });
@@ -53,25 +88,55 @@ const load = async (name: string, script = 'main', folder = 'panel') => {
     reply(subscription);
     send({ channel: 'openchamber.sdk', v: 1, type: 'workspace', payload: { subscriptionId: subscription.payload.subscriptionId, snapshot } });
   };
-  runInNewContext(await readFile(new URL(`${name}/${folder}/${script}.js`, examples), 'utf8'), {
-    window, document: window.document, HTMLElement: window.HTMLElement, MessageEvent: window.MessageEvent, console,
-    HTMLInputElement: window.HTMLInputElement, HTMLStyleElement: window.HTMLStyleElement, HTMLAnchorElement: window.HTMLAnchorElement,
+  const sandbox = {
+    window, document: window.document, HTMLElement: window.HTMLElement, MessageEvent: window.MessageEvent, CustomEvent: window.CustomEvent,
+    MessageChannel, MessagePort, console, HTMLInputElement: window.HTMLInputElement, HTMLStyleElement: window.HTMLStyleElement, HTMLAnchorElement: window.HTMLAnchorElement,
     TextEncoder, URL, crypto, performance, setTimeout: window.setTimeout.bind(window), clearTimeout: window.clearTimeout.bind(window),
-  });
+    ResizeObserver: window.ResizeObserver,
+  };
+  runInNewContext(GUEST_BOOTSTRAP_SCRIPT, sandbox);
+  runInNewContext(await readFile(new URL(`${name}/${folder}/${script}.js`, examples), 'utf8'), sandbox);
+  await tick();
   return { window, messages, send, ready, reply, request, button, update };
 };
 
 describe('checked-in SDK examples', () => {
+  test('the checklist file editor edits the file it was handed and keeps what it does not understand', async () => {
+    const app = await load('checklist-editor', 'main', 'editor');
+    const content = '# Launch\n- [ ] Write notes\n- [X] Ship\n';
+    await app.ready({ ...context, surface: 'file' });
+    app.send({ channel: 'openchamber.sdk', v: 1, type: 'file-open', payload: { path: 'launch.checklist.md', name: 'launch.checklist.md', content, readOnly: false, encoding: 'text' } });
+    await tick();
+    const document = app.window.document;
+    const boxes = [...document.querySelectorAll('input[type="checkbox"]')].filter((node) => node instanceof app.window.HTMLInputElement);
+    expect(boxes.map((box) => box.checked)).toEqual([false, true]);
+    expect(app.messages.some((message) => message.type === 'file-change')).toBe(false);
+
+    boxes[0]?.click();
+    await tick();
+    expect(app.request('file-change')).toMatchObject({ payload: { dirty: true, edited: true } });
+
+    app.send({ channel: 'openchamber.sdk', v: 1, type: 'file-snapshot', id: 'save-1', payload: { purpose: 'save' } });
+    await tick();
+    const answer = app.request('file-snapshot-result');
+    if (answer.type !== 'file-snapshot-result' || !('snapshot' in answer.payload) || !('content' in answer.payload.snapshot)) throw new Error('Missing snapshot');
+    expect(answer.payload.snapshot.content).toBe('# Launch\n- [x] Write notes\n- [x] Ship\n');
+
+    app.send({ channel: 'openchamber.sdk', v: 1, type: 'file-saved', payload: { version: answer.payload.snapshot.version } });
+    await tick();
+    expect(app.request('file-change')).toMatchObject({ payload: { dirty: false, edited: false } });
+  });
+
   test('a background message action shows one toast without drawing the panel', async () => {
     const app = await load('hello-kit', 'main', 'background');
-    app.ready({ ...context, surface: 'background' });
+    await app.ready({ ...context, surface: 'background' });
     app.send({ channel: 'openchamber.sdk', v: 1, type: 'action', id: 'count', payload: {
       kind: 'message', action: 'message-length', sessionId: 's1', sessionTitle: 'Example', directory: '/repo', messageId: 'm1', role: 'user', text: 'Hello',
     } });
     await tick();
     expect(app.request('toast')).toMatchObject({ payload: { kind: 'info', message: 'Message length: 5 characters.', copy: true, dismiss: true, persistent: true } });
     expect(app.messages.some((message) => message.type === 'action-result')).toBe(false);
-    app.ready({ ...context, surface: 'background' });
+    await app.ready({ ...context, surface: 'background' });
     expect(app.messages.filter((message) => message.type === 'toast')).toHaveLength(1);
     expect(app.window.document.querySelector('button')).toBeNull();
     app.reply(app.request('toast'));
@@ -81,18 +146,19 @@ describe('checked-in SDK examples', () => {
 
   test('hello kit keeps controls and input state across theme snapshots', async () => {
     const app = await load('hello-kit');
-    app.ready();
+    await app.ready();
     const input = app.window.document.querySelector('input');
     if (!input) throw new Error('Missing name field');
     input.value = 'Keep this draft';
     input.dispatchEvent(new app.window.Event('input', { bubbles: true }));
     const controls = app.window.document.querySelectorAll('button').length;
-    app.ready({ ...context, theme: { ...context.theme, mode: 'dark' } });
+    await app.ready({ ...context, theme: { ...context.theme, mode: 'dark' } });
     expect(app.window.document.querySelector('input')).toBe(input);
     expect(input.value).toBe('Keep this draft');
     expect(app.window.document.querySelectorAll('button').length).toBe(controls);
     expect(app.window.document.documentElement.dataset.ocTheme).toBe('dark');
     app.button('Compose').click();
+    await tick();
     expect(app.request('compose').type).toBe('compose');
     app.reply(app.request('compose'));
   });
@@ -100,9 +166,10 @@ describe('checked-in SDK examples', () => {
   test('GitHub ignores repeated ready and discards replies after disconnect', async () => {
     const app = await load('github-token');
     const connected = { ...context, connection: { connected: true, account: 'fixture' } };
-    app.ready(connected);
+    await app.ready(connected);
+    await tick();
     const pending = app.request('request');
-    app.ready(connected);
+    await app.ready(connected);
     expect(app.messages.filter((message) => message.type === 'request').length).toBe(1);
     app.send({ channel: 'openchamber.sdk', v: 1, type: 'connection', payload: { connection: context.connection } });
     app.reply(pending, { status: 200, body: JSON.stringify([{ full_name: 'private/repository', html_url: 'https://example.com/repo', description: null, stargazers_count: 0, private: true }]) });
@@ -113,16 +180,17 @@ describe('checked-in SDK examples', () => {
 
   test('service panel sends typed requests and retains its input', async () => {
     const app = await load('service-echo');
-    app.ready();
+    await app.ready();
     app.reply(app.request('service-status'), { status: 'stopped' });
     await tick();
     const input = app.window.document.querySelector('textarea');
     if (!input) throw new Error('Missing message field');
     input.value = 'Echo this';
     input.dispatchEvent(new app.window.Event('input', { bubbles: true }));
-    app.ready();
+    await app.ready();
     expect(input.value).toBe('Echo this');
     app.button('Send request').click();
+    await tick();
     const request = app.request('service-request');
     if (request.type !== 'service-request') throw new Error('Missing service request');
     expect(request.payload.body).toBe('{"message":"Echo this"}');
@@ -132,17 +200,74 @@ describe('checked-in SDK examples', () => {
     expect(app.window.document.body.textContent).toContain('HTTP 200');
   });
 
+  test('git graph section loads refs and history, expands one commit at a time, and opens its diff', async () => {
+    const app = await load('git-graph-status', 'main', 'status');
+    await app.ready({ ...context, surface: 'status' });
+    await tick();
+    app.reply(app.request('storage'), { storage: true, op: 'get', found: false });
+    await tick();
+    const service = (path: string) => {
+      const found = [...app.messages].reverse().find((message) => message.type === 'service-request' && message.payload.path === path);
+      if (!found || found.type !== 'service-request') throw new Error(`Missing ${path}`);
+      return found;
+    };
+    expect(service('/log').payload.query).toMatchObject({ directory: '/repo', mode: 'auto' });
+    app.reply(service('/refs'), { status: 200, body: JSON.stringify({
+      branch: 'main', upstream: 'origin/main', github: 'https://github.com/acme/repo',
+      refs: [{ name: 'main', kind: 'local' }, { name: 'origin/main', kind: 'remote' }],
+    }) });
+    app.reply(service('/log'), { status: 200, body: JSON.stringify({ uncommitted: 2, commits: [
+      { hash: 'b'.repeat(40), parents: ['a'.repeat(40)], author: 'Ada', when: '2 hours ago', date: '2026-09-24T08:00:00Z', subject: 'Add the graph',
+        refs: [{ name: 'main', kind: 'local', head: true }, { name: 'origin/main', kind: 'remote', head: false }] },
+      { hash: 'a'.repeat(40), parents: [], author: 'Ada', when: '3 days ago', date: '2026-09-21T08:00:00Z', subject: 'First commit', refs: [] },
+    ] }) });
+    await tick();
+    const document = app.window.document;
+    expect(document.body.textContent).toContain('Uncommitted changes');
+    expect(document.body.textContent).toContain('Ada · 2 hours ago');
+    expect(document.querySelector('.ref.head-ref')?.textContent).toBe('main');
+    expect(document.querySelector('.ref.remote')?.textContent).toBe('origin/main');
+    expect(document.querySelectorAll('svg.graph circle')).toHaveLength(3);
+
+    const rows = () => [...document.querySelectorAll('button.head')].filter((node) => node instanceof app.window.HTMLButtonElement);
+    rows()[0]?.click();
+    await tick();
+    const commit = service('/commit');
+    expect(commit.payload.query).toMatchObject({ sha: 'b'.repeat(40) });
+    app.reply(commit, { status: 200, body: JSON.stringify({
+      hash: 'b'.repeat(40), parents: ['a'.repeat(40)], author: 'Ada', email: 'ada@example.com', when: '2 hours ago', date: '2026-09-24T08:00:00Z',
+      subject: 'Add the graph', body: 'Longer story.', files: 3, insertions: 40, deletions: 2,
+    }) });
+    await tick();
+    expect(document.querySelector('.card')?.textContent).toContain('3 files changed');
+    expect(document.querySelector('.card')?.textContent).toContain('ada@example.com');
+    rows()[1]?.click();
+    await tick();
+    expect(document.querySelectorAll('.commit.open')).toHaveLength(1);
+    rows()[0]?.click();
+    await tick();
+    app.button('Open diff').click();
+    await tick();
+    expect(app.request('open-commit')).toMatchObject({ payload: { sha: 'b'.repeat(40) } });
+    app.button('Open on GitHub').click();
+    await tick();
+    expect(app.request('open-url')).toMatchObject({ payload: { url: `https://github.com/acme/repo/commit/${'b'.repeat(40)}` } });
+  });
+
   test('repository refresh failures preserve results and context is composed without sending', async () => {
     const app = await load('github-token');
-    app.ready({ ...context, connection: { connected: true, account: 'fixture' } });
-    app.reply(app.request('request'), { status: 200, body: JSON.stringify([{ full_name: 'example/repo', html_url: 'https://github.com/example/repo', description: 'A useful project', stargazers_count: 12, private: false }]) });
+    await app.ready({ ...context, connection: { connected: true, account: 'fixture' } });
+    await tick();
+    app.reply(app.request('request'), { status: 200, body: JSON.stringify([{ full_name: 'example/repo', html_url: 'https://example.com/repo', description: 'A useful project', stargazers_count: 12, private: false }]) });
     await tick();
     app.button('Add context to chat').click();
+    await tick();
     const compose = app.request('compose');
     if (compose.type !== 'compose') throw new Error('Missing compose');
     expect(compose.payload.text).toContain('example/repo');
     app.reply(compose);
     app.button('Refresh').click();
+    await tick();
     app.reply(app.request('request'), { status: 503, body: 'Unavailable' });
     await tick();
     expect(app.window.document.body.textContent).toContain('example/repo');
@@ -159,7 +284,7 @@ describe('checked-in SDK examples', () => {
     const result = app.request('resolve-result');
     if (result.type !== 'resolve-result' || !('item' in result.payload)) throw new Error('Missing task result');
     expect(result.payload.item?.id).toBe('DEMO-2');
-    app.ready();
+    await app.ready();
     for (const message of [...app.messages]) {
       if (message.type === 'storage' && message.payload.op === 'keys') app.reply(message, { storage: true, op: 'keys', keys: [] });
       if (message.type === 'storage' && message.payload.op === 'get') app.reply(message, { storage: true, op: 'get', found: false });
@@ -170,7 +295,7 @@ describe('checked-in SDK examples', () => {
     if (!input) throw new Error('Missing task search');
     input.value = 'DEMO-2';
     input.dispatchEvent(new app.window.Event('input', { bubbles: true }));
-    app.ready();
+    await app.ready();
     expect(input.value).toBe('DEMO-2');
     expect(app.window.document.querySelectorAll('h1').length).toBe(1);
     expect(app.messages.filter((message) => message.type === 'badge').length).toBe(1);
@@ -178,7 +303,8 @@ describe('checked-in SDK examples', () => {
 
   test('config null is data and repeated ready preserves a raw draft', async () => {
     const app = await load('config-editor');
-    app.ready();
+    await app.ready();
+    await tick();
     app.reply(app.request('file-stat'), { kind: 'file', size: 4, mtime: 0 });
     await tick();
     app.reply(app.request('file-read'), { content: 'null' });
@@ -189,14 +315,16 @@ describe('checked-in SDK examples', () => {
     if (!input) throw new Error('Missing editor');
     input.value = '{"draft":true}';
     input.dispatchEvent(new app.window.Event('input', { bubbles: true }));
-    app.ready();
+    await app.ready();
     expect(app.window.document.querySelector('textarea')).toBe(input);
     app.button('Explore').click(); app.button('Raw').click();
     expect(app.window.document.querySelector('textarea')?.value).toBe('{"draft":true}');
     app.button('Review changes').click();
     app.button('Save').click();
+    await tick();
     const pending = app.request('file-write');
     app.button('Back to editor').click();
+    await tick();
     const newer = app.window.document.querySelector('textarea');
     if (!newer) throw new Error('Missing editor during save');
     newer.value = '{"draft":"newer"}';
@@ -211,7 +339,8 @@ describe('checked-in SDK examples', () => {
 
   test('board loads projects even when notes fail and preserves scope on failed project snapshots', async () => {
     const app = await load('tasks-demo', 'page');
-    app.ready({ ...context, surface: 'page' });
+    await app.ready({ ...context, surface: 'page' });
+    await tick();
     const storage = app.request('storage');
     if (!('id' in storage)) throw new Error('Missing storage request');
     app.send({ channel: 'openchamber.sdk', v: 1, type: 'result', id: storage.id, ok: false, error: 'Storage unavailable', code: 'HOST_REJECTED' });
@@ -223,9 +352,11 @@ describe('checked-in SDK examples', () => {
     app.update({ kind: 'worktrees', projectId: 'a', state: 'ready', worktrees: [{ directory: '/a/branch', name: 'Branch A', branch: 'a', status: 'ready' }] });
     await tick();
     app.update({ kind: 'projects', state: 'error', projects: [] });
+    await tick();
     expect(app.window.document.body.textContent).toContain('Session A');
     expect(app.window.document.body.textContent).toContain('Project A');
     app.update({ kind: 'projects', state: 'ready', projects: [{ id: 'b', name: 'Project B', directory: '/b' }] });
+    await tick();
     expect(app.window.document.body.textContent).not.toContain('Session A');
     app.button('Project root').click();
     expect(app.window.document.body.textContent).not.toContain('Branch A');
@@ -233,7 +364,7 @@ describe('checked-in SDK examples', () => {
 
   test('conversation previews never render message text as remote images', async () => {
     const app = await load('tasks-demo', 'attach');
-    app.ready({ ...context, surface: 'dialog', item: { kind: 'session', action: 'summarize', sessionId: 's', sessionTitle: 'Example', directory: '/repo',
+    await app.ready({ ...context, surface: 'dialog', item: { kind: 'session', action: 'summarize', sessionId: 's', sessionTitle: 'Example', directory: '/repo',
       messages: [{ id: 'm', role: 'assistant', text: '![private](https://example.com/image)', createdAt: 0 }] } });
     expect(app.window.document.body.textContent).toContain('![private](https://example.com/image)');
     expect(app.window.document.querySelector('img')).toBeNull();

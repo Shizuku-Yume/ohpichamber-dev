@@ -6,7 +6,10 @@ import path from 'path';
 import { createProjectIdFromPath, projectConfigFileStemOf } from '../projects/project-id.js';
 import { createSettingsRuntime } from './settings-runtime.js';
 
-const createRuntime = async ({ mergePersistedSettings = (_current, changes) => changes } = {}) => {
+const createRuntime = async ({
+  mergePersistedSettings = (_current, changes) => changes,
+  onManagedPluginSettingsChanged = undefined,
+} = {}) => {
   const tempRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'oc-settings-runtime-'));
   const settingsFilePath = path.join(tempRoot, 'settings.json');
   const runtime = createSettingsRuntime({
@@ -26,6 +29,7 @@ const createRuntime = async ({ mergePersistedSettings = (_current, changes) => c
     normalizeManagedRemoteTunnelPresetTokens: (value) => value,
     syncManagedRemoteTunnelConfigWithPresets: async () => {},
     upsertManagedRemoteTunnelToken: async () => {},
+    onManagedPluginSettingsChanged,
   });
 
   return {
@@ -39,6 +43,31 @@ const createRuntime = async ({ mergePersistedSettings = (_current, changes) => c
 };
 
 describe('settings runtime', () => {
+  it('refreshes the managed OpenCode config only when a managed plugin setting changed', async () => {
+    const onManagedPluginSettingsChanged = vi.fn(async () => {});
+    const { runtime, cleanup } = await createRuntime({ onManagedPluginSettingsChanged });
+    try {
+      await runtime.persistSettings({ lightThemeId: 'flexoki-light' });
+      expect(onManagedPluginSettingsChanged).not.toHaveBeenCalled();
+
+      await runtime.persistSettings({ agentWebToolEnabled: false });
+      expect(onManagedPluginSettingsChanged).toHaveBeenCalledTimes(1);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('still answers the settings write when the managed config refresh fails', async () => {
+    const onManagedPluginSettingsChanged = vi.fn(async () => { throw new Error('disk full'); });
+    const { runtime, cleanup } = await createRuntime({ onManagedPluginSettingsChanged });
+    try {
+      await expect(runtime.persistSettings({ agentMemoryToolEnabled: true }))
+        .resolves.toMatchObject({ agentMemoryToolEnabled: true });
+    } finally {
+      await cleanup();
+    }
+  });
+
   it('round-trips both archived-only retention states through instance settings', async () => {
     const { runtime, settingsFilePath, cleanup } = await createRuntime();
     try {
@@ -48,6 +77,24 @@ describe('settings runtime', () => {
         expect(await runtime.readSettingsFromDisk()).toEqual(settings);
         expect(JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8'))).toEqual(settings);
       }
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('turns a stored last directory into a project only while one is stored', async () => {
+    const { runtime, tempRoot, cleanup } = await createRuntime();
+    try {
+      const directory = path.join(tempRoot, 'removed-project');
+      await fsPromises.mkdir(directory);
+      // The legacy migration: no projects, a last directory on disk.
+      await runtime.writeSettingsToDisk({ projects: [], lastDirectory: directory });
+      expect((await runtime.readSettingsFromDiskMigrated()).projects).toEqual([
+        expect.objectContaining({ path: directory }),
+      ]);
+      // Removing the last project forgets the last directory with ''.
+      await runtime.writeSettingsToDisk({ projects: [], lastDirectory: '' });
+      expect((await runtime.readSettingsFromDiskMigrated()).projects).toEqual([]);
     } finally {
       await cleanup();
     }

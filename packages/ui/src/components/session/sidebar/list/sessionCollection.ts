@@ -1,6 +1,6 @@
 import React from 'react';
-import type { Session } from '@opencode-ai/sdk/v2';
-import { useAllLiveSessions } from '@/sync/sync-context';
+import type { Session } from '@openchamber/agent-contract';
+import { useLiveSessionsExcluding } from '@/sync/sync-context';
 import {
   EMPTY_SESSION_ORDER_RANKS,
   orderSessionsByLifecycleScopes,
@@ -19,8 +19,8 @@ import { countSyncPerformance } from '@/sync/performance-diagnostics';
 import type { SessionNode } from '../types';
 
 type ProjectSidebarActiveSessionsArgs = {
-  globalActiveSessions: Session[];
-  liveSessions: Session[];
+  globalActiveSessions: readonly Session[];
+  liveSessions: readonly Session[];
   knownDirectories: Set<string>;
   isVSCode: boolean;
 };
@@ -30,10 +30,7 @@ type SidebarSessionPartitions = {
   chatSessions: Session[];
 };
 
-const parentIdOf = (session: Session): string | null => {
-  // SAFETY: OpenCode session payloads expose parentID although the SDK base Session omits it.
-  return (session as Session & { parentID?: string | null }).parentID ?? null;
-};
+const parentIdOf = (session: Session): string | null => session.parentSessionId ?? null;
 
 // This boundary owns session visibility before Recent or projects take
 // ownership. Temporary /btw forks never leak into any sidebar projection.
@@ -45,7 +42,7 @@ export const partitionSidebarSessions = (
   const chatSessions: Session[] = [];
   for (const session of sessions) {
     if (isBtwSession(session)) continue;
-    if (isChatDirectoryPath(session.directory)) {
+    if (isChatDirectoryPath(session.displayPath)) {
       if (isVSCode) continue;
       chatSessions.push(session);
       continue;
@@ -66,7 +63,7 @@ const isKnownActiveSessionDirectory = (
   // A deleted worktree is not a deletion event, so its record must reach the
   // ownership resolver even when no current topology directory matches it.
   if (!isVSCode) return true;
-  if (session.time?.archived) return true;
+  if (session.archivedAt) return true;
   const directory = normalizePath(resolveGlobalSessionDirectory(session))?.toLowerCase();
   if (!directory) return false;
   if (knownDirectories.size === 0) return false;
@@ -82,11 +79,11 @@ export const projectSidebarActiveSessions = ({
   isVSCode,
 }: ProjectSidebarActiveSessionsArgs): Session[] => {
   const sessions = [...globalActiveSessions];
-  const knownIds = new Set(globalActiveSessions.map((session) => session.id));
+  const knownIds = new Set(globalActiveSessions.map((session) => session.sessionId));
   const knownDirectoryKeys = new Set([...knownDirectories].map((directory) => directory.toLowerCase()));
 
   for (const session of liveSessions) {
-    if (knownIds.has(session.id)) continue;
+    if (knownIds.has(session.sessionId)) continue;
     sessions.push(session);
   }
 
@@ -103,10 +100,10 @@ const mergeSidebarSessionSources = (
   liveSessions: readonly Session[],
 ): Session[] => {
   const sessions = [...globalActiveSessions];
-  const knownIds = new Set(globalActiveSessions.map((session) => session.id));
+  const knownIds = new Set(globalActiveSessions.map((session) => session.sessionId));
   for (const session of liveSessions) {
-    if (knownIds.has(session.id)) continue;
-    knownIds.add(session.id);
+    if (knownIds.has(session.sessionId)) continue;
+    knownIds.add(session.sessionId);
     sessions.push(session);
   }
   return sessions;
@@ -122,10 +119,10 @@ export const getDescendantIds = (
   const visited = new Set<string>([sessionId]);
   const visit = (parentId: string): void => {
     for (const child of childrenMap.get(parentId) ?? []) {
-      if (visited.has(child.id)) continue;
-      visited.add(child.id);
-      descendants.push(child.id);
-      visit(child.id);
+      if (visited.has(child.sessionId)) continue;
+      visited.add(child.sessionId);
+      descendants.push(child.sessionId);
+      visit(child.sessionId);
     }
   };
   visit(sessionId);
@@ -142,12 +139,12 @@ export const buildActiveSessionNode = (
   childrenMap: ReadonlyMap<string, readonly Session[]>,
   session: Session,
 ): SessionNode => {
-  const visited = new Set<string>([session.id]);
+  const visited = new Set<string>([session.sessionId]);
   const build = (current: Session): SessionNode => ({
     session: current,
-    children: (childrenMap.get(current.id) ?? []).flatMap((child) => {
-      if (child.time?.archived || visited.has(child.id)) return [];
-      visited.add(child.id);
+    children: (childrenMap.get(current.sessionId) ?? []).flatMap((child) => {
+      if (child.archivedAt || visited.has(child.sessionId)) return [];
+      visited.add(child.sessionId);
       return [build(child)];
     }),
     worktree: null,
@@ -158,6 +155,14 @@ export const buildActiveSessionNode = (
 type SidebarSessionProjectionArgs = ProjectSidebarActiveSessionsArgs & {
   pinnedSessionIds: Set<string>;
   sessionOrderRanks: ReadonlyMap<string, number>;
+};
+
+export type SidebarSessionProjection = {
+  chatSessions: Session[];
+  childrenMap: Map<string, Session[]>;
+  orderedSessions: Session[];
+  projectSessions: Session[];
+  sessionById: Map<string, Session>;
 };
 
 type SidebarSessionStructureArgs = Omit<ProjectSidebarActiveSessionsArgs, 'globalActiveSessions'> & {
@@ -180,8 +185,8 @@ const buildSidebarSessionStructure = ({
   const projectSessions = partition.projectSessions
     .filter((session) => isKnownActiveSessionDirectory(session, knownDirectoryKeys, isVSCode));
   const sessions = [...projectSessions, ...partition.chatSessions];
-  const sessionById = new Map(sessions.map((session) => [session.id, session]));
-  const projectSessionIds = new Set(projectSessions.map((session) => session.id));
+  const sessionById = new Map(sessions.map((session) => [session.sessionId, session]));
+  const projectSessionIds = new Set(projectSessions.map((session) => session.sessionId));
   const indexedRootIds = globalStructure?.activeRootIds ?? [];
   const indexedRootIdSet = new Set(indexedRootIds);
   const rootSessions = [
@@ -191,11 +196,11 @@ const buildSidebarSessionStructure = ({
       return session ? [session] : [];
     }),
     ...projectSessions.filter((session) => (
-      !indexedRootIdSet.has(session.id) && !parentIdOf(session)
+      !indexedRootIdSet.has(session.sessionId) && !parentIdOf(session)
     )),
   ];
   return {
-    chatSessionIds: new Set(partition.chatSessions.map((session) => session.id)),
+    chatSessionIds: new Set(partition.chatSessions.map((session) => session.sessionId)),
     projectSessions,
     rootSessions,
     sessionById,
@@ -227,7 +232,7 @@ const orderSidebarSessionStructure = (
     childrenMap.set(parentID, siblings);
   }
   return {
-    chatSessions: orderedSessions.filter((session) => structure.chatSessionIds.has(session.id)),
+    chatSessions: orderedSessions.filter((session) => structure.chatSessionIds.has(session.sessionId)),
     childrenMap,
     orderedSessions,
   };
@@ -240,7 +245,7 @@ export const buildSidebarSessionProjection = ({
   isVSCode,
   pinnedSessionIds,
   sessionOrderRanks,
-}: SidebarSessionProjectionArgs) => {
+}: SidebarSessionProjectionArgs): SidebarSessionProjection => {
   const structure = buildSidebarSessionStructure({
     globalActiveSessions,
     liveSessions,
@@ -261,6 +266,20 @@ type UseSessionProjectCollectionArgs = {
   isVisible: boolean;
 };
 
+export type SessionProjectCollection = {
+  archivedSessions: Session[];
+  childrenMap: Map<string, Session[]>;
+  chatSessions: Session[];
+  getDescendantIds: (sessionId: string, options: { includeArchived: boolean }) => string[];
+  hasAuthoritativeGlobalSessions: boolean;
+  orderedSessions: Session[];
+  pinnedSessionIds: Set<string>;
+  sessionOrderRanks: ReadonlyMap<string, number>;
+  sessions: Session[];
+  rootSessions: Session[];
+};
+
+
 // The collection owns the global-first/live-gap merge and lifecycle ordering.
 // Selection state intentionally never enters this boundary: rows subscribe to
 // active state themselves, leaving this projection referentially stable.
@@ -268,24 +287,31 @@ export const useSessionProjectCollection = ({
   knownDirectories,
   isVSCode,
   isVisible,
-}: UseSessionProjectCollectionArgs) => {
+}: UseSessionProjectCollectionArgs): SessionProjectCollection => {
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const globalStructure = useGlobalSessionsStore((state) => state.structure);
   const archivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
   const hasAuthoritativeGlobalSessions = useGlobalSessionsStore((state) => state.status === 'ready');
-  const liveSessions = useAllLiveSessions();
   const pinnedSessionIds = useSessionPinnedStore((state) => state.ids);
   const sessionOrderRanks = useSessionOrderingStore(React.useCallback(
     (state) => isVisible ? state.rankById : EMPTY_SESSION_ORDER_RANKS,
     [isVisible],
   ));
+  const globalSessionIds = React.useMemo(
+    () => new Set(globalActiveSessions.map((session) => session.sessionId)),
+    [globalActiveSessions],
+  );
+  // Only the live sessions the global cache does not hold yet: the merge drops
+  // a covered session's live copy, so its live bumps (`time.updated` on every
+  // streamed step) neither re-render the sidebar nor rebuild the structure.
+  const liveGapSessions = useLiveSessionsExcluding(globalSessionIds);
   const structure = React.useMemo(() => buildSidebarSessionStructure({
     globalActiveSessions,
     globalStructure,
-    liveSessions,
+    liveSessions: liveGapSessions,
     knownDirectories,
     isVSCode,
-  }), [globalActiveSessions, globalStructure, isVSCode, knownDirectories, liveSessions]);
+  }), [globalActiveSessions, globalStructure, isVSCode, knownDirectories, liveGapSessions]);
   const ordering = React.useMemo(
     () => orderSidebarSessionStructure(structure, pinnedSessionIds, sessionOrderRanks),
     [pinnedSessionIds, sessionOrderRanks, structure],
@@ -293,14 +319,13 @@ export const useSessionProjectCollection = ({
   const { chatSessions, orderedSessions } = ordering;
   const sessions = structure.projectSessions;
   const sessionById = React.useMemo(() => new Map(
-    [...structure.sessions, ...archivedSessions].map((session) => [session.id, session]),
+    [...structure.sessions, ...archivedSessions].map((session) => [session.sessionId, session]),
   ), [archivedSessions, structure.sessions]);
   const childrenMap = React.useMemo(() => {
     const children = new Map(ordering.childrenMap);
     for (const session of archivedSessions) {
-      // SAFETY: OpenCode's session records carry parentID for sub-session
-      // hierarchy; the SDK's base Session type does not currently expose it.
-      const parentID = (session as Session & { parentID?: string | null }).parentID;
+      // Archived child records retain their canonical parentSessionId.
+      const parentID = session.parentSessionId;
       if (!parentID) continue;
       const siblings = children.get(parentID) ?? [];
       siblings.push(session);
@@ -310,7 +335,7 @@ export const useSessionProjectCollection = ({
   }, [archivedSessions, ordering.childrenMap]);
   const getDescendantIdsForAction = React.useCallback(
     (sessionId: string, options: { includeArchived: boolean }) => getDescendantIds(childrenMap, sessionId)
-      .filter((id) => options.includeArchived || !sessionById.get(id)?.time?.archived),
+      .filter((id) => options.includeArchived || !sessionById.get(id)?.archivedAt),
     [childrenMap, sessionById],
   );
 
@@ -320,7 +345,6 @@ export const useSessionProjectCollection = ({
     chatSessions,
     getDescendantIds: getDescendantIdsForAction,
     hasAuthoritativeGlobalSessions,
-    liveSessions,
     orderedSessions,
     pinnedSessionIds,
     sessionOrderRanks,
@@ -334,7 +358,7 @@ type UseRecentSessionCollectionArgs = {
   isVSCode: boolean;
   pinnedSessionIds: Set<string>;
   sessionOrderRanks: ReadonlyMap<string, number>;
-  sessions: Session[];
+  sessions: readonly Session[];
 };
 
 // Recent is a separate high-frequency collection view. Its active membership
@@ -357,7 +381,7 @@ export const useRecentSessionCollection = ({
     if (!enabled || isVSCode) return [];
     countSyncPerformance('recentCandidatesVisited', sessions.length);
     return orderSessionsByLifecycleScopes(
-      deriveRecentSessions(sessions, activeSessionIdSet),
+      deriveRecentSessions([...sessions], activeSessionIdSet),
       pinnedSessionIds,
       sessionOrderRanks,
     );

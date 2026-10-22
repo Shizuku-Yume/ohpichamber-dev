@@ -20,3 +20,11 @@
 - [ ] Finish the explicit credential handoff before its source disappears, then remove the one-time importer and legacy credential reader at this cutover.
 - [ ] Keep external editor launch, theme import and retained host capabilities working.
 - [ ] Update module ownership docs and package scripts without adding compatibility adapters.
+
+The retained upgrade route and helper are not safe to remove: `AboutSettings.tsx`, `OpenCodeUpdateToast.tsx`, and `openCodeUpgrade.ts` actively call `POST /api/opencode/upgrade`, while About/upgrade status consumers call `GET /api/opencode/upgrade-status`; `routes-upgrade.test.js` covers these live contracts. The lifecycle `bootstrapOpenCodeAtStartup` export and tests likewise remain because retained OpenCode credential/config/session callers still invoke the lifecycle owner outside the production startup pipeline. `scheduleOpenCodeApiDetection` has no remaining production caller and is absent from the canonical startup path.
+
+## Progress
+
+On 2026-10-15, removed the unused public `setupProxy` and `restartOpenCode` exports, the obsolete `setupProxy` startup argument, and their `index.d.ts` declarations. `bun test packages/web/server/lib/opencode/lifecycle.test.js` passed 40 tests and 135 assertions. Node import smoke confirmed both exports are absent while `startWebUiServer` remains; `node --check` passed. After updating these records, `bun run docs:validate` passed (696 pages, 58 sidebar links) and `.workflow/bin/workflow validate --no-color` passed (42 task files). This does not pass Task 17: connected Web/Electron W7/W10, dependent service and credential-handoff work, active legacy callers, and final packaging remain open. The focused Web type-check still has seven inherited UI diagnostics; oxlint and dead-code findings remain non-passing inventory, not acceptance evidence.
+
+Archive ownership is unresolved for the OMP cutover. `space-archive.js` imports exported chats into Host OpenCode; the OMP SDK opens local `.jsonl` session files and has no remote transcript transfer/adoption API. The M3 specification forbids automatic transcript import, and the M5 plan requires a separate versioned scope for any desired transcript importer. No transfer or adoption is implemented or claimed; do not retire this caller by silently importing transcripts.

@@ -11,6 +11,7 @@ import {
 } from '@openchamber/sdk';
 
 import { readExtensionStore, updateExtensionStore } from './persist.js';
+import { readBoundedResponseText } from './response-body.js';
 import { resolveServiceSocketEnv } from './sockets.js';
 
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
@@ -37,14 +38,40 @@ const runtimes = new Map();
 /** @type {Map<string, Promise<ServiceRuntime>>} */
 const startingByGuest = new Map();
 
+/** @type {Map<string, Promise<void>>} */
+const stoppingByGuest = new Map();
+
+// Requests retain their lifecycle object across awaits. A later host start
+// cannot reopen admission for work that belonged to the previous host.
+let hostLifecycle = { accepting: true };
+
+export const beginGuestServiceHost = () => {
+  if (runtimes.size || startingByGuest.size || stoppingByGuest.size) {
+    throw new Error('Guest services must finish stopping before a new host starts.');
+  }
+  hostLifecycle.accepting = false;
+  hostLifecycle = { accepting: true };
+};
+
+export const beginGuestServiceShutdown = () => {
+  hostLifecycle.accepting = false;
+};
+
+const assertGuestHostActive = (lifecycle) => {
+  if (!lifecycle.accepting) {
+    throw new GuestServiceError('The host is shutting down.', 'NO_SERVICE');
+  }
+};
+
 export class GuestServiceError extends Error {
   /**
    * @param {string} message
-   * @param {'NO_SERVICE' | 'SERVICE_FAILED' | 'REQUEST_FAILED' | 'BAD_PATH' | 'BAD_METHOD' | 'DISABLED' | 'CANCELLED'} code
+   * @param {'NO_SERVICE' | 'SERVICE_FAILED' | 'REQUEST_FAILED' | 'RESPONSE_TOO_LARGE' | 'BAD_PATH' | 'BAD_METHOD' | 'DISABLED' | 'CANCELLED'} code
    * `SERVICE_FAILED` is a service that never became ready: nothing was sent
    * to it. `REQUEST_FAILED` is a request that was sent and got no usable
    * answer (timeout, dropped connection, unreadable body): the service may
-   * have acted on it.
+   * have acted on it. `RESPONSE_TOO_LARGE` is an answer over `responseMax`:
+   * the service did act on the request.
    */
   constructor(message, code) {
     super(message);
@@ -263,6 +290,8 @@ export const stopGuestService = async (guestId) => {
  * @param {string} guestId
  */
 const discardRuntime = async (guestId) => {
+  const stopping = stoppingByGuest.get(guestId);
+  if (stopping) return stopping;
   const runtime = runtimes.get(guestId);
   if (!runtime) {
     return;
@@ -273,7 +302,7 @@ const discardRuntime = async (guestId) => {
   if (child.exitCode !== null || child.signalCode) {
     return;
   }
-  await new Promise((resolve) => {
+  const stopped = new Promise((resolve) => {
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
       resolve(undefined);
@@ -284,14 +313,24 @@ const discardRuntime = async (guestId) => {
     });
     child.kill('SIGTERM');
   });
+  stoppingByGuest.set(guestId, stopped);
+  try {
+    await stopped;
+  } finally {
+    stoppingByGuest.delete(guestId);
+  }
 };
 
 /** Test seam: the pid of a guest's running service, or `null`. */
 export const readServicePid = (guestId) => runtimes.get(guestId)?.child.pid ?? null;
 
 export const stopAllGuestServices = async () => {
-  const ids = [...runtimes.keys()];
-  await Promise.all(ids.map((id) => stopGuestService(id)));
+  const starts = [...startingByGuest.values()];
+  const ids = new Set([...runtimes.keys(), ...startingByGuest.keys(), ...stoppingByGuest.keys()]);
+  const stops = [...ids].map((id) => stopGuestService(id));
+  // Cancelled starts reject normally. Await their cleanup as well as children
+  // already registered when shutdown began.
+  await Promise.allSettled([...starts, ...stops]);
 };
 
 /**
@@ -337,7 +376,14 @@ const startGuestService = async ({
   socketBindings = [],
   socketOverrides = {},
   epoch,
+  lifecycle,
 }) => {
+  assertGuestHostActive(lifecycle);
+  // A replacement must not occupy the same guest slot while its previous
+  // child is still stopping; host shutdown must be able to drain both.
+  const previousStop = stoppingByGuest.get(guestId);
+  if (previousStop) await previousStop;
+  assertGuestHostActive(lifecycle);
   const existing = runtimes.get(guestId);
   if (existing?.status === 'ready' && existing.child.exitCode === null && !existing.child.signalCode) {
     return existing;
@@ -347,7 +393,7 @@ const startGuestService = async ({
   }
   // The request's epoch, read before its first store access: a Pause that
   // finished anywhere since then is a cancellation, spawn included.
-  const cancelled = () => stopEpochOf(guestId) !== epoch;
+  const cancelled = () => !lifecycle.accepting || stopEpochOf(guestId) !== epoch;
   const stoppedError = () => new GuestServiceError('The service was stopped before it became ready.', 'NO_SERVICE');
 
   const absoluteEntry = path.resolve(packageRoot, entry);
@@ -365,6 +411,7 @@ const startGuestService = async ({
     throw stoppedError();
   }
   const port = await reserveLoopbackPort();
+  if (cancelled()) throw stoppedError();
   const token = crypto.randomBytes(24).toString('hex');
   const socketEnv = socketBindings.length > 0
     ? await resolveServiceSocketEnv(socketBindings, socketOverrides)
@@ -459,7 +506,7 @@ const INHERITED_SERVICE_ENV_NAMES = new Set([
 ]);
 
 /** @param {NodeJS.ProcessEnv} source */
-export const inheritedServiceEnv = (source) => {
+const inheritedServiceEnv = (source) => {
   /** @type {Record<string, string>} */
   const env = {};
   for (const [name, value] of Object.entries(source)) {
@@ -507,6 +554,7 @@ const ensureGuestService = async (params) => {
  *   query?: Record<string, string>,
  *   body?: string,
  *   accept?: string,
+ *   headers?: Record<string, string>,
  *   timeoutMs?: number,
  *   idleStopMs?: number,
  *   signal?: AbortSignal,
@@ -527,10 +575,13 @@ export const openGuestServiceRequest = async ({
   query,
   body,
   accept = 'application/json',
+  headers: extraHeaders,
   timeoutMs = GUEST_REQUEST_TIMEOUT_MS,
   idleStopMs,
   signal,
 }) => {
+  const lifecycle = hostLifecycle;
+  assertGuestHostActive(lifecycle);
   if (!METHODS.has(method)) {
     throw new GuestServiceError('Unsupported request method.', 'BAD_METHOD');
   }
@@ -542,6 +593,7 @@ export const openGuestServiceRequest = async ({
   // enabled flag it read before the pause.
   const epoch = stopEpochOf(guestId);
   const store = await readExtensionStore(persistPath);
+  assertGuestHostActive(lifecycle);
   if (store.disabledGuests?.[guestId]) {
     const label = typeof guestName === 'string' && guestName.trim() ? guestName.trim() : 'This extension';
     throw new GuestServiceError(
@@ -570,9 +622,10 @@ export const openGuestServiceRequest = async ({
       socketBindings,
       socketOverrides,
       epoch,
+      lifecycle,
     });
   }
-  if (stopEpochOf(guestId) !== epoch) {
+  if (!lifecycle.accepting || stopEpochOf(guestId) !== epoch) {
     if (runtimes.get(guestId) === runtime) {
       await discardRuntime(guestId);
     }
@@ -596,6 +649,9 @@ export const openGuestServiceRequest = async ({
 
   /** @type {Record<string, string>} */
   const headers = {
+    // Host-set context (surface viewer headers) first: nothing in it can
+    // replace the bearer or the content type below.
+    ...extraHeaders,
     Accept: accept,
     [OPENCHAMBER_SERVICE_AUTH_HEADER]: `Bearer ${runtime.token}`,
   };
@@ -640,14 +696,14 @@ export const openGuestServiceRequest = async ({
 };
 
 /**
- * Panel-shaped proxy: text answer, capped. Same params as
+ * Panel-shaped proxy: text answer, refused over `responseMax`. Same params as
  * `openGuestServiceRequest` plus `responseMax`.
  */
 export const proxyGuestServiceRequest = async ({ responseMax = GUEST_REQUEST_RESPONSE_MAX, ...params }) => {
   const { response, finished } = await openGuestServiceRequest(params);
-  let text;
+  let body;
   try {
-    text = await response.text();
+    body = await readBoundedResponseText(response, responseMax);
   } catch {
     finished();
     if (params.signal?.aborted) {
@@ -658,10 +714,11 @@ export const proxyGuestServiceRequest = async ({ responseMax = GUEST_REQUEST_RES
     throw new GuestServiceError('Guest service request failed.', 'REQUEST_FAILED');
   }
   finished();
+  if (body.tooLarge) {
+    throw new GuestServiceError(`The service answered with more than ${responseMax} bytes.`, 'RESPONSE_TOO_LARGE');
+  }
   return {
     status: response.status,
-    body: text.length <= responseMax
-      ? text
-      : text.slice(0, responseMax),
+    body: body.text,
   };
 };

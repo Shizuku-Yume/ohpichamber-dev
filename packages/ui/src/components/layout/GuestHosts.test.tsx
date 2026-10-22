@@ -1,12 +1,13 @@
 import { expect, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createOpencodeClient } from '@opencode-ai/sdk/v2';
+import { OpenCode } from '@opencode/client';
 import { Window } from 'happy-dom';
+import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL } from '@openchamber/sdk';
 import { hostMessageSchema } from '@openchamber/sdk/schemas';
 import type { GuestMessage, HostMessage } from '@openchamber/sdk';
-import { toast } from 'sonner';
 
+import { toast } from 'sonner';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { I18nProvider } from '@/lib/i18n';
@@ -43,17 +44,27 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   }
   const fetch = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-    if (String(input).includes('/auth/url-token')) return Response.json({ token: 'scoped-test', expiresAt: Date.now() + 60_000 });
-    return Response.json({});
+    const target = String(input instanceof Request ? input.url : input);
+    if (target.includes('/auth/url-token')) return Response.json({ token: 'scoped-test', expiresAt: Date.now() + 60_000 });
+    // The sync bootstrap runs on the shared `opencodeClient`, not the provider's
+    // sdk prop, so its v2 list routes are answered here.
+    if (target.includes('/event')) return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });
+    if (target.includes('/session/active')) return Response.json({});
+    if (target.includes('/location')) return Response.json({ directory: '/visible', project: { id: 'project', directory: '/visible', canonical: '/visible' } });
+    return Response.json({ data: [] });
   });
   const notice = spyOn(toast, 'info').mockImplementation(() => 'toast');
   const error = spyOn(toast, 'error').mockImplementation(() => 'error');
   const clipboard = spyOn(dom.navigator.clipboard, 'writeText').mockResolvedValue(undefined);
   const dismiss = spyOn(toast, 'dismiss').mockImplementation(() => 'dismissed');
-  const sdk = createOpencodeClient({ baseUrl: 'http://sync.test', fetch: async (request) => {
-    const url = new URL(request instanceof Request ? request.url : request.toString());
-    if (url.pathname.endsWith('/global/event')) return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });
-    return Response.json(url.pathname.endsWith('/session/status') ? {} : []);
+  const sdk = OpenCode.make({ baseUrl: 'http://sync.test', fetch: async (request) => {
+    const path = new URL(request instanceof Request ? request.url : request.toString()).pathname;
+    if (path.endsWith('/event')) return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });
+    const body = path.endsWith('/location')
+      ? { directory: '/visible', project: { id: 'project', directory: '/visible', canonical: '/visible' } }
+      : path.endsWith('/session/active') ? {}
+      : { data: [] };
+    return Response.json(body);
   } });
   const theme = getDefaultTheme(false);
   const themeContext: ThemeContextValue = {
@@ -81,8 +92,10 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
   let done = Promise.resolve();
   let commandDone = Promise.resolve<GuestResolveOutcome>({ ok: false, reason: 'unavailable' });
   const messages: HostMessage[] = [];
-  let restorePost = () => {};
-  let restoreCommandPost = () => {};
+  let actionPort: MessagePort | null = null;
+  let commandPort: MessagePort | null = null;
+  const guestPorts: MessagePort[] = [];
+  const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
   try {
     await act(async () => root.render(<React.StrictMode><I18nProvider><ThemeSystemContext.Provider value={themeContext}>
       <SyncProvider sdk={sdk} directory="/visible"><GuestHosts /></SyncProvider>
@@ -96,21 +109,59 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
     const frame = container.querySelector<HTMLIFrameElement>('[aria-hidden="true"] iframe');
     if (!frame) throw new Error('Background iframe did not mount');
     // Frame navigation is disabled in this DOM. Supply a separate guest
-    // window to exercise the real host's source checks and postMessage path.
+    // window and announce a private bootstrap port before load.
     Object.defineProperty(frame, 'contentWindow', { configurable: true, value: guestWindow });
     if (!frame.contentWindow) throw new Error('Guest window is missing');
     const frameWindow = frame.contentWindow;
-    const post = spyOn(frameWindow, 'postMessage').mockImplementation((data) => { messages.push(hostMessageSchema.parse(data)); });
-    restorePost = () => post.mockRestore();
-    const send = (message: GuestMessage, source = frameWindow) => window.dispatchEvent(new MessageEvent('message', { source, data: message }));
+    const bootstrapGuest = () => {
+      const channel = new MessageChannel();
+      const guestBootstrapPort = channel.port2;
+      guestBootstrapPort.addEventListener('message', (event) => {
+        const transferred = event.ports?.[0];
+        if (!transferred) throw new Error('SDK port was not transferred');
+        actionPort = transferred;
+        guestPorts.push(transferred);
+        transferred.addEventListener('message', (message) => { messages.push(hostMessageSchema.parse(message.data)); });
+        transferred.start();
+        transferred.postMessage({ channel: 'openchamber.sdk', v: 1, type: 'hello' });
+      });
+      guestBootstrapPort.start();
+      const bootstrapEvent = new dom.MessageEvent('message', {
+        source: guestWindow,
+        data: { channel: GUEST_BOOTSTRAP_CHANNEL, v: GUEST_BOOTSTRAP_API_VERSION, type: 'bootstrap' },
+      });
+      Object.defineProperty(bootstrapEvent, 'ports', { value: [channel.port1] });
+      dom.dispatchEvent(bootstrapEvent);
+    };
+    const send = (message: GuestMessage, source = frameWindow) => {
+      if (source === frameWindow && actionPort) actionPort.postMessage(message);
+      else window.dispatchEvent(new MessageEvent('message', { source, data: message }));
+    };
     expect(frame.src.includes(`/${variant.backgroundEntry ?? variant.entry}`)).toBe(true);
     expect(frame.getAttribute('sandbox')).toBe('allow-scripts');
     expect(frame.closest('[aria-hidden="true"]')).not.toBeNull();
     await act(async () => {
-      send({ channel: 'openchamber.sdk', v: 1, type: 'hello' });
       frame.dispatchEvent(new Event('load'));
-      send({ channel: 'openchamber.sdk', v: 1, type: 'hello' });
+      await tick();
     });
+    const malformedChannel = new MessageChannel();
+    const malformedAnnouncement = new dom.MessageEvent('message', {
+      source: dom,
+      data: { channel: GUEST_BOOTSTRAP_CHANNEL, v: GUEST_BOOTSTRAP_API_VERSION, type: 'bootstrap' },
+    });
+    Object.defineProperty(malformedAnnouncement, 'ports', { value: [malformedChannel.port1] });
+    dom.dispatchEvent(malformedAnnouncement);
+    dom.dispatchEvent(new dom.MessageEvent('message', {
+      source: guestWindow,
+      data: { channel: GUEST_BOOTSTRAP_CHANNEL, v: GUEST_BOOTSTRAP_API_VERSION, type: 'bootstrap' },
+    }));
+    await act(async () => { await tick(); });
+    expect(actionPort).toBeNull();
+    malformedChannel.port1.close();
+    malformedChannel.port2.close();
+    bootstrapGuest();
+    await act(async () => { await tick(); });
+    expect(actionPort).not.toBeNull();
     const actionMessage = messages.find((message) => message.type === 'action');
     if (!actionMessage || actionMessage.type !== 'action') throw new Error('No action dispatched');
     expect(messages.filter((message) => message.type === 'action')).toHaveLength(1);
@@ -124,6 +175,7 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
       send({ channel: 'openchamber.sdk', v: 1, type: 'action-result', id: 'wrong-id', payload: { ok: true } });
       send({ channel: 'openchamber.sdk', v: 1, type: 'action-result', id: actionMessage.id, payload: { ok: true } }, window);
       send({ channel: 'openchamber.sdk', v: 1, type: 'toast', id: 'toast-1', payload: { kind: 'info', message: 'Counted', copy: true, persistent: true } });
+      await tick();
     });
     expect(useGuestActionHostStore.getState().requests.length).toBe(1);
     expect(notice.mock.calls.length).toBe(1);
@@ -131,6 +183,7 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
     await act(async () => {
       send({ channel: 'openchamber.sdk', v: 1, type: 'action-result', id: actionMessage.id, payload: { ok: true } });
       send({ channel: 'openchamber.sdk', v: 1, type: 'toast', id: 'late', payload: { kind: 'info', message: 'Too late' } });
+      await tick();
       await done;
     });
     expect(container.querySelector('[aria-hidden="true"] iframe')).toBeNull();
@@ -161,19 +214,58 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
     const commandFrame = container.querySelector<HTMLIFrameElement>('[aria-hidden="true"] iframe');
     if (!commandFrame) throw new Error('Command iframe missing');
     expect(commandFrame.src.includes(`/${variant.backgroundEntry ?? variant.entry}`)).toBe(true);
-    Object.defineProperty(commandFrame, 'contentWindow', { configurable: true, value: commandWindow });
-    if (!commandFrame.contentWindow) throw new Error('Command window missing');
-    const commandSource = commandFrame.contentWindow;
+    let commandSource = commandWindow;
     const commandMessages: HostMessage[] = [];
-    const commandPost = spyOn(commandSource, 'postMessage').mockImplementation((data) => { commandMessages.push(hostMessageSchema.parse(data)); });
-    restoreCommandPost = () => commandPost.mockRestore();
-    await act(async () => { window.dispatchEvent(new MessageEvent('message', { source: commandSource, data: { channel: 'openchamber.sdk', v: 1, type: 'hello' } })); });
-    const resolveMessage = commandMessages.find((message) => message.type === 'resolve');
-    if (!resolveMessage || resolveMessage.type !== 'resolve') throw new Error('Command was not delivered');
-    expect(resolveMessage.payload).toEqual({ command: 'count', args: 'hello' });
+    let resolveCommandPort: ((port: MessagePort) => void) | null = null;
+    const commandPortReady = new Promise<MessagePort>((resolve) => { resolveCommandPort = resolve; });
+    let resolveCommandReadyMessage: ((message: Extract<HostMessage, { type: 'resolve' }>) => void) | null = null;
+    const commandReadyMessage = new Promise<Extract<HostMessage, { type: 'resolve' }>>((resolve) => { resolveCommandReadyMessage = resolve; });
+    const bootstrapCommand = () => {
+      const channel = new MessageChannel();
+      const guestBootstrapPort = channel.port2;
+      guestBootstrapPort.addEventListener('message', (event) => {
+        const transferred = event.ports?.[0];
+        if (!transferred) throw new Error('Command guest port was not transferred');
+        commandPort = transferred;
+        guestPorts.push(transferred);
+        transferred.addEventListener('message', (message) => {
+          const parsed = hostMessageSchema.parse(message.data);
+          commandMessages.push(parsed);
+          if (parsed.type === 'resolve') resolveCommandReadyMessage?.(parsed);
+        });
+        transferred.start();
+        transferred.postMessage({ channel: 'openchamber.sdk', v: 1, type: 'hello' });
+        resolveCommandPort?.(transferred);
+      });
+      guestBootstrapPort.start();
+      const bootstrapEvent = new dom.MessageEvent('message', {
+        source: commandSource,
+        data: { channel: GUEST_BOOTSTRAP_CHANNEL, v: GUEST_BOOTSTRAP_API_VERSION, type: 'bootstrap' },
+      });
+      Object.defineProperty(bootstrapEvent, 'ports', { value: [channel.port1] });
+      dom.dispatchEvent(bootstrapEvent);
+    };
+    await act(async () => {
+      commandFrame.dispatchEvent(new Event('load'));
+      await tick();
+    });
+    const currentCommandFrame = container.querySelector<HTMLIFrameElement>('[aria-hidden="true"] iframe');
+    if (!currentCommandFrame) throw new Error('Command iframe was replaced during load');
+    Object.defineProperty(currentCommandFrame, 'contentWindow', { configurable: true, value: commandWindow });
+    if (!currentCommandFrame.contentWindow) throw new Error('Command window missing');
+    commandSource = commandWindow;
+    expect(commandMessages).toHaveLength(0);
+    await act(async () => {
+      bootstrapCommand();
+      await commandPortReady;
+      await commandReadyMessage;
+    });
+    expect(commandPort).not.toBeNull();
+    const resolveMessage = await commandReadyMessage;
     expect(commandMessages.find((message) => message.type === 'ready')).toMatchObject({ payload: { surface: variant.backgroundEntry ? 'background' : 'panel' } });
     await act(async () => {
-      window.dispatchEvent(new MessageEvent('message', { source: commandSource, data: { channel: 'openchamber.sdk', v: 1, type: 'resolve-result', id: resolveMessage.id, payload: { item: null } } }));
+      commandPort?.postMessage({ channel: 'openchamber.sdk', v: 1, type: 'resolve-result', id: resolveMessage.id, payload: { item: null } });
+      await tick();
       expect(await commandDone).toEqual({ ok: true, item: null });
     });
     expect(container.querySelector('[aria-hidden="true"] iframe')).toBeNull();
@@ -202,9 +294,9 @@ test(`${variant.name}: actions and commands use the execution entry and clean up
   } finally {
     await act(async () => root.unmount());
     await done;
-    restorePost(); fetch.mockRestore(); notice.mockRestore(); error.mockRestore();
-    restoreCommandPost();
+    fetch.mockRestore(); notice.mockRestore(); error.mockRestore();
     clipboard.mockRestore(); dismiss.mockRestore();
+    for (const port of guestPorts) port.close();
     useSessionUIStore.setState({ currentSessionId: null });
     await dom.happyDOM.close();
     await guestWindow.happyDOM.close();

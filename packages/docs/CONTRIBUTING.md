@@ -1,10 +1,10 @@
-# Docs Authoring Guide
+# Docs authoring guide
 
-This package is docs content source-of-truth for OpenChamber.
+This package contains documentation content source for OpenChamber and OhPiChamber.
 
 ## Voice & style
 
-Write for someone trying to get something done — not for an engineer reading a
+Write for someone trying to get something done, not for an engineer reading a
 spec. Assume the reader may be non-technical. A page should feel quick to read,
 never like a separate chore just to get through one screen.
 
@@ -23,7 +23,7 @@ stays the same no matter who is writing.
   for ("Use `openchamber tunnel` to expose a running OpenChamber instance.").
 - Cut anything that doesn't change what the reader does next.
 - A basic page should fit in a screen or two. Long, dense reference pages (like
-  Reverse Proxy) are the exception — and they say so in their first line ("Use
+  Reverse Proxy) are the exception, and they say so in their first line ("Use
   this page if you run OpenChamber behind...").
 
 ### Steps
@@ -45,7 +45,7 @@ running.
 
 - Explain a term the first time it appears, in parentheses, in everyday words:
   - good: start a tunnel (a public link to your local OpenChamber)
-  - bad: start a tunnel — the reader doesn't know what that is yet
+  - bad: start a tunnel (the reader does not know what that is yet)
 - Prefer common words over internal ones. "App", "version", "page" beat
   "surface", "instance", "route" when the meaning is the same. If an internal
   term is unavoidable, define it once.
@@ -55,7 +55,7 @@ running.
 ### Bullets and sentences
 
 - Be consistent within a single list. Either all short fragments (lowercase, no
-  period) or all full sentences (capital letter, period) — don't mix the two in
+  period) or all full sentences (capital letter, period). Do not mix the two in
   one list.
 - Use fragments for quick option lists; use full sentences for rules, warnings,
   or anything the reader must not misread.
@@ -64,14 +64,14 @@ running.
 
 - Where a step can realistically fail, link to
   [Troubleshooting](/troubleshooting/) right there, not only at the bottom.
-- Don't re-document something another page owns — link to it. (Quickstart points
+- Don't re-document something another page owns; link to it. (Quickstart points
   at Install for the actual install command instead of copying it.)
 
 ### Show, don't only tell
 
 - A screenshot beats a paragraph for anything visual (where a button is, what a
   screen looks like). See [Images](#images) for how to add one.
-- Always pair a screenshot with one line of text — the image supports the step,
+- Always pair a screenshot with one line of text: the image supports the step,
   it isn't the whole step.
 
 ### Commands and code
@@ -98,9 +98,9 @@ running.
    - `foo.mdx` -> `/foo/`
    - `folder/index.mdx` -> `/folder/`
    - `folder/bar.mdx` -> `/folder/bar/`
-4. Add translations for the page — see [Localization](#localization). New pages
+4. Add translations for the page. See [Localization](#localization). New pages
    must include translated files for every supported locale before they ship.
-5. If the page is linked from the sidebar, add its localized labels too — see
+5. If the page is linked from the sidebar, add its localized labels too. See
    [Translate the sidebar](#translate-the-sidebar).
 6. Run validation:
 
@@ -130,7 +130,7 @@ Rules:
 ## Images
 
 Images live inside the docs content tree so they sync to the website with the
-pages (the sync copies all of `content/docs/`, not just `.mdx`). Reference them
+pages. The sync copies all of `content/docs/`, not just `.mdx`. Reference them
 with a **relative path**; Astro optimizes them at build time.
 
 ```
@@ -145,7 +145,7 @@ Rules:
 - co-locate images under `content/docs/` (e.g. `content/docs/images/`); a
   relative `./images/...` reference is resolved and optimized at build
 - always set meaningful `alt` text (and translate it in localized pages)
-- do **not** put docs images in the website repo's `public/` — it is not the
+- do **not** put docs images in the website repo's `public/` folder: it is not the
   source of truth and the sync will not pick them up
 - keep originals reasonably sized; the build generates responsive variants
 
@@ -210,7 +210,7 @@ other language mirrors the English files under a locale folder.
 > [!IMPORTANT]
 > The **content folder** uses the lowercase locale key (`zh-cn`, `pt-br`); the
 > **sidebar `translations`** key uses the BCP-47 language tag (`zh-CN`, `pt-BR`).
-> They look similar but are not interchangeable — Starlight resolves them with
+> They look similar but are not interchangeable. Starlight resolves them with
 > different rules. Everything else (`uk`, `es`, `ko`, `pl`, `fr`, `de`, `ja`, `tr`, `en`) is identical
 > in both columns.
 
@@ -246,7 +246,7 @@ Each translated file needs its **own translated frontmatter** (`title` and
 ```mdx
 ---
 title: Встановлення
-description: Встановіть OpenChamber для десктопа, вебу або VS Code.
+description: Встановіть OpenChamber для десктопа, вебу або мобільних пристроїв.
 ---
 ```
 
@@ -257,7 +257,7 @@ not rely on that fallback for new docs pages.
 ### Translate the sidebar
 
 Do **not** create separate sidebar entries per language and do **not** add a
-locale prefix to `link` — Starlight prefixes the active locale automatically.
+locale prefix to `link`: Starlight prefixes the active locale automatically.
 Instead, add a `translations` map (keyed by the BCP-47 tag from the table above)
 to each section and item in `sidebar.config.json`:
 
@@ -300,15 +300,15 @@ A label with no translation for the active locale falls back to the English
 
 ### What not to translate
 
-- brand and product nouns: OpenChamber, OpenCode, VS Code, PWA, GitHub, Discord,
+- brand and product nouns: OhPiChamber, OpenChamber, OpenCode, OMP, PWA, GitHub,
   macOS, SSH
 - code blocks, shell commands, file paths, flags, and config keys
 - the page filename and the sidebar `link` (these stay identical across locales)
 
 ### Validate
 
-`bun run docs:validate` walks every `.mdx` under `content/docs/` — **including
-translations** — and fails if any page is missing `title` or `description`
+`bun run docs:validate` walks every `.mdx` under `content/docs/` (including
+translations) and fails if any page is missing `title` or `description`
 frontmatter, or if a sidebar `link` does not resolve to an English page. Run it
 after adding or translating pages.
 

@@ -12,13 +12,14 @@ import { streamPerfCount } from '@/stores/utils/streamDebug';
 import { sameMultiRunIdentity } from '@/lib/multirun/identity';
 import { normalizePath } from '../utils';
 
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 type Context = {
   groupDirectory?: string | null;
   projectId?: string | null;
   folderOwnerKey?: string | null;
   selectionScopeKey?: string | null;
   archivedBucket?: boolean;
-  secondaryMeta?: { projectLabel?: string | null; branchLabel?: string | null } | null;
+  secondaryMeta?: { projectLabel?: string | null; branchLabel?: string | null; inSpace?: boolean } | null;
   renderContext?: SessionSidebarRenderContext;
   rowKey?: string;
   dragKey?: string;
@@ -32,7 +33,6 @@ type SessionTreeItemRenderProps = Context & Pick<SessionNodeItemProps,
   | 'editingId'
   | 'editingRowKey'
   | 'editTitle'
-  | 'copiedSessionId'
   | 'openSidebarMenuKey'
   | 'mobileVariant'
   | 'alwaysShowActions'
@@ -58,7 +58,6 @@ export type SessionTreeItemProps = SessionTreeItemRenderProps & Pick<SessionNode
   deleteSessionConfirm: DeleteSessionConfirmState;
   setDeleteSessionConfirm: (value: DeleteSessionConfirmState) => void;
   startFolderRename: (scopeKey: string, folder: { id: string; name: string }) => void;
-  setCopiedSessionId: (sessionId: string | null) => void;
   renderChildren?: boolean;
 };
 
@@ -99,8 +98,6 @@ function SessionTreeItemComponent({
   deleteSessionConfirm,
   setDeleteSessionConfirm,
   startFolderRename,
-  copiedSessionId,
-  setCopiedSessionId,
   startSessionWorktreeMenuLoad,
   onEditProject,
   mobileVariant,
@@ -108,7 +105,7 @@ function SessionTreeItemComponent({
   renderChildren = true,
 }: SessionTreeItemProps): React.ReactNode {
   streamPerfCount('ui.sidebar_tree_item.render');
-  const effectiveRowKey = rowKey ?? `${renderContext}:${archivedBucket ? 'archived' : 'active'}:${node.session.id}`;
+  const effectiveRowKey = rowKey ?? `${renderContext}:${archivedBucket ? 'archived' : 'active'}:${node.session.sessionId}`;
   const createFolder = useSessionFoldersStore((state) => state.createFolder);
   const toggleFolderCollapse = useSessionFoldersStore((state) => state.toggleFolderCollapse);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
@@ -120,7 +117,7 @@ function SessionTreeItemComponent({
   const descendantIdsKey = React.useMemo(() => {
     const ids: string[] = [];
     const visit = (current: SessionNode) => current.children.forEach((child) => {
-      ids.push(child.session.id);
+      ids.push(child.session.sessionId);
       visit(child);
     });
     visit(node);
@@ -149,16 +146,14 @@ function SessionTreeItemComponent({
     editingId,
     setEditingId,
     setEditingRowKey,
-    editingSessionId: node.session.id,
+    editingSessionId: node.session.sessionId,
     editingOccurrenceKey: effectiveRowKey,
     editTitle,
     setEditTitle,
-    copiedSessionId,
-    setCopiedSessionId,
   });
   const childRenderExtrasFor = renderExtras?.childRenderExtrasFor;
   const childContext: Context = {
-    groupDirectory: node.session.directory ?? groupDirectory,
+    groupDirectory: resolveGlobalSessionDirectory(node.session) ?? groupDirectory,
     projectId,
     archivedBucket,
     renderContext,
@@ -180,11 +175,7 @@ function SessionTreeItemComponent({
       toggleParent={toggleParent}
        handleSessionSelect={sessionActions.handleSessionSelect}
        handleSessionDoubleClick={sessionActions.handleSessionDoubleClick}
-       handleShareSession={sessionActions.handleShareSession}
-       copiedSessionId={copiedSessionId}
-       handleCopyShareUrl={sessionActions.handleCopyShareUrl}
        handleCopySessionId={sessionActions.handleCopySessionId}
-       handleUnshareSession={sessionActions.handleUnshareSession}
       openSidebarMenuKey={openSidebarMenuKey}
       setOpenSidebarMenuKey={setOpenSidebarMenuKey}
       createFolderAndStartRename={createFolderAndStartRename}
@@ -205,15 +196,16 @@ function SessionTreeItemComponent({
       secondaryMeta={secondaryMeta}
       renderContext={renderContext}
       rowKey={effectiveRowKey}
-      dragKey={dragKey ?? rowKey ?? node.session.id}
+      dragKey={dragKey ?? rowKey ?? node.session.sessionId}
       subtreeContainsEditing={renderExtras?.subtreeContainsEditing ?? EMPTY_SUBTREE_CONTAINS_EDITING}
       menuOpenSessionId={renderExtras?.menuOpenSessionId ?? null}
       nodeStructureKey={renderExtras?.nodeStructureKey ?? ''}
+      blockingBadgeSessionScopes={renderExtras?.blockingBadgeSessionScopes}
       relativeTimeTick={renderExtras?.relativeTimeTick}
     >
       {renderChildren ? node.children.map((child) => (
         <SessionTreeItem
-          key={child.session.id}
+          key={child.session.sessionId}
            node={child}
            pinnedSessionIds={pinnedSessionIds}
           expandedParents={expandedParents}
@@ -225,7 +217,6 @@ function SessionTreeItemComponent({
           setEditingId={setEditingId}
           setEditingRowKey={setEditingRowKey}
            editTitle={editTitle}
-           copiedSessionId={copiedSessionId}
           setEditTitle={setEditTitle}
            toggleParent={toggleParent}
            openSidebarMenuKey={openSidebarMenuKey}
@@ -236,7 +227,6 @@ function SessionTreeItemComponent({
            deleteSessionConfirm={deleteSessionConfirm}
            setDeleteSessionConfirm={setDeleteSessionConfirm}
             startFolderRename={startFolderRename}
-            setCopiedSessionId={setCopiedSessionId}
             startSessionWorktreeMenuLoad={startSessionWorktreeMenuLoad}
            mobileVariant={mobileVariant}
            alwaysShowActions={alwaysShowActions}
@@ -248,7 +238,7 @@ function SessionTreeItemComponent({
         />
       )) : null}
     </SessionNodeItem>
-    {deleteSessionConfirm?.session.id === node.session.id ? <SessionDeleteConfirmDialog
+    {deleteSessionConfirm?.session.sessionId === node.session.sessionId ? <SessionDeleteConfirmDialog
       value={deleteSessionConfirm}
       setValue={setDeleteSessionConfirm}
       showDeletionDialog={showDeletionDialog}
@@ -259,14 +249,13 @@ function SessionTreeItemComponent({
 }
 
 const isSameSessionForRow = (prev: SessionNode, next: SessionNode): boolean => (
-  prev.session.id === next.session.id
-  && prev.session.title === next.session.title
-  && prev.session.directory === next.session.directory
-  && prev.session.parentID === next.session.parentID
-  && prev.session.share?.url === next.session.share?.url
-  && prev.session.time?.created === next.session.time?.created
-  && prev.session.time?.updated === next.session.time?.updated
-  && prev.session.time?.archived === next.session.time?.archived
+  prev.session.sessionId === next.session.sessionId
+  && prev.session.metadata?.title === next.session.metadata?.title
+  && resolveGlobalSessionDirectory(prev.session) === resolveGlobalSessionDirectory(next.session)
+  && prev.session.parentSessionId === next.session.parentSessionId
+  && prev.session.createdAt === next.session.createdAt
+  && prev.session.updatedAt === next.session.updatedAt
+  && prev.session.archivedAt === next.session.archivedAt
   && sameMultiRunIdentity(prev.session, next.session)
   && normalizePath(prev.worktree?.path ?? null) === normalizePath(next.worktree?.path ?? null)
   && prev.worktree?.branch === next.worktree?.branch
@@ -283,20 +272,21 @@ const areSessionTreeItemPropsEqual = (prev: SessionTreeItemProps, next: SessionT
   if ((prev.renderExtras?.nodeStructureKey ?? '') !== (next.renderExtras?.nodeStructureKey ?? '')) return false;
   if ((prev.renderExtras?.menuOpenSessionId ?? null) !== (next.renderExtras?.menuOpenSessionId ?? null)) return false;
   if (prev.renderExtras?.relativeTimeTick !== next.renderExtras?.relativeTimeTick) return false;
-  const id = next.node.session.id;
+  const id = next.node.session.sessionId;
   if ((prev.renderExtras?.subtreeContainsEditing?.has(id) ?? false) !== (next.renderExtras?.subtreeContainsEditing?.has(id) ?? false)) return false;
   if ((prev.secondaryMeta?.projectLabel ?? null) !== (next.secondaryMeta?.projectLabel ?? null)) return false;
   if ((prev.secondaryMeta?.branchLabel ?? null) !== (next.secondaryMeta?.branchLabel ?? null)) return false;
+  if ((prev.secondaryMeta?.inSpace ?? false) !== (next.secondaryMeta?.inSpace ?? false)) return false;
   const scalarKeys = [
     'depth', 'groupDirectory', 'projectId', 'folderOwnerKey', 'selectionScopeKey', 'archivedBucket',
     'renderContext', 'rowKey', 'dragKey', 'renderChildren',
     'hasSessionSearchQuery', 'normalizedSessionSearchQuery', 'notifyOnSubtasks',
-    'editingId', 'editingRowKey', 'editTitle', 'copiedSessionId', 'openSidebarMenuKey',
+    'editingId', 'editingRowKey', 'editTitle', 'openSidebarMenuKey',
     'mobileVariant', 'alwaysShowActions', 'allowReselect',
     'pinnedSessionIds', 'expandedParents', 'deleteSessionConfirm',
     'setEditingId', 'setEditingRowKey', 'setEditTitle', 'toggleParent', 'setOpenSidebarMenuKey',
     'startSessionWorktreeMenuLoad', 'onEditProject', 'onSessionSelected', 'resetSessionSearch',
-    'setDeleteSessionConfirm', 'startFolderRename', 'setCopiedSessionId',
+    'setDeleteSessionConfirm', 'startFolderRename',
   ] as const;
   for (const key of scalarKeys) {
     if (prev[key] !== next[key]) return false;

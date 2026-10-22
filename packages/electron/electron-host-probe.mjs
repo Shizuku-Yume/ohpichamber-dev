@@ -6,6 +6,7 @@ const versionEnvelope = z.object({
   status: z.literal('ok'),
   // Arrays historically classify as incompatible rather than wrong-service.
   compatibility: z.union([z.looseObject({}), z.array(z.unknown())]),
+  openchamberVersion: optionalIdentity,
 });
 
 const buildProbeUrl = (url, pathname) => {
@@ -18,13 +19,24 @@ const buildProbeUrl = (url, pathname) => {
   }
 };
 
+// A server before 2.0 runs OpenCode 1.x and reports the same API version and
+// capabilities as a current one; only its own version tells it apart. A
+// version that does not parse says nothing either way.
+const isServerBeforeOpenCode2 = (version) => {
+  const major = /^(\d+)\./.exec(version)?.[1];
+  return major !== undefined && Number(major) < 2;
+};
+
 const classifyVersionPayload = (payload) => {
   const parsed = versionEnvelope.safeParse(payload);
   if (!parsed.success) {
     return 'wrong-service';
   }
-  const { compatibility } = parsed.data;
+  const { compatibility, openchamberVersion } = parsed.data;
   if (!Array.isArray(compatibility.capabilities) || !compatibility.capabilities.includes('api.runtime-url.v1')) {
+    return 'incompatible';
+  }
+  if (isServerBeforeOpenCode2(openchamberVersion)) {
     return 'incompatible';
   }
   if (compatibility.apiVersion !== 1 || compatibility.minClientApiVersion > 1) {
@@ -86,22 +98,18 @@ export const probeElectronHostWithDeadline = async ({
     const expectedIdentity = optionalIdentity.parse(expectedServerId);
     if (expectedIdentity) {
       const healthUrl = buildProbeUrl(url, '/health');
-      if (healthUrl) {
-        try {
-          const response = await fetchProbe(healthUrl, { Accept: 'application/json' });
-          // A redirected identity belongs to another candidate, even if its ID matches.
-          if (response.status >= 300 && response.status < 400 || response.redirected) return result('wrong-service');
-          if (response.ok) {
-            const payload = await response.json().catch(() => null);
-            const reported = optionalIdentity.parse(payload?.serverId);
-            if (reported && reported !== expectedIdentity) return result('wrong-service');
-          }
-        } catch (error) {
-          if (controller.signal.aborted) throw error;
-          // Electron 43 net.fetch rejects manual redirects instead of returning a 3xx response.
-          if (error instanceof Error && error.message === 'Redirect was cancelled') return result('wrong-service');
-          // Identity is optional on older servers; the authenticated request remains authoritative.
-        }
+      if (!healthUrl) return result('wrong-service');
+      try {
+        const response = await fetchProbe(healthUrl, { Accept: 'application/json' });
+        // A redirected identity belongs to another candidate, even if its ID matches.
+        if (response.status >= 300 && response.status < 400 || response.redirected || !response.ok) return result('wrong-service');
+        const payload = await response.json().catch(() => null);
+        const reported = optionalIdentity.parse(payload?.serverId);
+        if (reported !== expectedIdentity) return result('wrong-service');
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        // Electron 43 net.fetch rejects manual redirects instead of returning a 3xx response.
+        return result('wrong-service');
       }
     }
 

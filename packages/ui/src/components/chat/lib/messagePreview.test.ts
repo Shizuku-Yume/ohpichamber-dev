@@ -1,21 +1,24 @@
 import { describe, expect, test } from 'bun:test'
-import type { Part } from '@opencode-ai/sdk/v2'
+import type { Part, TextPart } from '@/lib/opencode/model'
 import { CONTEXT_METADATA_KEY, type ContextPartPayload } from '@/lib/messages/contextParts'
 import { getFullText, getMessagePreview, getPromptPreviewText } from './messagePreview'
 
-const textPart = (text: string): Part => ({ type: 'text', text } as Part)
+const textPart = (text: string): TextPart => ({
+  id: `prt_${text}`,
+  sessionID: 'ses_1',
+  messageID: 'msg_1',
+  type: 'text',
+  text,
+})
 
-// SAFETY: a synthetic context part as the composer builds it; the preview
-// helpers read only type, text, and metadata.
-const contextPart = (payload: ContextPartPayload, text: string): Part => ({
+const contextPart = (payload: ContextPartPayload, text: string): TextPart => ({
   id: 'prt_1',
   sessionID: 'ses_1',
   messageID: 'msg_1',
   type: 'text',
   text,
-  synthetic: true,
   metadata: { [CONTEXT_METADATA_KEY]: payload },
-} as Part)
+})
 
 const chatQuote = (quote: string, text = ''): ContextPartPayload => ({ kind: 'chat-quote', quote, text })
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@openchamber/agent-contract';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/lib/i18n';
@@ -9,7 +9,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { collectSessionSubtreeIds, runSessionSubtreeAction } from './sessionSubtreeActions';
 import { describeSessionActionError } from './sessionActionError';
 
-export type DeleteSessionSource = {
+type DeleteSessionSource = {
   archivedBucket?: boolean;
   hardDelete?: boolean;
   /** Bypass the confirmation dialog and delete/archive immediately. */
@@ -39,13 +39,10 @@ type Args = {
   setEditTitle: (value: string) => void;
   editingId: string | null;
   editTitle: string;
-  copiedSessionId: string | null;
-  setCopiedSessionId: (sessionId: string | null) => void;
 };
 
 export const useSessionActions = (args: Args) => {
   const { t } = useI18n();
-  const copyTimeout = React.useRef<number | null>(null);
   const editingIdRef = React.useRef(args.editingId);
   const editTitleRef = React.useRef(args.editTitle);
   const deleteSessionConfirmRef = React.useRef(args.deleteSessionConfirm);
@@ -56,8 +53,6 @@ export const useSessionActions = (args: Args) => {
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const updateSessionTitle = useSessionUIStore((state) => state.updateSessionTitle);
-  const shareSession = useSessionUIStore((state) => state.shareSession);
-  const unshareSession = useSessionUIStore((state) => state.unshareSession);
   const deleteSession = useSessionUIStore((state) => state.deleteSession);
   const deleteSessions = useSessionUIStore((state) => state.deleteSessions);
   const archiveSession = useSessionUIStore((state) => state.archiveSession);
@@ -77,16 +72,7 @@ export const useSessionActions = (args: Args) => {
     editingSessionId,
     editingOccurrenceKey,
     setEditTitle,
-    setCopiedSessionId,
   } = args;
-
-  React.useEffect(() => {
-    return () => {
-      if (copyTimeout.current) {
-        clearTimeout(copyTimeout.current);
-      }
-    };
-  }, []);
 
   const handleSessionSelect = React.useCallback(
     (sessionId: string, sessionDirectory?: string | null) => {
@@ -147,42 +133,6 @@ export const useSessionActions = (args: Args) => {
     setEditTitle('');
   }, [setEditTitle, setEditingId, setEditingRowKey]);
 
-  const copyShareUrl = React.useCallback(async (url: string, sessionId: string): Promise<boolean> => {
-    try {
-      const result = await copyTextToClipboard(url);
-      if (!result.ok) return false;
-      setCopiedSessionId(sessionId);
-      if (copyTimeout.current) clearTimeout(copyTimeout.current);
-      copyTimeout.current = window.setTimeout(() => {
-        setCopiedSessionId(null);
-        copyTimeout.current = null;
-      }, 2000);
-      return true;
-    } catch {
-      return false;
-    }
-  }, [setCopiedSessionId]);
-
-  const handleShareSession = React.useCallback(async (session: Session) => {
-    const result = await shareSession(session.id);
-    if (!result?.share?.url) {
-      toast.error(t('sessions.sidebar.session.share.error'));
-      return;
-    }
-    const copied = await copyShareUrl(result.share.url, session.id);
-    toast[copied ? 'success' : 'warning'](t('sessions.sidebar.session.share.successTitle'), {
-      description: t(copied
-        ? 'sessions.sidebar.session.share.successDescription'
-        : 'sessions.sidebar.session.share.copyUrlError'),
-    });
-  }, [copyShareUrl, shareSession, t]);
-
-  const handleCopyShareUrl = React.useCallback((url: string, sessionId: string) => {
-    void copyShareUrl(url, sessionId).then((copied) => {
-      if (!copied) toast.error(t('sessions.sidebar.session.share.copyUrlError'));
-    });
-  }, [copyShareUrl, t]);
-
   const handleCopySessionId = React.useCallback((sessionId: string) => {
     void copyTextToClipboard(sessionId)
       .then((result) => {
@@ -194,15 +144,6 @@ export const useSessionActions = (args: Args) => {
       })
       .catch(() => toast.error(t('sessions.sidebar.session.copyId.error')));
   }, [t]);
-
-  const handleUnshareSession = React.useCallback(async (sessionId: string) => {
-    const result = await unshareSession(sessionId);
-    if (result) {
-      toast.success(t('sessions.sidebar.session.unshare.success'));
-    } else {
-      toast.error(t('sessions.sidebar.session.unshare.error'));
-    }
-  }, [t, unshareSession]);
 
   const executeDeleteSession = React.useCallback(
     async (
@@ -230,7 +171,7 @@ export const useSessionActions = (args: Args) => {
   const handleDeleteSession = React.useCallback(
     (session: Session, source?: DeleteSessionSource) => {
       const shouldHardDelete = source?.archivedBucket === true || source?.hardDelete === true;
-      const effectiveDescendantIds = collectSessionSubtreeIds(session.id, descendantIds, shouldHardDelete);
+      const effectiveDescendantIds = collectSessionSubtreeIds(session.sessionId, descendantIds, shouldHardDelete);
       if (!showDeletionDialog || source?.skipConfirm === true) {
         void executeDeleteSession(session, source, { descendantIds: effectiveDescendantIds });
         return;
@@ -255,7 +196,7 @@ export const useSessionActions = (args: Args) => {
 
   const handleRestoreSession = React.useCallback(
     async (session: Session) => {
-      const success = await unarchiveSession(session.id);
+      const success = await unarchiveSession(session.sessionId);
       if (success) {
         toast.success(t('sessions.sidebar.session.restore.success'));
       } else {
@@ -270,14 +211,11 @@ export const useSessionActions = (args: Args) => {
     handleSessionDoubleClick,
     handleSaveEdit,
     handleCancelEdit,
-    handleShareSession,
-    handleCopyShareUrl,
     handleCopySessionId,
-    handleUnshareSession,
     handleDeleteSession,
     handleRestoreSession,
     confirmDeleteSession,
-  }), [handleCancelEdit, handleCopySessionId, handleCopyShareUrl, handleDeleteSession,
-    handleRestoreSession, handleSaveEdit, handleSessionDoubleClick, handleSessionSelect, handleShareSession,
-    handleUnshareSession, confirmDeleteSession]);
+  }), [handleCancelEdit, handleCopySessionId, handleDeleteSession,
+    handleRestoreSession, handleSaveEdit, handleSessionDoubleClick, handleSessionSelect,
+    confirmDeleteSession]);
 };

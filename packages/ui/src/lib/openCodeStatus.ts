@@ -2,10 +2,11 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getSyncSessions } from '@/sync/sync-refs';
 import { useUIStore } from '@/stores/useUIStore';
 import { getRuntimeUrlResolver } from './runtime-url';
-import { opencodeClient } from './opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { runtimeFetch } from './runtime-fetch';
 import { getRecentSendFailures } from '@/sync/send-failure-log';
 import { getRecentSessionErrors } from '@/sync/session-error-log';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 declare const __APP_VERSION__: string | undefined;
 
@@ -54,8 +55,8 @@ const getCurrentDirectory = (): string => {
   const currentSessionId = state.currentSessionId;
   if (!currentSessionId) return '';
   const sessions = getSyncSessions();
-  const session = sessions.find((s) => s.id === currentSessionId);
-  return typeof session?.directory === 'string' ? session.directory : '';
+  const session = sessions.find((s) => s.sessionId === currentSessionId);
+  return session ? resolveGlobalSessionDirectory(session) ?? '' : '';
 };
 
 const safeFetch = async (input: string, timeoutMs = 6000): Promise<ProbeResult> => {
@@ -251,34 +252,25 @@ export const buildOpenCodeStatusReport = async (): Promise<string> => {
     return url.toString();
   };
 
-  // OpenCode's own view of its directories; `home` anchors the log path below.
-  const pathInfo: { home?: unknown } | null = await (async () => {
-    const url = buildProbeUrl('/path', true);
-    if (!url) return null;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    try {
-      const resp = await runtimeFetch(url, { signal: controller.signal, cache: 'no-store' });
-      if (!resp.ok) return null;
-      const json = (await resp.json().catch(() => null)) as unknown;
-      return isRecord(json) ? json : null;
-    } catch {
-      return null;
-    } finally {
-      clearTimeout(timeout);
-    }
-  })();
+  // Log paths use the Host home, with stored-directory guesses owned by the
+  // Host filesystem adapter when the home endpoint is unavailable.
+  const hostHome = await hostFilesystem
+    .getSystemInfo()
+    .then((info) => (info.homeDirectory && info.homeDirectory !== '/' ? info.homeDirectory : ''))
+    .catch(() => '');
 
   const probeTargets: Array<{ label: string; path: string; includeDirectory?: boolean; timeoutMs?: number }> = [
-    { label: 'health', path: '/global/health', includeDirectory: false },
+    // OpenCode 2.x routes. `info` replaced `health`, `location` replaced
+    // `project/current` and `path`, and providers and models are top-level.
+    { label: 'info', path: '/info', includeDirectory: false },
     { label: 'config', path: '/config', includeDirectory: true },
-    { label: 'providers', path: '/config/providers', includeDirectory: true },
+    { label: 'providers', path: '/provider', includeDirectory: true },
+    { label: 'models', path: '/model', includeDirectory: true },
     { label: 'agents', path: '/agent', includeDirectory: true, timeoutMs: 12000 },
     { label: 'commands', path: '/command', includeDirectory: true, timeoutMs: 10000 },
-    { label: 'project', path: '/project/current', includeDirectory: true },
-    { label: 'path', path: '/path', includeDirectory: true },
+    { label: 'location', path: '/location', includeDirectory: true },
     { label: 'sessions', path: '/session', includeDirectory: true, timeoutMs: 12000 },
-    { label: 'sessionStatus', path: '/session/status', includeDirectory: true },
+    { label: 'sessionStatus', path: '/session/active', includeDirectory: true },
   ];
 
   const probes = apiBase
@@ -296,7 +288,7 @@ export const buildOpenCodeStatusReport = async (): Promise<string> => {
   lines.push(`Time: ${now.toISOString()}`);
   lines.push(`OpenChamber version: ${appVersion}`);
   lines.push(`Runtime: ${origin || '(unknown)'} (api=${apiBase || '(unknown)'})`);
-  lines.push(`OpenCode SDK base: ${opencodeClient.getBaseUrl()}`);
+  lines.push(`OpenCode SDK base: ${apiBase || '(unknown)'}`);
   lines.push(`Event stream: ${eventStreamStatus}`);
   lines.push(`Directory: ${directory || '(none)'}`);
   lines.push(`Platform: ${platform}`);
@@ -356,12 +348,11 @@ export const buildOpenCodeStatusReport = async (): Promise<string> => {
   // directory (the same default on every platform, which is why Windows users
   // do not find it under AppData); the desktop app writes the server console,
   // including OpenCode lifecycle lines, through electron-log.
-  const opencodeHome = typeof pathInfo?.home === 'string' ? pathInfo.home : '';
   const isWindows = /Windows NT/.test(platform);
   const isDesktop = origin.startsWith('openchamber-ui://');
   lines.push('');
   lines.push('Log files:');
-  lines.push(`- OpenCode: ${opencodeHome ? joinPath(opencodeHome, '.local/share/opencode/log', isWindows) : '<home>/.local/share/opencode/log'} (or $XDG_DATA_HOME/opencode/log when set)`);
+  lines.push(`- OpenCode: ${hostHome ? joinPath(hostHome, '.local/share/opencode/log', isWindows) : '<home>/.local/share/opencode/log'} (or $XDG_DATA_HOME/opencode/log when set)`);
   if (isDesktop) {
     const isMacDesktop = /Mac OS X|Macintosh/.test(platform);
     lines.push(`- OpenChamber desktop: ${isWindows

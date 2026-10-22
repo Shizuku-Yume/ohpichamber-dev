@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { CONTEXT_SURFACES, sortContextSurfaces } from '../lib/surfaces/registry';
+import {
+  forgetBrowserTabOpenedWithAddress,
+  subscribeBrowserTabLoadRequests,
+  wasBrowserTabOpenedWithAddress,
+} from '../lib/browser/devServerWait';
+import { useFilesViewTabsStore } from './useFilesViewTabsStore';
 import { useTerminalStore } from './useTerminalStore';
 import { useUIStore } from './useUIStore';
 
@@ -11,6 +17,69 @@ const originalPersistOptions = useUIStore.persist.getOptions();
 beforeEach(() => {
   useUIStore.setState({ contextPanelByDirectory: {}, contextRailOrder: [] });
   useTerminalStore.getState().clearAll();
+});
+
+describe('useUIStore preview file tabs', () => {
+  const fileTabs = () => getContextPanelTabs('/repo').filter((tab) => tab.mode === 'file');
+
+  test('a preview replaces the previous preview in its slot instead of adding a tab', () => {
+    const store = useUIStore.getState();
+    store.openContextFile('/repo', '/repo/kept.ts');
+    store.openContextFile('/repo', '/repo/a.ts', { preview: true });
+    store.openContextFile('/repo', '/repo/b.ts', { preview: true });
+
+    expect(fileTabs().map((tab) => [tab.targetPath, tab.preview])).toEqual([
+      ['/repo/kept.ts', false],
+      ['/repo/b.ts', true],
+    ]);
+    expect(useUIStore.getState().contextPanelByDirectory['/repo'].activeTabId).toBe(fileTabs()[1].id);
+  });
+
+  test('a moved folder takes its file tabs along, in place, keeping the active one active', () => {
+    const store = useUIStore.getState();
+    store.openContextFile('/repo', '/repo/src/a.ts');
+    store.openContextFile('/repo', '/repo/srcx/b.ts');
+    store.openContextFile('/repo', '/repo/src/deep/c.ts', { preview: true });
+
+    store.moveContextFilePaths('/repo', '/repo/src', '/repo/lib/src');
+
+    expect(fileTabs().map((tab) => [tab.targetPath, tab.preview])).toEqual([
+      ['/repo/lib/src/a.ts', false],
+      ['/repo/srcx/b.ts', false],
+      ['/repo/lib/src/deep/c.ts', true],
+    ]);
+    expect(useUIStore.getState().contextPanelByDirectory['/repo'].activeTabId).toBe(fileTabs()[2].id);
+    expect(fileTabs()[2].id).toBe('file:/repo/lib/src/deep/c.ts');
+  });
+
+  test('a moved tab replaces a stale tab already open at its destination', () => {
+    const store = useUIStore.getState();
+    store.openContextFile('/repo', '/repo/lib/a.ts');
+    store.openContextFile('/repo', '/repo/src/a.ts');
+
+    store.moveContextFilePaths('/repo', '/repo/src/a.ts', '/repo/lib/a.ts');
+
+    expect(fileTabs().map((tab) => tab.targetPath)).toEqual(['/repo/lib/a.ts']);
+    expect(useUIStore.getState().contextPanelByDirectory['/repo'].activeTabId).toBe('file:/repo/lib/a.ts');
+  });
+
+  test('a regular open, an explicit pin, or a preview of an open file keeps the tab', () => {
+    const store = useUIStore.getState();
+    store.openContextFile('/repo', '/repo/a.ts', { preview: true });
+    store.openContextFile('/repo', '/repo/a.ts');
+    expect(fileTabs().map((tab) => tab.preview)).toEqual([false]);
+
+    store.openContextFile('/repo', '/repo/b.ts', { preview: true });
+    store.pinContextPanelTab('/repo', fileTabs()[1].id);
+    store.openContextFile('/repo', '/repo/c.ts', { preview: true });
+    store.openContextFile('/repo', '/repo/a.ts', { preview: true });
+
+    expect(fileTabs().map((tab) => [tab.targetPath, tab.preview])).toEqual([
+      ['/repo/a.ts', false],
+      ['/repo/b.ts', false],
+      ['/repo/c.ts', true],
+    ]);
+  });
 });
 
 describe('useUIStore context panel tabs', () => {
@@ -202,7 +271,7 @@ describe('useUIStore context panel tabs', () => {
     expect(tabs.some((tab) => tab.mode === 'plan')).toBe(true);
   });
 
-  test('drops invalid persisted context-panel width fractions', async () => {
+  test('ignores width fractions persisted by older builds and keeps the pixel width', async () => {
     const directory = '/repo';
     useUIStore.persist.setOptions({ storage: {
       getItem: () => ({
@@ -237,8 +306,8 @@ describe('useUIStore context panel tabs', () => {
       await useUIStore.persist.rehydrate();
 
       const panel = useUIStore.getState().contextPanelByDirectory[directory];
-      expect(panel?.widthFractionByMode).toEqual({ chat: 0.4, walkthrough: 0.8 });
-      expect(panel?.widthByMode.walkthrough).toBe(800);
+      expect(panel).not.toHaveProperty('widthFractionByMode');
+      expect(panel?.widthByMode).toEqual({ walkthrough: 800 });
     } finally {
       useUIStore.persist.setOptions(originalPersistOptions);
     }
@@ -314,6 +383,74 @@ describe('useUIStore context panel tabs', () => {
 
     terminalTab = getTerminalTab('/repo-worktree');
     expect(terminalTab?.targetDirectory).toBe(null);
+  });
+
+  test('a chat tab keeps its own session directory under the host directory', () => {
+    useUIStore.getState().openContextPanelTab('/repo', {
+      mode: 'chat',
+      dedupeKey: 'session:ses_1',
+      targetDirectory: '/other-project/',
+    });
+
+    const chatTab = getContextPanelTabs('/repo').find((tab) => tab.mode === 'chat');
+    expect(chatTab?.targetDirectory).toBe('/other-project');
+    expect(useUIStore.getState().contextPanelByDirectory['/other-project']).toBe(undefined);
+
+    // A chat tab opened without a directory carries none, and a mode that is
+    // neither terminal nor chat never does.
+    useUIStore.getState().openContextPanelTab('/repo', { mode: 'chat', dedupeKey: 'session:ses_2' });
+    useUIStore.getState().openContextPanelTab('/repo', { mode: 'diff', targetDirectory: '/other-project' });
+
+    const tabs = getContextPanelTabs('/repo');
+    expect(tabs.find((tab) => tab.dedupeKey === 'session:ses_2')?.targetDirectory).toBe(null);
+    expect(tabs.find((tab) => tab.mode === 'diff')?.targetDirectory).toBe(null);
+  });
+
+  test('persisted chat tabs keep a normalized session directory through rehydration', async () => {
+    const persistedTab = {
+      targetPath: null,
+      label: null,
+      sessionTitleFallback: null,
+      readOnly: false,
+      stagedDiff: false,
+      diffScope: null,
+      touchedAt: 1,
+    };
+    useUIStore.persist.setOptions({ storage: {
+      getItem: () => ({
+        version: 20,
+        state: {
+          contextPanelByDirectory: {
+            '/repo': {
+              isOpen: true,
+              expanded: false,
+              widthByMode: {},
+              touchedAt: 1,
+              activeTabId: 'chat:session:ses_1',
+              tabs: [
+                { ...persistedTab, id: 'chat:session:ses_1', mode: 'chat', dedupeKey: 'session:ses_1', targetDirectory: '/other-project/' },
+                { ...persistedTab, id: 'chat:session:ses_2', mode: 'chat', dedupeKey: 'session:ses_2', targetDirectory: 42 },
+                { ...persistedTab, id: 'diff', mode: 'diff', dedupeKey: 'diff', diffScope: 'working', targetDirectory: '/other-project' },
+              ],
+            },
+          },
+        },
+      }),
+      setItem: () => undefined,
+      removeItem: () => undefined,
+    } });
+
+    try {
+      useUIStore.setState(useUIStore.getInitialState(), true);
+      await useUIStore.persist.rehydrate();
+
+      const tabs = getContextPanelTabs('/repo');
+      expect(tabs.find((tab) => tab.dedupeKey === 'session:ses_1')?.targetDirectory).toBe('/other-project');
+      expect(tabs.find((tab) => tab.dedupeKey === 'session:ses_2')?.targetDirectory).toBe(null);
+      expect(tabs.find((tab) => tab.mode === 'diff')?.targetDirectory).toBe(null);
+    } finally {
+      useUIStore.persist.setOptions(originalPersistOptions);
+    }
   });
 
   test('reopening a terminal tab with null clears a previous target directory', () => {
@@ -443,6 +580,45 @@ describe('useUIStore context panel tabs', () => {
 
     const sanitizedDiffTab = getContextPanelTabs('/repo-worktree').find((tab) => tab.mode === 'diff');
     expect(sanitizedDiffTab?.targetDirectory).toBe(null);
+  });
+});
+
+describe('useUIStore browser tabs opened with an address', () => {
+  const url = 'http://localhost:5173/';
+  const tabID = `browser:${url}`;
+
+  test('a new tab counts as opened now, so its first load may wait for the server', () => {
+    forgetBrowserTabOpenedWithAddress('/repo', tabID);
+    useUIStore.getState().openContextPreview('/repo', url);
+    expect(wasBrowserTabOpenedWithAddress('/repo', tabID)).toBe(true);
+    expect(wasBrowserTabOpenedWithAddress('/other', tabID)).toBe(false);
+    forgetBrowserTabOpenedWithAddress('/repo', tabID);
+  });
+
+  test('opening the address of an existing tab asks that tab to load it again', () => {
+    useUIStore.getState().openContextBrowser('/repo', url);
+    forgetBrowserTabOpenedWithAddress('/repo', tabID);
+    const requested: string[] = [];
+    const elsewhere: string[] = [];
+    const stop = subscribeBrowserTabLoadRequests('/repo', tabID, (next) => requested.push(next));
+    const stopElsewhere = subscribeBrowserTabLoadRequests('/other', tabID, (next) => elsewhere.push(next));
+
+    useUIStore.getState().openContextPreview('/repo', url);
+    useUIStore.getState().openContextBrowser('/repo', url);
+
+    expect(requested).toEqual([url, url]);
+    expect(elsewhere).toEqual([]);
+    // Loaded through the request, not marked: a later remount still counts as restored.
+    expect(wasBrowserTabOpenedWithAddress('/repo', tabID)).toBe(false);
+    stop();
+    stopElsewhere();
+  });
+
+  test('an agent tab opened with an address counts as opened now', () => {
+    const agentTabID = useUIStore.getState().openAgentBrowserTab('/repo', url, 'ses_1');
+    expect(agentTabID === null).toBe(false);
+    expect(wasBrowserTabOpenedWithAddress('/repo', agentTabID ?? '')).toBe(true);
+    forgetBrowserTabOpenedWithAddress('/repo', agentTabID ?? '');
   });
 });
 
@@ -730,7 +906,6 @@ describe('useUIStore closeContextPanelTab surface stability', () => {
     expect(state?.tabs.map((tab) => tab.mode)).toEqual(['terminal', 'file']);
     expect(useUIStore.getState().contextEditorTreeVisible).toBe(true);
     expect(state?.widthByMode).toEqual(stateBefore?.widthByMode);
-    expect(state?.widthFractionByMode).toEqual(stateBefore?.widthFractionByMode);
   });
 
   test('closing the empty editor tab itself still closes the file surface', () => {
@@ -795,7 +970,6 @@ describe('useUIStore closeContextPanelTabs bulk', () => {
     expect(state?.tabs.some((tab) => tab.mode === 'terminal')).toBe(true);
     expect(useUIStore.getState().contextEditorTreeVisible).toBe(true);
     expect(state?.widthByMode).toEqual(state0?.widthByMode);
-    expect(state?.widthFractionByMode).toEqual(state0?.widthFractionByMode);
   });
 
   test('closing only inactive-mode tabs leaves the active tab and panel intact', () => {
@@ -848,30 +1022,17 @@ describe('useUIStore per-surface panel widths', () => {
     expect(state?.widthByMode.browser).toBe(undefined);
   });
 
-  test('captures the clamped width as a responsive ratio when the panel area is known', () => {
-    useUIStore.getState().openContextPanelTab(directory, { mode: 'diff' });
-    useUIStore.getState().setContextPanelWidth(directory, 'diff', 100, 1000);
-    useUIStore.getState().setContextPanelWidth(directory, 'git', 700, 1000);
-
-    const state = useUIStore.getState().contextPanelByDirectory[directory];
-    expect(state?.widthByMode.diff).toBe(320);
-    expect(state?.widthFractionByMode.diff).toBe(0.32);
-    expect(state?.widthFractionByMode.git).toBe(0.7);
-    expect(state?.widthFractionByMode.browser).toBe(undefined);
-  });
-
-  test('a pixel resize without a valid area replaces the previous ratio', () => {
+  test('a later resize replaces the remembered width', () => {
     const store = useUIStore.getState();
-    store.setContextPanelWidth(directory, 'walkthrough', 800, 1000);
-    store.setContextPanelWidth(directory, 'walkthrough', 600, Number.POSITIVE_INFINITY);
+    store.setContextPanelWidth(directory, 'walkthrough', 800);
+    store.setContextPanelWidth(directory, 'walkthrough', 600.4);
     const panel = useUIStore.getState().contextPanelByDirectory[directory];
     expect(panel?.widthByMode.walkthrough).toBe(600);
-    expect(panel?.widthFractionByMode.walkthrough).toBeUndefined();
   });
 
   test('tree resizing and visibility changes preserve the full editor width', () => {
     const store = useUIStore.getState();
-    store.setContextPanelWidth(directory, 'file', 800, 1000);
+    store.setContextPanelWidth(directory, 'file', 800);
     store.openContextFile(directory, '/repo/a.ts');
     store.setContextEditorTreeWidth(260);
     store.toggleContextEditor();
@@ -885,7 +1046,6 @@ describe('useUIStore per-surface panel widths', () => {
     const panel = useUIStore.getState().contextPanelByDirectory[directory];
     expect(useUIStore.getState().contextEditorTreeWidth).toBe(300);
     expect(panel?.widthByMode).toEqual({ file: 800 });
-    expect(panel?.widthFractionByMode).toEqual({ file: 0.8 });
   });
 
   test('restores the shared tree width and ignores obsolete tree-only panel widths', async () => {
@@ -900,7 +1060,6 @@ describe('useUIStore per-surface panel widths', () => {
                 isOpen: true,
                 expanded: false,
                 widthByMode: { 'file-tree': 400, file: 800 },
-                widthFractionByMode: { 'file-tree': 0.4, file: 0.8 },
                 touchedAt: 1,
                 activeTabId: null,
                 tabs: [],
@@ -920,7 +1079,6 @@ describe('useUIStore per-surface panel widths', () => {
       const panel = useUIStore.getState().contextPanelByDirectory[directory];
       expect(useUIStore.getState().contextEditorTreeWidth).toBe(260);
       expect(panel?.widthByMode).toEqual({ file: 800 });
-      expect(panel?.widthFractionByMode).toEqual({ file: 0.8 });
     } finally {
       useUIStore.persist.setOptions(originalPersistOptions);
     }
@@ -971,5 +1129,104 @@ describe('context panel tab limits', () => {
     const tabs = state?.tabs ?? [];
     expect(tabs.some((tab) => tab.id === state?.activeTabId)).toBe(true);
     expect(tabs.some((tab) => tab.targetPath === 'http://localhost:3019/')).toBe(true);
+  });
+});
+
+describe('useUIStore openAgentBrowserTab', () => {
+  const directory = '/agent-repo';
+
+  test('opens a new background tab even when one already shows the address, and returns its id', () => {
+    useUIStore.getState().openContextBrowser(directory, 'https://a.test');
+    const shownId = useUIStore.getState().contextPanelByDirectory[directory]?.activeTabId;
+
+    const agentId = useUIStore.getState().openAgentBrowserTab(directory, 'https://a.test', 'ses_1');
+
+    const state = useUIStore.getState().contextPanelByDirectory[directory];
+    expect(agentId).not.toBeNull();
+    expect(agentId).not.toBe(shownId);
+    expect(state?.tabs.find((tab) => tab.id === agentId)?.targetPath).toBe('https://a.test');
+    expect(state?.activeTabId).toBe(shownId);
+  });
+
+  test("records the session that opened the tab and keeps it through the persisted state's sanitizer", () => {
+    useUIStore.getState().openContextBrowser(directory, 'https://mine.test');
+    const agentId = useUIStore.getState().openAgentBrowserTab(directory, 'https://a.test', 'ses_1');
+    // Any later open re-reads the tabs through the sanitizer rehydration uses.
+    useUIStore.getState().openContextPanelTab(directory, { mode: 'diff' });
+
+    const tabs = useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
+    expect(tabs.find((tab) => tab.id === agentId)?.ownerSessionId).toBe('ses_1');
+    expect(tabs.find((tab) => tab.targetPath === 'https://mine.test')?.ownerSessionId).toBeNull();
+  });
+
+  test('reads a browser tab saved before tabs had owners as the user\'s own', () => {
+    const persisted = {
+      contextPanelByDirectory: {
+        [directory]: {
+          isOpen: false,
+          expanded: false,
+          widthByMode: {},
+          touchedAt: 1,
+          activeTabId: null,
+          tabs: [{ id: 'browser:browser:agent:1-1', mode: 'browser', targetPath: 'https://old.test', dedupeKey: 'browser:agent:1-1', touchedAt: 1 }],
+        },
+      },
+    };
+    // SAFETY: the object mirrors an older persisted context-panel shape;
+    // setState bypasses the persist middleware's typing, not its migration.
+    useUIStore.setState(persisted as never);
+    useUIStore.getState().openContextPanelTab(directory, { mode: 'diff' });
+
+    const tabs = useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
+    expect(tabs.find((tab) => tab.mode === 'browser')?.ownerSessionId).toBeNull();
+  });
+});
+
+describe('useUIStore closeContextFile (the editor\'s Cmd/Ctrl+W)', () => {
+  const panel = () => useUIStore.getState().contextPanelByDirectory['/repo'];
+  const activeTab = () => panel().tabs.find((tab) => tab.id === panel().activeTabId);
+  const editorOpenPaths = () => useFilesViewTabsStore.getState().byRoot['/repo']?.openPaths ?? [];
+
+  beforeEach(() => {
+    useFilesViewTabsStore.setState({ byRoot: {} });
+  });
+
+  test('closes the active file\'s tab and activates the next file, as the close button does', () => {
+    const store = useUIStore.getState();
+    store.openContextFile('/repo', '/repo/a.ts');
+    store.openContextFile('/repo', '/repo/b.ts');
+    useFilesViewTabsStore.getState().addOpenPath('/repo', '/repo/a.ts');
+    useFilesViewTabsStore.getState().addOpenPath('/repo', '/repo/b.ts');
+
+    store.closeContextFile('/repo', '/repo/b.ts');
+
+    expect(panel().tabs.map((tab) => tab.targetPath)).toEqual(['/repo/a.ts']);
+    expect(activeTab()?.targetPath).toBe('/repo/a.ts');
+    expect(panel().isOpen).toBe(true);
+    expect(editorOpenPaths()).toEqual(['/repo/a.ts']);
+  });
+
+  test('closing the last file leaves the file surface on its tree, panel open', () => {
+    const store = useUIStore.getState();
+    store.openContextFile('/repo', '/repo/a.ts');
+
+    store.closeContextFile('/repo', '/repo/a.ts');
+
+    expect(panel().tabs.some((tab) => tab.targetPath === '/repo/a.ts')).toBe(false);
+    expect(activeTab()?.mode).toBe('file');
+    expect(activeTab()?.targetPath ?? null).toBe(null);
+    expect(panel().isOpen).toBe(true);
+  });
+
+  test('a path with no tab leaves the tabs alone and still leaves the editor\'s open files', () => {
+    const store = useUIStore.getState();
+    store.openContextFile('/repo', '/repo/a.ts');
+    useFilesViewTabsStore.getState().addOpenPath('/repo', '/repo/stray.ts');
+    const before = panel().tabs;
+
+    store.closeContextFile('/repo', '/repo/stray.ts');
+
+    expect(panel().tabs).toBe(before);
+    expect(editorOpenPaths()).not.toContain('/repo/stray.ts');
   });
 });

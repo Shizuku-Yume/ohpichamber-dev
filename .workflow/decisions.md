@@ -144,3 +144,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** official provider/OAuth credentials become available, or real service credential handoff requires a provider behavior not yet established.
 - **Effort:** omp-through-m3
+
+## 2026-10-13 - Scope review rounds to a boundary and declare the real landing mode
+
+- **Decided:** adopt workflow 2.6.4 in this repository. A review round covers one boundary — comparison point, paths, deliverable and trust boundaries; a nonblocking fix inside it opens no new round, while a `blocking` finding or a boundary-moving fix gets one delta round carrying every such fix at once. The security pass triggers on a named trust-boundary list and reviews the boundary closure instead of the whole change set. Gate and close reviews reuse the tasks' `Review boundary` records plus a fixed assembly checklist rather than replaying task briefs. Declare `Landing: local-merge`, and keep one current acceptance receipt per Check bound to the code path, inputs and environment it exercised.
+- **Instead of:** keeping `Landing: direct` while work accumulated on 54 branches with `main` 85 commits behind, and reviewing each finding, task and gate as its own round.
+- **Because:** the measured waste was per-finding rounds (11 recovery/reopen branches, 15 receipts on task 10 alone), a security pass over an 85-file change set on every task, and gate21 repeating briefs the tasks had already passed. Task 22's five disjoint slices were each reviewed against their own diff while the merged result was reviewed by nobody.
+- **Mine:** no
+- **Revisit when:** a blocking defect escapes a boundary round, or the assembly checklist proves insufficient at gate 23.
+- **Effort:** omp-through-m3

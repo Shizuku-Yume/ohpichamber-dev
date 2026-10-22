@@ -4,9 +4,15 @@
 [![GitHub release](https://img.shields.io/github/v/release/openchamber/openchamber?style=flat&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgZmlsbD0iI2YxZWNlYyIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjxwYXRoIGQ9Ik0xMjgsMTI5LjA5VjIzMmE4LDgsMCwwLDEtMy44NC0xbC04OC00OC4xOGE4LDgsMCwwLDEtNC4xNi03VjgwLjE4YTgsOCwwLDAsMSwuNy0zLjI1WiIgb3BhY2l0eT0iMC4yIj48L3BhdGg%2BPHBhdGggZD0iTTIyMy42OCw2Ni4xNSwxMzUuNjgsMThhMTUuODgsMTUuODgsMCwwLDAtMTUuMzYsMGwtODgsNDguMTdhMTYsMTYsMCwwLDAtOC4zMiwxNHY5NS42NGExNiwxNiwwLDAsMCw4LjMyLDE0bDg4LDQ4LjE3YTE1Ljg4LDE1Ljg4LDAsMCwwLDE1LjM2LDBsODgtNDguMTdhMTYsMTYsMCwwLDAsOC4zMi0xNFY4MC4xOEExNiwxNiwwLDAsMCwyMjMuNjgsNjYuMTVaTTEyOCwzMmw4MC4zNCw0NC0yOS43NywxNi4zLTgwLjM1LTQ0Wk0xMjgsMTIwLDQ3LjY2LDc2bDMzLjktMTguNTYsODAuMzQsNDRaTTQwLDkwbDgwLDQzLjc4djg1Ljc5TDQwLDE3NS44MlptMTc2LDg1Ljc4aDBsLTgwLDQzLjc5VjEzMy44MmwzMi0xNy41MVYxNTJhOCw4LDAsMCwwLDE2LDBWMTA3LjU1TDIxNiw5MHY4NS43N1oiPjwvcGF0aD48L3N2Zz4%3D&logoColor=FFFCF0&labelColor=100F0F&color=205EA6)](https://github.com/openchamber/openchamber/releases/latest)
 [![Discord](https://img.shields.io/badge/Discord-join.svg?style=flat&labelColor=100F0F&color=8B7EC8&logo=discord&logoColor=FFFCF0)](https://discord.gg/ZYRSdnwwKA)
 
-Run [OpenCode](https://opencode.ai) in your browser. Install the CLI, open `localhost:3000`, done. Works on desktop browsers, tablets, and phones as a PWA.
+Web and PWA application and Host Gateway server runtime for OpenChamber.
 
-Full project overview, screenshots, and all features: [github.com/openchamber/openchamber](https://github.com/openchamber/openchamber)
+This package owns the browser UI build, the Host Gateway HTTP and WebSocket server, CLI executable (`openchamber`), and host service endpoints (filesystem, Git, PTY terminals, dev server discovery, dev tunnels, authentication, and push notifications).
+
+### Migration status
+
+OhPiChamber is currently in a pre-M0 baseline state. In this baseline, the web server runs the inherited Host Gateway together with OpenCode proxy and process lifecycle management. Under the planned OhPiChamber migration (see `.workflow/omp-migration/scope.md`, `SCOPE-2.1`, `SCOPE-7.1` through `SCOPE-9.3`, and `SCOPE-17.1`), Host Gateway infrastructure is retained, while OpenCode proxy routes and process management are scheduled for retirement in favor of the OMP Agent Service and Canonical API (`/api/agent/v1`).
+
+Full project overview, screenshots, and architecture documents live in the repository root and `.workflow/omp-migration/`.
 
 ## Install
 
@@ -16,7 +22,24 @@ curl -fsSL https://raw.githubusercontent.com/openchamber/openchamber/main/script
 
 Or install manually: `bun add -g @openchamber/web` (or npm, pnpm, yarn).
 
-> **Prerequisites:** [OpenCode CLI](https://opencode.ai) installed, Node.js 22+.
+> **Prerequisites:** [OpenCode CLI](https://opencode.ai) matching the pinned baseline, Node.js 24.14+.
+
+### Monorepo development scripts
+
+```bash
+# From repository root
+bun run build:web       # Build web assets and server dependencies
+bun run dev:web         # Watch and build web UI
+bun run dev:web:server  # Start server with watch mode
+bun run start:web       # Run production server
+
+# From packages/web
+bun run build           # Build builtin extensions and web assets
+bun run dev             # Watch and build
+bun run start           # Start via bin/cli.js serve
+```
+
+
 
 ## Usage
 
@@ -110,13 +133,15 @@ OPENCODE_HOST=https://myhost:4096 OPENCODE_SKIP_START=true openchamber
 | `OPENCODE_HOST` | Full base URL of external server (overrides `OPENCODE_PORT`) |
 | `OPENCODE_PORT` | Port of external server |
 | `OPENCODE_SKIP_START` | Skip starting embedded OpenCode server |
-| `OPENCHAMBER_OPENCODE_HOSTNAME` | Bind hostname for managed OpenCode server (default: `127.0.0.1`, use `0.0.0.0` for LAN/remote access — trusted networks only). Invalid values are rejected with an error and fall back to loopback |
-| `OPENCHAMBER_HOST` | Bind hostname for the OpenChamber web server (default: `127.0.0.1`; use `0.0.0.0` for LAN/remote access — trusted networks only) |
+| `OPENCHAMBER_OPENCODE_HOSTNAME` | Bind hostname for managed OpenCode server (default: `127.0.0.1`, use `0.0.0.0` for LAN/remote access. trusted networks only). Invalid values are rejected with an error and fall back to loopback |
+| `OPENCHAMBER_HOST` | Bind hostname for the OpenChamber web server (default: `127.0.0.1`; use `0.0.0.0` for LAN/remote access. trusted networks only) |
 | `OPENCHAMBER_VERBOSE_REQUEST_LOGS` | Set to `true` to log every HTTP request; disabled by default to keep user logs small |
+| `OPENCHAMBER_GITLAB_CLIENT_ID` | OAuth application ID used for GitLab device flow. Overrides the built-in application, which covers `gitlab.com` only; a self-managed instance needs its own. Personal access token and `glab` authentication remain available without it. |
 | `OPENCHAMBER_SKIP_API_COMPRESSION` | Set to `true` to disable gzip compression for `/api/*` responses |
 | `OPENCHAMBER_COMPRESS_API` | Set to `true` to force `/api/*` compression, or `false` to disable it. Desktop runtime disables API compression by default to reduce local sidecar CPU use |
 | `OPENCHAMBER_FS_UPLOAD_MAX_BYTES` | Maximum file upload size in bytes (default: 100 MiB) |
 | `OPENCHAMBER_TERMINAL_SHELL` | Preferred terminal shell executable used by the `Auto` setting before platform defaults |
+| `npm_config_registry` / `NPM_CONFIG_REGISTRY` | Registry used for plugin metadata and npm version checks. Scoped registry settings and the user's `.npmrc` are also honored. The lowercase value takes precedence when both are set. |
 
 </details>
 
@@ -127,7 +152,7 @@ OPENCODE_HOST=https://myhost:4096 OPENCODE_SKIP_START=true openchamber
 OPENCHAMBER_OPENCODE_HOSTNAME=0.0.0.0 openchamber --port 3000
 ```
 
-**Security note:** binding to `0.0.0.0` exposes the server on all network interfaces — use only on trusted networks and protect with firewall rules or `--ui-password`.
+**Security note:** binding to `0.0.0.0` exposes the server on all network interfaces. use only on trusted networks and protect with firewall rules or `--ui-password`.
 
 </details>
 
@@ -199,7 +224,7 @@ WantedBy=default.target
 ```
 
 > **Why set `PATH` and `SSH_AUTH_SOCK`?**
-> systemd user services start with a minimal environment — no shell profile is sourced.
+> systemd user services start with a minimal environment. no shell profile is sourced.
 > Without an explicit `PATH`, OpenCode won't find tools installed via Homebrew, npm, or `~/.local/bin`.
 > Without `SSH_AUTH_SOCK`, git operations over SSH (push, pull, clone) will fail.
 > `%t` expands to `$XDG_RUNTIME_DIR` (e.g. `/run/user/1000`), where most SSH agents write their socket.

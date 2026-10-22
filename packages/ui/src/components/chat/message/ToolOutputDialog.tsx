@@ -1,3 +1,4 @@
+import { isShellTool, isSubagentTool, isWriteTool } from '@/lib/toolHelpers';
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { File as PierreFile, PatchDiff } from '@pierre/diffs/react';
@@ -12,8 +13,6 @@ import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import {
-    renderTodoOutput,
-    renderListOutput,
     renderGrepOutput,
     renderGlobOutput,
     renderWebSearchOutput,
@@ -278,7 +277,7 @@ const ImagePreviewDialog: React.FC<{
     }, [popup.image]);
 
     const [currentIndex, setCurrentIndex] = React.useState(0);
-    const [imageNaturalSize, setImageNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
+    const [imageNaturalSize, setImageNaturalSize] = React.useState<{ url: string; width: number; height: number } | null>(null);
     const { isRendered, isVisible, isTransitioning } = usePreviewOverlayState(popup.open);
     const viewport = usePreviewViewport(popup.open);
 
@@ -342,30 +341,34 @@ const ImagePreviewDialog: React.FC<{
         };
     }, [hasMultipleImages, onOpenChange, popup.open, showNext, showPrevious]);
 
-    React.useEffect(() => {
-        setImageNaturalSize(null);
-    }, [currentImage?.url]);
+    // The measured size belongs to one URL. Resetting it in an effect on URL
+    // change raced the load event of an already-cached image, which left the
+    // viewer stuck at its maximum box with wide dead margins around the image.
+    const currentImageUrl = currentImage?.url;
+    const currentNaturalSize = imageNaturalSize && imageNaturalSize.url === currentImageUrl
+        ? imageNaturalSize
+        : null;
 
     const imageDisplaySize = React.useMemo(() => {
         const maxWidth = Math.max(160, viewport.width * (isMobile ? 0.86 : 0.75));
         const maxHeight = Math.max(160, viewport.height * (isMobile ? 0.72 : 0.75));
 
-        if (!imageNaturalSize) {
+        if (!currentNaturalSize) {
             return {
                 width: Math.round(maxWidth),
                 height: Math.round(maxHeight),
             };
         }
 
-        const widthScale = maxWidth / imageNaturalSize.width;
-        const heightScale = maxHeight / imageNaturalSize.height;
+        const widthScale = maxWidth / currentNaturalSize.width;
+        const heightScale = maxHeight / currentNaturalSize.height;
         const scale = Math.min(widthScale, heightScale);
 
         return {
-            width: Math.max(1, Math.round(imageNaturalSize.width * scale)),
-            height: Math.max(1, Math.round(imageNaturalSize.height * scale)),
+            width: Math.max(1, Math.round(currentNaturalSize.width * scale)),
+            height: Math.max(1, Math.round(currentNaturalSize.height * scale)),
         };
-    }, [imageNaturalSize, isMobile, viewport.height, viewport.width]);
+    }, [currentNaturalSize, isMobile, viewport.height, viewport.width]);
 
     if (!isRendered || !currentImage || typeof document === 'undefined') {
         return null;
@@ -446,12 +449,13 @@ const ImagePreviewDialog: React.FC<{
                             const element = event.currentTarget;
                             const width = element.naturalWidth;
                             const height = element.naturalHeight;
+                            const url = element.getAttribute('src') ?? '';
                             if (width > 0 && height > 0) {
                                 setImageNaturalSize((previous) => {
-                                    if (previous && previous.width === width && previous.height === height) {
+                                    if (previous && previous.url === url && previous.width === width && previous.height === height) {
                                         return previous;
                                     }
-                                    return { width, height };
+                                    return { url, width, height };
                                 });
                             }
                         }}
@@ -978,26 +982,27 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                     <div className="tool-output-surface h-full max-h-[75vh] overflow-y-auto px-3 pr-4">
                         {popup.metadata?.input && typeof popup.metadata.input === 'object' &&
                             Object.keys(popup.metadata.input).length > 0 &&
-                            popup.metadata?.tool !== 'todowrite' &&
-                            popup.metadata?.tool !== 'todoread' &&
-                            popup.metadata?.tool !== 'apply_patch' ? (() => {
+                            popup.metadata?.tool !== 'patch' ? (() => {
                                 const meta = popup.metadata!;
+                                const metaTool = typeof meta.tool === 'string' ? meta.tool : undefined;
                                 const input = meta.input as Record<string, unknown>;
 
                                 const getInputValue = (key: string): string | null => {
                                   const val = input[key];
                                   return typeof val === 'string' ? val : (typeof val === 'number' ? String(val) : null);
                                 };
+                                // v2 file tools report `path`.
+                                const writeTarget = getInputValue('path') || getInputValue('filePath') || getInputValue('file_path') || '';
                                 return (
                                 <div className="border-b border-border/20 p-4 -mx-3">
                                     <div className="typography-markdown font-medium text-muted-foreground mb-2 px-3">
-                                        {meta.tool === 'bash'
+                                        {isShellTool(metaTool)
                                             ? 'Command:'
-                                            : meta.tool === 'task'
-                                                ? 'Task Details:'
+                                            : isSubagentTool(metaTool)
+                                                ? 'Subagent Details:'
                                                 : 'Input:'}
                                     </div>
-                                    {meta.tool === 'bash' && getInputValue('command') ? (
+                                    {isShellTool(metaTool) && getInputValue('command') ? (
                                         <div className="tool-input-surface bg-transparent rounded-xl border border-border/20 mx-3">
                                             <WorkerHighlightedCode
                                                 language="bash"
@@ -1007,22 +1012,22 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                 wrap
                                             />
                                         </div>
-                                    ) : meta.tool === 'task' && getInputValue('prompt') ? (
+                                    ) : isSubagentTool(metaTool) && getInputValue('prompt') ? (
                                         <div
                                             className="tool-input-surface bg-transparent rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90 mx-3"
                                             style={toolDisplayStyles.getPopupStyles()}
                                         >
                                             {getInputValue('description') ? `Task: ${getInputValue('description')}\n` : ''}
-                                            {getInputValue('subagent_type') ? `Agent Type: ${getInputValue('subagent_type')}\n` : ''}
+                                            {getInputValue('agent') ? `Agent: ${getInputValue('agent')}\n` : ''}
                                             {`Instructions:\n${getInputValue('prompt')}`}
                                         </div>
-                                    ) : meta.tool === 'write' && getInputValue('content') ? (
+                                    ) : isWriteTool(metaTool) && getInputValue('content') ? (
                                         <div className="tool-input-surface bg-transparent rounded-xl border border-border/20 mx-3">
                                             <PierreFile
                                                 file={{
-                                                    name: getInputValue('filePath') || getInputValue('file_path') || 'new-file',
+                                                    name: writeTarget || 'new-file',
                                                     contents: getInputValue('content')!,
-                                                    lang: getLanguageFromExtension(getInputValue('filePath') || getInputValue('file_path') || '') || undefined,
+                                                    lang: getLanguageFromExtension(writeTarget) || undefined,
                                                 }}
                                                 options={{
                                                     disableFileHeader: true,
@@ -1054,37 +1059,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                         ) : popup.content ? (
                         <div className="p-4">
                             {(() => {
-                                const tool = popup.metadata?.tool;
-
-                                if (tool === 'todowrite' || tool === 'todoread') {
-                                    return (
-                                        renderTodoOutput(popup.content, {
-                                            total: t('chat.todo.total'),
-                                            inProgress: t('chat.todo.inProgress'),
-                                            pending: t('chat.todo.pending'),
-                                            completed: t('chat.todo.completed'),
-                                            cancelled: t('chat.todo.cancelled'),
-                                        }) || (
-                                            <WorkerHighlightedCode
-                                                language="json"
-                                                code={popup.content}
-                                                style={toolDisplayStyles.getPopupContainerStyles()}
-                                                codeStyle={DIALOG_CODE_TAG_PROPS.style}
-                                                wrap
-                                            />
-                                        )
-                                    );
-                                }
-
-                                if (tool === 'list') {
-                                    return (
-                                        renderListOutput(popup.content) || (
-                                            <pre className="typography-markdown bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
-                                                {popup.content}
-                                            </pre>
-                                        )
-                                );
-                                }
+                                const tool = typeof popup.metadata?.tool === 'string' ? popup.metadata.tool : undefined;
 
                                 if (tool === 'grep') {
                                     return (
@@ -1106,7 +1081,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                     );
                                 }
 
-                                if (tool === 'task' || tool === 'reasoning') {
+                                if (isSubagentTool(tool) || tool === 'reasoning') {
                                     return (
                                         <div className={tool === 'reasoning' ? "text-muted-foreground/70" : ""}>
                                             <SimpleMarkdownRenderer content={popup.content} variant="tool" />
@@ -1168,4 +1143,6 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
     );
 };
 
-export default ToolOutputDialog;
+// Mounted by every chat message, which re-renders on each streamed chunk
+// while the popup state and handlers stay the same.
+export default React.memo(ToolOutputDialog);

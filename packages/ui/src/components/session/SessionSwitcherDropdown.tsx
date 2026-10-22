@@ -1,6 +1,7 @@
 import React from 'react';
+import { useSessionTurnActivity } from '@/sync/global-session-status';
 import { Menu as BaseMenu } from '@base-ui/react/menu';
-import type { Session } from '@opencode-ai/sdk/v2';
+import type { Session } from '@openchamber/agent-contract';
 
 import {
   DropdownMenu,
@@ -10,7 +11,6 @@ import {
 import { Icon } from '@/components/icon/Icon';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useGlobalSessionStatus } from '@/sync/sync-context';
 import { useSessionUnseenCount } from '@/sync/notification-store';
 import {
   findSwitcherItemAncestorIds,
@@ -155,7 +155,7 @@ function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentP
         ) : (
           items.map((item) => (
             <SwitcherNode
-              key={item.node.session.id}
+              key={item.node.session.sessionId}
               item={item}
               depth={0}
               variant={variant}
@@ -183,7 +183,7 @@ function SwitcherNode({ item, depth, variant, expandedParents, toggleParent, clo
   const { node, secondaryMeta } = item;
   const session = node.session;
   const hasChildren = node.children.length > 0;
-  const isExpanded = expandedParents.has(session.id);
+  const isExpanded = expandedParents.has(session.sessionId);
 
   return (
     <>
@@ -194,13 +194,13 @@ function SwitcherNode({ item, depth, variant, expandedParents, toggleParent, clo
         secondaryMeta={secondaryMeta}
         hasChildren={hasChildren}
         isExpanded={isExpanded}
-        onToggleExpand={hasChildren ? () => toggleParent(session.id) : undefined}
+        onToggleExpand={hasChildren ? () => toggleParent(session.sessionId) : undefined}
         closeDropdown={closeDropdown}
       />
       {hasChildren && isExpanded
         ? node.children.map((childNode) => (
             <SwitcherNode
-              key={childNode.session.id}
+              key={childNode.session.sessionId}
               item={{ node: childNode, projectId: item.projectId, groupDirectory: item.groupDirectory, secondaryMeta }}
               depth={depth + 1}
               variant={variant}
@@ -231,18 +231,17 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
 
-  const sessionStatus = useGlobalSessionStatus(session.id);
-  const unseenCount = useSessionUnseenCount(session.id);
+  const unseenCount = useSessionUnseenCount(session.sessionId);
 
-  const isActive = currentSessionId === session.id;
-  const sessionTitle = session.title?.trim() || t('sessions.sidebar.session.untitled');
-  const isSubtask = Boolean((session as Session & { parentID?: string | null }).parentID);
+  const isActive = currentSessionId === session.sessionId;
+  const sessionTitle = session.metadata?.title?.trim() || t('sessions.sidebar.session.untitled');
+  const isSubtask = Boolean(session.parentSessionId);
   const needsAttention = unseenCount > 0 && (!isSubtask || notifyOnSubtasks);
-  const statusType = sessionStatus?.type ?? 'idle';
-  const isStreaming = statusType === 'busy' || statusType === 'retry';
+  const turnActivity = useSessionTurnActivity(session.sessionId);
+  const isStreaming = turnActivity !== null;
   const showUnreadDot = !isStreaming && needsAttention && !isActive;
 
-  const timestamp = session.time?.updated || session.time?.created || Date.now();
+  const timestamp = session.updatedAt || session.createdAt || Date.now();
   const timeLabel = formatSessionCompactDateLabel(timestamp);
 
   const projectLabel = secondaryMeta?.projectLabel?.trim() || null;
@@ -255,7 +254,7 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
       return;
     }
     const directory = resolveGlobalSessionDirectory(session);
-    setCurrentSession(session.id, directory ?? null);
+    setCurrentSession(session.sessionId, directory ?? null);
     closeDropdown();
   }, [closeDropdown, isActive, session, setCurrentSession]);
 
@@ -269,7 +268,7 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
         handleSelect();
       }}
       data-slot="session-switcher-item"
-      data-switcher-item-id={session.id}
+      data-switcher-item-id={session.sessionId}
       className={cn(
         'group relative flex w-full cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 outline-hidden select-none',
         'data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover',
@@ -295,7 +294,7 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
               {isExpanded ? <Icon name="arrow-down-s" className="h-3.5 w-3.5" /> : <Icon name="arrow-right-s" className="h-3.5 w-3.5" />}
             </span>
           ) : null}
-          <span className="truncate typography-ui-label font-normal leading-tight text-foreground">
+          <span dir="auto" className="truncate text-left typography-ui-label font-normal leading-tight text-foreground">
             {sessionTitle}
           </span>
         </div>
@@ -335,11 +334,8 @@ function SwitcherRow({ session, depth, variant, secondaryMeta, hasChildren, isEx
       {isStreaming || showUnreadDot ? (
         <span className="flex h-3 w-3 flex-shrink-0 items-center justify-center self-center">
           <SessionActivityIndicator
-            state={isStreaming ? 'running' : 'unread'}
-            label={isStreaming
-              ? t('sessions.sidebar.session.status.active')
-              : t('sessions.sidebar.session.status.unread')}
-            runningDotClassName="animate-busy-pulse"
+            state={turnActivity ?? 'unread'}
+            runningClassName="animate-busy-pulse"
           />
         </span>
       ) : null}

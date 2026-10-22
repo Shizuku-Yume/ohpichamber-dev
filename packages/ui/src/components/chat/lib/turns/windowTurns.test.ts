@@ -1,18 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, Part } from '@opencode-ai/sdk/v2';
+import type { Message } from '@/lib/opencode/model';
 import { buildTurnWindowModel, updateTurnWindowModelIncremental } from './windowTurns';
 import type { ChatMessageEntry } from './types';
 
 function message({ id, role, parentID }: { id: string; role: 'user' | 'assistant' | 'system'; parentID?: string }): ChatMessageEntry {
-    return {
-        info: {
-            id,
-            role,
-            ...(parentID ? { parentID } : {}),
-            time: { created: 1 },
-        } as Message,
-        parts: [] as Part[],
-    };
+    const info: Message = role === 'assistant'
+        ? { id, sessionID: 's', role, ...(parentID ? { parentID } : {}), time: { created: 1 }, agent: 'build', providerID: 'p', modelID: 'm' }
+        : role === 'user'
+            ? { id, sessionID: 's', role, time: { created: 1 } }
+            : { id, sessionID: 's', role, time: { created: 1 }, text: '' };
+    return { info, parts: [] };
 }
 
 describe('windowTurns', () => {

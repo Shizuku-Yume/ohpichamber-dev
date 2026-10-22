@@ -1,9 +1,7 @@
-import { readAuthFile } from '../../opencode/auth.js';
+import { readOpenCodeCredentials } from '../../opencode/auth.js';
 import {
   getAuthEntry,
   normalizeAuthEntry,
-  asObject,
-  asNonEmptyString,
   buildResult,
   toUsageWindow,
   toNumber,
@@ -12,7 +10,7 @@ import {
 
 export const providerId = 'cline-pass';
 export const providerName = 'ClinePass';
-export const aliases = ['cline-pass'];
+const aliases = ['cline-pass'];
 const CLINE_USAGE_URL = 'https://api.cline.bot/api/v1/users/me/plan/usage-limits';
 
 // Cline reports a rolling five-hour window, a rolling weekly window, and a
@@ -29,10 +27,9 @@ const getApiKey = (auth) => {
   return asNonEmptyString(entry?.key) ?? asNonEmptyString(entry?.token);
 };
 
-export const isConfigured = (auth = readAuthFile()) => Boolean(getApiKey(auth));
-
-export const fetchQuota = async ({ readAuth = readAuthFile, fetchImpl = fetch } = {}) => {
-  const apiKey = getApiKey(readAuth());
+export const isConfigured = (auth) => Boolean(getApiKey(auth));
+export const fetchQuota = async ({ readAuth = readOpenCodeCredentials, fetchImpl = fetch } = {}) => {
+  const apiKey = getApiKey(await readAuth());
 
   if (!apiKey) {
     return buildResult({
