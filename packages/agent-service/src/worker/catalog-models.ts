@@ -231,7 +231,12 @@ export class NativeModels {
   async readModels(workspaceId: string, revision: string): Promise<ModelCatalog> {
     await this.load();
     await this.context.modelRegistry.reapplyModelPolicies();
-    const all = this.context.modelRegistry.getAll('all');
+    // A model is listed only when its provider can execute: configured
+    // models.yml entries (including keyless endpoints), stored/environment/
+    // oauth credentials, or native keyless local providers. The full bundled
+    // registry stays the source for ProviderCatalog, so Settings still offers
+    // every connectable provider.
+    const all = this.context.modelRegistry.getAvailable('all');
     const allowed = new Set(filterAvailableModelsByEnabledPatterns(all, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
     const disabledProviders = new Set(cfgDisabledProviders.get(this.context.settings));
     const models = all.filter(model => model.contextWindow !== null && model.maxTokens !== null && model.contextWindow > 0 && model.maxTokens > 0)

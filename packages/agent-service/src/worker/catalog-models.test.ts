@@ -41,6 +41,53 @@ async function openCatalogFixture() {
 
 const configuration = { providerId: 'm212-loopback', name: 'Loopback', endpoint: 'http://127.0.0.1:18080/v1',
   protocol: 'chat-completions' as const, credentialRef: null };
+test('model catalog publishes only executable providers while the provider directory stays complete', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-models-native-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  const modelsPath = join(agentDirectory, 'models.yml');
+  const nativeConfig = {
+    providers: {
+      'native-custom': {
+        baseUrl: 'http://127.0.0.1:18080/v1', apiKey: 'native-test-key', api: 'openai-completions',
+        models: [{ id: 'native-custom-model', name: 'Native custom', contextWindow: 65536, maxTokens: 256 }],
+      },
+      'native-keyless': {
+        baseUrl: 'http://127.0.0.1:18081/v1', auth: 'none', api: 'openai-completions',
+        models: [{ id: 'native-keyless-model', name: 'Native keyless', contextWindow: 65536, maxTokens: 256 }],
+      },
+    },
+  };
+  const authored = YAML.stringify(nativeConfig);
+  await writeFile(modelsPath, authored);
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  try {
+    const catalog = await runtime.models.readModels('workspace_1', '1');
+    const catalogProviders = new Set(catalog.models.map(model => model.provider));
+    expect(catalog.models.filter(model => model.provider === 'native-custom').map(model => model.modelId))
+      .toEqual(['native-custom-model']);
+    expect(catalog.models.filter(model => model.provider === 'native-keyless').map(model => model.modelId))
+      .toEqual(['native-keyless-model']);
+
+    // The bundled registry still knows providers nobody configured. They must
+    // not reach the executable model catalog.
+    const unconfigured = [...new Set(runtime.modelRegistry.getAll('all').map(model => model.provider))]
+      .find(provider => runtime.authStorage.keys.source(provider) === undefined && !runtime.authStorage.keys.keyless(provider));
+    expect(unconfigured).toBeDefined();
+    expect(catalogProviders.has(unconfigured!)).toBe(false);
+
+    const directory = await runtime.models.readProviders('workspace_1', '1');
+    expect(directory.providers.some(provider => provider.providerId === unconfigured)).toBe(true);
+    expect(await readFile(modelsPath, 'utf8')).toBe(authored);
+  } finally {
+    runtime.authStorage.close();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 const configuredModel = { modelId: 'm212-model', provider: configuration.providerId, name: 'Loopback text', modalities: ['text' as const],
   contextWindow: 65536, maxOutputTokens: 256, reasoningEffortSupported: false, reasoningOptions: [], variants: [],
   toolsSupported: true, pricing: null };

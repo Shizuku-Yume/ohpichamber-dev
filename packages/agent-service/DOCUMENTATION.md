@@ -2,6 +2,12 @@
 
 The Agent Service owns workspace MCP configuration and routes sessionless workspace MCP operations through stateless workers. Workspace configuration is persisted by the catalog coordinator; worker operations remain authorized against the workspace root session.
 
+## Provider and model catalogs
+
+`GET /api/agent/v1/workspaces/:workspaceId/providers` publishes the complete native provider directory used by Settings: bundled providers, configured `models.yml` providers, stored credentials and OAuth providers. It stays complete so the connection directory can offer a provider that is not configured yet.
+
+`GET /api/agent/v1/workspaces/:workspaceId/models` publishes only executable models. The worker asks the native `ModelRegistry` for its available pool (`getAvailable('all')`), which includes configured providers (including keyless `auth: none` local endpoints), stored/environment/OAuth credentials and native keyless local providers, and excludes providers whose authentication is missing. Model pickers therefore cannot list every bundled provider; the full registry is never the executable catalog. An unreadable or malformed native configuration remains a `503 SERVICE_UNAVAILABLE` read failure, not an empty catalog.
+
 ## Native session archives
 
 `SessionRegistry.archiveManifest()` is the host-authorized, read-only inventory of native chats. `exportArchive()` emits a bounded uncompressed ustar bundle containing the selected transcript, descendants, tool artifacts, subagent outputs, and referenced blobs; it never parses transcripts in Node. `importArchive()` validates the complete manifest before staging and installs immutable deleted-space references. Imported roots and descendants remain cold until explicitly reopened, and deleted-space mutations return `SESSION_READ_ONLY` (HTTP 409). Archive transfers are bounded to 256 MiB and five minutes per operation; save/restore uses a thirty-minute host window.

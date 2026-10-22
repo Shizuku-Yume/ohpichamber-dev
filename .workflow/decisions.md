@@ -179,3 +179,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** A dirty path turns out to belong to a different owner, or a task's implementation shows the behavior is already fully committed and the task can be dropped without losing the evidence.
 - **Effort:** omp-through-m3
+
+## 2026-10-22 - Reopen M3 for the trial-observed quota and model-availability follow-ups
+
+- **Decided:** Reopen `omp-through-m3` for two follow-up bugfixes. Task 75 (owned by the quota lane in its own worktree) makes an unconfigured provider's usage request `configured: false` with no error while configured failures stay visible. Task 76 (this lane) makes the workspace `ModelCatalog` expose only providers the native SDK reports as available, while `ProviderCatalog` stays the complete Settings directory.
+- **Instead of:** Deferring these trial-observed defects to M4, treating the native-provider read as a new design effort, or rewriting Host profile/environment agent-directory resolution. Live Host metadata binds the current workspace `agentDirectory` to `/home/shizuku/.omp/agent`, matching the OMP CLI's default `models.yml`, and the running service already publishes CLIProxyAPI with its 12 enabled models. There is no current-lane evidence of a path mismatch to fix.
+- **Because:** The user's real trial showed the chat picker listing every bundled provider, which buries the one configured custom provider, and a quota error for a provider with no credential. Application packaging/integration is coordinated separately for the final M3 gate rather than becoming a product task.
+- **Mine:** no
+- **Revisit when:** A real trial workspace shows the Host agent directory differing from the native OMP CLI configuration path, or a provider still cannot be selected after the availability fix.
+- **Effort:** omp-through-m3

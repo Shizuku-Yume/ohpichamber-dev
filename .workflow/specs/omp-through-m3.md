@@ -222,6 +222,15 @@ Each task Check names the existing package runner or the new executable owned by
 
 W7-W10 require the integrated application and are rerun at effort closure. Earlier focused runs can satisfy multiple IDs; do not duplicate them solely because several task files mention the same evidence.
 
+## Trial follow-ups (2026-10-22)
+
+The installed M3 trial exposed two follow-up defects that stay in this effort rather than becoming M4 scope:
+
+- Task 75 (quota lane): an unconfigured provider's usage request is `configured: false` with no error; configured failures stay visible.
+- Task 76 (this lane): the workspace `ModelCatalog` exposes only providers the native SDK reports as executable (configured `models.yml`, credential, oauth or native keyless), while `ProviderCatalog` stays the complete Settings directory. No provider-ID special cases. Live evidence already shows the running Host reading `/home/shizuku/.omp/agent/models.yml` and publishing CLIProxyAPI, so no agent-directory rewrite is part of this scope.
+
+Integration, packaging and the final M3 gate remain coordinator-owned, not a product task. These are defects in current behavior, not a new design. Tasks 1-74 remain archived and their evidence unchanged.
+
 ## Open questions
 
 Official-provider/OAuth feasibility and non-Linux/macOS resource measurements remain explicitly unverified under the two accepted M0 release-limit entries cited above. Required online model discovery was measured and reviewed in task31, not waived. Actual M2 credential handoff and per-provider outcomes, service resources, Host Gatekeeper, CAS and restart evidence remain required at their owning gates; the accepted M0 limits waive none of them.
