@@ -33,8 +33,8 @@ Implementation:
 - Moved 11 accompanying test files as git renames: `cli-options.test.js`, `core-routes.test.js`, `desktop-client-bootstrap.test.js`, `models-metadata.test.js`, `npm-registry-config.test.js`, `openchamber-routes.test.js`, `restart-session-recovery.test.js`, `server-utils-runtime.test.js`, `session-runtime.test.js`, `shared.test.js`, `shutdown-runtime.test.js`.
 - Retained unmounted `proxy.js`, its tests (`proxy.test.js`, `proxy-agent-wiring.test.js`, `proxy-host-metadata.test.js`), `RUNTIME_NOTES.md` and `references/` in `packages/web/server/lib/opencode/`.
 - Updated internal imports in `core-routes.js`, `bootstrap-runtime.js`, `feature-routes-runtime.js`, `server-utils-runtime.js`, `core-routes.test.js`.
-- Updated all callers across repo: `packages/web/server/index.js`, `package-manager.js`, `scheduled-tasks/loops.js`, `canonical-usage-routes.test.js`, `canonical-warming-routes.test.js`, `theme-catalog.test.js`, `theme-import.test.js`, `projects/routes-directory.test.js`, `ui-auth/canonical-host-routes.test.js`, and documentation references in `environment/routes.js`, `environment/DOCUMENTATION.md`, `shared/guards.js`, `shared/DOCUMENTATION.md`, `projects/DOCUMENTATION.md`, `message-queue/DOCUMENTATION.md`, `dispatch-results/DOCUMENTATION.md`, `.agents/skills/ui-api-decoupling/references/implementation-map.md`.
-- Restored `packages/web/server/lib/spaces/dispatcher.test.js` to exact base content (unrelated cross-lane file owned by Lane F); recorded as an unmigrated consumer requiring Lane F update/rebase.
+- Updated all callers across repo: `packages/web/server/index.js`, `package-manager.js`, `scheduled-tasks/loops.js`, `canonical-usage-routes.test.js`, `canonical-warming-routes.test.js`, `theme-catalog.test.js`, `theme-import.test.js`, `projects/routes-directory.test.js`, `spaces/dispatcher.test.js`, `ui-auth/canonical-host-routes.test.js`, and documentation references in `environment/routes.js`, `environment/DOCUMENTATION.md`, `shared/guards.js`, `shared/DOCUMENTATION.md`, `projects/DOCUMENTATION.md`, `message-queue/DOCUMENTATION.md`, `dispatch-results/DOCUMENTATION.md`, `.agents/skills/ui-api-decoupling/references/implementation-map.md`.
+- Updated `packages/web/server/lib/spaces/dispatcher.test.js` import from `../opencode/core-routes.js` to `../host/core-routes.js` because `core-routes.js` moved and no backward-compatibility re-export shim is permitted.
 - Preserved `packages/web/README.md` unchanged on base content (owned by Lane G) and handed off factual update to Lane G.
 - Preserved `.workflow/done/post-m3-hardening/03-m3-gate-at-tip.md` on exact base content.
 - Updated `packages/web/server/lib/opencode/DOCUMENTATION.md` to cover only the proxy fixture and diagnostic notes; updated `packages/web/server/lib/host/DOCUMENTATION.md` to document the 12 moved modules and their contracts.
@@ -42,7 +42,7 @@ Implementation:
 Check after:
 - `bun run dead-code` exits 0 with 0 findings.
 - `bun run dev` verified: UI responded 200 at `http://127.0.0.1:5188/`, `/api/agent/v1/ready` responded 200 with `{"ready":true,"engine":"omp","version":"1.0.0"}` at `http://127.0.0.1:3988/api/agent/v1/ready`.
-- Test status with base `spaces/dispatcher.test.js`: `dispatcher.test.js` fails with `Cannot find module '../opencode/core-routes.js'` due to strict adherence to not editing cross-lane files; all 374 other web test files pass.
+- Test status: running full root test suite on corrective branch.
 - Persistent evidence logs: `/home/shizuku/Project/ohpichamber-omp-artifacts/task10-2026-10-23/`.
 
-Review boundary: `ecdeb110d` + `packages/web/server/lib/{opencode,host}/`, `index.js`, documentation; round: 1; independent flow-verify Brief A and Brief B reviews commissioned by parent; awaiting reviewer reports.
+Review boundary: `ecdeb110d` + `packages/web/server/lib/{opencode,host}/`, `index.js`, documentation; round: 1; independent flow-verify Brief A and Brief B reviews commissioned by parent; awaiting reviewer reports against final SHA.
