@@ -29,6 +29,10 @@ export class MetadataWriteError extends HostMetadataError {
   constructor(message, cause) { super(message, 'METADATA_WRITE_FAILED', cause); this.name = 'MetadataWriteError'; }
 }
 
+export class MetadataSchemaTooNewError extends HostMetadataError {
+  constructor(message, cause) { super(message, 'METADATA_SCHEMA_TOO_NEW', cause); this.name = 'MetadataSchemaTooNewError'; }
+}
+
 const loadDatabaseSync = () => {
   try {
     const { DatabaseSync } = process.getBuiltinModule?.('node:sqlite') ?? require('node:sqlite');
@@ -40,85 +44,128 @@ const loadDatabaseSync = () => {
 
 const metadataDatabasePath = (dataDir, nodePath = path) => nodePath.join(dataDir, 'host-metadata.sqlite');
 
+export const CURRENT_HOST_METADATA_VERSION = 1;
+
+export const HOST_METADATA_MIGRATIONS = [
+  // Migration 1: baseline Host metadata tables and prompt queue tables
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS host_direct_command (
+        session_id TEXT NOT NULL, command_id TEXT NOT NULL,
+        project_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
+        operation TEXT NOT NULL CHECK (operation IN ('send', 'steer', 'followUp')),
+        payload_hash TEXT NOT NULL, claim_id TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('pending', 'accepted')),
+        acknowledgment TEXT,
+        PRIMARY KEY (session_id, command_id),
+        CHECK ((state = 'pending' AND acknowledgment IS NULL) OR (state = 'accepted' AND acknowledgment IS NOT NULL))
+      );
+      CREATE TABLE IF NOT EXISTS session_metadata (
+        session_id TEXT PRIMARY KEY,
+        revision INTEGER NOT NULL,
+        payload TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS session_archive (
+        session_id TEXT PRIMARY KEY,
+        revision INTEGER NOT NULL,
+        archived_at INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS session_folders (
+        singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+        revision INTEGER NOT NULL,
+        payload TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS session_folder_scopes (
+        scope TEXT PRIMARY KEY,
+        payload TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS host_agent_projects (
+        project_id TEXT PRIMARY KEY,
+        host_project_id TEXT NOT NULL,
+        directory TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        display_path TEXT
+      );
+      CREATE TABLE IF NOT EXISTS host_agent_directories (
+        agent_directory_id TEXT PRIMARY KEY,
+        directory TEXT NOT NULL UNIQUE
+      );
+      CREATE TABLE IF NOT EXISTS host_agent_workspaces (
+        workspace_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        cwd TEXT NOT NULL,
+        agent_directory_id TEXT NOT NULL,
+        UNIQUE (project_id, cwd)
+      );
+      CREATE TABLE IF NOT EXISTS host_agent_sessions (
+        session_id TEXT PRIMARY KEY,
+        root_session_id TEXT NOT NULL,
+        workspace_id TEXT NOT NULL,
+        agent_directory_id TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS host_agent_relocations (
+        root_session_id TEXT PRIMARY KEY,
+        transaction_id TEXT NOT NULL UNIQUE,
+        source_workspace_id TEXT NOT NULL,
+        destination_workspace_id TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS host_attachments (
+        attachment_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        workspace_id TEXT NOT NULL,
+        agent_directory_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        media_type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        storage_name TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS metadata_conversion (
+        source TEXT PRIMARY KEY,
+        completed INTEGER NOT NULL CHECK (completed IN (0, 1))
+      );
+      CREATE TABLE IF NOT EXISTS prompt_queue_owner (
+        session_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, workspace_id TEXT NOT NULL, revision TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS prompt_queue_item (
+        session_id TEXT NOT NULL, item_id TEXT NOT NULL, position INTEGER NOT NULL, created_at INTEGER NOT NULL,
+        payload TEXT NOT NULL, lease_id TEXT, lease_expires_at INTEGER,
+        PRIMARY KEY(session_id, item_id)
+      );
+      CREATE TABLE IF NOT EXISTS prompt_queue_delivery (
+        lease_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, item_id TEXT NOT NULL, run_id TEXT NOT NULL UNIQUE,
+        epoch TEXT NOT NULL, phase TEXT NOT NULL, updated_at INTEGER NOT NULL, error_code TEXT
+      );
+      CREATE TABLE IF NOT EXISTS prompt_queue_command (
+        session_id TEXT NOT NULL, command_id TEXT NOT NULL, payload_hash TEXT NOT NULL, response TEXT NOT NULL,
+        expires_at INTEGER NOT NULL, PRIMARY KEY(session_id, command_id)
+      );
+      CREATE TABLE IF NOT EXISTS prompt_queue_conversion (
+        source_id TEXT PRIMARY KEY, source_hash TEXT NOT NULL, session_id TEXT
+      );
+    `);
+  },
+];
+
 export const ensureHostMetadataSchema = (db) => {
-  db.exec(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA synchronous = FULL;
-    CREATE TABLE IF NOT EXISTS host_direct_command (
-      session_id TEXT NOT NULL, command_id TEXT NOT NULL,
-      project_id TEXT NOT NULL, workspace_id TEXT NOT NULL,
-      operation TEXT NOT NULL CHECK (operation IN ('send', 'steer', 'followUp')),
-      payload_hash TEXT NOT NULL, claim_id TEXT NOT NULL,
-      state TEXT NOT NULL CHECK (state IN ('pending', 'accepted')),
-      acknowledgment TEXT,
-      PRIMARY KEY (session_id, command_id),
-      CHECK ((state = 'pending' AND acknowledgment IS NULL) OR (state = 'accepted' AND acknowledgment IS NOT NULL))
+  const versionRow = db.prepare('PRAGMA user_version').get();
+  const currentVersion = Number(versionRow?.user_version ?? 0);
+  if (currentVersion > CURRENT_HOST_METADATA_VERSION) {
+    throw new MetadataSchemaTooNewError(
+      `Host metadata database schema version ${currentVersion} is newer than supported version ${CURRENT_HOST_METADATA_VERSION}`
     );
-    CREATE TABLE IF NOT EXISTS session_metadata (
-      session_id TEXT PRIMARY KEY,
-      revision INTEGER NOT NULL,
-      payload TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS session_archive (
-      session_id TEXT PRIMARY KEY,
-      revision INTEGER NOT NULL,
-      archived_at INTEGER
-    );
-    CREATE TABLE IF NOT EXISTS session_folders (
-      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-      revision INTEGER NOT NULL,
-      payload TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS session_folder_scopes (
-      scope TEXT PRIMARY KEY,
-      payload TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS host_agent_projects (
-      project_id TEXT PRIMARY KEY,
-      host_project_id TEXT NOT NULL,
-      directory TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      display_path TEXT
-    );
-    CREATE TABLE IF NOT EXISTS host_agent_directories (
-      agent_directory_id TEXT PRIMARY KEY,
-      directory TEXT NOT NULL UNIQUE
-    );
-    CREATE TABLE IF NOT EXISTS host_agent_workspaces (
-      workspace_id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL,
-      cwd TEXT NOT NULL,
-      agent_directory_id TEXT NOT NULL,
-      UNIQUE (project_id, cwd)
-    );
-    CREATE TABLE IF NOT EXISTS host_agent_sessions (
-      session_id TEXT PRIMARY KEY,
-      root_session_id TEXT NOT NULL,
-      workspace_id TEXT NOT NULL,
-      agent_directory_id TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS host_agent_relocations (
-      root_session_id TEXT PRIMARY KEY,
-      transaction_id TEXT NOT NULL UNIQUE,
-      source_workspace_id TEXT NOT NULL,
-      destination_workspace_id TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS host_attachments (
-      attachment_id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL,
-      workspace_id TEXT NOT NULL,
-      agent_directory_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      media_type TEXT NOT NULL,
-      size INTEGER NOT NULL,
-      storage_name TEXT NOT NULL UNIQUE,
-      created_at INTEGER NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS metadata_conversion (
-      source TEXT PRIMARY KEY,
-      completed INTEGER NOT NULL CHECK (completed IN (0, 1))
-    );
-  `);
+  }
+  if (currentVersion === CURRENT_HOST_METADATA_VERSION) {
+    return currentVersion;
+  }
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;');
+  withTransaction(db, () => {
+    for (let v = currentVersion; v < CURRENT_HOST_METADATA_VERSION; v++) {
+      HOST_METADATA_MIGRATIONS[v](db);
+      db.exec(`PRAGMA user_version = ${v + 1}`);
+    }
+  });
+  return CURRENT_HOST_METADATA_VERSION;
 };
 
 export const openHostMetadataDatabase = ({ dataDir, path: nodePath = path, fsImpl = fs, databasePath } = {}) => {

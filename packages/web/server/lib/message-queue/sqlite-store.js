@@ -6,7 +6,7 @@ import {
   CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, PromptContextSchema, PromptRequestSchema,
   QueueAppendRequestSchema, QueueDeleteRequestSchema, QueueReorderRequestSchema, QueueStateSchema,
 } from '@openchamber/agent-contract';
-import { createMetadataLifecycle, openHostMetadataDatabase, withTransaction } from '../host/metadata-sqlite.js';
+import { createMetadataLifecycle, ensureHostMetadataSchema, openHostMetadataDatabase, withTransaction } from '../host/metadata-sqlite.js';
 
 const ScopeSchema = z.strictObject({ sessionId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema });
 const CommandIdSchema = z.uuid({ version: 'v4' });
@@ -50,28 +50,9 @@ const preview = (value) => value === undefined ? undefined : value.slice(0, 100)
 /** Host-owned delivery data only; the OMP transcript never enters this database. */
 export function createPromptQueueStore({ dataDir, database, closeDatabase = database === undefined, now = Date.now } = {}) {
   const db = database ?? openHostMetadataDatabase({ dataDir }).db;
-  db.exec(`
-    PRAGMA synchronous = FULL;
-    CREATE TABLE IF NOT EXISTS prompt_queue_owner (
-      session_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, workspace_id TEXT NOT NULL, revision TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS prompt_queue_item (
-      session_id TEXT NOT NULL, item_id TEXT NOT NULL, position INTEGER NOT NULL, created_at INTEGER NOT NULL,
-      payload TEXT NOT NULL, lease_id TEXT, lease_expires_at INTEGER,
-      PRIMARY KEY(session_id, item_id)
-    );
-    CREATE TABLE IF NOT EXISTS prompt_queue_delivery (
-      lease_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, item_id TEXT NOT NULL, run_id TEXT NOT NULL UNIQUE,
-      epoch TEXT NOT NULL, phase TEXT NOT NULL, updated_at INTEGER NOT NULL, error_code TEXT
-    );
-    CREATE TABLE IF NOT EXISTS prompt_queue_command (
-      session_id TEXT NOT NULL, command_id TEXT NOT NULL, payload_hash TEXT NOT NULL, response TEXT NOT NULL,
-      expires_at INTEGER NOT NULL, PRIMARY KEY(session_id, command_id)
-    );
-    CREATE TABLE IF NOT EXISTS prompt_queue_conversion (
-      source_id TEXT PRIMARY KEY, source_hash TEXT NOT NULL, session_id TEXT
-    );
-  `);
+  if (database) {
+    ensureHostMetadataSchema(db);
+  }
   const lifecycle = createMetadataLifecycle(db, closeDatabase);
   const legacyPath = dataDir === undefined ? null : path.join(dataDir, 'message-queue.json');
   let conversionStatus = legacyPath !== null && fs.existsSync(legacyPath) ? 'pending' : 'missing';
