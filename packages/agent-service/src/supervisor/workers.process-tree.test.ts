@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,7 +15,7 @@ import { WorkerRegistry, terminateWorkerProcessTree } from './workers.ts';
   await Promise.all([mkdir(cwd), mkdir(agentDirectory)]);
   const source = `import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
-const child = spawn('sleep', ['300'], { stdio: 'ignore' });
+const child = spawn('/bin/sh', ['-c', "trap '' TERM; exec sleep 300"], { stdio: 'ignore' });
 child.once('spawn', () => writeFileSync(${JSON.stringify(pidFile)}, String(child.pid)));
 process.on('message', message => {
   if (message?.type === 'bootstrap') process.send({ type: 'ready', workerGeneration: message.workerGeneration });
@@ -23,6 +24,7 @@ process.on('message', message => {
   const entrypoint = join(root, 'worker-fixture.mjs');
   await writeFile(entrypoint, source);
   const registry = new WorkerRegistry({ workerEntrypoint: entrypoint, workerRuntime: process.execPath, stopTimeoutMs: 200 });
+  const sibling = spawn('sleep', ['300'], { stdio: 'ignore' });
   let pid: number | undefined;
   const state = async (childPid: number) => {
     try {
@@ -40,7 +42,10 @@ process.on('message', message => {
     await registry.stop('root');
     const status = await state(pid);
     expect(['gone', 'Z', 'X']).toContain(status);
+    expect(sibling.pid).toBeDefined();
+    expect(['gone', 'Z', 'X']).not.toContain(await state(sibling.pid!));
   } finally {
+    if (sibling.pid) { try { process.kill(sibling.pid, 'SIGKILL'); } catch { /* Controlled sibling already exited. */ } }
     if (pid !== undefined && Number.isSafeInteger(pid) && pid > 1) {
       try { process.kill(pid, 'SIGKILL'); } catch { /* Controlled descendant already exited. */ }
     }

@@ -102,6 +102,19 @@ export const terminateWorkerProcessTree = async (
     return true;
   } catch { return false; }
 };
+
+export const waitForWorkerProcessTree = async (
+  pid: number | undefined,
+  { platform = process.platform, processKill = process.kill as ProcessKill, graceMs = 250 } = {},
+): Promise<boolean> => {
+  if (platform === 'win32' || pid === undefined || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return true;
+  const deadline = Date.now() + graceMs;
+  const groupAlive = () => {
+    try { processKill(-pid, 0); return true; } catch { return false; }
+  };
+  while (groupAlive() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  return !groupAlive();
+};
 function defaultWorkerRuntime(): string {
   if (process.execPath.includes('bun')) return process.execPath;
   return Bun.which('bun') ?? process.execPath;
@@ -650,6 +663,8 @@ export class WorkerRegistry {
       for (const [requestId, handle] of this.actions) if (handle.entry === entry) { this.actions.delete(requestId); handle.controller.abort(); }
       if (wasStarting) entry.rejectReady(new Error('SDK worker is stopping'));
       if (entry.child.connected) entry.child.send({ type: 'stop', workerGeneration: entry.info.workerGeneration });
+      const groupSignalled = await terminateWorkerProcessTree(entry.child.pid, 'SIGTERM');
+      if (!groupSignalled && entry.child.exitCode === null && entry.child.signalCode === null) entry.child.kill('SIGTERM');
       let escalated = false;
       try {
         await waitWithin(entry.exited, this.options.stopTimeoutMs ?? 5_000);
@@ -660,7 +675,10 @@ export class WorkerRegistry {
         }
         await waitWithin(entry.exited, 500);
       }
-      if (!escalated) await terminateWorkerProcessTree(entry.child.pid, 'SIGTERM');
+      if (groupSignalled && !await waitForWorkerProcessTree(entry.child.pid)) {
+        await terminateWorkerProcessTree(entry.child.pid, 'SIGKILL');
+        await waitForWorkerProcessTree(entry.child.pid, { graceMs: 500 });
+      }
       for (const pending of entry.pending.values()) pending.reject(new Error('SDK worker is stopping'));
       entry.pending.clear();
       entry.info.state = 'stopped';
