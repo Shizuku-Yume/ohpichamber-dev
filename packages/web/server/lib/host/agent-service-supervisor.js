@@ -184,7 +184,9 @@ export const createAgentServiceSupervisor = ({
   const state = () => ({ phase, pid: child?.pid ?? null, port });
   const assertAdmitted = () => { if (!accepting || phase !== 'ready' || !child) throw new Error('Agent service is not accepting requests'); };
   const captureScope = (body, allowRebind = false) => {
-    const captured = Object.freeze(CapturedHostBootstrapScopeSchema.parse({ rootSessionId: body.rootSessionId, projectId: body.projectId, workspaceId: body.workspaceId, cwd: body.cwd, agentDirectory: body.agentDirectory, ...(body.agentDirectoryId === undefined ? {} : { agentDirectoryId: body.agentDirectoryId }) }));
+    const scope = { rootSessionId: body.rootSessionId, projectId: body.projectId, workspaceId: body.workspaceId, cwd: body.cwd, agentDirectory: body.agentDirectory };
+    if (body.agentDirectoryId !== undefined) scope.agentDirectoryId = body.agentDirectoryId;
+    const captured = Object.freeze(CapturedHostBootstrapScopeSchema.parse(scope));
     const prior = scopes.get(captured.rootSessionId);
     if (prior && !allowRebind && !isDeepStrictEqual(prior, captured)) throw new Error('Host bootstrap scope cannot change');
     if (prior && !allowRebind) return { captured: prior, prior };
@@ -224,7 +226,7 @@ export const createAgentServiceSupervisor = ({
   };
   const handleSkillSourceMessage = async (launched, message) => {
     if (message?.type !== 'host.skill-source.request') return;
-    const requestId = HostSkillSourceRequestSchema.shape.requestId.safeParse(message.requestId);
+    const requestId = HostSkillSourceRequestSchema.pick({ requestId: true }).safeParse({ requestId: message.requestId });
     if (!requestId.success) return;
     let result = { status: 'failed', code: 'SERVICE_UNAVAILABLE' };
     try {
@@ -232,7 +234,7 @@ export const createAgentServiceSupervisor = ({
       const operation = HostSkillSourceOperationSchema.parse(request.operation);
       const captured = workspaceScopes.get(operation.workspaceId)?.scope;
       if (child !== launched || !accepting || phase !== 'ready' || !launched.connected
-        || typeof handleSkillSource !== 'function' || !captured
+        || !handleSkillSource || !captured
         || captured.projectId !== operation.projectId || captured.workspaceId !== operation.workspaceId
         || captured.agentDirectoryId !== operation.agentDirectoryId) throw new Error('Skill source scope unavailable');
       // Only Host-captured paths reach the disk owner; the private operation carries IDs alone.
@@ -241,7 +243,7 @@ export const createAgentServiceSupervisor = ({
         && workspaceScopes.get(operation.workspaceId)?.scope === captured) result = handled;
     } catch { /* Never send filesystem paths, thrown messages, or internal service details. */ }
     try {
-      if (launched.connected) launched.send({ type: 'host.skill-source.result', requestId: requestId.data, result }, () => {});
+      if (launched.connected) launched.send({ type: 'host.skill-source.result', requestId: requestId.data.requestId, result }, () => {});
     } catch { /* The service may disconnect while the Host source operation completes. */ }
   };
   // Registry failures are diagnostics, never lifecycle failures: a missing
