@@ -11,7 +11,7 @@ import { openApprovalPolicyStore } from './approval-policy-store.js';
 import { AgentServiceReadySchema } from '@openchamber/agent-contract';
 
 import { MANAGED_PROCESS_TOKEN_ENV, createManagedProcessRegistry, reapOrphanedProcesses, registerManagedProcess, terminateManagedProcess, unregisterManagedProcess } from './managed-process-registry.js';
-import { terminateProcessTree } from './pidfd-terminator.js';
+import { terminateProcessTree, processTreeAlive, waitForProcessTreeExit } from './pidfd-terminator.js';
 
 const defaultRegistry = { registerManagedProcess, unregisterManagedProcess, reapOrphanedProcesses, terminateManagedProcess };
 
@@ -292,18 +292,27 @@ export const createAgentServiceSupervisor = ({
     try {
       await waitWithin(exited, stopTimeoutMs, 'Agent service stop timed out');
     } catch {
-      if (current.exitCode === null && current.signalCode === null) {
-        if (process.platform === 'linux') {
+      if (process.platform === 'linux') {
+        if (current.exitCode === null && current.signalCode === null) {
           // Linux uses the registry's birth-checked pidfd tree path.
-          try { await processRegistry.terminateManagedProcess(current.pid, 'SIGKILL'); } catch { /* best effort */ }
-        } else {
-          // macOS uses the detached POSIX group; Windows uses hidden taskkill /T /F.
-          const terminated = await terminateProcessTree(current.pid, 'SIGKILL');
-          if (!terminated) current.kill('SIGKILL');
+          try { await processRegistry.terminateManagedProcess(current.pid, 'SIGKILL'); } catch { /* The orphan reaper retains the record. */ }
         }
+      } else if (current.exitCode === null && current.signalCode === null) {
+        // Windows taskkill walks ancestry while the leader exists; macOS and
+        // Windows both receive a graceful tree signal above before this /F.
+        const terminated = await terminateProcessTree(current.pid, 'SIGKILL');
+        if (!terminated) current.kill('SIGKILL');
       }
       await waitWithin(exited, 500, 'Agent service did not exit after termination');
     }
+    if (process.platform === 'darwin') {
+      // The leader may have exited while group members remain; signal the
+      // detached group again and bound the observation.
+      if (processTreeAlive(current.pid)) await terminateProcessTree(current.pid, 'SIGKILL');
+      await waitForProcessTreeExit(current.pid, { graceMs: 500 });
+    }
+    // Windows limitation: taskkill cannot discover descendants after the leader
+    // exits, so its tree signal necessarily runs while the leader is alive.
     if (Number.isInteger(current.pid)) {
       try {
         await processRegistry.unregisterManagedProcess(current.pid);

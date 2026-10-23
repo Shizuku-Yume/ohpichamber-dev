@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { describe, expect, it } from 'vitest';
 
-import { createPidfdTerminator, processTreeKillArgs, terminateProcessTree } from './pidfd-terminator.js';
+import { createPidfdTerminator, processTreeKillArgs, terminateProcessTree, processTreeAlive, waitForProcessTreeExit } from './pidfd-terminator.js';
 
 const linuxOnly = process.platform === 'linux' ? it : it.skip;
 
@@ -74,14 +74,18 @@ describe('pidfd terminator', () => {
 describe('portable process-tree fallback', () => {
   it('constructs a hidden Windows taskkill tree command and rejects unsafe pids', async () => {
     const calls = [];
-    await expect(terminateProcessTree(4242, 'SIGKILL', {
-      platform: 'win32',
-      execFileAsync: async (...args) => { calls.push(args); return { stdout: '', stderr: '' }; },
-    })).resolves.toBe(true);
-    expect(calls).toEqual([['taskkill', ['/T', '/F', '/PID', '4242'], { windowsHide: true }]]);
+    const execFileAsync = async (...args) => { calls.push(args); return { stdout: '', stderr: '' }; };
+    await expect(terminateProcessTree(4242, 'SIGKILL', { platform: 'win32', execFileAsync })).resolves.toBe(true);
+    await expect(terminateProcessTree(4242, 'SIGTERM', { platform: 'win32', execFileAsync })).resolves.toBe(true);
+    expect(calls).toEqual([
+      ['taskkill', ['/T', '/F', '/PID', '4242'], { windowsHide: true }],
+      ['taskkill', ['/T', '/PID', '4242'], { windowsHide: true }],
+    ]);
     expect(processTreeKillArgs(4242)).toEqual(['/T', '/F', '/PID', '4242']);
+    expect(processTreeKillArgs(4242, 'SIGTERM')).toEqual(['/T', '/PID', '4242']);
     expect(terminateProcessTree(1, 'SIGKILL', { platform: 'win32' })).resolves.toBe(false);
     expect(() => processTreeKillArgs(process.pid)).toThrow('Unsafe process id');
+    expect(() => processTreeKillArgs(4242, 'SIGUSR1')).toThrow('Unsupported process signal');
   });
 
   it('uses a detached macOS process group and tolerates an exited child', async () => {
@@ -89,5 +93,25 @@ describe('portable process-tree fallback', () => {
     expect(await terminateProcessTree(4242, 'SIGTERM', { platform: 'darwin', processKill: (pid, signal) => signals.push([pid, signal]) })).toBe(true);
     expect(signals).toEqual([[-4242, 'SIGTERM']]);
     expect(await terminateProcessTree(4242, 'SIGTERM', { platform: 'darwin', processKill: () => { throw Object.assign(new Error('gone'), { code: 'ESRCH' }); } })).toBe(false);
+    expect(processTreeAlive(4242, { platform: 'darwin', processKill: () => {} })).toBe(true);
+    expect(processTreeAlive(4242, { platform: 'darwin', processKill: () => { throw Object.assign(new Error('gone'), { code: 'ESRCH' }); } })).toBe(false);
+    expect(processTreeAlive(4242, { platform: 'win32', processKill: () => {} })).toBe(false);
+  });
+
+  it('bounds observation of a surviving macOS group and exits when it disappears', async () => {
+    let clock = 0;
+    let alive = true;
+    const processKill = () => { if (!alive) throw Object.assign(new Error('gone'), { code: 'ESRCH' }); };
+    const sleep = async (ms) => { clock += ms; if (clock >= 30) alive = false; };
+    expect(await waitForProcessTreeExit(4242, { platform: 'darwin', processKill, graceMs: 100, pollMs: 10, now: () => clock, sleep })).toBe(true);
+    expect(clock).toBe(30);
+
+    let deadlineClock = 0;
+    expect(await waitForProcessTreeExit(4242, {
+      platform: 'darwin', processKill: () => {}, graceMs: 50, pollMs: 10,
+      now: () => deadlineClock, sleep: async (ms) => { deadlineClock += ms; },
+    })).toBe(false);
+    expect(deadlineClock).toBe(50);
+    expect(await waitForProcessTreeExit(4242, { platform: 'win32' })).toBe(true);
   });
 });

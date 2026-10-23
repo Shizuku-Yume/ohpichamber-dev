@@ -80,9 +80,13 @@ const defaultExecFileAsync = promisify(execFile);
 type ProcessKill = (pid: number, signal?: NodeJS.Signals | number) => void;
 const defaultProcessKill: ProcessKill = (pid, signal) => { process.kill(pid, signal); };
 
-export const windowsProcessTreeKillArgs = (pid: number): string[] => {
+// Non-Linux limit: the detached group covers ordinary descendants, but a
+// child that starts its own session/group escapes it. Windows taskkill is
+// ancestry-based, so escalation must run while the worker leader still exists.
+export const windowsProcessTreeKillArgs = (pid: number, signal: NodeJS.Signals = 'SIGKILL'): string[] => {
   if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) throw new Error('Unsafe process id');
-  return ['/T', '/F', '/PID', String(pid)];
+  if (signal !== 'SIGTERM' && signal !== 'SIGKILL') throw new Error('Unsupported process signal');
+  return signal === 'SIGKILL' ? ['/T', '/F', '/PID', String(pid)] : ['/T', '/PID', String(pid)];
 };
 
 export const terminateWorkerProcessTree = async (
@@ -93,7 +97,7 @@ export const terminateWorkerProcessTree = async (
   if (pid === undefined || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return false;
   if (platform === 'win32') {
     try {
-      await execFileAsync('taskkill', windowsProcessTreeKillArgs(pid), { windowsHide: true });
+      await execFileAsync('taskkill', windowsProcessTreeKillArgs(pid, signal), { windowsHide: true });
       return true;
     } catch { return false; }
   }
@@ -106,14 +110,14 @@ export const terminateWorkerProcessTree = async (
 
 export const waitForWorkerProcessTree = async (
   pid: number | undefined,
-  { platform = process.platform, processKill = defaultProcessKill, graceMs = 250 } = {},
+  { platform = process.platform, processKill = defaultProcessKill, graceMs = 250, pollMs = 10, now = Date.now, sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)) } = {},
 ): Promise<boolean> => {
   if (platform === 'win32' || pid === undefined || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return true;
-  const deadline = Date.now() + graceMs;
+  const deadline = now() + graceMs;
   const groupAlive = () => {
     try { processKill(-pid, 0); return true; } catch { return false; }
   };
-  while (groupAlive() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  while (groupAlive() && now() < deadline) await sleep(pollMs);
   return !groupAlive();
 };
 function defaultWorkerRuntime(): string {

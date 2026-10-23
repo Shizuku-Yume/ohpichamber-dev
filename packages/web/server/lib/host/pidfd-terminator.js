@@ -22,9 +22,15 @@ import { z } from 'zod';
 
 const defaultExecFileAsync = promisify(execFile);
 
-export const processTreeKillArgs = (pid) => {
+// Non-Linux fallback limits: POSIX signals the detached process group, so a
+// descendant that creates its own session/group escapes it. Windows taskkill
+// walks ancestry, so it must run while the worker/service leader still exists;
+// after that leader exits, orphaned descendants are not reliably discoverable.
+// Linux keeps the birth-checked pidfd tree as its authoritative cleanup path.
+export const processTreeKillArgs = (pid, signal = 'SIGKILL') => {
   if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) throw new Error('Unsafe process id');
-  return ['/T', '/F', '/PID', String(pid)];
+  if (signal !== 'SIGTERM' && signal !== 'SIGKILL') throw new Error('Unsupported process signal');
+  return signal === 'SIGKILL' ? ['/T', '/F', '/PID', String(pid)] : ['/T', '/PID', String(pid)];
 };
 
 export const terminateProcessTree = async (
@@ -35,7 +41,7 @@ export const terminateProcessTree = async (
   if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return false;
   if (platform === 'win32') {
     try {
-      await execFileAsync('taskkill', processTreeKillArgs(pid), { windowsHide: true });
+      await execFileAsync('taskkill', processTreeKillArgs(pid, signal), { windowsHide: true });
       return true;
     } catch { return false; }
   }
@@ -44,6 +50,27 @@ export const terminateProcessTree = async (
     processKill(-pid, signal);
     return true;
   } catch { return false; }
+};
+
+export const processTreeAlive = (
+  pid,
+  { platform = process.platform, processKill = process.kill } = {},
+) => {
+  if (platform !== 'darwin' && platform !== 'linux') return false;
+  if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return false;
+  try { processKill(-pid, 0); return true; } catch { return false; }
+};
+
+export const waitForProcessTreeExit = async (
+  pid,
+  { graceMs = 250, pollMs = 10, platform = process.platform, processKill = process.kill, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {},
+) => {
+  // Only the POSIX group fallback can observe remaining members; Windows has no
+  // portable tree query, so its taskkill call must happen while the leader exists.
+  if (platform !== 'darwin') return true;
+  const deadline = now() + graceMs;
+  while (processTreeAlive(pid, { platform, processKill }) && now() < deadline) await sleep(pollMs);
+  return !processTreeAlive(pid, { platform, processKill });
 };
 const REQUEST_ENV = 'OPENCHAMBER_PIDFD_REQUEST';
 
