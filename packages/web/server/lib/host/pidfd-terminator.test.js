@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { describe, expect, it } from 'vitest';
 
-import { createPidfdTerminator } from './pidfd-terminator.js';
+import { createPidfdTerminator, processTreeKillArgs, terminateProcessTree } from './pidfd-terminator.js';
 
 const linuxOnly = process.platform === 'linux' ? it : it.skip;
 
@@ -68,5 +68,26 @@ describe('pidfd terminator', () => {
     await expect(terminator([{ pid: 1, startTicks: '1' }], 'SIGKILL')).rejects.toBeTruthy();
     await expect(terminator([{ pid: 2, startTicks: 'not-ticks' }], 'SIGKILL')).rejects.toBeTruthy();
     await expect(terminator([{ pid: 2, startTicks: '1' }], 'SIGUSR1')).rejects.toBeTruthy();
+  });
+});
+
+describe('portable process-tree fallback', () => {
+  it('constructs a hidden Windows taskkill tree command and rejects unsafe pids', async () => {
+    const calls = [];
+    await expect(terminateProcessTree(4242, 'SIGKILL', {
+      platform: 'win32',
+      execFileAsync: async (...args) => { calls.push(args); return { stdout: '', stderr: '' }; },
+    })).resolves.toBe(true);
+    expect(calls).toEqual([['taskkill', ['/T', '/F', '/PID', '4242'], { windowsHide: true }]]);
+    expect(processTreeKillArgs(4242)).toEqual(['/T', '/F', '/PID', '4242']);
+    expect(terminateProcessTree(1, 'SIGKILL', { platform: 'win32' })).resolves.toBe(false);
+    expect(() => processTreeKillArgs(process.pid)).toThrow('Unsafe process id');
+  });
+
+  it('uses a detached macOS process group and tolerates an exited child', async () => {
+    const signals = [];
+    expect(await terminateProcessTree(4242, 'SIGTERM', { platform: 'darwin', processKill: (pid, signal) => signals.push([pid, signal]) })).toBe(true);
+    expect(signals).toEqual([[-4242, 'SIGTERM']]);
+    expect(await terminateProcessTree(4242, 'SIGTERM', { platform: 'darwin', processKill: () => { throw Object.assign(new Error('gone'), { code: 'ESRCH' }); } })).toBe(false);
   });
 });

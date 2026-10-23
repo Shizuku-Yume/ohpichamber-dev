@@ -10,9 +10,10 @@ import { createHostWorkerAuthorizationChannel } from './worker-authorization-cha
 import { openApprovalPolicyStore } from './approval-policy-store.js';
 import { AgentServiceReadySchema } from '@openchamber/agent-contract';
 
-import { MANAGED_PROCESS_TOKEN_ENV, createManagedProcessRegistry, reapOrphanedProcesses, registerManagedProcess, unregisterManagedProcess } from './managed-process-registry.js';
+import { MANAGED_PROCESS_TOKEN_ENV, createManagedProcessRegistry, reapOrphanedProcesses, registerManagedProcess, terminateManagedProcess, unregisterManagedProcess } from './managed-process-registry.js';
+import { terminateProcessTree } from './pidfd-terminator.js';
 
-const defaultRegistry = { registerManagedProcess, unregisterManagedProcess, reapOrphanedProcesses };
+const defaultRegistry = { registerManagedProcess, unregisterManagedProcess, reapOrphanedProcesses, terminateManagedProcess };
 
 const STARTUP_TIMEOUT_MS = 15_000;
 const STOP_TIMEOUT_MS = 5_000;
@@ -279,20 +280,24 @@ export const createAgentServiceSupervisor = ({
       if (current.exitCode !== null || current.signalCode !== null) resolve();
       else current.once('close', resolve);
     });
-    if (current.exitCode === null && current.signalCode === null) current.kill('SIGTERM');
+    if (current.exitCode === null && current.signalCode === null) {
+      let signalled = false;
+      if (process.platform === 'linux') {
+        try { signalled = await processRegistry.terminateManagedProcess(current.pid, 'SIGTERM'); } catch { /* Leave failed identities for the orphan reaper. */ }
+      } else signalled = await terminateProcessTree(current.pid, 'SIGTERM');
+      if (!signalled) current.kill('SIGTERM');
+    }
     try {
       await waitWithin(exited, stopTimeoutMs, 'Agent service stop timed out');
     } catch {
       if (current.exitCode === null && current.signalCode === null) {
-        if (process.platform === 'win32') current.kill('SIGKILL');
-        else {
-          // Escalate through pidfd identities; a numeric group kill can hit a
-          // recycled id. A failure leaves the recorded child for startup reap.
-          try {
-            await processRegistry.terminateManagedProcess(current.pid, 'SIGKILL');
-          } catch {
-            // pidfd/Bun unavailable: no numeric fallback.
-          }
+        if (process.platform === 'linux') {
+          // Linux uses the registry's birth-checked pidfd tree path.
+          try { await processRegistry.terminateManagedProcess(current.pid, 'SIGKILL'); } catch { /* best effort */ }
+        } else {
+          // macOS uses the detached POSIX group; Windows uses hidden taskkill /T /F.
+          const terminated = await terminateProcessTree(current.pid, 'SIGKILL');
+          if (!terminated) current.kill('SIGKILL');
         }
       }
       await waitWithin(exited, 500, 'Agent service did not exit after termination');

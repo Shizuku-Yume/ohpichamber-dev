@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { isDeepStrictEqual } from 'node:util';
+import { promisify } from 'node:util';
 import { z } from 'zod';
 import { UsageWorkerBootstrapSchema, CompletionWorkerBootstrapSchema, WorkerBootstrapSchema, WorkerBootstrapMessageSchema, WorkerOperationSchema, WorkerReplySchema, WorkerPolicyResultSchema } from '../protocol.ts';
 import type { CompletionWorkerBootstrap, WorkerBootstrap, WorkerApprovalPolicy, WorkerInfo, WorkerOperation, WorkerOperationResult, WorkerPolicyRequest, WorkerPolicyResult, WorkerInteraction } from '../protocol.ts';
@@ -74,6 +75,33 @@ export interface WorkerRegistryOptions {
   isSessionIdle?: (rootSessionId: string) => boolean;
   capacityPolicy?: WorkerCapacityPolicy;
 }
+
+const defaultExecFileAsync = promisify(execFile);
+type ProcessKill = (pid: number, signal?: NodeJS.Signals | number) => void;
+
+export const windowsProcessTreeKillArgs = (pid: number): string[] => {
+  if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) throw new Error('Unsafe process id');
+  return ['/T', '/F', '/PID', String(pid)];
+};
+
+export const terminateWorkerProcessTree = async (
+  pid: number | undefined,
+  signal: NodeJS.Signals = 'SIGKILL',
+  { platform = process.platform, execFileAsync = defaultExecFileAsync, processKill = process.kill as ProcessKill } = {},
+): Promise<boolean> => {
+  if (pid === undefined || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return false;
+  if (platform === 'win32') {
+    try {
+      await execFileAsync('taskkill', windowsProcessTreeKillArgs(pid), { windowsHide: true });
+      return true;
+    } catch { return false; }
+  }
+  if (platform !== 'linux' && platform !== 'darwin') return false;
+  try {
+    processKill(-pid, signal);
+    return true;
+  } catch { return false; }
+};
 function defaultWorkerRuntime(): string {
   if (process.execPath.includes('bun')) return process.execPath;
   return Bun.which('bun') ?? process.execPath;
@@ -461,6 +489,7 @@ export class WorkerRegistry {
     const child = spawn(workerRuntime, workerArgs, {
       cwd: input.cwd,
       env: environment,
+      detached: process.platform !== 'win32',
       windowsHide: true,
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
     });
@@ -621,12 +650,17 @@ export class WorkerRegistry {
       for (const [requestId, handle] of this.actions) if (handle.entry === entry) { this.actions.delete(requestId); handle.controller.abort(); }
       if (wasStarting) entry.rejectReady(new Error('SDK worker is stopping'));
       if (entry.child.connected) entry.child.send({ type: 'stop', workerGeneration: entry.info.workerGeneration });
+      let escalated = false;
       try {
         await waitWithin(entry.exited, this.options.stopTimeoutMs ?? 5_000);
       } catch {
-        if (entry.child.exitCode === null && entry.child.signalCode === null) entry.child.kill('SIGKILL');
+        if (entry.child.exitCode === null && entry.child.signalCode === null) {
+          escalated = await terminateWorkerProcessTree(entry.child.pid, 'SIGKILL');
+          if (!escalated) entry.child.kill('SIGKILL');
+        }
         await waitWithin(entry.exited, 500);
       }
+      if (!escalated) await terminateWorkerProcessTree(entry.child.pid, 'SIGTERM');
       for (const pending of entry.pending.values()) pending.reject(new Error('SDK worker is stopping'));
       entry.pending.clear();
       entry.info.state = 'stopped';

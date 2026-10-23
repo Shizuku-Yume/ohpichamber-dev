@@ -21,6 +21,30 @@ import { promisify } from 'node:util';
 import { z } from 'zod';
 
 const defaultExecFileAsync = promisify(execFile);
+
+export const processTreeKillArgs = (pid) => {
+  if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) throw new Error('Unsafe process id');
+  return ['/T', '/F', '/PID', String(pid)];
+};
+
+export const terminateProcessTree = async (
+  pid,
+  signal = 'SIGKILL',
+  { platform = process.platform, execFileAsync = defaultExecFileAsync, processKill = process.kill } = {},
+) => {
+  if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return false;
+  if (platform === 'win32') {
+    try {
+      await execFileAsync('taskkill', processTreeKillArgs(pid), { windowsHide: true });
+      return true;
+    } catch { return false; }
+  }
+  if (platform !== 'darwin' && platform !== 'linux') return false;
+  try {
+    processKill(-pid, signal);
+    return true;
+  } catch { return false; }
+};
 const REQUEST_ENV = 'OPENCHAMBER_PIDFD_REQUEST';
 
 const IdentitySchema = z.object({
