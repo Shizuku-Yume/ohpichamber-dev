@@ -1,6 +1,6 @@
 import { findExecutableOnPath } from '../tunnels/executable-search.js';
-import { isExecutable } from '../host/executable.js';
-import { pathLooksUserConfigured, mergePathValues } from '../host/path-utils.js';
+import { isExecutable } from './executable.js';
+import { pathLooksUserConfigured, mergePathValues } from './path-utils.js';
 
 export const createServerUtilsRuntime = (dependencies) => {
   const {

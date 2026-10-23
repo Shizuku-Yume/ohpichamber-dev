@@ -1,5 +1,5 @@
-import { ThemeImportStorageError } from '../host/theme-runtime.js';
-import { registerThemeCatalogRoutes } from '../host/theme-catalog.js';
+import { ThemeImportStorageError } from './theme-runtime.js';
+import { registerThemeCatalogRoutes } from './theme-catalog.js';
 
 const parseLoopbackUrl = (rawUrl) => {
   if (typeof rawUrl !== 'string') {

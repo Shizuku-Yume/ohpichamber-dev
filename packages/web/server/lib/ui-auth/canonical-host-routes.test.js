@@ -11,7 +11,7 @@ import { createSelectedCredentialHandoff } from '../host/private-credential.js';
 import { createTunnelAuth } from '../host/tunnel-auth.js';
 import { createRemoteClientAuthRuntime } from '../client-auth/remote-clients.js';
 import { createRequestSecurityRuntime } from '../security/request-security.js';
-import { registerCommonRequestMiddleware } from '../opencode/core-routes.js';
+import { registerCommonRequestMiddleware } from '../host/core-routes.js';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ohpichamber-canonical-host-'));
 const originalDataDir = process.env.OPENCHAMBER_DATA_DIR;

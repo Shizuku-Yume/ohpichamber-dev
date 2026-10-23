@@ -54,24 +54,24 @@ import { createProjectDirectoryRuntime } from './lib/host/project-directory-runt
 import { createSettingsNormalizationRuntime } from './lib/host/settings-normalization-runtime.js';
 import { createSettingsHelpers } from './lib/host/settings-helpers.js';
 import { createThemeRuntime } from './lib/host/theme-runtime.js';
-import { parseServeCliOptions } from './lib/opencode/cli-options.js';
+import { parseServeCliOptions } from './lib/host/cli-options.js';
 import {
   isRequestAuthorized,
   registerAuthAndAccessRoutes,
   registerCommonRequestMiddleware,
   registerServerStatusRoutes,
-} from './lib/opencode/core-routes.js';
-import { registerOpenChamberRoutes } from './lib/opencode/openchamber-routes.js';
+} from './lib/host/core-routes.js';
+import { registerOpenChamberRoutes } from './lib/host/openchamber-routes.js';
 import { createStaticRoutesRuntime } from './lib/host/static-routes-runtime.js';
 import { listPwaSessions } from './lib/host/pwa-session-shortcuts.js';
 import { createSettingsRuntime } from './lib/host/settings-runtime.js';
 import { registerSettingsRoutes } from './lib/host/settings-routes.js';
-import { createSessionRuntime } from './lib/opencode/session-runtime.js';
-import { createServerUtilsRuntime } from './lib/opencode/server-utils-runtime.js';
-import { createFeatureRoutesRuntime } from './lib/opencode/feature-routes-runtime.js';
-import { createBootstrapRuntime } from './lib/opencode/bootstrap-runtime.js';
-import { createGracefulShutdownRuntime } from './lib/opencode/shutdown-runtime.js';
-import { runCliEntryIfMain } from './lib/opencode/cli-entry-runtime.js';
+import { createSessionRuntime } from './lib/host/session-runtime.js';
+import { createServerUtilsRuntime } from './lib/host/server-utils-runtime.js';
+import { createFeatureRoutesRuntime } from './lib/host/feature-routes-runtime.js';
+import { createBootstrapRuntime } from './lib/host/bootstrap-runtime.js';
+import { createGracefulShutdownRuntime } from './lib/host/shutdown-runtime.js';
+import { runCliEntryIfMain } from './lib/host/cli-entry-runtime.js';
 import { configureAgentService } from './lib/small-model/client.js';
 import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
 import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
