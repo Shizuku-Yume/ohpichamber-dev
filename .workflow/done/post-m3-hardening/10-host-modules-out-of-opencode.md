@@ -34,6 +34,7 @@ Implementation:
 - Retained unmounted `proxy.js`, its tests (`proxy.test.js`, `proxy-agent-wiring.test.js`, `proxy-host-metadata.test.js`), `RUNTIME_NOTES.md` and `references/` in `packages/web/server/lib/opencode/`.
 - Updated internal imports in `core-routes.js`, `bootstrap-runtime.js`, `feature-routes-runtime.js`, `server-utils-runtime.js`, `core-routes.test.js`.
 - Updated all callers across repo: `packages/web/server/index.js`, `package-manager.js`, `scheduled-tasks/loops.js`, `canonical-usage-routes.test.js`, `canonical-warming-routes.test.js`, `theme-catalog.test.js`, `theme-import.test.js`, `projects/routes-directory.test.js`, `spaces/dispatcher.test.js`, `ui-auth/canonical-host-routes.test.js`, and documentation references in `environment/routes.js`, `environment/DOCUMENTATION.md`, `shared/guards.js`, `shared/DOCUMENTATION.md`, `projects/DOCUMENTATION.md`, `message-queue/DOCUMENTATION.md`, `dispatch-results/DOCUMENTATION.md`, `.agents/skills/ui-api-decoupling/references/implementation-map.md`.
+- Cross-lane note on `packages/web/server/lib/spaces/dispatcher.test.js`: this test imports `registerCommonRequestMiddleware` directly. Because `core-routes.js` moved to `packages/web/server/lib/host/core-routes.js` and no backward-compatibility re-export shim is permitted, `dispatcher.test.js` must update its import to `../host/core-routes.js` so that the web suite passes without leaving obsolete path references.
 - Preserved `packages/web/README.md` unchanged (owned by Lane G) and handed off factual update to Lane G.
 - Updated `packages/web/server/lib/opencode/DOCUMENTATION.md` to cover only the proxy fixture and diagnostic notes; updated `packages/web/server/lib/host/DOCUMENTATION.md` to document the 12 moved modules and their contracts.
 
@@ -44,7 +45,4 @@ Check after:
 - Root test rerun: 7/7 suites passed (scripts 22/22, sdk 23/23, ui 804/804, agent-contract 177 pass, agent-service 229 pass / 7 skip / 0 fail, electron 44/44, web 375 passed / 9 skipped files and 6105 passed / 135 skipped tests).
 - Persistent evidence logs: `/home/shizuku/Project/ohpichamber-omp-artifacts/task10-2026-10-23/`.
 
-Review boundary: `ecdeb110d` + `packages/web/server/lib/{opencode,host}/`, `index.js`, documentation; round: 1; briefs: A (pass, 0 findings), B (pass, 0 findings), sec (pass, no trust boundary crossed); findings: 0 blocking / 0 nonblocking.
-- Brief A (requirements & process): PASS. All 12 modules relocated to `server/lib/host/` as git renames; no re-export shims left behind; proxy fixture and tests retained in `opencode/`; documentation updated in both directories; evidence complete across web suite, dead-code, dev smoke, and root test.
-- Brief B (quality & callers): PASS. All imports updated cleanly without aliases; identical web test counts (375 files / 6105 tests); 0 dead-code findings; dev smoke verified; no regressions introduced.
-- Security pass: PASS. No trust boundary crossed; moved modules preserve existing permissions, authentication middleware, and input validation without adding listeners or credentials.
+Review boundary: `ecdeb110d` + `packages/web/server/lib/{opencode,host}/`, `index.js`, documentation; round: 1; independent reviews Brief A and Brief B commissioned by parent coordinator; awaiting reports against exact corrective SHA.
