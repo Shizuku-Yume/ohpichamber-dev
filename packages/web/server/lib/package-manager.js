@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { fetchUpdateNotes } from './changelog/update-notes.js';
 import { isEnterpriseMode } from './enterprise-mode.js';
 
-import { resolveNpmRegistryRequest } from './opencode/npm-registry-config.js';
+import { resolveNpmRegistryRequest } from './host/npm-registry-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

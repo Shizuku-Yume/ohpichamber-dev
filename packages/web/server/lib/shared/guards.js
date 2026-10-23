@@ -10,7 +10,7 @@
  * similar but answer differently for real inputs stay with their owner:
  * `terminal/runtime.js` uses `String(value) === value`, which rejects boxed
  * strings and throws on null-prototype objects; `guests/oauth.js`,
- * `host/settings-files.js`, and `opencode/shared.js` use a loose
+ * `host/settings-files.js`, and `host/shared.js` use a loose
  * `typeof value === 'object'` object check that classifies differently from
  * `isPlainObject`; `quota/utils/transformers.js` exports an array-accepting
  * `asObject`. See DOCUMENTATION.md for the full matrix.

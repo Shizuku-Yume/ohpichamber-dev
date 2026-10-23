@@ -21,7 +21,7 @@ import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/ru
 import { registerMessageQueueRoutes } from '../message-queue/runtime.js';
 import { registerRoutingRoutes } from '../routing/routes.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
-import { registerProjectIconRoutes } from '../host/project-icon-routes.js';
+import { registerProjectIconRoutes } from './project-icon-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
 import { createTrackedItemsService } from '../tracked-items/service.js';
 import { createProviderReadCache } from '../provider-read-cache/index.js';
@@ -31,7 +31,7 @@ import { registerTrackedItemsRoutes } from '../tracked-items/routes.js';
 import { registerOpenChamberSessionRoutes } from '../openchamber-sessions/routes.js';
 import { registerOpenChamberControlRoutes } from '../openchamber-control/routes.js';
 import { registerMarkdownImageGrantRoutes } from '../markdown-image-grants/routes.js';
-import { createSkillRepositoryIdentityResolver } from '../host/skill-repository-identity.js';
+import { createSkillRepositoryIdentityResolver } from './skill-repository-identity.js';
 import crypto from 'node:crypto';
 import { getGitHubAuthByAccountId } from '../github/auth.js';
 import { getGitHubCliCredential } from '../github/octokit.js';

@@ -40,4 +40,3 @@ Check after (phase-tested source commit `2c3dbbe5e`, which is not in `main`'s hi
 - Landing root test at `8973d7fea` after the final rebase onto `83ec4d19b`: exit 0, 7/7 suites (log `landing-test.log`).
 - `git merge-base --is-ancestor 8973d7fea main` exits 0 after the fast-forward landing. The phase-tested `2c3dbbe5e` was superseded by the rebase and is not in `main`; the receipt states this explicitly.
 
-**Finished:** 2026-10-23T07:23:08Z

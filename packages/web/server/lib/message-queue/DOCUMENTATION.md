@@ -17,9 +17,9 @@ renders a projection.
 
 Wiring: created in `server/index.js` after the global event hub and the
 session-knowledge runtime; routes registered in
-`opencode/feature-routes-runtime.js` (before the generic OpenCode proxy) with
-JSON bodies enabled in `opencode/core-routes.js`; stopped by
-`opencode/shutdown-runtime.js`.
+`host/feature-routes-runtime.js` (before the generic OpenCode proxy) with
+JSON bodies enabled in `host/core-routes.js`; stopped by
+`host/shutdown-runtime.js`.
 
 ## Canonical delivery owner
 

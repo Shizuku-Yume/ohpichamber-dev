@@ -76,7 +76,7 @@ UI (`packages/ui/src/lib/sharedTrustConfirmation.ts`).
 - `project-id.js` — `createProjectIdFromPath` / `projectPathFromId`: the path-derived id (`path_<base64url>`) that names the file, and the checkout path back from it. The shared UI derives the same id (`packages/ui/src/lib/projectId.ts`); both sides must agree. `projectConfigFileStemOf`: the stem that names the file and the sibling folder for an id, see the file name invariant below.
 - `project-config.js` — `createProjectConfigRuntime`: raw read, atomic write, the cross-process file lock (Electron and a CLI `serve` can share one projects dir), scheduled-task normalization, the project-setup read/update, and `readWorktreeDirectory` (the personal Git worktree folder).
 - `project-setup.js` — sanitizers, the shared-file parser (`parseSharedProjectConfig`, `normalizePlansDir`), the merge (`mergeProjectSetup`), and the personal view for the setup keys (including `worktreeDirectory`).
-- `routes.js` — the setup routes. `/api/projects` is on the JSON-body allowlist in `opencode/core-routes.js`.
+- `routes.js` — the setup routes. `/api/projects` is on the JSON-body allowlist in `host/core-routes.js`.
 
 ## Invariants
 

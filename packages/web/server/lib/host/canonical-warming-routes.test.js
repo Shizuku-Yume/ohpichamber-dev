@@ -10,7 +10,7 @@ import { registerCanonicalHostRoutes } from './canonical-routes.js';
 import { createTunnelAuth } from './tunnel-auth.js';
 import { createRemoteClientAuthRuntime } from '../client-auth/remote-clients.js';
 import { createRequestSecurityRuntime } from '../security/request-security.js';
-import { registerCommonRequestMiddleware } from '../opencode/core-routes.js';
+import { registerCommonRequestMiddleware } from './core-routes.js';
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'canonical-warming-auth-'));
 const originalDataDirectory = process.env.OPENCHAMBER_DATA_DIR;

@@ -1,5 +1,5 @@
 import { registerNotificationEmitRoutes } from '../notifications/emit-route.js';
-import { registerCanonicalHostRoutes } from '../host/canonical-routes.js';
+import { registerCanonicalHostRoutes } from './canonical-routes.js';
 
 export const createBootstrapRuntime = (dependencies) => {
   const {

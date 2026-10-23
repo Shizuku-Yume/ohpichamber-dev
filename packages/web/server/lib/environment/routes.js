@@ -15,7 +15,7 @@ import { EnvironmentPatchError, isProjectId } from './store.js';
  * null before it ran, `{ state: "applied", count }`, or
  * `{ state: "failed", reason, exitCode? }`.
  *
- * `/api/environment` is on the JSON-body allowlist in `opencode/core-routes.js`.
+ * `/api/environment` is on the JSON-body allowlist in `host/core-routes.js`.
  */
 export const registerEnvironmentRoutes = (app, { store, runtime, listProjects }) => {
   const respondWithError = (res, error, fallback) => {

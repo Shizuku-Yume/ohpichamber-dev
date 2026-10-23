@@ -27,6 +27,18 @@
 - `canonical-routes.js` registers `/api/agent/v1` routes: status, ready, capabilities, projects, workspaces, queue, sessions, attachments, credentials preflight, and proxied agent routes with strict schema validation and scope authorization.
 - Native plugin routes in `canonical-routes.js` keep package managers, marketplace fetches and extension source operations behind production Host authentication, origin checks, workspace authorization and canonical request/response schemas. The Bun service alone owns native SDK instances. Enterprise authority is read for every package install/update/removal and marketplace fetch; refusals are HTTP 403 `enterprise_mode`. Catalog reads, enable/disable, settings and workspace-confined local extension authoring remain available. Web/PWA, Electron, hosted mobile and Capacitor share this gateway; no native plugin execution is added to Node or the UI. Legacy `/api/config/plugins` route registration is retired; unrelated provider/MCP `/api/integration` callers are unchanged.
 - Explicit `POST /workspaces/:workspaceId/plugins/apply` uses the same canonical gateway schema, origin and workspace gates and remains available in enterprise mode. It requests a deliberate restart of idle native sessions at the existing persisted revision; the Bun supervisor rejects busy or pending selected roots before retiring any worker and reports actual new generations or individual failures. Mutations alone never trigger session restarts.
+- `bootstrap-runtime.js`: Composes base Host routes, UI authentication, canonical agent endpoints, notification channels, TTS, and OpenChamber management routes.
+- `cli-options.js`: Parses command-line flags and environment variables for server startup.
+- `cli-entry-runtime.js`: Detects direct CLI entry execution and starts the server runtime with parsed arguments.
+- `core-routes.js`: Registers server status and system endpoints, browser session authentication, WebAuthn passkeys, device pairing, theme endpoints, and common request body parsing middleware.
+- `feature-routes-runtime.js`: Registers Host feature route domains (filesystems, environments, quotas, walkthroughs, git, dev servers, session folders, project context, scheduled tasks, tracked items).
+- `models-metadata.js`: In-process cache and client projection helper for the `models.dev` catalog.
+- `npm-registry-config.js` (`npm-registry-config.d.ts`): Resolves npm registry endpoints and authentication headers from `.npmrc` or environment configurations.
+- `openchamber-routes.js`: Registers OpenChamber update checks, update installations, enterprise policy, and model catalog endpoints.
+- `server-utils-runtime.js`: Utility helpers for PATH augmentation, executable resolution, and SSE data payload parsing.
+- `session-runtime.js`: In-memory state machine for session activity phases, attention status, and blocking requests, driven by Canonical `/api/agent/v1` events and snapshots.
+- `shared.js`: File and path utility helpers for Markdown/YAML frontmatter operations and Git ancestor/worktree resolution.
+- `shutdown-runtime.js`: Coordinates graceful shutdown across Host services, HTTP connections, the Bun Agent Service runtime, and SQLite stores.
 
 ## Ownership boundary
 
@@ -179,3 +191,108 @@ Native Bash descriptors include their working directory as a source path. The Ho
 ### Worker operation authorization and native questions
 
 `worker-operation-authorizer.js` authorizes native worker operations against Host workspace scopes, path containment rules, and approval policies. After evaluating scope, path containment, agent profile, preset constraints, and explicit policy denials, the authorizer allows the native `ask` and `task` tool names. `ask` only opens a scoped, CAS-protected interaction; `task` starts a non-isolated SDK child under the captured workspace and the worker already applies the selected profile's `allowedTools` gate. Every child tool call on that path re-enters this authorizer, so neither name grants a host machine capability or an unknown-tool authorization. Isolated task requests are refused because SDK isolation drops the programmatic authorization extensions, and caller-supplied child names must be one safe path segment.
+## Retained Host Infrastructure Contracts
+
+### bootstrap-runtime.js
+- `createBootstrapRuntime(dependencies)`: Creates the base route bootstrap runtime.
+- Returned API:
+  - `setupBaseRoutes(app, options)`: Registers base middleware and route sets in execution order:
+    1. UI auth controller (`createUiAuth`)
+    2. Server status routes (`registerServerStatusRoutes`)
+    3. Common request middleware (`registerCommonRequestMiddleware`)
+    4. Canonical host routes (`registerCanonicalHostRoutes`)
+    5. Notification emit routes (`registerNotificationEmitRoutes`)
+    6. Browser auth, passkeys, and client pairing (`registerAuthAndAccessRoutes`)
+    7. TTS routes (`registerTtsRoutes`)
+    8. Notification subscription and delivery routes (`registerNotificationRoutes`)
+    9. OpenChamber updater and model catalog routes (`registerOpenChamberRoutes`)
+  - Returns `{ uiAuthController }`.
+
+### cli-options.js
+- `parseServeCliOptions({ argv, env, defaultPort, cloudflareProvider, managedLocalMode })`: Parses command-line arguments and environment overrides into a normalized options object:
+  - Port (`--port`, `-p`, `defaultPort`)
+  - Host binding (`--host`, `-h`)
+  - UI password (`--ui-password`, `OPENCHAMBER_UI_PASSWORD`)
+  - Cloudflare tunnels (`--try-cf-tunnel`, `--tunnel-provider`, `--tunnel-mode`, `--tunnel-config`, `--tunnel-token`, `--tunnel-hostname`, and matching `OPENCHAMBER_TUNNEL_*` env vars)
+  - API-only execution (`--api-only`, `OPENCHAMBER_API_ONLY`)
+
+### cli-entry-runtime.js
+- `runCliEntryIfMain(dependencies)`: Checks if `process.argv[1] === currentFilename`. When invoked directly as the CLI entrypoint, parses startup options via `parseServeCliOptions`, sets `setExitOnShutdown(true)`, and calls `startServer(...)`.
+
+### core-routes.js
+- `isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController })`: Returns a boolean indicating if a request carries credentials accepted by `/api`, without rejecting unauthorized calls.
+- `registerServerStatusRoutes(app, dependencies)`:
+  - `GET /health`: Health snapshot, uptime, version, runtime name, compatibility capabilities, and server ID.
+  - `GET /api/version`: Basic version and server start metadata.
+  - `POST /api/system/shutdown`: Authenticated graceful server shutdown (`exitProcess: true`).
+  - `POST /api/system/dev-shutdown`: Development escape hatch; terminates dev process group and loopback preview ports when `OPENCHAMBER_DEV_SHUTDOWN=true`.
+  - `GET /api/system/info`: Process ID, runtime name, version, and start time; includes active port and tunnel URL when request is authorized.
+  - `GET /api/system/free-port`: Allocates a best-effort free loopback TCP port hint.
+- `registerAuthAndAccessRoutes(app, dependencies)`:
+  - Session auth: `GET /auth/session`, `POST /auth/session`, `POST /auth/url-token`
+  - Passkeys: `GET /auth/passkey/status`, `POST /auth/passkey/authenticate/options`, `POST /auth/passkey/authenticate/verify`, `POST /auth/passkey/register/options`, `POST /auth/passkey/register/verify`, `GET /api/passkeys`, `DELETE /api/passkeys/:id`
+  - Reset: `POST /api/auth/reset`
+  - Remote client auth & device pairing: `GET /api/client-auth/clients`, `POST /api/client-auth/clients`, `DELETE /api/client-auth/clients/:id`, `DELETE /api/client-auth/clients`, `POST /api/client-auth/pairing/sessions`, `GET /api/client-auth/connection/candidates`, `GET /api/client-auth/pairing/transports`, `GET /api/client-auth/pairing/sessions`, `DELETE /api/client-auth/pairing/sessions/:id`, `POST /api/client-auth/pairing/redeem`
+  - Direct connection exchange: `GET /connect`
+  - Utility URL probe: `POST /api/system/probe-url`
+  - Route guard: `app.use('/api', ...)` enforcing UI session or client bearer token authentication.
+- `registerSettingsUtilityRoutes(app, dependencies)`:
+  - `GET /api/config/themes`: Lists custom themes from disk.
+  - `POST /api/config/themes`: Saves imported theme palette into user custom themes directory.
+  - `DELETE /api/config/themes/:id`: Deletes custom theme by metadata ID.
+  - Registers theme catalog routes via `registerThemeCatalogRoutes(app)`.
+- `registerCommonRequestMiddleware(app, dependencies)`: Shared middleware applying body size limits, bypassing parsed bodies for isolated space requests (`skipBodyParsing`), protecting `/api/agent/v1` from urlencoded tampering, and handling request logging.
+
+### feature-routes-runtime.js
+- `createFeatureRoutesRuntime()`: Composes feature route modules.
+- Returned API:
+  - `registerRoutes(app, routeDependencies)`: Wires filesystem, environment, quota, walkthrough, session goal, source control, linear, guest plugins, git, dev server, magic prompts, session folders, project context, agent memory, session knowledge, message search, permission auto-accept, message queue, routing, themes, project icons, scheduled tasks, tracked items, and markdown image grant routes. Host settings routes are not registered here; Host composition registers `GET`/`PUT /api/config/settings` from `lib/host/settings-routes.js` before this method runs.
+  - `getSkillRepositoryDependencies()`: Provides Git credential helper dependencies for skill repository operations.
+  - `publishRepositoryCredentialEndpoint()`: Publishes Git credential helper IPC endpoint.
+
+### models-metadata.js
+- `getModelsMetadata({ url, ttlMs, timeoutMs } = {})`: Fetches and caches the `models.dev` model catalog in memory (default 10-minute TTL), with fallback to stale cache on network failures.
+- `toClientModelsMetadata(metadata)`: Projects the raw catalog to provider IDs and client-needed model capabilities (`id`, `name`, `tool_call`, `reasoning`, `temperature`, `attachment`, `structured_output`, `modalities`, `cost`, `limit`, `knowledge`, `release_date`, `last_updated`).
+
+### npm-registry-config.js
+- `resolveNpmRegistryRequest(packageName, metadataPath)`: Parses npm registry configuration from process environment (`npm_config_*`, `NPM_CONFIG_*`) and user `.npmrc`. Supports scoped registries (such as `@scope:registry`) and resolves Bearer token or Basic authentication headers. Exported type declarations live in `npm-registry-config.d.ts`.
+
+### openchamber-routes.js
+- `registerOpenChamberRoutes(app, dependencies)`:
+  - `GET /api/openchamber/enterprise-policy`: Returns public enterprise mode policy.
+  - `GET /api/openchamber/update-check`: Checks for application updates.
+  - `POST /api/openchamber/update-install`: Initiates update installation (delegated to Electron `desktopUpdater`, systemd transient units, macOS launchd kickstarts, or Windows `.cmd` scripts).
+  - `GET /api/openchamber/models-metadata`: Returns projected `models.dev` metadata.
+
+### server-utils-runtime.js
+- `createServerUtilsRuntime({ os, path, process, getLoginShellPath? })`:
+  - `buildAugmentedPath()`: Merges process `PATH` and login shell `PATH`, prioritizing user-configured directories.
+  - `searchPathFor(binaryName, searchPath?)`: Locates an executable file on the PATH.
+  - `isExecutable(filePath)`: Verifies file existence and executable permissions.
+
+### session-runtime.js
+- `createSessionRuntime({ broadcastEvent, now = Date.now })`: Maintains session activity and attention state.
+- Returned API:
+  - `applySnapshot(snapshot)`: Ingests canonical session snapshot from the Bun Agent Service, updating session status, active run ID, and blocking approval/question entries.
+  - `processCanonicalEvent(event)`: Ingests canonical stream events, transitioning status, attention flags, and busy/cooldown/idle activity phases.
+  - `getSessionState(sessionId)`: Returns current status, run ID, and metadata for a session.
+  - `getSessionStateSnapshot()`: Returns map of all tracked session states.
+  - `getPendingBlockingRequestsSnapshot()`: Returns map of pending approvals and questions by session ID.
+  - `getSessionActivitySnapshot()`: Returns map of session activity phases.
+  - `getActiveSessionCount()`: Returns count of sessions currently in `busy` phase in O(1).
+  - `getSessionAttentionSnapshot()`: Returns map of session attention states.
+  - `getSessionAttentionState(sessionId)`: Returns attention record for a session.
+  - `markUserMessageSent(sessionId)`: Records user message timestamp for attention calculation.
+  - `markSessionViewed(sessionId, clientId)`: Clears attention when viewed by a client.
+  - `markSessionUnviewed(sessionId, clientId)`: Removes client from session viewer set.
+  - `interruptBusySessionsAfterRestart()`: Transitions live sessions to `unavailable` with reason `agent-service-restart`, clears pending requests, settles cooldowns, and broadcasts `openchamber:session-interrupted`.
+  - `dispose()`: Clears state maps and cleanup interval timer.
+
+### shared.js
+- `parseMdFile(filePath)`: Reads and parses Markdown files with YAML frontmatter, handling BOM and lenient colon parsing.
+- `writeMdFile(filePath, frontmatter, body, { flag = 'w' } = {})`: Serializes frontmatter YAML and body, writing to disk.
+- `getAncestors(startDir, stopDir)`: Returns array of directory paths from `startDir` ascending to `stopDir` or filesystem root.
+- `findWorktreeRoot(startDir)`: Ascends directory tree to find the root containing `.git`.
+
+### shutdown-runtime.js
+- `createGracefulShutdownRuntime(dependencies)`: Coordinates graceful server teardown across all Host Gateway subsystems, HTTP sockets, and child processes.
