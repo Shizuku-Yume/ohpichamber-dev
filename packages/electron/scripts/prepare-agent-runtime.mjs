@@ -90,10 +90,22 @@ export function stageDependencyClosure(source, destination, { platform = process
   return packages;
 
 }
+export function assertNativeRuntimePackageAvailable(rootManifest, { platform = process.platform, architecture = process.arch } = {}) {
+  const packageName = `@oh-my-pi/pi-natives-${platform}-${architecture}`;
+  const override = rootManifest.overrides?.[packageName];
+  if (typeof override !== 'string' || !override.startsWith('file:')) {
+    throw new Error(
+      `Agent Runtime staging for ${platform}-${architecture} requires a source-built ${packageName} package; `
+      + `this target is not pinned yet. Complete post-m3-hardening/29-vendor-native-leaves before building it.`,
+    );
+  }
+}
+
 export function prepareAgentRuntime({ bunPath = process.execPath, output = path.join(electronRoot, 'resources', 'agent-runtime') } = {}) {
   const target = resolveTargetArchitecture({ builderArgs: process.argv.slice(2) });
   if (target.node !== process.arch) throw new Error('Agent runtime staging requires a native target host');
   const rootManifest = json(path.join(workspaceRoot, 'package.json'));
+  assertNativeRuntimePackageAvailable(rootManifest, { platform: process.platform, architecture: target.node });
   const expectedBunVersion = rootManifest.packageManager.replace(/^bun@/, '');
   const version = spawnSync(bunPath, ['--version'], { encoding: 'utf8', windowsHide: true });
   if (version.status !== 0 || version.stdout.trim() !== expectedBunVersion) {
