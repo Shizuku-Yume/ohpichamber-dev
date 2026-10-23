@@ -31,7 +31,8 @@ process.on('message', message => {
       const stat = await readFile(`/proc/${childPid}/stat`, 'utf8');
       return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[0];
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 'gone';
+      const code = error instanceof Error && 'code' in error ? error.code : undefined;
+      if (code === 'ENOENT') return 'gone';
       throw error;
     }
   };
@@ -56,6 +57,8 @@ process.on('message', message => {
 
 test('Windows worker tree termination uses direct hidden taskkill', async () => {
   const calls: unknown[][] = [];
+  // SAFETY: the injected recorder accepts every command argument and returns the
+  // stdout/stderr fields consumed by this command-only branch; it never executes a process.
   await terminateWorkerProcessTree(4242, 'SIGKILL', { platform: 'win32', execFileAsync: (async (...args: unknown[]) => { calls.push(args); return { stdout: '', stderr: '' }; }) as never });
   expect(calls).toEqual([['taskkill', ['/T', '/F', '/PID', '4242'], { windowsHide: true }]]);
 });

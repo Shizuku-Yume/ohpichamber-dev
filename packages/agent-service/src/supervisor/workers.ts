@@ -78,6 +78,7 @@ export interface WorkerRegistryOptions {
 
 const defaultExecFileAsync = promisify(execFile);
 type ProcessKill = (pid: number, signal?: NodeJS.Signals | number) => void;
+const defaultProcessKill: ProcessKill = (pid, signal) => { process.kill(pid, signal); };
 
 export const windowsProcessTreeKillArgs = (pid: number): string[] => {
   if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) throw new Error('Unsafe process id');
@@ -87,7 +88,7 @@ export const windowsProcessTreeKillArgs = (pid: number): string[] => {
 export const terminateWorkerProcessTree = async (
   pid: number | undefined,
   signal: NodeJS.Signals = 'SIGKILL',
-  { platform = process.platform, execFileAsync = defaultExecFileAsync, processKill = process.kill as ProcessKill } = {},
+  { platform = process.platform, execFileAsync = defaultExecFileAsync, processKill = defaultProcessKill } = {},
 ): Promise<boolean> => {
   if (pid === undefined || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return false;
   if (platform === 'win32') {
@@ -105,7 +106,7 @@ export const terminateWorkerProcessTree = async (
 
 export const waitForWorkerProcessTree = async (
   pid: number | undefined,
-  { platform = process.platform, processKill = process.kill as ProcessKill, graceMs = 250 } = {},
+  { platform = process.platform, processKill = defaultProcessKill, graceMs = 250 } = {},
 ): Promise<boolean> => {
   if (platform === 'win32' || pid === undefined || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return true;
   const deadline = Date.now() + graceMs;
