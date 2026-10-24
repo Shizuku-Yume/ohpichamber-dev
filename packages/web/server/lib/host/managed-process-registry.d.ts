@@ -51,3 +51,5 @@ export function unregisterManagedProcess(pid?: number): Promise<void>;
 export function reapOrphanedProcesses(options?: {
   log?: (message: string) => void;
 }): Promise<{ inspected: number; reaped: number }>;
+
+export function terminateManagedProcess(pid: number, signal?: 'SIGTERM' | 'SIGKILL'): Promise<boolean>;

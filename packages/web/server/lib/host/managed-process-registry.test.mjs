@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MANAGED_PROCESS_TOKEN_ENV, createManagedProcessRegistry } from './managed-process-registry.js';
+import { MANAGED_PROCESS_TOKEN_ENV, createManagedProcessRegistry, terminateManagedProcess } from './managed-process-registry.js';
 
 // The registry takes filesystem, process-table and pidfd helpers as
 // dependencies. These tests inject fakes so no real process is ever signalled.
@@ -362,5 +362,11 @@ describe('unregisterManagedProcess', () => {
     await unregisterManagedProcess(undefined);
 
     expect(rmMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('default registry exports', () => {
+  it('exposes terminateManagedProcess for the Agent Service supervisor', () => {
+    expect(typeof terminateManagedProcess).toBe('function');
   });
 });

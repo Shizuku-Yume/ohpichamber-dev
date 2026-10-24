@@ -480,3 +480,4 @@ const defaultRegistry = createManagedProcessRegistry();
 export const registerManagedProcess = defaultRegistry.registerManagedProcess;
 export const unregisterManagedProcess = defaultRegistry.unregisterManagedProcess;
 export const reapOrphanedProcesses = defaultRegistry.reapOrphanedProcesses;
+export const terminateManagedProcess = defaultRegistry.terminateManagedProcess;
