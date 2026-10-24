@@ -16,28 +16,38 @@ This is the measured task-24 recipe, not a claim of hermetic or two-build reprod
 
 **Verify identity first.** Revision `c9de2b02b997f37cc89639282ed35dec86f139e8`; source archive SHA-256 `06b6a671af953f5cdefe95cbd44271a5c20d9b9e951173af7d10d71e1b0dc150`; authored fingerprint `3,499` files / SHA-256 `b70a2f4afd9fd8fa9ec20094e9658b528e943eff52608d296af2366b80241ad1`; source lock SHA-256 `fcd23297e0c05fb6fd9b6623a70823826fd99a6cc7ffca18201c95860fce66b3`. Reject an archive whose hashes differ. The matching registry version `18.8.9` is not this identity.
 
-**Prerequisites.** Bun `1.4.2`, Node for the source scripts, a disposable copy of the source excluding `.git` and `node_modules`, and a fresh HOME/XDG/TMPDIR/cache root. Never mutate the retained source.
+**Prerequisites.** Bun `1.4.2`, Node for the source scripts, a disposable copy of the source excluding `.git` and `node_modules`, and a fresh HOME/XDG/TMPDIR/cache root. Never mutate the retained source. `<RETAINED>` is an absolute artifact directory, for example the retained task-24 root `/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011`.
+
+**Native addons are not in the source archive.** The snapshot contains no compiled native binaries, and `packages/natives/scripts/gen-npm-packages.ts` throws without them. Stage the two existing Linux x64 addons into the disposable source's `packages/natives/native/` before generating the leaf and verify their hashes: `pi_natives.linux-x64-modern.node` = `33710d1ac6830e068fb46db335e6e2f2e6175a343b267506cd8a31d72d52e059` (the loaded addon) and `pi_natives.linux-x64-baseline.node` = `df5f6404bdd1db1da01144d91e76accef34a6beeb0e3041537c8d6edf05e5a15` (packaged, not loaded). These are reused prebuilt inputs; their compilation from this revision is unproven, and the version stamp is not build provenance.
 
 1. **Prepare the disposable source.**
    `bun install --frozen-lockfile --ignore-scripts --filter @oh-my-pi/pi-coding-agent --filter @oh-my-pi/collab-web --filter @oh-my-pi/omp-stats`
 2. **Build and pack the 13 packages** into `<RETAINED>/tarballs`:
-   - `bun --cwd=packages/natives run gen:npm --tag linux-x64`
-   - `bun pm pack --destination <RETAINED>/tarballs --quiet` from `packages/natives/npm/linux-x64`
-   - `bun -e 'import { prepareNativeCorePackage, applyPublishBin } from "./scripts/ci-release-publish.ts"; await prepareNativeCorePackage("packages/natives", true); await applyPublishBin("packages/coding-agent", true);'`
-   - `bun pm pack ...` in `packages/stats`, `omptype`, `agent`, `ai`, `catalog`, `mnemopi`, `natives`, `tui`, `utils`, `wire`, `snapcompact`, and last `coding-agent`. The `coding-agent` prepack generates the tool views, stats client embed, docs index and CLI bundle, then resets the stats placeholder.
+   `cd <SOURCE> && bun --cwd=packages/natives run gen:npm --tag linux-x64`
+
+   `cd <SOURCE>/packages/natives/npm/linux-x64 && bun pm pack --destination <RETAINED>/tarballs --quiet`
+
+   `cd <SOURCE> && bun -e 'import { prepareNativeCorePackage, applyPublishBin } from "./scripts/ci-release-publish.ts"; await prepareNativeCorePackage("packages/natives", true); await applyPublishBin("packages/coding-agent", true);'`
+
+   Then run this from each package directory in this order: `stats`, `omptype`, `agent`, `ai`, `catalog`, `mnemopi`, `natives`, `tui`, `utils`, `wire`, `snapcompact`, `coding-agent`:
+
+   `cd <SOURCE>/packages/<name> && bun pm pack --destination <RETAINED>/tarballs --quiet`
+
+   `coding-agent` is last because its prepack generates the tool views, stats client embed, docs index and CLI bundle, then resets the stats placeholder.
 3. **Check and copy.** Compare every tarball's SHA-256 and size with `copy-manifest.json`, then place them under `vendor/omp/<revision>/tarballs/`. The manifest covers 15 files: the 13 tarballs and the `@ark/schema` and `puppeteer-core` patch inputs. The `@oh-my-pi/pi-coding-agent` patch under `patches/` is application-owned and is not part of that manifest.
-4. **Recreate the consumer and lock.** Install the 12 first-party packages as explicit `file:` dependencies and bind all 13 artifacts as overrides; the Linux x64 leaf arrives through the core package's `optionalDependencies`. Seed the consumer lock from the pinned source lock, preserve its third-party records and patches, replace workspace and first-party package records with the local artifacts, and remove every `@workspace:` record and catalog metadata. A fresh registry-range install is not acceptable: it drifted on 45 entries before correction in task 24. `bun install --frozen-lockfile --ignore-scripts` must exit 0 without changing the seeded lock.
+4. **Recreate the consumer and lock.** Start from the retained task-24 consumer inputs `/home/shizuku/Project/ohpichamber-omp-artifacts/c9de2b02/task24-20261011/inputs/consumer/{package.json,bun.lock,patches}` after rechecking the artifact-set hashes. Install the 12 first-party packages as explicit `file:` dependencies and bind all 13 artifacts as overrides; the Linux x64 leaf arrives through the core package's `optionalDependencies`. In the seeded lock, replace the top-level `workspaces` entry with the consumer root, replace the top-level `overrides` with the consumer overrides (including `"@ark/schema": "0.56.2"` and the 225 owner-scoped entries recorded in `dependency-owners.json`), preserve the source third-party records and both patch files/`patchedDependencies`, replace first-party package records with local artifact records from the initial consumer lock, and remove every `@workspace:` record and catalog metadata. A fresh registry-range install is not acceptable: it drifted on 45 entries before correction in task 24. `bun install --frozen-lockfile --ignore-scripts` must exit 0 without changing the seeded lock.
 5. **Wire the application.** Root `package.json` overrides select the 13 local archives; root `patchedDependencies` keeps the two vendor patches and the application SDK patch keyed by the coding-agent tarball path. Update `dependency-owners.json` only from a new installed closure.
 6. **Verify.**
    - each manifest destination's SHA-256/size matches `copy-manifest.json`;
    - `bun install --frozen-lockfile --ignore-scripts` at the repository root (locked third-party packages need registry access; record the offline limit);
-   - `bun test src` in `packages/agent-service` (or `bun run test` for the full gate), and the packaged Desktop path: `prepare:agent-runtime`, `verify:agent-runtime`, then `verify:agent-runtime "<packaged resources>"` and `verify:linux-appimage` when packaging;
+   - `bun run --cwd packages/agent-service test` (the package script supplies `--timeout 15000`; plain `bun test` uses a shorter default that the credential-reopen tests exceed), or `bun run test` for the full gate, and the packaged Desktop path: `prepare:agent-runtime`, `verify:agent-runtime`, then `verify:agent-runtime "<packaged resources>"` and `verify:linux-appimage` when packaging;
    - retain the new artifact set read-only (`0444` files, `0555` directories), record its artifact-set SHA-256, and keep the exact source/consumer lock and patch inputs.
 
 ## Bumping the pin
 
 1. Obtain the new revision and archive with the maintainer's permission; record the revision, archive SHA-256, authored fingerprint, source lock SHA-256 and acquisition method (the GitHub API returned HTTP 403 for the current acquisition; the Atom feed plus codeload supplied the revision and archive).
-2. Rebuild all 13 packages with the recipe above on a native target host. A new native leaf needs its target host and leaf source; Linux arm64 and the non-Linux leaves are task 29's scope (`29-vendor-native-leaves.md`).
-3. Replace `vendor/omp/<revision>/`, update the root overrides and the coding-agent patch key/path, and re-resolve the lock. Update `dependency-owners.json` only if the installed closure changes.
-4. Rerun the checks above: the Agent Service suite, the full root gate, packaged-resource verification and the Linux AppImage verification when packaging, plus Agent Runtime readiness. Record the exact revisions, hashes and any stand-in.
-5. Update the spec/development record. Do not claim two-build reproducibility, an offline mirror or native source-build equivalence without a measured receipt.
+2. Choose a native target host for the 13-package build. A new native leaf needs its target host and leaf source; Linux arm64 and the non-Linux leaves are task 29's scope (`29-vendor-native-leaves.md`).
+3. Rebuild the 13 packages, then write the new `copy-manifest.json` (revision, destinations, SHA-256/size, artifact-set identity) before copying or comparing anything; the old manifest covers the old pin only. Regenerate `dependency-owners.json` from the new installed closure and replace the whole `vendor/omp/<revision>/` directory, including patches.
+4. Migrate every application binding together: the 13 root `overrides` (12 archives plus the native leaf), the 12 explicit `file:` dependencies in `packages/agent-service/package.json`, both vendor patch paths plus the coding-agent SDK patch key in root `patchedDependencies`, and the 225 owner-scoped `@oh-my-pi/...@<version>>...` overrides that mirror `dependency-owners.json`. Then re-resolve `bun.lock`.
+5. Rerun the checks above: the Agent Service suite, the full root gate, packaged-resource verification and the Linux AppImage verification when packaging, plus Agent Runtime readiness. Record the exact revisions, hashes and any stand-in.
+6. Update the spec/development record. Do not claim two-build reproducibility, an offline mirror or native source-build equivalence without a measured receipt.
