@@ -1680,7 +1680,10 @@ async function main(options = {}) {
       // The packaged desktop UI (openchamber-ui://) and the dev UI sit on a
       // different origin, so every custom request header must be listed here or
       // the browser refuses the request at preflight, before it reaches a route.
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With,Cache-Control,X-OpenChamber-Directory,X-OpenChamber-Directory-Encoding,Ngrok-Skip-Browser-Warning,X-OpenChamber-Surface,X-OpenChamber-Provider,X-OpenChamber-Model');
+      // Last-Event-ID is sent when a session event stream resumes; without it
+      // the packaged UI's preflight fails, the stream cannot recover, and the
+      // directory's authoritative session status is invalidated to unavailable.
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With,Cache-Control,Last-Event-ID,X-OpenChamber-Directory,X-OpenChamber-Directory-Encoding,Ngrok-Skip-Browser-Warning,X-OpenChamber-Surface,X-OpenChamber-Provider,X-OpenChamber-Model');
       res.setHeader('Access-Control-Expose-Headers', 'x-next-cursor');
       res.setHeader('Vary', 'Origin');
       if (req.method === 'OPTIONS') {

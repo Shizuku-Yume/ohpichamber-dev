@@ -1777,7 +1777,11 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                         : !floatingComposer && 'bg-background'
                 )}
             >
-                {!draftLayoutVisible && !isDesktopExpandedInput && sessionMessages.length > 0 && (
+                {/* A run is accepted before its first message is admitted, so
+                    the working state alone must mount this anchor: the chat
+                    status live region lives here and has to announce the run
+                    without waiting for timeline content. */}
+                {!draftLayoutVisible && !isDesktopExpandedInput && (sessionMessages.length > 0 || sessionIsWorking) && (
                     /* One zero-height anchor on the slot's top edge for
                        everything that floats above the composer, so the
                        mobile keyboard slide and the pill morph move them as
