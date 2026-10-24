@@ -93,7 +93,10 @@ export function stageDependencyClosure(source, destination, { platform = process
 export function assertNativeRuntimePackageAvailable(rootManifest, { platform = process.platform, architecture = process.arch } = {}) {
   const packageName = `@oh-my-pi/pi-natives-${platform}-${architecture}`;
   const override = rootManifest.overrides?.[packageName];
-  if (typeof override !== 'string' || !override.startsWith('file:')) {
+  const localPath = typeof override === 'string' && override.trim().startsWith('file:')
+    ? override.trim().slice('file:'.length).trim()
+    : '';
+  if (!localPath) {
     throw new Error(
       `Agent Runtime staging for ${platform}-${architecture} requires a source-built ${packageName} package; `
       + `this target is not pinned yet. Complete post-m3-hardening/29-vendor-native-leaves before building it.`,
