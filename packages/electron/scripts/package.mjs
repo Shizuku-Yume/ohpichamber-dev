@@ -7,8 +7,31 @@ const env = { ...process.env };
 const builderArgs = process.argv.slice(2);
 const targetArchitecture = resolveTargetArchitecture({ environment: env, builderArgs });
 
-if (process.platform === 'win32' && !env.CSC_LINK && !env.WINDOWS_CSC_LINK) {
+// Release builds must be signed. The Windows release job sets
+// OPENCHAMBER_REQUIRE_WINDOWS_SIGNING=1 and maps the WINDOWS_CSC_LINK /
+// WINDOWS_CSC_KEY_PASSWORD repository secrets to electron-builder's
+// CSC_LINK / CSC_KEY_PASSWORD. Local and smoke builds leave the flag unset
+// and may stay unsigned.
+if (!env.CSC_LINK && env.WINDOWS_CSC_LINK) env.CSC_LINK = env.WINDOWS_CSC_LINK;
+if (!env.CSC_KEY_PASSWORD && env.WINDOWS_CSC_KEY_PASSWORD) env.CSC_KEY_PASSWORD = env.WINDOWS_CSC_KEY_PASSWORD;
+
+if (env.OPENCHAMBER_REQUIRE_WINDOWS_SIGNING === '1') {
+  if (!env.CSC_LINK || !env.CSC_KEY_PASSWORD) {
+    console.error(
+      '[electron] Windows release signing is required, but signing material is missing. '
+      + 'Set the WINDOWS_CSC_LINK (base64 PFX) and WINDOWS_CSC_KEY_PASSWORD repository secrets; '
+      + 'the release job maps them to CSC_LINK and CSC_KEY_PASSWORD.',
+    );
+    process.exit(1);
+  }
+  console.log('[electron] Windows release signing enabled; packaging a signed installer.');
+} else if ((process.platform === 'win32' || builderArgs.includes('--win')) && !env.CSC_LINK) {
   env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
+  // verifyUpdateCodeSignature defaults to true for signed releases. An unsigned
+  // local or smoke build has no certificate, so electron-builder cannot derive
+  // the publisher name it would record in app-update.yml; keep the previous
+  // unsigned behavior for this build only.
+  builderArgs.push('--config.win.verifyUpdateCodeSignature=false');
   console.log('[electron] Windows code signing disabled; building unsigned installer.');
 }
 

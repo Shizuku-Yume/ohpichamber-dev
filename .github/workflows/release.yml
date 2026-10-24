@@ -330,6 +330,10 @@ jobs:
       - name: Build Windows app
         working-directory: packages/electron
         shell: bash
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          OPENCHAMBER_REQUIRE_WINDOWS_SIGNING: '1'
         run: |
           node ./scripts/package.mjs --win --${{ matrix.arch }} --publish=never
           bun run verify:agent-runtime "dist/win${{ matrix.arch == 'arm64' && '-arm64' || '' }}-unpacked/resources"

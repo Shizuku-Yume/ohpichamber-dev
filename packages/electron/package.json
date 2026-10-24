@@ -118,7 +118,7 @@
       "target": [
         "nsis"
       ],
-      "verifyUpdateCodeSignature": false,
+      "verifyUpdateCodeSignature": true,
       "artifactName": "${productName}-${version}-win-${arch}.${ext}"
     },
     "linux": {
