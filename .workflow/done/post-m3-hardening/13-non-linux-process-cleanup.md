@@ -2,9 +2,10 @@
 
 **Effort:** post-m3-hardening
 **Task type:** feature
-**Base commit:** fd7b1968c
+**Base commit:** 342c8182e20c8843176a5b714101f2f0696a5ea9
+**Original branch point:** fd7b1968c
 **Started:** 2026-10-23T20:10:00Z
-**Finished:** 2026-10-24T01:12:00Z
+**Finished:** 2026-10-24T14:20:00Z
 
 **Delivers:** Stopping or timing out the Agent Service or a worker on macOS and Windows terminates its whole process tree, instead of failing closed.
 
@@ -24,6 +25,14 @@
 
 ## Progress
 
-Task13 checkpoint on `post-m3-hardening/13-non-linux-process-cleanup`; C07 archive commit `83ec4d19b` reproduced the Linux grandchild leak and assigned this fix to Lane B.
+Checkpoint: the branch was rebased from `c4b8ddcb0` onto current `main` `342c8182e20c8843176a5b714101f2f0696a5ea9`; the merge-base is `342c8182e`, and the source/test tree did not change in the rebase. Original branch point: `fd7b1968c`. C07 archive commit `83ec4d19b` reproduced the Linux grandchild leak and assigned this fix to Lane B.
 
-Check after (final): the real Linux regression passes with group isolation, bounded grace, SIGKILL escalation, and a SIGTERM-resistant `sleep 300` descendant; the unrelated sibling survives. Worker process-tree suite: 4 pass / 0 fail / 22 expects. Host PIDFD/registry/supervisor/restart suite: 4 files / 32 tests pass. Agent-service type-check passed; changed-file oxlint passed; `git diff --check` passed. Windows uses hidden `taskkill /T /PID` for graceful stop and `/T /F /PID` only for force; macOS signals the detached group and bounds observation. Platform limits: a POSIX descendant that leaves its group escapes fallback cleanup; Windows taskkill cannot discover descendants after the leader exits, so its tree signal must run while the leader is alive; native macOS/Windows execution was not performed (no machine available), only simulated signal/command construction and Linux real-process coverage. Workflow validate is blocked by the unrelated duplicate `Finished` field at `.workflow/done/post-m3-hardening/03-m3-gate-at-tip.md:43` (0 errors / 1 warning); that file was intentionally not changed. Task13 is archived at this branch tip, not landed; task18 remains deferred because Lane F task17 has no findings or measurement receipt.
+Check before: Task07's recorded reproduction at `83ec4d19b` ran `bun /tmp/repro-worker-descendant.mjs` and printed `{"parentPid":1384267,"grandchildPid":1384271}` followed by `{"parentAlive":false,"grandchildAlive":true}`. The pre-change stop killed only the direct worker pid, so the new real-process regression fails against that path.
+
+Check after: `bun test --timeout 60000 src/supervisor/workers.process-tree.test.ts` in `packages/agent-service` reports 4 pass / 0 fail / 28 expect calls across 1 file. The unrelated sibling survives and the SIGTERM-resistant `sleep 300` worker descendant is gone after `WorkerRegistry.stop`; the Windows and macOS cases are construction-level tests. The prior c4b8 sentence recorded 22 expects; that number does not match the current suite and is superseded by this observation. Host process suites (`pidfd-terminator.test.js`, `managed-process-registry.test.mjs`, `agent-service-supervisor.registry.test.js`, `agent-service-supervisor.restart.test.js`) report 4 files / 32 tests passed with `bunx vitest run`. `bun run type-check` in `packages/agent-service` exited 0 (13 OMP package declarations prepared); changed-file `oxlint` and changed host-file `eslint` exited 0; `git diff --check` exited 0; `.workflow/bin/workflow validate` reported "Workflow is valid (123 task files)."
+
+Implementation: workers spawn detached on POSIX (`detached: process.platform !== 'win32'`); `WorkerRegistry.stopEntry` signals the group with SIGTERM, waits within the existing timeout, escalates to SIGKILL, and bounds a post-exit group observation. The Agent Service stop uses the birth-checked pidfd tree on Linux, the detached group signal on macOS, and hidden `taskkill /T /PID` for graceful Windows stop with `/T /F /PID` only on escalation. Limits documented next to the code: a POSIX descendant that creates its own session/group escapes fallback cleanup; Windows `taskkill` walks ancestry and cannot discover descendants after the leader exits, so its tree signal must run while the leader is alive; Linux keeps the pidfd tree as the authoritative path.
+
+Unverified platforms: native macOS and Windows execution was not performed (no machine available). Only the command/signal construction tests and the real Linux process observation exist; no real macOS group-signal run or Windows taskkill/process-tree run is claimed.
+
+Independent A/B review and the full root gate belong to this branch tip; the task stays archived-at-branch, not landed, until the root gate passes. Task18 is archived on `main`; the earlier deferral note is superseded.
