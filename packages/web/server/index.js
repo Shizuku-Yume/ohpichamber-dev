@@ -74,7 +74,6 @@ import { createGracefulShutdownRuntime } from './lib/host/shutdown-runtime.js';
 import { runCliEntryIfMain } from './lib/host/cli-entry-runtime.js';
 import { configureAgentService } from './lib/small-model/client.js';
 import { createSessionAssistRuntime } from './lib/session-assist/runtime.js';
-import { createSessionGoalRuntime } from './lib/session-goal/runtime.js';
 import { createContextObligatoryRuntime } from './lib/context-obligatory/runtime.js';
 import { createLinearSessionStatusRuntime } from './lib/linear/status-runtime.js';
 import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.js';
@@ -617,13 +616,6 @@ const persistSessionMetadataPatch = async (sessionID, patch, { directory = '' } 
       properties: { sessionID, metadata: result.metadata, revision: result.revision },
     });
   }
-  // The write itself arms the goal loop: it is the authoritative signal and
-  // does not depend on the event stream being connected.
-  // Called, not captured: the runtime is declared further down.
-  if (result.changed && patch?.openchamber && 'goal' in patch.openchamber) {
-    void Promise.resolve(sessionGoalRuntime.notifyGoalChanged(sessionID, directory, result.metadata))
-      .catch((error) => console.warn('[session-goal] could not arm after a goal change:', error?.message ?? error));
-  }
   return result;
 };
 
@@ -784,50 +776,6 @@ const sessionAssistRuntime = createSessionAssistRuntime({
   persistSessionAssist: (sessionID, directory, assist) =>
     persistSessionMetadataPatch(sessionID, { openchamber: { assist } }, { directory }),
 });
-const sessionGoalRuntime = createSessionGoalRuntime({
-  sessionService: openChamberSessionService,
-  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
-  getSmallModelService: async () => import('./lib/small-model/index.js'),
-  classifierEndpoint: (workspaceId) => routingRuntime.classifierEndpoint(workspaceId),
-  jev: createJevClient(),
-  readSessionMetadata: readStoredSessionMetadata,
-  persistSessionGoal: (sessionID, directory, goal) =>
-    persistSessionMetadataPatch(sessionID, { openchamber: { goal } }, { directory }),
-  emitGoalNotification: async ({ sessionId, directory, status, goal }) => {
-    // The goal settle notification replaces the per-turn ready notifications
-    // (suppressed while the goal is active) — so it obeys the same toggle.
-    const settings = await readSettingsFromDisk();
-    if (settings.notifyOnCompletion === false) {
-      return;
-    }
-    const title = status === 'complete'
-      ? 'Goal complete'
-      : (status === 'budgetLimited' ? 'Goal reached its token budget' : 'Goal blocked');
-    const detail = goal?.statusReason && goal.statusReason !== 'verified by audit' && goal.statusReason !== 'reported by agent'
-      ? goal.statusReason
-      : '';
-    const objective = typeof goal?.objective === 'string' ? goal.objective.slice(0, 140) : '';
-    const notificationPayload = {
-      title,
-      body: [objective, detail].filter(Boolean).join(' — ').slice(0, 240),
-      tag: `goal-${sessionId}`,
-      kind: 'goal',
-      sessionId,
-      directory,
-    };
-    const desktopNotificationDelivered = emitDesktopNotification(notificationPayload);
-    broadcastUiNotification(notificationPayload, { desktopNotificationDelivered });
-    void notificationTriggerRuntime.sendGoalSettlePush({
-      sessionId,
-      directory,
-      status,
-      title,
-      body: notificationPayload.body,
-    }).catch((error) => {
-      console.warn('[session-goal] push fanout failed:', error?.message || error);
-    });
-  },
-});
 /**
  * Owns what a session must be told about the project's knowledge. Every sender
  * asks it — the UI over HTTP, scheduled tasks and agent-dispatched sessions in
@@ -961,7 +909,6 @@ globalMessageStreamHub.subscribeEvent(async (event, scope) => {
   sessionLineage.observe(event);
   sessionAssistRuntime.processCanonicalEvent(event, scope);
   sessionWorkRuntime.processCanonicalEvent(event, scope);
-  sessionGoalRuntime.processCanonicalEvent(event, scope);
   contextObligatoryRuntime.processCanonicalEvent(event, scope);
   linearSessionStatusRuntime.processCanonicalEvent(event, scope);
   await dispatchResultsRuntime.processCanonicalEvent(event, scope);
@@ -1097,12 +1044,14 @@ const scheduledTasksRuntime = createScheduledTasksRuntime({
     const project = sanitizeProjects(settings?.projects || []).find((entry) => entry.id === projectID) ?? null;
     return resolveSessionDefaults({ settings, project });
   },
+  readDefaultGoalTokenBudget: async () => {
+    const settings = await readSettingsFromDiskMigrated();
+    return settings?.sessionGoalDefaultBudgetEnabled === true ? settings.sessionGoalDefaultBudget ?? null : null;
+  },
   listProjects: async () => {
     const settings = await readSettingsFromDiskMigrated();
     return sanitizeProjects(settings?.projects || []);
   },
-  persistSessionGoal: (sessionID, directory, goal) =>
-    persistSessionMetadataPatch(sessionID, { openchamber: { goal } }, { directory }),
   setSessionAutoAccept: (sessionId, enabled, directory) => permissionAutoAcceptRuntime.setSessionPolicy(sessionId, enabled, directory),
   emitTaskRunEvent: (event) => {
     for (const client of uiOpenChamberEventClients) {
@@ -1365,7 +1314,6 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   permissionAutoAcceptRuntime,
   sessionAssistRuntime,
   sessionWorkRuntime,
-  sessionGoalRuntime,
   contextObligatoryRuntime,
   messageQueueRuntime,
   dispatchResultsRuntime,

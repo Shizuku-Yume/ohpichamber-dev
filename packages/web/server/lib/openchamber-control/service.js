@@ -515,10 +515,31 @@ export const createOpenChamberControlService = (dependencies) => {
     }
   };
 
+  const startSessionGoal = async (sessionID, input) => {
+    if (input.goal !== true) return null;
+    const objective = asNonEmptyString(input.prompt);
+    if (!objective) throw new OpenChamberControlError('goal requires prompt', 400);
+    if (typeof sessionService.control !== 'function') throw new OpenChamberControlError('Native goal control is unavailable', 503);
+    const goalTokenBudget = input.goalTokenBudget;
+    if (goalTokenBudget !== undefined && (!Number.isSafeInteger(goalTokenBudget) || goalTokenBudget < 1000 || goalTokenBudget > 100_000_000))
+      throw new OpenChamberControlError('goalTokenBudget must be from 1000 to 100000000', 400);
+    const settings = await readSettingsFromDiskMigrated();
+    const tokenBudget = goalTokenBudget ?? (settings.sessionGoalDefaultBudgetEnabled === true ? settings.sessionGoalDefaultBudget : null);
+    const options = sessionPromptRequest(input).options;
+    const result = await sessionService.control(sessionID, { type: 'goal', op: 'create', objective, tokenBudget: tokenBudget ?? null,
+      providerId: options.providerId ?? undefined, modelId: options.modelId ?? undefined, variant: options.variant, reasoningEffort: options.reasoningEffort });
+    if (result?.type !== 'goal' || result.mode?.kind !== 'goal' || result.mode.status !== 'active') throw new OpenChamberControlError('Native goal acknowledgement is invalid', 502);
+    return { goalEnabled: true, goalTokenBudget: tokenBudget ?? null };
+  };
+
   const executeSessionAction = async (action, input, contextDirectory, signal, contextSessionId) => {
     if (input.timeout !== undefined && input.wait !== true) throw new OpenChamberControlError('timeout requires wait', 400);
     if (input.lastAssistant === true && input.wait !== true) throw new OpenChamberControlError('lastAssistant requires wait', 400);
     assertSingleScope(input);
+    if (input.goalTokenBudget !== undefined && input.goal !== true) throw new OpenChamberControlError('goalTokenBudget requires goal', 400);
+    if (input.goal === true && !asNonEmptyString(input.prompt)) throw new OpenChamberControlError('goal requires prompt', 400);
+    if (input.goalTokenBudget !== undefined && (!Number.isSafeInteger(input.goalTokenBudget) || input.goalTokenBudget < 1000 || input.goalTokenBudget > 100_000_000))
+      throw new OpenChamberControlError('goalTokenBudget must be from 1000 to 100000000', 400);
     if (input.pullRequest !== undefined && action !== 'session.create') {
       throw new OpenChamberControlError('pullRequest applies only to session.create', 400);
     }
@@ -543,9 +564,11 @@ export const createOpenChamberControlService = (dependencies) => {
         || asNonEmptyString(created?.session?.sessionId)
         || asNonEmptyString(created?.session?.id)
         || asNonEmptyString(created?.id);
-      if (!canonicalSessionID) throw new OpenChamberControlError('Agent service returned no session id', 502);
       result = { ...created, sessionId: canonicalSessionID, promptDispatched: false };
-      if (asNonEmptyString(input.prompt)) {
+      const goal = await startSessionGoal(canonicalSessionID, input);
+      if (goal) result = { ...result, ...goal };
+      if (goal) result.promptDispatched = true;
+      else if (asNonEmptyString(input.prompt)) {
         const sent = await sessionService.send(canonicalSessionID, sessionPromptRequest(input));
         result = { ...result, ...sent, sessionId: canonicalSessionID, promptDispatched: true };
       }
@@ -553,7 +576,9 @@ export const createOpenChamberControlService = (dependencies) => {
       if (!sessionID) throw new OpenChamberControlError('sessionId is required', 400);
       await resolveReadScope(input, contextDirectory, contextSessionId, sessionID);
       if (action === 'session.send') {
-        result = await sessionService.send(sessionID, sessionPromptRequest(input));
+        const goal = await startSessionGoal(sessionID, input);
+        if (goal) result = { ...goal, sessionId: sessionID, promptDispatched: true };
+        else result = { ...(await sessionService.send(sessionID, sessionPromptRequest(input))), sessionId: sessionID, promptDispatched: true };
       } else {
         result = await sessionService.fork(sessionID, asNonEmptyString(input.messageId) ? { messageId: input.messageId.trim() } : {});
         const childSessionID = asNonEmptyString(result?.sessionId)
@@ -562,7 +587,10 @@ export const createOpenChamberControlService = (dependencies) => {
           || asNonEmptyString(result?.id);
         if (!childSessionID) throw new OpenChamberControlError('Agent service returned no forked session id', 502);
         result = { ...result, sessionId: childSessionID, promptDispatched: false };
-        if (asNonEmptyString(input.prompt)) {
+        const goal = await startSessionGoal(childSessionID, input);
+        if (goal) {
+          result = { ...result, ...goal, promptDispatched: true };
+        } else if (asNonEmptyString(input.prompt)) {
           const sent = await sessionService.send(childSessionID, sessionPromptRequest(input));
           result = { ...result, ...sent, sessionId: childSessionID, promptDispatched: true };
         }

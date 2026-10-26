@@ -376,7 +376,7 @@ Rows that name something the app can already show are buttons:
 | Pull request, Checks | PR surface (`openContextSurface(dir, 'pr')`) |
 | Subagent | that child session's chat tab, read-only |
 | Goal (row) | the composer's own `SessionGoalDialog` |
-| Goal (pause/resume) | `setSessionGoalStatus(sessionId, directory, status)` |
+| Goal (pause/resume) | OMP `goal` control through the composer's `SessionGoalDialog` |
 | MCP switch | connects/disconnects the server |
 | MCP status | the state doubles as the button that reconnects |
 | Pinned (pin icon) | unpins the message |

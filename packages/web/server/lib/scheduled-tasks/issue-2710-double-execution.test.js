@@ -86,12 +86,14 @@ const createSharedProjectConfigRuntime = (initialTask) => {
 
 const createRuntimeDeps = (projectConfigRuntime) => ({
   projectConfigRuntime,
+  messageQueueRuntime: { hasScheduledTask: async () => false, getState: async () => ({ revision: '0', items: [] }), append: async () => {}, cancelScheduledTask: async () => {} },
   listProjects: vi.fn(async () => [{ id: 'p1', path: '/repo' }]),
   listWorkspaceScopes: async () => ({ items: [{ workspaceId: workspace.workspaceId }], errors: {} }),
   resolveWorkspaceScope: async () => workspace,
   sessionService: {
     create: async () => { dispatches.sessionCreates.push(Date.now()); return { session: sessionRecord(`sess-${dispatches.sessionCreates.length}`) }; },
     send: async (sessionId) => { if (dispatchGate) await dispatchGate; return { run: { sessionId, runId: 'run', status: 'running', createdAt: Date.now() } }; },
+    control: async (_sessionId, operation) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: operation.objective, tokenBudget: operation.tokenBudget, tokensUsed: 0 } }),
   },
   emitTaskRunEvent: vi.fn(),
   setSessionAutoAccept: async () => {},

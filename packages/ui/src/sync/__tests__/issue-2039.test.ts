@@ -584,4 +584,24 @@ describe("assistant answer worktree routing", () => {
       runtimeKey: getRuntimeKey(), sessionId: "ses_issue_2039", directory: "/worktrees/generated-branch",
     })
   })
+  test("starts an OMP goal before the fork answer prompt", async () => {
+    const order: string[] = []
+    const goal = spyOn(canonicalClient, "goal").mockImplementation(async (sessionId, input) => {
+      order.push("goal")
+      return { type: "goal", mode: { kind: "goal", status: "active", objective: input.objective ?? "", tokenBudget: input.tokenBudget ?? null, tokensUsed: 0 } }
+    })
+    spyOn(canonicalClient, "createRun").mockImplementation(async sessionId => {
+      order.push("prompt")
+      return { run: { runId: "goal-run", sessionId, status: "running", createdAt: 1 } }
+    })
+    await useSessionUIStore.getState().createSessionFromAssistantMessage({
+      sessionId: "source-session", directory: "/repo", text: "Implement the requested feature",
+    }, {
+      providerId: "provider", modelId: "model", variant: "", instructions: "Use the answer as the assignment", runAsGoal: true,
+    })
+    expect(goal).toHaveBeenCalledTimes(1)
+    expect(goal.mock.calls[0]?.[1].objective).toContain("Implement the requested feature")
+    expect(order).toEqual(["goal"])
+    expect(canonicalClient.createRun).not.toHaveBeenCalled()
+  })
 })

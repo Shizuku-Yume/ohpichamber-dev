@@ -42,6 +42,39 @@ describe('canonical notification triggers', () => {
     expect(f.ui[0]).toMatchObject({ sessionId: 'session', workspaceId: 'workspace', kind: 'ready' });
     expect(JSON.stringify([...f.ui, ...f.web])).not.toContain('/private/');
   });
+  it('suppresses active-goal turn alerts and sends one OMP completion alert', async () => {
+    const f = fixture();
+    const snapshotWithMode = (currentMode) => snapshot([], [], { mode: currentMode });
+    let mode = { kind: 'goal', status: 'active', objective: 'Ship it', tokenBudget: null, tokensUsed: 0 };
+    f.sessionService.open = async () => snapshotWithMode(mode);
+    await f.runtime.processCanonicalEvent(terminal(), scope);
+    expect(f.web).toEqual([]);
+    mode = { ...mode, status: 'complete' };
+    await f.runtime.processCanonicalEvent({ type: 'session.updated', sessionId: 'session', epoch: 'epoch', sequence: '2', timestamp: 2, mode }, scope);
+    await f.runtime.processCanonicalEvent(terminal(3), scope);
+    expect(f.web).toHaveLength(1);
+    expect(f.web[0].data.type).toBe('goal_complete');
+    await f.runtime.processCanonicalEvent(terminal(4), scope);
+    expect(f.web).toHaveLength(2);
+    expect(f.web[1].data.type).toBe('ready');
+    expect(f.ui).toHaveLength(2);
+    expect(f.native).toHaveLength(2);
+    expect(f.desktop).toHaveLength(2);
+  });
+  it('announces a budget-limited goal once without an ordinary ready alert', async () => {
+    const f = fixture();
+    let mode = { kind: 'goal', status: 'active', objective: 'Ship it', tokenBudget: 12000, tokensUsed: 12000 };
+    f.sessionService.open = async () => snapshot([], [], { mode });
+    await f.runtime.processCanonicalEvent(terminal(), scope);
+    expect(f.web).toEqual([]);
+    mode = { ...mode, status: 'budget-limited' };
+    await f.runtime.processCanonicalEvent(terminal(2), scope);
+    expect(f.web).toHaveLength(1);
+    expect(f.web[0].data.type).toBe('goal_budget');
+    await f.runtime.processCanonicalEvent(terminal(3), scope);
+    expect(f.web).toHaveLength(2);
+    expect(f.web[1].data.type).toBe('ready');
+  });
 
   it('preserves template text, redacts credentials/private cwd and suppresses repeat terminal alerts', async () => {
     const f = fixture({ notificationTemplates: { completion: { title: '{session_name}', message: '{last_message} {worktree}' } } });

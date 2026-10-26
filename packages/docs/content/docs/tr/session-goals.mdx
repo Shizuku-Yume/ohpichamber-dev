@@ -5,9 +5,8 @@ description: Bir promptu, agent'ın otomatik olarak doğru hedefe doğru çalı�
 
 # Oturum hedefleri
 
-**Not:** Bu özellik henüz OMP çalışma zamanında doğrulanmadı. Bu sayfa amaçlanan davranışı açıklar.
 
-Bir hedef, tek bir promptu bir bitiş çizgisine dönüştürür. Her yanıttan sonra agent'a "devam et" demek yerine hedefi bir kez belirlersiniz. OpenChamber da oturumu buna doğru otomatik olarak çalıştırır ve her turdan sonra bağımsız bir denetçiyle ilerlemeyi kontrol eder. Siz uzaktayken de çalışmaya devam eder.
+Hedefler, Agent Service worker'ındaki OMP Goal modunu kullanır. OMP devam turlarını başlatır ve agent tamamlandığını bildirir. OpenChamber ayrı bir denetleyici veya bağımsız denetçi çalıştırmaz.
 
 ## Bir hedef başlatma
 
@@ -18,13 +17,13 @@ Bu, hem mevcut bir oturumda hem de yeni oturum taslağında çalışır. Hedefi 
 
 ### Hedef başlatmanın başka yolları
 
-- **Bir agent yanıtından**: "Bu yanıttan yeni oturum başlat" iletişim kutusunda **Run as goal** seçin. Yanıt, yeni oturumun tamamlaması gereken bir görev olarak devredilir. İzole bir çalışma için **Create worktree** ile birleştirebilirsiniz.
-- **Bir plandan**: Kaydedilmiş bir planı yeni bir oturumda ya da worktree'de uygularsınız, iletişim kutusunda **Run as goal** seçin. Hedef, plan içeriğini amacınız olarak taşır, böylece denetçi ilerlemeyi gerçek plana göre değerlendirir.
+- **Agent yanıtından**: Yanıtı OMP hedefi olarak çalıştırmak için iletişim kutusunda **Run as goal** seçin.
+- **Bir plandan**: Kaydedilmiş bir planı yeni oturumda ya da worktree'de uygularken **Run as goal** seçin. Plan içeriği OMP hedefi olur.
 - **Bir zamanlamadan**: Tekrarlayan çalıştırmaların promptlarını tamamlamasını istiyorsanız bir [scheduled task](/scheduled-tasks/) üzerinde **Run as goal** seçin.
 
 ## Bağımsız bir amaç yazın
 
-İlerleme denetçisi yalnızca amacınızı ve agent'ın en son yanıtını görür. Sohbet geçmişini görmez. Bu yüzden hedef mesajını, geçmişi bilmeyen birinin bitmiş durumun nasıl göründüğünü anlayacağı şekilde yazın.
+Gizli sohbet bağlamına ihtiyaç duymadan agent'ın anlayabileceği, açık ve doğrulanabilir bir bitiş durumu yazın.
 
 - İyi: "Export modülü için testler ekle ve tüm test paketini geçerli hale getir."
 - Pek iyi değil: "Bunu düzelt" ya da "O fikre devam et."
@@ -33,14 +32,7 @@ Küçük ve bağlamlı devamlar için hedefe gerek yok. Normal bir mesaj gönder
 
 ## Nasıl çalışır
 
-Agent durup oturum bir süre sessiz kaldıktan sonra OpenChamber şunları yapar:
-
-1. Küçük ve ucuz bir modele son turu amaçla karşılaştırmasını söyler. Devam et, bitti ya da takıldı mı?
-2. Karar "devam et" ise bir devam promptu gönderir ve agent işi yeniden alır.
-3. Amaç doğrulanabilir biçimde sağlandıysa hedef tamamlanır ve bir bildirim alırsınız.
-4. Agent gerçekten takıldıysa, yani sizden girdi gerekiyorsa, hedef engellendi olarak durur. Ama bunu yalnızca denetçi üç kez üst üste söylediğinde yapar. Tek seferlik bir aksaklık hedefi bitirmez.
-
-Sert güvenlik durakları da vardır. İsteğe bağlı token bütçesi, otomatik devam sayısı sınırı ve tur hatasında durma. Oturumun bağlamı çalışma sırasında kısaltılırsa hedef devam eder. Bağlam penceresine çarpmak, işin bitmediğinin kanıtıdır.
+OMP her devam turunu aynı oturum worker'ında başlatır. Agent Goal aracıyla tamamlandığını bildirir. Token bütçesine ulaşılınca, devam turu ilerleme kaydetmeyince veya hedefi duraklatıp sildiğinizde ya da çalışan turu iptal ettiğinizde OMP durur.
 
 ### Durdurma ve sürdürme
 
@@ -51,13 +43,13 @@ Sert güvenlik durakları da vardır. İsteğe bağlı token bütçesi, otomatik
 
 ## İzleme ve yönetme
 
-- Yazma alanının üstündeki şerit, hedefin son ilerleme notunu, durumunu ve token kullanımını gösterir. İçinde bir duraklatma/sürdürme düğmesi de vardır. Agent durmuşsa ve hedef etkinse şerit dönen bir **Evaluating…** gösterir. Bu sessiz pencere ve denetim çalışıyordur.
-- Hedef düğmesi hedef çalışırken mavi, tamamlandığında yeşil, engellendiğinde ya da bütçe bittiğinde kırmızı kalır. Hedef iletişim kutusunu açmak için basın. Amaçı ya da bütçeyi düzenleyin, ya da hedefi kaldırın. Tamamlanmış bir hedef salt okunurdur. Önce kaldırın, sonra yenisini etkinleştirin.
+- Yazma alanının üstündeki şerit hedefi, durumu ve token kullanımını gösterir; duraklatma ve sürdürme denetimlerini içerir.
+- Hedef düğmesi ve oturum kenar çubuğundaki simge OMP Goal durumunu yansıtır. İletişim kutusunda hedefi veya bütçeyi değiştirebilir ya da hedefi kaldırabilirsiniz.
 - Oturum kenar çubuğunda, oturum tarihinin yanında küçük bir hedef simgesi görünür. Rengi hedefin durumuna göre değişir.
 
 ## Bildirimler
 
-Bir hedef etkinken tur sonu "agent hazır" bildirimleri bastırılır. Bunlar yalnızca hedef döngüsünün kendi devamlarını tekrar eder. Hedef yerleştiğinde, yani tamamlandığında, engellendiğinde ya da bütçeye ulaşıldığında bunun yerine tek bir son bildirim alırsınız. Bu bildirim masaüstünde ve mobil itmede gelir. Aynı "tamamlanınca bildir" ayarına uyar. İzin istemleri, sorular ve hata bildirimleri boyunca normal şekilde çalışmaya devam eder.
+OMP hedefi etkinken her turdan sonra "agent hazır" bildirimi gönderilmez. Hedef tamamlandığında ya da bütçesine ulaştığında bildirim alırsınız. İzin istekleri, sorular ve hata bildirimleri normal şekilde çalışır.
 
 ## Token bütçesi
 
@@ -65,8 +57,8 @@ Bir hedef etkinken tur sonu "agent hazır" bildirimleri bastırılır. Bunlar ya
 
 ## Aklınızda bulunsun
 
-- Hedef döngüsü tarayıcı sekmesinde değil, OpenChamber sunucusunda çalışır. Sekmeyi kapatsanız da telefonu kilitleseniz de agent çalışmaya devam eder ve hedef yerleştiğinde bildirim alırsınız. Sunucu, masaüstü uygulaması ya da `openchamber` süreci, açık kalmalıdır.
-- Hedefler, denetçi çağrıları dahil, oturumunuzun kendi sağlayıcısını ve modelini kullanır. Kullanmakta olduğunuz sağlayıcıların dışına hiçbir şey çıkmaz.
+- Hedef, ayrı bir Host döngüsünde değil Agent Service içindeki OMP oturum worker'ında çalışır. Sunucu çalışır durumda kalmalıdır.
+- OMP oturumun sağlayıcısını ve modelini kullanır; bağımsız denetçi çağrısı yapmaz.
 - Her oturumda aynı anda bir hedef olabilir.
 
 ## İlgili

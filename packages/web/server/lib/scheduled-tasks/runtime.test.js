@@ -247,6 +247,7 @@ Run daily.
       const warnings = [];
       const runtime = createScheduledTasksRuntime({
         projectConfigRuntime,
+        messageQueueRuntime: { hasScheduledTask: async () => false, getState: async () => ({ revision: '0', items: [] }), append: async () => {}, cancelScheduledTask: async () => {} },
         listProjects: async () => [
           { id: 'broken', path: brokenPath },
           { id: 'healthy', path: healthyPath },
@@ -259,8 +260,9 @@ Run daily.
       expect(runtime.getStatus().enabledScheduledTasksCount).toBe(1);
       const healthyTasks = await projectConfigRuntime.listScheduledTasks('healthy');
       expect(healthyTasks.map((task) => task.id)).toEqual(['loop:project:daily']);
-      expect(warnings).toHaveLength(1);
-      expect(warnings[0][1]).toMatchObject({ projectID: 'broken' });
+      expect(warnings).toHaveLength(2);
+      expect(warnings[0][1]).toMatchObject({ projectId: 'broken' });
+      expect(warnings[1][1]).toMatchObject({ projectID: 'broken' });
       runtime.stop();
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
@@ -278,18 +280,23 @@ describe('canonical scheduled execution', () => {
       execution: { prompt: 'Do the work', providerID: 'provider', modelID: 'model', agent: 'agent', variant: 'high', ...execution }, state: {} };
     const sent = [];
     const created = [];
+    const controls = [];
+    const callOrder = [];
+    const messageQueueRuntime = { hasScheduledTask: async () => false, getState: async () => ({ revision: '0', items: [] }),
+      append: async () => {}, cancelScheduledTask: async () => {} };
     const projectConfigRuntime = {
       listScheduledTasks: async () => [task], reconcileLoopTasks: async () => [task],
       updateScheduledTaskState: async (_project, _task, patch) => { task = { ...task, state: { ...task.state, ...patch } }; return { task }; },
     };
     const sessionService = {
-      create: async (request) => { created.push(request); return { session: session(workspace) }; },
-      send: async (sessionId, request) => { sent.push(request); return { run: { sessionId, runId: 'run', status: 'running', createdAt: 1 } }; },
+      create: async request => { created.push(request); return { session: session(workspace) }; },
+      control: async (sessionId, operation) => { callOrder.push('goal'); controls.push({ sessionId, operation }); return { type: 'goal', mode: { kind: 'goal', status: 'active', objective: operation.objective, tokenBudget: operation.tokenBudget, tokensUsed: 0 } }; },
+      send: async (sessionId, request) => { callOrder.push('send'); sent.push(request); return { run: { sessionId, runId: 'run', status: 'running', createdAt: 1 } }; },
     };
     const runtime = createScheduledTasksRuntime({ projectConfigRuntime, listProjects: async () => [{ id: 'host-project', path: '/repo' }],
       listWorkspaceScopes: async () => ({ items: [{ workspaceId: workspace.workspaceId }], errors: {} }),
-      resolveWorkspaceScope: async () => workspace, sessionService, logger: { warn() {}, info() {} }, ...extra });
-    return { runtime, sessionService, created, sent, stored: () => task };
+      resolveWorkspaceScope: async () => workspace, sessionService, messageQueueRuntime, logger: { warn() {}, info() {} }, ...extra });
+    return { runtime, sessionService, created, sent, controls, callOrder, stored: () => task };
   };
 
   it('uses opaque scopes and captures pinned selection without treating acknowledgement as transcript completion', async () => {
@@ -301,6 +308,15 @@ describe('canonical scheduled execution', () => {
       options: { providerId: 'provider', modelId: 'model', agentId: null, variant: 'high', reasoningEffort: null } });
     expect(h.sent[0].input.context[0]).toMatchObject({ kind: 'context', metadata: { scheduledTask: { projectId: 'host-project', taskId: 'task', mode: 'new' } } });
     expect(h.stored().state.lastStatus).toBe('success');
+    h.runtime.stop();
+  });
+  it('creates an OMP goal before the prompt and applies the default budget', async () => {
+    const h = setup({ goalEnabled: true }, { readDefaultGoalTokenBudget: async () => 12000 });
+    await h.runtime.syncProject('host-project');
+    expect(await h.runtime.runNow('host-project', 'task')).toMatchObject({ ok: true });
+    expect(h.controls).toEqual([{ sessionId: 'session', operation: { type: 'goal', op: 'create', objective: 'Do the work', tokenBudget: 12000 } }]);
+    expect(h.callOrder).toEqual(['goal']);
+    expect(h.sent).toEqual([]);
     h.runtime.stop();
   });
 

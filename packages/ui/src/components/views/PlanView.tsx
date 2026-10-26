@@ -709,7 +709,9 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
           if (!canCreateWorktree) {
             return;
           }
-          const created = await createWorktreeSessionForNewBranch(sendTargetProject.path, generateBranchName());
+          const created = await createWorktreeSessionForNewBranch(sendTargetProject.path, generateBranchName(), undefined, {
+            providerId: execution.providerID, modelId: execution.modelID, variant: execution.variant || undefined,
+          });
           if (!created?.id) {
             return;
           }
@@ -735,19 +737,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
         selectionState.saveSessionModelSelection(sessionId, execution.providerID, execution.modelID);
 
         setCurrentSession(sessionId, directoryHint);
-        // "Run as goal" rides the same arm mechanism as the composer target
-        // button; set explicitly either way so a stray armed flag cannot
-        // leak into a non-goal plan send. The objective override carries the
-        // plan substance — "Implement this plan: X" alone would give the
-        // progress audit nothing to judge against. Plans that exceed the
-        // objective limit are distilled into completion criteria by the
-        // small model (the working agent always reads the full plan from
-        // its file); on distillation failure a head+tail excerpt keeps the
-        // intent (top) and acceptance criteria (bottom), sacrificing the
-        // implementation middle the agent reads from the file anyway.
-        // Oversized objectives (huge plans) are distilled into audit
-        // criteria inside setSessionGoal — the shared path for every goal
-        // source. Here we only compose header + full content.
+        // "Run as goal" uses the composer's arm mechanism. Set it either way
+        // so an unrelated armed flag cannot leak into this plan send. OMP
+        // receives the full plan objective before the first prompt; the
+        // prompt carries the plan text or points to its source file.
         const goalObjective = execution.runAsGoal === true
           ? [
               `Implement the plan "${sendPromptTitle}" end-to-end${resolvedPath ? ` (plan file: ${resolvedPath})` : ' (the full plan follows)'}.`,
@@ -757,8 +750,8 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
               '',
               content,
             ].join('\n')
-          : null;
-        useSessionGoalArmStore.getState().setArmed(execution.runAsGoal === true, goalObjective);
+          : null
+        useSessionGoalArmStore.getState().setArmed(execution.runAsGoal === true, goalObjective, true);
         await sendMessage(
           visiblePrompt,
           execution.providerID,

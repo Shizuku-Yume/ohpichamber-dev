@@ -119,10 +119,10 @@ export type RunCreateRequest = z.infer<typeof RunCreateRequestSchema>;
 export const RunAbortRequestSchema = z.strictObject({ sessionId: EntityIdSchema, runId: EntityIdSchema });
 export type RunAbortRequest = z.infer<typeof RunAbortRequestSchema>;
 export const GoalControlRequestSchema = z.strictObject({
-  type: z.literal('goal'), op: z.enum(['create', 'resume', 'pause', 'drop']),
-  objective: z.string().trim().min(1).optional(), tokenBudget: z.number().int().positive().nullable().optional(),
+  type: z.literal('goal'), op: z.enum(['create', 'resume', 'pause', 'drop']), objective: z.string().trim().min(1).optional(), tokenBudget: z.number().int().positive().nullable().optional(),
+  providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), variant: z.string().nullable().optional(), reasoningEffort: z.string().nullable().optional(),
 }).refine(request => request.op !== 'create' || request.objective !== undefined, {
-  message: 'Creating a goal requires an objective', path: ['objective'],
+  message: 'Goal creation requires an objective', path: ['objective'],
 });
 export type GoalControlRequest = z.infer<typeof GoalControlRequestSchema>;
 export const SessionControlRequestSchema = z.discriminatedUnion('type', [

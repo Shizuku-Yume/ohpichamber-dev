@@ -5,9 +5,8 @@ description: Verwandelt eine Aufforderung in ein Ziel, auf das der Agent automat
 
 # Sitzungsziele
 
-**Hinweis:** Dieses Feature ist auf der OMP-Laufzeit noch nicht verifiziert. Diese Seite beschreibt das beabsichtigte Verhalten.
 
-Ein Ziel macht aus einer Aufforderung eine Ziellinie. Statt den Agenten nach jeder Antwort mit "continue" anzustupsen, legst du das Ziel einmal fest — und OpenChamber hält die Sitzung automatisch darauf ausgerichtet und prüft nach jedem Zug mit einem unabhängigen Prüfer den Fortschritt. Es läuft weiter, auch wenn du nicht da bist.
+Ziele verwenden den OMP-Goal-Modus im Agent-Service-Worker. OMP startet Fortsetzungen, und der Agent erklärt das Ziel für abgeschlossen. OpenChamber betreibt weder einen eigenen Supervisor noch einen unabhängigen Prüfer.
 
 ## Ein Ziel starten
 
@@ -18,13 +17,13 @@ Das funktioniert in einer bestehenden Sitzung ebenso wie in einem neuen Sitzungs
 
 ### Weitere Wege, ein Ziel zu starten
 
-- **Aus einer Antwort des Agenten**: Im Dialog "Start new session from this answer" aktiviere **Run as goal** — die Antwort wird als Aufgabe übergeben, die die neue Sitzung bis zum Abschluss ausführt (kombiniere das mit **Create worktree** für einen isolierten Lauf).
-- **Aus einem Plan**: Wenn du einen gespeicherten Plan in einer neuen Sitzung oder einem Worktree umsetzt, aktiviere im Dialog **Run as goal**. Das Ziel übernimmt den Planinhalt als seine Aufgabe, sodass der Prüfer den Fortschritt am tatsächlichen Plan misst.
+- **Aus einer Antwort des Agenten**: Aktiviere im Dialog zum Starten einer Sitzung aus der Antwort **Run as goal**, um die Antwort als OMP-Ziel auszuführen.
+- **Aus einem Plan**: Aktiviere beim Umsetzen eines gespeicherten Plans in einer neuen Sitzung oder einem Worktree **Run as goal**. Der Planinhalt wird zum OMP-Ziel.
 - **Nach Zeitplan**: Aktiviere bei einer [geplanten Aufgabe](/scheduled-tasks/) **Run as goal**, damit wiederkehrende Läufe ihre Aufforderung bis zum Abschluss verfolgen.
 
 ## Eine eigenständige Zielbeschreibung schreiben
 
-Der Fortschrittsprüfer sieht nur deine Zielbeschreibung und die neueste Antwort des Agenten — nicht den Chatverlauf. Formuliere die Zielnachricht also so, dass auch jemand ohne Gesprächskontext versteht, wie der fertige Zustand aussieht.
+Formuliere ein klares, überprüfbares Endergebnis, das der Agent ohne versteckten Chatkontext verstehen kann.
 
 - Gut: "Füge Tests für das Exportmodul hinzu und sorge dafür, dass die gesamte Test-Suite besteht."
 - Nicht so gut: "Beheb das" oder "Mach mit der Idee weiter."
@@ -33,14 +32,7 @@ Für kleine nachgelagerte Rückfragen mit Kontext brauchst du kein Ziel — send
 
 ## So funktioniert es
 
-Nachdem der Agent anhält und die Sitzung für einen Moment ruhig bleibt, macht OpenChamber Folgendes:
-
-1. Es bittet ein kleines, günstiges Modell, den letzten Zug gegen das Ziel zu prüfen: weitermachen, fertig oder festgefahren?
-2. Wenn das Urteil "weitermachen" lautet, sendet es eine Fortsetzungsaufforderung und der Agent nimmt die Arbeit wieder auf.
-3. Wenn das Ziel nachweislich erreicht ist, ist es abgeschlossen und du bekommst eine Benachrichtigung.
-4. Wenn der Agent wirklich feststeckt (deine Eingabe braucht), wird das Ziel erst dann als blockiert gestoppt — aber nur nachdem der Prüfer das dreimal in Folge gesagt hat, damit ein einzelner Ausrutscher das Ziel nie beendet.
-
-Es gibt auch harte Sicherheitsstopps: ein optionales Token-Budget, eine Obergrenze für automatische Fortsetzungen und ein Stopp bei Fehlern in einem Zug. Wenn der Kontext der Sitzung mitten in der Arbeit komprimiert wird, geht das Ziel einfach weiter — in das Kontextfenster zu laufen ist ein Beweis dafür, dass die Arbeit noch nicht fertig war.
+OMP startet jeden Folgezug im selben Sitzungs-Worker. Der Agent erklärt mit dem Goal-Tool den Abschluss; OMP stoppt außerdem bei erreichtem Token-Budget, ausbleibendem Fortschritt oder wenn du pausierst, das Ziel entfernst oder den laufenden Zug abbrichst.
 
 ### Stoppen und fortsetzen
 
@@ -51,13 +43,13 @@ Es gibt auch harte Sicherheitsstopps: ein optionales Token-Budget, eine Obergren
 
 ## Beobachten und verwalten
 
-- Die Leiste über dem Composer zeigt die neueste Fortschrittsnotiz, den Status und die Token-Nutzung des Ziels sowie eine Inline-Schaltfläche zum Pausieren/Fortsetzen. Wenn der Agent angehalten hat und das Ziel aktiv ist, zeigt die Leiste ein drehendes **Evaluating…** — das ist das ruhige Zeitfenster und der laufende Audit.
-- Die Zielschaltfläche bleibt während der Laufzeit blau beleuchtet, wird bei Abschluss grün und bei Blockierung oder erreichtem Budget rot. Drücke sie, um den Zieldialog zu öffnen: Bearbeite das Ziel oder das Budget oder entferne das Ziel. Ein abgeschlossenes Ziel ist schreibgeschützt — entferne es und aktiviere dann ein neues.
+- Die Leiste über dem Composer zeigt Ziel, Status und Tokenverbrauch sowie Steuerelemente zum Pausieren und Fortsetzen.
+- Die Zielschaltfläche und das Symbol in der Sitzungs-Seitenleiste spiegeln den OMP-Goal-Status wider. Im Dialog kannst du Ziel und Budget ändern oder das Ziel entfernen.
 - In der Sitzungs-Seitenleiste erscheint neben dem Sitzungsdatum ein kleines Zielsymbol, dessen Farbe den Zustand des Ziels widerspiegelt.
 
 ## Benachrichtigungen
 
-Während ein Ziel aktiv ist, werden die "Agent ist bereit"-Benachrichtigungen pro Zug unterdrückt — sie würden nur die eigenen Fortsetzungen der Zielschleife wiederholen. Wenn das Ziel zur Ruhe kommt (abgeschlossen, blockiert oder Budget erreicht), bekommst du stattdessen eine letzte Benachrichtigung, auf dem Desktop und als mobile Push-Nachricht. Sie folgt derselben Einstellung "bei Abschluss benachrichtigen"; Berechtigungsanfragen, Fragen und Fehlermeldungen funktionieren währenddessen wie gewohnt weiter.
+Während ein OMP-Ziel aktiv ist, gibt es keine Benachrichtigung „Agent ist bereit“ nach jedem Zug. Bei Abschluss oder erreichtem Budget erhältst du eine Benachrichtigung. Berechtigungsanfragen, Fragen und Fehlermeldungen funktionieren weiterhin wie gewohnt.
 
 ## Token-Budget
 
@@ -65,8 +57,8 @@ In **Einstellungen → Chat → Goal** kannst du ein Standard-Token-Budget für 
 
 ## Beachten
 
-- Die Zielschleife läuft im OpenChamber-Server, nicht in deinem Browser-Tab. Schließe den Tab, sperre das Telefon — der Agent arbeitet weiter, und du bekommst eine Benachrichtigung, wenn das Ziel zur Ruhe kommt. Der Server (Desktop-App oder `openchamber`-Prozess) muss weiterlaufen.
-- Ziele verwenden den eigenen Provider und das Modell deiner Sitzung, einschließlich der Prüferaufrufe — nichts verlässt die Provider, die du bereits nutzt.
+- Das Ziel läuft im OMP-Sitzungs-Worker des Agent Service, nicht in einem Host-Supervisor. Der Server muss dafür weiterlaufen.
+- OMP verwendet den Provider und das Modell der Sitzung; ein unabhängiger Prüfer wird nicht aufgerufen.
 - Pro Sitzung immer nur ein Ziel gleichzeitig.
 
 ## Verwandt

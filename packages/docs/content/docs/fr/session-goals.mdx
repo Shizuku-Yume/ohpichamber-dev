@@ -5,9 +5,8 @@ description: Transformez un prompt en objectif vers lequel l'agent travaille aut
 
 # Objectifs de session
 
-**Remarque :** Cette fonctionnalité n'est pas encore vérifiée sur le runtime OMP. Cette page décrit le comportement prévu.
 
-Un objectif transforme un seul prompt en ligne d'arrivée. Au lieu de relancer l'agent avec « continue » après chaque réponse, vous définissez l'objectif une fois — et OpenChamber fait travailler la session vers lui automatiquement, en vérifiant la progression avec un auditeur indépendant après chaque tour. Le travail continue même en votre absence.
+Les objectifs utilisent le mode Goal d'OMP dans le worker de l'Agent Service. OMP lance les continuations et l'agent déclare quand l'objectif est terminé. OpenChamber n'exécute ni superviseur ni auditeur indépendant.
 
 ## Démarrer un objectif
 
@@ -18,13 +17,13 @@ Cela fonctionne aussi bien dans une session existante que dans un brouillon de n
 
 ### D'autres façons de démarrer un objectif
 
-- **Depuis une réponse de l'agent** : dans le dialogue « Start new session from this answer », cochez **Exécuter comme objectif** — la réponse est transmise comme une mission que la nouvelle session exécute jusqu'au bout (combinez avec **Create worktree** pour une exécution isolée).
-- **Depuis un plan** : en implémentant un plan enregistré dans une nouvelle session ou un worktree, cochez **Exécuter comme objectif** dans le dialogue. L'objectif porte le contenu du plan, l'auditeur juge donc la progression par rapport au plan réel.
+- **Depuis une réponse de l'agent** : cochez **Exécuter comme objectif** pour démarrer un objectif OMP à partir de la réponse.
+- **Depuis un plan** : cochez **Exécuter comme objectif** lors de l'implémentation d'un plan enregistré dans une nouvelle session ou un worktree. Le contenu du plan devient l'objectif OMP.
 - **Selon un horaire** : cochez **Exécuter comme objectif** sur une [tâche planifiée](/scheduled-tasks/) pour que les exécutions récurrentes poursuivent leur prompt jusqu'au bout.
 
 ## Rédigez un objectif autonome
 
-L'auditeur de progression ne voit que votre objectif et la dernière réponse de l'agent — pas l'historique du chat. Formulez donc le message-objectif de sorte qu'une personne sans le contexte de la conversation comprenne à quoi ressemble l'état final.
+Rédigez un résultat final clair et vérifiable que l'agent puisse comprendre sans le contexte caché du chat.
 
 - Bien : « Ajoute des tests pour le module d'export et fais passer toute la suite de tests. »
 - Moins bien : « Corrige ça » ou « Continue sur cette idée. »
@@ -33,14 +32,7 @@ Pour de petits ajustements contextuels, pas besoin d'objectif — envoyez un mes
 
 ## Comment ça marche
 
-Quand l'agent s'arrête et que la session reste calme un instant, OpenChamber :
-
-1. Demande à un petit modèle économique d'auditer le dernier tour par rapport à l'objectif : continuer, terminé ou bloqué ?
-2. Si le verdict est « continuer », il envoie un prompt de continuation et l'agent reprend le travail.
-3. Si l'objectif est atteint de manière vérifiable, l'objectif se termine et vous recevez une notification.
-4. Si l'agent est réellement bloqué (il a besoin de vous), l'objectif s'arrête comme bloqué — mais seulement après que l'auditeur l'a dit trois fois de suite ; un accroc ponctuel ne termine jamais l'objectif.
-
-Il y a aussi des garde-fous : un budget de tokens optionnel, un plafond de continuations automatiques et un arrêt en cas d'erreur de tour. Si le contexte de la session est compacté en plein travail, l'objectif continue simplement — heurter la fenêtre de contexte prouve que le travail n'était pas fini.
+OMP lance chaque continuation dans le worker de la session. L'agent déclare la fin avec l'outil Goal ; OMP s'arrête aussi lorsque le budget de tokens est atteint, qu'une continuation ne progresse plus, ou lorsque vous mettez l'objectif en pause, le supprimez ou interrompez le tour en cours.
 
 ### Arrêter et reprendre
 
@@ -51,13 +43,13 @@ Il y a aussi des garde-fous : un budget de tokens optionnel, un plafond de conti
 
 ## Suivre et gérer
 
-- La bande au-dessus du composeur affiche la dernière note de progression, le statut et l'usage de tokens, avec un bouton pause/reprise intégré. Quand l'agent s'est arrêté et que l'objectif est actif, la bande affiche un **Évaluation…** animé — c'est la fenêtre de calme et l'audit en cours.
-- Le bouton cible reste allumé tant que l'objectif tourne (bleu), passe au vert à la fin et au rouge s'il est bloqué ou à court de budget. Appuyez dessus pour ouvrir le dialogue de l'objectif : modifier l'objectif ou le budget, ou le supprimer. Un objectif terminé est en lecture seule — supprimez-le, puis armez-en un nouveau.
+- La bande au-dessus du composeur affiche l'objectif, son statut et l'usage de tokens, avec les commandes de pause et de reprise.
+- Le bouton cible et l'icône de la barre latérale suivent l'état Goal d'OMP. Le dialogue permet de modifier l'objectif ou le budget, ou de supprimer l'objectif.
 - Dans la barre latérale des sessions, une petite cible apparaît à côté de la date de la session, colorée selon l'état de l'objectif.
 
 ## Notifications
 
-Tant qu'un objectif est actif, les notifications « agent prêt » à chaque tour sont supprimées — elles ne feraient qu'écho aux continuations de la boucle elle-même. Quand l'objectif se règle (terminé, bloqué ou budget atteint), vous recevez une seule notification finale, sur le bureau et en push mobile. Elle respecte le même réglage « notifier à la fin » ; les demandes de permission, les questions et les notifications d'erreur continuent de fonctionner normalement.
+Tant que l'objectif OMP est actif, aucune notification « agent prêt » n'est envoyée après chaque tour. Une notification arrive lorsque l'objectif est terminé ou que son budget est atteint. Les demandes d'autorisation, les questions et les erreurs continuent de fonctionner normalement.
 
 ## Budget de tokens
 
@@ -65,8 +57,8 @@ Dans **Paramètres → Chat → Objectif**, vous pouvez définir un budget de to
 
 ## À garder en tête
 
-- La boucle d'objectif tourne dans le serveur OpenChamber, pas dans votre onglet de navigateur. Fermez l'onglet, verrouillez le téléphone — l'agent continue, et vous recevez une notification quand l'objectif se termine. Le serveur (app de bureau ou processus `openchamber`) doit rester lancé.
-- Les objectifs utilisent le fournisseur et le modèle de votre propre session, y compris pour les appels de l'auditeur — rien ne part vers des fournisseurs que vous n'utilisez pas déjà.
+- L'objectif s'exécute dans le worker OMP de l'Agent Service, pas dans un superviseur Host séparé. Le serveur doit rester lancé.
+- OMP utilise le fournisseur et le modèle de la session ; aucun auditeur indépendant n'est appelé.
 - Un objectif par session à la fois.
 
 ## Voir aussi

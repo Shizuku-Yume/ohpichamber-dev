@@ -60,11 +60,11 @@ describe('session.link', () => {
 
   test('appends to the links already there and keeps other metadata', async () => {
     const existing = { id: 'linear:ENG-1', identifier: 'ENG-1', title: 'Spec', url: 'https://linear.app/x', kind: 'linear', linkedAt: 1 };
-    const { linker, store } = createLinker({ openchamber: { linked_issues: [existing], goal: { text: 'g' } } });
+    const { linker, store } = createLinker({ openchamber: { linked_issues: [existing], custom_field: { text: 'g' } } });
     const result = await linker.link({ sessionId: 's1', directory: '/repo', link: pull });
 
     expect(result.changed).toBe(true);
-    expect(store.metadata.openchamber.goal).toEqual({ text: 'g' });
+    expect(store.metadata.openchamber.custom_field).toEqual({ text: 'g' });
     expect(store.metadata.openchamber.linked_issues.map((entry) => entry.id)).toEqual(['linear:ENG-1', 'acme/app#7']);
   });
 

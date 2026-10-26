@@ -566,6 +566,9 @@ export class WorkerSession {
     switch (operation.type) {
       case 'goal': {
         const request = operation;
+        if (request.op === 'create' && (request.providerId || request.modelId || request.variant !== undefined || request.reasoningEffort !== undefined)) {
+          await this.selectOptions({ providerId: request.providerId, modelId: request.modelId, variant: request.variant ?? null, reasoningEffort: request.reasoningEffort ?? null });
+        }
         if (request.op === 'create' || request.op === 'resume') {
           if (this.preparation || this.projection.activeRun() || this.session.isStreaming || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         }

@@ -83,8 +83,6 @@ import {
 } from "./session-actions"
 import { useInputStore, type SyntheticContextPart } from "./input-store"
 import { useSessionGoalArmStore } from "@/stores/useSessionGoalArmStore"
-import { setSessionGoal } from '@/lib/sessionGoalActions'
-import { wrapSystemReminder } from "@/lib/systemReminder"
 import { useUIStore } from "@/stores/useUIStore"
 import { useSelectionStore } from "./selection-store"
 import { getViewportSessionMemory, useViewportStore, viewportSessionKey } from "./viewport-store"
@@ -1863,20 +1861,12 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
         return
       }
       if (goalArm.armed) {
-        const budgetLine = tokenBudget !== null ? ` A token budget of ${tokenBudget} tokens applies to this goal.` : ""
-        const goalIntro = wrapSystemReminder(
-          "Goal mode is active for this session. The user message above defines the goal objective. "
-          + "Work toward it across turns; whenever you stop before the objective is verifiably complete, the system will automatically prompt you to continue. "
-          + "Progress is evaluated independently after each turn, so end every turn with a clear, factual statement of what is done, what was verified, and what remains."
-          + budgetLine,
-        )
-        parts = [...(parts ?? []), { text: goalIntro, synthetic: true }]
         if (!goalArm.objectiveOverride?.trim() && !options?.fileResourcesExpanded && inputMode !== 'shell') {
           fileResourceExpansion = await expandNativeFileResource(content, directory)
         }
         const objective = goalArm.objectiveOverride?.trim() || fileResourceExpansion?.content || content
         assertSendRuntime(capturedRuntimeKey)
-        await setSessionGoal(sessionId, directory ?? undefined, { objective, tokenBudget }, null)
+        await canonicalClient.goal(sessionId, { op: 'create', objective, tokenBudget })
         assertSendRuntime(capturedRuntimeKey)
         goalApplied = true
       }
@@ -2152,12 +2142,9 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       }
     }
 
-    // "Run as goal" rides the same arm mechanism as the composer target
-    // button: sendMessage consumes the flag, stamps the goal (objective =
-    // the composed fork message) and attaches the goal-mode intro part.
-    // Set explicitly either way so a stray armed flag cannot leak into a
-    // non-goal fork.
-    useSessionGoalArmStore.getState().setArmed(execution.runAsGoal === true)
+    // Goal control starts the first OMP turn with this composed assignment.
+    // Do not send it again as a Host prompt.
+    useSessionGoalArmStore.getState().setArmed(execution.runAsGoal === true, null, true)
 
     await get().sendMessage(
       composeForkSessionMessage(execution.instructions, assistantPlanText),
@@ -2172,6 +2159,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       { target: { runtimeKey, sessionId: session.sessionId, directory: sessionDirectory } },
     )
     assertSendRuntime(runtimeKey)
+
   },
 
   // ---------------------------------------------------------------------------

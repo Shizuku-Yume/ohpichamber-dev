@@ -21,6 +21,8 @@ const createHarness = (settings = {
   const created = [];
   const sent = [];
   const forked = [];
+  const goalControls = [];
+  const callOrder = [];
   const requests = [];
   const sessionScopes = new Map([
     ['session-1', { rootSessionId: 'session-1', ...scopeForWorkspace }],
@@ -31,9 +33,11 @@ const createHarness = (settings = {
       return { session: { sessionId: 'session-new', projectId: payload.projectId, workspaceId: payload.workspaceId } };
     },
     send: async (sessionId, payload) => {
+      callOrder.push('send');
       sent.push({ sessionId, payload });
       return { run: { runId: `run-${sent.length}`, sessionId } };
     },
+    control: async (sessionId, operation) => { callOrder.push('goal'); goalControls.push({ sessionId, operation }); return { type: 'goal', mode: { kind: 'goal', status: 'active', objective: operation.objective, tokenBudget: operation.tokenBudget, tokensUsed: 0 } }; },
     fork: async (sessionId, payload) => {
       forked.push({ sessionId, payload });
       return { session: { sessionId: 'session-forked', projectId: 'project-1', workspaceId: 'workspace-1' } };
@@ -68,7 +72,7 @@ const createHarness = (settings = {
       setEnabled: async () => ({ enabled: true }),
     },
   });
-  return { control, created, sent, forked, requests };
+  return { control, created, sent, forked, goalControls, callOrder, requests };
 };
 
 describe('OpenChamber control service canonical consumers', () => {
@@ -93,7 +97,32 @@ describe('OpenChamber control service canonical consumers', () => {
       },
     }]);
     expect(result).toMatchObject({ sessionId: 'session-new', promptDispatched: true });
-    expect(JSON.stringify(created[0])).not.toContain('/repo/app');
+    expect(sent).toHaveLength(1);
+    expect(sent[0].sessionId).toBe('session-new');
+  });
+  it('creates native goals before CLI create, send and fork prompts', async () => {
+    const h = createHarness({ agentControlToolEnabled: true, agentWebToolEnabled: true, agentMemoryToolEnabled: true,
+      agentNotifyToolEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5000 });
+    const created = await h.control.execute('session.create', {
+      model: 'provider-1/model-1', prompt: 'Create objective', goal: true,
+    }, '/repo/app');
+    expect(created).toMatchObject({ goalEnabled: true, goalTokenBudget: 5000, promptDispatched: true });
+    expect(h.goalControls[0]).toMatchObject({ sessionId: 'session-new', operation: { type: 'goal', op: 'create', objective: 'Create objective', tokenBudget: 5000, providerId: 'provider-1', modelId: 'model-1' } });
+    expect(h.callOrder).toEqual(['goal']);
+    expect(h.sent).toEqual([]);
+
+    h.callOrder.length = 0;
+    await h.control.execute('session.send', { sessionId: 'session-1', directory: '/repo/app', prompt: 'Send objective', goal: true, goalTokenBudget: 8000 });
+    expect(h.goalControls[1].operation).toMatchObject({ objective: 'Send objective', tokenBudget: 8000 });
+    expect(h.callOrder).toEqual(['goal']);
+    expect(h.sent).toEqual([]);
+
+    h.callOrder.length = 0;
+    await h.control.execute('session.fork', { sessionId: 'session-1', directory: '/repo/app', prompt: 'Fork objective', goal: true });
+    expect(h.goalControls[2].sessionId).toBe('session-forked');
+    expect(h.goalControls[2].operation).toMatchObject({ objective: 'Fork objective', tokenBudget: 5000 });
+    expect(h.callOrder).toEqual(['goal']);
+    expect(h.sent).toEqual([]);
   });
 
   it('sends and forks only after authoritative session-scope checks', async () => {

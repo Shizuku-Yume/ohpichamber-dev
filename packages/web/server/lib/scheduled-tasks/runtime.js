@@ -2,7 +2,7 @@ import path from 'node:path';
 import { DateTime } from 'luxon';
 import { CronExpressionParser } from 'cron-parser';
 import { CapturedSendOptionsSchema, PromptRequestSchema, SessionCreateAckSchema } from '@openchamber/agent-contract';
-import { buildGoalIntroText, createSessionGoal } from '../session-goal/create.js';
+
 import { discoverLoops } from './loops.js';
 import { createExistingSessionTasks, createScheduledTaskContext } from './existing-session.js';
 import { createScheduledPromptExpander } from './file-resource-prompt.js';
@@ -210,10 +210,11 @@ export const createScheduledTasksRuntime = (deps) => {
     createChatWorkspace,
     emitTaskRunEvent,
     setSessionAutoAccept,
-    persistSessionGoal = null,
+
     chatsScope = null,
     readSessionDefaults = null,
     messageQueueRuntime,
+    readDefaultGoalTokenBudget = async () => null,
     isSessionArchived,
     logger = console,
     maxGlobalConcurrency = DEFAULT_GLOBAL_CONCURRENCY,
@@ -472,7 +473,9 @@ export const createScheduledTasksRuntime = (deps) => {
     const startedAt = Date.now();
     const projectPath = await ensureProjectPath(projectID);
     if (!projectPath) throw new Error('Project path is unavailable');
-    if (typeof sessionService?.create !== 'function' || typeof sessionService?.send !== 'function') throw new Error('Canonical session service is unavailable');
+    if (typeof sessionService?.create !== 'function' || (task.execution.goalEnabled
+      ? typeof sessionService?.control !== 'function'
+      : typeof sessionService?.send !== 'function')) throw new Error('Canonical session service is unavailable');
     const options = await resolveRunSelection(projectID, task);
     const workspace = isChatsScope(projectID)
       ? await (typeof createChatWorkspace === 'function' ? createChatWorkspace() : Promise.reject(new Error('Managed chat workspace service is unavailable')))
@@ -499,14 +502,15 @@ export const createScheduledTasksRuntime = (deps) => {
       try { await setSessionAutoAccept(sessionID, true, workspace.cwd); }
       catch (error) { logger.warn?.('[scheduled-tasks] permission auto-accept enrollment failed; approvals remain manual', sessionID, error?.message ?? error); }
     }
-    const context = [createScheduledTaskContext({ projectId: projectID, taskId: task.id, sessionId: sessionID, workspaceId: workspace.workspaceId, mode: 'new', triggeredAt: startedAt })];
     if (task.execution.goalEnabled) {
-      await createSessionGoal({ persistSessionGoal, sessionID, scope: workspace, objective: prompt.input.text,
-        tokenBudget: task.execution.goalTokenBudget, providerID: prompt.options.providerId ?? undefined, modelID: prompt.options.modelId ?? undefined });
-      context.push({ kind: 'synthetic', text: buildGoalIntroText(task.execution.goalTokenBudget) });
+      const tokenBudget = task.execution.goalTokenBudget ?? await readDefaultGoalTokenBudget(projectID);
+      const result = await sessionService.control(sessionID, { type: 'goal', op: 'create', objective: prompt.input.text, tokenBudget: tokenBudget ?? null });
+      if (result?.type !== 'goal' || result.mode?.kind !== 'goal' || result.mode.status !== 'active') throw new Error('Scheduled goal acknowledgement is invalid');
+    } else {
+      const context = [createScheduledTaskContext({ projectId: projectID, taskId: task.id, sessionId: sessionID, workspaceId: workspace.workspaceId, mode: 'new', triggeredAt: startedAt })];
+      const result = await sessionService.send(sessionID, PromptRequestSchema.parse({ input: { ...prompt.input, context }, options: prompt.options }));
+      if (!result?.run || result.run.sessionId !== sessionID) throw new Error('Scheduled prompt acknowledgement is invalid');
     }
-    const result = await sessionService.send(sessionID, PromptRequestSchema.parse({ input: { ...prompt.input, context }, options: prompt.options }));
-    if (!result?.run || result.run.sessionId !== sessionID) throw new Error('Scheduled prompt acknowledgement is invalid');
     const finishedAt = Date.now();
     return { sessionID, directory: workspace.cwd, durationMs: Math.max(0, finishedAt - startedAt), reason, startedAt, finishedAt };
   };
@@ -978,8 +982,8 @@ export const createScheduledTasksRuntime = (deps) => {
       catch (error) { logger.warn?.('[scheduled-tasks] root agent migration failed', { projectId: project.id, error: error?.message ?? String(error) }); }
     }
     logger.info?.(`[scheduled-tasks] root agent migration changed=${changed}`);
-    await syncAllProjects();
     started = true;
+    await syncAllProjects();
   };
 
   const stop = async () => {

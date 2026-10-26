@@ -8,8 +8,7 @@ import {
 const goal = {
   id: 'goal_1', objective: 'Ship it', objectiveFile: true, status: 'active', tokenBudget: 100,
   tokensUsed: 1, tokensBaseline: 2, tokensCommitted: 3, turnsUsed: 4, blockedStreak: 5,
-  auditFailStreak: 6, note: 'note', statusReason: 'reason', evaluationProviderID: 'provider_1',
-  evaluationModelID: 'model_1', lastAccountedMessageID: 'message_1', createdAt: 1, updatedAt: 2,
+  auditFailStreak: 6, note: 'note', statusReason: 'reason',
 };
 const links = [
   { kind: 'issue', id: 'link_1', title: 'Issue', url: 'https://example.test/i', linkedAt: 1, number: 1, author: 'A', authorAvatarUrl: 'avatar' },

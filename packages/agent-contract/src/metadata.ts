@@ -9,10 +9,9 @@ const goalFields = {
   tokensUsed: countSchema.optional(), tokensBaseline: countSchema.optional(), tokensCommitted: countSchema.optional(),
   turnsUsed: countSchema.optional(), blockedStreak: countSchema.optional(), auditFailStreak: countSchema.optional(),
   note: z.string().optional(), statusReason: z.string().optional(),
-  evaluationProviderID: z.string().optional(), evaluationModelID: z.string().optional(),
   lastAccountedMessageID: z.string().optional(), createdAt: TimestampSchema.optional(), updatedAt: TimestampSchema.optional(),
 };
-const goalSchema = z.strictObject(goalFields);
+const goalSchema = z.object(goalFields);
 const assistFields = {
   recap: z.string(), suggestion: z.string(), forMessageID: EntityIdSchema, generatedAt: TimestampSchema,
 };
@@ -88,7 +87,6 @@ export const SessionMetadataPatchSchema = z.strictObject({ changes: z.strictObje
       tokensCommitted: goalFields.tokensCommitted.nullable(), turnsUsed: goalFields.turnsUsed.nullable(),
       blockedStreak: goalFields.blockedStreak.nullable(), auditFailStreak: goalFields.auditFailStreak.nullable(),
       note: goalFields.note.nullable(), statusReason: goalFields.statusReason.nullable(),
-      evaluationProviderID: goalFields.evaluationProviderID.nullable(), evaluationModelID: goalFields.evaluationModelID.nullable(),
       lastAccountedMessageID: goalFields.lastAccountedMessageID.nullable(),
       createdAt: goalFields.createdAt.nullable(), updatedAt: goalFields.updatedAt.nullable(),
     }).nullable().optional(),

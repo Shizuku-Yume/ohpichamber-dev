@@ -9,8 +9,8 @@ This module provides notification message preparation utilities for the web serv
 - `packages/web/server/lib/notifications/push-runtime.js`: push subscription persistence, VAPID initialization, and UI visibility runtime.
 - `packages/web/server/lib/notifications/apns-runtime.js`: native APNs/FCM token persistence and delivery. Relay mode signs requests through the shared host `relayKeyStore`; it does not create a signing keypair in notification settings. Direct APNs delivery uses ES256 and HTTP/2 when `OPENCHAMBER_PUSH_RELAY_DISABLED=true`. Native delivery is not gated on UI visibility; iOS suppresses foreground banners. A registered device `pushKey` seals notification text, while legacy registrations receive generic text. See `APNS.md`.
 - `packages/web/server/lib/notifications/emitter-runtime.js`: desktop/stdout + UI SSE notification emission runtime.
-- `packages/web/server/lib/notifications/runtime.js`: trigger runtime for OpenCode event-driven notification fanout.
-- `packages/web/server/lib/notifications/template-runtime.js`: notification template variables and session text/title enrichment runtime. Zen-model helpers are retained as compatibility stubs only.
+- `packages/web/server/lib/notifications/runtime.js`: trigger runtime for canonical OMP session events.
+- `packages/web/server/lib/notifications/template-runtime.js`: notification template variables and session text/title enrichment runtime.
 - `packages/web/server/lib/notifications/message.js`: helper implementation module.
 - `packages/web/server/lib/notifications/message.test.js`: unit tests for notification message helpers.
 - `packages/web/server/lib/notifications/push-seal.js`: end-to-end sealing of native push text. A phone that registers with a `pushKey` (32 bytes, base64; made on device) gets each notification's title and body encrypted with AES-256-GCM; the push relay, Apple and Google carry only a generic title and the ciphertext in `data.enc`.
@@ -42,12 +42,14 @@ This module provides notification message preparation utilities for the web serv
   - `POST /api/sessions/:id/unview`
   - `POST /api/sessions/:id/message-sent`
 
-### Trigger runtime API (runtime.js)
-- `createNotificationTriggerRuntime(dependencies)`: creates runtime-owned debounced trigger handling for OpenCode events.
+- `createNotificationTriggerRuntime(dependencies)`: creates runtime-owned debounced trigger handling for canonical session events.
 - Returned API:
-  - `maybeSendPushForTrigger(payload)`
+  - `processCanonicalEvent(event, scope)`
+  - `setAutoAcceptSession(sessionId, enabled)`
+  - `stop()`
 - Owns:
   - completion/error/question/permission trigger routing; permission suppression consults the authoritative permission-auto-accept runtime
+  - authoritative OMP `SessionMode` lookup on terminal runs; active goal turns suppress ordinary ready notices, and complete/budget-limited goals emit one final goal notification
   - session parent cache for subtask suppression
   - template resolution and fallback behavior
   - native notification fanout and web push payload fanout

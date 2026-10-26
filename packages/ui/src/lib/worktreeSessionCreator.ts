@@ -290,11 +290,14 @@ export async function createWorktreeDraft(options?: { initialPrompt?: string; ti
 /**
  * Create a worktree session for a new branch name.
  * Callers can still use startPoint for metadata or follow-up git operations.
+ * @param selection Optional model/variant selection to apply at creation time.
+ * @returns Created session descriptor or null.
  */
 export async function createWorktreeSessionForNewBranch(
   projectDirectory: string,
   preferredBranchName: string,
   startPoint?: string,
+  selection?: { providerId: string; modelId: string; variant?: string },
   options?: {
     kind?: 'pr' | 'standard';
     worktreeName?: string;
@@ -367,7 +370,9 @@ export async function createWorktreeSessionForNewBranch(
       await waitForWorktreeBootstrapIfEnabled(projectRef, metadata.path);
 
       const sessionStore = useSessionUIStore.getState();
-      const session = await sessionStore.createSession(undefined, metadata.path);
+      const session = await sessionStore.createSession(undefined, metadata.path, undefined, selection
+        ? { model: { providerId: selection.providerId, modelId: selection.modelId }, variant: selection.variant || undefined }
+        : undefined);
       if (!session) {
         await removeProjectWorktree(projectRef, metadata, { deleteLocalBranch: true }).catch(() => undefined);
         throw new Error('Could not create a session for the worktree.');
