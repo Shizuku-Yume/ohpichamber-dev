@@ -15,8 +15,12 @@
 ## Progress
 - Dirty at start: none
 - Started: 2026-10-26T10:53:19+08:00
-- Status: active
-- Check before: pending; prerequisite task 09 is archived and landed.
+- Status: paused
+- Check before: pending; prerequisite task 09 is archived and landed. The previous worker did not record an executable before result.
+- Check after: not run. Current tree is uncommitted on `omp-native-chat/16-retire-goal-supervisor`.
+- Completed in this handoff: removed `packages/web/server/lib/session-goal/` and wiring from index/host route/shutdown; scheduled task now sends `goal create` before the first prompt; removed evaluator metadata fields and locale label; removed supervisor checker/max-turn UI and settings registry entries; goal metadata uses non-strict object parsing so old evaluator fields are stripped rather than rejecting sessions; updated English session-goals page and small-model docs.
+- Current next steps: finish CLI goal orchestration in `packages/web/server/lib/openchamber-sessions/routes.js` or its orchestration caller; inspect fork/plan UI sends and notify runtime mode handling; remove unused auditor/checker/cap UI keys and stale copy in all locales and settings helper/tests, regenerate/adjust settings registry snapshot appropriately; update/add endpoint + integration tests and task docs; update `## Progress` after checks; run Check and real path, run both flow-verify briefs/security pass, archive, validate, commit, rebase, rerun required checks, land.
+- Review boundary: not run. No security pass, flow-verify, tests, or real path run.
 
 **Check:** Before: `rg -l "session-goal/" packages/web/server` lists `index.js`, `feature-routes-runtime.js` and `scheduled-tasks/runtime.js`. After: it lists nothing, `GET /api/goals/objective/<id>` returns 404, and `rg "openchamber\.goal" packages/web packages/ui/src` finds no writer. `bun run --cwd packages/web test` has: a scheduled task with `goalEnabled` and a CLI `session create --prompt <p> --goal` each yield a session whose snapshot is `{kind:'goal', status:'active'}` with the expected objective and a following `origin:'goal'` run; with a goal active, a terminal run sends no ready notification, and a goal reaching `complete` sends exactly one. UI tests: fork-from-answer and plan implement with "Run as goal" send `goal create` with the dialog's objective after the session exists and before its first prompt; the sidebar glyph colours by `SessionMode` goal status.
 
