@@ -2,7 +2,7 @@
 
 **Effort:** omp-native-chat
 **Task type:** feature
-**Base commit:** <commit-sha>
+**Base commit:** 3999ddb0d59575a661c492fa50659e22a1fe8ba7
 
 **Delivers:** OMP goal mode is the only goal loop. Every way of starting a goal outside the composer (fork-from-answer and plan implement "Run as goal", scheduled tasks with `goalEnabled`, CLI `session create|send|fork --goal`) starts an OMP goal, the sidebar glyph and notifications follow the OMP goal, and the Host supervisor with its audit model is gone.
 
@@ -11,6 +11,12 @@
 
 **Read first:** spec "Goal entry points", "What it must not do" and W17; `packages/web/server/lib/session-goal/DOCUMENTATION.md` (every entry point and the notification rules it implements); `scope.md` SCOPE-10.2.
 **Covers:** W17
+
+## Progress
+- Dirty at start: none
+- Started: 2026-10-26T10:53:19+08:00
+- Status: active
+- Check before: pending; prerequisite task 09 is archived and landed.
 
 **Check:** Before: `rg -l "session-goal/" packages/web/server` lists `index.js`, `feature-routes-runtime.js` and `scheduled-tasks/runtime.js`. After: it lists nothing, `GET /api/goals/objective/<id>` returns 404, and `rg "openchamber\.goal" packages/web packages/ui/src` finds no writer. `bun run --cwd packages/web test` has: a scheduled task with `goalEnabled` and a CLI `session create --prompt <p> --goal` each yield a session whose snapshot is `{kind:'goal', status:'active'}` with the expected objective and a following `origin:'goal'` run; with a goal active, a terminal run sends no ready notification, and a goal reaching `complete` sends exactly one. UI tests: fork-from-answer and plan implement with "Run as goal" send `goal create` with the dialog's objective after the session exists and before its first prompt; the sidebar glyph colours by `SessionMode` goal status.
 
