@@ -1990,7 +1990,7 @@ export const settingsDict = {
   "settings.openchamber.defaults.field.defaultAgent": "الوكيل الافتراضي",
   "settings.openchamber.defaults.field.showDeletionDialogAria": "إظهار نافذة تأكيد الحذف",
   "settings.openchamber.defaults.field.sessionWarming": "إبقاء الجلسات الخاملة نشطة",
-  "settings.openchamber.defaults.field.sessionWarmingInfo": "يستخدم تدفئة ذاكرة التخزين المؤقت للمطالبات الأصلية لمساحة العمل هذه. قد تتكبد الطلبات رسومًا من الموفر؛ لا يضمن الوضع المكوّن إصابة ذاكرة التخزين المؤقت أو التنفيذ النشط."OK\" صغيرًا كل 4 دقائق أثناء خمول الجلسة، لمدة تصل إلى 30 دقيقة بعد آخر رسالة لك. يُحتسب كل طلب كطلب صغير مدفوع. ينطبق على جميع المشاريع.",
+  "settings.openchamber.defaults.field.sessionWarmingInfo": "يستخدم تدفئة ذاكرة التخزين المؤقت للمطالبات الأصلية لمساحة العمل هذه. قد تتكبد الطلبات رسومًا من الموفر؛ لا يضمن الوضع المكوّن إصابة ذاكرة التخزين المؤقت أو التنفيذ النشط.",
   "settings.openchamber.defaults.field.showDeletionDialog": "إظهار نافذة تأكيد الحذف",
   "settings.openchamber.defaults.smallModel.title": "النموذج الصغير",
   "settings.openchamber.defaults.smallModel.description": "نموذج منخفض التكلفة للمهام المساعدة السريعة مثل الملخصات القصيرة.",

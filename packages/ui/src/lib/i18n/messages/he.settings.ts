@@ -1990,7 +1990,7 @@ export const settingsDict = {
   "settings.openchamber.defaults.field.defaultAgent": "סוכן ברירת מחדל",
   "settings.openchamber.defaults.field.showDeletionDialogAria": "הצג תיבת דו-שיח למחיקה",
   "settings.openchamber.defaults.field.sessionWarming": "שמור הפעלות לא פעילות חמות",
-  "settings.openchamber.defaults.field.sessionWarmingInfo": "משתמש בחימום זיכרון מטמון הנחיות מקורי עבור סביבת עבודה זו. בקשות עשויות לחייב בתשלום מהספק; המצב המוגדר אינו מבטיח פגיעה במטמון או ביצוע פעיל."OK\" זעירה כל 4 דקות כל עוד ההפעלה לא פעילה, עד 30 דקות אחרי ההודעה האחרונה. כל פינג מחויב כבקשה קטנה. חל על כל הפרויקטים.",
+  "settings.openchamber.defaults.field.sessionWarmingInfo": "משתמש בחימום זיכרון מטמון הנחיות מקורי עבור סביבת עבודה זו. בקשות עשויות לחייב בתשלום מהספק; המצב המוגדר אינו מבטיח פגיעה במטמון או ביצוע פעיל.",
   "settings.openchamber.defaults.field.showDeletionDialog": "הצג תיבת דו-שיח למחיקה",
   "settings.openchamber.defaults.smallModel.title": "מודל קטן",
   "settings.openchamber.defaults.smallModel.description": "מודל זול למשימות עזר מהירות, כמו סיכומים ותקצירים קצרים.",
