@@ -148,4 +148,23 @@ describe('i18n dictionaries', () => {
       }
     }
   });
+
+  test('no locale value may mention OpenCode for a key whose en value does not', () => {
+    const OPENCODE_REGEX = /opencode/i;
+    const failures: string[] = [];
+
+    for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
+      if (locale === 'en') continue;
+      for (const [key, value] of Object.entries(dictionary)) {
+        if (OPENCODE_REGEX.test(value)) {
+          const enValue = enDict[key as keyof typeof enDict] ?? '';
+          if (!OPENCODE_REGEX.test(enValue)) {
+            failures.push(`${locale} ${key}: "${value}" mentions OpenCode but en does not ("${enValue}")`);
+          }
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
+  });
 });
