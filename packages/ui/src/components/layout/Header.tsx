@@ -754,8 +754,8 @@ export const Header: React.FC = () => {
       return activeProjectLabel ?? 'OpenChamber';
     }
     const trimmedTitle = currentSession?.title?.trim();
-    return trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : 'Untitled Session';
-  }, [activeProjectLabel, currentSession?.title, currentSessionId]);
+    return trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : t('sessions.sidebar.session.untitled');
+  }, [activeProjectLabel, currentSession?.title, currentSessionId, t]);
   const loadSessionRecords = useSessionMessageRecordsForExport();
   const updateSessionTitle = useSessionUIStore((state) => state.updateSessionTitle);
   const archiveSessions = useSessionUIStore((state) => state.archiveSessions);
