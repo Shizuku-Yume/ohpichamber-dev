@@ -149,18 +149,22 @@ describe('i18n dictionaries', () => {
     }
   });
 
-  test('no locale value may mention OpenCode for a key whose en value does not', () => {
-    const OPENCODE_REGEX = /opencode/i;
+  // OMP is the fork's only engine. OpenCode survives in English where it names
+  // host infrastructure (the CLI, a config file, a provider); a locale may use
+  // the same name on exactly those keys and nowhere else, so a translation
+  // cannot quietly reintroduce OpenCode as the thing running the session.
+  test('no locale names OpenCode on a key whose english value does not', () => {
+    const mentionsOpenCode = /opencode/i;
+    const englishValues: Record<string, string> = enDict;
     const failures: string[] = [];
 
     for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
       if (locale === 'en') continue;
       for (const [key, value] of Object.entries(dictionary)) {
-        if (OPENCODE_REGEX.test(value)) {
-          const enValue = enDict[key as keyof typeof enDict] ?? '';
-          if (!OPENCODE_REGEX.test(enValue)) {
-            failures.push(`${locale} ${key}: "${value}" mentions OpenCode but en does not ("${enValue}")`);
-          }
+        if (!mentionsOpenCode.test(value)) continue;
+        const enValue = englishValues[key] ?? '';
+        if (!mentionsOpenCode.test(enValue)) {
+          failures.push(`${locale} ${key}: "${value}" names OpenCode but en does not ("${enValue}")`);
         }
       }
     }
