@@ -17,7 +17,6 @@ import { notifyFirstCanonicalBootstrap } from "./first-server-connect"
 import { useGlobalSyncStore } from "./global-sync-store"
 import { applyDirectoryEvent, compareCounters, mergeHostSession } from "./event-reducer"
 import { createEventPipeline, type EventPipeline } from "./event-pipeline"
-import { subscribeSessionWarmingSync } from "./session-warming-sync";
 import { subscribeSessionFoldersSync } from "./session-folders-sync";
 import { subscribeSessionDraftsSync } from "./session-drafts-sync";
 import { subscribeMessageQueueSync } from "./message-queue-sync";
@@ -321,7 +320,6 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     })
     setSessionParentResolver((sessionId) => findLiveSession(Array.from(childStores.children.values(), (store) => store.getState()), sessionId)?.parentSessionId)
     void bootstrapGlobal(useGlobalSyncStore.setState, useGlobalSyncStore.getState, client, isCurrent)
-    const unsubscribeSessionWarming = subscribeSessionWarmingSync(props.runtimeKey);
     const unsubscribeFolderEvents = subscribeSessionFoldersSync(props.runtimeKey);
     const unsubscribeDraftEvents = subscribeSessionDraftsSync(props.runtimeKey);
     const unsubscribeMessageQueueEvents = subscribeMessageQueueSync(props.runtimeKey ?? getRuntimeKey());
@@ -383,7 +381,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     document.addEventListener("visibilitychange", visible)
     return () => {
       currentRef.current = false
-      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeSessionWarming(); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents();
+      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents();
       window.removeEventListener("online", resume)
       window.removeEventListener("offline", offline)
       window.removeEventListener("pageshow", pageshow)

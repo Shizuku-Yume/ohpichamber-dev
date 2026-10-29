@@ -15,7 +15,6 @@ import { htmlRenderI18n } from './html-render.i18n';
 import { sessionNoticesI18n } from './session-notices.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
-import { sessionWarmingI18n } from './session-warming.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
 import { sidebarWorkI18n } from './sidebar-work.i18n';
 import { worktreeArchiveI18n } from './worktree-archive.i18n';
@@ -55,7 +54,6 @@ export const dict = {
   ...sessionNoticesI18n.ar,
   ...usageStatsI18n.ar,
   ...webSearchI18n.ar,
-  ...sessionWarmingI18n.ar,
   ...heapSnapshotI18n.ar,
   ...sidebarWorkI18n.ar,
   ...worktreeArchiveI18n.ar,
@@ -7331,28 +7329,6 @@ export const dict = {
   "settings.webSearch.keys.fieldExample": "مثال: {example}",
   "settings.webSearch.keys.envHintForm": "يقرأ OpenCode هذا أيضًا من {names}.",
   "settings.webSearch.toast.keyRemoveFailed": "تعذّرت إزالة المفتاح.",
-  "settings.openchamber.defaults.sessionWarming.aria": "طريقة إبقاء الجلسات الخاملة نشطة",
-  "settings.openchamber.defaults.sessionWarming.off": "إيقاف",
-  "settings.openchamber.defaults.sessionWarming.all": "كل الجلسات",
-  "settings.openchamber.defaults.sessionWarming.session": "الجلسات المختارة",
-  "settings.openchamber.defaults.sessionWarming.info": "ينسى بعض الموفرين السياق المخزن مؤقتًا للمحادثة بعد بضع دقائق من الصمت، فتصبح الرسالة التالية أبطأ وأعلى تكلفة. ترسل الخوادم طلب إبقاء اتصال خفيفًا دوريًا أثناء خمول الجلسة. فعّله لكل جلسة من قائمة الجلسة؛ أدناه، اختر مدة بقاء الجلسة دافئة بعد كل رد.",
-  "settings.openchamber.defaults.sessionWarming.duration": "إبقاء نشطة لمدة",
-  "settings.openchamber.defaults.sessionWarming.durationAria": "مدة بقاء الجلسة نشطة بعد الرد",
-  "settings.openchamber.defaults.sessionWarming.duration.30": "30 دقيقة",
-  "settings.openchamber.defaults.sessionWarming.duration.60": "ساعة",
-  "settings.openchamber.defaults.sessionWarming.duration.120": "ساعتان",
-  "settings.openchamber.defaults.sessionWarming.duration.180": "3 ساعات",
-  "sessions.sidebar.session.menu.keepWarm": "إبقاء نشطة",
-  "sessions.sidebar.session.menu.stopWarm": "إيقاف الإبقاء نشطة",
-  "sessions.sidebar.session.menuHint.keepWarm": "يبقي السياق المخزن مؤقتًا لهذه الجلسة حيًا بعد كل رد، بطلب صغير كل 4 دقائق. تُحدَّد المدة في الإعدادات.",
-  "sessions.sidebar.session.menuHint.stopWarm": "يوقف طلبات الإبقاء لهذه الجلسة.",
-  "sessions.warming.toggleFailed": "تعذّر تغيير إبقاء هذه الجلسة نشطة",
-  "chat.workStatus.warming.turnOn": "إبقاء هذه الجلسة نشطة",
-  "chat.workStatus.warming.turnOff": "إيقاف إبقاء هذه الجلسة نشطة",
-  "chat.workStatus.warming.off": "غير مُبقاة نشطة. فعّله لإبقاء السياق المخزن مؤقتًا بعد كل رد.",
-  "chat.workStatus.warming.remaining": "نشطة لمدة {time} أخرى",
-  "chat.workStatus.warming.waiting": "ستبقى نشطة بعد انتهاء الرد",
-  "chat.workStatus.warming.expired": "انتهت الساعة. تعود الجلسة نشطة بعد الرد التالي.",
   "openCodeStatusDialog.heapSnapshot.action": "حفظ لقطة ذاكرة OpenCode",
   "openCodeStatusDialog.heapSnapshot.hint": "للإبلاغ عن مشكلات الذاكرة. قد يحتوي الملف على مفاتيح API وموجّهات ومحتوى ملفات، لذا شاركه بشكل خاص فقط.",
   "openCodeStatusDialog.heapSnapshot.writing": "جارٍ كتابة اللقطة. يتوقف OpenCode مؤقتًا حتى تنتهي.",
@@ -8161,7 +8137,6 @@ export const dict = {
   "settings.openchamber.defaults.newSessionsTitle": "الجلسات الجديدة",
   "settings.openchamber.defaults.field.model": "النموذج",
   "settings.openchamber.defaults.field.agent": "الوكيل",
-  "settings.openchamber.defaults.promptCacheTitle": "ذاكرة التخزين المؤقت للمطالبات",
   "settings.openchamber.defaults.usageLimitsTitle": "حدود الاستخدام",
   "settings.openchamber.defaults.usageLimits.accountSwitching": "يُضبط تبديل الحسابات لكل موفّر في صفحة «الموفرون».",
   "settings.openchamber.defaults.usageLimits.openProviders": "فتح «الموفرون»",

@@ -15,7 +15,6 @@ import { htmlRenderI18n } from './html-render.i18n';
 import { sessionNoticesI18n } from './session-notices.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
-import { sessionWarmingI18n } from './session-warming.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
 import { sidebarWorkI18n } from './sidebar-work.i18n';
 import { worktreeArchiveI18n } from './worktree-archive.i18n';
@@ -55,7 +54,6 @@ export const dict = {
   ...sessionNoticesI18n.he,
   ...usageStatsI18n.he,
   ...webSearchI18n.he,
-  ...sessionWarmingI18n.he,
   ...heapSnapshotI18n.he,
   ...sidebarWorkI18n.he,
   ...worktreeArchiveI18n.he,
@@ -7331,28 +7329,6 @@ export const dict = {
   "settings.webSearch.keys.fieldExample": "דוגמה: {example}",
   "settings.webSearch.keys.envHintForm": "OpenCode קורא את זה גם מתוך {names}.",
   "settings.webSearch.toast.keyRemoveFailed": "לא ניתן היה להסיר את המפתח.",
-  "settings.openchamber.defaults.sessionWarming.aria": "איך לשמור הפעלות לא פעילות חמות",
-  "settings.openchamber.defaults.sessionWarming.off": "כבוי",
-  "settings.openchamber.defaults.sessionWarming.all": "כל ההפעלות",
-  "settings.openchamber.defaults.sessionWarming.session": "הפעלות נבחרות",
-  "settings.openchamber.defaults.sessionWarming.info": "יש ספקים ששוכחים את ההקשר השמור של שיחה אחרי כמה דקות של שקט, ולכן ההודעה הבאה איטית ויקרה יותר. השרת שולח פינג תקופתי זעיר כשההפעלה אינה פעילה. מפעילים לכל הפעלה בנפרד בתפריט ההפעלה; למטה בוחרים כמה זמן הפעלה נשארת חמה אחרי כל תשובה.",
-  "settings.openchamber.defaults.sessionWarming.duration": "לשמור חמה למשך",
-  "settings.openchamber.defaults.sessionWarming.durationAria": "כמה זמן הפעלה נשארת חמה אחרי תשובה",
-  "settings.openchamber.defaults.sessionWarming.duration.30": "30 דק׳",
-  "settings.openchamber.defaults.sessionWarming.duration.60": "שעה",
-  "settings.openchamber.defaults.sessionWarming.duration.120": "שעתיים",
-  "settings.openchamber.defaults.sessionWarming.duration.180": "3 שעות",
-  "sessions.sidebar.session.menu.keepWarm": "שמור חמה",
-  "sessions.sidebar.session.menu.stopWarm": "הפסק לשמור חמה",
-  "sessions.sidebar.session.menuHint.keepWarm": "שומר את ההקשר השמור של ההפעלה הזו אחרי כל תשובה, עם בקשה זעירה כל 4 דקות. משך הזמן נקבע בהגדרות.",
-  "sessions.sidebar.session.menuHint.stopWarm": "מפסיק את בקשות השמירה עבור ההפעלה הזו.",
-  "sessions.warming.toggleFailed": "לא ניתן היה לשנות את שמירת ההפעלה הזו חמה",
-  "chat.workStatus.warming.turnOn": "שמור את ההפעלה הזו חמה",
-  "chat.workStatus.warming.turnOff": "הפסק לשמור את ההפעלה הזו חמה",
-  "chat.workStatus.warming.off": "לא נשמרת חמה. הפעל כדי לשמור את ההקשר במטמון אחרי כל תשובה.",
-  "chat.workStatus.warming.remaining": "חמה עוד {time}",
-  "chat.workStatus.warming.waiting": "תישמר חמה אחרי שהתשובה תסתיים",
-  "chat.workStatus.warming.expired": "השעה עברה. השמירה מתחדשת אחרי התשובה הבאה.",
   "openCodeStatusDialog.heapSnapshot.action": "שמירת תמונת זיכרון של OpenCode",
   "openCodeStatusDialog.heapSnapshot.hint": "לדיווח על בעיות זיכרון. הקובץ עשוי להכיל מפתחות API, הנחיות ותוכן קבצים, לכן שתפו אותו רק באופן פרטי.",
   "openCodeStatusDialog.heapSnapshot.writing": "כותבים את תמונת הזיכרון. OpenCode מושהה עד הסיום.",
@@ -8161,7 +8137,6 @@ export const dict = {
   "settings.openchamber.defaults.newSessionsTitle": "סשנים חדשים",
   "settings.openchamber.defaults.field.model": "מודל",
   "settings.openchamber.defaults.field.agent": "סוכן",
-  "settings.openchamber.defaults.promptCacheTitle": "מטמון הנחיות",
   "settings.openchamber.defaults.usageLimitsTitle": "מגבלות שימוש",
   "settings.openchamber.defaults.usageLimits.accountSwitching": "החלפת חשבונות מוגדרת לכל ספק בנפרד בעמוד ספקים.",
   "settings.openchamber.defaults.usageLimits.openProviders": "פתיחת ספקים",

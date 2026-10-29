@@ -15,7 +15,6 @@ import { htmlRenderI18n } from './html-render.i18n';
 import { sessionNoticesI18n } from './session-notices.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
-import { sessionWarmingI18n } from './session-warming.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
 import { sidebarWorkI18n } from './sidebar-work.i18n';
 import { worktreeArchiveI18n } from './worktree-archive.i18n';
@@ -55,7 +54,6 @@ export const dict = {
   ...sessionNoticesI18n.en,
   ...usageStatsI18n.en,
   ...webSearchI18n.en,
-  ...sessionWarmingI18n.en,
   ...heapSnapshotI18n.en,
   ...sidebarWorkI18n.en,
   ...worktreeArchiveI18n.en,
@@ -3670,28 +3668,6 @@ export const dict = {
   "settings.webSearch.keys.fieldExample": "Example: {example}",
   "settings.webSearch.keys.envHintForm": "OpenCode also reads it from {names}.",
   "settings.webSearch.toast.keyRemoveFailed": "Couldn't remove the key.",
-  "settings.openchamber.defaults.sessionWarming.aria": "How idle sessions are kept warm",
-  "settings.openchamber.defaults.sessionWarming.off": "Off",
-  "settings.openchamber.defaults.sessionWarming.all": "All sessions",
-  "settings.openchamber.defaults.sessionWarming.session": "Chosen sessions",
-  "settings.openchamber.defaults.sessionWarming.info": "Some providers forget a conversation's cached context after a few minutes of silence, so the next message is slower and costs more. While a session sits idle, the server sends a tiny keep-alive request every few minutes, and each one is billed as a small request. Turn it on for a session in the session menu; below, pick how long a session stays warm after each reply.",
-  "settings.openchamber.defaults.sessionWarming.duration": "Keep warm for",
-  "settings.openchamber.defaults.sessionWarming.durationAria": "How long a session stays warm after a reply",
-  "settings.openchamber.defaults.sessionWarming.duration.30": "30 min",
-  "settings.openchamber.defaults.sessionWarming.duration.60": "1 hour",
-  "settings.openchamber.defaults.sessionWarming.duration.120": "2 hours",
-  "settings.openchamber.defaults.sessionWarming.duration.180": "3 hours",
-  "sessions.sidebar.session.menu.keepWarm": "Keep warm",
-  "sessions.sidebar.session.menu.stopWarm": "Stop keeping warm",
-  "sessions.sidebar.session.menuHint.keepWarm": "Keeps this session's cached context alive after each reply, with a tiny request every 4 minutes. How long is set in Settings.",
-  "sessions.sidebar.session.menuHint.stopWarm": "Stops the keep-alive requests for this session.",
-  "sessions.warming.toggleFailed": "Couldn't change keep warm for this session",
-  "chat.workStatus.warming.turnOn": "Keep this session warm",
-  "chat.workStatus.warming.turnOff": "Stop keeping this session warm",
-  "chat.workStatus.warming.off": "Not kept warm. Turn it on to keep the cached context alive after each reply.",
-  "chat.workStatus.warming.remaining": "Kept warm for {time} more",
-  "chat.workStatus.warming.waiting": "Kept warm once the reply finishes",
-  "chat.workStatus.warming.expired": "The hour is up. Warming starts again after the next reply.",
   "openCodeStatusDialog.heapSnapshot.action": "Save OpenCode memory snapshot",
   "openCodeStatusDialog.heapSnapshot.hint": "For memory reports. The file can hold API keys, prompts and file contents, so share it privately.",
   "openCodeStatusDialog.heapSnapshot.writing": "Writing the snapshot. OpenCode pauses until it's done.",
@@ -4500,7 +4476,6 @@ export const dict = {
   "settings.openchamber.defaults.newSessionsTitle": "New sessions",
   "settings.openchamber.defaults.field.model": "Model",
   "settings.openchamber.defaults.field.agent": "Agent",
-  "settings.openchamber.defaults.promptCacheTitle": "Prompt cache",
   "settings.openchamber.defaults.usageLimitsTitle": "Usage limits",
   "settings.openchamber.defaults.usageLimits.accountSwitching": "Account switching is set per provider in Providers.",
   "settings.openchamber.defaults.usageLimits.openProviders": "Open Providers",
@@ -8936,7 +8911,6 @@ export const dict = {
   "settings.integrations.linear.sessionComments.info": "Adds a comment to the issue when a session starts, finishes, or fails. Comments are only posted when this server has a public address, so the link opens the session for everyone on the issue.",
   "settings.integrations.linear.sessionComments.aria": "Post session status comments to Linear",
   "settings.integrations.linear.sessionComments.loadFailed": "Could not load Linear comment settings.",
-  "settings.openchamber.defaults.sessionWarming.label": "Keep chosen sessions warm",
   "chat.chatInput.actions.linkLinearIssue": "Link Linear Issue",
   "chat.chatInput.linked.linearIssue.openInBrowserAria": "Open issue in Linear",
   "chat.chatInput.linked.linearIssue.removeAria": "Remove linked Linear issue",

@@ -15,7 +15,6 @@ import { htmlRenderI18n } from './html-render.i18n';
 import { sessionNoticesI18n } from './session-notices.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
-import { sessionWarmingI18n } from './session-warming.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
 import { sidebarWorkI18n } from './sidebar-work.i18n';
 import { worktreeArchiveI18n } from './worktree-archive.i18n';
@@ -55,7 +54,6 @@ export const dict = {
   ...sessionNoticesI18n['zh-TW'],
   ...usageStatsI18n['zh-TW'],
   ...webSearchI18n['zh-TW'],
-  ...sessionWarmingI18n['zh-TW'],
   ...heapSnapshotI18n['zh-TW'],
   ...sidebarWorkI18n['zh-TW'],
   ...worktreeArchiveI18n['zh-TW'],
@@ -3670,28 +3668,6 @@ export const dict = {
   "settings.webSearch.keys.fieldExample": "範例：{example}",
   "settings.webSearch.keys.envHintForm": "OpenCode 也會從 {names} 讀取。",
   "settings.webSearch.toast.keyRemoveFailed": "無法移除金鑰。",
-  "settings.openchamber.defaults.sessionWarming.aria": "如何保持閒置工作階段預熱",
-  "settings.openchamber.defaults.sessionWarming.off": "關閉",
-  "settings.openchamber.defaults.sessionWarming.all": "所有工作階段",
-  "settings.openchamber.defaults.sessionWarming.session": "選定的工作階段",
-  "settings.openchamber.defaults.sessionWarming.info": "有些提供者會在靜默幾分鐘後忘記對話的快取內容，導致下一則訊息更慢、費用更高。工作階段閒置時，伺服器每隔幾分鐘送出一次很小的保活請求，每次都會以小請求計費。在工作階段選單中依工作階段開啟；在下方選擇每次回覆後工作階段保持溫熱的時長。",
-  "settings.openchamber.defaults.sessionWarming.duration": "預熱時長",
-  "settings.openchamber.defaults.sessionWarming.durationAria": "每次回覆後工作階段保持預熱的時長",
-  "settings.openchamber.defaults.sessionWarming.duration.30": "30 分鐘",
-  "settings.openchamber.defaults.sessionWarming.duration.60": "1 小時",
-  "settings.openchamber.defaults.sessionWarming.duration.120": "2 小時",
-  "settings.openchamber.defaults.sessionWarming.duration.180": "3 小時",
-  "sessions.sidebar.session.menu.keepWarm": "保持預熱",
-  "sessions.sidebar.session.menu.stopWarm": "停止預熱",
-  "sessions.sidebar.session.menuHint.keepWarm": "每次回覆後，每 4 分鐘送出一個很小的請求，保持此工作階段的快取上下文。時長在設定中選擇。",
-  "sessions.sidebar.session.menuHint.stopWarm": "停止此工作階段的保活請求。",
-  "sessions.warming.toggleFailed": "無法變更此工作階段的預熱設定",
-  "chat.workStatus.warming.turnOn": "保持此工作階段預熱",
-  "chat.workStatus.warming.turnOff": "停止預熱此工作階段",
-  "chat.workStatus.warming.off": "未預熱。開啟後，每次回覆後保持快取上下文。",
-  "chat.workStatus.warming.remaining": "還會預熱 {time}",
-  "chat.workStatus.warming.waiting": "回覆結束後開始預熱",
-  "chat.workStatus.warming.expired": "一小時已過。下次回覆後會重新預熱。",
   "openCodeStatusDialog.heapSnapshot.action": "儲存 OpenCode 記憶體快照",
   "openCodeStatusDialog.heapSnapshot.hint": "用於回報記憶體問題。檔案可能包含 API 金鑰、提示詞和檔案內容，請僅私下分享。",
   "openCodeStatusDialog.heapSnapshot.writing": "正在寫入快照。完成前 OpenCode 會暫停。",
@@ -4500,7 +4476,6 @@ export const dict = {
   "settings.openchamber.defaults.newSessionsTitle": "新工作階段",
   "settings.openchamber.defaults.field.model": "模型",
   "settings.openchamber.defaults.field.agent": "Agent",
-  "settings.openchamber.defaults.promptCacheTitle": "提示詞快取",
   "settings.openchamber.defaults.usageLimitsTitle": "用量限制",
   "settings.openchamber.defaults.usageLimits.accountSwitching": "帳號切換在「供應商」中依供應商分別設定。",
   "settings.openchamber.defaults.usageLimits.openProviders": "開啟供應商",
@@ -8936,7 +8911,6 @@ export const dict = {
   "settings.integrations.linear.sessionComments.info": "工作階段開始、完成或失敗時在議題留言。僅在這台伺服器有公開位址時才發布，這樣連結才能讓所有人開啟該工作階段。",
   "settings.integrations.linear.sessionComments.aria": "將工作階段狀態留言發布到 Linear",
   "settings.integrations.linear.sessionComments.loadFailed": "無法載入 Linear 留言設定。",
-  "settings.openchamber.defaults.sessionWarming.label": "保持所選工作階段溫熱",
   "chat.chatInput.actions.linkLinearIssue": "關聯 Linear Issue",
   "chat.chatInput.linked.linearIssue.openInBrowserAria": "在 Linear 中開啟 Issue",
   "chat.chatInput.linked.linearIssue.removeAria": "移除已關聯的 Linear Issue",
