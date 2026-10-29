@@ -359,3 +359,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** task 04 lands the SDK source-control contract and its examples.
 - **Effort:** upstream-refresh
+
+## 2026-10-29 - Delete upstream's per-session warming instead of rewiring it
+
+- **Decided:** Remove the per-session warming feature the upstream refresh adopted: the server modules under `packages/web/server/lib/session-warming/`, the UI store and sync subscriber, the Settings field, the per-session strings and the retired `/api/config/warming` fallback. Keep the canonical workspace control (`GET/PUT /api/agent/v1/workspaces/:workspaceId/cache-warming`) as the only warming surface.
+- **Instead of:** rewiring the adopted runtime onto the Agent Service now, or mounting it with a Host-side keep-alive ping loop over the canonical prompt endpoint.
+- **Because:** the adopted runtime and its routes call OpenCode endpoints that the fork deleted (`/api/session/active`, `/api/session/:id/generate`), nothing mounted them, and the settings field and toggle hid themselves behind a 404, so the feature was unreachable code carrying user-facing strings. The fork's warming is native and workspace-scoped (`CacheWarmingMode` off/streaming/idle, applied by the Agent Service workers); per-session warming is a different contract that needs a canonical route, per-session worker application and a revision, which is a follow-up, not a refresh task.
+- **Mine:** no (maintainer decision after the task 21 real path).
+- **Revisit when:** per-session warming is implemented on the Agent Service and a canonical session-level route exists; the settings field and session toggle can then be rebuilt against it.
+- **Effort:** upstream-refresh

@@ -108,3 +108,13 @@ An entry leaves this file in one of two ways:
 - **Impact:** Any completed turn that executed tools displays `Elapsed 0.0s` in the Turn stats section of the work-status panel, obscuring true execution duration.
 - **Solution:** Pass the canonical `Turn` record (or query `useSessionTurns`) into `WorkStatusTelemetrySection` and use `turn.finishedAt - turn.startedAt` (or skip `virtualUser` messages and use true turn boundaries) to compute `elapsedDurationMs`.
 - **Cost:** Touches `WorkStatusTelemetrySection.tsx` and `telemetry.ts` inputs to receive canonical `Turn` data; no backend change needed as `Turn` already carries `startedAt` and `finishedAt`.
+
+## Per-session warming has no Agent Service implementation
+
+- **Where:** Agent Service session warming (the canonical `GET/PUT /api/agent/v1/workspaces/:workspaceId/cache-warming` covers the workspace), `packages/ui/src/components/sections/openchamber/`
+- **Added:** 2026-10-29
+- **Priority:** worth-doing
+- **Problem:** The refresh adopted upstream's per-session warming (a server keep-alive loop over OpenCode's session endpoints plus a Settings field and a session-menu toggle). It was unmounted, unreachable behind a 404, and pointed at deleted endpoints, so it was deleted (`decisions.md: 2026-10-29 - Delete upstream's per-session warming instead of rewiring it`). The fork can now warm a whole workspace (`off`/`streaming`/`idle`) but cannot keep one chosen session warm, which upstream's users had.
+- **Impact:** Anyone relying on "keep this one long session warm without paying for pings on throwaway ones" loses that control after the refresh; the canonical workspace mode is the only choice, applied to every active worker in the workspace.
+- **Solution:** Add a canonical session-level warming route and state on the Agent Service (revision CAS, per-session apply outcome, native `AgentSession.setCacheWarmingMode` per session), then rebuild the Settings choice and the session toggle against it; no Host-side timer loop.
+- **Cost:** New contract and route in `packages/agent-contract` and `packages/agent-service`, worker-level session application, a store and sync subscriber in the UI, and 15 locales of copy; the workspace control and its tests must keep passing.
