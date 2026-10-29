@@ -53,8 +53,8 @@
 - `zh-CN`: 9,083 total, 0 missing, 0 extra
 - `zh-TW`: 9,083 total, 0 missing, 0 extra
 - `tr`: 9,083 total, 0 missing, 0 extra
-- `ar`: 8,725 total, 358 missing (visible fallback to English), 0 extra
-- `he`: 8,725 total, 358 missing (visible fallback to English), 0 extra
+- `ar`: 8,739 total, 349 missing (visible fallback to English), 0 extra
+- `he`: 8,739 total, 349 missing (visible fallback to English), 0 extra
 
 ### Real Path Evidence
 Captured live via `chrome-devtools` against dev server running on port 5280 with isolated data dir and real OMP Gemini 3.8 Flash provider:
@@ -192,3 +192,57 @@ Bounding rects per shot: `logs/screenshot-bounding-rects.md`.
   is unavailable. The read runs once per directory and runtime, so the row keeps the
   error until the Settings page points at a different, authorized directory or the
   runtime reconnects; there is no retry.
+
+## Rebase onto task 21 and the Runtime status dialog (2026-10-29)
+
+Branch `upstream-refresh/fix-ar-he` rebased onto the integration tip
+`8ee84af280` (task 21). The rebase applied cleanly: none of the four branch
+commits conflicted with `c4ce06dc0f..8ee84af280`.
+
+### What task 21 left untranslated
+
+`git diff c4ce06dc0f..8ee84af280 -- packages/ui/src/lib/i18n/messages/` shows
+four new `runtimeStatusDialog.*` keys in each of the twelve maintained locales,
+plus `overview.error.loadFailed` in all fourteen — including ar and he, so that
+one needed nothing. The rest of the dialog (`title`, `description`,
+`actions.copy`, the copy toasts, the empty state) and the command palette entry
+that opens it were never translated either, so an Arabic or Hebrew UI opened a
+fully English dialog around the new action.
+
+Translated into ar and he: the four keys task 21 added, the eight surrounding
+`runtimeStatusDialog.*` keys, and `commandPalette.item.showRuntimeStatus` — 13
+keys per locale, placed with the same meaning as `en`. Engine references stay
+`Agent Service`; diagnostics reuse the About dialog's wording
+(`بيانات التشخيص` / `נתוני אבחון`). ar/he now hold 8,739 of the 9,088 English
+keys. The two-language placeholder check is unchanged (the one known exception,
+`sessions.sidebar.draft.attachmentsSingle`, drops `{count}` on purpose because
+the singular needs no number).
+
+### Real path
+
+Dev server on `127.0.0.1:3750/3751`, isolated data dir under the artifact
+directory, provider variables from `~/.config/ohpichamber/omp-m0-provider.env`,
+Arabic locale. Headless Chrome (`chrome-devtools start --headless=true`,
+`emulate <page> --viewport "1280x800"`).
+
+- Command palette (`Ctrl+P`) lists `إظهار حالة التشغيل`; opening it shows the
+  dialog `حالة التشغيل` / `اعرض جاهزية المضيف و Agent Service والتشخيصات الحالية.`
+  with `تنزيل بيانات التشخيص` and `نسخ`, `dir=rtl`, dialog right edge 976 and the
+  action row on the dialog's left (trailing) edge. The diagnostics body below it
+  is generated status text (timestamps, URLs, HTTP codes) and stays as it is.
+- `screenshots/08-arabic-runtime-status.png` holds the Arabic dialog;
+  `screenshots/08-arabic-runtime-status.txt` holds its DOM text and direction.
+- The same flow in Hebrew renders `מצב סביבת ההרצה`, `הורדת נתוני אבחון`, `העתק`.
+
+### Validation
+
+- `bun run type-check`: exit 0 (`logs/rebase-type-check.log`)
+- `bun run lint`: exit 0, the same three pre-existing react-hooks warnings
+  (`logs/rebase-lint.log`)
+- focused tests `bun test src/lib/i18n src/components/sections/openchamber/DefaultsSettings.test.tsx src/components/layout/HeaderSessionArchiveMenuItem.test.tsx src/components/ui`:
+  exit 0, 152 tests / 59 files (`logs/rebase-focused-i18n-tests.log`)
+- `bunx oxlint -c oxlint.anti-slop.config.ts` over `ar.ts`, `he.ts`,
+  `messages.test.ts`, `Header.tsx`: exit 1 from the 21 pre-existing `Header.tsx`
+  findings, none on the two lines this branch changes and none in the catalogs or
+  the test (`logs/rebase-oxlint.log`)
+
