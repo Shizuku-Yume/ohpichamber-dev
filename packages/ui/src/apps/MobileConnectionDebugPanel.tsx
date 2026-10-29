@@ -45,7 +45,8 @@ export const MobileConnectionDebugPanel: React.FC<{ onClose: () => void }> = ({ 
         {entries.length === 0 ? (
           <p className="typography-small text-muted-foreground">{t('mobile.connectionDebug.empty')}</p>
         ) : (
-          <pre className="whitespace-pre-wrap break-words typography-code text-muted-foreground">
+          // The trail is generated Latin machine text; keep it LTR under RTL locales.
+          <pre dir="ltr" className="whitespace-pre-wrap break-words typography-code text-muted-foreground text-start">
             {entries.map(formatMobileConnectDebugEntry).join('\n')}
           </pre>
         )}
