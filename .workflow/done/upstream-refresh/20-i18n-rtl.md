@@ -246,3 +246,69 @@ Arabic locale. Headless Chrome (`chrome-devtools start --headless=true`,
   findings, none on the two lines this branch changes and none in the catalogs or
   the test (`logs/rebase-oxlint.log`)
 
+
+## Diagnostics text under RTL (2026-10-29)
+
+The Arabic Runtime status dialog rendered its generated status body inside a
+`<pre>` that inherited `dir=rtl`, so the bidi algorithm reordered neutral
+characters: `Log files:` displayed as `:Log files`, a leading `-` moved to the
+end of its line, `(api=/api/)` flipped its parentheses, and every line was
+right-aligned. Generated status text is shown to users, so it must read LTR.
+
+### Fixed here
+
+- `components/ui/RuntimeStatusDialog.tsx`: the status body now carries
+  `dir="ltr"` and logical `text-start`; the dialog chrome keeps following the
+  document direction.
+- `apps/MobileConnectionDebugPanel.tsx`: the connection debug trail is the same
+  kind of generated Latin text on a hidden diagnostics surface; same fix.
+- `components/ui/RuntimeStatusDialog.test.tsx`: asserts the body's `dir` is
+  `ltr` while the document and dialog shell stay RTL.
+
+### Surveyed, already correct or not a text block
+
+- Markdown code blocks (`MarkdownCode` via `CodeBlockContainer`),
+  `MarkdownMermaid`, `FrontmatterProperties`, `WorkflowsPanel`,
+  `WorkflowAnswerBlock` and two blocks in `UserTextPart` already set
+  `dir="ltr"`.
+- The terminal (`components/terminal/TerminalViewport`) renders through the
+  libghostty canvas surface, so bidi does not reorder its output.
+- `AboutDialog` only copies diagnostics to the clipboard; it renders no text
+  block.
+
+### Surveyed, same defect, not fixed in this task
+
+- `chat/message/parts/PlainDiffFallback.tsx` — plain patch text.
+- `chat/BackgroundShellsStrip.tsx` — shell command in the row tooltip.
+- `chat/message/parts/ToolPart.tsx` — shell tool input text.
+- `chat/PermissionCard.tsx` — permission details JSON.
+- `chat/message/parts/GeneratedJsonResultCard.tsx` — JSON tool result.
+- `chat/ErrorResponseDetails.tsx` — error payload body.
+- `chat/ChatErrorBoundary.tsx` and `ui/ErrorBoundary.tsx` — component stacks.
+- `session/spaces/SpaceSetupOutput.tsx` — space setup command output.
+- `sections/remote-instances/RemoteInstancesPage.tsx` — remote output block.
+- `chat/message/parts/UserTextPart.tsx:337` — pasted context text.
+
+### Real path
+
+Headless Chrome, dev server on `127.0.0.1:3750/3751`, Arabic locale,
+1280x800. `screenshots/09-arabic-runtime-status-ltr-body.png` shows the dialog;
+`screenshots/09-arabic-runtime-status-ltr-body.txt` records the document
+`dir=rtl`, dialog computed direction `rtl`, the body's `dir` attribute `ltr`,
+computed direction `ltr`, `text-align: start`, and span rects proving the body
+starts at the left edge of its padding box (`Log files:` x=341, `- Host
+console:` x=341, pre x=325).
+
+### Validation
+
+- `bun run type-check`: exit 0 (`logs/rtl-pre-type-check.log`)
+- `bun run lint`: exit 0 (`logs/rtl-pre-lint.log`)
+- focused tests `bun test src/lib/i18n src/components/ui src/components/sections/openchamber/DefaultsSettings.test.tsx src/components/layout/HeaderSessionArchiveMenuItem.test.tsx`:
+  exit 0, 153 tests / 60 files (`logs/rtl-pre-focused-tests.log`); the new test
+  alone is `logs/rtl-pre-test.log`
+- `bunx oxlint -c oxlint.anti-slop.config.ts` over `RuntimeStatusDialog.tsx`,
+  `MobileConnectionDebugPanel.tsx`, `RuntimeStatusDialog.test.tsx`: exit 0
+  (`logs/rtl-pre-oxlint.log`)
+- A run that also included `src/apps` failed on 78 mobile gesture tests in this
+  environment (edge swipe, host-switch); those suites are unrelated to this
+  change and were not investigated.
