@@ -246,6 +246,29 @@ a 2101-character timeline with zero prompt or credential matches, and the quota
 surface showing its per-provider state. What could not be reached is listed under
 Limits.
 
+#### Follow-up: per-session warming deleted, real path re-checked (2026-10-29)
+
+Branch `upstream-refresh/21-warming` on top of `8ee84af280`. Removed the whole
+per-session chain (server modules, store, sync subscriber, Settings field, session
+toggle, event type, strings in every locale) and kept the canonical workspace
+control. Decision: `decisions.md: 2026-10-29 - Delete upstream's per-session
+warming instead of rewiring it`; follow-up:
+`Per-session warming has no Agent Service implementation` in
+`.workflow/technical-debt.md`.
+
+Real path, headless Chrome on 3740/3741 with the isolated data dir:
+
+- Settings > Sessions shows one warming row, "Keep idle sessions warm", reading
+  `Idle mode`; unchecking it saved `Off` with "Saved; applied to active workers."
+  and re-checking it restored `Idle mode`, revision moving 1 -> 2. Canonical
+  `GET/PUT /api/agent/v1/workspaces/ws_9dcd3e0d.../cache-warming` answered 200.
+- A session view has no warming control: no `aria-label` or button text matching
+  "warm", and no `/api/session-warming` request or console message at all.
+- Evidence: `warming-realpath/` (01 idle before, 02 off after save, 03 idle
+  restored, 04 session view, 05 session view with the settings panel closed, plus
+  DOM text for each, `06-console.txt`, `07-network.txt`,
+  `08-cache-warming-requests.txt`) under the task 21 artifacts directory.
+
 #### Checks after phase 2
 
 - `bun run type-check`: exit 0 (`logs/type-check-phase2.log`)
