@@ -270,11 +270,23 @@ Real path, headless Chrome on 3740/3741 with the isolated data dir:
   row showing "Loading configured mode…" in the image.
 - A session view has no warming control: no `aria-label` or button text matching
   "warm", and no `/api/session-warming` request or console message at all.
-- Evidence: `warming-realpath/` (01 idle before, 02 off after save, 03 idle
-  restored, 04 session view, 05 session view with the settings panel closed, plus
-  the settled DOM text and canonical revision for each, `06-console.txt`,
-  `07-network.txt`, `08-cache-warming-requests.txt`) under the task 21 artifacts
-  directory.
+- Console: nothing from the removed route, but the run still logs git-project
+  404/422 failures ("Failed to read project repositories: Not Found"),
+  `WorkerPoolManager: worker initialization timed out after 10000ms` twice, the
+  Base UI `nativeButton` warning from the defaults dropdown, a "Loading screen
+  timeout" warning and a form-field id/name issue. None of them belong to the
+  canonical warming row, whose `GET/PUT` requests all answered 200.
+- Evidence, all in `warming-realpath/` under the task 21 artifacts directory:
+  `01-settings-warming-idle-before.{png,txt}`,
+  `02-settings-warming-off-after-save.{png,txt}` and
+  `03-settings-warming-idle-restored.{png,txt}` are the settled captures of the
+  row (each `.txt` holds the DOM text at capture plus the canonical state and
+  revision); `04-session-no-warming-control.{png,txt}` and
+  `05-session-view-closed-settings.{png,txt}` are the session views;
+  `10-console-ordered-run.txt` and `10-network-ordered-run.txt` are the console
+  and request logs of the recorded run. `06-console.txt`, `07-network.txt`,
+  `08-cache-warming-requests.txt` and `09-*` belong to the superseded first pass
+  and are kept only for traceability.
 
 #### Checks after phase 2
 
