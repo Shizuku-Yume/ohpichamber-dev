@@ -258,16 +258,21 @@ warming instead of rewiring it`; follow-up:
 
 Real path, headless Chrome on 3740/3741 with the isolated data dir:
 
-- Settings > Sessions shows one warming row, "Keep idle sessions warm", reading
-  `Idle mode`; unchecking it saved `Off` with "Saved; applied to active workers."
-  and re-checking it restored `Idle mode`, revision moving 1 -> 2. Canonical
-  `GET/PUT /api/agent/v1/workspaces/ws_9dcd3e0d.../cache-warming` answered 200.
+- Settings > Sessions shows one warming row, "Keep idle sessions warm":
+  `Idle mode` on load, `Off` plus "Saved; applied to active workers." after
+  unchecking it, and `Idle mode` plus the same message after re-checking it. The
+  canonical `GET/PUT /api/agent/v1/workspaces/ws_9dcd3e0d.../cache-warming`
+  answered 200 throughout (revisions 4 -> 5 -> 6 for the idle, off and idle
+  states). Captures are viewport shots of the settings dialog: a full-page shot
+  resizes the viewport, which remounts the panel and leaves the row showing
+  "Loading configured mode…" in the image.
 - A session view has no warming control: no `aria-label` or button text matching
   "warm", and no `/api/session-warming` request or console message at all.
 - Evidence: `warming-realpath/` (01 idle before, 02 off after save, 03 idle
   restored, 04 session view, 05 session view with the settings panel closed, plus
-  DOM text for each, `06-console.txt`, `07-network.txt`,
-  `08-cache-warming-requests.txt`) under the task 21 artifacts directory.
+  the settled DOM text and canonical revision for each, `06-console.txt`,
+  `07-network.txt`, `08-cache-warming-requests.txt`) under the task 21 artifacts
+  directory.
 
 #### Checks after phase 2
 
