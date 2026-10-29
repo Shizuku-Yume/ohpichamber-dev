@@ -114,23 +114,6 @@ mock.module('@/components/sections/agents/ModelSelector', () => ({
 mock.module('@/components/sections/commands/AgentSelector', () => ({
   AgentSelector: () => <button type="button">agent</button>,
 }));
-// A Host without per-session warming: the field renders nothing and touches no route.
-mock.module('@/stores/useSessionWarmingStore', () => ({
-  WARMING_DURATION_STEPS: [30, 60, 120, 180],
-  useSessionWarmingStore: <T,>(selector: (state: Record<string, unknown>) => T): T => selector({
-    status: 'unavailable',
-    revision: null,
-    enabled: false,
-    minutes: 60,
-    sessions: {},
-    applySnapshot: () => undefined,
-    refresh: async () => undefined,
-    setMode: async () => undefined,
-    setMinutes: async () => undefined,
-    setSessionWarm: async () => undefined,
-    reset: () => undefined,
-  }),
-}));
 mock.module('@/components/sections/shared/SettingsInfoHint', () => ({
   SettingsInfoHint: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));

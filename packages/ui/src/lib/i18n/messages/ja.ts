@@ -15,7 +15,6 @@ import { htmlRenderI18n } from './html-render.i18n';
 import { sessionNoticesI18n } from './session-notices.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
-import { sessionWarmingI18n } from './session-warming.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
 import { sidebarWorkI18n } from './sidebar-work.i18n';
 import { worktreeArchiveI18n } from './worktree-archive.i18n';
@@ -55,7 +54,6 @@ export const dict = {
   ...sessionNoticesI18n.ja,
   ...usageStatsI18n.ja,
   ...webSearchI18n.ja,
-  ...sessionWarmingI18n.ja,
   ...heapSnapshotI18n.ja,
   ...sidebarWorkI18n.ja,
   ...worktreeArchiveI18n.ja,
@@ -3670,28 +3668,6 @@ export const dict = {
   "settings.webSearch.keys.fieldExample": "例: {example}",
   "settings.webSearch.keys.envHintForm": "OpenCode は {names} からも読み込みます。",
   "settings.webSearch.toast.keyRemoveFailed": "キーを削除できませんでした。",
-  "settings.openchamber.defaults.sessionWarming.aria": "アイドル中のセッションを温めておく方法",
-  "settings.openchamber.defaults.sessionWarming.off": "オフ",
-  "settings.openchamber.defaults.sessionWarming.all": "すべてのセッション",
-  "settings.openchamber.defaults.sessionWarming.session": "選んだセッション",
-  "settings.openchamber.defaults.sessionWarming.info": "プロバイダーによっては、数分間やり取りがないと会話のキャッシュされたコンテキストを忘れ、次のメッセージが遅くなりコストも増えます。セッションがアイドルの間、サーバーは数分ごとに小さなキープアライブ リクエストを送信し、それぞれが小さなリクエストとして課金されます。セッションメニューでセッションごとに有効にし、下で各返信後にセッションをウォーム状態に保つ時間を選びます。",
-  "settings.openchamber.defaults.sessionWarming.duration": "温める時間",
-  "settings.openchamber.defaults.sessionWarming.durationAria": "応答の後にセッションを温める時間",
-  "settings.openchamber.defaults.sessionWarming.duration.30": "30 分",
-  "settings.openchamber.defaults.sessionWarming.duration.60": "1 時間",
-  "settings.openchamber.defaults.sessionWarming.duration.120": "2 時間",
-  "settings.openchamber.defaults.sessionWarming.duration.180": "3 時間",
-  "sessions.sidebar.session.menu.keepWarm": "温めておく",
-  "sessions.sidebar.session.menu.stopWarm": "温めるのをやめる",
-  "sessions.sidebar.session.menuHint.keepWarm": "各応答の後、4 分ごとの小さなリクエストでこのセッションのキャッシュを保ちます。時間は設定で選べます。",
-  "sessions.sidebar.session.menuHint.stopWarm": "このセッションのキープアライブリクエストを止めます。",
-  "sessions.warming.toggleFailed": "このセッションの温め設定を変更できませんでした",
-  "chat.workStatus.warming.turnOn": "このセッションを温めておく",
-  "chat.workStatus.warming.turnOff": "このセッションを温めるのをやめる",
-  "chat.workStatus.warming.off": "温めていません。オンにすると、各応答の後もキャッシュを保ちます。",
-  "chat.workStatus.warming.remaining": "あと {time} 温めます",
-  "chat.workStatus.warming.waiting": "応答が終わると温めます",
-  "chat.workStatus.warming.expired": "1 時間が過ぎました。次の応答の後にまた温めます。",
   "openCodeStatusDialog.heapSnapshot.action": "OpenCode のメモリスナップショットを保存",
   "openCodeStatusDialog.heapSnapshot.hint": "メモリの問題を報告するためのものです。ファイルには API キー、プロンプト、ファイル内容が含まれる場合があるため、共有は非公開で行ってください。",
   "openCodeStatusDialog.heapSnapshot.writing": "スナップショットを書き込み中です。完了するまで OpenCode は一時停止します。",
@@ -4500,7 +4476,6 @@ export const dict = {
   "settings.openchamber.defaults.newSessionsTitle": "新しいセッション",
   "settings.openchamber.defaults.field.model": "モデル",
   "settings.openchamber.defaults.field.agent": "Agent",
-  "settings.openchamber.defaults.promptCacheTitle": "プロンプトキャッシュ",
   "settings.openchamber.defaults.usageLimitsTitle": "使用量の上限",
   "settings.openchamber.defaults.usageLimits.accountSwitching": "アカウントの切り替えは「プロバイダー」でプロバイダーごとに設定します。",
   "settings.openchamber.defaults.usageLimits.openProviders": "プロバイダーを開く",
@@ -8936,7 +8911,6 @@ export const dict = {
   "settings.integrations.linear.sessionComments.info": "セッションの開始・完了・失敗時にイシューへコメントします。リンクを誰でも開けるよう、このサーバーが公開アドレスを持つ場合のみ投稿します。",
   "settings.integrations.linear.sessionComments.aria": "セッション状態のコメントを Linear に投稿",
   "settings.integrations.linear.sessionComments.loadFailed": "Linear のコメント設定を読み込めませんでした。",
-  "settings.openchamber.defaults.sessionWarming.label": "選択したセッションをウォーム状態に保つ",
   "chat.chatInput.actions.linkLinearIssue": "Linear Issueをリンク",
   "chat.chatInput.linked.linearIssue.openInBrowserAria": "LinearでIssueを開く",
   "chat.chatInput.linked.linearIssue.removeAria": "リンクしたLinear Issueを削除",

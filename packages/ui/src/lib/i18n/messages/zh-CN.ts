@@ -15,7 +15,6 @@ import { htmlRenderI18n } from './html-render.i18n';
 import { sessionNoticesI18n } from './session-notices.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
-import { sessionWarmingI18n } from './session-warming.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
 import { sidebarWorkI18n } from './sidebar-work.i18n';
 import { worktreeArchiveI18n } from './worktree-archive.i18n';
@@ -55,7 +54,6 @@ export const dict = {
   ...sessionNoticesI18n['zh-CN'],
   ...usageStatsI18n['zh-CN'],
   ...webSearchI18n['zh-CN'],
-  ...sessionWarmingI18n['zh-CN'],
   ...heapSnapshotI18n['zh-CN'],
   ...sidebarWorkI18n['zh-CN'],
   ...worktreeArchiveI18n['zh-CN'],
@@ -3670,28 +3668,6 @@ export const dict = {
   "settings.webSearch.keys.fieldExample": "示例：{example}",
   "settings.webSearch.keys.envHintForm": "OpenCode 也会从 {names} 读取。",
   "settings.webSearch.toast.keyRemoveFailed": "无法移除密钥。",
-  "settings.openchamber.defaults.sessionWarming.aria": "如何保持空闲会话预热",
-  "settings.openchamber.defaults.sessionWarming.off": "关闭",
-  "settings.openchamber.defaults.sessionWarming.all": "所有会话",
-  "settings.openchamber.defaults.sessionWarming.session": "选定的会话",
-  "settings.openchamber.defaults.sessionWarming.info": "有些提供方会在静默几分钟后忘记对话的缓存上下文，导致下一条消息更慢、费用更高。会话空闲时，服务器每隔几分钟发送一次很小的保活请求，每次都会按小请求计费。在会话菜单中按会话开启；在下方选择每次回复后会话保持温热的时长。",
-  "settings.openchamber.defaults.sessionWarming.duration": "预热时长",
-  "settings.openchamber.defaults.sessionWarming.durationAria": "每次回复后会话保持预热的时长",
-  "settings.openchamber.defaults.sessionWarming.duration.30": "30 分钟",
-  "settings.openchamber.defaults.sessionWarming.duration.60": "1 小时",
-  "settings.openchamber.defaults.sessionWarming.duration.120": "2 小时",
-  "settings.openchamber.defaults.sessionWarming.duration.180": "3 小时",
-  "sessions.sidebar.session.menu.keepWarm": "保持预热",
-  "sessions.sidebar.session.menu.stopWarm": "停止预热",
-  "sessions.sidebar.session.menuHint.keepWarm": "每次回复后，每 4 分钟发送一个很小的请求，保持此会话的缓存上下文。时长在设置中选择。",
-  "sessions.sidebar.session.menuHint.stopWarm": "停止此会话的保活请求。",
-  "sessions.warming.toggleFailed": "无法更改此会话的预热设置",
-  "chat.workStatus.warming.turnOn": "保持此会话预热",
-  "chat.workStatus.warming.turnOff": "停止预热此会话",
-  "chat.workStatus.warming.off": "未预热。开启后，每次回复后保持缓存上下文。",
-  "chat.workStatus.warming.remaining": "还会预热 {time}",
-  "chat.workStatus.warming.waiting": "回复结束后开始预热",
-  "chat.workStatus.warming.expired": "一小时已过。下次回复后会重新预热。",
   "openCodeStatusDialog.heapSnapshot.action": "保存 OpenCode 内存快照",
   "openCodeStatusDialog.heapSnapshot.hint": "用于报告内存问题。文件可能包含 API 密钥、提示词和文件内容，请仅私下分享。",
   "openCodeStatusDialog.heapSnapshot.writing": "正在写入快照。完成前 OpenCode 会暂停。",
@@ -4500,7 +4476,6 @@ export const dict = {
   "settings.openchamber.defaults.newSessionsTitle": "新会话",
   "settings.openchamber.defaults.field.model": "模型",
   "settings.openchamber.defaults.field.agent": "智能体",
-  "settings.openchamber.defaults.promptCacheTitle": "提示词缓存",
   "settings.openchamber.defaults.usageLimitsTitle": "用量限制",
   "settings.openchamber.defaults.usageLimits.accountSwitching": "账号切换在「提供商」中按提供商分别设置。",
   "settings.openchamber.defaults.usageLimits.openProviders": "打开提供商",
@@ -8936,7 +8911,6 @@ export const dict = {
   "settings.integrations.linear.sessionComments.info": "会话开始、完成或失败时在议题下留言。仅当此服务器拥有公网地址时才发布，这样链接才能让所有人打开该会话。",
   "settings.integrations.linear.sessionComments.aria": "将会话状态评论发布到 Linear",
   "settings.integrations.linear.sessionComments.loadFailed": "无法加载 Linear 评论设置。",
-  "settings.openchamber.defaults.sessionWarming.label": "保持所选会话温热",
   "chat.chatInput.actions.linkLinearIssue": "关联 Linear Issue",
   "chat.chatInput.linked.linearIssue.openInBrowserAria": "在 Linear 中打开 Issue",
   "chat.chatInput.linked.linearIssue.removeAria": "移除已关联的 Linear Issue",

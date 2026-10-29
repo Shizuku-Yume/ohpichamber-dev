@@ -1990,7 +1990,7 @@ export const settingsDict = {
   "settings.openchamber.defaults.field.defaultAgent": "סוכן ברירת מחדל",
   "settings.openchamber.defaults.field.showDeletionDialogAria": "הצג תיבת דו-שיח למחיקה",
   "settings.openchamber.defaults.field.sessionWarming": "שמור הפעלות לא פעילות חמות",
-  "settings.openchamber.defaults.field.sessionWarmingInfo": "יש ספקים ששוכחים את ההקשר השמור של שיחה אחרי כמה דקות של שקט, ולכן ההודעה הבאה איטית ויקרה יותר. כשאפשרות זו פעילה, OpenCode שולח בקשת \"OK\" זעירה כל 4 דקות כל עוד ההפעלה לא פעילה, עד 30 דקות אחרי ההודעה האחרונה. כל פינג מחויב כבקשה קטנה. חל על כל הפרויקטים.",
+  "settings.openchamber.defaults.field.sessionWarmingInfo": "משתמש במטחסן ההנחיות המקורי של סביבת העבודה הזו. ייתכנו חיובים על בקשות; המצב המוגדר אינו מבטיח פגיעה במטמון או הרצה בפועל.",
   "settings.openchamber.defaults.field.showDeletionDialog": "הצג תיבת דו-שיח למחיקה",
   "settings.openchamber.defaults.smallModel.title": "מודל קטן",
   "settings.openchamber.defaults.smallModel.description": "מודל זול למשימות עזר מהירות, כמו סיכומים ותקצירים קצרים.",

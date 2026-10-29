@@ -15,7 +15,6 @@ import { htmlRenderI18n } from './html-render.i18n';
 import { sessionNoticesI18n } from './session-notices.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
-import { sessionWarmingI18n } from './session-warming.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
 import { sidebarWorkI18n } from './sidebar-work.i18n';
 import { worktreeArchiveI18n } from './worktree-archive.i18n';
@@ -55,7 +54,6 @@ export const dict = {
   ...sessionNoticesI18n.ko,
   ...usageStatsI18n.ko,
   ...webSearchI18n.ko,
-  ...sessionWarmingI18n.ko,
   ...heapSnapshotI18n.ko,
   ...sidebarWorkI18n.ko,
   ...worktreeArchiveI18n.ko,
@@ -3670,28 +3668,6 @@ export const dict = {
   "settings.webSearch.keys.fieldExample": "예: {example}",
   "settings.webSearch.keys.envHintForm": "OpenCode는 {names}에서도 읽습니다.",
   "settings.webSearch.toast.keyRemoveFailed": "키를 제거하지 못했습니다.",
-  "settings.openchamber.defaults.sessionWarming.aria": "유휴 세션의 캐시를 유지하는 방식",
-  "settings.openchamber.defaults.sessionWarming.off": "끄기",
-  "settings.openchamber.defaults.sessionWarming.all": "모든 세션",
-  "settings.openchamber.defaults.sessionWarming.session": "선택한 세션",
-  "settings.openchamber.defaults.sessionWarming.info": "일부 제공자는 몇 분간 조용하면 대화의 캐시된 컨텍스트를 잊어버려 다음 메시지가 느려지고 비용이 더 듭니다. 세션이 유휴 상태인 동안 서버가 몇 분마다 아주 작은 연결 유지 요청을 보내며, 각각은 작은 요청으로 청구됩니다. 세션 메뉴에서 세션별로 켜고, 아래에서 각 응답 후 세션을 따뜻하게 유지할 시간을 선택하세요.",
-  "settings.openchamber.defaults.sessionWarming.duration": "유지 시간",
-  "settings.openchamber.defaults.sessionWarming.durationAria": "응답 후 세션의 캐시를 유지하는 시간",
-  "settings.openchamber.defaults.sessionWarming.duration.30": "30분",
-  "settings.openchamber.defaults.sessionWarming.duration.60": "1시간",
-  "settings.openchamber.defaults.sessionWarming.duration.120": "2시간",
-  "settings.openchamber.defaults.sessionWarming.duration.180": "3시간",
-  "sessions.sidebar.session.menu.keepWarm": "캐시 유지",
-  "sessions.sidebar.session.menu.stopWarm": "캐시 유지 중지",
-  "sessions.sidebar.session.menuHint.keepWarm": "각 응답 후 4분마다 아주 작은 요청을 보내 이 세션의 캐시된 맥락을 유지합니다. 유지 시간은 설정에서 정합니다.",
-  "sessions.sidebar.session.menuHint.stopWarm": "이 세션의 유지 요청을 멈춥니다.",
-  "sessions.warming.toggleFailed": "이 세션의 캐시 유지를 변경하지 못했습니다",
-  "chat.workStatus.warming.turnOn": "이 세션의 캐시 유지",
-  "chat.workStatus.warming.turnOff": "이 세션의 캐시 유지 중지",
-  "chat.workStatus.warming.off": "캐시를 유지하지 않습니다. 켜면 각 응답 후 캐시된 맥락을 유지합니다.",
-  "chat.workStatus.warming.remaining": "{time} 더 유지",
-  "chat.workStatus.warming.waiting": "응답이 끝나면 유지",
-  "chat.workStatus.warming.expired": "1시간이 지났습니다. 다음 응답 후 다시 유지합니다.",
   "openCodeStatusDialog.heapSnapshot.action": "OpenCode 메모리 스냅샷 저장",
   "openCodeStatusDialog.heapSnapshot.hint": "메모리 문제 보고용입니다. 파일에 API 키, 프롬프트, 파일 내용이 들어 있을 수 있으니 비공개로만 공유하세요.",
   "openCodeStatusDialog.heapSnapshot.writing": "스냅샷을 쓰는 중입니다. 완료될 때까지 OpenCode가 일시 중지됩니다.",
@@ -4500,7 +4476,6 @@ export const dict = {
   "settings.openchamber.defaults.newSessionsTitle": "새 세션",
   "settings.openchamber.defaults.field.model": "모델",
   "settings.openchamber.defaults.field.agent": "에이전트",
-  "settings.openchamber.defaults.promptCacheTitle": "프롬프트 캐시",
   "settings.openchamber.defaults.usageLimitsTitle": "사용량 한도",
   "settings.openchamber.defaults.usageLimits.accountSwitching": "계정 전환은 프로바이더 페이지에서 프로바이더별로 설정합니다.",
   "settings.openchamber.defaults.usageLimits.openProviders": "프로바이더 열기",
@@ -8936,7 +8911,6 @@ export const dict = {
   "settings.integrations.linear.sessionComments.info": "세션이 시작, 완료, 실패할 때 이슈에 댓글을 남깁니다. 링크를 모두가 열 수 있도록 이 서버에 공개 주소가 있을 때만 게시합니다.",
   "settings.integrations.linear.sessionComments.aria": "세션 상태 댓글을 Linear에 게시",
   "settings.integrations.linear.sessionComments.loadFailed": "Linear 댓글 설정을 불러오지 못했습니다.",
-  "settings.openchamber.defaults.sessionWarming.label": "선택한 세션 따뜻하게 유지",
   "chat.chatInput.actions.linkLinearIssue": "Linear 이슈 연결",
   "chat.chatInput.linked.linearIssue.openInBrowserAria": "Linear에서 이슈 열기",
   "chat.chatInput.linked.linearIssue.removeAria": "연결된 Linear 이슈 제거",

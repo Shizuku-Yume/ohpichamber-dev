@@ -194,13 +194,13 @@ tree and re-pointed at the fork's canonical data sources:
   `chatSettingsTabs.ts` so a search result or a deep link can select it. The desktop
   return-key and pasted-image preferences wait for their store and settings-registry
   keys (task 23/25), so they are not offered yet.
-- **Session warming.** Two different features keep the same name, and the page shows
-  both: `openchamber/SessionWarmingCheckbox.tsx` toggles the workspace's cache warming
-  through `CanonicalClient.readCacheWarming`/`updateCacheWarming`, while
-  `openchamber/SessionWarmingModeField.tsx` mirrors the Host's per-session warming
-  (`useSessionWarmingStore`, `/api/session-warming`) — off or chosen sessions, plus
-  the warm duration. A Host without the per-session routes reports `unavailable` and
-  the field hides rather than showing a choice it cannot keep.
+- **Session warming.** Only the workspace control remains:
+  `openchamber/SessionWarmingCheckbox.tsx` reads and writes the workspace's cache
+  warming through `CanonicalClient.readCacheWarming`/`updateCacheWarming`
+  (`GET/PUT /api/agent/v1/workspaces/:workspaceId/cache-warming`) and shows the
+  per-worker apply outcome. Upstream's per-session warming, its settings field and
+  the session-menu toggle were removed (see the decision in `.workflow/decisions.md`);
+  per-session warming returns only once the Agent Service owns it.
 - **Extensions.** `extensions/ExtensionsPage.tsx` renders installed and guest
   extensions as cards with a detail view, install-source badges, the approval dialog
   and the website locale links. Guest capabilities and permissions come from the

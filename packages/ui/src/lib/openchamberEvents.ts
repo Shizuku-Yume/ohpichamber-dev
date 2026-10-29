@@ -5,7 +5,6 @@ import { isRelayModeActive } from './relay/runtime-tunnel';
 import { subscribeRuntimeEndpointChanged } from './runtime-switch';
 import { canDriveBrowserPage } from './browser/hostCapability';
 import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
-import { sessionWarmingSnapshotSchema, type SessionWarmingSnapshot } from '@/stores/useSessionWarmingStore';
 import { z } from 'zod';
 import { trackedItemRecordsSchema } from './trackedItems/model';
 import type { SyncEvent } from './opencode/events';
@@ -238,8 +237,6 @@ type OpenChamberEvent =
   | RoutingSafetySkippedEvent
   | MessageQueueUpdatedEvent
   | PermissionPolicyEvent
-  /** Which sessions the server keeps warm, as a full snapshot. */
-  | { type: 'session-warming'; snapshot: SessionWarmingSnapshot }
   /** The host follows this space's queue again; what changed in a gap is read from the space. */
   | { type: 'space-queue-stream'; spaceId: string }
   /** The host follows this space's permission modes again; what changed in a gap is read from the space. */
@@ -462,12 +459,6 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
       if (event.type !== 'openchamber.permission-auto-accept' && event.type !== 'openchamber.permission-left-for-user') continue;
       for (const listener of listeners) listener({ type: 'permission-policy', event: event as PermissionPolicySyncEvent });
     }
-    return;
-  }
-
-  if (envelope.type === 'openchamber:session-warming') {
-    const parsed = sessionWarmingSnapshotSchema.safeParse(envelope.properties);
-    if (parsed.success) for (const listener of listeners) listener({ type: 'session-warming', snapshot: parsed.data });
     return;
   }
 

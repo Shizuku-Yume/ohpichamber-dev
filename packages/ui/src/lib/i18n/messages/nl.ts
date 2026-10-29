@@ -15,7 +15,6 @@ import { htmlRenderI18n } from './html-render.i18n';
 import { sessionNoticesI18n } from './session-notices.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
-import { sessionWarmingI18n } from './session-warming.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
 import { sidebarWorkI18n } from './sidebar-work.i18n';
 import { worktreeArchiveI18n } from './worktree-archive.i18n';
@@ -55,7 +54,6 @@ export const dict = {
   ...sessionNoticesI18n.nl,
   ...usageStatsI18n.nl,
   ...webSearchI18n.nl,
-  ...sessionWarmingI18n.nl,
   ...heapSnapshotI18n.nl,
   ...sidebarWorkI18n.nl,
   ...worktreeArchiveI18n.nl,
@@ -3670,28 +3668,6 @@ export const dict = {
   "settings.webSearch.keys.fieldExample": "Voorbeeld: {example}",
   "settings.webSearch.keys.envHintForm": "OpenCode leest dit ook uit {names}.",
   "settings.webSearch.toast.keyRemoveFailed": "Kan de sleutel niet verwijderen.",
-  "settings.openchamber.defaults.sessionWarming.aria": "Hoe inactieve sessies warm worden gehouden",
-  "settings.openchamber.defaults.sessionWarming.off": "Uit",
-  "settings.openchamber.defaults.sessionWarming.all": "Alle sessies",
-  "settings.openchamber.defaults.sessionWarming.session": "Gekozen sessies",
-  "settings.openchamber.defaults.sessionWarming.info": "Sommige providers vergeten de gecachte context van een gesprek na een paar minuten stilte, waardoor het volgende bericht trager is en meer kost. Terwijl een sessie inactief is, stuurt de server elke paar minuten een klein keep-alive-verzoek, en elk daarvan wordt als klein verzoek gefactureerd. Zet het per sessie aan in het sessiemenu; kies hieronder hoe lang een sessie na elk antwoord warm blijft.",
-  "settings.openchamber.defaults.sessionWarming.duration": "Warm houden voor",
-  "settings.openchamber.defaults.sessionWarming.durationAria": "Hoe lang een sessie na een antwoord warm blijft",
-  "settings.openchamber.defaults.sessionWarming.duration.30": "30 minuten",
-  "settings.openchamber.defaults.sessionWarming.duration.60": "1 uur",
-  "settings.openchamber.defaults.sessionWarming.duration.120": "2 uur",
-  "settings.openchamber.defaults.sessionWarming.duration.180": "3 uur",
-  "sessions.sidebar.session.menu.keepWarm": "Warm houden",
-  "sessions.sidebar.session.menu.stopWarm": "Niet meer warm houden",
-  "sessions.sidebar.session.menuHint.keepWarm": "Houdt de gecachte context van deze sessie na elk antwoord in leven, met een klein verzoek elke 4 minuten. Hoe lang stel je in bij Instellingen.",
-  "sessions.sidebar.session.menuHint.stopWarm": "Stopt de keep-alive-verzoeken voor deze sessie.",
-  "sessions.warming.toggleFailed": "Warm houden kon voor deze sessie niet worden gewijzigd",
-  "chat.workStatus.warming.turnOn": "Deze sessie warm houden",
-  "chat.workStatus.warming.turnOff": "Deze sessie niet meer warm houden",
-  "chat.workStatus.warming.off": "Wordt niet warm gehouden. Zet het aan om de gecachte context na elk antwoord te bewaren.",
-  "chat.workStatus.warming.remaining": "Nog {time} warm gehouden",
-  "chat.workStatus.warming.waiting": "Wordt warm gehouden zodra het antwoord klaar is",
-  "chat.workStatus.warming.expired": "Het uur is voorbij. Na het volgende antwoord wordt de sessie weer warm gehouden.",
   "openCodeStatusDialog.heapSnapshot.action": "OpenCode-geheugensnapshot opslaan",
   "openCodeStatusDialog.heapSnapshot.hint": "Voor geheugenproblemen. Het bestand kan API-sleutels, prompts en bestandsinhoud bevatten, deel het dus alleen privé.",
   "openCodeStatusDialog.heapSnapshot.writing": "Snapshot wordt geschreven. OpenCode pauzeert tot het klaar is.",
@@ -4500,7 +4476,6 @@ export const dict = {
   "settings.openchamber.defaults.newSessionsTitle": "Nieuwe sessies",
   "settings.openchamber.defaults.field.model": "Model",
   "settings.openchamber.defaults.field.agent": "Agent",
-  "settings.openchamber.defaults.promptCacheTitle": "Promptcache",
   "settings.openchamber.defaults.usageLimitsTitle": "Gebruikslimieten",
   "settings.openchamber.defaults.usageLimits.accountSwitching": "Van account wisselen stel je per provider in bij Providers.",
   "settings.openchamber.defaults.usageLimits.openProviders": "Providers openen",
@@ -8936,7 +8911,6 @@ export const dict = {
   "settings.integrations.linear.sessionComments.info": "Voegt een reactie toe aan het issue wanneer een sessie start, eindigt of mislukt. Reacties worden alleen geplaatst als deze server een openbaar adres heeft, zodat de link de sessie voor iedereen op het issue opent.",
   "settings.integrations.linear.sessionComments.aria": "Sessiestatusreacties naar Linear plaatsen",
   "settings.integrations.linear.sessionComments.loadFailed": "Kan de reactie-instellingen van Linear niet laden",
-  "settings.openchamber.defaults.sessionWarming.label": "Gekozen sessies warm houden",
   "chat.chatInput.actions.linkLinearIssue": "Linear-issue koppelen",
   "chat.chatInput.linked.linearIssue.openInBrowserAria": "Issue in Linear openen",
   "chat.chatInput.linked.linearIssue.removeAria": "Gekoppeld Linear-issue verwijderen",

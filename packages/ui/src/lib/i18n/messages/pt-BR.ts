@@ -15,7 +15,6 @@ import { htmlRenderI18n } from './html-render.i18n';
 import { sessionNoticesI18n } from './session-notices.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
-import { sessionWarmingI18n } from './session-warming.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
 import { sidebarWorkI18n } from './sidebar-work.i18n';
 import { worktreeArchiveI18n } from './worktree-archive.i18n';
@@ -55,7 +54,6 @@ export const dict = {
   ...sessionNoticesI18n['pt-BR'],
   ...usageStatsI18n['pt-BR'],
   ...webSearchI18n['pt-BR'],
-  ...sessionWarmingI18n['pt-BR'],
   ...heapSnapshotI18n['pt-BR'],
   ...sidebarWorkI18n['pt-BR'],
   ...worktreeArchiveI18n['pt-BR'],
@@ -3680,28 +3678,6 @@ export const dict = {
   "settings.webSearch.keys.fieldExample": "Exemplo: {example}",
   "settings.webSearch.keys.envHintForm": "O OpenCode também lê isso de {names}.",
   "settings.webSearch.toast.keyRemoveFailed": "Não foi possível remover a chave.",
-  "settings.openchamber.defaults.sessionWarming.aria": "Como as sessões ociosas ficam aquecidas",
-  "settings.openchamber.defaults.sessionWarming.off": "Desativado",
-  "settings.openchamber.defaults.sessionWarming.all": "Todas as sessões",
-  "settings.openchamber.defaults.sessionWarming.session": "Sessões escolhidas",
-  "settings.openchamber.defaults.sessionWarming.info": "Alguns provedores esquecem o contexto em cache de uma conversa após alguns minutos de silêncio, então a próxima mensagem fica mais lenta e custa mais. Enquanto uma sessão está ociosa, o servidor envia uma pequena requisição de keep-alive a cada poucos minutos, e cada uma é cobrada como uma requisição pequena. Ative por sessão no menu da sessão; abaixo, escolha por quanto tempo uma sessão permanece aquecida após cada resposta.",
-  "settings.openchamber.defaults.sessionWarming.duration": "Manter aquecida por",
-  "settings.openchamber.defaults.sessionWarming.durationAria": "Por quanto tempo uma sessão fica aquecida após uma resposta",
-  "settings.openchamber.defaults.sessionWarming.duration.30": "30 minutos",
-  "settings.openchamber.defaults.sessionWarming.duration.60": "1 hora",
-  "settings.openchamber.defaults.sessionWarming.duration.120": "2 horas",
-  "settings.openchamber.defaults.sessionWarming.duration.180": "3 horas",
-  "sessions.sidebar.session.menu.keepWarm": "Manter aquecida",
-  "sessions.sidebar.session.menu.stopWarm": "Parar de manter aquecida",
-  "sessions.sidebar.session.menuHint.keepWarm": "Mantém o contexto em cache desta sessão vivo após cada resposta, com uma pequena requisição a cada 4 minutos. A duração fica nas Configurações.",
-  "sessions.sidebar.session.menuHint.stopWarm": "Para as requisições de manutenção desta sessão.",
-  "sessions.warming.toggleFailed": "Não foi possível mudar o aquecimento desta sessão",
-  "chat.workStatus.warming.turnOn": "Manter esta sessão aquecida",
-  "chat.workStatus.warming.turnOff": "Parar de manter esta sessão aquecida",
-  "chat.workStatus.warming.off": "Não está aquecida. Ative para manter o contexto em cache após cada resposta.",
-  "chat.workStatus.warming.remaining": "Aquecida por mais {time}",
-  "chat.workStatus.warming.waiting": "Fica aquecida quando a resposta terminar",
-  "chat.workStatus.warming.expired": "A hora acabou. O aquecimento volta depois da próxima resposta.",
   "openCodeStatusDialog.heapSnapshot.action": "Salvar snapshot de memória do OpenCode",
   "openCodeStatusDialog.heapSnapshot.hint": "Para relatar problemas de memória. O arquivo pode conter chaves de API, prompts e conteúdo de arquivos, então compartilhe só em particular.",
   "openCodeStatusDialog.heapSnapshot.writing": "Gravando o snapshot. O OpenCode fica pausado até terminar.",
@@ -4510,7 +4486,6 @@ export const dict = {
   "settings.openchamber.defaults.newSessionsTitle": "Novas sessões",
   "settings.openchamber.defaults.field.model": "Modelo",
   "settings.openchamber.defaults.field.agent": "Agente",
-  "settings.openchamber.defaults.promptCacheTitle": "Cache de prompts",
   "settings.openchamber.defaults.usageLimitsTitle": "Limites de uso",
   "settings.openchamber.defaults.usageLimits.accountSwitching": "A troca de conta é configurada por provedor em Provedores.",
   "settings.openchamber.defaults.usageLimits.openProviders": "Abrir Provedores",
@@ -8936,7 +8911,6 @@ export const dict = {
   "settings.integrations.linear.sessionComments.info": "Comenta na issue quando uma sessão começa, termina ou falha. Os comentários só são publicados se este servidor tiver um endereço público, para que o link abra a sessão para todos.",
   "settings.integrations.linear.sessionComments.aria": "Publicar comentários de status de sessão no Linear",
   "settings.integrations.linear.sessionComments.loadFailed": "Não foi possível carregar as configurações de comentários do Linear.",
-  "settings.openchamber.defaults.sessionWarming.label": "Manter as sessões escolhidas aquecidas",
   "chat.chatInput.actions.linkLinearIssue": "Vincular issue do Linear",
   "chat.chatInput.linked.linearIssue.openInBrowserAria": "Abrir issue no Linear",
   "chat.chatInput.linked.linearIssue.removeAria": "Remover issue do Linear vinculada",
