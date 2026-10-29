@@ -202,14 +202,13 @@ canonical `GET/PUT /api/agent/v1/workspaces/:workspaceId/cache-warming`
   calls `/api/quota/credentials/:providerId`; `packages/web/server/lib/quota/routes.js`
   registers no such route (it has `providers`, `:providerId` and
   `gift-reset/use`). Not exercised, not fixed here.
-- **Per-session warming runtime.** `packages/web/server/lib/session-warming/{routes,runtime}.js`
-  are mounted nowhere and target deleted OpenCode endpoints (`/api/session/active`,
-  `/api/session/:id/generate`). The fork's warming is the canonical workspace
-  `cache-warming`; the upstream per-session surface stays dark
-  (`unavailable`), and its `setMode` fallback still names the retired
-  `/api/config/warming`, unreachable because the field hides first. Owner
-  decision needed: retire the modules or implement per-session warming on the
-  Agent Service.
+- **Per-session warming runtime: removed by decision.** The modules were mounted
+  nowhere and targeted deleted OpenCode endpoints; the maintainer chose to delete
+  them rather than rewire them. See `decisions.md: 2026-10-29 - Delete upstream's
+  per-session warming instead of rewiring it`, and the follow-up entry
+  `Per-session warming has no Agent Service implementation` in
+  `.workflow/technical-debt.md`. The canonical workspace control is untouched and
+  remains the only warming surface.
 - **Default `writer` agent profile.** Its `tools:` list includes tools the worker
   session does not mount, so a session started with it fails
   (`Selected profile tool is unavailable`, now visible in the diagnostic). The
