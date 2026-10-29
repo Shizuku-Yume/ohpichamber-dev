@@ -262,10 +262,12 @@ Real path, headless Chrome on 3740/3741 with the isolated data dir:
   `Idle mode` on load, `Off` plus "Saved; applied to active workers." after
   unchecking it, and `Idle mode` plus the same message after re-checking it. The
   canonical `GET/PUT /api/agent/v1/workspaces/ws_9dcd3e0d.../cache-warming`
-  answered 200 throughout (revisions 4 -> 5 -> 6 for the idle, off and idle
-  states). Captures are viewport shots of the settings dialog: a full-page shot
-  resizes the viewport, which remounts the panel and leaves the row showing
-  "Loading configured mode…" in the image.
+  answered 200 throughout, with revisions 6 -> 7 -> 8 for the idle, off and idle
+  states of the recorded run (the revision is the agent-directory catalog
+  counter, shared by every catalog mutation, so it does not restart at 1).
+  Captures are viewport shots of the settings dialog, taken in file order: a
+  full-page shot resizes the viewport, which remounts the panel and leaves the
+  row showing "Loading configured mode…" in the image.
 - A session view has no warming control: no `aria-label` or button text matching
   "warm", and no `/api/session-warming` request or console message at all.
 - Evidence: `warming-realpath/` (01 idle before, 02 off after save, 03 idle
