@@ -76,7 +76,9 @@ export const RuntimeStatusDialog: React.FC = () => {
           </button>
         </div>
 
-        <pre className="max-h-[60vh] overflow-auto rounded-lg bg-surface-muted p-4 typography-code text-foreground whitespace-pre-wrap">
+        {/* Generated status text is Latin machine output: force LTR so RTL
+            punctuation and alignment rules cannot reorder it. */}
+        <pre dir="ltr" className="max-h-[60vh] overflow-auto rounded-lg bg-surface-muted p-4 typography-code text-foreground whitespace-pre-wrap text-start">
           {runtimeStatusText || t('runtimeStatusDialog.empty.noData')}
         </pre>
       </DialogContent>
