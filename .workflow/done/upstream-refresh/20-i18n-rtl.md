@@ -181,12 +181,12 @@ Bounding rects per shot: `logs/screenshot-bounding-rects.md`.
 
 ### Remaining limits
 
-- 358 English-fallback keys remain in ar/he by task decision; on the Sessions page
+- 349 English-fallback keys remain in ar/he by task decision; on the Sessions page
   this still shows `Keep tracked sessions in their project group` and
   `Move sessions into work automatically` in English.
-- The per-session warming section (`/api/session-warming`) answers 404 on this tip —
-  a documented task 21 gap — so its `Prompt cache` heading renders with no controls
-  and the store logs a warning.
+- The per-session warming section (`/api/session-warming`) answered 404 on this tip,
+  a documented task 21 gap. The combined branch below removes that feature, so the
+  `Prompt cache` heading no longer renders.
 - A Settings project whose directory has been deleted still makes the warming row
   report a read failure (now in the user's language) instead of saying the workspace
   is unavailable. The read runs once per directory and runtime, so the row keeps the
@@ -312,3 +312,90 @@ console:` x=341, pre x=325).
 - A run that also included `src/apps` failed on 78 mobile gesture tests in this
   environment (edge swipe, host-switch); those suites are unrelated to this
   change and were not investigated.
+
+## Combined follow-up branch: ar/he plus the warming removal (2026-10-30)
+
+Branch `upstream-refresh/ar-he-warming-linear`, worktree
+`upstream-refresh-ar-he-warming-linear`, built linearly on the integration tip
+`43dcd6ffc1`. It carries the ar/he follow-up (`upstream-refresh/fix-ar-he`) and
+the per-session warming removal (`upstream-refresh/21-warming`) so either can
+land without landing the other into a conflicted tree. Both source branches and
+the merge-based reference branch below are kept.
+
+### How it was built
+
+`git cherry-pick` of the fifteen local follow-up commits in their existing
+order — the eight from `fix-ar-he`, then the seven from `21-warming` — onto
+`43dcd6ffc1`. No merge commits, so the history stays linear as
+`.workflow/merge-strategy.md` requires. The upstream range was not involved.
+
+Two commits conflicted and were resolved the same way in both attempts:
+
+- `refactor(warming): remove upstream's per-session warming`: four catalog files.
+  Kept this branch's translation of `settings.openchamber.defaults.field.sessionWarmingInfo`
+  (the English sentence it translates is unchanged by the removal), and took the
+  removal's side for the retired per-session block.
+- `docs(workflow): record the per-session warming deletion…`: `.workflow/technical-debt.md`.
+  Kept both appended entries — integration's "Host tool errors collapse to
+  SERVICE_UNAVAILABLE" first, then "Per-session warming has no Agent Service
+  implementation".
+
+One follow-up commit, `fix(i18n): drop the retired per-session warming key from
+ar/he`, removes `settings.openchamber.defaults.sessionWarming.label`. The ar/he
+branch had added it for the retired Settings field; the removal never saw it
+because it did not exist in that branch's base, so it survived the pick and
+would have broken key parity.
+
+### The merge-based reference branch
+
+`upstream-refresh/ar-he-warming` (worktree `upstream-refresh-ar-he-warming`) was
+built first with two `--no-ff` merges and the identical resolutions. It is kept
+only as a resolution reference: at the code boundary, `git diff
+upstream-refresh/ar-he-warming ada837a5e1` (the linear branch's last non-doc
+commit) is empty, so the linear branch carries exactly that tree, task records
+included. This record commit is the only later difference.
+
+### Post-merge state
+
+- Catalogs: en 9,064 keys; ar and he 8,715 each; 0 keys in ar/he that en lacks;
+  349 English-fallback keys per locale; 0 ar/he values naming OpenCode on a key
+  whose English does not; no `{placeholder}` drift beyond the intentional
+  `sessions.sidebar.draft.attachmentsSingle` singular.
+- The retired namespace is gone from every locale: no
+  `settings.openchamber.defaults.sessionWarming.*`, `promptCacheTitle`,
+  `sessions.warming.toggleFailed`, `chat.workStatus.warming.*`,
+  `sessions.sidebar.session.menu(.Hint).keepWarm/stopWarm`, and no
+  `session-warming.i18n.ts` import anywhere.
+- The supported workspace warming copy survives and is translated in ar/he:
+  `settings.openchamber.defaults.field.sessionWarming`,
+  `…field.sessionWarmingInfo`, and all eleven `…warming.*` keys.
+
+### Checks on the combined branch
+
+- `bun run type-check`: exit 0 (`logs/combined-linear-type-check.log`)
+- `bun run lint`: exit 0, the same three pre-existing react-hooks warnings
+  (`logs/combined-linear-lint.log`)
+- UI focused `bun test src/lib/i18n src/components/ui
+  src/components/sections/openchamber/DefaultsSettings.test.tsx
+  src/components/layout/HeaderSessionArchiveMenuItem.test.tsx`: exit 0,
+  152 tests / 59 files (`logs/combined-linear-ui-focused-tests.log`)
+- Web focused `bunx vitest run lib/host/settings-helpers.test.js`: exit 0,
+  59 tests (`logs/combined-linear-web-focused-tests.log`)
+- `bunx oxlint -c oxlint.anti-slop.config.ts` over the changed UI and server
+  files: exit 1 from the findings the file already carries. Two of them land on
+  lines the warming removal added (`settings-helpers.js:1107`, `:1116`, both a
+  `typeof` guard in the same style as every other branch of that sanitizer); the
+  rest predate this branch. Nothing was rewritten here because the code is not
+  this branch's and the file's convention is uniform
+  (`logs/combined-linear-oxlint.log`).
+- `bun run dead-code`: exit 1 (baseline finding count); versus the pinned
+  integration-tip baseline it reports no new file, and two disappear —
+  `WorkStatusWarmingToggle.tsx` (deleted with the feature) and
+  `project-knowledge.js` (adopted by integration after that baseline was taken)
+  (`logs/combined-linear-dead-code.log`, `logs/combined-linear-dead-code.diff`).
+
+### Held for the heavy slot
+
+No dev server, app build or root test ran here; task 19 owns that slot. When it
+frees: the Arabic/Hebrew real path (Sessions warming row, Runtime status dialog,
+one Arabic chat) and `bun run test` at this tip.
