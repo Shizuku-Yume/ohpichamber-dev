@@ -5834,7 +5834,6 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.overrideModel": "النموذج البديل",
   "settings.openchamber.defaults.walkthroughModel.overrideModel": "نموذج جولة الشرح",
   "settings.openchamber.defaults.option.defaultLowercase": "افتراضي",
-  "settings.openchamber.defaults.sessionWarming.label": "إبقاء الجلسات المختارة نشطة",
   "settings.openchamber.git.title": "تفضيلات Git",
   "settings.openchamber.git.changesViewTitle": "عرض التغييرات",
   "settings.openchamber.git.changesViewAria": "وضع عرض تغييرات Git",
