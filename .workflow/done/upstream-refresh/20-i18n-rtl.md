@@ -399,3 +399,25 @@ included. This record commit is the only later difference.
 No dev server, app build or root test ran here; task 19 owns that slot. When it
 frees: the Arabic/Hebrew real path (Sessions warming row, Runtime status dialog,
 one Arabic chat) and `bun run test` at this tip.
+
+### A/B review at the pinned boundary `b75c015740`
+
+- **A (locale/catalog):** correct, no defect. Key parity holds with 0 keys only in
+  ar/he, the retired namespace is gone from source and callers, the surviving
+  workspace warming copy reads correctly in both locales, the 13 Runtime status /
+  palette keys exist and the OpenCode-as-engine rule has no violation. It counted
+  9,075 en / 8,729 ar / 8,729 he and 346 missing by walking the source files; the
+  runtime dictionaries measured here are 9,064 / 8,715 / 8,715 with 349 missing.
+  The difference is the counting method (literal keys across the split files versus
+  the assembled dictionary); both agree on 0 extra keys.
+- **B (provenance):** correct. All 15 source commits have ordered counterparts, 13
+  patch-identical and 2 adapted by the conflict resolutions; the history is linear
+  with no upstream commit in its ancestry; both debt entries are present; the
+  ar/he `field.sessionWarmingInfo` translations and the retired-key removal match
+  the rules; `git diff ada837a5e1 upstream-refresh/ar-he-warming` is empty; the
+  source branches, `main` and the integration ref were not rewritten.
+
+Integration moved to `811ecef471` while this branch was being built. The three
+commits since `43dcd6ffc1` are workflow-documentation only (no file under
+`packages/ui/src/lib/i18n/messages/`, no warming code), so landing starts with a
+three-commit rebase and needs no new review.
