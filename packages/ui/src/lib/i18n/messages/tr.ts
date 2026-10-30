@@ -15,7 +15,6 @@ import { htmlRenderI18n } from './html-render.i18n';
 import { sessionNoticesI18n } from './session-notices.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
-import { sessionWarmingI18n } from './session-warming.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
 import { sidebarWorkI18n } from './sidebar-work.i18n';
 import { worktreeArchiveI18n } from './worktree-archive.i18n';
@@ -55,7 +54,6 @@ export const dict = {
   ...sessionNoticesI18n.tr,
   ...usageStatsI18n.tr,
   ...webSearchI18n.tr,
-  ...sessionWarmingI18n.tr,
   ...heapSnapshotI18n.tr,
   ...sidebarWorkI18n.tr,
   ...worktreeArchiveI18n.tr,
@@ -3609,28 +3607,6 @@ export const dict = {
   "settings.webSearch.keys.fieldExample": "Örnek: {example}",
   "settings.webSearch.keys.envHintForm": "OpenCode bunu {names} üzerinden de okur.",
   "settings.webSearch.toast.keyRemoveFailed": "Anahtar kaldırılamadı.",
-  "settings.openchamber.defaults.sessionWarming.aria": "Boştaki oturumlar nasıl sıcak tutulur",
-  "settings.openchamber.defaults.sessionWarming.off": "Kapalı",
-  "settings.openchamber.defaults.sessionWarming.all": "Tüm oturumlar",
-  "settings.openchamber.defaults.sessionWarming.session": "Seçilen oturumlar",
-  "settings.openchamber.defaults.sessionWarming.info": "Bazı sağlayıcılar birkaç dakika sessizlikten sonra konuşmanın önbelleğe alınmış bağlamını unutur; sonraki mesaj daha yavaş olur ve daha pahalıya gelir. Oturum boştayken sunucu birkaç dakikada bir çok küçük bir canlı tutma isteği gönderir ve her biri küçük bir istek olarak faturalandırılır. Oturum menüsünde oturum başına açın; aşağıda her yanıttan sonra oturumun ne kadar sıcak kalacağını seçin.",
-  "settings.openchamber.defaults.sessionWarming.duration": "Sıcak tutma süresi",
-  "settings.openchamber.defaults.sessionWarming.durationAria": "Bir oturumun yanıttan sonra ne kadar sıcak kalacağı",
-  "settings.openchamber.defaults.sessionWarming.duration.30": "30 dk",
-  "settings.openchamber.defaults.sessionWarming.duration.60": "1 saat",
-  "settings.openchamber.defaults.sessionWarming.duration.120": "2 saat",
-  "settings.openchamber.defaults.sessionWarming.duration.180": "3 saat",
-  "sessions.sidebar.session.menu.keepWarm": "Sıcak tut",
-  "sessions.sidebar.session.menu.stopWarm": "Sıcak tutmayı durdur",
-  "sessions.sidebar.session.menuHint.keepWarm": "Bu oturumun önbelleğe alınmış bağlamını her yanıttan sonra, her 4 dakikada bir küçük bir istekle canlı tutar. Süre Ayarlar'da seçilir.",
-  "sessions.sidebar.session.menuHint.stopWarm": "Bu oturum için canlı tutma isteklerini durdurur.",
-  "sessions.warming.toggleFailed": "Bu oturum için sıcak tutma değiştirilemedi",
-  "chat.workStatus.warming.turnOn": "Bu oturumu sıcak tut",
-  "chat.workStatus.warming.turnOff": "Bu oturumu sıcak tutmayı durdur",
-  "chat.workStatus.warming.off": "Sıcak tutulmuyor. Önbelleğe alınmış bağlamı her yanıttan sonra korumak için açın.",
-  "chat.workStatus.warming.remaining": "{time} daha sıcak tutulacak",
-  "chat.workStatus.warming.waiting": "Yanıt bitince sıcak tutulacak",
-  "chat.workStatus.warming.expired": "Bir saat doldu. Bir sonraki yanıttan sonra yeniden sıcak tutulur.",
   "openCodeStatusDialog.heapSnapshot.action": "OpenCode bellek anlık görüntüsünü kaydet",
   "openCodeStatusDialog.heapSnapshot.hint": "Bellek sorunlarını bildirmek için. Dosya API anahtarları, istemler ve dosya içerikleri barındırabilir, bu yüzden yalnızca özel olarak paylaşın.",
   "openCodeStatusDialog.heapSnapshot.writing": "Anlık görüntü yazılıyor. Bitene kadar OpenCode duraklar.",
@@ -4439,7 +4415,6 @@ export const dict = {
   "settings.openchamber.defaults.newSessionsTitle": "Yeni oturumlar",
   "settings.openchamber.defaults.field.model": "Model",
   "settings.openchamber.defaults.field.agent": "Agent",
-  "settings.openchamber.defaults.promptCacheTitle": "İstem önbelleği",
   "settings.openchamber.defaults.usageLimitsTitle": "Kullanım sınırları",
   "settings.openchamber.defaults.usageLimits.accountSwitching": "Hesap değiştirme, Provider'lar bölümünde sağlayıcı başına ayarlanır.",
   "settings.openchamber.defaults.usageLimits.openProviders": "Provider'ları aç",
@@ -8936,7 +8911,6 @@ export const dict = {
   "settings.gitlab.actions.addInstance": "Instance ekle",
   "settings.gitlab.device.waiting": "Cihazı GitLab'da yetkilendirin, ardından OpenChamber'a dönün. Bu sayfa otomatik olarak güncellenir.",
   "settings.gitlab.actions.openGitLab": "GitLab'ı Aç",
-  "settings.openchamber.defaults.sessionWarming.label": "Seçilen oturumları sıcak tut",
   "chat.chatInput.actions.linkLinearIssue": "Linear Issue bağla",
   "chat.chatInput.linked.linearIssue.openInBrowserAria": "Issue'u Linear'da aç",
   "chat.chatInput.linked.linearIssue.removeAria": "Bağlı Linear issue'u kaldır",

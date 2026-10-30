@@ -93,6 +93,17 @@ export const createSettingsHelpers = (dependencies) => {
   // settings-helpers.test.js fails when the two lists drift apart.
   const UI_LOCALE_VALUES = new Set(['en', 'de', 'fr', 'nl', 'zh-CN', 'zh-TW', 'uk', 'es', 'pt-BR', 'ko', 'pl', 'ja', 'tr', 'ar', 'he']);
   const SIDEBAR_PROJECT_SORT_ORDER_VALUES = new Set(['manual', 'a-z', 'z-a', 'date-added', 'recent']);
+  // Registry keys that are plain switches. They need no branch of their own, but
+  // each still has to reach `result` or the registry allowlist silently drops it.
+  const PERSISTABLE_BOOLEAN_SETTINGS = Object.freeze([
+    'layoutAnimations', 'openLinksInBrowserPanel', 'openTrackerLinksOnBoard',
+    'worktreeArchiveOnDoneEnabled', 'showOpenCodeUpdateNotifications',
+    'agentScheduleToolEnabled', 'agentKnowledgeToolEnabled', 'agentRenderToolEnabled',
+    'agentWorkflowToolEnabled', 'mobileReturnKeySends', 'savePastedImagesAsFiles',
+  ]);
+  // Mirrors `LIVE_BROWSER_TABS_MIN`/`MAX` in packages/ui/src/lib/browser/liveTabs.ts.
+  const LIVE_BROWSER_TABS_MIN = 1;
+  const LIVE_BROWSER_TABS_MAX = 20;
   const SIDEBAR_WORKTREE_SORT_ORDER_VALUES = new Set(['recent', 'manual', 'a-z']);
   const HIDDEN_MODELS_MAX = 1024;
   const RECENT_EFFORTS_MAX_KEYS = 128;
@@ -1087,6 +1098,23 @@ export const createSettingsHelpers = (dependencies) => {
       if (trimmed.length <= STT_LANGUAGE_MAX_LENGTH) {
         result.sttLanguage = trimmed;
       }
+    }
+
+    // Plain switches the UI persists but this chain had no branch for, so the
+    // registry listed them and every write dropped them (settings-registry.json
+    // caught it once it was regenerated). Keep each one a strict boolean.
+    for (const key of PERSISTABLE_BOOLEAN_SETTINGS) {
+      if (typeof candidate[key] === 'boolean') {
+        result[key] = candidate[key];
+      }
+    }
+    if (Number.isInteger(candidate.liveBrowserTabLimit)
+      && candidate.liveBrowserTabLimit >= LIVE_BROWSER_TABS_MIN
+      && candidate.liveBrowserTabLimit <= LIVE_BROWSER_TABS_MAX) {
+      result.liveBrowserTabLimit = candidate.liveBrowserTabLimit;
+    }
+    if (typeof candidate.smallModelVariant === 'string' && candidate.smallModelVariant.trim().length > 0) {
+      result.smallModelVariant = candidate.smallModelVariant.trim();
     }
 
     // The registry is the last word on what a client may persist: a key the

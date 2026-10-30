@@ -15,7 +15,6 @@ import { htmlRenderI18n } from './html-render.i18n';
 import { sessionNoticesI18n } from './session-notices.i18n';
 import { usageStatsI18n } from './usage-stats.i18n';
 import { webSearchI18n } from './websearch.i18n';
-import { sessionWarmingI18n } from './session-warming.i18n';
 import { heapSnapshotI18n } from './heap-snapshot.i18n';
 import { sidebarWorkI18n } from './sidebar-work.i18n';
 import { worktreeArchiveI18n } from './worktree-archive.i18n';
@@ -55,7 +54,6 @@ export const dict = {
   ...sessionNoticesI18n.uk,
   ...usageStatsI18n.uk,
   ...webSearchI18n.uk,
-  ...sessionWarmingI18n.uk,
   ...heapSnapshotI18n.uk,
   ...sidebarWorkI18n.uk,
   ...worktreeArchiveI18n.uk,
@@ -3680,28 +3678,6 @@ export const dict = {
   "settings.webSearch.keys.fieldExample": "Приклад: {example}",
   "settings.webSearch.keys.envHintForm": "OpenCode також читає це з {names}.",
   "settings.webSearch.toast.keyRemoveFailed": "Не вдалося видалити ключ.",
-  "settings.openchamber.defaults.sessionWarming.aria": "Як тримати неактивні сесії «теплими»",
-  "settings.openchamber.defaults.sessionWarming.off": "Вимкнено",
-  "settings.openchamber.defaults.sessionWarming.all": "Усі сесії",
-  "settings.openchamber.defaults.sessionWarming.session": "Вибрані сесії",
-  "settings.openchamber.defaults.sessionWarming.info": "Деякі провайдери забувають кешований контекст розмови за кілька хвилин тиші, тож наступне повідомлення повільніше й дорожче. Поки сесія простоює, сервер надсилає крихітний запит підтримки кожні кілька хвилин, і кожен тарифікується як малий запит. Увімкніть це для сесії в меню сесії; нижче виберіть, скільки сесія залишається теплою після кожної відповіді.",
-  "settings.openchamber.defaults.sessionWarming.duration": "Тримати «теплою»",
-  "settings.openchamber.defaults.sessionWarming.durationAria": "Скільки сесія лишається «теплою» після відповіді",
-  "settings.openchamber.defaults.sessionWarming.duration.30": "30 хв",
-  "settings.openchamber.defaults.sessionWarming.duration.60": "1 год",
-  "settings.openchamber.defaults.sessionWarming.duration.120": "2 год",
-  "settings.openchamber.defaults.sessionWarming.duration.180": "3 год",
-  "sessions.sidebar.session.menu.keepWarm": "Тримати «теплою»",
-  "sessions.sidebar.session.menu.stopWarm": "Не тримати «теплою»",
-  "sessions.sidebar.session.menuHint.keepWarm": "Тримає закешований контекст цієї сесії після кожної відповіді, з крихітним запитом кожні 4 хвилини. Скільки саме, задається в налаштуваннях.",
-  "sessions.sidebar.session.menuHint.stopWarm": "Зупиняє запити підтримки для цієї сесії.",
-  "sessions.warming.toggleFailed": "Не вдалося змінити підтримку «теплою» для цієї сесії",
-  "chat.workStatus.warming.turnOn": "Тримати цю сесію «теплою»",
-  "chat.workStatus.warming.turnOff": "Не тримати цю сесію «теплою»",
-  "chat.workStatus.warming.off": "Не тримається «теплою». Увімкніть, щоб контекст лишався в кеші після кожної відповіді.",
-  "chat.workStatus.warming.remaining": "«Тепла» ще {time}",
-  "chat.workStatus.warming.waiting": "Буде «теплою» після завершення відповіді",
-  "chat.workStatus.warming.expired": "Година минула. Після наступної відповіді сесія знову буде «теплою».",
   "openCodeStatusDialog.heapSnapshot.action": "Зберегти знімок пам’яті OpenCode",
   "openCodeStatusDialog.heapSnapshot.hint": "Для звітів про пам’ять. Файл може містити API-ключі, промпти й вміст файлів, тож передавайте його лише приватно.",
   "openCodeStatusDialog.heapSnapshot.writing": "Записуємо знімок. OpenCode на паузі, доки запис не завершиться.",
@@ -4510,7 +4486,6 @@ export const dict = {
   "settings.openchamber.defaults.newSessionsTitle": "Нові сесії",
   "settings.openchamber.defaults.field.model": "Модель",
   "settings.openchamber.defaults.field.agent": "Агент",
-  "settings.openchamber.defaults.promptCacheTitle": "Кеш промптів",
   "settings.openchamber.defaults.usageLimitsTitle": "Ліміти використання",
   "settings.openchamber.defaults.usageLimits.accountSwitching": "Перемикання акаунтів налаштовується для кожного провайдера в розділі Провайдери.",
   "settings.openchamber.defaults.usageLimits.openProviders": "Відкрити Провайдери",
@@ -8936,7 +8911,6 @@ export const dict = {
   "settings.integrations.linear.sessionComments.info": "Додає коментар до тікета, коли сесія починається, завершується або падає. Коментарі публікуються, лише якщо цей сервер має публічну адресу, щоб посилання відкривало сесію для всіх.",
   "settings.integrations.linear.sessionComments.aria": "Публікувати коментарі про стан сесії в Linear",
   "settings.integrations.linear.sessionComments.loadFailed": "Не вдалося завантажити налаштування коментарів Linear.",
-  "settings.openchamber.defaults.sessionWarming.label": "Тримати вибрані сесії теплими",
   "chat.chatInput.actions.linkLinearIssue": "Прив’язати Linear issue",
   "chat.chatInput.linked.linearIssue.openInBrowserAria": "Відкрити issue в Linear",
   "chat.chatInput.linked.linearIssue.removeAria": "Прибрати прив’язаний Linear issue",

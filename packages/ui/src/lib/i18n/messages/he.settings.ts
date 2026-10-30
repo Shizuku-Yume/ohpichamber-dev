@@ -2019,7 +2019,6 @@ export const settingsDict = {
   "settings.openchamber.defaults.smallModel.overrideModel": "מודל חלופי",
   "settings.openchamber.defaults.walkthroughModel.overrideModel": "מודל הסיור",
   "settings.openchamber.defaults.option.defaultLowercase": "ברירת מחדל",
-  "settings.openchamber.defaults.sessionWarming.label": "לשמור הפעלות נבחרות חמות",
   "settings.openchamber.git.title": "העדפות Git",
   "settings.openchamber.git.changesViewTitle": "תצוגת שינויים",
   "settings.openchamber.git.changesViewAria": "מצב תצוגת השינויים ב-Git",

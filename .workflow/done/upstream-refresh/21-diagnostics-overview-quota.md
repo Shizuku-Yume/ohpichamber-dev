@@ -202,14 +202,13 @@ canonical `GET/PUT /api/agent/v1/workspaces/:workspaceId/cache-warming`
   calls `/api/quota/credentials/:providerId`; `packages/web/server/lib/quota/routes.js`
   registers no such route (it has `providers`, `:providerId` and
   `gift-reset/use`). Not exercised, not fixed here.
-- **Per-session warming runtime.** `packages/web/server/lib/session-warming/{routes,runtime}.js`
-  are mounted nowhere and target deleted OpenCode endpoints (`/api/session/active`,
-  `/api/session/:id/generate`). The fork's warming is the canonical workspace
-  `cache-warming`; the upstream per-session surface stays dark
-  (`unavailable`), and its `setMode` fallback still names the retired
-  `/api/config/warming`, unreachable because the field hides first. Owner
-  decision needed: retire the modules or implement per-session warming on the
-  Agent Service.
+- **Per-session warming runtime: removed by decision.** The modules were mounted
+  nowhere and targeted deleted OpenCode endpoints; the maintainer chose to delete
+  them rather than rewire them. See `decisions.md: 2026-10-29 - Delete upstream's
+  per-session warming instead of rewiring it`, and the follow-up entry
+  `Per-session warming has no Agent Service implementation` in
+  `.workflow/technical-debt.md`. The canonical workspace control is untouched and
+  remains the only warming surface.
 - **Default `writer` agent profile.** Its `tools:` list includes tools the worker
   session does not mount, so a session started with it fails
   (`Selected profile tool is unavailable`, now visible in the diagnostic). The
@@ -246,6 +245,48 @@ work and a pending permission under Needs you, the diagnostics export downloadin
 a 2101-character timeline with zero prompt or credential matches, and the quota
 surface showing its per-provider state. What could not be reached is listed under
 Limits.
+
+#### Follow-up: per-session warming deleted, real path re-checked (2026-10-29)
+
+Branch `upstream-refresh/21-warming` on top of `8ee84af280`. Removed the whole
+per-session chain (server modules, store, sync subscriber, Settings field, session
+toggle, event type, strings in every locale) and kept the canonical workspace
+control. Decision: `decisions.md: 2026-10-29 - Delete upstream's per-session
+warming instead of rewiring it`; follow-up:
+`Per-session warming has no Agent Service implementation` in
+`.workflow/technical-debt.md`.
+
+Real path, headless Chrome on 3740/3741 with the isolated data dir:
+
+- Settings > Sessions shows one warming row, "Keep idle sessions warm":
+  `Idle mode` on load, `Off` plus "Saved; applied to active workers." after
+  unchecking it, and `Idle mode` plus the same message after re-checking it. The
+  canonical `GET/PUT /api/agent/v1/workspaces/ws_9dcd3e0d.../cache-warming`
+  answered 200 throughout, with revisions 6 -> 7 -> 8 for the idle, off and idle
+  states of the recorded run (the revision is the agent-directory catalog
+  counter, shared by every catalog mutation, so it does not restart at 1).
+  Captures are viewport shots of the settings dialog, taken in file order: a
+  full-page shot resizes the viewport, which remounts the panel and leaves the
+  row showing "Loading configured mode…" in the image.
+- A session view has no warming control: no `aria-label` or button text matching
+  "warm", and no `/api/session-warming` request or console message at all.
+- Console: nothing from the removed route, but the run still logs git-project
+  404/422 failures ("Failed to read project repositories: Not Found"),
+  `WorkerPoolManager: worker initialization timed out after 10000ms` twice, the
+  Base UI `nativeButton` warning from the defaults dropdown, a "Loading screen
+  timeout" warning and a form-field id/name issue. None of them belong to the
+  canonical warming row, whose `GET/PUT` requests all answered 200.
+- Evidence, all in `warming-realpath/` under the task 21 artifacts directory:
+  `01-settings-warming-idle-before.{png,txt}`,
+  `02-settings-warming-off-after-save.{png,txt}` and
+  `03-settings-warming-idle-restored.{png,txt}` are the settled captures of the
+  row (each `.txt` holds the DOM text at capture plus the canonical state and
+  revision); `04-session-no-warming-control.{png,txt}` and
+  `05-session-view-closed-settings.{png,txt}` are the session views;
+  `10-console-ordered-run.txt` and `10-network-ordered-run.txt` are the console
+  and request logs of the recorded run. `06-console.txt`, `07-network.txt`,
+  `08-cache-warming-requests.txt` and `09-*` belong to the superseded first pass
+  and are kept only for traceability.
 
 #### Checks after phase 2
 
