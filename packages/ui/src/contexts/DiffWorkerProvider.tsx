@@ -76,49 +76,96 @@ let currentRenderTheme: { light: string; dark: string } = {
   light: 'pierre-light',
   dark: 'pierre-dark',
 };
+let workerInitTimeoutOverride: number | undefined;
 
 const notifyPoolListeners = () => {
   for (const listener of poolListeners) listener();
 };
 
-const applyRenderOptions = (style: WorkerPoolStyle, pool: WorkerPoolManager) => {
-  void pool.setRenderOptions({
-    theme: currentRenderTheme,
-    lineDiffType: WORKER_POOL_CONFIG[style].lineDiffType,
-  });
+const applyRenderOptions = (style: WorkerPoolStyle, pool: WorkerPoolManager): Promise<void> => {
+  return pool
+    .setRenderOptions({
+      theme: currentRenderTheme,
+      lineDiffType: WORKER_POOL_CONFIG[style].lineDiffType,
+    })
+    .catch(() => {
+      // If setting render options fails (e.g. worker terminated or worker error),
+      // cleanly evict the pool so callers fall back to main-thread rendering.
+      if (pools[style] === pool) {
+        try {
+          pool.terminate();
+        } catch {
+          // Ignore termination errors on failed pool
+        }
+        delete pools[style];
+        notifyPoolListeners();
+      }
+    });
 };
 
 const ensurePool = (style: WorkerPoolStyle): void => {
   if (typeof window === 'undefined' || poolsRequested.has(style)) return;
   poolsRequested.add(style);
-  void loadPoolModules().then((modules) => {
-    if (pools[style]) return;
-    const config = WORKER_POOL_CONFIG[style];
-    const pool = new modules.WorkerPoolManager(
-      {
-        workerFactory: modules.workerFactory,
-        poolSize: config.poolSize,
-        totalASTLRUCacheSize: config.totalASTLRUCacheSize,
-        // Highlights tokenizes this much in about a millisecond, less than a
-        // worker round trip, so small files and diffs paint highlighted in
-        // their first frame. Shiki is slower but the threshold stays small.
-        mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS,
-      },
-      {
-        theme: {
-          light: 'pierre-light',
-          dark: 'pierre-dark',
+  void loadPoolModules()
+    .then(async (modules) => {
+      if (pools[style]) return;
+      const config = WORKER_POOL_CONFIG[style];
+      const pool = new modules.WorkerPoolManager(
+        {
+          workerFactory: modules.workerFactory,
+          poolSize: config.poolSize,
+          totalASTLRUCacheSize: config.totalASTLRUCacheSize,
+          // Highlights tokenizes this much in about a millisecond, less than a
+          // worker round trip, so small files and diffs paint highlighted in
+          // their first frame. Shiki is slower but the threshold stays small.
+          mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS,
+          workerInitializationTimeout: workerInitTimeoutOverride,
+          onWorkerError: (event) => {
+            if ('preventDefault' in event && typeof event.preventDefault === 'function') {
+              event.preventDefault();
+            }
+          },
         },
-        langs: PRELOAD_LANGS,
-        lineDiffType: config.lineDiffType,
-        preferredHighlighter: modules.highlighter,
+        {
+          theme: {
+            light: 'pierre-light',
+            dark: 'pierre-dark',
+          },
+          langs: PRELOAD_LANGS,
+          lineDiffType: config.lineDiffType,
+          preferredHighlighter: modules.highlighter,
+        }
+      );
+      try {
+        await pool.initialize();
+        if (!pool.isWorkingPool()) {
+          try {
+            pool.terminate();
+          } catch {
+            // Ignore termination errors
+          }
+          return;
+        }
+        await pool.setRenderOptions({
+          theme: currentRenderTheme,
+          lineDiffType: WORKER_POOL_CONFIG[style].lineDiffType,
+        });
+        pools[style] = pool;
+        notifyPoolListeners();
+      } catch {
+        try {
+          pool.terminate();
+        } catch {
+          // Ignore termination errors on failed pool
+        }
+        delete pools[style];
+        notifyPoolListeners();
       }
-    );
-    void pool.initialize();
-    pools[style] = pool;
-    applyRenderOptions(style, pool);
-    notifyPoolListeners();
-  });
+    })
+    .catch(() => {
+      delete pools[style];
+      notifyPoolListeners();
+    });
 };
 
 const subscribeToPools = (listener: () => void): (() => void) => {
@@ -133,11 +180,16 @@ const setRenderTheme = (renderTheme: { light: string; dark: string }) => {
   currentRenderTheme = renderTheme;
   for (const style of Object.keys(pools) as WorkerPoolStyle[]) {
     const pool = pools[style];
-    if (pool) applyRenderOptions(style, pool);
+    if (pool) void applyRenderOptions(style, pool);
   }
 };
 
-export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children }) => {
+interface DiffWorkerProviderComponent extends React.FC<DiffWorkerProviderProps> {
+  _setWorkerInitTimeoutForTesting?: (timeout: number | undefined) => void;
+  _resetPoolsForTesting?: () => void;
+}
+
+export const DiffWorkerProvider: DiffWorkerProviderComponent = ({ children }) => {
   const themeSystem = useOptionalThemeSystem();
 
   const fallbackLight = getDefaultTheme(false);
@@ -160,12 +212,14 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
   // with, so ordering is preserved even before this resolves.
   useEffect(() => {
     let cancelled = false;
-    void loadPoolModules().then((modules) => {
-      if (cancelled) return;
-      modules.ensurePierreThemeRegistered(lightTheme);
-      modules.ensurePierreThemeRegistered(darkTheme);
-      setRenderTheme({ light: lightTheme.metadata.id, dark: darkTheme.metadata.id });
-    });
+    void loadPoolModules()
+      .then((modules) => {
+        if (cancelled) return;
+        modules.ensurePierreThemeRegistered(lightTheme);
+        modules.ensurePierreThemeRegistered(darkTheme);
+        setRenderTheme({ light: lightTheme.metadata.id, dark: darkTheme.metadata.id });
+      })
+      .catch(() => { });
     return () => {
       cancelled = true;
     };
@@ -181,7 +235,9 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
     const warm = () => {
       ensurePool('unified');
       ensurePool('split');
-      void import('@/components/chat/markdown/highlightsEngine').then(({ loadHighlights }) => loadHighlights());
+      void import('@/components/chat/markdown/highlightsEngine')
+        .then(({ loadHighlights }) => loadHighlights())
+        .catch(() => { });
     };
     if (typeof window.requestIdleCallback === 'function') {
       const handle = window.requestIdleCallback(warm, { timeout: 5000 });
@@ -190,10 +246,26 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
     const timeout = window.setTimeout(warm, 2000);
     return () => window.clearTimeout(timeout);
   }, []);
-
   return <>{children}</>;
 };
+DiffWorkerProvider._setWorkerInitTimeoutForTesting = (timeout: number | undefined): void => {
+  workerInitTimeoutOverride = timeout;
+};
 
+DiffWorkerProvider._resetPoolsForTesting = (): void => {
+  workerInitTimeoutOverride = undefined;
+  poolModulesPromise = null;
+  for (const style of Object.keys(pools) as WorkerPoolStyle[]) {
+    try {
+      pools[style]?.terminate();
+    } catch {
+      // Ignore termination errors during reset
+    }
+    delete pools[style];
+  }
+  poolsRequested.clear();
+  poolListeners.clear();
+};
 // oxlint-disable-next-line react/only-export-components
 export const useWorkerPool = (style: WorkerPoolStyle = 'unified'): WorkerPoolManager | undefined => {
   const pool = useSyncExternalStore(

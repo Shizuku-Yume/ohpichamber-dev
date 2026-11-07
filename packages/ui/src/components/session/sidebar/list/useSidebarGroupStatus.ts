@@ -24,7 +24,6 @@ export const useSidebarGroupStatus = ({
   chatGroup: SessionGroup | null;
   canGrantAccess: boolean;
 }): SidebarGroupStatusResult => {
-  const globalStatus = useGlobalSessionsStore((state) => state.status);
   const globalRefreshFailed = useGlobalSessionsStore((state) => state.globalRefreshFailed);
   const hasLoadedGlobalSessions = useGlobalSessionsStore((state) => state.hasLoaded);
   const discoveryErrors = useGlobalSessionsStore((state) => state.discoveryErrors);
@@ -102,6 +101,6 @@ export const useSidebarGroupStatus = ({
       }
     }
     return statuses;
-  }, [bootstrapSnapshot, canGrantAccess, childStores, groups, globalStatus, globalRefreshFailed, hasLoadedGlobalSessions, discoveryErrors]);
+  }, [bootstrapSnapshot, canGrantAccess, childStores, groups, globalRefreshFailed, hasLoadedGlobalSessions, discoveryErrors]);
   return { groupStatusByKey, bootstrapSnapshot };
 };
