@@ -161,3 +161,13 @@ test('icon-only command actions carry accessible names', async () => {
   const trigger = container!.querySelector<HTMLButtonElement>('button svg use[href="#oc-more-2"]')?.closest('button');
   expect(trigger?.getAttribute('aria-label')).toBe('custom');
 });
+
+test('groups built-in commands under Built-in commands and custom commands under Custom commands', async () => {
+  const builtin: CommandEntry = { ...command, commandId: 'command_builtin', name: 'compact', description: 'Compact context', editable: false, source: 'builtin' };
+  const custom: CommandEntry = { ...command, commandId: 'command_custom', name: 'review', description: 'Review changes', editable: true, source: 'workspace' };
+  await render(async () => true, [builtin, custom]);
+  expect(container!.textContent).toContain('Built-in commands');
+  expect(container!.textContent).toContain('Custom commands');
+  expect(container!.textContent).toContain('/compact');
+  expect(container!.textContent).toContain('/review');
+});

@@ -8,6 +8,8 @@ import { CommandCatalogStateSchema, FileResourceExpandResultSchema, FileResource
 import type { FileResourceOperation } from '../catalogs/file-resources-protocol.ts';
 import { WorkerOperationError, WorkerRegistry } from './workers.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
+import { lookupBuiltinSlashCommand } from '@oh-my-pi/pi-coding-agent/slash-commands/builtin-registry';
+import { ALLOWED_BUILTIN_COMMANDS } from '../worker/builtin-commands.ts';
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close(); });
@@ -26,7 +28,8 @@ async function fixture() {
     if (result.type !== 'fileResources') throw new Error('Expected native file-resource result');
     return result.result;
   };
-  return { root, cwd, agentDirectory, workers, operation,
+  return {
+    root, cwd, agentDirectory, workers, operation,
     reopen: async () => {
       for (const worker of workers.list()) await workers.stop(worker.rootSessionId);
       catalogs = new WorkspaceCatalogs(stateDirectory, workers);
@@ -141,4 +144,63 @@ test('shared native prompt preparation classifies no-op matches and expands each
   const untouched = '/skill:unlisted\n\nuntouched args  ';
   expect(await h.operation({ action: 'input.expand', request: { text: untouched } })).toEqual({ kind: 'prompt-input', result: { kind: 'text', content: untouched } });
   expect(await h.operation({ action: 'input.expand', request: { text: '/first\targument' } })).toEqual({ kind: 'prompt-input', result: { kind: 'text', content: '/first\targument' } });
+}, 60000);
+
+test('all 29 ALLOWED_BUILTIN_COMMANDS are projected as read-only inherited entries and file-backed commands remain editable', async () => {
+  const h = await fixture();
+  const catalogResult = await h.operation({ action: 'commands.read' });
+  if (catalogResult.kind !== 'commands') throw new Error('Expected command catalog');
+  const catalog = CommandCatalogStateSchema.parse(catalogResult.catalog);
+
+  expect(catalog.builtinCommands).toEqual([...ALLOWED_BUILTIN_COMMANDS]);
+  for (const name of ALLOWED_BUILTIN_COMMANDS) {
+    const entry = catalog.commands.find(cmd => cmd.name === name && cmd.source === 'builtin');
+    if (!entry) throw new Error(`Missing projected builtin command: ${name}`);
+    expect(entry.editable).toBe(false);
+    expect(entry.scope).toBe('inherited');
+    expect(entry.source).toBe('builtin');
+    expect(typeof entry.description).toBe('string');
+    expect(entry.description.length).toBeGreaterThan(0);
+
+    const spec = lookupBuiltinSlashCommand(name);
+    const expectedDesc = spec?.description ?? spec?.acpDescription ?? '';
+    expect(entry.description).toBe(expectedDesc);
+    const expectedHint = spec?.acpInputHint ?? spec?.inlineHint ?? undefined;
+    expect(entry.argumentHint).toBe(expectedHint);
+  }
+  // Assert dedicated /btw is also projected read-only without modifying the 29-command execution allowlist
+  const btwEntry = catalog.commands.find(cmd => cmd.name === 'btw' && cmd.source === 'builtin');
+  if (!btwEntry) throw new Error('Missing projected builtin command: btw');
+  expect(btwEntry.editable).toBe(false);
+  expect(btwEntry.scope).toBe('inherited');
+  expect(catalog.builtinCommands).not.toContain('btw');
+
+  const compactBuiltin = catalog.commands.find(cmd => cmd.name === 'compact' && cmd.source === 'builtin');
+  if (!compactBuiltin) throw new Error('Missing compact builtin');
+  await expect(h.operation({ action: 'commands.update', request: { expectedRevision: catalog.revision, commandId: compactBuiltin.commandId, name: 'compact', scope: 'workspace', content: 'should fail' } })).rejects.toMatchObject({ status: 403 });
+  await expect(h.operation({ action: 'commands.delete', request: { expectedRevision: catalog.revision, commandId: compactBuiltin.commandId } })).rejects.toMatchObject({ status: 403 });
+
+  const created = await h.operation({
+    action: 'commands.create',
+    request: {
+      expectedRevision: catalog.revision,
+      name: 'compact',
+      scope: 'workspace',
+      description: 'Custom compact override',
+      content: 'Custom compact template\n',
+    },
+  });
+  if (created.kind !== 'commands') throw new Error('Expected command catalog after create');
+  const updatedCatalog = CommandCatalogStateSchema.parse(created.catalog);
+  const fileBacked = updatedCatalog.commands.find(cmd => cmd.name === 'compact' && cmd.editable);
+  if (!fileBacked) throw new Error('Expected file-backed compact command to be present and editable');
+  expect(fileBacked.editable).toBe(true);
+  expect(fileBacked.scope).toBe('workspace');
+  expect(fileBacked.content).toBe('Custom compact template\n');
+  expect(fileBacked.description).toBe('Custom compact override');
+
+  const builtinStillPresent = updatedCatalog.commands.find(cmd => cmd.name === 'compact' && !cmd.editable);
+  if (!builtinStillPresent) throw new Error('Expected builtin compact to remain present');
+  expect(builtinStillPresent.editable).toBe(false);
+  expect(builtinStillPresent.scope).toBe('inherited');
 }, 60000);

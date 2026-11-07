@@ -35,7 +35,7 @@ export const CommandsPage: React.FC = () => {
   const selectedName = useCommandsStore(state => state.selectedCommandName);
   const commands = useCommandsStore(state => selectCommandsForDirectory(state, directory));
   const draft = useCommandsStore(state => state.commandDraft);
-  const entity = commands.find(command => command.name === selectedName);
+  const entity = commands.find(command => command.name === selectedName && command.editable) ?? commands.find(command => command.name === selectedName);
   const isNew = Boolean(draft && draft.name === selectedName && !entity);
   const readOnly = Boolean(entity && !entity.editable);
   const group = isNew ? draft?.group : entity?.group;
@@ -117,7 +117,7 @@ export const CommandsPage: React.FC = () => {
     );
   }
   return <SettingsPageLayout title={isNew ? t('settings.commands.page.title.new') : `/${selectedName}`}
-    description={isNew ? t('settings.commands.page.subtitle.new') : t('settings.commands.page.subtitle.edit')}
+    description={isNew ? t('settings.commands.page.subtitle.new') : readOnly ? t('settings.commands.sidebar.section.builtIn') : t('settings.commands.page.subtitle.edit')}
     onBlurCapture={autosave.onBlurCapture}>
     <fieldset disabled={readOnly} className="min-w-0">
       <SettingsSection title={t('settings.commands.page.section.identity')} divider={false} contentClassName="space-y-0">
@@ -163,37 +163,41 @@ export const CommandsPage: React.FC = () => {
           />
         </SettingsFieldRow>
       </SettingsSection>
-      <SettingsSection title={t('settings.commands.page.section.executionContext')} contentClassName="space-y-0">
-        <SettingsFieldRow settingsItem="commands.model" label={t('settings.agents.page.field.overrideModel')}>
-          <ModelSelector providerId={form.modelSelection?.providerId ?? ''} modelId={form.modelSelection?.modelId ?? ''}
-            directory={directory ?? undefined} onChange={(providerId, modelId) => {
-              setForm({ ...form, modelSelection: providerId && modelId ? { providerId, modelId } : null });
-              requestSave();
-            }} className={SETTINGS_CUSTOM_TRIGGER_CLASS} />
-        </SettingsFieldRow>
-        {group ? <SettingsFieldRow settingsItem="commands.group" label={t('settings.commands.page.field.group')}>
-          <span className="typography-meta text-muted-foreground truncate">{group}</span>
-        </SettingsFieldRow> : null}
-      </SettingsSection>
-      <SettingsSection title={t('settings.commands.page.section.template')} settingsItem="commands.template">
-        <Textarea value={form.content} onChange={event => setForm({ ...form, content: event.target.value })}
-          placeholder={t('settings.commands.page.field.templatePlaceholder')} rows={12}
-          className="w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent" />
-        <p className="mt-2 typography-meta text-muted-foreground">
-          <code className="text-foreground">$ARGUMENTS</code> {t('settings.commands.page.templateHint.userInput')} &middot;{' '}
-          <code className="text-foreground">!`cmd`</code> {t('settings.commands.page.templateHint.shellOutput')} &middot;{' '}
-          <code className="text-foreground">@file</code> {t('settings.commands.page.templateHint.fileContents')}
-        </p>
-        {isNew && <div className="flex items-center gap-2 pt-3">
-          <Button onClick={() => void create()} disabled={creating || !form.name.trim() || !form.content.trim()}
-            size="xs" >
-            {creating ? t('settings.common.actions.saving') : t('settings.common.actions.create')}
-          </Button>
-          <Button variant="ghost" onClick={cancelCreate} disabled={creating} size="xs" >
-            {t('settings.common.actions.cancel')}
-          </Button>
-        </div>}
-      </SettingsSection>
+      {(!readOnly || form.modelSelection || group) && (
+        <SettingsSection title={t('settings.commands.page.section.executionContext')} contentClassName="space-y-0">
+          <SettingsFieldRow settingsItem="commands.model" label={t('settings.agents.page.field.overrideModel')}>
+            <ModelSelector providerId={form.modelSelection?.providerId ?? ''} modelId={form.modelSelection?.modelId ?? ''}
+              directory={directory ?? undefined} onChange={(providerId, modelId) => {
+                setForm({ ...form, modelSelection: providerId && modelId ? { providerId, modelId } : null });
+                requestSave();
+              }} className={SETTINGS_CUSTOM_TRIGGER_CLASS} />
+          </SettingsFieldRow>
+          {group ? <SettingsFieldRow settingsItem="commands.group" label={t('settings.commands.page.field.group')}>
+            <span className="typography-meta text-muted-foreground truncate">{group}</span>
+          </SettingsFieldRow> : null}
+        </SettingsSection>
+      )}
+      {(!readOnly || form.content) && (
+        <SettingsSection title={t('settings.commands.page.section.template')} settingsItem="commands.template">
+          <Textarea value={form.content} onChange={event => setForm({ ...form, content: event.target.value })}
+            placeholder={t('settings.commands.page.field.templatePlaceholder')} rows={12}
+            className="w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent" />
+          <p className="mt-2 typography-meta text-muted-foreground">
+            <code className="text-foreground">$ARGUMENTS</code> {t('settings.commands.page.templateHint.userInput')} &middot;{' '}
+            <code className="text-foreground">!`cmd`</code> {t('settings.commands.page.templateHint.shellOutput')} &middot;{' '}
+            <code className="text-foreground">@file</code> {t('settings.commands.page.templateHint.fileContents')}
+          </p>
+          {isNew && <div className="flex items-center gap-2 pt-3">
+            <Button onClick={() => void create()} disabled={creating || !form.name.trim() || !form.content.trim()}
+              size="xs" >
+              {creating ? t('settings.common.actions.saving') : t('settings.common.actions.create')}
+            </Button>
+            <Button variant="ghost" onClick={cancelCreate} disabled={creating} size="xs" >
+              {t('settings.common.actions.cancel')}
+            </Button>
+          </div>}
+        </SettingsSection>
+      )}
     </fieldset>
   </SettingsPageLayout>;
 };

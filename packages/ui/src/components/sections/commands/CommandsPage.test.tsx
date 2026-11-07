@@ -28,7 +28,7 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
-const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+const _fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
   const request = new Request(input instanceof Request ? input : new URL(input, window.location.href), init);
   const path = new URL(request.url).pathname;
   if (path === '/api/fs/home') return Response.json({ home: '/test' });
@@ -60,14 +60,14 @@ const { SyncProvider } = await import('@/sync/sync-context');
 const initialStore = useCommandsStore.getState();
 const container = document.createElement('div');
 document.body.appendChild(container);
-const root = createRoot(container);
+let root = createRoot(container);
 
 afterEach(async () => {
   await act(async () => root.unmount());
+  container.innerHTML = '';
+  root = createRoot(container);
   useCommandsStore.setState(initialStore, true);
   await new Promise((resolve) => setTimeout(resolve, 350));
-  fetchSpy.mockRestore();
-  browser.close();
 });
 
 test('a command refresh during save preserves the newer draft for the queued save', async () => {
@@ -79,11 +79,13 @@ test('a command refresh during save preserves the newer draft for the queued sav
     commands: [command],
     commandsByDirectory: { '/project': [command] },
     updateCommand: async (_name, config) => new Promise<boolean>((resolve) => {
-      writes.push({ template: config.content || '', agentId: config.agentId, publish: () => {
-        const { agentId, ...rest } = { ...command, ...config };
-        const updated: CommandEntry = { ...rest, ...(agentId ? { agentId } : {}) };
-        useCommandsStore.setState({ commands: [updated], commandsByDirectory: { '/project': [updated] } });
-      }, finish: (success = true) => resolve(success) });
+      writes.push({
+        template: config.content || '', agentId: config.agentId, publish: () => {
+          const { agentId, ...rest } = { ...command, ...config };
+          const updated: CommandEntry = { ...rest, ...(agentId ? { agentId } : {}) };
+          useCommandsStore.setState({ commands: [updated], commandsByDirectory: { '/project': [updated] } });
+        }, finish: (success = true) => resolve(success)
+      });
     }),
   });
   await act(async () => { root.render(<SyncProvider directory="/project"><I18nProvider><CommandsPage /></I18nProvider></SyncProvider>); });
@@ -137,4 +139,42 @@ test('a command refresh during save preserves the newer draft for the queued sav
   await act(async () => { writes[6].finish(); });
   await act(async () => { prompt.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
   expect(writes).toHaveLength(7);
+});
+
+test('shows read-only built-in command detail and disables fields', async () => {
+  const builtin: CommandEntry = {
+    commandId: 'command_compact',
+    name: 'compact',
+    content: '',
+    description: 'Manually compact the session context',
+    argumentHint: '[soft|remote|snapcompact] [focus]',
+    scope: 'inherited',
+    source: 'builtin',
+    editable: false,
+  };
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  useCommandsStore.setState({
+    selectedCommandName: builtin.name,
+    commands: [builtin],
+    commandsByDirectory: { '/project': [builtin] },
+  });
+
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <SyncProvider directory="/project">
+          <CommandsPage />
+        </SyncProvider>
+      </I18nProvider>
+    );
+  });
+
+  expect(container.textContent).toContain('/compact');
+  expect(container.textContent).toContain('Built-in commands');
+  const fieldset = container.querySelector('fieldset');
+  expect(fieldset?.disabled).toBe(true);
+  const descTextarea = container.querySelector<HTMLTextAreaElement>('textarea');
+  expect(descTextarea?.value).toBe('Manually compact the session context');
+  const hintInput = container.querySelector<HTMLInputElement>('input[aria-label="$ARGUMENTS"]');
+  expect(hintInput?.value).toBe('[soft|remote|snapcompact] [focus]');
 });

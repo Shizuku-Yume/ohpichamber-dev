@@ -22,6 +22,7 @@ import {
 import type { FileResourceOperation, FileResourceResult } from '../catalogs/file-resources-protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { buildPublicSkillPrompt, sanitizeSkillRoots } from './catalog-skills.ts';
+import { lookupBuiltinSlashCommand } from '@oh-my-pi/pi-coding-agent/slash-commands/builtin-registry';
 import { ALLOWED_BUILTIN_COMMANDS, isAllowedBuiltinCommand } from './builtin-commands.ts';
 
 export interface NativeFileResourcesContext {
@@ -48,7 +49,7 @@ function denied(): never { throw new ProjectionError(403, 'UNAUTHORIZED', 'Resou
 
 /** Native discovery and expansion run only here; file IDs never grant arbitrary path access. */
 export class NativeFileResources {
-  constructor(private readonly context: NativeFileResourcesContext) {}
+  constructor(private readonly context: NativeFileResourcesContext) { }
 
   private root(scope: FileResourceScope, kind: 'commands' | 'prompts' | 'skills'): string {
     return scope === 'workspace' ? join(this.context.cwd, '.omp', kind) : join(this.context.agentDirectory, kind);
@@ -128,16 +129,43 @@ export class NativeFileResources {
       const data = this.metadata(file.text, file.path);
       const definition = discovered.items.find(item => item.path === file.path);
       const command = native.find(item => item.name === definition?.name && item._source?.providerName === definition?._source.providerName);
-      return { path: file.path, entry: CommandEntrySchema.parse({ ...data, commandId: identity('command', file.path), name: definition?.name ?? basename(file.name),
-        description: data.description ?? command?.description ?? '', scope: file.scope, source: command?.source ?? file.scope, editable: true }) };
+      return {
+        path: file.path, entry: CommandEntrySchema.parse({
+          ...data, commandId: identity('command', file.path), name: definition?.name ?? basename(file.name),
+          description: data.description ?? command?.description ?? '', scope: file.scope, source: command?.source ?? file.scope, editable: true
+        })
+      };
     });
     for (const command of native) {
       const source = discovered.items.find(item => item.name === command.name && item._source.providerName === command._source?.providerName);
       if (source && result.some(item => item.path === source.path)) continue;
       const metadata = source ? this.metadata(await readFile(source.path, 'utf8'), source.path) : {};
-      result.push({ entry: CommandEntrySchema.parse({ ...metadata, commandId: identity('command', source ? `${source.path}:${command.name}` : `bundled:${command.name}`),
-        name: command.name, content: command.content, description: command.description, argumentHint: command.argumentHint,
-        scope: 'inherited', source: command.source, editable: false }) });
+      result.push({
+        entry: CommandEntrySchema.parse({
+          ...metadata, commandId: identity('command', source ? `${source.path}:${command.name}` : `bundled:${command.name}`),
+          name: command.name, content: command.content, description: command.description, argumentHint: command.argumentHint,
+          scope: 'inherited', source: command.source, editable: false
+        })
+      });
+    }
+    const projectedBuiltins = [...ALLOWED_BUILTIN_COMMANDS, 'btw'] as const;
+    for (const name of projectedBuiltins) {
+      const spec = lookupBuiltinSlashCommand(name);
+      if (!spec) continue;
+      const description = spec?.description ?? spec?.acpDescription ?? '';
+      const argumentHint = spec?.acpInputHint ?? spec?.inlineHint ?? undefined;
+      result.push({
+        entry: CommandEntrySchema.parse({
+          commandId: identity('command', `builtin:${name}`),
+          name,
+          description,
+          argumentHint,
+          content: '',
+          scope: 'inherited',
+          source: 'builtin',
+          editable: false,
+        }),
+      });
     }
     const ranks = new Map(native.map((command, index) => [`${command.source}\0${command.name}`, index]));
     result.sort((a, b) => (ranks.get(`${a.entry.source}\0${a.entry.name}`) ?? native.length) - (ranks.get(`${b.entry.source}\0${b.entry.name}`) ?? native.length));
@@ -150,9 +178,13 @@ export class NativeFileResources {
       const data = this.metadata(file.text, file.path);
       const directory = file.name.includes('/') ? file.name.slice(0, file.name.lastIndexOf('/')) : '';
       const source = `(${file.scope === 'agent' ? 'user' : 'project'}${directory ? `:${directory.replaceAll('/', ':')}` : ''})`;
-      return { path: file.editable ? file.path : undefined, entry: PromptTemplateEntrySchema.parse({ content: data.content, description: data.description ?? '',
-        modelSelection: data.modelSelection, agentId: data.agentId, group: data.group ?? (directory || undefined),
-        templateId: identity('template', file.path), name: basename(file.name), scope: file.editable ? file.scope : 'inherited', source, editable: file.editable }) };
+      return {
+        path: file.editable ? file.path : undefined, entry: PromptTemplateEntrySchema.parse({
+          content: data.content, description: data.description ?? '',
+          modelSelection: data.modelSelection, agentId: data.agentId, group: data.group ?? (directory || undefined),
+          templateId: identity('template', file.path), name: basename(file.name), scope: file.editable ? file.scope : 'inherited', source, editable: file.editable
+        })
+      };
     });
     for (const [index, template] of native.entries()) {
       if (result.some(item => item.entry.name === template.name && item.entry.content === template.content && item.entry.source === template.source)) continue;
@@ -216,9 +248,11 @@ export class NativeFileResources {
         const location = await this.authorable(skill.filePath, 'skills');
         const authoredSkillId = location ? relative(this.root(location.scope, 'skills'), dirname(skill.filePath)).split(sep).join('/') : undefined;
         const authored = FileResourcePathSchema.safeParse(authoredSkillId);
-        const entry: FileResourceSkillEntry = { skillId: identity('skill', skill.filePath), name: skill.name, description: sanitizeSkillRoots(skill, skill.description, this.context),
+        const entry: FileResourceSkillEntry = {
+          skillId: identity('skill', skill.filePath), name: skill.name, description: sanitizeSkillRoots(skill, skill.description, this.context),
           content: await readFile(skill.filePath, 'utf8'), source: skill._source?.providerName ?? 'native',
-          scope: location?.scope ?? 'inherited', readOnly: !location || !authored.success };
+          scope: location?.scope ?? 'inherited', readOnly: !location || !authored.success
+        };
         if (authored.success) entry.authoredSkillId = authored.data;
         skills.push(entry);
       }
@@ -264,7 +298,7 @@ export class NativeFileResources {
         else await this.remove(location);
       }
       commands = (await this.commands()).entries;
-      return { kind: 'commands', catalog: { workspaceId, revision, commands: commands.filter(item => item.entry.source !== 'builtin' || isAllowedBuiltinCommand(item.entry.name)).map(item => item.entry), builtinCommands: [...ALLOWED_BUILTIN_COMMANDS] } };
+      return { kind: 'commands', catalog: { workspaceId, revision, commands: commands.filter(item => item.entry.source !== 'builtin' || isAllowedBuiltinCommand(item.entry.name) || item.entry.name === 'btw').map(item => item.entry), builtinCommands: [...ALLOWED_BUILTIN_COMMANDS] } };
     }
     let { entries: templates } = await this.templates();
     if (operation.action === 'templates.expand') {
