@@ -120,6 +120,29 @@ export const CommandsPage: React.FC = () => {
       </div>
     );
   }
+  if (entity?.source === 'builtin') {
+    return (
+      <SettingsPageLayout
+        title={`/${selectedName}`}
+        description={t('settings.commands.sidebar.section.builtIn')}
+      >
+        <SettingsSection title={t('settings.commands.page.section.identity')} divider={false} contentClassName="space-y-3">
+          <SettingsStackedField className="py-1.5" label={t('settings.common.field.description')} controlClassName="w-full max-w-none">
+            <p className="typography-body text-foreground leading-relaxed whitespace-pre-wrap">
+              {form.description || t('settings.commands.page.field.descriptionPlaceholder')}
+            </p>
+          </SettingsStackedField>
+          {form.argumentHint ? (
+            <SettingsFieldRow settingsItem="commands.argument-hint" label={t('settings.commands.page.field.argumentHint')}>
+              <code className="typography-mono rounded bg-muted px-2 py-0.5 text-xs text-foreground">
+                {form.argumentHint}
+              </code>
+            </SettingsFieldRow>
+          ) : null}
+        </SettingsSection>
+      </SettingsPageLayout>
+    );
+  }
   return <SettingsPageLayout title={isNew ? t('settings.commands.page.title.new') : `/${selectedName}`}
     description={isNew ? t('settings.commands.page.subtitle.new') : readOnly ? t('settings.commands.sidebar.section.builtIn') : t('settings.commands.page.subtitle.edit')}
     onBlurCapture={autosave.onBlurCapture}>

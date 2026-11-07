@@ -90,11 +90,23 @@ export const useCommandsStore = create<CommandsStore>()(devtools((set, get) => {
  return {
   selectedCommandId: null, selectedCommandName: null, commands: [], commandsByDirectory: {}, catalogsByDirectory: {}, isLoading: false, commandDraft: null,
   setSelectedCommand: (name) => {
-   const match = get().commands.find(c => c.name === name);
+   let match = get().commands.find(c => c.name === name);
+   if (!match) {
+    for (const list of Object.values(get().commandsByDirectory)) {
+     match = list.find(c => c.name === name);
+     if (match) break;
+    }
+   }
    set({ selectedCommandName: name, selectedCommandId: match?.commandId ?? null });
   },
   setSelectedCommandId: (id) => {
-   const match = get().commands.find(c => c.commandId === id);
+   let match = get().commands.find(c => c.commandId === id);
+   if (!match) {
+    for (const list of Object.values(get().commandsByDirectory)) {
+     match = list.find(c => c.commandId === id);
+     if (match) break;
+    }
+   }
    set({ selectedCommandId: id, selectedCommandName: match?.name ?? id });
   },
   setCommandDraft: (draft) => set({ commandDraft: draft, selectedCommandId: null }),

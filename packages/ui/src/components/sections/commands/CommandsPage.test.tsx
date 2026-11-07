@@ -141,7 +141,7 @@ test('a command refresh during save preserves the newer draft for the queued sav
   expect(writes).toHaveLength(7);
 });
 
-test('shows read-only built-in command detail and disables fields', async () => {
+test('shows clean read-only built-in command detail without form chrome', async () => {
   const builtin: CommandEntry = {
     commandId: 'command_compact',
     name: 'compact',
@@ -155,6 +155,7 @@ test('shows read-only built-in command detail and disables fields', async () => 
   useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
   useCommandsStore.setState({
     selectedCommandName: builtin.name,
+    selectedCommandId: builtin.commandId,
     commands: [builtin],
     commandsByDirectory: { '/project': [builtin] },
   });
@@ -171,10 +172,9 @@ test('shows read-only built-in command detail and disables fields', async () => 
 
   expect(container.textContent).toContain('/compact');
   expect(container.textContent).toContain('Built-in commands');
-  const fieldset = container.querySelector('fieldset');
-  expect(fieldset?.disabled).toBe(true);
-  const descTextarea = container.querySelector<HTMLTextAreaElement>('textarea');
-  expect(descTextarea?.value).toBe('Compress session history using AI to reduce context size');
-  const hintInput = container.querySelector<HTMLInputElement>('input[aria-label="$ARGUMENTS"]');
-  expect(hintInput?.value).toBe('[soft|remote|snapcompact] [focus]');
+  expect(container.textContent).toContain('Compress session history using AI to reduce context size');
+  expect(container.textContent).toContain('[soft|remote|snapcompact] [focus]');
+  expect(container.querySelector('textarea')).toBeNull();
+  expect(container.querySelector('input')).toBeNull();
+  expect(container.querySelector('fieldset')).toBeNull();
 });
