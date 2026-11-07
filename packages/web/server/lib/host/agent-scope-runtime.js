@@ -7,6 +7,28 @@ import { MetadataReadError, MetadataWriteError, HostMetadataError } from './meta
 
 const WorkspaceDirectorySchema = z.string().refine((directory) => Boolean(directory.trim()) && path.isAbsolute(directory.trim()));
 
+/**
+ * OMP's agent directory, resolved the same way OMP itself resolves it: an
+ * explicit `PI_CODING_AGENT_DIR` wins, then `PI_CONFIG_DIR` relocates the whole
+ * config root, then the default `~/.omp/agent`. The Host is the authority that
+ * tells the Agent Service which directory to bind, so it must agree with the
+ * worker's own resolution or the two would address different state.
+ *
+ * `PI_CONFIG_DIR` is a directory *name* relative to the home directory in OMP
+ * (`getConfigDirName()` feeds `path.join(os.homedir(), name)`), so a relative
+ * value joins onto home. An absolute value is taken as the root itself, which
+ * is what a launcher that relocates state outside the home directory passes.
+ */
+export const resolveAgentDirectory = ({ env = process.env, home = os.homedir(), pathModule = path } = {}) => {
+  const agentDir = typeof env.PI_CODING_AGENT_DIR === 'string' ? env.PI_CODING_AGENT_DIR.trim() : '';
+  if (agentDir) return pathModule.resolve(agentDir);
+  const configDir = typeof env.PI_CONFIG_DIR === 'string' ? env.PI_CONFIG_DIR.trim() : '';
+  const configRoot = !configDir
+    ? pathModule.join(home, '.omp')
+    : pathModule.isAbsolute(configDir) ? pathModule.resolve(configDir) : pathModule.join(home, configDir);
+  return pathModule.join(configRoot, 'agent');
+};
+
 const failureCode = (error) => error instanceof HostMetadataError ? error.code : 'METADATA_READ_FAILED';
 const displayPath = (scope) => path.relative(scope.projectDirectory, scope.cwd) || '.';
 const publicWorkspace = (scope) => ({
@@ -18,7 +40,7 @@ const publicWorkspace = (scope) => ({
 /** Configured Host projects and their registered worktrees are the directory authority, not client path hints. */
 export const createHostAgentScopeRuntime = ({
   store, readSettings, sanitizeProjects, validateDirectoryPath, getWorktrees, managedChatsScope,
-  getArchiveCatalog = () => [], agentDirectory = path.join(os.homedir(), '.omp', 'agent'), fsPromises = fs.promises,
+  getArchiveCatalog = () => [], agentDirectory = resolveAgentDirectory(), fsPromises = fs.promises,
 }) => {
   const readProjects = async () => sanitizeProjects((await readSettings()).projects) ?? [];
   const initialize = async () => {

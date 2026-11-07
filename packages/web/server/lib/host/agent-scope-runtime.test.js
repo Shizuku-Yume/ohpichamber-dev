@@ -6,7 +6,7 @@ import express from 'express';
 import request from 'supertest';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHostSessionState } from './session-state.js';
-import { createHostAgentScopeRuntime } from './agent-scope-runtime.js';
+import { createHostAgentScopeRuntime, resolveAgentDirectory } from './agent-scope-runtime.js';
 import { createSettingsNormalizationRuntime } from './settings-normalization-runtime.js';
 import { createProjectDirectoryRuntime } from './project-directory-runtime.js';
 import { getWorktrees } from '../git/service.js';
@@ -55,6 +55,22 @@ const admittedSession = (scope, sessionId = 'native-session') => ({
   displayPath: scope.displayPath, createdAt: 1700000000000, updatedAt: 1700000000000,
   epoch: 'native-epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null,
   mode: { kind: 'main' },
+});
+
+describe('agent directory resolution', () => {
+  const home = '/home/user';
+  it('honours the explicit agent directory, then the relocated config root, then the default', () => {
+    expect(resolveAgentDirectory({ home, env: {} })).toBe('/home/user/.omp/agent');
+    expect(resolveAgentDirectory({ home, env: { PI_CONFIG_DIR: '.omp-alt' } })).toBe('/home/user/.omp-alt/agent');
+    // An absolute config root is used as-is, not joined onto home.
+    expect(resolveAgentDirectory({ home, env: { PI_CONFIG_DIR: '/srv/omp-iso' } })).toBe('/srv/omp-iso/agent');
+    expect(resolveAgentDirectory({ home, env: { PI_CODING_AGENT_DIR: '/custom/agent' } })).toBe('/custom/agent');
+    expect(resolveAgentDirectory({ home, env: { PI_CONFIG_DIR: '.omp-alt', PI_CODING_AGENT_DIR: '/custom/agent' } }))
+      .toBe('/custom/agent');
+    // Blank values are not a configuration.
+    expect(resolveAgentDirectory({ home, env: { PI_CONFIG_DIR: '  ', PI_CODING_AGENT_DIR: '  ' } }))
+      .toBe('/home/user/.omp/agent');
+  });
 });
 
 describe('configured Host scope authority', () => {

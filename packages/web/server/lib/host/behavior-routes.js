@@ -14,12 +14,18 @@ const asError = (message, status = 400) => Object.assign(new Error(message), { s
 
 /**
  * OMP's own agent directory: `PI_CODING_AGENT_DIR` when the Host was started
- * with one, otherwise the default `~/.omp/agent`.
+ * with one, then `PI_CONFIG_DIR` relocating the config root, otherwise the
+ * default `~/.omp/agent`. `PI_CONFIG_DIR` is a name relative to home in OMP; an
+ * absolute value is the relocated root itself.
  */
 const resolveGlobalAgentsPath = ({ os, pathModule = path, env = process.env }) => {
   const configured = typeof env.PI_CODING_AGENT_DIR === 'string' ? env.PI_CODING_AGENT_DIR.trim() : '';
-  const agentDirectory = configured ? pathModule.resolve(configured) : pathModule.join(os.homedir(), '.omp', 'agent');
-  return pathModule.join(agentDirectory, AGENTS_FILE_NAME);
+  if (configured) return pathModule.join(pathModule.resolve(configured), AGENTS_FILE_NAME);
+  const configDir = typeof env.PI_CONFIG_DIR === 'string' ? env.PI_CONFIG_DIR.trim() : '';
+  const configRoot = !configDir
+    ? pathModule.join(os.homedir(), '.omp')
+    : pathModule.isAbsolute(configDir) ? pathModule.resolve(configDir) : pathModule.join(os.homedir(), configDir);
+  return pathModule.join(configRoot, 'agent', AGENTS_FILE_NAME);
 };
 
 const resolveRequest = async ({ req, resolveWorkspaceDirectory, os }) => {

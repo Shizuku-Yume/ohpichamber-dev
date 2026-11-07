@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ensureAgentRuntimeSymlinks,
   resolveWebAgentRuntime,
@@ -124,6 +124,37 @@ describe('agent-runtime resolution and supervisor creation', () => {
       expect(() => ensureAgentRuntimeSymlinks(dummy)).not.toThrow();
     } finally {
       fs.rmSync(dummy, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ['EROFS', 'read-only mount'],
+    ['ENOTDIR', 'a packed asar path whose parent is the archive file'],
+  ])('ensureAgentRuntimeSymlinks tolerates an unrepairable runtime root (%s: %s)', (code) => {
+    // A packaged AppImage mounts its payload read-only and packs this module
+    // inside app.asar, so the repair pass must not fail the boot when the links
+    // it would create are already present in the payload.
+    const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-rt-unrepairable-'));
+    const runtimeDir = path.join(fixtureDir, 'resources', 'agent-runtime');
+    fs.mkdirSync(path.join(runtimeDir, 'packages', '0'), { recursive: true });
+    fs.writeFileSync(path.join(runtimeDir, 'packages', '0', 'index.js'), 'export const pkg = 0;');
+    fs.writeFileSync(path.join(runtimeDir, 'manifest.json'), JSON.stringify({
+      platform: process.platform,
+      architecture: process.arch,
+      files: [{ path: 'service/node_modules/dep-zero', link: '../../packages/0' }],
+    }));
+    const mkdirSync = fs.mkdirSync;
+    const spy = vi.spyOn(fs, 'mkdirSync').mockImplementation((target, options) => {
+      if (String(target).includes('service/node_modules')) {
+        throw Object.assign(new Error(code), { code });
+      }
+      return mkdirSync(target, options);
+    });
+    try {
+      expect(() => ensureAgentRuntimeSymlinks(runtimeDir)).not.toThrow();
+    } finally {
+      spy.mockRestore();
+      fs.rmSync(fixtureDir, { recursive: true, force: true });
     }
   });
 });

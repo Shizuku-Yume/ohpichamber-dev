@@ -13,6 +13,10 @@ export function findRuntimeRoot(packageRoot = webRoot) {
   return candidates.find((dir) => fs.existsSync(path.join(dir, 'manifest.json'))) ?? null;
 }
 
+// A runtime root that cannot be repaired in place: read-only mounts, and paths
+// that only exist inside a packed asar archive (ENOTDIR: a parent is the file).
+const REPAIR_UNAVAILABLE = new Set(['EROFS', 'EACCES', 'EPERM', 'ENOTDIR']);
+
 export function ensureAgentRuntimeSymlinks(root) {
   const manifestPath = path.join(root, 'manifest.json');
   if (!fs.existsSync(manifestPath)) return;
@@ -33,7 +37,17 @@ export function ensureAgentRuntimeSymlinks(root) {
       } catch {
         // missing or mismatched link
       }
-      fs.mkdirSync(path.dirname(file), { recursive: true });
+      // A packaged AppImage mounts its payload read-only, and electron-builder
+      // packs this module inside app.asar, so the runtime root can be a virtual
+      // archive path that cannot be written at all. Such a root already carries
+      // the links from packaging; only an unpacked install, where they were
+      // flattened away, can be repaired here.
+      try {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+      } catch (error) {
+        if (REPAIR_UNAVAILABLE.has(error?.code)) continue;
+        throw error;
+      }
       try { fs.rmSync(file, { force: true, recursive: true }); } catch { }
       try {
         fs.symlinkSync(item.link, file);

@@ -62,6 +62,14 @@ describe('behavior rules routes', () => {
       .toBe('/home/user/.omp/agent/AGENTS.md');
     expect(resolveGlobalAgentsPath({ os: { homedir: () => '/home/user' }, env: { PI_CODING_AGENT_DIR: '/custom/agent' } }))
       .toBe('/custom/agent/AGENTS.md');
+    // An explicit agent directory outranks the relocated config root.
+    expect(resolveGlobalAgentsPath({ os: { homedir: () => '/home/user' }, env: { PI_CONFIG_DIR: '.omp-alt', PI_CODING_AGENT_DIR: '/custom/agent' } }))
+      .toBe('/custom/agent/AGENTS.md');
+    expect(resolveGlobalAgentsPath({ os: { homedir: () => '/home/user' }, env: { PI_CONFIG_DIR: '.omp-alt' } }))
+      .toBe('/home/user/.omp-alt/agent/AGENTS.md');
+    // An absolute config root is used as-is, not joined onto home.
+    expect(resolveGlobalAgentsPath({ os: { homedir: () => '/home/user' }, env: { PI_CONFIG_DIR: '/srv/omp-iso' } }))
+      .toBe('/srv/omp-iso/agent/AGENTS.md');
   });
 
   it('reports a missing global file without creating it', async () => {
