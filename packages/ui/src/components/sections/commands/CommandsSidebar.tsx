@@ -109,7 +109,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     }
 
     setIsConfirmActionPending(true);
-    const success = await deleteCommand(confirmActionCommand.name, settingsDirectory);
+    const success = await deleteCommand(confirmActionCommand.name, settingsDirectory, confirmActionCommand.commandId);
 
     if (success) {
       toast.success(t('settings.commands.sidebar.toast.commandDeleted', { name: confirmActionCommand.name }));
@@ -171,7 +171,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       return;
     }
 
-    const success = await updateCommand(renameDialogCommand.name, { name: sanitizedName }, settingsDirectory);
+    const success = await updateCommand(renameDialogCommand.name, { name: sanitizedName }, settingsDirectory, renameDialogCommand.commandId);
 
     if (success) {
       toast.success(t('settings.common.status.saved'));

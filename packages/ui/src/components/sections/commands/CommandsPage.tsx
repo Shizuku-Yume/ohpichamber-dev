@@ -80,7 +80,7 @@ export const CommandsPage: React.FC = () => {
       const success = await useCommandsStore.getState().updateCommand(entity.name, {
         name: form.name, description: form.description, content: form.content, argumentHint: form.argumentHint,
         agentId: null, modelSelection: form.modelSelection ?? undefined,
-      }, directory);
+      }, directory, entity.commandId);
       if (!success) return autosaveFailed(t('settings.commands.page.toast.updateFailed'));
       if (identityRef.current === identity) saved.current = form;
       return AUTOSAVE_SAVED;

@@ -13,13 +13,13 @@ let requests: Request[];
 let failRead = false;
 let conflict = false;
 let delayedRead: Promise<CommandCatalogState> | null = null;
-let restoreFetch: () => void = () => {};
-let onRead: () => void = () => {};
+let restoreFetch: () => void = () => { };
+let onRead: () => void = () => { };
 
 beforeEach(() => {
   useCommandsStore.getState().resetForRuntimeSwitch();
   catalog = { workspaceId: 'workspace_1', revision: '1', commands: [command], builtinCommands: ['context', 'compact'] };
-  requests = []; failRead = false; conflict = false; delayedRead = null; onRead = () => {};
+  requests = []; failRead = false; conflict = false; delayedRead = null; onRead = () => { };
   lastUpdateRequest = undefined;
   const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const request = new Request(input instanceof Request ? input : new URL(input.toString(), 'http://localhost'), init);
@@ -40,18 +40,20 @@ beforeEach(() => {
       catalog = { ...catalog, revision: String(BigInt(catalog.revision) + 1n), commands: [...catalog.commands, { commandId: created.commandId, name: created.name, description: created.description, content: created.content, scope: created.scope, source: created.source, editable: true, group: created.group, argumentHint: created.argumentHint, agentId: created.agentId, modelSelection: created.modelSelection }] };
       return Response.json(catalog);
     }
-    if (request.method === 'PATCH' && path.endsWith('/commands/command_1')) {
+    if (request.method === 'PATCH' && path.includes('/commands/')) {
       const input = CommandUpdateRequestSchema.parse(await request.json());
       lastUpdateRequest = input;
-      const updated: CommandEntry = { ...command, name: input.name, description: input.description ?? '', content: input.content, modelSelection: input.modelSelection, group: input.group, argumentHint: input.argumentHint };
+      const target = catalog.commands.find(c => c.commandId === input.commandId) ?? command;
+      const updated: CommandEntry = { ...target, name: input.name, description: input.description ?? '', content: input.content, modelSelection: input.modelSelection, group: input.group, argumentHint: input.argumentHint };
       delete updated.agentId;
       if (input.agentId) updated.agentId = input.agentId;
-      catalog = { ...catalog, revision: String(BigInt(catalog.revision) + 1n), commands: [updated] };
+      catalog = { ...catalog, revision: String(BigInt(catalog.revision) + 1n), commands: catalog.commands.map(c => c.commandId === updated.commandId ? updated : c) };
       return Response.json(catalog);
     }
-    if (request.method === 'DELETE' && path.endsWith('/commands/command_1')) {
-      expect(await request.json()).toEqual({ commandId: 'command_1', expectedRevision: catalog.revision });
-      catalog = { ...catalog, revision: String(BigInt(catalog.revision) + 1n), commands: [] };
+    if (request.method === 'DELETE' && path.includes('/commands/')) {
+      const body = await request.json();
+      expect(body.expectedRevision).toBe(catalog.revision);
+      catalog = { ...catalog, revision: String(BigInt(catalog.revision) + 1n), commands: catalog.commands.filter(c => c.commandId !== body.commandId) };
       return Response.json(catalog);
     }
     throw new Error(`Unexpected request ${request.method} ${path}`);
@@ -119,5 +121,26 @@ describe('native command consumers', () => {
     expect(await useCommandsStore.getState().updateCommand(command.name, { content: 'no' }, '/repo')).toBe(false);
     expect(await useCommandsStore.getState().deleteCommand(command.name, '/repo')).toBe(false);
     expect(requests.every(request => request.method !== 'PATCH' && request.method !== 'DELETE')).toBe(true);
+  });
+  test('same-name builtin and custom commands route update and delete to custom id while builtin stays read-only', async () => {
+    const builtinCompact: CommandEntry = { commandId: 'command_builtin_compact', name: 'compact', description: 'Built-in', content: '', scope: 'inherited', source: 'builtin', editable: false };
+    const customCompact: CommandEntry = { commandId: 'command_custom_compact', name: 'compact', description: 'Custom', content: 'Custom content', scope: 'workspace', source: 'workspace', editable: true };
+    catalog = { ...catalog, commands: [builtinCompact, customCompact] };
+    await useCommandsStore.getState().loadCommands('/repo');
+
+    expect(await useCommandsStore.getState().updateCommand('compact', { content: 'Updated custom' }, '/repo', customCompact.commandId)).toBe(true);
+    expect(lastUpdateRequest).toMatchObject({ commandId: customCompact.commandId, content: 'Updated custom' });
+
+    lastUpdateRequest = undefined;
+    expect(await useCommandsStore.getState().updateCommand('compact', { content: 'Should fail' }, '/repo', builtinCompact.commandId)).toBe(false);
+    expect(lastUpdateRequest).toBeUndefined();
+
+    expect(await useCommandsStore.getState().updateCommand('compact', { content: 'Unambiguous editable' }, '/repo')).toBe(true);
+    expect(lastUpdateRequest).toMatchObject({ commandId: customCompact.commandId, content: 'Unambiguous editable' });
+
+    expect(await useCommandsStore.getState().deleteCommand('compact', '/repo', customCompact.commandId)).toBe(true);
+    const deleteRequest = requests.find(r => r.method === 'DELETE');
+    expect(deleteRequest).toBeDefined();
+    expect(new URL(deleteRequest!.url).pathname).toBe('/api/agent/v1/workspaces/workspace_1/commands/command_custom_compact');
   });
 });
