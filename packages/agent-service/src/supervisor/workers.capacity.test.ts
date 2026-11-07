@@ -26,41 +26,58 @@ const startSession = (registry: WorkerRegistry, rootSessionId: string, cwd: stri
 };
 
 /**
- * The reaper runs on a real interval and every eviction probe is an operation
- * on the worker, so a fixed sleep races the probe and the process exit under
- * load. Wait for the observable state instead: the registry entry disappears
- * only after the worker's process has been stopped and reaped.
+ * Poll for an observable state instead of sleeping a fixed window. Real child
+ * processes and the registry's own interval share no fake clock, so the
+ * assertion stays on what the registry exposes and the deadline carries
+ * generous slack for a machine running every suite at once.
  * Integration test: WorkerRegistry spawns real child processes and uses an
  * unmockable platform timer loop, so deterministic time control will not work.
  */
-const waitForEviction = async (registry: WorkerRegistry, rootSessionId: string, timeoutMs = 10_000) => {
+const pollUntil = async (description: string, timeoutMs: number, predicate: () => boolean) => {
   const deadline = Date.now() + timeoutMs;
-  while (registry.info(rootSessionId) !== undefined) {
-    if (Date.now() >= deadline) {
-      throw new Error(`Timed out after ${timeoutMs} ms waiting for ${rootSessionId} to be evicted`);
-    }
-    // Integration test: polling real worker process exit against platform clock
-    await Bun.sleep(20);
-  }
-  expect(registry.info(rootSessionId)).toBeUndefined();
-};
-
-/**
- * The negative half of the same rule: while an operation or a restart
- * reservation is outstanding the worker must survive several reap intervals.
- * Polling keeps the assertion on the observable state rather than on how long
- * one sleep happened to take.
- * Integration test: WorkerRegistry spawns real child processes and uses an
- * unmockable platform timer loop, so deterministic time control will not work.
- */
-const expectNotEvictedFor = async (registry: WorkerRegistry, rootSessionId: string, milliseconds: number) => {
-  const deadline = Date.now() + milliseconds;
-  while (Date.now() < deadline) {
-    expect(registry.info(rootSessionId)?.state).toBe('ready');
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error(`Timed out after ${timeoutMs} ms waiting for ${description}`);
     // Integration test: polling real worker process state against platform clock
     await Bun.sleep(20);
   }
-  expect(registry.info(rootSessionId)?.state).toBe('ready');
+};
+
+/**
+ * The registry entry disappears only after the worker's process has been
+ * stopped and reaped, so that removal is the observable end of an eviction.
+ */
+const waitForEviction = async (registry: WorkerRegistry, rootSessionId: string, timeoutMs = 15_000) => {
+  await pollUntil(`${rootSessionId} to be evicted`, timeoutMs, () => registry.info(rootSessionId) === undefined);
+};
+
+/**
+ * Each idle-eviction attempt asks the registry's `isSessionIdle` option before
+ * it may stop a worker. Counting those probes is a deterministic barrier: once
+ * a worker has been probed N times and is still registered, N eviction attempts
+ * ran while the postponement was in force, however much CPU contention
+ * stretched the clock. Integration tests only: a unit-level fake clock cannot
+ * drive real child process exit.
+ */
+const createReapBarrier = (idle: (rootSessionId: string) => boolean = () => true) => {
+  const probes = new Map<string, number>();
+  return {
+    isSessionIdle: (rootSessionId: string) => {
+      probes.set(rootSessionId, (probes.get(rootSessionId) ?? 0) + 1);
+      return idle(rootSessionId);
+    },
+    /** Blocks until the registry has probed the root `attempts` more times. */
+    waitForAttempts: (rootSessionId: string, attempts: number, timeoutMs = 10_000) => {
+      const target = (probes.get(rootSessionId) ?? 0) + attempts;
+      return pollUntil(`the registry to attempt ${target} evictions of ${rootSessionId}`, timeoutMs,
+        () => (probes.get(rootSessionId) ?? 0) >= target);
+    },
+  };
+};
+
+/** Advance past the current millisecond so last-activity ordering is strict. */
+const waitForClockTick = async () => {
+  const started = Date.now();
+  while (Date.now() === started) await Bun.sleep(0);
 };
 
 test('the measured Task17 policy is the production default', () => {
@@ -80,9 +97,9 @@ test('a new root at the cap evicts the least recently active idle worker', async
     await registry.startStateless({ rootSessionId: 'catalog-root', projectId: 'project', workspaceId: 'workspace',
       cwd: tree.cwd, agentDirectory: tree.agentDirectory, agentDirectoryId: 'agent', catalogRevision: '1' });
     await startSession(registry, 'root-one', tree.cwd, tree.agentDirectory);
-    await Bun.sleep(5);
+    await waitForClockTick();
     await startSession(registry, 'root-two', tree.cwd, tree.agentDirectory);
-    await Bun.sleep(5);
+    await waitForClockTick();
 
     await startSession(registry, 'root-three', tree.cwd, tree.agentDirectory);
 
@@ -135,24 +152,28 @@ test('simultaneous opens cannot oversubscribe the cap', async () => {
 test('an idle worker is evicted while active-turn and pending-approval roots stay', async () => {
   const tree = await workspace('idle');
   const blocked = new Set(['root-active-turn', 'root-pending-approval']);
+  const barrier = createReapBarrier(rootSessionId => !blocked.has(rootSessionId));
   const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
     startupTimeoutMs: 10_000, stopTimeoutMs: 2_000,
     capacityPolicy: policy({ idleEvictionTimeoutMs: 100, reapIntervalMs: 20 }),
-    isSessionIdle: rootSessionId => !blocked.has(rootSessionId) });
+    isSessionIdle: barrier.isSessionIdle });
+  const sessionRoots = () => registry.list().filter(worker => worker.kind === 'session').map(worker => worker.rootSessionId).sort();
   try {
     for (const id of ['root-idle', 'root-active-turn', 'root-pending-approval']) await startSession(registry, id, tree.cwd, tree.agentDirectory);
-    await Bun.sleep(400);
-    expect(registry.list().filter(worker => worker.kind === 'session').map(worker => worker.rootSessionId).sort())
-      .toEqual(['root-active-turn', 'root-pending-approval']);
+    // Two blocked roots are probed twice by every completed reap attempt, so
+    // waiting for four probes proves the reaper ran with them still busy
+    // rather than racing a fixed sleep.
+    await Promise.all(['root-active-turn', 'root-pending-approval'].map(id => barrier.waitForAttempts(id, 4)));
+    await waitForEviction(registry, 'root-idle');
+    expect(sessionRoots()).toEqual(['root-active-turn', 'root-pending-approval']);
 
     blocked.delete('root-active-turn');
-    await Bun.sleep(400);
-    expect(registry.list().filter(worker => worker.kind === 'session').map(worker => worker.rootSessionId))
-      .toEqual(['root-pending-approval']);
+    await waitForEviction(registry, 'root-active-turn');
+    expect(sessionRoots()).toEqual(['root-pending-approval']);
 
     blocked.delete('root-pending-approval');
-    await Bun.sleep(400);
-    expect(registry.list().filter(worker => worker.kind === 'session')).toEqual([]);
+    await waitForEviction(registry, 'root-pending-approval');
+    expect(sessionRoots()).toEqual([]);
   } finally {
     try { await registry.close(); } finally { await tree.remove(); }
   }
@@ -160,16 +181,25 @@ test('an idle worker is evicted while active-turn and pending-approval roots sta
 
 test('a pending worker operation and a restart reservation each postpone eviction', async () => {
   const tree = await workspace('pending');
+  const barrier = createReapBarrier();
+  // The fixture delays every snapshot reply, including the eviction probe, so
+  // the stop timeout must stay well above the operation delay for the probe to
+  // resolve rather than time out on a busy machine.
   const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
-    startupTimeoutMs: 10_000, stopTimeoutMs: 2_000,
-    capacityPolicy: policy({ idleEvictionTimeoutMs: 80, reapIntervalMs: 20 }),
-    isSessionIdle: () => true });
+    startupTimeoutMs: 10_000, stopTimeoutMs: 5_000,
+    capacityPolicy: policy({ idleEvictionTimeoutMs: 50, reapIntervalMs: 10 }),
+    isSessionIdle: barrier.isSessionIdle });
   try {
-    await startSession(registry, 'root-pending-operation', tree.cwd, tree.agentDirectory, { WORKER_OPERATION_DELAY_MS: '250' });
+    await startSession(registry, 'root-pending-operation', tree.cwd, tree.agentDirectory, { WORKER_OPERATION_DELAY_MS: '1500' });
     const pending = registry.request('root-pending-operation', { type: 'shell', operation: { type: 'snapshot' } });
-    // Real child processes and the registry's own interval share no fake
-    // clock, so the postponement window is observed against the live reaper.
-    await expectNotEvictedFor(registry, 'root-pending-operation', 150);
+    // Two probes are one complete reaper decision, so waiting for four probes
+    // proves the registry tried twice to evict while the operation was still
+    // outstanding, with a hold far longer than the idle window so contention
+    // cannot close that gap.
+    await barrier.waitForAttempts('root-pending-operation', 4, 20_000);
+    expect(registry.info('root-pending-operation')?.state).toBe('ready');
+    // Rejects if the worker was stopped mid-operation; the reply is the
+    // observable end of the postponement.
     await pending;
     await waitForEviction(registry, 'root-pending-operation');
 
@@ -177,7 +207,8 @@ test('a pending worker operation and a restart reservation each postpone evictio
     const generation = registry.info('root-reserved')?.workerGeneration;
     if (!generation) throw new Error('A ready worker generation is required');
     const reservation = registry.reserveRestart('root-reserved', generation);
-    await expectNotEvictedFor(registry, 'root-reserved', 300);
+    await barrier.waitForAttempts('root-reserved', 2, 20_000);
+    expect(registry.info('root-reserved')?.state).toBe('ready');
     reservation.release();
     await waitForEviction(registry, 'root-reserved');
   } finally {
@@ -187,19 +218,21 @@ test('a pending worker operation and a restart reservation each postpone evictio
 
 test('a running background shell job postpones eviction until it ends', async () => {
   const tree = await workspace('shell-job');
+  const barrier = createReapBarrier();
   const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
     startupTimeoutMs: 10_000, stopTimeoutMs: 2_000,
     capacityPolicy: policy({ idleEvictionTimeoutMs: 100, reapIntervalMs: 20 }),
-    isSessionIdle: () => true });
+    isSessionIdle: barrier.isSessionIdle });
   try {
-    await startSession(registry, 'root-shell-job', tree.cwd, tree.agentDirectory, { WORKER_SHELL_JOB_MS: '900' });
-    // Real child processes and the registry's interval share no fake clock; the
-    // idle window itself is the behavior under test.
-    await Bun.sleep(400);
+    await startSession(registry, 'root-shell-job', tree.cwd, tree.agentDirectory, { WORKER_SHELL_JOB_MS: '1500' });
+    // Probing twice proves a reap decision ran; the job snapshot then proves
+    // it was still running, which is the condition the eviction must respect.
+    await barrier.waitForAttempts('root-shell-job', 2, 20_000);
     expect(registry.info('root-shell-job')?.state).toBe('ready');
+    const probe = await registry.request('root-shell-job', { type: 'shell', operation: { type: 'snapshot' } });
+    expect(probe.type === 'shell' && probe.result.type === 'snapshot' ? probe.result.snapshot.running : []).toHaveLength(1);
 
-    await Bun.sleep(1_200);
-    expect(registry.info('root-shell-job')).toBeUndefined();
+    await waitForEviction(registry, 'root-shell-job');
   } finally {
     try { await registry.close(); } finally { await tree.remove(); }
   }
