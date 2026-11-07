@@ -27,7 +27,15 @@ Default location: `~/.config/openchamber` (or the directory specified by `OPENCH
   - Full-text search index (FTS5). This database is strictly derived from session events and is automatically rebuilt if absent; it does not need to be preserved in backups.
 
 ### OMP Agent Directory
-OpenChamber assigns each workspace a captured agent directory. The Host default is `$HOME/.omp/agent`: `packages/web/server/lib/host/agent-scope-runtime.js` builds `path.join(os.homedir(), '.omp', 'agent')` and does not consult `PI_CODING_AGENT_DIR` or XDG variables when forming that default. The Host passes the captured path to the agent service, which forces every worker's `PI_CODING_AGENT_DIR` to it.
+OpenChamber assigns each workspace a captured agent directory. The Host default is resolved the same way OMP resolves its own agent directory, in this order:
+
+1. `PI_CODING_AGENT_DIR` when set — used as-is.
+2. `PI_CONFIG_DIR` when set — a directory name relative to `$HOME`, or an absolute path used as the config root itself; the agent directory is `<root>/agent`.
+3. Otherwise `$HOME/.omp/agent`.
+
+`packages/web/server/lib/host/agent-scope-runtime.js` implements this as `resolveAgentDirectory()`, and `behavior-routes.js` resolves the global `AGENTS.md` against the same directory. The Host passes the captured path to the agent service, which forces every worker's `PI_CODING_AGENT_DIR` to it.
+
+Set `PI_CONFIG_DIR` to run the app against its own OMP state instead of the state the OMP CLI uses. A launcher that relocates everything under one root, such as `~/.local/bin/ohpichamber-iso`, sets `OPENCHAMBER_DATA_DIR`, `OPENCHAMBER_DESKTOP_USER_DATA_DIR`, `OPENCHAMBER_CHATS_DIR`, `PI_CONFIG_DIR`, and `TMPDIR` together so no file is shared with `~/.omp` or `~/.config/openchamber`. A fresh isolated root has no `models.yml`, so copy that file from the shared agent directory to give both sides the same providers.
 
 Inside a worker, `openNativeRuntime` (`packages/agent-service/src/worker/native-runtime.ts`) applies this precedence:
 1. **Named profile:** use `OMP_PROFILE` when it is defined, otherwise `PI_PROFILE`. An empty value or `default` selects no profile; an invalid name throws. When a profile resolves, `setProfile(profile)` selects `$HOME/.omp/profiles/<profile>/agent` in OMP's process-wide path resolver, and that resolver ignores the captured agent directory.
