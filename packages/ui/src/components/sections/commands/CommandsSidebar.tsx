@@ -28,7 +28,9 @@ import { SettingsSidebarNoMatches, SettingsSidebarSearch } from '@/components/se
 import { matchesRankQuery } from '@/lib/search/fuzzySearch';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
+import { getLocalizedCommandDescription } from './commandDescriptions';
 import { SETTINGS_SECTION_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
+
 
 interface CommandsSidebarProps {
   onItemSelect?: () => void;
@@ -44,15 +46,19 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   const [openMenuCommand, setOpenMenuCommand] = React.useState<string | null>(null);
 
   const {
+    selectedCommandId,
     selectedCommandName,
     setSelectedCommand,
+    setSelectedCommandId,
     setCommandDraft,
     updateCommand,
     deleteCommand,
     loadCommands,
   } = useCommandsStore(useShallow((s) => ({
+    selectedCommandId: s.selectedCommandId,
     selectedCommandName: s.selectedCommandName,
     setSelectedCommand: s.setSelectedCommand,
+    setSelectedCommandId: s.setSelectedCommandId,
     setCommandDraft: s.setCommandDraft,
     updateCommand: s.updateCommand,
     deleteCommand: s.deleteCommand,
@@ -221,11 +227,10 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
                   <CommandListItem
                     key={command.commandId}
                     command={command}
-                    isSelected={selectedCommandName === command.name}
+                    isSelected={selectedCommandId ? selectedCommandId === command.commandId : selectedCommandName === command.name}
                     onSelect={() => {
-                      setSelectedCommand(command.name);
+                      setSelectedCommandId(command.commandId);
                       onItemSelect?.();
-
                     }}
                     onDuplicate={() => handleDuplicateCommand(command)}
                     isMenuOpen={openMenuCommand === command.commandId}
@@ -244,11 +249,10 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
                   <CommandListItem
                     key={command.commandId}
                     command={command}
-                    isSelected={selectedCommandName === command.name}
+                    isSelected={selectedCommandId ? selectedCommandId === command.commandId : selectedCommandName === command.name}
                     onSelect={() => {
-                      setSelectedCommand(command.name);
+                      setSelectedCommandId(command.commandId);
                       onItemSelect?.();
-
                     }}
                     onRename={() => handleOpenRenameDialog(command)}
                     onDelete={() => handleDeleteCommand(command)}
@@ -399,9 +403,9 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
               </span>
             </div>
 
-            {command.description && (
+            {getLocalizedCommandDescription(command, t) && (
               <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
-                {command.description}
+                {getLocalizedCommandDescription(command, t)}
               </div>
             )}
           </button>

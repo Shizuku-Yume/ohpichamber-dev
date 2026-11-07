@@ -150,6 +150,7 @@ export class NativeFileResources {
     }
     const projectedBuiltins = [...ALLOWED_BUILTIN_COMMANDS, 'btw'] as const;
     for (const name of projectedBuiltins) {
+      if (result.some(item => item.entry.name === name && item.entry.scope === 'inherited')) continue;
       const spec = lookupBuiltinSlashCommand(name);
       if (!spec) continue;
       const description = spec?.description ?? spec?.acpDescription ?? '';
@@ -286,7 +287,10 @@ export class NativeFileResources {
       if (operation.action === 'commands.expand') {
         const item = commands.find(item => item.entry.commandId === operation.request.commandId);
         if (!item) throw new ProjectionError(404, 'INVALID_REQUEST', 'Command is not in the native catalog');
-        return { kind: 'expanded', result: { content: expandSlashCommand(`/${item.entry.name} ${operation.request.arguments}`, [item.entry]), modelSelection: item.entry.modelSelection, agentId: item.entry.agentId } };
+        const content = item.entry.source === 'builtin'
+          ? (operation.request.arguments ? `/${item.entry.name} ${operation.request.arguments}` : `/${item.entry.name}`)
+          : expandSlashCommand(`/${item.entry.name} ${operation.request.arguments}`, [item.entry]);
+        return { kind: 'expanded', result: { content, modelSelection: item.entry.modelSelection, agentId: item.entry.agentId } };
       }
       if (operation.action === 'commands.create') await this.write('commands', operation.request);
       if (operation.action === 'commands.update' || operation.action === 'commands.delete') {

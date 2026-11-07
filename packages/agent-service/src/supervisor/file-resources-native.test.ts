@@ -180,6 +180,14 @@ test('all 29 ALLOWED_BUILTIN_COMMANDS are projected as read-only inherited entri
   await expect(h.operation({ action: 'commands.update', request: { expectedRevision: catalog.revision, commandId: compactBuiltin.commandId, name: 'compact', scope: 'workspace', content: 'should fail' } })).rejects.toMatchObject({ status: 403 });
   await expect(h.operation({ action: 'commands.delete', request: { expectedRevision: catalog.revision, commandId: compactBuiltin.commandId } })).rejects.toMatchObject({ status: 403 });
 
+  // Assert synthetic builtin expansion returns literal command without erasing input
+  const expandedLiteral = await h.operation({ action: 'commands.expand', request: { commandId: compactBuiltin.commandId, arguments: 'soft' } });
+  if (expandedLiteral.kind !== 'expanded') throw new Error('Expected expanded result');
+  expect(expandedLiteral.result.content).toBe('/compact soft');
+  const expandedBare = await h.operation({ action: 'commands.expand', request: { commandId: compactBuiltin.commandId, arguments: '' } });
+  if (expandedBare.kind !== 'expanded') throw new Error('Expected expanded result');
+  expect(expandedBare.result.content).toBe('/compact');
+
   const created = await h.operation({
     action: 'commands.create',
     request: {

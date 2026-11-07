@@ -162,12 +162,26 @@ test('icon-only command actions carry accessible names', async () => {
   expect(trigger?.getAttribute('aria-label')).toBe('custom');
 });
 
-test('groups built-in commands under Built-in commands and custom commands under Custom commands', async () => {
-  const builtin: CommandEntry = { ...command, commandId: 'command_builtin', name: 'compact', description: 'Compact context', editable: false, source: 'builtin' };
-  const custom: CommandEntry = { ...command, commandId: 'command_custom', name: 'review', description: 'Review changes', editable: true, source: 'workspace' };
+test('built-in and custom commands have independent selection by id and built-in exposes no delete or rename actions', async () => {
+  const builtin: CommandEntry = { ...command, commandId: 'command_builtin_compact', name: 'compact', description: 'Compact context', editable: false, source: 'builtin' };
+  const custom: CommandEntry = { ...command, commandId: 'command_custom_compact', name: 'compact', description: 'Custom compact', editable: true, scope: 'workspace', source: 'workspace' };
   await render(async () => true, [builtin, custom]);
-  expect(container!.textContent).toContain('Built-in commands');
-  expect(container!.textContent).toContain('Custom commands');
-  expect(container!.textContent).toContain('/compact');
-  expect(container!.textContent).toContain('/review');
+
+  const rows = container!.querySelectorAll<HTMLButtonElement>('.group.relative button.flex-col');
+  expect(rows).toHaveLength(2);
+
+  await act(async () => { rows[0].click(); });
+  expect(useCommandsStore.getState().selectedCommandId).toBe('command_builtin_compact');
+
+  const rowContainers = container!.querySelectorAll('.group.relative.flex.items-center');
+  expect(rowContainers[0].className).toContain('bg-interactive-selection');
+  expect(rowContainers[1].className).not.toContain('bg-interactive-selection');
+
+  const triggers = container!.querySelectorAll<HTMLButtonElement>('button[aria-label="compact"]');
+  expect(triggers).toHaveLength(2);
+  await act(async () => { triggers[0].click(); });
+  const menuItems = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map(item => item.textContent?.trim());
+  expect(menuItems).toContain('Duplicate');
+  expect(menuItems).not.toContain('Delete');
+  expect(menuItems).not.toContain('Rename');
 });

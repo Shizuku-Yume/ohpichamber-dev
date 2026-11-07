@@ -174,7 +174,7 @@ test('shows read-only built-in command detail and disables fields', async () => 
   const fieldset = container.querySelector('fieldset');
   expect(fieldset?.disabled).toBe(true);
   const descTextarea = container.querySelector<HTMLTextAreaElement>('textarea');
-  expect(descTextarea?.value).toBe('Manually compact the session context');
+  expect(descTextarea?.value).toBe('Compress session history using AI to reduce context size');
   const hintInput = container.querySelector<HTMLInputElement>('input[aria-label="$ARGUMENTS"]');
   expect(hintInput?.value).toBe('[soft|remote|snapcompact] [focus]');
 });

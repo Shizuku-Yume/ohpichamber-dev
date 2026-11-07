@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { selectCommandsForDirectory, useCommandsStore, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
+import { getLocalizedCommandDescription } from './commandDescriptions';
 import { ModelSelector } from '../agents/ModelSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Icon } from '@/components/icon/Icon';
@@ -32,16 +33,18 @@ interface CommandForm {
 export const CommandsPage: React.FC = () => {
   const { t } = useI18n();
   const directory = useSettingsDirectory();
+  const selectedId = useCommandsStore(state => state.selectedCommandId);
   const selectedName = useCommandsStore(state => state.selectedCommandName);
   const commands = useCommandsStore(state => selectCommandsForDirectory(state, directory));
   const draft = useCommandsStore(state => state.commandDraft);
-  const entity = commands.find(command => command.name === selectedName && command.editable) ?? commands.find(command => command.name === selectedName);
+  const entity = (selectedId ? commands.find(command => command.commandId === selectedId) : null)
+    ?? commands.find(command => command.name === selectedName);
   const isNew = Boolean(draft && draft.name === selectedName && !entity);
   const readOnly = Boolean(entity && !entity.editable);
   const group = isNew ? draft?.group : entity?.group;
   const [form, setForm] = React.useState<CommandForm>({ name: '', scope: 'agent', description: '', content: '', argumentHint: '', modelSelection: null });
   const [creating, setCreating] = React.useState(false);
-  const identity = JSON.stringify([directory, selectedName]);
+  const identity = JSON.stringify([directory, selectedId ?? selectedName]);
   const identityRef = React.useRef(identity);
   identityRef.current = identity;
   const saved = React.useRef<CommandForm | null>(null);
@@ -50,9 +53,10 @@ export const CommandsPage: React.FC = () => {
   React.useEffect(() => {
     const source = isNew ? draft : entity;
     if (!source) return;
+    const localizedDesc = entity ? getLocalizedCommandDescription(entity, t) : source.description;
     const next: CommandForm = {
       name: source.name, scope: source.scope === 'workspace' ? 'workspace' : 'agent',
-      description: source.description ?? '', content: source.content ?? '', argumentHint: source.argumentHint ?? '',
+      description: localizedDesc ?? '', content: source.content ?? '', argumentHint: source.argumentHint ?? '',
       modelSelection: source.modelSelection ?? null,
     };
     const sameIdentity = loadedIdentity.current === identity;
@@ -61,7 +65,7 @@ export const CommandsPage: React.FC = () => {
       .some(value => value && JSON.stringify(value) === JSON.stringify(next))) return;
     setForm(next);
     saved.current = next;
-  }, [draft, entity, identity, isNew]);
+  }, [draft, entity, identity, isNew, t]);
   const config: CommandConfig = {
     name: form.name, scope: form.scope, description: form.description, content: form.content,
     argumentHint: form.argumentHint || undefined, modelSelection: form.modelSelection ?? undefined,

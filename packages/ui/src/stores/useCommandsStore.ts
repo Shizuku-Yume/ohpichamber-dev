@@ -13,6 +13,7 @@ export type CommandConfig = Pick<CommandEntry, 'name' | 'description' | 'content
 type CommandDraft = Omit<CommandConfig, 'content' | 'description'> & { content?: string; description?: string; scope: CommandScope };
 
 interface CommandsStore {
+  selectedCommandId: string | null;
   selectedCommandName: string | null;
   commands: Command[];
   commandsByDirectory: { [directory: string]: Command[] };
@@ -20,6 +21,7 @@ interface CommandsStore {
   isLoading: boolean;
   commandDraft: CommandDraft | null;
   setSelectedCommand: (name: string | null) => void;
+  setSelectedCommandId: (id: string | null) => void;
   setCommandDraft: (draft: CommandDraft | null) => void;
   loadCommands: (directory?: string | null) => Promise<boolean>;
   resetForRuntimeSwitch: () => void;
@@ -86,12 +88,19 @@ export const useCommandsStore = create<CommandsStore>()(devtools((set, get) => {
     return catalog;
   };
   return {
-    selectedCommandName: null, commands: [], commandsByDirectory: {}, catalogsByDirectory: {}, isLoading: false, commandDraft: null,
-    setSelectedCommand: (name) => set({ selectedCommandName: name }),
-    setCommandDraft: (draft) => set({ commandDraft: draft }),
+    selectedCommandId: null, selectedCommandName: null, commands: [], commandsByDirectory: {}, catalogsByDirectory: {}, isLoading: false, commandDraft: null,
+    setSelectedCommand: (name) => {
+      const match = get().commands.find(c => c.name === name);
+      set({ selectedCommandName: name, selectedCommandId: match?.commandId ?? null });
+    },
+    setSelectedCommandId: (id) => {
+      const match = get().commands.find(c => c.commandId === id);
+      set({ selectedCommandId: id, selectedCommandName: match?.name ?? id });
+    },
+    setCommandDraft: (draft) => set({ commandDraft: draft, selectedCommandId: null }),
     resetForRuntimeSwitch: () => {
       generation += 1; loads.clear(); loadedAt.clear();
-      set({ commands: [], commandsByDirectory: {}, catalogsByDirectory: {}, isLoading: false, commandDraft: null, selectedCommandName: null });
+      set({ commands: [], commandsByDirectory: {}, catalogsByDirectory: {}, isLoading: false, commandDraft: null, selectedCommandName: null, selectedCommandId: null });
     },
     loadCommands: async (requestedDirectory) => {
       const directory = resolveDirectory(requestedDirectory);
