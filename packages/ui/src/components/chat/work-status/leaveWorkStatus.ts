@@ -6,6 +6,6 @@ import React from 'react';
  * pinned message in the transcript, the issues and PRs board). The desktop
  * card sits beside the chat and provides nothing.
  */
-export const LeaveWorkStatusContext = React.createContext<(() => void) | null>(null);
+const LeaveWorkStatusContext = React.createContext<(() => void) | null>(null);
 
 export const useLeaveWorkStatus = (): (() => void) | null => React.useContext(LeaveWorkStatusContext);

@@ -181,13 +181,6 @@ export const useChangeRequestTerm = (id: string | null | undefined): ChangeReque
  */
 type SourceControlProviderServing = 'served' | 'not-served' | 'unknown';
 
-export const useSourceControlProviderServing = (id: string | null | undefined): SourceControlProviderServing => (
-  useSourceControlProviderRegistry((state) => {
-    if (id && state.byId.has(id)) return 'served';
-    return state.holdsList ? 'not-served' : 'unknown';
-  })
-);
-
 /**
  * Whether the server reads a provider's change-request diffs, which the
  * comparison view and walkthroughs show. A served provider can list and open
@@ -207,18 +200,9 @@ export const useChangeRequestDiffServing = (id: string | null | undefined): Sour
  * providers in one render (rows of different hosts). An id the registry does
  * not hold reads as the generic fallback. One function while the list stays.
  */
-export type SourceControlDescriptorOf = (id: string | null | undefined) => SourceControlProviderDescriptor;
+type SourceControlDescriptorOf = (id: string | null | undefined) => SourceControlProviderDescriptor;
 
 export const useSourceControlDescriptorOf = (): SourceControlDescriptorOf => {
   const byId = useSourceControlProviderRegistry((state) => state.byId);
   return React.useCallback((id) => (id ? byId.get(id) : undefined) ?? unknownProviderDescriptor(id ?? ''), [byId]);
 };
-
-/**
- * The descriptor for a provider id as the registry holds it now, for text built
- * outside React: message previews and display parts, toasts. It does not
- * re-render anything when the list changes; React code uses the hooks above.
- */
-export const readSourceControlProvider = (id: string | null | undefined): SourceControlProviderDescriptor => (
-  (id ? useSourceControlProviderRegistry.getState().byId.get(id) : undefined) ?? unknownProviderDescriptor(id ?? '')
-);

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 /** The project fields the icon needs — a structural subset of the sheet's
     ProjectMeta, so both the sheet and the timeline list can pass their own
     project objects without sharing a type. */
-export type MobileProjectIconProject = {
+type MobileProjectIconProject = {
   id: string;
   icon?: string | null;
   color?: string | null;

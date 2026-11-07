@@ -1,4 +1,4 @@
-export type PermissionAutoAcceptSyncEvent = {
+type PermissionAutoAcceptSyncEvent = {
   type: 'openchamber.permission-auto-accept';
   properties: {
     modes?: Record<string, 'ask' | 'safety' | 'auto'>;
@@ -8,7 +8,7 @@ export type PermissionAutoAcceptSyncEvent = {
   };
 };
 
-export type PermissionLeftForUserSyncEvent = {
+type PermissionLeftForUserSyncEvent = {
   type: 'openchamber.permission-left-for-user';
   properties: {
     permissionId: string;

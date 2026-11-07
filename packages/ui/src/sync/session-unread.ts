@@ -15,7 +15,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { patchSessionMetadata } from './session-actions';
 
-export function withWorkbenchViewedAt(
+function withWorkbenchViewedAt(
  metadata: SessionMetadata | null | undefined,
  lastIdleAt: number,
  viewedAt: number | undefined,

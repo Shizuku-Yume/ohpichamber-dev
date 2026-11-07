@@ -57,9 +57,6 @@ const windowsProcessSchema = z.object({
   executablePath: z.string().nullable(),
 });
 
-/** `{openchamberDataDir}/guest-services`. */
-export const guestServiceRegistryDir = (dataDir) => path.join(dataDir, 'guest-services');
-
 const digestToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
 const sleep = (ms) => new Promise((resolve) => {
@@ -264,5 +261,4 @@ export const createGuestServiceRegistry = ({
 const defaultRegistry = createGuestServiceRegistry();
 
 export const recordGuestService = defaultRegistry.recordGuestService;
-export const releaseGuestService = defaultRegistry.releaseGuestService;
 export const reapOrphanedGuestServices = defaultRegistry.reapOrphanedGuestServices;

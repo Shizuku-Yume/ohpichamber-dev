@@ -251,8 +251,7 @@ no per-user tool switch yet (upstream's `agentWorkflowToolEnabled`); the flag al
   leaving the outcome in the run the user acted on.
 - **Broadcast.** `announce` sends `openchamber:workflow-run` / `-removed` through the
   Host's global UI event broadcaster. The UI store in `lib/workflows/store.ts` is the only
-  run-state source; task 25's `sync/workflow-activity.ts` derives the indicator's running
-  sessions from it.
+  run-state source; surfaces read run state from it directly.
 - **Wiring.** `routes.js` exports `createWorkflowsModule`, built only when the flag is on;
   `server/index.js` constructs it once, hands `workflowRuntime` to the control service and
   the module to the feature-route registry, and asks it to deliver pending reports once the

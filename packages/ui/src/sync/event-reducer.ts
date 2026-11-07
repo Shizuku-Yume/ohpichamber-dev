@@ -37,12 +37,6 @@ export function clearSessionAdvisor(state: State, sessionId: string): State {
  return { ...state, advisor };
 }
 
-export function clearSessionCleanse(state: State, sessionId: string): State {
- if (!state.cleanse?.[sessionId]) return state;
- const cleanse = { ...state.cleanse };
- delete cleanse[sessionId];
- return { ...state, cleanse };
-}
 const retain = <T>(current: readonly T[], incoming: readonly T[], key: (item: T) => string): T[] => {
  const prior = new Map(current.map((item) => [key(item), item]))
  const next = incoming.map((item) => { const old = prior.get(key(item)); return old && same(old, item) ? old : item })

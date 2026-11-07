@@ -60,7 +60,7 @@ export const countSessionTreeQueryMatches = (node: SessionNode, query: string): 
  * rows open to the match and search lists these sessions nowhere else.
  * `'session'` matches the session itself only.
  */
-export type MatchedZoneSessions = {
+type MatchedZoneSessions = {
   sessions: Session[];
   matchCountById: Map<string, number>;
 };

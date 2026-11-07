@@ -4,7 +4,7 @@ import { getSettingsSurface } from '@/lib/settings/surface';
 import type { SettingsSurface } from '@/lib/settings/registry';
 
 type ProjectSortOrder = 'manual' | 'a-z' | 'z-a' | 'date-added' | 'recent';
-export type ListSessionGrouping = 'project' | 'time';
+type ListSessionGrouping = 'project' | 'time';
 type ProjectDisplayMode = 'all' | 'single';
 
 type SessionDisplayStore = {

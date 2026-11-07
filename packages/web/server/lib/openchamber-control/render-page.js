@@ -9,8 +9,8 @@ import { OpenChamberControlError } from './error.js';
 // JSON body is capped at 1 MB. 200,000 characters stays under that cap even for
 // text that encodes to several bytes per character, and is far more than a
 // chart or table page needs.
-export const RENDER_PAGE_MAX_HTML_LENGTH = 200_000;
-export const RENDER_PAGE_MAX_TITLE_LENGTH = 120;
+const RENDER_PAGE_MAX_HTML_LENGTH = 200_000;
+const RENDER_PAGE_MAX_TITLE_LENGTH = 120;
 // An answer is a choice and a few values, never a document: the page sends
 // what the user picked and the agent builds the rest itself.
 const RENDER_PAGE_MAX_SUMMARY_LENGTH = 500;
@@ -27,10 +27,10 @@ const LOCAL_IMAGE_RE = /(["'`])((?:file:\/\/|\/(?!\/)|[A-Za-z]:[\\/])[^"'`<>\n]*
 // How much the local images a page shows may weigh together, in file bytes.
 // The chat reads each one into the page as a data URL, and the browser holds
 // it decoded on top, so the weight of a page is what bounds the chat's memory.
-export const RENDER_PAGE_IMAGE_BUDGET_BYTES = 25 * 1024 * 1024;
+const RENDER_PAGE_IMAGE_BUDGET_BYTES = 25 * 1024 * 1024;
 
 /** The local image paths a page names, in order, once each. */
-export const renderPageImageSources = (html) => {
+const renderPageImageSources = (html) => {
   const sources = new Set();
   for (const match of html.matchAll(LOCAL_IMAGE_RE)) sources.add(match[2] ?? match[3]);
   return [...sources];
@@ -45,7 +45,7 @@ export const renderPageImageSources = (html) => {
  * route serves a page with this rule and the agent is told with it, so both
  * agree on what the user sees.
  */
-export const fitRenderPageImages = async (html, inspect) => {
+const fitRenderPageImages = async (html, inspect) => {
   const images = [];
   let shownBytes = 0;
   let totalBytes = 0;
@@ -119,13 +119,6 @@ const RENDER_PAGE_FALLBACK_TITLE = 'Page';
 const SHOWN_NOTE = "Shown to the user in the chat above your reply. Don't announce, describe or restate the page; reply with only what it doesn't already say.";
 
 const ANSWERED_NOTE = "The user answered on the page. summary is their choice in words, data is what the page sent. Continue the task from it; the chat already shows the summary under the page, so don't repeat it back.";
-
-/**
- * What the agent reads when the user wrote in the chat instead of answering on
- * the page. The plugin builds that result itself (see ../agent-tool/runtime.js),
- * because the wait ends there, before this server hears of it.
- */
-export const RENDER_PAGE_CLOSED_IN_CHAT_NOTE = "The user did not answer on the page and wrote in the chat instead; their message follows this result. Continue from that message and don't ask the same question on a page again unless they want it.";
 
 const pageKey = (sessionId, callId) => `${sessionId}\u0000${callId}`;
 

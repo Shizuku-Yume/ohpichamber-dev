@@ -16,7 +16,7 @@ const HOST_PRODUCT_ICONS = new Set([
 ]);
 
 /** A Remixicon in the app's sprite that a guest may name; product marks are the host's own. */
-export const isGuestIconName = (name: string): name is IconName => (
+const isGuestIconName = (name: string): name is IconName => (
   Object.hasOwn(iconSpriteData, name) && !HOST_PRODUCT_ICONS.has(name)
 );
 

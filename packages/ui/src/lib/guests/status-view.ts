@@ -1,6 +1,5 @@
-import type { GuestRequest, GuestStatusActionEvent, GuestStatusView } from '@openchamber/sdk';
+import type { GuestRequest, GuestStatusView } from '@openchamber/sdk';
 import { guestStatusViewSchema } from '@openchamber/sdk/schemas';
-import { z } from 'zod';
 
 import { proxyGuestServiceRequest } from './service';
 
@@ -14,13 +13,6 @@ export type GuestStatusViewFailure = 'unreachable' | 'invalid';
 export type GuestStatusViewRead =
   | { ok: true; view: GuestStatusView }
   | { ok: false; failure: GuestStatusViewFailure };
-
-type GuestStatusActionResult =
-  | { ok: true }
-  /** `message` is the service's own explanation when it gave one. */
-  | { ok: false; message: string | null };
-
-const actionFailureSchema = z.object({ message: z.string().trim().min(1).max(300) });
 
 /** What the service is told about where the section shows. */
 type GuestStatusContext = {
@@ -44,27 +36,6 @@ const parseView = (body: string): GuestStatusView | null => {
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
-  }
-};
-
-/** Tells the service a control was activated. */
-export const postGuestStatusAction = async (
-  guestId: string,
-  path: string,
-  context: GuestStatusContext,
-  event: GuestStatusActionEvent,
-): Promise<GuestStatusActionResult> => {
-  const answer = await proxyGuestServiceRequest(guestId, sourceRequest(path, context, {
-    method: 'POST',
-    body: JSON.stringify(event),
-  }));
-  if (!answer.ok) return { ok: false, message: null };
-  if (isSuccess(answer.result.status)) return { ok: true };
-  try {
-    const parsed = actionFailureSchema.safeParse(JSON.parse(answer.result.body));
-    return { ok: false, message: parsed.success ? parsed.data.message : null };
-  } catch {
-    return { ok: false, message: null };
   }
 };
 
@@ -129,7 +100,7 @@ const documentVisibility = (): StatusViewVisibility => ({
   },
 });
 
-export type StatusViewPoller = {
+type StatusViewPoller = {
   /**
    * Read now, as after an action; a read in flight is followed by one more.
    * Resolves once a read that started after the call has been delivered, so

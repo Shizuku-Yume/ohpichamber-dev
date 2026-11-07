@@ -2,9 +2,7 @@ import { create } from 'zustand';
 import type { CleanseProgressEvent, CleanseProgressStatus } from '@openchamber/agent-contract';
 import { compareCounters } from '@/sync/event-reducer';
 
-export type { CleanseProgressStatus };
-
-export interface CleanseState {
+interface CleanseState {
   sessionId: string;
   epoch: string;
   sequence: string;

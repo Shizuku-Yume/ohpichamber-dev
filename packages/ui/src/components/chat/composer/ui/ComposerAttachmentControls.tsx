@@ -25,7 +25,7 @@ import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /** A tracker the attach menu offers: its mark, the translated action, and what opens its picker. */
-export type ComposerTrackerPicker = { provider: string; icon: IconName; label: string; open: () => void };
+type ComposerTrackerPicker = { provider: string; icon: IconName; label: string; open: () => void };
 
 type ComposerAttachmentControlsProps = {
     isVSCode?: boolean;

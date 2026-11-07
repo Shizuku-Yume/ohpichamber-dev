@@ -8,8 +8,6 @@ import {
 } from '@/sync/session-ordering';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
-import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
-import { deriveRecentSessions } from '../recent/activitySections';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { normalizePath } from '../utils';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
@@ -233,7 +231,7 @@ const orderSidebarSessionStructure = (
   };
 };
 
-export type SidebarSessionProjection = {
+type SidebarSessionProjection = {
   chatSessions: Session[];
   childrenMap: Map<string, Session[]>;
   orderedSessions: Session[];
@@ -272,7 +270,7 @@ type UseSessionProjectCollectionArgs = {
 // The collection owns the global-first/live-gap merge and lifecycle ordering.
 // Selection state intentionally never enters this boundary: rows subscribe to
 // active state themselves, leaving this projection referentially stable.
-export type UseSessionProjectCollectionResult = {
+type UseSessionProjectCollectionResult = {
   archivedSessions: readonly Session[];
   childrenMap: Map<string, Session[]>;
   chatSessions: Session[];
@@ -363,38 +361,4 @@ export const useSessionProjectCollection = ({
     rootSessions: structure.rootSessions,
     sessionById,
   };
-};
-
-const EMPTY_ACTIVE_SESSION_IDS = new Set<string>();
-
-type UseRecentSessionCollectionArgs = {
-  enabled: boolean;
-  pinnedSessionIds: ReadonlySet<string>;
-  sessionOrderRanks: ReadonlyMap<string, number>;
-  sessions: readonly Session[];
-};
-
-// Kept for MobileSessionsSheet compatibility until Task 32 migrates it.
-export const useRecentSessionCollection = ({
-  enabled,
-  pinnedSessionIds,
-  sessionOrderRanks,
-  sessions,
-}: UseRecentSessionCollectionArgs): Session[] => {
-  const activeSessionIdSet = useGlobalSessionStatusStore(
-    React.useCallback(
-      (state) => enabled ? state.activeSessionIds : EMPTY_ACTIVE_SESSION_IDS,
-      [enabled],
-    ),
-  );
-
-  return React.useMemo(() => {
-    if (!enabled) return [];
-    countSyncPerformance('recentCandidatesVisited', sessions.length);
-    return orderSessionsByLifecycleScopes(
-      deriveRecentSessions(sessions, activeSessionIdSet),
-      pinnedSessionIds instanceof Set ? pinnedSessionIds : new Set(pinnedSessionIds),
-      sessionOrderRanks,
-    );
-  }, [activeSessionIdSet, enabled, pinnedSessionIds, sessionOrderRanks, sessions]);
 };

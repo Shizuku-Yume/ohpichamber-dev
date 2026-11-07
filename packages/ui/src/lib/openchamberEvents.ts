@@ -225,7 +225,7 @@ const notificationPropertiesSchema = z.object({
  showWhenFocused: z.boolean().optional(),
 });
 
-export type SessionMetadataEvent = { type: 'session-metadata'; state: SessionMetadataState };
+type SessionMetadataEvent = { type: 'session-metadata'; state: SessionMetadataState };
 type OpenChamberEvent =
  | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
  /** `connectionId` names this connection on the server; absent from servers before tracked items. */

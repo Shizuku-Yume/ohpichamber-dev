@@ -9,7 +9,7 @@ import { z } from 'zod';
  * in an `<openchamber-workflow …>` envelope that names the run and its state.
  */
 
-export type WorkflowReportState = 'completed' | 'failed' | 'stopped' | 'declined';
+type WorkflowReportState = 'completed' | 'failed' | 'stopped' | 'declined';
 
 export type WorkflowReport = {
   runId: string;

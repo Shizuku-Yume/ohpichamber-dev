@@ -4,12 +4,10 @@ import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/
 import { forgetLegacyPins, getLegacyPins, setPendingPin, useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { setSessionPinned } from './session-actions';
 
-export { setPendingPin };
-
 export type PinTarget = { directory: string; sessionId: string };
 
 // Clicks on one session run in order, so the last one wins on the server too.
-export const pinQueues = new Map<string, { tail: Promise<void>; count: number }>();
+const pinQueues = new Map<string, { tail: Promise<void>; count: number }>();
 
 /**
  * Pin or unpin a session. The row flips at once; the pin is stored in the

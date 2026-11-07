@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { PullRequestSource } from '@/lib/diff/pullRequestDiff';
 import type { SourceControlReadContext } from '@/lib/source-control/types';
 
-export interface PullRequestDiffRequest {
+interface PullRequestDiffRequest {
   source: PullRequestSource;
   context: SourceControlReadContext;
 }

@@ -59,9 +59,6 @@ export const sessionReferenceKey = (reference: { sessionId: string; messageId?: 
     messageId: reference.messageId ?? null,
 });
 
-/** The link the `@` picker writes for a session. */
-export const sessionLinkText = (sessionId: string): string => `openchamber://session/${sessionId}`;
-
 export const loadSessionLinkReference = async (target: SessionLinkTarget): Promise<SessionReference | null> => {
     const runtimeKey = getRuntimeKey();
     const snapshot = await ensureGlobalSessionsLoaded();

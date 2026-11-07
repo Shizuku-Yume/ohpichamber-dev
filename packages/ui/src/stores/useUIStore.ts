@@ -290,7 +290,7 @@ const contextPanelModeKeepsTargetDirectory = (mode: ContextPanelMode): boolean =
  * the form that creates it. It is always there and never closes; the items
  * opened beside it carry their link as `targetPath`.
  */
-export const isTrackerBranchTab = (tab: { mode: ContextPanelMode; targetPath: string | null }): boolean => (
+const isTrackerBranchTab = (tab: { mode: ContextPanelMode; targetPath: string | null }): boolean => (
   tab.mode === 'pr' && !tab.targetPath
 );
 

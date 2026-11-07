@@ -1,7 +1,6 @@
 import type { Agent } from '@openchamber/agent-contract';
 import type { Theme } from '@/types/theme';
 import { chromaticDistance, contrastRatio } from './theme/color';
-import { isHexColor } from './colorPresets';
 
 /** `color` is a semantic theme CSS variable. */
 export type AgentColor = { color: string };
@@ -17,17 +16,6 @@ const SYNTAX_COLORS = [
   { key: 'variable', color: 'var(--syntax-variable)' },
 ] as const;
 const MIN_SEPARATION = 0.055;
-
-// OpenCode's v1 migration writes #aaaaaa for theme names it cannot keep
-// ("primary", "accent"), so it stands for "no colour chosen", not grey.
-const MIGRATED_COLOR_PLACEHOLDER = '#aaaaaa';
-
-/** The colour set in the agent's config, when it is one OpenCode v2 accepts (six-digit hex only). */
-export const configuredAgentColor = (color: string | null | undefined): string | null => {
-  const value = color?.trim();
-  if (!value || !isHexColor(value) || value.toLowerCase() === MIGRATED_COLOR_PLACEHOLDER) return null;
-  return value;
-};
 
 function hashName(name: string): number {
   let hash = 0;

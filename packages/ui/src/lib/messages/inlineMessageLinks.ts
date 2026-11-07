@@ -23,15 +23,6 @@ export const INLINE_REFERENCE_CHIP_CLASS =
 /** The label inside a reference chip: one line, cut with an ellipsis where the field is narrower than the name. */
 export const REFERENCE_CHIP_LABEL_CLASS = 'min-w-0 truncate';
 
-/**
- * Punctuation the user typed right after a chip (`, . : ; ! ? …`, closing
- * brackets and quotes). A browser may break a line between a chip and the
- * text after it, which a word and its comma never allow, so each surface
- * keeps this run on the chip's line: the composer and plain messages wrap
- * both in a `nowrap` span, Markdown joins them with a word joiner (U+2060).
- */
-export const CHIP_TRAILING_PUNCTUATION = /^[.,;:!?…)\]}»”’"'%]+/;
-
 /** A chip that opens something (a skill) reacts to hover with a firmer border, not a fill. */
 export const INTERACTIVE_REFERENCE_CHIP_CLASS = `${INLINE_REFERENCE_CHIP_CLASS} cursor-pointer transition-colors hover:border-foreground/40`;
 

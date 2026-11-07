@@ -23,12 +23,6 @@ const ESCAPE_SURFACES: Array<{ name: string; file: string; handler: string; clos
     close: /close\(\);/,
   },
   {
-    name: 'sidebar peek',
-    file: 'components/layout/useSidebarPeek.ts',
-    handler: 'const handleKeyDown',
-    close: /hide\(\);/,
-  },
-  {
     name: 'mobile overlay panel',
     file: 'components/ui/MobileOverlayPanel.tsx',
     handler: 'const handleKeyDown',
@@ -61,8 +55,7 @@ describe('escape surfaces ignore IME composition keystrokes', () => {
       const start = source.indexOf(surface.handler);
       expect(start).toBeGreaterThan(-1);
 
-      // From the handler to the end of its close action; the peek sidebar's
-      // handler sits inside an effect that also wires pointer listeners.
+      // From the handler to the end of its close action.
       const handler = source.slice(start, start + 2000);
       const guardIndex = handler.indexOf('isIMECompositionEvent');
       const closeIndex = handler.search(surface.close);

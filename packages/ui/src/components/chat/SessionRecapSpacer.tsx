@@ -37,7 +37,7 @@ export const SessionRecapNote: React.FC<SessionRecapNoteProps> = React.memo(({ s
 
 SessionRecapNote.displayName = 'SessionRecapNote';
 
-export interface CompactionDividerProps {
+interface CompactionDividerProps {
   method?: string;
   tokensBefore: number;
   tokensAfter?: number;

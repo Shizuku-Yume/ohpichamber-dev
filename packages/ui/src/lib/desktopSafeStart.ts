@@ -9,9 +9,6 @@ declare global {
   }
 }
 
-/** True when the desktop app reloaded this window because it kept crashing. */
-export const isDesktopSafeStart = (): boolean => globalThis.window?.__OPENCHAMBER_SAFE_START__ === true;
-
 /**
  * Forget the saved layout a crashing window restores on every load: expanded
  * folders, open files and open panels. Runs before the first render, and the

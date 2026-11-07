@@ -179,12 +179,6 @@ export const useSessionWorkflowRuns = (sessionId: string | null): WorkflowRun[] 
   return available ? runs : EMPTY_RUNS;
 };
 
-/** One run of a session by id, for the chat card of the call that proposed it. */
-export const useWorkflowRun = (sessionId: string | null, runId: string | null): WorkflowRun | null => {
-  const runs = useSessionWorkflowRuns(sessionId);
-  return React.useMemo(() => (runId ? runs.find((run) => run.id === runId) ?? null : null), [runId, runs]);
-};
-
 /**
  * The runs of every session in a project (its folder and its worktrees),
  * oldest first, read from the server the first time a surface asks; events

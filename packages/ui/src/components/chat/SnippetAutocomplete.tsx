@@ -9,7 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import type { Snippet } from '@/types/snippet';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
 
-export interface SnippetAutocompleteHandle {
+interface SnippetAutocompleteHandle {
   handleKeyDown: (key: string) => void;
 }
 

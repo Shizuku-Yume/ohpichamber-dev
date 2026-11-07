@@ -3,7 +3,7 @@ import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { useCleanseStore } from '@/stores/useCleanseStore';
 
-export interface CleanseStatusBoardProps {
+interface CleanseStatusBoardProps {
   status: 'discovering' | 'repairing' | 'verifying' | 'completed' | 'failed' | 'cancelled';
   activeCheckers: string[];
   completedCheckers: string[];
@@ -122,7 +122,7 @@ export const CleanseStatusBoard: React.FC<CleanseStatusBoardProps> = ({
   );
 };
 
-export interface CleanseTimelineBoardProps {
+interface CleanseTimelineBoardProps {
   sessionId: string | null;
   directory?: string;
   className?: string;

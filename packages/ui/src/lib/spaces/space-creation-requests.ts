@@ -11,19 +11,13 @@ export const noteSpaceCreationRequest = (requestId: string, spaceId: string): vo
   spaceRequests.set(requestId, spaceId);
 };
 
-export const forgetSpaceCreationRequest = (requestId: string): void => {
-  spaceRequests.delete(requestId);
-};
-
 /** Forgets the waiting requests; the runtime their spaces were asked of is gone. */
 export const resetSpaceCreationRequests = (): void => {
   spaceRequests.clear();
 };
 
-export const isSpaceCreationRequest = (requestId: string | null | undefined): boolean => Boolean(requestId && spaceRequests.has(requestId));
-
 /** The space a draft waits for, or null when the draft waits for nothing of this kind. */
-export const spaceOfCreationRequest = (requestId: string | null | undefined): string | null => (requestId ? spaceRequests.get(requestId) ?? null : null);
+const spaceOfCreationRequest = (requestId: string | null | undefined): string | null => (requestId ? spaceRequests.get(requestId) ?? null : null);
 
 /** Where a draft waiting for a space runs commands: nowhere while the space is made, in the space once it runs. */
 export type DraftSpaceTarget = { kind: 'preparing' } | { kind: 'ready'; directory: string };

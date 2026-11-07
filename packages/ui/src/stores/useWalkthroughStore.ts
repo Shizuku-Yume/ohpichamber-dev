@@ -21,7 +21,7 @@ import { joinProjectPath } from '@/lib/source-control/projectPath';
 
 type WalkthroughEntryStatus = 'idle' | 'loading' | 'generating' | 'ready' | 'error';
 
-export interface WalkthroughEntry {
+interface WalkthroughEntry {
   status: WalkthroughEntryStatus;
   stage: WalkthroughStage | null;
   result: WalkthroughResult | null;

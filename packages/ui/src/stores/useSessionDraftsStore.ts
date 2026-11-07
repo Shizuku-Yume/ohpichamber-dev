@@ -63,9 +63,6 @@ type SessionDraftsActions = {
   discard: (draftId: string, options?: { final?: boolean }) => Promise<void>;
 };
 
-/** A new draft's id: the server keeps ids of letters, digits, `_`, `.` and `-`. */
-export const createSessionDraftId = (): string => `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
-
 const EMPTY: readonly SessionDraft[] = [];
 
 // Attachments already stored for a draft travel by id only. Keyed by runtime
@@ -94,7 +91,7 @@ const unsyncedDraftKeys = new Set<string>();
 export const hasUnsyncedSessionDraft = (draftId: string): boolean => unsyncedDraftKeys.has(uploadKey(draftId));
 
 /** A save the server refused because the draft's attachments are too large to keep. */
-export class SessionDraftTooLargeError extends Error {}
+class SessionDraftTooLargeError extends Error {}
 
 // A load that started before a write must not bring back what the write
 // changed: every write bumps its runtime's revision, which a load of the same

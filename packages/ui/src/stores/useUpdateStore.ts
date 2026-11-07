@@ -127,7 +127,7 @@ function mapRuntimeParams(runtime: ClientRuntime): URLSearchParams {
   return params;
 }
 
-export function parseUpdateCheckResponse(data: {
+function parseUpdateCheckResponse(data: {
   available?: boolean;
   version?: string;
   currentVersion?: string;

@@ -8,7 +8,6 @@
   "workspaces": {
     ".": {
       "entry": [
-        "fix-deprecation.js",
         "oxlint.config.ts",
         "oxlint.anti-slop.config.ts",
         "postcss.config.js",
@@ -21,6 +20,7 @@
     },
     "packages/ui": {
       "entry": [
+        "src/components/chat/MarkdownRendererImpl.tsx",
         "src/**/*.bench.{ts,tsx}",
         "src/**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx}",
         "src/**/__tests__/**/*.{js,cjs,mjs,jsx,ts,tsx}"
@@ -31,7 +31,6 @@
     },
     "packages/web": {
       "entry": [
-        "bin/cli.js",
         "src/mobile-main.tsx",
         "src/mini-chat-main.tsx",
         "src/main.tsx",
@@ -101,7 +100,6 @@
         "scripts/**/*.{js,cjs,mjs,ts}"
       ],
       "project": [
-        "*.{js,cjs,mjs,ts}",
         "scripts/**/*.{js,cjs,mjs,ts}"
       ]
     }

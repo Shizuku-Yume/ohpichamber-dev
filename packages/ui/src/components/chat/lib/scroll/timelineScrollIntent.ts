@@ -44,10 +44,6 @@ const FRAME_SCROLL_EVENT = 'openchamber:frame-scroll';
 /** `up` moves toward older content: a wheel up, or a finger dragging down. */
 export type FrameScrollDirection = 'up' | 'down';
 
-export function dispatchFrameScroll(frame: HTMLElement, direction: FrameScrollDirection): void {
-    frame.dispatchEvent(new CustomEvent<FrameScrollDirection>(FRAME_SCROLL_EVENT, { bubbles: true, detail: direction }));
-}
-
 /** Listens for frame scroll gestures inside `container`. */
 export function onFrameScroll(container: HTMLElement, listener: (direction: FrameScrollDirection) => void): () => void {
     const handle = (event: Event) => {

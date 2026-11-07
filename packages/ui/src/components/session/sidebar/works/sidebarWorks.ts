@@ -14,7 +14,7 @@ export type SidebarWorkRef =
 
 type SidebarWorktreeWorkRef = Extract<SidebarWorkRef, { kind: 'worktree' }>;
 
-export type SidebarWorkIndex = {
+type SidebarWorkIndex = {
   bySessionId: ReadonlyMap<string, SidebarWorkRef>;
   /** Every worktree work, in section and group order, sessions or not. */
   worktreeWorks: readonly SidebarWorktreeWorkRef[];

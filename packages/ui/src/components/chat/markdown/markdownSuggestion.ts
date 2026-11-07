@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 /** The displayed lines a review suggestion replaces, owned by the review surface until it lands. */
-export interface ReviewCommentExcerpt {
+interface ReviewCommentExcerpt {
   startLine: number;
   lines: string[];
 }

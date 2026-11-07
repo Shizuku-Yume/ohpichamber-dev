@@ -21,7 +21,7 @@ import type {
 } from '@openchamber/agent-contract';
 import type { EndedShell, TrackedShell } from '@/sync/background-shells';
 
-export interface JobsSheetDialogProps {
+interface JobsSheetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   shell: TrackedShell | EndedShell | null;

@@ -142,7 +142,7 @@ useSessionPinnedStore.subscribe((state) => {
   }
 });
 
-export const publishPinnedIds = (): void => {
+const publishPinnedIds = (): void => {
   const next = derivePinnedIds();
   if (!sameIds(next, useSessionPinnedStore.getState().ids)) {
     useSessionPinnedStore.setState({ ids: next });

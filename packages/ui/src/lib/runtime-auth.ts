@@ -435,13 +435,6 @@ export const acquireRuntimeUrlAuthToken = (apiBaseUrl?: string | null): (() => v
   };
 };
 
-export const subscribeRuntimeUrlAuthToken = (listener: () => void): (() => void) => {
-  urlAuthListeners.add(listener);
-  return () => {
-    urlAuthListeners.delete(listener);
-  };
-};
-
 export const buildRuntimeAuthHeaders = async (headers?: HeadersInit): Promise<Headers> => {
   const next = new Headers(headers);
   for (const [key, value] of Object.entries(getRuntimeExtraHeadersSync())) {

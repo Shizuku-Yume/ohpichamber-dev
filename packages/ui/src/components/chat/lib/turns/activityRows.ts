@@ -11,12 +11,12 @@ export const LIVE_ACTIVITY_VISIBLE_ROWS = 7;
 
 
 /** Whether a tool call gets a row: while it runs, and once it ended with sane timing. */
-export const isToolRowShown = (toolPart: ToolCallPart): boolean => {
+const isToolRowShown = (toolPart: ToolCallPart): boolean => {
     return toolPart.status !== 'cancelled';
 };
 
 /** Whether a part MessageBody draws is a row (`parts` already filtered for reasoning). */
-export const isActivityRowPart = (part: Part): boolean => {
+const isActivityRowPart = (part: Part): boolean => {
     if (part.type === 'tool_call') return isToolRowShown(part);
     if (part.type === 'text') return !isEmptyTextPart(part);
     return part.type === 'reasoning';

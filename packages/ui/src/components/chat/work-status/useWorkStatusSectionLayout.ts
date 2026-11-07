@@ -14,7 +14,7 @@ import { useWorkStatusExtensionSections, type WorkStatusExtensionSections } from
  * Status tab keeps its own per-device list (`mobileWorkStatusHiddenSections`,
  * Subagents hidden by default); the desktop panel keeps the profile one.
  */
-export const useWorkStatusHiddenSections = () => {
+const useWorkStatusHiddenSections = () => {
   const isMobile = useUIStore((state) => state.isMobile);
   const hidden = useUIStore((state) => (isMobile ? state.mobileWorkStatusHiddenSections : state.workStatusHiddenSections));
   const setSectionVisible = useUIStore((state) => (isMobile ? state.setMobileWorkStatusSectionVisible : state.setWorkStatusSectionVisible));
