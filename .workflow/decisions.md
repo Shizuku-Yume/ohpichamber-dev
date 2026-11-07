@@ -771,3 +771,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** user
 - **Revisit when:** External Linear OAuth credentials are provisioned, worktree session isolation is designed and implemented in a subsequent milestone, or Electron Linux headless compositor capture is resolved.
 - **Effort:** m4-orchestration
+
+## 2026-11-07 - Decline per-session cache warming on the Agent Service
+
+- **Decided:** not fixing Per-session warming has no Agent Service implementation. The canonical workspace-scoped control (`GET/PUT /api/agent/v1/workspaces/:workspaceId/cache-warming`, `off`/`streaming`/`idle`) stays the only warming surface, and the technical-debt entry is removed.
+- **Instead of:** fixing it by adding a canonical session-level warming route, per-session revision CAS and worker application, then rebuilding the Settings field and the session-menu toggle against it.
+- **Because:** the maintainer excluded it from the M6 audit and polish (`decisions.md: 2026-10-29 - Delete upstream's per-session warming instead of rewiring it`, and `.workflow/specs/m6-audit-and-polish.md`: "keeping per-session cache warming and bundled ripgrep excluded per maintainer decision"), and the adopted per-session runtime was unreachable code pointed at deleted OpenCode endpoints.
+- **Mine:** no
+- **Revisit when:** the maintainer asks for per-session warming again and a canonical session-scoped warming contract is designed end to end.
+- **Effort:** tech-debt-sweep

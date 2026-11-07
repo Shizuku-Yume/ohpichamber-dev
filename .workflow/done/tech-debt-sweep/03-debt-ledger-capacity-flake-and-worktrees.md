@@ -1,0 +1,45 @@
+# 03: Reconcile technical-debt.md, harden workers.capacity.test.ts contention polling, and prune merged historical worktrees
+
+**Effort:** tech-debt-sweep
+**Task type:** refactor
+**Base commit:** 923e864b7
+**Started:** 2026-11-07
+**Finished:** 2026-11-07
+**Blocked by:** None
+**Covers:** W3
+**Files:** `.workflow/technical-debt.md`; `.workflow/decisions.md`; `packages/agent-service/src/supervisor/workers.capacity.test.ts`
+**Read first:** `.workflow/specs/tech-debt-sweep.md`; `.workflow/technical-debt.md`; `.workflow/decisions.md`; `packages/agent-service/src/supervisor/workers.capacity.test.ts`
+**Check:** `for i in 1 2 3 4 5; do bun test packages/agent-service/src/supervisor/workers.capacity.test.ts || exit 1; done && .workflow/bin/workflow validate` → exits 0 across 5 consecutive runs with reconciled `technical-debt.md` and pruned historical worktrees.
+
+- [x] Reconcile `.workflow/technical-debt.md` per its format rules: remove resolved entries (`Session unread state has no OMP source`, `Session pins have no OMP source`, and the 5 `Status: fixed` entries from 2026-11-04 — workspace session listing, parent link, elapsed turn stats, host tool errors, relocation race), record the explicit declined decision in `.workflow/decisions.md` before removing `Per-session warming has no Agent Service implementation`, and remove `Root test contention flakes under multi-suite load` once hardened below.
+- [x] Harden `packages/agent-service/src/supervisor/workers.capacity.test.ts` ("a pending worker operation and a restart reservation each postpone eviction" and sibling eviction timing assertions) to rely strictly on deterministic signals / bounded state polling with generous contention slack rather than fragile wall-clock sleeps, and verify 5/5 consecutive passes.
+- [x] Safely prune historical worktrees under `/home/shizuku/Project/ohpichamber-worktrees/` (excluding `debt-*`) and their merged local task branches **only** when `git status --short` is empty AND `git merge-base --is-ancestor <HEAD> 2cd1a8c836` holds; leave any dirty or unmerged historical worktree untouched and list it in `## Progress`.
+
+## Progress
+
+**Work — capacity test:** the failing assertions were fixed sleeps and fixed "not evicted yet" windows (`Bun.sleep(5)`, `Bun.sleep(400)`, `expectNotEvictedFor(..., 150)`, `Bun.sleep(1200)`) against a real 20 ms reaper and real child processes. Under the 7-suite root gate those windows lost to spawn and scheduling latency, so the eviction probe or the process exit landed after the assertion. Replacements:
+- `pollUntil`/`waitForEviction` keep the assertion on observable registry state (the entry disappears only after the worker process is stopped and reaped) with a 15 s bound instead of a fixed window.
+- `createReapBarrier` wraps `isSessionIdle` and counts probe calls. Waiting for N probes is a deterministic latch that the reaper completed N decisions while a postponement was in force, independent of how far contention stretched the clock; the old "must survive 150/300 ms" negative windows are gone.
+- The idle/active-turn test waits for 4 probes of each blocked root, then polls for the idle root's eviction; the pending-operation and restart tests wait for 4 and 2 probes respectively before releasing the postponement and polling the eviction. The pending fixture hold rose to 1500 ms with `stopTimeoutMs` 5000 so the fixture's own delayed snapshot reply cannot be mistaken for a busy worker on a loaded machine.
+- The shell-job test no longer sleeps 400/1200 ms: it waits for two probes, asserts the worker's own snapshot still reports one running job, then polls the eviction.
+- LRU ordering uses `waitForClockTick` (advances past the current millisecond) instead of `Bun.sleep(5)`, so "least recently active" is decided by insertion order rather than by timer drift.
+- Semantics preserved: same seven tests, same policy constants, same typed capacity refusal, same LRU victim, same postponement gates.
+- `bunx oxlint packages/agent-service/src/supervisor/workers.capacity.test.ts` → exit 0.
+- `bun test packages/agent-service/src/supervisor/workers.capacity.test.ts` → 7 pass / 0 fail, 5 consecutive runs (5.47 s, 5.47 s, 5.58 s, 5.51 s, 5.54 s).
+
+**Work — ledger:** `.workflow/technical-debt.md` now has no entries: the `## Format` contract stays and `## Entries` is empty. Removed because fixed: `Session unread state has no OMP source` and `Session pins have no OMP source` (M6 task 04 — `packages/ui/src/sync/session-unread.ts`, `session-pins.ts`, `host-metadata.sqlite` `openchamber.workbench`/`openchamber.pinned`); `Workspace session listing failure...`, `Session create cannot set a parent link`, `Turn stats Elapsed 0.0s...`, `Host tool errors collapse to SERVICE_UNAVAILABLE`, `Session relocation can race worktree archive before admission` (all already `Status: fixed (2026-11-04)` in `p1-debts`); `Root test contention flakes under multi-suite load` (this task). `Per-session warming has no Agent Service implementation` was declined, not fixed: `.workflow/decisions.md` gained `## 2026-11-07 - Decline per-session cache warming on the Agent Service` with `Decided: not fixing Per-session warming has no Agent Service implementation`, `Instead of`, `Because` (maintainer's M6 exclusion per `2026-10-29` and `specs/m6-audit-and-polish.md`), `Mine: no`, and `Revisit when`; appended after the last entry, no existing entry edited. `.workflow/development.md` untouched.
+
+**Work — worktree prune (serialized under `flock /tmp/debt-git.lock`):** candidate set came from `git worktree list` filtered to `/home/shizuku/Project/ohpichamber-worktrees/`; each candidate was rechecked immediately before removal (`git -C <wt> status --short` empty and `git merge-base --is-ancestor <HEAD> 2cd1a8c836`), then `git worktree remove` and `git branch -d` for its branch. Removed exactly 66 clean merged historical worktrees and their branches. 111 merged local branches were deleted by `git branch -d` (66 tied to removed worktrees plus 45 standalone merged branches); 2 merged branches stayed because a skipped worktree still checks them out (`upstream-refresh/21`, `upstream-refresh/27`). Worktrees and local branches went from 80 to 14 entries (`git worktree list` now lists `main`, `pkg-m6`, the four `debt-*` worktrees, and the seven skipped historical ones plus the out-of-scope `/tmp/m6-dead-base`) and from 178 to 67 branches; `git branch -d` refuses unmerged branches, so nothing unmerged was deleted, and the 66 removals all verified ancestor-of-`2cd1a8c836`. Protected and never touched: `main` (`/home/shizuku/Project/ohpichamber`), `pkg-m6`, `debt-integration`, `debt-w1`, `debt-w2`, `debt-w3`. `/tmp/m6-dead-base` is outside the brief's directory scope and was left untouched. `backup/*`, `tech-debt-sweep/*`, `pkg-m6-preview` branches preserved; standalone merged branches were deleted only when merged into `2cd1a8c836`, not checked out by any remaining worktree, and not a skipped worktree's branch.
+
+**Skipped historical worktrees (left completely untouched):**
+- `/home/shizuku/Project/ohpichamber-worktrees/post-m3-hardening-12` — branch `post-m3-hardening/14-windows-release-signing`; dirty (` M packages/electron/scripts/prepare-agent-runtime.test.mjs`) and `HEAD 41469be107` not an ancestor of `2cd1a8c836`.
+- `/home/shizuku/Project/ohpichamber-worktrees/post-m3-hardening-39` — branch `post-m3-hardening/39-packaged-live-region-latency`; clean but `HEAD 5c58642ef8` is not an ancestor of `2cd1a8c836`.
+- `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-21` — branch `upstream-refresh/21`; dirty (`?? .omp/`) although `HEAD 5cd6f16bcc` is merged; kept because the worktree is dirty.
+- `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-21-warming` — branch `upstream-refresh/21-warming`; clean but `HEAD 3fe518e8b5` is not an ancestor of `2cd1a8c836`.
+- `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-27` — branch `upstream-refresh/27`; dirty (`?? .workflow/development.md`) although `HEAD a03759718d` is merged; kept because the worktree is dirty.
+- `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-ar-he-warming` — branch `upstream-refresh/ar-he-warming`; clean but `HEAD 47abe80a2d` is not an ancestor of `2cd1a8c836`.
+- `/home/shizuku/Project/ohpichamber-worktrees/upstream-refresh-fix-ar-he` — branch `upstream-refresh/fix-ar-he`; clean but `HEAD 227efb1ecd` is not an ancestor of `2cd1a8c836`.
+
+Not git worktrees, so not pruned and not claimed: `/home/shizuku/Project/ohpichamber-worktrees/m4-integration.lock` and `/home/shizuku/Project/ohpichamber-worktrees/m6-w5`.
+
+**Check after:** `for i in 1 2 3 4 5; do bun test packages/agent-service/src/supervisor/workers.capacity.test.ts || exit 1; done && .workflow/bin/workflow validate` → 5/5 runs of 7 pass / 0 fail, then `Workflow is valid (224 task files).` exit 0. `bunx oxlint` on the changed test → exit 0. Under load: four copies of the file run concurrently → 4/4 `0 fail`; the same four concurrent copies with every core busy-spinning for 20 s → 4/4 `0 fail`. `.workflow/development.md` unmodified; `../opencode` untouched.
