@@ -5,12 +5,9 @@ import path from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { simpleGit } from 'simple-git';
 import { createWorktreeBootstrapStore } from './worktree-bootstrap-storage.js';
-<<<<<<< HEAD
 import { createProjectConfigRuntime } from '../projects/project-config.js';
 import { createProjectIdFromPath } from '../projects/project-id.js';
 
-=======
->>>>>>> bc50ba56a
 import { parseDiffFiles } from '../walkthrough/hunks.js';
 import { loadSourceSections, parseSource, sourceKey } from '../walkthrough/sources.js';
 import { registerGitRoutes } from './routes.js';
@@ -20,7 +17,6 @@ import { createHostSessionState } from '../host/session-state.js';
 import { createOpenChamberSessionService } from '../openchamber-sessions/routes.js';
 
 import {
-<<<<<<< HEAD
  configureGitEnvironment,
  configureProjectWorktreeDirectory,
  initializeRepository,
@@ -62,7 +58,6 @@ import {
  populateWorktreeWithLockRecovery,
  previewWorktreeCreate,
  removeWorktree,
-
  teardownWorktree,
  waitForWorktreeRemoval,
  snapshotWorktree,
@@ -100,87 +95,6 @@ import {
  merge,
  rebase,
  removeRemote,
-=======
-  configureGitEnvironment,
-  getCurrentIdentity,
-  checkoutBranch,
-  checkoutCommit,
-  cherryPick,
-  commit,
-  createWorktree,
-  getWorktreeBootstrapStatus,
-  waitForActiveWorktreeBootstrap,
-  getBranches,
-  getRepositoryRemoteUrls,
-  parseRemoteListing,
-  getRepositoryRoot,
-  getUnpushedBranchCounts,
-  getRangeDiff,
-  getCommitFileDiff,
-  getRangeFileVersions,
-  getBranchBase,
-  getCommitDiff,
-  getCommitFiles,
-  getLog,
-  getStatus,
-  getTrackingBranch,
-  getCheckedOutBranch,
-  getPathsWithoutChanges,
-  stashPush,
-  stashApply,
-  listStashes,
-  getWorktrees,
-  setWorktreeTaskTitle,
-  setWorktreePinned,
-  seedBranchTaskTitle,
-  markGeneratedBranchName,
-  readRenameableGeneratedBranch,
-  renameGeneratedWorktreeBranch,
-  isGitRepository,
-  isPatchEquivalentOfHead,
-  observeWorktreeTopology,
-  populateWorktreeWithLockRecovery,
-  previewWorktreeCreate,
-  removeWorktree,
-  teardownWorktree,
-  waitForWorktreeRemoval,
-  snapshotWorktree,
-  archiveWorktree,
-  listWorktreeArchives,
-  restoreWorktreeArchive,
-  deleteWorktreeArchive,
-  resolvePrimaryWorktreeRoot,
-  resolveWorktreeTopLevel,
-  resetToCommit,
-  resolveBaseRefForLog,
-  revertCommit,
-  setLocalIdentity,
-  clearLocalIdentity,
-  configureRepositoryTransport,
-  getGlobalIdentity,
-  stageFiles,
-  subscribeWorktreeTopologyChanges,
-  renameBranch,
-  unstageFiles,
-  applyHunk,
-  getDiff,
-  getPathDiff,
-  getPathDiffs,
-  revertFile,
-  getUntrackedDiffs,
-  getFileDiff,
-  hasLocalIdentity,
-  validateWorktreeCreate,
-  parseBranchCreationSource,
-  getRangeFiles,
-  inspectContributorCheckoutActions,
-  getConflictDetails,
-  continueMerge,
-  continueRebase,
-  merge,
-  rebase,
-  removeRemote,
->>>>>>> bc50ba56a
 } from './service.js';
 
 // ---------------------------------------------------------------------------
@@ -333,7 +247,6 @@ describe('getLog on a repository with no commits yet', () => {
 });
 
 describe('getLog with a base', () => {
-<<<<<<< HEAD
  it('accepts branches, commits, tags and relative revisions as targets', async () => {
   const { tmpDir, git } = await createTempRepo();
   await git.commit('first', { '--allow-empty': null });
@@ -367,41 +280,6 @@ describe('getLog with a base', () => {
   await git.commit('main moved on', { '--allow-empty': null });
   await git.checkout('feature');
   await git.commit('feature work', { '--allow-empty': null });
-=======
-  it('accepts branches, commits, tags and relative revisions as targets', async () => {
-    const { tmpDir, git } = await createTempRepo();
-    await git.commit('first', { '--allow-empty': null });
-    const first = (await git.revparse(['HEAD'])).trim();
-    await git.raw(['tag', 'first']);
-    await git.commit('second', { '--allow-empty': null });
-    for (const to of ['main', first, 'first', 'HEAD~1']) {
-      const result = await getLog(tmpDir, { to });
-      expect(result.all.length).toBeGreaterThan(0);
-    }
-  });
-  it('reports a deleted target revision without logging a server failure', async () => {
-    const { tmpDir, git } = await createTempRepo();
-    await git.commit('one', { '--allow-empty': null });
-    await git.raw(['branch', 'feature']);
-    await git.raw(['branch', '-D', 'feature']);
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      for (const from of ['main', undefined]) {
-        await expect(getLog(tmpDir, { from, to: 'feature' })).rejects.toMatchObject({ code: 'revision_not_found' });
-      }
-      expect(log).not.toHaveBeenCalled();
-    } finally {
-      log.mockRestore();
-    }
-  });
-  it('lists only the commits the target adds, never what the base gained since', async () => {
-    const { tmpDir, git } = await createTempRepo();
-    await git.commit('one', { '--allow-empty': null });
-    await git.raw(['branch', 'feature']);
-    await git.commit('main moved on', { '--allow-empty': null });
-    await git.checkout('feature');
-    await git.commit('feature work', { '--allow-empty': null });
->>>>>>> bc50ba56a
 
   const branchOnly = await getLog(tmpDir, { from: 'main', to: 'HEAD', maxCount: 25 });
   expect(branchOnly.all.map((entry) => entry.message)).toEqual(['feature work']);
@@ -989,7 +867,6 @@ describe.runIf(canRunGit())('diff output with diff.external configured', () => {
   expect(untracked).toContain('@@');
   expect(untracked).not.toContain('EXTERNAL-DIFF-OUTPUT');
 
-<<<<<<< HEAD
   const range = await getRangeDiff(tmpDir, { base: 'base-branch', head: 'head-branch' });
   expect(range).toContain('diff --git');
   expect(range).toContain('@@');
@@ -1038,56 +915,6 @@ describe.runIf(canRunGit())('diff output with diff.external configured', () => {
    }
   }
  });
-=======
-    const range = await getRangeDiff(tmpDir, { base: 'base-branch', head: 'head-branch' });
-    expect(range).toContain('diff --git');
-    expect(range).toContain('@@');
-    expect(range).not.toContain('EXTERNAL-DIFF-OUTPUT');
-  });
-
-  it('keeps a/ and b/ header prefixes when diff.mnemonicPrefix or diff.noprefix is enabled', async () => {
-    const { tmpDir, git } = await createTempRepo();
-    await writeFile(tmpDir, 'file.txt', 'one\n');
-    await git.add('file.txt');
-    await git.commit('Initial');
-    await git.raw(['branch', 'base-branch']);
-    await git.checkoutLocalBranch('head-branch');
-    await writeFile(tmpDir, 'file.txt', 'two\n');
-    await git.add('file.txt');
-    await git.commit('Second');
-    const commitHash = (await git.revparse(['HEAD'])).trim();
-    await writeFile(tmpDir, 'file.txt', 'three\n');
-    await writeFile(tmpDir, 'new.txt', 'untracked\n');
-
-    // Verify diff.mnemonicPrefix alone first (where git would emit c/, w/, and i/
-    // prefixes), then with diff.noprefix enabled on top (where noprefix wins).
-    for (const [key, value] of [
-      ['diff.mnemonicPrefix', 'true'],
-      ['diff.noprefix', 'true'],
-    ]) {
-      runGit(tmpDir, ['config', key, value]);
-
-      const workingDiff = await getDiff(tmpDir, { path: 'file.txt' });
-      expect(workingDiff).toContain('diff --git a/file.txt b/file.txt');
-
-      const rangeDiff = await getRangeDiff(tmpDir, { base: 'base-branch', head: 'head-branch' });
-      expect(rangeDiff).toContain('diff --git a/file.txt b/file.txt');
-
-      const commitDiff = await getCommitDiff(tmpDir, { hash: commitHash });
-      expect(commitDiff).toContain('diff --git a/file.txt b/file.txt');
-
-      for (const [source, expectedPaths] of [
-        [{ kind: 'working-tree', scope: 'all' }, ['file.txt', 'new.txt']],
-        [{ kind: 'branch', baseRef: 'base-branch', headRef: 'head-branch' }, ['file.txt', 'new.txt']],
-        [{ kind: 'commit', hash: commitHash }, ['file.txt']],
-      ]) {
-        const { sections } = await loadSourceSections(tmpDir, source);
-        const files = sections.flatMap((section) => parseDiffFiles(section.patch, section.scope).files);
-        expect(files.map((file) => file.path)).toEqual(expectedPaths);
-      }
-    }
-  });
->>>>>>> bc50ba56a
 });
 
 describe('symlink diffs', () => {
@@ -1115,10 +942,9 @@ describe('symlink diffs', () => {
 // ---------------------------------------------------------------------------
 
 describe.runIf(canRunGit())('diffs for status paths that are not plain files', () => {
-<<<<<<< HEAD
  const callDiffRoute = async (endpoint, query, requestBody) => {
   const routes = new Map();
-  registerGitRoutes({ get: (url, handler) => routes.set(url, handler), post: (url, handler) => routes.set(url, handler), put() { }, delete() { } });
+  registerGitRoutes({ get: (url, handler) => routes.set(url, handler), post: (url, handler) => routes.set(url, handler), put() {}, delete() {} });
   let status = 200;
   let body;
   await routes.get(`/api/git/${endpoint}`)({ query, body: requestBody }, {
@@ -1188,18 +1014,6 @@ describe.runIf(canRunGit())('diffs for status paths that are not plain files', (
     json(value) { payload = value; },
    });
    return { status, payload };
-=======
-  const callDiffRoute = async (endpoint, query, requestBody) => {
-    const routes = new Map();
-    registerGitRoutes({ get: (url, handler) => routes.set(url, handler), post: (url, handler) => routes.set(url, handler), put() {}, delete() {} });
-    let status = 200;
-    let body;
-    await routes.get(`/api/git/${endpoint}`)({ query, body: requestBody }, {
-      status(value) { status = value; return this; },
-      json(value) { body = value; },
-    });
-    return { status, body };
->>>>>>> bc50ba56a
   };
 
   const paths = ['README.md', 'new.txt', 'removed.txt', 'nested/'];
@@ -1308,136 +1122,10 @@ describe.runIf(canRunGit())('diffs for status paths that are not plain files', (
   const { repository, recorded } = createRepositoryWithSubmodule();
   fs.writeFileSync(path.join(repository, 'sub', 'scratch.txt'), 'scratch\n');
 
-<<<<<<< HEAD
   const result = await getPathDiff(repository, { path: 'sub' });
   expect(result).toEqual({
    diff: '',
    submodule: { headCommit: recorded, indexCommit: recorded, worktreeCommit: recorded, hasTrackedChanges: false, hasUntrackedFiles: true, hasConflict: false },
-=======
-    const routes = new Map();
-    registerGitRoutes({ get() {}, post: (url, handler) => routes.set(url, handler), put() {}, delete() {} });
-    const postDiffs = async (body) => {
-      let status = 200;
-      let payload;
-      await routes.get('/api/git/diffs')({ query: { directory: repository }, body }, {
-        status(value) { status = value; return this; },
-        json(value) { payload = value; },
-      });
-      return { status, payload };
-    };
-
-    const paths = ['README.md', 'new.txt', 'removed.txt', 'nested/'];
-    const { status, payload } = await postDiffs({ paths, context: 3 });
-    expect(status).toBe(200);
-    expect(payload.diffs.map((entry) => entry.path)).toEqual(paths);
-    for (const filePath of ['README.md', 'new.txt']) {
-      const single = await getPathDiff(repository, { path: filePath, contextLines: 3 });
-      expect(payload.diffs.find((entry) => entry.path === filePath)).toEqual({ path: filePath, ...single });
-    }
-    expect(payload.diffs[2]).toMatchObject({ path: 'removed.txt', code: 'path_not_found' });
-    expect(payload.diffs[3]).toMatchObject({ path: 'nested/', code: 'nested_repository' });
-
-    // The service answers the same entries in input order, whatever finishes first.
-    expect(await getPathDiffs(repository, { paths, contextLines: 3, concurrency: 2 })).toEqual(payload.diffs);
-
-    const stagedBatch = await postDiffs({ paths: ['staged.txt'], staged: true });
-    expect(stagedBatch.payload.diffs[0]).toEqual({ path: 'staged.txt', ...(await getPathDiff(repository, { path: 'staged.txt', staged: true })) });
-
-    expect((await postDiffs({ paths: [] })).status).toBe(400);
-    expect((await postDiffs({ paths: ['ok', 7] })).status).toBe(400);
-  });
-
-  it.each(['plain directory', 'removed .git'])('reports a non-repository without logging for %s', async (scenario) => {
-    const directory = scenario === 'plain directory' ? createTempDir() : createRepositoryWithRemote().repository;
-    if (scenario === 'removed .git') {
-      for (const endpoint of ['diff', 'file-diff', 'diffs']) {
-        expect((await callDiffRoute(endpoint, { directory, path: 'README.md' }, { paths: ['README.md'] })).status).toBe(200);
-      }
-      fs.renameSync(path.join(directory, '.git'), path.join(directory, 'removed-git'));
-    }
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      for (const endpoint of ['diff', 'file-diff', 'diffs']) {
-        const result = await callDiffRoute(endpoint, { directory, path: 'notes.md' }, { paths: ['z.md', 'a.md'] });
-        expect(result).toEqual({ status: 409, body: { error: 'This directory is not a Git repository.', code: 'not_repository' } });
-      }
-      expect(warn).not.toHaveBeenCalled();
-      expect(error).not.toHaveBeenCalled();
-      expect((await callDiffRoute('diffs', { directory }, { paths: [] })).status).toBe(400);
-      expect((await callDiffRoute('diffs', { directory }, { paths: ['ok', 7] })).status).toBe(400);
-    } finally {
-      warn.mockRestore();
-      error.mockRestore();
-    }
-  });
-
-  it('describes a submodule whose checked-out commit moved', async () => {
-    const { repository, recorded } = createRepositoryWithSubmodule();
-    const submodulePath = path.join(repository, 'sub');
-    runGit(submodulePath, ['config', 'user.email', 'test@example.com']);
-    runGit(submodulePath, ['config', 'user.name', 'Test']);
-    runGit(submodulePath, ['commit', '--allow-empty', '-m', 'moved']);
-    const moved = runGit(submodulePath, ['rev-parse', 'HEAD']).trim();
-    const submodule = { headCommit: recorded, indexCommit: recorded, worktreeCommit: moved, hasTrackedChanges: false, hasUntrackedFiles: false, hasConflict: false };
-
-    const patch = await callDiffRoute('diff', { directory: repository, path: 'sub' });
-    expect(patch.status).toBe(200);
-    expect(patch.body.diff).toContain(`+Subproject commit ${moved}`);
-    expect(patch.body.submodule).toEqual(submodule);
-
-    const split = await callDiffRoute('file-diff', { directory: repository, path: 'sub' });
-    expect(split.body).toEqual({
-      original: `Subproject commit ${recorded}\n`,
-      modified: `Subproject commit ${moved}\n`,
-      path: 'sub',
-      isBinary: false,
-      submodule,
-    });
-  });
-
-  it('reports a submodule merge conflict instead of an unchanged commit', async () => {
-    const { repository } = createRepositoryWithRemote();
-    const library = createTempDir();
-    runGit(library, ['init', '-b', 'main']);
-    runGit(library, ['config', 'user.email', 'test@example.com']);
-    runGit(library, ['config', 'user.name', 'Test']);
-    runGit(library, ['commit', '--allow-empty', '-m', 'base']);
-    runGit(library, ['checkout', '-b', 'left']);
-    runGit(library, ['commit', '--allow-empty', '-m', 'left']);
-    runGit(library, ['checkout', '-b', 'right', 'main']);
-    runGit(library, ['commit', '--allow-empty', '-m', 'right']);
-    runGit(library, ['checkout', 'main']);
-    runGit(repository, ['-c', 'protocol.file.allow=always', 'submodule', 'add', library, 'sub']);
-    runGit(repository, ['commit', '-m', 'add submodule']);
-    const submodulePath = path.join(repository, 'sub');
-    for (const [branch, commit] of [['other', 'right'], ['next', 'left']]) {
-      if (branch === 'other') runGit(repository, ['checkout', '-b', 'other']);
-      else runGit(repository, ['checkout', 'next']);
-      runGit(submodulePath, ['checkout', commit]);
-      runGit(repository, ['add', 'sub']);
-      runGit(repository, ['commit', '-m', `move to ${commit}`]);
-    }
-    expect(() => runGit(repository, ['merge', 'other'])).toThrow();
-
-    const { submodule } = await getPathDiff(repository, { path: 'sub' });
-    expect(submodule).toMatchObject({
-      headCommit: runGit(repository, ['rev-parse', 'HEAD:sub']).trim(),
-      indexCommit: null,
-      hasConflict: true,
-    });
-  });
-
-  it('reports untracked files inside a submodule even though its patch is empty', async () => {
-    const { repository, recorded } = createRepositoryWithSubmodule();
-    fs.writeFileSync(path.join(repository, 'sub', 'scratch.txt'), 'scratch\n');
-
-    const result = await getPathDiff(repository, { path: 'sub' });
-    expect(result).toEqual({
-      diff: '',
-      submodule: { headCommit: recorded, indexCommit: recorded, worktreeCommit: recorded, hasTrackedChanges: false, hasUntrackedFiles: true, hasConflict: false },
-    });
->>>>>>> bc50ba56a
   });
  });
 });
@@ -1544,6 +1232,41 @@ describe('getStatus', () => {
   }
  });
 
+ it("tells a folder Git refuses from a folder that is no repository, in Git's words", async () => {
+  if (!canRunGit()) return;
+
+  const repo = createTempDir();
+  const plain = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  // Git's own switch for a repository owned by someone else, as a drive
+  // formatted elsewhere looks on Windows.
+  const keys = ['GIT_TEST_ASSUME_DIFFERENT_OWNER', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS'];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  const globalConfig = path.join(createTempDir(), 'empty-gitconfig');
+  // Ambient trust settings can otherwise bypass Git's ownership check.
+  process.env.GIT_CONFIG_NOSYSTEM = '1';
+  process.env.GIT_CONFIG_GLOBAL = globalConfig;
+  process.env.GIT_CONFIG_COUNT = '0';
+  delete process.env.GIT_CONFIG_PARAMETERS;
+  process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = '1';
+  try {
+   await expect(isGitRepository(repo, { failOnGitError: true })).rejects.toMatchObject({
+    code: 'GIT_REPOSITORY_UNREADABLE',
+    message: expect.stringContaining('safe.directory'),
+   });
+   await expect(isGitRepository(plain, { failOnGitError: true })).resolves.toBe(false);
+   await expect(isGitRepository(path.join(plain, 'missing'), { failOnGitError: true })).resolves.toBe(false);
+   // Callers that keep the best-effort probe still read a refusal as no repository.
+   await expect(isGitRepository(repo)).resolves.toBe(false);
+  } finally {
+   for (const key of keys) {
+    if (previous[key] === undefined) delete process.env[key];
+    else process.env[key] = previous[key];
+   }
+  }
+  await expect(isGitRepository(repo, { failOnGitError: true })).resolves.toBe(true);
+ });
+
  it('reads status for a git repo when process.cwd() is elsewhere', async () => {
   if (!canRunGit()) return;
 
@@ -1575,52 +1298,12 @@ describe('getStatus', () => {
   const neutralCwd = createTempDir();
   fs.mkdirSync(nested, { recursive: true });
 
-<<<<<<< HEAD
   runGit(parent, ['init', '-b', 'main']);
   runGit(parent, ['config', 'user.email', 'test@example.com']);
   runGit(parent, ['config', 'user.name', 'Test User']);
   fs.writeFileSync(path.join(parent, 'README.md'), '# Parent\n');
   runGit(parent, ['add', 'README.md']);
   runGit(parent, ['commit', '-m', 'Parent commit']);
-=======
-  it("tells a folder Git refuses from a folder that is no repository, in Git's words", async () => {
-    if (!canRunGit()) return;
-
-    const repo = createTempDir();
-    const plain = createTempDir();
-    runGit(repo, ['init', '-b', 'main']);
-    // Git's own switch for a repository owned by someone else, as a drive
-    // formatted elsewhere looks on Windows.
-    const keys = ['GIT_TEST_ASSUME_DIFFERENT_OWNER', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS'];
-    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
-    const globalConfig = path.join(createTempDir(), 'empty-gitconfig');
-    // Ambient trust settings can otherwise bypass Git's ownership check.
-    process.env.GIT_CONFIG_NOSYSTEM = '1';
-    process.env.GIT_CONFIG_GLOBAL = globalConfig;
-    process.env.GIT_CONFIG_COUNT = '0';
-    delete process.env.GIT_CONFIG_PARAMETERS;
-    process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = '1';
-    try {
-      await expect(isGitRepository(repo, { failOnGitError: true })).rejects.toMatchObject({
-        code: 'GIT_REPOSITORY_UNREADABLE',
-        message: expect.stringContaining('safe.directory'),
-      });
-      await expect(isGitRepository(plain, { failOnGitError: true })).resolves.toBe(false);
-      await expect(isGitRepository(path.join(plain, 'missing'), { failOnGitError: true })).resolves.toBe(false);
-      // Callers that keep the best-effort probe still read a refusal as no repository.
-      await expect(isGitRepository(repo)).resolves.toBe(false);
-    } finally {
-      for (const key of keys) {
-        if (previous[key] === undefined) delete process.env[key];
-        else process.env[key] = previous[key];
-      }
-    }
-    await expect(isGitRepository(repo, { failOnGitError: true })).resolves.toBe(true);
-  });
-
-  it('reads status for a git repo when process.cwd() is elsewhere', async () => {
-    if (!canRunGit()) return;
->>>>>>> bc50ba56a
 
   runGit(nested, ['init', '-b', 'feature']);
   runGit(nested, ['config', 'user.email', 'test@example.com']);
@@ -2113,292 +1796,11 @@ describe('createWorktree', () => {
   });
  });
 
-<<<<<<< HEAD
  it('still inspects a record left pending with no live bootstrap into a repair blocker', async () => {
   const directory = path.join(createTempDir(), 'crashed-worktree');
   const bootstrapStore = {
    read: vi.fn(async () => ({ status: 'pending', phase: 'directory-created', error: null, updatedAt: 1 })),
    write: vi.fn(async (_directory, state) => state),
-=======
-  it('still inspects a record left pending with no live bootstrap into a repair blocker', async () => {
-    const directory = path.join(createTempDir(), 'crashed-worktree');
-    const bootstrapStore = {
-      read: vi.fn(async () => ({ status: 'pending', phase: 'directory-created', error: null, updatedAt: 1 })),
-      write: vi.fn(async (_directory, state) => state),
-    };
-
-    await expect(getWorktreeBootstrapStatus(directory, { bootstrapStore })).resolves.toMatchObject({
-      status: 'failed',
-      errorCode: 'UNKNOWN',
-      error: expect.stringContaining('repair'),
-    });
-    expect(bootstrapStore.write).toHaveBeenCalledOnce();
-  });
-
-  it('fails closed when the bootstrap store cannot be read', async () => {
-    const directory = path.join(createTempDir(), 'unreadable-store');
-    const bootstrapStore = {
-      read: vi.fn(async () => { throw new Error('store unreadable'); }),
-      write: vi.fn(),
-    };
-
-    await expect(getWorktreeBootstrapStatus(directory, { bootstrapStore })).resolves.toMatchObject({
-      status: 'failed',
-      errorCode: 'UNKNOWN',
-    });
-  });
-
-  it('reports directory, Git, and setup bootstrap phases while preserving legacy status', async () => {
-    if (!canRunGit()) return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    const dataHome = createTempDir();
-    const setupMarker = path.join(dataHome, 'setup-started');
-    const setupScript = path.join(dataHome, 'setup-phase.cjs');
-    process.env.XDG_DATA_HOME = dataHome;
-
-    fs.writeFileSync(
-      setupScript,
-      `require('node:fs').writeFileSync(${JSON.stringify(setupMarker)}, 'started'); setTimeout(() => {}, 1000);\n`,
-    );
-
-    try {
-      const repo = createTempDir();
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
-      runGit(repo, ['add', 'README.md']);
-      runGit(repo, ['commit', '-m', 'Initial commit']);
-
-      const created = await createWorktree(repo, {
-        mode: 'new',
-        branchName: 'feature/bootstrap-phases',
-        worktreeName: 'bootstrap-phases',
-        returnAfterDirectoryCreated: true,
-        startCommand: `${JSON.stringify(process.execPath)} ${JSON.stringify(setupScript)}`,
-      });
-
-      expect(created.bootstrapStatus).toMatchObject({
-        status: 'pending',
-        phase: 'directory-created',
-        error: null,
-      });
-
-      await expect.poll(() => fs.existsSync(setupMarker), { timeout: 5_000 }).toBe(true);
-      await expect(getWorktreeBootstrapStatus(created.path)).resolves.toMatchObject({
-        status: 'pending',
-        phase: 'git-ready',
-        error: null,
-      });
-
-      await waitForActiveWorktreeBootstrap(created.path);
-      await expect(getWorktreeBootstrapStatus(created.path)).resolves.toMatchObject({
-        status: 'ready',
-        phase: 'setup-ready',
-        error: null,
-      });
-    } finally {
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  it('runs the start command OpenCode keeps for the project in the new worktree', async () => {
-    if (!canRunGit()) return;
-
-    // The project is a subfolder of the repository: the read goes to that
-    // folder, which OpenCode already serves, and the command runs at the root
-    // of the new worktree.
-    const repo = createTempDir();
-    const projectFolder = path.join(repo, 'app');
-    fs.mkdirSync(projectFolder);
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    fs.writeFileSync(path.join(projectFolder, 'README.md'), '# Test\n');
-    runGit(repo, ['add', 'app/README.md']);
-    runGit(repo, ['commit', '-m', 'Initial commit']);
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    process.env.XDG_DATA_HOME = createTempDir();
-    const askedFor = [];
-    const markerScript = path.join(createTempDir(), 'project-start.cjs');
-    fs.writeFileSync(markerScript, "require('node:fs').writeFileSync('START_RAN', process.cwd());\n");
-    configureProjectStartCommandSource({
-      read: async (directory) => {
-        askedFor.push(directory);
-        return `${JSON.stringify(process.execPath)} ${JSON.stringify(markerScript)}`;
-      },
-    });
-
-    try {
-      const created = await createWorktree(projectFolder, {
-        mode: 'new',
-        branchName: 'feature/project-start',
-        worktreeName: 'project-start',
-        returnAfterDirectoryCreated: true,
-      });
-
-      await expect.poll(
-        async () => (await getWorktreeBootstrapStatus(created.path)).phase,
-        { timeout: 5_000 },
-      ).toBe('setup-ready');
-      expect(fs.readFileSync(path.join(created.path, 'START_RAN'), 'utf8')).toBe(fs.realpathSync(created.path));
-      expect(askedFor.map((directory) => fs.realpathSync(directory))).toEqual([fs.realpathSync(projectFolder)]);
-    } finally {
-      configureProjectStartCommandSource(null);
-      if (previousXdgDataHome === undefined) delete process.env.XDG_DATA_HOME;
-      else process.env.XDG_DATA_HOME = previousXdgDataHome;
-    }
-  });
-
-  it('does not report Git-ready when checkout hydration is incomplete', async () => {
-    if (!canRunGit()) return;
-    const repo = createTempDir();
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
-    runGit(repo, ['add', 'README.md']);
-    runGit(repo, ['commit', '-m', 'Initial commit']);
-    const hydration = {
-      status: 'authorization-required',
-      submodules: [{
-        path: 'vendor/private', status: 'authorization-required',
-        error: { code: 'AUTHENTICATION_REQUIRED', message: 'Explicit grant required' },
-      }],
-      lfs: [{ path: '.', status: 'not-needed' }],
-    };
-    const hydrateCheckout = vi.fn(async () => hydration);
-    const bootstrapStore = createWorktreeBootstrapStore({
-      filePath: path.join(createTempDir(), 'bootstrap.json'),
-    });
-    const created = await createWorktree(repo, {
-      mode: 'new', branchName: 'feature/hydration-failure', worktreeName: 'hydration-failure',
-      returnAfterDirectoryCreated: true,
-    }, { hydrateCheckout, bootstrapStore });
-
-    await expect.poll(
-      async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
-      { timeout: 5_000 },
-    ).toBe('failed');
-    const expectedFailure = {
-      status: 'failed',
-      phase: 'directory-created',
-      errorCode: 'AUTHENTICATION_REQUIRED',
-      hydration: {
-        status: 'authorization-required',
-        submodules: [{
-          path: 'vendor/private',
-          status: 'authorization-required',
-          error: { code: 'AUTHENTICATION_REQUIRED' },
-        }],
-        lfs: [{ path: '.', status: 'not-needed' }],
-      },
-    };
-    await expect(getWorktreeBootstrapStatus(created.path, { bootstrapStore })).resolves.toMatchObject(expectedFailure);
-    await expect(bootstrapStore.read(created.path)).resolves.toMatchObject(expectedFailure);
-    expect(hydrateCheckout).toHaveBeenCalledWith({ directory: created.path, parentRemoteName: '' });
-  });
-
-  it('archives a worktree whose files landed but whose submodules failed to download (#5811)', async () => {
-    if (!canRunGit()) return;
-    const repo = createTempDir();
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
-    runGit(repo, ['add', 'README.md']);
-    runGit(repo, ['commit', '-m', 'Initial commit']);
-    const hydrateCheckout = vi.fn(async () => ({
-      status: 'cancelled',
-      submodules: [{ path: 'vendor/slow', status: 'cancelled', error: { code: 'TIMEOUT', message: 'Checkout hydration timed out' } }],
-      lfs: [],
-    }));
-    const bootstrapStore = createWorktreeBootstrapStore({ filePath: path.join(createTempDir(), 'bootstrap.json') });
-    const created = await createWorktree(repo, {
-      mode: 'new', branchName: 'feature/submodule-timeout', worktreeName: 'submodule-timeout',
-      returnAfterDirectoryCreated: true,
-    }, { hydrateCheckout, bootstrapStore });
-    await expect.poll(
-      async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
-      { timeout: 5_000 },
-    ).toBe('failed');
-
-    const archived = await archiveWorktree(repo, { directory: created.path, id: 'hydration-failed' }, { bootstrapStore });
-
-    expect(archived).toMatchObject({ id: 'hydration-failed', branch: 'feature/submodule-timeout' });
-    expect(fs.existsSync(created.path)).toBe(false);
-    // Every file was on disk, so the snapshot records no change.
-    expect(runGit(repo, ['diff', '--name-only', archived.head, archived.commit]).trim()).toBe('');
-  });
-
-  it('removes a worktree whose bootstrap failed without its teardown command, since setup never ran there', async () => {
-    if (!canRunGit()) return;
-    const repo = createTempDir();
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    runGit(repo, ['commit', '--allow-empty', '-m', 'Initial commit']);
-    const hydrateCheckout = vi.fn(async () => ({
-      status: 'cancelled',
-      submodules: [{ path: 'vendor/slow', status: 'cancelled', error: { code: 'TIMEOUT', message: 'Checkout hydration timed out' } }],
-      lfs: [],
-    }));
-    const bootstrapStore = createWorktreeBootstrapStore({ filePath: path.join(createTempDir(), 'bootstrap.json') });
-    const created = await createWorktree(repo, {
-      mode: 'new', branchName: 'feature/never-set-up', worktreeName: 'never-set-up',
-      returnAfterDirectoryCreated: true,
-    }, { hydrateCheckout, bootstrapStore });
-    await expect.poll(
-      async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
-      { timeout: 5_000 },
-    ).toBe('failed');
-
-    await expect(removeWorktree(repo, { directory: created.path, teardownCommand: 'exit 1' }, { bootstrapStore })).resolves.toBe(true);
-    expect(fs.existsSync(created.path)).toBe(false);
-  });
-
-  it('hydrates a checkout made from a local branch through the branch\'s own remote', async () => {
-    if (!canRunGit()) return;
-    const repo = createTempDir();
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
-    runGit(repo, ['add', 'README.md']);
-    runGit(repo, ['commit', '-m', 'Initial commit']);
-    runGit(repo, ['remote', 'add', 'upstream', 'https://example.com/team/repo.git']);
-    runGit(repo, ['remote', 'add', 'origin', 'https://example.com/me/repo.git']);
-    runGit(repo, ['config', 'branch.main.remote', 'upstream']);
-    const hydrateCheckout = vi.fn(async () => ({ status: 'not-needed', submodules: [], lfs: [] }));
-    const bootstrapStore = createWorktreeBootstrapStore({ filePath: path.join(createTempDir(), 'bootstrap.json') });
-    const created = await createWorktree(repo, {
-      mode: 'new', branchName: 'feature/from-local', worktreeName: 'from-local', startRef: 'main',
-      returnAfterDirectoryCreated: true,
-    }, { hydrateCheckout, bootstrapStore });
-    await expect.poll(
-      async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
-      { timeout: 5_000 },
-    ).not.toBe('pending');
-    // The branch's upstream, not the first remote in the list.
-    expect(hydrateCheckout).toHaveBeenCalledWith({ directory: created.path, parentRemoteName: 'upstream' });
-    // The branch it started from is recorded as its parent.
-    expect(readBranchConfig(created.path, 'feature/from-local', 'gh-merge-base')).toBe('main');
-  });
-
-  const installPostCheckoutHook = (repo, script, executable = true) => {
-    const hookPath = path.join(repo, '.git', 'hooks', 'post-checkout');
-    fs.writeFileSync(hookPath, script);
-    if (executable) {
-      fs.chmodSync(hookPath, 0o755);
-    }
-    return hookPath;
->>>>>>> bc50ba56a
   };
 
   await expect(getWorktreeBootstrapStatus(directory, { bootstrapStore })).resolves.toMatchObject({
@@ -2588,6 +1990,64 @@ describe('createWorktree', () => {
   expect(fs.existsSync(created.path)).toBe(false);
  });
 
+ it('archives a worktree whose files landed but whose submodules failed to download (#5811)', async () => {
+  if (!canRunGit()) return;
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
+  runGit(repo, ['add', 'README.md']);
+  runGit(repo, ['commit', '-m', 'Initial commit']);
+  const hydrateCheckout = vi.fn(async () => ({
+   status: 'cancelled',
+   submodules: [{ path: 'vendor/slow', status: 'cancelled', error: { code: 'TIMEOUT', message: 'Checkout hydration timed out' } }],
+   lfs: [],
+  }));
+  const bootstrapStore = createWorktreeBootstrapStore({ filePath: path.join(createTempDir(), 'bootstrap.json') });
+  const created = await createWorktree(repo, {
+   mode: 'new', branchName: 'feature/submodule-timeout', worktreeName: 'submodule-timeout',
+   returnAfterDirectoryCreated: true,
+  }, { hydrateCheckout, bootstrapStore });
+  await expect.poll(
+   async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
+   { timeout: 5_000 },
+  ).toBe('failed');
+
+  const archived = await archiveWorktree(repo, { directory: created.path, id: 'hydration-failed' }, { bootstrapStore });
+
+  expect(archived).toMatchObject({ id: 'hydration-failed', branch: 'feature/submodule-timeout' });
+  expect(fs.existsSync(created.path)).toBe(false);
+  // Every file was on disk, so the snapshot records no change.
+  expect(runGit(repo, ['diff', '--name-only', archived.head, archived.commit]).trim()).toBe('');
+ });
+
+ it('removes a worktree whose bootstrap failed without its teardown command, since setup never ran there', async () => {
+  if (!canRunGit()) return;
+  const repo = createTempDir();
+  runGit(repo, ['init', '-b', 'main']);
+  runGit(repo, ['config', 'user.email', 'test@example.com']);
+  runGit(repo, ['config', 'user.name', 'Test User']);
+  runGit(repo, ['commit', '--allow-empty', '-m', 'Initial commit']);
+  const hydrateCheckout = vi.fn(async () => ({
+   status: 'cancelled',
+   submodules: [{ path: 'vendor/slow', status: 'cancelled', error: { code: 'TIMEOUT', message: 'Checkout hydration timed out' } }],
+   lfs: [],
+  }));
+  const bootstrapStore = createWorktreeBootstrapStore({ filePath: path.join(createTempDir(), 'bootstrap.json') });
+  const created = await createWorktree(repo, {
+   mode: 'new', branchName: 'feature/never-set-up', worktreeName: 'never-set-up',
+   returnAfterDirectoryCreated: true,
+  }, { hydrateCheckout, bootstrapStore });
+  await expect.poll(
+   async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
+   { timeout: 5_000 },
+  ).toBe('failed');
+
+  await expect(removeWorktree(repo, { directory: created.path, teardownCommand: 'exit 1' }, { bootstrapStore })).resolves.toBe(true);
+  expect(fs.existsSync(created.path)).toBe(false);
+ });
+
  it('hydrates a checkout made from a local branch through the branch\'s own remote', async () => {
   if (!canRunGit()) return;
   const repo = createTempDir();
@@ -2623,63 +2083,8 @@ describe('createWorktree', () => {
   return hookPath;
  };
 
-<<<<<<< HEAD
  it('does not run the post-checkout hook while populating a created worktree', async () => {
   if (!canRunGit()) return;
-=======
-  it('stops a setup command that never exits, and what it started, for a removal that cancels setup', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    const dataHome = createTempDir();
-    const heartbeat = path.join(dataHome, 'heartbeat');
-    process.env.XDG_DATA_HOME = dataHome;
-
-    try {
-      const repo = createTempDir();
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
-      runGit(repo, ['add', 'README.md']);
-      runGit(repo, ['commit', '-m', 'Initial commit']);
-
-      const created = await createWorktree(repo, {
-        mode: 'new',
-        branchName: 'feature/endless-setup',
-        worktreeName: 'endless-setup',
-        returnAfterDirectoryCreated: true,
-        // The loop is a child of the shell, and writes into the checkout too.
-        startCommand: `bash -c 'while true; do echo beat >> "${heartbeat}"; echo beat > left-behind.txt; sleep 0.02; done' & wait`,
-      }, {
-        bootstrapStore: { write: vi.fn(async (_directory, state) => state), read: vi.fn(async () => null), remove: vi.fn(async () => true) },
-        hydrateCheckout: async () => ({ status: 'not-needed', submodules: [], lfs: [] }),
-      });
-
-      await expect.poll(() => fs.existsSync(heartbeat), { timeout: 5_000 }).toBe(true);
-
-      await removeWorktree(repo, { directory: created.path, deleteLocalBranch: true, cancelSetup: true }, {
-        bootstrapStore: { write: vi.fn(async (_directory, state) => state), read: vi.fn(async () => null), remove: vi.fn(async () => true) },
-      });
-
-      expect(fs.existsSync(created.path)).toBe(false);
-      expect(String(runGit(repo, ['branch', '--list', 'feature/endless-setup'])).trim()).toBe('');
-      const beats = fs.readFileSync(heartbeat, 'utf8');
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      expect(fs.readFileSync(heartbeat, 'utf8')).toBe(beats);
-      expect(fs.existsSync(created.path)).toBe(false);
-    } finally {
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  it('recovers from an unchanged stale index lock while populating a worktree', async () => {
-    if (!canRunGit()) return;
->>>>>>> bc50ba56a
 
   const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
   const dataHome = createTempDir();
@@ -3294,7 +2699,6 @@ describe('createWorktree with a personal worktreeDirectory', () => {
   }
  };
 
-<<<<<<< HEAD
  it('returns preview and creation paths that match Git when home is a symlink', async () => {
   if (!canRunGit()) return;
   const parent = createTempDir();
@@ -3325,41 +2729,7 @@ describe('createWorktree with a personal worktreeDirectory', () => {
    vi.unstubAllEnvs();
   }
  });
-=======
-  it('returns preview and creation paths that match Git when home is a symlink', async () => {
-    if (!canRunGit()) return;
-    const parent = createTempDir();
-    const realRoot = path.join(parent, 'real');
-    const aliasRoot = path.join(parent, 'alias');
-    fs.mkdirSync(realRoot);
-    fs.symlinkSync(realRoot, aliasRoot, process.platform === 'win32' ? 'junction' : 'dir');
-    const repo = initRepo();
-    fs.writeFileSync(path.join(repo, 'opencode.json'), JSON.stringify({ worktree: null }));
-    vi.stubEnv('OPENCODE_CONFIG', path.join(repo, 'opencode.json'));
-    vi.stubEnv('HOME', aliasRoot);
-    vi.stubEnv('USERPROFILE', aliasRoot);
-    vi.stubEnv('XDG_CONFIG_HOME', path.join(realRoot, '.config'));
-    vi.stubEnv('XDG_DATA_HOME', undefined);
-    try {
-      const input = {
-        mode: 'new', worktreeName: 'canonical-tree', branchName: 'openchamber/canonical-tree',
-        returnAfterDirectoryCreated: true,
-      };
-      const preview = await previewWorktreeCreate(repo, input);
-      const created = await createWorktree(repo, input);
-      await waitForActiveWorktreeBootstrap(created.path);
-      const listed = (await getWorktrees(repo)).find((entry) => entry.branch === created.branch);
-      expect(listed).toBeDefined();
-      expect(created.path.replaceAll('\\', '/')).toBe(listed.path.replaceAll('\\', '/'));
-      expect(preview.path.replaceAll('\\', '/')).toBe(listed.path.replaceAll('\\', '/'));
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
 
-  it('creates and previews under a configured relative folder', withDataHome(async () => {
-    if (!canRunGit()) return;
->>>>>>> bc50ba56a
 
  const setWorktreeDirectory = (projectConfigRuntime, repo, worktreeDirectory) => (
   projectConfigRuntime.updateProjectSetup(createProjectIdFromPath(repo), { worktreeDirectory })
@@ -4049,11 +3419,7 @@ describe('git remote arguments with option-like names', () => {
   const head = runGit(repository, ['rev-parse', 'HEAD']).trim();
   runGit(repository, ['update-ref', `refs/remotes/${OPTION_LIKE_REMOTE}/gone`, head]);
 
-<<<<<<< HEAD
   const branches = await getBranches(repository, { remote: 'live' });
-=======
-    const branches = await getBranches(repository, { remote: 'live' });
->>>>>>> bc50ba56a
 
   expect(branches.all).toContain(`remotes/${OPTION_LIKE_REMOTE}/react`);
   expect(branches.all).not.toContain(`remotes/${OPTION_LIKE_REMOTE}/gone`);
@@ -4149,7 +3515,6 @@ describe('removeWorktree', () => {
    directory: fixture.worktree,
   })).resolves.toBe(true);
 
-<<<<<<< HEAD
   expect(fs.existsSync(fixture.worktree)).toBe(false);
   expect(fs.existsSync(fixture.metadata)).toBe(false);
   expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
@@ -4227,56 +3592,6 @@ describe('removeWorktree', () => {
    if (!injected && changesGitEntry && fs.lstatSync(fixture.gitEntry).isSymbolicLink()) {
     injected = true;
     execFileSync(process.execPath, ['-e', `
-=======
-  it('keeps a branch another checkout holds and still removes the worktree', async () => {
-    if (!canRunGit()) return;
-    const fixture = createRemovalWorktree();
-    runGit(fixture.worktree, ['checkout', '--ignore-other-worktrees', 'main']);
-
-    await expect(removeWorktree(fixture.repo, {
-      directory: fixture.worktree,
-      deleteLocalBranch: true,
-    })).resolves.toBe(true);
-
-    expect(fs.existsSync(fixture.worktree)).toBe(false);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/main'])).toContain('refs/heads/main');
-  });
-
-  it('keeps the branch a remote names as its default', async () => {
-    if (!canRunGit()) return;
-    const fixture = createRemovalWorktree();
-    runGit(fixture.repo, ['checkout', '-b', 'other']);
-    runGit(fixture.worktree, ['checkout', 'main']);
-    runGit(fixture.repo, ['update-ref', 'refs/remotes/origin/main', 'main']);
-    runGit(fixture.repo, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main']);
-
-    await expect(removeWorktree(fixture.repo, {
-      directory: fixture.worktree,
-      deleteLocalBranch: true,
-    })).resolves.toBe(true);
-
-    expect(fs.existsSync(fixture.worktree)).toBe(false);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/main'])).toContain('refs/heads/main');
-  });
-
-  it.each(['file', 'symlink'])('preserves a concurrent .git %s installed before conversion claims the entry', async (kind) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    const originalTarget = installGitDirectoryLink(fixture);
-    const concurrentContents = kind === 'file'
-      ? `gitdir: ${fixture.metadata}\nconcurrent entry must survive\n`
-      : `./${originalTarget}`;
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const branchHead = runGit(fixture.repo, ['rev-parse', 'feature/remove']).trim();
-    const rename = fs.promises.rename.bind(fs.promises);
-    let injected = false;
-    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
-      const changesGitEntry = (source === fixture.gitEntry && destination.startsWith(`${fixture.gitEntry}.openchamber-`))
-        || (destination === fixture.gitEntry && source.startsWith(`${fixture.gitEntry}.openchamber-`));
-      if (!injected && changesGitEntry && fs.lstatSync(fixture.gitEntry).isSymbolicLink()) {
-        injected = true;
-        execFileSync(process.execPath, ['-e', `
->>>>>>> bc50ba56a
           const fs = require('node:fs');
           const [entry, kind, contents] = process.argv.slice(1);
           const staged = entry + '.concurrent';
@@ -5232,7 +4547,6 @@ describe('removeWorktree', () => {
    timeout: 30_000,
   });
 
-<<<<<<< HEAD
   const allowFixtureCleanup = (directory) => {
    // Annex object directories are read-only. Only visit owned directories,
    // never targets of symlinks within the fixture.
@@ -5240,1199 +4554,6 @@ describe('removeWorktree', () => {
    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     if (entry.isDirectory()) allowFixtureCleanup(path.join(directory, entry.name));
    }
-=======
-  it.each(['file', 'symlink'])('preserves a newer .git %s created during exclusive installation', async (kind) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    const originalTarget = installGitDirectoryLink(fixture);
-    const concurrentContents = kind === 'file' ? 'newest concurrent gitdir file\n' : `./${originalTarget}`;
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const link = fs.promises.link.bind(fs.promises);
-    let injected = false;
-    const linkSpy = vi.spyOn(fs.promises, 'link').mockImplementation(async (source, destination) => {
-      if (!injected && destination === fixture.gitEntry) {
-        injected = true;
-        if (kind === 'file') fs.writeFileSync(destination, concurrentContents, { flag: 'wx' });
-        else fs.symlinkSync(concurrentContents, destination, 'dir');
-      }
-      await link(source, destination);
-    });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow();
-      expect(injected).toBe(true);
-      if (kind === 'file') expect(fs.readFileSync(fixture.gitEntry, 'utf8')).toBe(concurrentContents);
-      else expect(fs.readlinkSync(fixture.gitEntry)).toBe(concurrentContents);
-      const claims = fs.readdirSync(fixture.worktree).filter(name => name.startsWith('.git.openchamber-'));
-      expect(claims).toHaveLength(1);
-      const claim = path.join(fixture.worktree, claims[0]);
-      expect(fs.readlinkSync(claim)).toBe(originalTarget);
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(claim));
-      expect(fs.existsSync(fixture.metadata)).toBe(true);
-      expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-    } finally {
-      linkSpy.mockRestore();
-      warnSpy.mockRestore();
-    }
-  });
-
-  it('leaves the original .git entry untouched when preparation cannot claim it', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    const originalTarget = installGitDirectoryLink(fixture);
-    const rename = fs.promises.rename.bind(fs.promises);
-    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
-      if (source === fixture.gitEntry) throw new Error('claim denied');
-      await rename(source, destination);
-    });
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow();
-    } finally {
-      renameSpy.mockRestore();
-    }
-    expect(fs.readlinkSync(fixture.gitEntry)).toBe(originalTarget);
-    expect(fs.readdirSync(fixture.worktree).sort()).toEqual(['.git', 'README.md']);
-    expect(fs.existsSync(fixture.metadata)).toBe(true);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it('retains the claimed symlink when preparation cannot install or restore .git', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    const originalTarget = installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const installationError = new Error('installation denied');
-    const linkSpy = vi.spyOn(fs.promises, 'link').mockRejectedValue(installationError);
-    const symlinkSpy = vi.spyOn(fs.promises, 'symlink').mockRejectedValue(new Error('restoration denied'));
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toBe(installationError);
-      expect(fs.lstatSync(fixture.gitEntry, { throwIfNoEntry: false })).toBeUndefined();
-      const claims = fs.readdirSync(fixture.worktree).filter(name => name.startsWith('.git.openchamber-'));
-      expect(claims).toHaveLength(1);
-      const claim = path.join(fixture.worktree, claims[0]);
-      expect(fs.readlinkSync(claim)).toBe(originalTarget);
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(claim));
-      expect(fs.existsSync(fixture.metadata)).toBe(true);
-      expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-    } finally {
-      linkSpy.mockRestore();
-      symlinkSpy.mockRestore();
-      warnSpy.mockRestore();
-    }
-  });
-
-  it.each(['worktree', 'metadata'])('does not recreate a %s removed after the preparation claim', async (kind) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    const originalTarget = installGitDirectoryLink(fixture);
-    const removedPath = kind === 'worktree' ? fixture.worktree : fixture.metadata;
-    const rename = fs.promises.rename.bind(fs.promises);
-    let claimedEntry;
-    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
-      const claimsSymlink = source === fixture.gitEntry && fs.lstatSync(source).isSymbolicLink();
-      await rename(source, destination);
-      if (claimsSymlink) {
-        claimedEntry = destination;
-        fs.rmSync(removedPath, { recursive: true, force: true });
-      }
-    });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow();
-      expect(claimedEntry).toBeDefined();
-      expect(fs.existsSync(removedPath)).toBe(false);
-      expect(fs.lstatSync(fixture.gitEntry, { throwIfNoEntry: false })).toBeUndefined();
-      if (kind === 'metadata') expect(fs.readlinkSync(claimedEntry)).toBe(originalTarget);
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(claimedEntry));
-      expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-    } finally {
-      renameSpy.mockRestore();
-      warnSpy.mockRestore();
-    }
-  });
-
-  it.each([false, true])('restores the exact .git symlink target after locked removal fails, absolute=%s', async (absolute) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    let linkTarget = installGitDirectoryLink(fixture, absolute);
-    if (!absolute) {
-      fs.unlinkSync(fixture.gitEntry);
-      linkTarget = `.//${linkTarget}`;
-      fs.symlinkSync(linkTarget, fixture.gitEntry, 'dir');
-    }
-    const branchHead = runGit(fixture.repo, ['rev-parse', 'feature/remove']).trim();
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-
-    const replacementStates = [];
-    const recordReplacement = () => replacementStates.push({
-      kind: fs.lstatSync(fixture.gitEntry).isSymbolicLink() ? 'symlink' : 'file',
-      metadataExists: fs.existsSync(fixture.metadata),
-    });
-    const link = fs.promises.link.bind(fs.promises);
-    const linkSpy = vi.spyOn(fs.promises, 'link').mockImplementation(async (source, destination) => {
-      await link(source, destination);
-      if (destination === fixture.gitEntry) recordReplacement();
-    });
-    const symlink = fs.promises.symlink.bind(fs.promises);
-    const symlinkSpy = vi.spyOn(fs.promises, 'symlink').mockImplementation(async (target, destination, type) => {
-      await symlink(target, destination, type);
-      if (destination === fixture.gitEntry) recordReplacement();
-    });
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow(/locked/);
-    } finally {
-      linkSpy.mockRestore();
-      symlinkSpy.mockRestore();
-    }
-
-    expect(replacementStates).toEqual([
-      { kind: 'file', metadataExists: true },
-      { kind: 'symlink', metadataExists: true },
-    ]);
-    expect(fs.readlinkSync(fixture.gitEntry)).toBe(linkTarget);
-    expect(fs.readFileSync(path.join(fixture.metadata, 'commondir'), 'utf8')).toBe('../..\n');
-    expect(fs.readFileSync(path.join(fixture.metadata, 'gitdir'), 'utf8').trim()).toBe(fixture.gitEntry);
-    expect(fs.readFileSync(path.join(fixture.worktree, 'README.md'), 'utf8')).toBe('# Test\n');
-    expect(runGit(fixture.repo, ['rev-parse', 'feature/remove']).trim()).toBe(branchHead);
-    expect(fs.readdirSync(fixture.worktree).sort()).toEqual(['.git', 'README.md']);
-  });
-
-  it.each(['edited file', 'replacement file', 'symlink'])('does not overwrite a concurrent .git %s after removal fails', async (kind) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    let concurrentEntry;
-    let concurrentContents;
-    const renameSpy = interceptGitFileReplacement(fixture.gitEntry, () => {
-      const contents = fs.readFileSync(fixture.gitEntry, 'utf8');
-      expect(contents).toBe(`gitdir: ${fixture.metadata}\n`);
-      if (kind === 'edited file') {
-        fs.writeFileSync(fixture.gitEntry, `${contents}concurrent change\n`);
-      } else if (kind === 'replacement file') {
-        const replacement = path.join(fixture.worktree, 'replacement');
-        fs.writeFileSync(replacement, contents);
-        fs.renameSync(replacement, fixture.gitEntry);
-      } else {
-        fs.unlinkSync(fixture.gitEntry);
-        fs.symlinkSync(fixture.metadata, fixture.gitEntry, 'dir');
-      }
-      concurrentEntry = fs.lstatSync(fixture.gitEntry);
-      concurrentContents = kind === 'symlink'
-        ? fs.readlinkSync(fixture.gitEntry) : fs.readFileSync(fixture.gitEntry, 'utf8');
-    });
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow(/locked/);
-    } finally {
-      renameSpy.mockRestore();
-    }
-
-    expect(fs.lstatSync(fixture.gitEntry).ino).toBe(concurrentEntry.ino);
-    expect(kind === 'symlink' ? fs.readlinkSync(fixture.gitEntry) : fs.readFileSync(fixture.gitEntry, 'utf8')).toBe(concurrentContents);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-    expect(fs.readdirSync(fixture.worktree).sort()).toEqual(['.git', 'README.md']);
-  });
-
-  it.each(['worktree', 'metadata', '.git'])('does not recreate a %s deleted during failed removal', async (kind) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const removedPath = kind === 'worktree' ? fixture.worktree
-      : kind === 'metadata' ? fixture.metadata : fixture.gitEntry;
-    const renameSpy = interceptGitFileReplacement(fixture.gitEntry, () => {
-      fs.rmSync(removedPath, { recursive: true, force: true });
-    });
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow();
-    } finally {
-      renameSpy.mockRestore();
-    }
-
-    expect(fs.existsSync(removedPath)).toBe(false);
-    if (kind === 'metadata') {
-      expect(fs.lstatSync(fixture.gitEntry).isFile()).toBe(true);
-      expect(fs.readFileSync(fixture.gitEntry, 'utf8')).toBe(`gitdir: ${fixture.metadata}\n`);
-    }
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it('does not overwrite a .git edit made while rollback is being prepared', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const symlink = fs.promises.symlink.bind(fs.promises);
-    const symlinkSpy = vi.spyOn(fs.promises, 'symlink').mockImplementation(async (target, destination, type) => {
-      if (path.dirname(destination) === fixture.worktree) {
-        fs.writeFileSync(fixture.gitEntry, 'concurrent gitdir file\n');
-      }
-      await symlink(target, destination, type);
-    });
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow(/locked/);
-    } finally {
-      symlinkSpy.mockRestore();
-    }
-
-    expect(fs.readFileSync(fixture.gitEntry, 'utf8')).toBe('concurrent gitdir file\n');
-    expect(fs.readdirSync(fixture.worktree).sort()).toEqual(['.git', 'README.md']);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it.each(['edit', 'delete'])('preserves a concurrent .git %s at the rollback rename boundary', async (change) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const rename = fs.promises.rename.bind(fs.promises);
-    let injected = false;
-    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
-      const claimsEntry = source === fixture.gitEntry && fs.lstatSync(source).isFile();
-      if (!injected && claimsEntry) {
-        injected = true;
-        if (change === 'edit') fs.writeFileSync(fixture.gitEntry, 'concurrent gitdir contents\n');
-        else fs.unlinkSync(fixture.gitEntry);
-      }
-      await rename(source, destination);
-    });
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow(/locked/);
-    } finally {
-      renameSpy.mockRestore();
-    }
-
-    expect(injected).toBe(true);
-    const entry = fs.lstatSync(fixture.gitEntry, { throwIfNoEntry: false });
-    if (change === 'edit') {
-      expect(entry?.isFile()).toBe(true);
-      expect(fs.readFileSync(fixture.gitEntry, 'utf8')).toBe('concurrent gitdir contents\n');
-    } else {
-      expect(entry).toBeUndefined();
-    }
-    expect(fs.readdirSync(fixture.worktree).sort()).toEqual(change === 'edit' ? ['.git', 'README.md'] : ['README.md']);
-    expect(fs.existsSync(fixture.metadata)).toBe(true);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it.each(['directory', 'file', 'dangling'])('restores a claimed concurrent %s symlink when hardlinks follow source symlinks', async (kind) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const target = kind === 'directory' ? fixture.metadata : path.join(fixture.repo, 'concurrent.gitdir');
-    const contents = `gitdir: ${fixture.metadata}\n`;
-    if (kind === 'file') fs.writeFileSync(target, contents);
-    const linkTarget = Buffer.from(`.//${path.relative(fixture.worktree, target)}`);
-    const rename = fs.promises.rename.bind(fs.promises);
-    let claimedEntry;
-    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
-      if (source === fixture.gitEntry && fs.lstatSync(source).isFile()) {
-        claimedEntry = destination;
-        fs.unlinkSync(source);
-        fs.symlinkSync(linkTarget, source, kind === 'directory' ? 'dir' : 'file');
-      }
-      await rename(source, destination);
-    });
-    const link = fs.promises.link.bind(fs.promises);
-    // Darwin link(2) follows its source symlink; use real filesystem operations
-    // with that behaviour so this recovery case runs on Linux too.
-    const linkSpy = vi.spyOn(fs.promises, 'link').mockImplementation(async (source, destination) => {
-      await link(await fs.promises.realpath(source), destination);
-    });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow(/locked/);
-      expect(claimedEntry).toBeDefined();
-      expect(fs.lstatSync(fixture.gitEntry, { throwIfNoEntry: false })?.isSymbolicLink()).toBe(true);
-      expect(fs.readlinkSync(fixture.gitEntry, { encoding: 'buffer' })).toEqual(linkTarget);
-      expect(fs.lstatSync(claimedEntry, { throwIfNoEntry: false })).toBeUndefined();
-      expect(fs.readdirSync(fixture.worktree).sort()).toEqual(['.git', 'README.md']);
-      expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-      if (kind === 'file') {
-        expect(fs.statSync(target).nlink).toBe(1);
-        expect(fs.readFileSync(target, 'utf8')).toBe(contents);
-      }
-      if (kind === 'dangling') expect(fs.existsSync(target)).toBe(false);
-      else expect(runGit(fixture.worktree, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('feature/remove');
-      expect(warnSpy).not.toHaveBeenCalled();
-    } finally {
-      renameSpy.mockRestore();
-      linkSpy.mockRestore();
-      warnSpy.mockRestore();
-    }
-
-  });
-
-  it('retains a claimed concurrent symlink when symlink restoration fails', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const linkTarget = Buffer.from(`.//${path.relative(fixture.worktree, fixture.metadata)}`);
-    const rename = fs.promises.rename.bind(fs.promises);
-    let claimedEntry;
-    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
-      if (source === fixture.gitEntry && fs.lstatSync(source).isFile()) {
-        claimedEntry = destination;
-        fs.unlinkSync(source);
-        fs.symlinkSync(linkTarget, source, 'dir');
-      }
-      await rename(source, destination);
-    });
-    const restoreError = new Error('concurrent symlink restoration denied');
-    const symlinkSpy = vi.spyOn(fs.promises, 'symlink').mockRejectedValue(restoreError);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow(/locked/);
-      expect(claimedEntry).toBeDefined();
-      expect(fs.lstatSync(fixture.gitEntry, { throwIfNoEntry: false })).toBeUndefined();
-      expect(fs.readlinkSync(claimedEntry, { encoding: 'buffer' })).toEqual(linkTarget);
-      expect(fs.existsSync(fixture.metadata)).toBe(true);
-      expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(claimedEntry));
-    } finally {
-      renameSpy.mockRestore();
-      symlinkSpy.mockRestore();
-      warnSpy.mockRestore();
-    }
-
-  });
-
-  it.each(['file', 'symlink'])('retains a claimed symlink changed to a %s while its target is restored', async (kind) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const linkTarget = Buffer.from(`.//${path.relative(fixture.worktree, fixture.metadata)}`);
-    const rename = fs.promises.rename.bind(fs.promises);
-    let claimedEntry;
-    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
-      if (source === fixture.gitEntry && fs.lstatSync(source).isFile()) {
-        claimedEntry = destination;
-        fs.unlinkSync(source);
-        fs.symlinkSync(linkTarget, source, 'dir');
-      }
-      await rename(source, destination);
-    });
-    const symlink = fs.promises.symlink.bind(fs.promises);
-    const symlinkSpy = vi.spyOn(fs.promises, 'symlink').mockImplementation(async (target, destination, type) => {
-      await symlink(target, destination, type);
-      if (destination === fixture.gitEntry) {
-        fs.unlinkSync(claimedEntry);
-        if (kind === 'file') fs.writeFileSync(claimedEntry, 'concurrent recovery contents\n');
-        else fs.symlinkSync('other-concurrent-target', claimedEntry);
-      }
-    });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow(/locked/);
-      expect(fs.readlinkSync(fixture.gitEntry, { encoding: 'buffer' })).toEqual(linkTarget);
-      expect(fs.lstatSync(claimedEntry, { throwIfNoEntry: false })).toBeDefined();
-      if (kind === 'file') expect(fs.readFileSync(claimedEntry, 'utf8')).toBe('concurrent recovery contents\n');
-      else expect(fs.readlinkSync(claimedEntry)).toBe('other-concurrent-target');
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(claimedEntry));
-    } finally {
-      renameSpy.mockRestore();
-      symlinkSpy.mockRestore();
-      warnSpy.mockRestore();
-    }
-
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it.each(['file', 'symlink'])('retains a claimed concurrent .git %s when a newer entry prevents putting it back', async (kind) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const rename = fs.promises.rename.bind(fs.promises);
-    let claimedEntry;
-    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
-      const claimsTemporaryEntry = source === fixture.gitEntry && fs.lstatSync(source).isFile();
-      if (claimsTemporaryEntry) {
-        claimedEntry = destination;
-        if (kind === 'file') {
-          fs.writeFileSync(source, 'older concurrent gitdir file\n');
-        } else {
-          fs.unlinkSync(source);
-          fs.symlinkSync(fixture.metadata, source, 'dir');
-        }
-      }
-      await rename(source, destination);
-      if (claimsTemporaryEntry) fs.writeFileSync(source, 'newest concurrent gitdir file\n');
-    });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow(/locked/);
-      expect(claimedEntry).toBeDefined();
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(claimedEntry));
-    } finally {
-      renameSpy.mockRestore();
-      warnSpy.mockRestore();
-    }
-
-    expect(fs.readFileSync(fixture.gitEntry, 'utf8')).toBe('newest concurrent gitdir file\n');
-    if (kind === 'file') expect(fs.readFileSync(claimedEntry, 'utf8')).toBe('older concurrent gitdir file\n');
-    else expect(fs.readlinkSync(claimedEntry)).toBe(fixture.metadata);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it('retains a claimed concurrent directory at the logged recovery path', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const rename = fs.promises.rename.bind(fs.promises);
-    let claimedEntry;
-    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
-      if (source === fixture.gitEntry && fs.lstatSync(source).isFile()) {
-        claimedEntry = destination;
-        fs.unlinkSync(source);
-        fs.mkdirSync(source);
-        fs.writeFileSync(path.join(source, 'canary'), 'concurrent directory contents\n');
-      }
-      await rename(source, destination);
-    });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow(/locked/);
-      expect(claimedEntry).toBeDefined();
-      expect(fs.lstatSync(fixture.gitEntry, { throwIfNoEntry: false })).toBeUndefined();
-      expect(fs.readFileSync(path.join(claimedEntry, 'canary'), 'utf8')).toBe('concurrent directory contents\n');
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(claimedEntry));
-    } finally {
-      renameSpy.mockRestore();
-      warnSpy.mockRestore();
-    }
-
-    expect(fs.existsSync(fixture.metadata)).toBe(true);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it.each(['worktree', 'metadata'])('does not recreate a %s removed after the rollback claim', async (kind) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const rename = fs.promises.rename.bind(fs.promises);
-    const removedPath = kind === 'worktree' ? fixture.worktree : fixture.metadata;
-    let claimedEntry;
-    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (source, destination) => {
-      const claimsTemporaryEntry = source === fixture.gitEntry && fs.lstatSync(source).isFile();
-      await rename(source, destination);
-      if (claimsTemporaryEntry) {
-        claimedEntry = destination;
-        fs.rmSync(removedPath, { recursive: true, force: true });
-      }
-    });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow(/locked/);
-    } finally {
-      renameSpy.mockRestore();
-      warnSpy.mockRestore();
-    }
-
-    expect(claimedEntry).toBeDefined();
-    expect(fs.existsSync(removedPath)).toBe(false);
-    expect(fs.existsSync(fixture.gitEntry)).toBe(false);
-    if (kind === 'metadata') expect(fs.readFileSync(claimedEntry, 'utf8')).toBe(`gitdir: ${fixture.metadata}\n`);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it('preserves the native removal error and gitdir file when symlink restoration fails', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    installGitDirectoryLink(fixture);
-    runGit(fixture.repo, ['worktree', 'lock', fixture.worktree]);
-    const restoreError = new Error('symlink restoration denied');
-    const symlinkSpy = vi.spyOn(fs.promises, 'symlink').mockRejectedValue(restoreError);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow(/locked/);
-      expect(warnSpy).toHaveBeenCalledWith(
-        'Failed to restore worktree .git symlink after removal failed:',
-        restoreError,
-      );
-    } finally {
-      symlinkSpy.mockRestore();
-      warnSpy.mockRestore();
-    }
-
-    expect(fs.lstatSync(fixture.gitEntry).isFile()).toBe(true);
-    expect(fs.readFileSync(fixture.gitEntry, 'utf8')).toBe(`gitdir: ${fixture.metadata}\n`);
-    expect(fs.readdirSync(fixture.worktree).sort()).toEqual(['.git', 'README.md']);
-    expect(runGit(fixture.worktree, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('feature/remove');
-  });
-
-  it('restores the original .git symlink when exclusive installation fails', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    const linkTarget = installGitDirectoryLink(fixture);
-    const link = fs.promises.link.bind(fs.promises);
-    const linkSpy = vi.spyOn(fs.promises, 'link').mockImplementation(async (source, destination) => {
-      if (destination === fixture.gitEntry) throw new Error('replacement denied');
-      await link(source, destination);
-    });
-    try {
-      await expect(removeWorktree(fixture.repo, {
-        directory: fixture.worktree,
-        deleteLocalBranch: true,
-      })).rejects.toThrow('replacement denied');
-    } finally {
-      linkSpy.mockRestore();
-    }
-
-    expect(fs.readlinkSync(fixture.gitEntry)).toBe(linkTarget);
-    expect(fs.existsSync(fixture.metadata)).toBe(true);
-    expect(fs.readdirSync(fixture.worktree).sort()).toEqual(['.git', 'README.md']);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it.each(['primary', 'foreign', 'escaped'])('rejects a .git symlink to %s metadata without deleting the worktree or branch', async (kind) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    let target;
-    if (kind === 'primary') {
-      target = path.join(fixture.repo, '.git');
-    } else if (kind === 'foreign') {
-      target = createRemovalWorktree().metadata;
-    } else {
-      const outside = path.join(createTempDir(), 'metadata');
-      fs.cpSync(fixture.metadata, outside, { recursive: true });
-      target = path.join(path.dirname(fixture.metadata), 'escaped');
-      fs.symlinkSync(outside, target, 'dir');
-    }
-    const linkTarget = installGitDirectoryLink({ ...fixture, metadata: target }, true);
-    const canary = path.join(target, 'canary');
-    fs.writeFileSync(canary, 'untouched\n');
-
-    await expect(removeWorktree(fixture.repo, {
-      directory: fixture.worktree,
-      deleteLocalBranch: true,
-    })).rejects.toThrow('outside this repository\'s worktree metadata');
-
-    expect(fs.readlinkSync(fixture.gitEntry)).toBe(linkTarget);
-    expect(fs.readFileSync(canary, 'utf8')).toBe('untouched\n');
-    expect(fs.readFileSync(path.join(fixture.worktree, 'README.md'), 'utf8')).toBe('# Test\n');
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it('rejects a .git symlink whose metadata has a different commondir', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    const linkTarget = installGitDirectoryLink(fixture);
-    const foreignCommonDirectory = path.join(createRemovalWorktree().repo, '.git');
-    fs.writeFileSync(path.join(fixture.metadata, 'commondir'), `${foreignCommonDirectory}\n`);
-
-    await expect(removeWorktree(fixture.repo, {
-      directory: fixture.worktree,
-      deleteLocalBranch: true,
-    })).rejects.toThrow('different common directory');
-
-    expect(fs.readlinkSync(fixture.gitEntry)).toBe(linkTarget);
-    expect(fs.existsSync(fixture.metadata)).toBe(true);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it('rejects a metadata backlink to another registered worktree', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    const otherWorktree = path.join(createTempDir(), 'other');
-    runGit(fixture.repo, ['worktree', 'add', '-b', 'feature/other', otherWorktree]);
-    const otherGitEntry = path.join(otherWorktree, '.git');
-    const otherMetadata = fs.readFileSync(otherGitEntry, 'utf8').slice('gitdir: '.length).trim();
-    const linkTarget = installGitDirectoryLink({ ...fixture, metadata: otherMetadata }, true);
-
-    await expect(removeWorktree(fixture.repo, {
-      directory: fixture.worktree,
-      deleteLocalBranch: true,
-    })).rejects.toThrow('backlink does not name this worktree');
-
-    expect(fs.readlinkSync(fixture.gitEntry)).toBe(linkTarget);
-    expect(runGit(otherWorktree, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('feature/other');
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it('rejects a metadata backlink to a different entry that resolves to the same directory', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    const metadata = path.join(path.dirname(fixture.metadata), 'wrong-backlink');
-    const otherGitEntry = path.join(fixture.worktree, '.git.other');
-    fs.cpSync(fixture.metadata, metadata, { recursive: true });
-    fs.writeFileSync(path.join(metadata, 'gitdir'), `${otherGitEntry}\n`);
-    fs.symlinkSync(metadata, otherGitEntry, 'dir');
-    const linkTarget = installGitDirectoryLink({ ...fixture, metadata }, true);
-
-    await expect(removeWorktree(fixture.repo, {
-      directory: fixture.worktree,
-      deleteLocalBranch: true,
-    })).rejects.toThrow('backlink does not name this worktree');
-
-    expect(fs.readlinkSync(fixture.gitEntry)).toBe(linkTarget);
-    expect(fs.readlinkSync(otherGitEntry)).toBe(metadata);
-    expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
-  });
-
-  it.each([false, true])('protects the primary workspace with a .git directory symlink, absolute=%s', async (absolute) => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    const gitEntry = path.join(fixture.repo, '.git');
-    const metadata = path.join(fixture.repo, 'git-metadata');
-    fs.renameSync(gitEntry, metadata);
-    const linkTarget = absolute ? metadata : 'git-metadata';
-    fs.symlinkSync(linkTarget, gitEntry, 'dir');
-    const disposeInstance = vi.fn();
-
-    await expect(removeWorktree(fixture.repo, {
-      directory: fixture.repo,
-      deleteLocalBranch: true,
-      disposeInstance,
-    })).rejects.toThrow('Cannot remove the primary workspace');
-
-    expect(disposeInstance).not.toHaveBeenCalled();
-    expect(fs.readlinkSync(gitEntry)).toBe(linkTarget);
-    expect(runGit(fixture.repo, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('main');
-    expect(fs.readFileSync(path.join(fixture.repo, 'README.md'), 'utf8')).toBe('# Test\n');
-  });
-
-  it('leaves an unregistered unmanaged directory and its .git symlink untouched', async () => {
-    if (!canRunGit() || process.platform === 'win32') return;
-    const fixture = createRemovalWorktree();
-    const orphan = createTempDir();
-    const gitEntry = path.join(orphan, '.git');
-    fs.symlinkSync(fixture.metadata, gitEntry, 'dir');
-    const disposeInstance = vi.fn();
-
-    await expect(removeWorktree(fixture.repo, { directory: orphan, disposeInstance })).resolves.toBe(true);
-
-    expect(disposeInstance).not.toHaveBeenCalled();
-    expect(fs.readlinkSync(gitEntry)).toBe(fixture.metadata);
-    expect(fs.existsSync(fixture.metadata)).toBe(true);
-    expect(fs.existsSync(fixture.worktree)).toBe(true);
-  });
-
-  it('forgets unmanaged orphan worktree entries without deleting files', async () => {
-    if (!canRunGit()) return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    const dataHome = createTempDir();
-    process.env.XDG_DATA_HOME = dataHome;
-
-    try {
-      const repo = createTempDir();
-      const sentinel = createTempDir();
-      const canary = path.join(sentinel, 'canary.txt');
-
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
-      runGit(repo, ['add', 'README.md']);
-      runGit(repo, ['commit', '-m', 'Initial commit']);
-      fs.writeFileSync(canary, 'sentinel');
-
-      const disposeInstance = vi.fn();
-      await expect(removeWorktree(repo, {
-        directory: sentinel,
-        deleteLocalBranch: false,
-        disposeInstance,
-      })).resolves.toBe(true);
-      expect(fs.existsSync(canary)).toBe(true);
-      expect(disposeInstance).not.toHaveBeenCalled();
-    } finally {
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  it('disposes the registered worktree instance before git removes the directory', async () => {
-    if (!canRunGit()) return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    process.env.XDG_DATA_HOME = createTempDir();
-
-    try {
-      const repo = createTempDir();
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
-
-      const created = await createWorktree(repo, {
-        mode: 'new',
-        branchName: 'feature/dispose-order',
-        worktreeName: 'dispose-order',
-      });
-      const targetRealPath = fs.realpathSync(created.path);
-
-      let observed = null;
-      const disposeInstance = vi.fn(async (worktreeDirectory) => {
-        observed = {
-          realPath: fs.realpathSync(worktreeDirectory),
-          directoryExists: fs.existsSync(worktreeDirectory),
-        };
-      });
-
-      await expect(removeWorktree(repo, {
-        directory: created.path,
-        disposeInstance,
-      })).resolves.toBe(true);
-
-      expect(disposeInstance).toHaveBeenCalledTimes(1);
-      expect(observed).toEqual({ realPath: targetRealPath, directoryExists: true });
-      expect(fs.existsSync(created.path)).toBe(false);
-    } finally {
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  it('holds requests for the worktree folders from the release until the removal settles', async () => {
-    if (!canRunGit()) return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    process.env.XDG_DATA_HOME = createTempDir();
-
-    try {
-      const repo = createTempDir();
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
-
-      const created = await createWorktree(repo, {
-        mode: 'new',
-        branchName: 'feature/removal-hold',
-        worktreeName: 'removal-hold',
-      });
-      await expect(waitForWorktreeRemoval(created.path)).resolves.toBeUndefined();
-
-      const settledAfter = (promise) => promise.then(() => 'settled');
-      const pendingAfter = (ms) => new Promise((resolve) => setTimeout(() => resolve('pending'), ms));
-      let insideHold = null;
-      const observed = {};
-      const disposeInstance = vi.fn(async () => {
-        insideHold = waitForWorktreeRemoval(path.join(created.path, 'sub'));
-        observed.inside = await Promise.race([settledAfter(insideHold), pendingAfter(50)]);
-        observed.project = await Promise.race([settledAfter(waitForWorktreeRemoval(repo)), pendingAfter(50)]);
-      });
-
-      await expect(removeWorktree(repo, { directory: created.path, disposeInstance })).resolves.toBe(true);
-
-      expect(observed).toEqual({ inside: 'pending', project: 'settled' });
-      await expect(insideHold).resolves.toBeUndefined();
-      await expect(waitForWorktreeRemoval(created.path)).resolves.toBeUndefined();
-    } finally {
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  // Windows reports a folder held by another process as "Permission denied";
-  // a read-only directory gives git the same failure on macOS and Linux.
-  it('releases the worktree instance again before retrying a busy removal', async () => {
-    if (!canRunGit() || process.platform === 'win32' || process.getuid?.() === 0) return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    process.env.XDG_DATA_HOME = createTempDir();
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
-
-    try {
-      const repo = createTempDir();
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
-
-      const created = await createWorktree(repo, {
-        mode: 'new',
-        branchName: 'feature/busy-release',
-        worktreeName: 'busy-release',
-      });
-      // Its background checkout must finish before the platform is faked below.
-      await expect.poll(async () => (await getWorktreeBootstrapStatus(created.path)).status).not.toBe('pending');
-      const held = path.join(created.path, 'held');
-      fs.mkdirSync(held);
-      fs.writeFileSync(path.join(held, 'file.txt'), 'held');
-      fs.chmodSync(held, 0o555);
-
-      // The second release is the one that frees the folder.
-      const disposeInstance = vi.fn(async () => {
-        if (disposeInstance.mock.calls.length === 2) fs.chmodSync(held, 0o755);
-      });
-      Object.defineProperty(process, 'platform', { ...platform, value: 'win32' });
-
-      await expect(removeWorktree(repo, { directory: created.path, disposeInstance })).resolves.toBe(true);
-
-      expect(disposeInstance).toHaveBeenCalledTimes(2);
-      expect(fs.existsSync(created.path)).toBe(false);
-    } finally {
-      Object.defineProperty(process, 'platform', platform);
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  // Git drops the registration once it starts deleting, whatever stops it
-  // then; on Windows a path too long for git did (issue #5734) and the archive
-  // left a half-deleted folder. A read-only directory stops git the same way
-  // here, and the release that makes it writable stands for the long-path-aware
-  // removal that finishes the job; left read-only, it stands for a leftover
-  // nothing can delete, which the message then names.
-  it.each([
-    { finished: true },
-    { finished: false },
-  ])('finishes deleting a worktree git unregistered before it failed (cleanup finished: $finished)', async ({ finished }) => {
-    if (!canRunGit() || process.platform === 'win32' || process.getuid?.() === 0) return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    process.env.XDG_DATA_HOME = createTempDir();
-    let held;
-
-    try {
-      const repo = createTempDir();
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
-
-      const created = await createWorktree(repo, {
-        mode: 'new',
-        branchName: 'feature/stopped-removal',
-        worktreeName: 'stopped-removal',
-      });
-      await expect.poll(async () => (await getWorktreeBootstrapStatus(created.path)).status).not.toBe('pending');
-      held = path.join(created.path, 'node_modules');
-      fs.mkdirSync(held);
-      fs.writeFileSync(path.join(held, 'index.js'), 'module.exports = 1;\n');
-      fs.chmodSync(held, 0o555);
-
-      const disposeInstance = vi.fn(async () => {
-        if (finished && disposeInstance.mock.calls.length === 2) fs.chmodSync(held, 0o755);
-      });
-      const archiving = archiveWorktree(repo, { directory: created.path, id: 'stopped', disposeInstance });
-
-      if (finished) {
-        await expect(archiving).resolves.toMatchObject({ id: 'stopped', branch: 'feature/stopped-removal' });
-        expect(fs.existsSync(created.path)).toBe(false);
-      } else {
-        await expect(archiving).rejects.toMatchObject({
-          code: 'WORKTREE_ARCHIVE_PARTIAL',
-          message: expect.stringContaining(`its folder ${created.path} could not be deleted completely`),
-        });
-      }
-      expect((await listWorktreeArchives(repo)).map((entry) => entry.id)).toEqual(['stopped']);
-    } finally {
-      if (held && fs.existsSync(held)) fs.chmodSync(held, 0o755);
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  it('warns about a failed instance disposal and still removes the worktree', async () => {
-    if (!canRunGit()) return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    process.env.XDG_DATA_HOME = createTempDir();
-
-    try {
-      const repo = createTempDir();
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
-
-      const created = await createWorktree(repo, {
-        mode: 'new',
-        branchName: 'feature/dispose-failure',
-        worktreeName: 'dispose-failure',
-      });
-
-      const disposeInstance = vi.fn(async () => {
-        throw new Error('OpenCode API URL is not available');
-      });
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      try {
-        await expect(removeWorktree(repo, {
-          directory: created.path,
-          disposeInstance,
-        })).resolves.toBe(true);
-
-        expect(disposeInstance).toHaveBeenCalledTimes(1);
-        expect(fs.existsSync(created.path)).toBe(false);
-        expect(warnSpy).toHaveBeenCalledWith(
-          expect.stringContaining(created.path),
-          'OpenCode API URL is not available'
-        );
-      } finally {
-        warnSpy.mockRestore();
-      }
-    } finally {
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  it('never disposes the primary workspace', async () => {
-    if (!canRunGit()) return;
-
-    const previousXdgDataHome = process.env.XDG_DATA_HOME;
-    process.env.XDG_DATA_HOME = createTempDir();
-
-    try {
-      const repo = createTempDir();
-      runGit(repo, ['init', '-b', 'main']);
-      runGit(repo, ['config', 'user.email', 'test@example.com']);
-      runGit(repo, ['config', 'user.name', 'Test User']);
-      runGit(repo, ['commit', '--allow-empty', '-m', 'init']);
-
-      const disposeInstance = vi.fn();
-      await expect(removeWorktree(repo, {
-        directory: repo,
-        disposeInstance,
-      })).rejects.toThrow('Cannot remove the primary workspace');
-      expect(disposeInstance).not.toHaveBeenCalled();
-    } finally {
-      if (previousXdgDataHome === undefined) {
-        delete process.env.XDG_DATA_HOME;
-      } else {
-        process.env.XDG_DATA_HOME = previousXdgDataHome;
-      }
-    }
-  });
-
-  it('prunes the metadata a half-finished removal left behind', async () => {
-    if (!canRunGit()) return;
-
-    const repo = createTempDir();
-    const worktree = path.join(createTempDir(), 'half-removed');
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    runGit(repo, ['commit', '--allow-empty', '-m', 'Initial commit']);
-    runGit(repo, ['worktree', 'add', '-b', 'half', worktree]);
-    // What a Windows lock leaves: git deleted these files, then stopped.
-    const metadata = path.join(repo, '.git', 'worktrees', 'half-removed');
-    for (const name of ['gitdir', 'HEAD', 'index']) fs.rmSync(path.join(metadata, name), { force: true });
-
-    await expect(removeWorktree(repo, { directory: worktree })).resolves.toBe(true);
-    expect(fs.existsSync(metadata)).toBe(false);
-  });
-
-  it('runs the teardown command inside the worktree first, and keeps the worktree when it fails', async () => {
-    if (!canRunGit()) return;
-
-    const repo = createTempDir();
-    const scripts = createTempDir();
-    const worktree = path.join(createTempDir(), 'with-teardown');
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    runGit(repo, ['commit', '--allow-empty', '-m', 'Initial commit']);
-    runGit(repo, ['worktree', 'add', '-b', 'teardown', worktree]);
-    const marker = path.join(scripts, 'teardown-cwd.txt');
-    const failing = path.join(scripts, 'fail.cjs');
-    const recording = path.join(scripts, 'record.cjs');
-    fs.writeFileSync(failing, "process.stderr.write('stack still running\\n'); process.exit(3);\n");
-    fs.writeFileSync(recording, `require('fs').writeFileSync(${JSON.stringify(marker)}, process.cwd());\n`);
-    const run = (script) => `${JSON.stringify(process.execPath)} ${JSON.stringify(script)}`;
-    const disposeInstance = vi.fn();
-
-    await expect(removeWorktree(repo, { directory: worktree, teardownCommand: run(failing), disposeInstance }))
-      .rejects.toThrow(/teardown command failed, so the worktree was kept: [\s\S]*stack still running/);
-    expect(fs.existsSync(path.join(worktree, '.git'))).toBe(true);
-    expect(runGit(repo, ['worktree', 'list', '--porcelain'])).toContain('branch refs/heads/teardown');
-    expect(disposeInstance).not.toHaveBeenCalled();
-
-    await expect(removeWorktree(repo, { directory: worktree, teardownCommand: run(recording), disposeInstance })).resolves.toBe(true);
-    expect(fs.readFileSync(marker, 'utf8')).toBe(path.join(fs.realpathSync(path.dirname(worktree)), 'with-teardown'));
-    expect(fs.existsSync(worktree)).toBe(false);
-  });
-
-  it('gives the teardown command no input to wait for', async () => {
-    if (!canRunGit()) return;
-
-    const repo = createTempDir();
-    const worktree = path.join(createTempDir(), 'reads-stdin');
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    runGit(repo, ['commit', '--allow-empty', '-m', 'Initial commit']);
-    runGit(repo, ['worktree', 'add', '-b', 'reads-stdin', worktree]);
-    // Waits for the end of its input, as a command asking a question would.
-    const reading = path.join(createTempDir(), 'read.cjs');
-    fs.writeFileSync(reading, "process.stdin.resume(); process.stdin.on('end', () => process.exit(0));\n");
-
-    await expect(removeWorktree(repo, { directory: worktree, teardownCommand: `${JSON.stringify(process.execPath)} ${JSON.stringify(reading)}` }))
-      .resolves.toBe(true);
-    expect(fs.existsSync(worktree)).toBe(false);
-  }, 10_000);
-
-  it('skips the teardown of a contributor-fork checkout, and keeps the worktree with the teardown code when that cannot be told', async () => {
-    if (!canRunGit()) return;
-
-    const repo = createTempDir();
-    const worktree = path.join(createTempDir(), 'fork');
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    runGit(repo, ['commit', '--allow-empty', '-m', 'Initial commit']);
-    runGit(repo, ['worktree', 'add', '-b', 'fork', worktree]);
-    const unknown = path.join(createTempDir(), 'unknown');
-    runGit(repo, ['worktree', 'add', '-b', 'unknown', unknown]);
-    const unreadable = async () => { throw new Error('provenance store unreadable'); };
-
-    await expect(removeWorktree(repo, { directory: unknown, teardownCommand: 'exit 1', isContributorCheckout: unreadable }))
-      .rejects.toMatchObject({ code: 'WORKTREE_TEARDOWN_FAILED', message: expect.stringContaining('provenance store unreadable') });
-    expect(fs.existsSync(path.join(unknown, '.git'))).toBe(true);
-    // "Delete without teardown" sends no command, so nothing has to be told.
-    await expect(removeWorktree(repo, { directory: unknown, isContributorCheckout: unreadable })).resolves.toBe(true);
-    expect(fs.existsSync(unknown)).toBe(false);
-
-    await expect(removeWorktree(repo, { directory: worktree, teardownCommand: 'exit 1', isContributorCheckout: async () => true })).resolves.toBe(true);
-    expect(fs.existsSync(worktree)).toBe(false);
-  });
-
-  it('runs a teardown alone without removing anything, and reports a failure with its code', async () => {
-    if (!canRunGit()) return;
-
-    const repo = createTempDir();
-    const scripts = createTempDir();
-    const worktree = path.join(createTempDir(), 'teardown-only');
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    runGit(repo, ['commit', '--allow-empty', '-m', 'Initial commit']);
-    runGit(repo, ['worktree', 'add', '-b', 'teardown-only', worktree]);
-    const marker = path.join(scripts, 'ran.txt');
-    const recording = path.join(scripts, 'record.cjs');
-    fs.writeFileSync(recording, `require('fs').writeFileSync(${JSON.stringify(marker)}, process.cwd());\n`);
-
-    await expect(teardownWorktree(repo, { directory: worktree, teardownCommand: `${JSON.stringify(process.execPath)} ${JSON.stringify(recording)}` })).resolves.toBe(true);
-    expect(fs.readFileSync(marker, 'utf8')).toBe(path.join(fs.realpathSync(path.dirname(worktree)), 'teardown-only'));
-    expect(runGit(repo, ['worktree', 'list', '--porcelain'])).toContain('branch refs/heads/teardown-only');
-
-    await expect(teardownWorktree(repo, { directory: worktree, teardownCommand: 'exit 3' })).rejects.toMatchObject({ code: 'WORKTREE_TEARDOWN_FAILED' });
-    await expect(teardownWorktree(repo, { directory: repo, teardownCommand: 'exit 3' })).rejects.toThrow('primary workspace');
-    expect(fs.existsSync(path.join(worktree, '.git'))).toBe(true);
-  });
-
-  it('keeps only the end of a long teardown failure in the error', async () => {
-    if (!canRunGit()) return;
-
-    const repo = createTempDir();
-    const worktree = path.join(createTempDir(), 'chatty');
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    runGit(repo, ['commit', '--allow-empty', '-m', 'Initial commit']);
-    runGit(repo, ['worktree', 'add', '-b', 'chatty', worktree]);
-    const chatty = path.join(createTempDir(), 'chatty.cjs');
-    fs.writeFileSync(chatty, "process.stderr.write('log line\\n'.repeat(5000) + 'daemon not running\\n'); process.exit(1);\n");
-
-    const error = await removeWorktree(repo, { directory: worktree, teardownCommand: `${JSON.stringify(process.execPath)} ${JSON.stringify(chatty)}` })
-      .then(() => null, (reason) => reason);
-    expect(error.message).toMatch(/^Worktree teardown command failed, so the worktree was kept: \.\.\./);
-    expect(error.message).toMatch(/daemon not running$/);
-    expect(error.message.length).toBeLessThan(2200);
-    expect(fs.existsSync(path.join(worktree, '.git'))).toBe(true);
-  });
-
-  it('skips the teardown command when the worktree folder is already gone', async () => {
-    if (!canRunGit()) return;
-
-    const repo = createTempDir();
-    const worktree = path.join(createTempDir(), 'folder-gone');
-    runGit(repo, ['init', '-b', 'main']);
-    runGit(repo, ['config', 'user.email', 'test@example.com']);
-    runGit(repo, ['config', 'user.name', 'Test User']);
-    runGit(repo, ['commit', '--allow-empty', '-m', 'Initial commit']);
-    runGit(repo, ['worktree', 'add', '-b', 'folder-gone', worktree]);
-    fs.rmSync(worktree, { recursive: true, force: true });
-
-    await expect(removeWorktree(repo, { directory: worktree, teardownCommand: 'exit 1' })).resolves.toBe(true);
-    expect(runGit(repo, ['worktree', 'list', '--porcelain'])).not.toContain('folder-gone');
-  });
-
-  const canRunGitAnnex = () => {
-    try {
-      execFileSync('git-annex', ['version'], { stdio: 'ignore', timeout: 10_000 });
-      return true;
-    } catch (error) {
-      if (error.code === 'ENOENT') return false;
-      throw error;
-    }
->>>>>>> bc50ba56a
   };
 
   const withAnnexWorktree = async (check) => {
@@ -6655,7 +4776,6 @@ describe('worktree archives', () => {
   return { repo, linked };
  };
 
-<<<<<<< HEAD
  // The Host generates the id and releases that same id on every path; the
  // service only sees it. Tests never assert helper call counts.
  const createLeaseControl = (options = {}) => {
@@ -6674,40 +4794,6 @@ describe('worktree archives', () => {
    },
   };
  };
-=======
-  it('archives a worktree whose folder is gone and restores its branch', async () => {
-    if (!canRunGit()) return;
-    const { repo, linked: created } = createArchivableWorktree();
-    const head = runGit(repo, ['rev-parse', 'feature/task']).trim();
-    // The path git lists, which is what the client sends: a gone folder cannot be resolved.
-    const linked = fs.realpathSync(created);
-    fs.rmSync(linked, { recursive: true });
-
-    const archived = await archiveWorktree(repo, { directory: linked, id: 'gone', sessionIds: ['ses_1'] });
-    expect(archived).toMatchObject({ id: 'gone', head, branch: 'feature/task', title: 'Login timeout fix', sessionIds: ['ses_1'] });
-    expect(runGit(repo, ['worktree', 'list', '--porcelain'])).not.toContain('feature/task');
-
-    runGit(repo, ['worktree', 'add', linked, 'feature/task']);
-    await expect(restoreWorktreeArchive(linked, { id: 'gone' })).resolves.toEqual({ id: 'gone', conflicts: false });
-    expect(runGit(linked, ['status', '--porcelain']).trim()).toBe('');
-    expect(await listWorktreeArchives(repo)).toEqual([]);
-  });
-
-  it('refuses a worktree that lost only its .git file, keeping its files out of a partial archive', async () => {
-    if (!canRunGit()) return;
-    const { repo, linked } = createArchivableWorktree();
-    fs.rmSync(path.join(linked, '.git'));
-
-    await expect(archiveWorktree(repo, { directory: linked, id: 'broken' })).rejects.toThrow();
-    expect(await listWorktreeArchives(repo)).toEqual([]);
-    expect(fs.readFileSync(path.join(linked, 'new.txt'), 'utf8')).toBe('untracked\n');
-  });
-
-  it('applies the changes over commits the branch got after archiving', async () => {
-    if (!canRunGit()) return;
-    const { repo, linked } = createArchivableWorktree();
-    await archiveWorktree(repo, { directory: linked, id: 'a2' });
->>>>>>> bc50ba56a
 
  const withShimGit = async (mode, run) => {
   const bin = createTempDir();
@@ -6765,6 +4851,34 @@ describe('worktree archives', () => {
   expect(await listWorktreeArchives(repo)).toEqual([]);
   // No cherry-pick is left in progress.
   expect(() => runGit(linked, ['rev-parse', '--verify', '--quiet', 'CHERRY_PICK_HEAD'])).toThrow();
+ });
+
+ it('archives a worktree whose folder is gone and restores its branch', async () => {
+  if (!canRunGit()) return;
+  const { repo, linked: created } = createArchivableWorktree();
+  const head = runGit(repo, ['rev-parse', 'feature/task']).trim();
+  // The path git lists, which is what the client sends: a gone folder cannot be resolved.
+  const linked = fs.realpathSync(created);
+  fs.rmSync(linked, { recursive: true });
+
+  const archived = await archiveWorktree(repo, { directory: linked, id: 'gone', sessionIds: ['ses_1'] });
+  expect(archived).toMatchObject({ id: 'gone', head, branch: 'feature/task', title: 'Login timeout fix', sessionIds: ['ses_1'] });
+  expect(runGit(repo, ['worktree', 'list', '--porcelain'])).not.toContain('feature/task');
+
+  runGit(repo, ['worktree', 'add', linked, 'feature/task']);
+  await expect(restoreWorktreeArchive(linked, { id: 'gone' })).resolves.toEqual({ id: 'gone', conflicts: false });
+  expect(runGit(linked, ['status', '--porcelain']).trim()).toBe('');
+  expect(await listWorktreeArchives(repo)).toEqual([]);
+ });
+
+ it('refuses a worktree that lost only its .git file, keeping its files out of a partial archive', async () => {
+  if (!canRunGit()) return;
+  const { repo, linked } = createArchivableWorktree();
+  fs.rmSync(path.join(linked, '.git'));
+
+  await expect(archiveWorktree(repo, { directory: linked, id: 'broken' })).rejects.toThrow();
+  expect(await listWorktreeArchives(repo)).toEqual([]);
+  expect(fs.readFileSync(path.join(linked, 'new.txt'), 'utf8')).toBe('untracked\n');
  });
 
  it('archives a worktree whose folder is gone and restores its branch', async () => {
@@ -7430,11 +5544,7 @@ describe.runIf(canRunGit())('getBranches', () => {
   const { repository, remote } = createRepositoryWithRemote({ remoteName: 'origin', defaultBranch: 'react' });
   fs.rmSync(remote, { recursive: true, force: true });
 
-<<<<<<< HEAD
   const branches = await getBranches(repository, { remote: 'live' });
-=======
-    const branches = await getBranches(repository, { remote: 'live' });
->>>>>>> bc50ba56a
 
   expect(branches.all).toContain('remotes/origin/react');
  });
@@ -7472,11 +5582,7 @@ describe.runIf(canRunGit())('getBranches', () => {
   runGit(collaborator, ['push', 'origin', 'feature-remote-only']);
   runGit(collaborator, ['push', 'origin', ':feature-stale']);
 
-<<<<<<< HEAD
   const branches = await getBranches(repository, { remote: 'live' });
-=======
-    const branches = await getBranches(repository, { remote: 'live' });
->>>>>>> bc50ba56a
 
   expect(branches.all).toContain('remotes/origin/feature-remote-only');
   expect(branches.all).toContain('remotes/origin/feature-known');
@@ -7507,7 +5613,6 @@ describe.runIf(canRunGit())('getBranches', () => {
   runGit(collaborator, ['checkout', '-b', 'later']);
   runGit(collaborator, ['push', 'origin', 'later']);
 
-<<<<<<< HEAD
   // Within the freshness window the remote is not asked again.
   expect((await getBranches(repository, live)).all).not.toContain('remotes/origin/later');
   // A fetch here changes the tracking refs, so the remote is read again.
@@ -7552,79 +5657,6 @@ describe('parseRemoteListing', () => {
    { name: 'origin', fetchUrl: 'git@github.com:owner/repo.git', pushUrl: 'git@github.com:owner/repo.git' },
   ]);
  });
-=======
-    const branches = await getBranches(repository, { remote: 'local' });
-
-    expect(branches.all).not.toContain('v2.1.3');
-    expect(branches.branches).not.toHaveProperty('v2.1.3');
-  });
-
-  it('keeps a branch that shares its name with the detached HEAD', async () => {
-    const { repository } = createRepositoryWithRemote({ remoteName: 'origin', defaultBranch: 'react' });
-    runGit(repository, ['branch', 'v2.1.3']);
-    runGit(repository, ['tag', 'v2.1.3']);
-    runGit(repository, ['checkout', '--detach', 'refs/tags/v2.1.3']);
-
-    const branches = await getBranches(repository, { remote: 'local' });
-
-    expect(branches.all.filter((name) => name === 'v2.1.3')).toHaveLength(1);
-    expect(branches.branches['v2.1.3']).toMatchObject({ current: false });
-  });
-
-  it('reuses a remote\'s answer until its local tracking refs change', async () => {
-    const { repository, remote } = createRepositoryWithRemote({ remoteName: 'origin', defaultBranch: 'react' });
-    const live = { remote: 'live' };
-    expect((await getBranches(repository, live)).all).not.toContain('remotes/origin/later');
-    const collaborator = createTempDir();
-    runGit(collaborator, ['clone', remote, '.']);
-    runGit(collaborator, ['checkout', '-b', 'later']);
-    runGit(collaborator, ['push', 'origin', 'later']);
-
-    // Within the freshness window the remote is not asked again.
-    expect((await getBranches(repository, live)).all).not.toContain('remotes/origin/later');
-    // A fetch here changes the tracking refs, so the remote is read again.
-    runGit(repository, ['fetch', 'origin']);
-    expect((await getBranches(repository, live)).all).toContain('remotes/origin/later');
-  });
-});
-
-describe('parseRemoteListing', () => {
-  it('reads CRLF output as Git for Windows may print it', () => {
-    const listing = [
-      'origin\tgit@github.com:owner/repo.git (fetch)',
-      'origin\tgit@github.com:owner/push.git (push)',
-      'mirror\thttps://example.com/a b.git (fetch)',
-      'mirror\thttps://example.com/a b.git (push)',
-      'bare\t',
-      '',
-    ].join('\r\n');
-    expect(parseRemoteListing(['bare', 'mirror', 'origin'], listing)).toEqual([
-      { name: 'mirror', fetchUrl: 'https://example.com/a b.git', pushUrl: 'https://example.com/a b.git' },
-      { name: 'origin', fetchUrl: 'git@github.com:owner/repo.git', pushUrl: 'git@github.com:owner/push.git' },
-    ]);
-  });
-
-  it('ignores decoration after the listing kind, recognized or not (#4479)', () => {
-    // Git only annotates the fetch line in practice; the parser ignores
-    // whatever follows the marker so it does not depend on the annotation's
-    // exact shape.
-    const listing = [
-      'origin\tgit@github.com:owner/repo.git (fetch) [blob:none]',
-      'origin\tgit@github.com:owner/repo.git (push)',
-      'mirror\thttps://example.com/repo.git (fetch) [blob:limit=1m] [tree:1]',
-      'mirror\thttps://example.com/repo.git (push) [blob:none]',
-      'future\thttps://example.com/f.git (fetch) [blob:none] (extra)',
-      'future\thttps://example.com/f.git (push)',
-      'bare\t',
-      '',
-    ].join('\n');
-    expect(parseRemoteListing(['bare', 'future', 'mirror', 'origin'], listing)).toEqual([
-      { name: 'future', fetchUrl: 'https://example.com/f.git', pushUrl: 'https://example.com/f.git' },
-      { name: 'mirror', fetchUrl: 'https://example.com/repo.git', pushUrl: 'https://example.com/repo.git' },
-      { name: 'origin', fetchUrl: 'git@github.com:owner/repo.git', pushUrl: 'git@github.com:owner/repo.git' },
-    ]);
-  });
->>>>>>> bc50ba56a
 });
 
 describe.runIf(canRunGit())('getRepositoryRemoteUrls', () => {
@@ -7637,25 +5669,11 @@ describe.runIf(canRunGit())('getRepositoryRemoteUrls', () => {
   runGit(repository, ['config', 'url.https://github.com/.insteadOf', 'gh:']);
   runGit(repository, ['config', 'remote.bare.fetch', '+refs/heads/*:refs/remotes/bare/*']);
 
-<<<<<<< HEAD
   const remotes = await getRepositoryRemoteUrls(repository);
   const expected = remotes.map(({ name }) => {
    const read = (args) => { try { return runGit(repository, args).trim(); } catch { return ''; } };
    const fetchUrl = read(['remote', 'get-url', name]);
    return { name, fetchUrl, pushUrl: read(['remote', 'get-url', '--push', name]) || fetchUrl };
-=======
-    const remotes = await getRepositoryRemoteUrls(repository);
-    const expected = remotes.map(({ name }) => {
-      const read = (args) => { try { return runGit(repository, args).trim(); } catch { return ''; } };
-      const fetchUrl = read(['remote', 'get-url', name]);
-      return { name, fetchUrl, pushUrl: read(['remote', 'get-url', '--push', name]) || fetchUrl };
-    });
-
-    expect(remotes).toEqual(expected);
-    expect(remotes.map(({ name }) => name)).toEqual(['origin', 'rewritten']);
-    expect(remotes.find((remote) => remote.name === 'rewritten')?.fetchUrl).toBe('https://github.com/other/repo.git');
-    expect(remotes.find((remote) => remote.name === 'origin')?.pushUrl).toBe('git@github.com:owner/push.git');
->>>>>>> bc50ba56a
   });
 
   expect(remotes).toEqual(expected);
@@ -7678,7 +5696,6 @@ describe.runIf(canRunGit())('getRepositoryRemoteUrls', () => {
    fetchUrl: 'git@github.com:owner/repo.git',
    pushUrl: 'git@github.com:owner/repo.git',
   });
-<<<<<<< HEAD
  });
 
  it('leaves out a remote with no fetch URL, such as a git-annex special remote (#5995)', async () => {
@@ -7716,50 +5733,11 @@ describe.runIf(canRunGit())('getRepositoryRemoteUrls', () => {
    const invocations = path.join(wrapperDirectory, 'invocations');
    const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
    fs.writeFileSync(path.join(wrapperDirectory, 'git'), `#!/bin/sh
-=======
-
-  it('leaves out a remote with no fetch URL, such as a git-annex special remote (#5995)', async () => {
-    const repository = createTempDir();
-    runGit(repository, ['init', '-b', 'main']);
-    runGit(repository, ['remote', 'add', 'origin', 'https://github.com/owner/repo.git']);
-    runGit(repository, ['config', 'remote.storage.annex-externaltype', 'example']);
-    runGit(repository, ['config', 'remote.storage.annex-uuid', '00000000-0000-0000-0000-000000000000']);
-    runGit(repository, ['config', 'remote.pushonly.pushurl', 'https://example.com/push.git']);
-
-    expect(await getRepositoryRemoteUrls(repository)).toEqual([{
-      name: 'origin',
-      fetchUrl: 'https://github.com/owner/repo.git',
-      pushUrl: 'https://github.com/owner/repo.git',
-    }]);
-  });
-
-  // The wrapper fails selected commands and delegates every other read to Git.
-  describe.skipIf(process.platform === 'win32')('when git remote -v fails', () => {
-    it.each([
-      { scenario: 'keeps configured fetch remotes', hasFetchUrl: true, configFailure: false },
-      { scenario: 'treats config exit 1 as no matching URL keys', hasFetchUrl: false, configFailure: false },
-      { scenario: 'preserves the fail-loud fallback on other config failures', hasFetchUrl: true, configFailure: true },
-    ])('$scenario', async ({ hasFetchUrl, configFailure }) => {
-      const repository = createTempDir();
-      runGit(repository, ['init', '-b', 'main']);
-      if (hasFetchUrl) {
-        runGit(repository, ['remote', 'add', 'up.stream', 'https://github.com/owner/repo.git']);
-        runGit(repository, ['config', 'remote.up.stream.pushurl', 'git@github.com:owner/push.git']);
-      }
-      runGit(repository, ['config', 'remote.storage.annex-uuid', '00000000-0000-0000-0000-000000000000']);
-      runGit(repository, ['config', 'remote.pushonly.pushurl', 'https://example.com/push.git']);
-
-      const wrapperDirectory = createTempDir();
-      const invocations = path.join(wrapperDirectory, 'invocations');
-      const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
-      fs.writeFileSync(path.join(wrapperDirectory, 'git'), `#!/bin/sh
->>>>>>> bc50ba56a
 echo "$*" >> "${invocations}"
 if [ "$1" = remote ] && [ "$2" = -v ]; then exit 2; fi
 ${configFailure ? 'if [ "$1" = config ]; then exit 2; fi' : ''}
 exec "${realGit}" "$@"
 `);
-<<<<<<< HEAD
    fs.chmodSync(path.join(wrapperDirectory, 'git'), 0o755);
    vi.stubEnv('PATH', `${wrapperDirectory}${path.delimiter}${process.env.PATH || ''}`);
 
@@ -7788,36 +5766,6 @@ exec "${realGit}" "$@"
    }
   });
  });
-=======
-      fs.chmodSync(path.join(wrapperDirectory, 'git'), 0o755);
-      vi.stubEnv('PATH', `${wrapperDirectory}${path.delimiter}${process.env.PATH || ''}`);
-
-      let remotes;
-      try {
-        remotes = await getRepositoryRemoteUrls(repository);
-      } finally {
-        vi.unstubAllEnvs();
-      }
-
-      const fetchRemote = {
-        name: 'up.stream',
-        fetchUrl: 'https://github.com/owner/repo.git',
-        pushUrl: 'git@github.com:owner/push.git',
-      };
-      expect(remotes).toEqual(configFailure ? [
-        { name: 'pushonly', fetchUrl: 'pushonly', pushUrl: 'https://example.com/push.git' },
-        { name: 'storage', fetchUrl: 'storage', pushUrl: 'storage' },
-        fetchRemote,
-      ] : hasFetchUrl ? [fetchRemote] : []);
-      const commands = fs.readFileSync(invocations, 'utf8').trim().split('\n');
-      expect(commands).toContain('remote -v');
-      expect(commands).toContain('config --name-only --get-regexp ^remote\\..*\\.url$');
-      if (!configFailure) {
-        expect(commands.some((command) => command.startsWith('remote get-url') && /(?:storage|pushonly)$/.test(command))).toBe(false);
-      }
-    });
-  });
->>>>>>> bc50ba56a
 });
 
 describe.runIf(canRunGit())('getUnpushedBranchCounts', () => {
@@ -8135,53 +6083,9 @@ describe.runIf(canRunGit())('getRangeDiff', () => {
 
   const files = await getRangeFiles(repository, { base: 'origin/parent', head: 'child' });
 
-<<<<<<< HEAD
   expect(files.map((file) => file.path)).toEqual(['child.txt']);
   expect(await getRangeDiff(repository, { base: 'origin/parent', head: 'child' })).not.toContain('parent.txt');
  });
-=======
-  it('uses an explicitly selected base on a remote other than origin', async () => {
-    const { repository } = createRepositoryWithRemote({ remoteName: 'upstream', defaultBranch: 'react' });
-    // The selected remote ref must work without a local branch of that name.
-    fs.writeFileSync(path.join(repository, 'feature.txt'), 'work\n');
-    runGit(repository, ['add', 'feature.txt']);
-    runGit(repository, ['commit', '-m', 'feature']);
-
-    const diff = await getRangeDiff(repository, { base: 'upstream/react', head: 'next' });
-
-    expect(diff).toContain('feature.txt');
-    await expect(getRangeDiff(repository, { base: 'react', head: 'next' })).rejects.toThrow(/is not available locally/);
-  });
-
-  it('names an unfetched remote-only ref instead of failing with git\'s ambiguous argument (#2735)', async () => {
-    const { repository } = createRepositoryWithRemote({ defaultBranch: 'react' });
-
-    await expect(
-      getRangeDiff(repository, { base: 'remotes/origin/never-fetched', head: 'next' })
-    ).rejects.toThrow(/is not available locally/);
-  });
-
-  it('fetches an unfetched remote base branch before comparing, as for a stacked pull request', async () => {
-    const { repository } = createRepositoryWithRemote({ defaultBranch: 'react' });
-    // The parent branch of the stack is on the remote, but this clone never fetched it.
-    runGit(repository, ['checkout', '-b', 'parent']);
-    fs.writeFileSync(path.join(repository, 'parent.txt'), 'parent\n');
-    runGit(repository, ['add', 'parent.txt']);
-    runGit(repository, ['commit', '-m', 'parent']);
-    runGit(repository, ['push', 'origin', 'parent']);
-    runGit(repository, ['update-ref', '-d', 'refs/remotes/origin/parent']);
-    runGit(repository, ['checkout', '-b', 'child']);
-    runGit(repository, ['branch', '-D', 'parent']);
-    fs.writeFileSync(path.join(repository, 'child.txt'), 'child\n');
-    runGit(repository, ['add', 'child.txt']);
-    runGit(repository, ['commit', '-m', 'child']);
-
-    const files = await getRangeFiles(repository, { base: 'origin/parent', head: 'child' });
-
-    expect(files.map((file) => file.path)).toEqual(['child.txt']);
-    expect(await getRangeDiff(repository, { base: 'origin/parent', head: 'child' })).not.toContain('parent.txt');
-  });
->>>>>>> bc50ba56a
 });
 
 describe('parseBranchCreationSource', () => {
@@ -8697,7 +6601,6 @@ describe('worktree task titles', () => {
   expect(await renameGeneratedWorktreeBranch(linked, 'fix/other')).toBeNull();
  });
 
-<<<<<<< HEAD
  it('records a generated name even while another git process holds the config lock', async () => {
   const { repo, linked } = createLinkedWorktree();
   const lock = path.join(repo, '.git', 'config.lock');
@@ -8841,149 +6744,4 @@ describe.runIf(canRunGit())('getRangeFileVersions', () => {
   expect(commit.original).toBe(dataUrl);
   fs.rmSync(repository, { recursive: true, force: true });
  });
-=======
-  it('records a generated name even while another git process holds the config lock', async () => {
-    const { repo, linked } = createLinkedWorktree();
-    const lock = path.join(repo, '.git', 'config.lock');
-    fs.writeFileSync(lock, '');
-    // Git holds the lock for a moment, as a worktree being made in the background does.
-    setTimeout(() => fs.rmSync(lock), 120);
-    await markGeneratedBranchName(repo, 'feature/task', 'feature/');
-    expect(await readRenameableGeneratedBranch(linked)).toBe('feature/task');
-  });
-
-  const renameItemBranch = async (placeholder, prefix, requested) => {
-    const { repo, linked } = createLinkedWorktree();
-    runGit(linked, ['branch', '-m', 'feature/task', placeholder]);
-    await markGeneratedBranchName(repo, placeholder, prefix);
-    return (await renameGeneratedWorktreeBranch(linked, requested))?.to;
-  };
-
-  it('puts the item key of an issue branch in front of the last segment of the agent\'s name', async () => {
-    expect(await renameItemBranch('issue-180-merry-salamander', 'issue-180-', 'fix/documentation-catalog'))
-      .toBe('fix/180-documentation-catalog');
-    expect(await renameItemBranch('issue-ENG-12-merry-salamander', 'issue-ENG-12-', 'fix/docs-catalog'))
-      .toBe('fix/eng-12-docs-catalog');
-    expect(await renameItemBranch('discussion-12-merry-salamander', 'discussion-12-', 'docs-catalog'))
-      .toBe('discussion-12-docs-catalog');
-  });
-
-  it('takes a name that already carries the item key as it is', async () => {
-    expect(await renameItemBranch('issue-180-merry-salamander', 'issue-180-', 'issue-180-docs-catalog')).toBe('issue-180-docs-catalog');
-    expect(await renameItemBranch('issue-180-merry-salamander', 'issue-180-', 'fix/180-docs-catalog')).toBe('fix/180-docs-catalog');
-    expect(await renameItemBranch('issue-ENG-12-merry-salamander', 'issue-ENG-12-', 'fix/ENG-12-docs')).toBe('fix/ENG-12-docs');
-    // 1800 is not 180.
-    expect(await renameItemBranch('issue-180-merry-salamander', 'issue-180-', 'fix/1800-docs')).toBe('fix/180-1800-docs');
-  });
-
-  it('refuses a detached worktree, which has no branch to hold a title', async () => {
-    const { repo } = createLinkedWorktree();
-    const detached = path.join(createTempDir(), 'detached');
-    runGit(repo, ['worktree', 'add', '--detach', detached]);
-    await expect(setWorktreeTaskTitle(detached, { title: 'Name', by: 'user' })).rejects.toMatchObject({ status: 409 });
-    await expect(setWorktreePinned(detached, true)).rejects.toMatchObject({ status: 409 });
-  });
-
-  it('pins a worktree in its branch config, listed with the time it was pinned', async () => {
-    const { repo, linked } = createLinkedWorktree();
-    const entryOf = async () => (await getWorktrees(repo)).find((worktree) => fs.realpathSync(worktree.path) === fs.realpathSync(linked));
-
-    expect((await entryOf())?.pinnedAt).toBeUndefined();
-    expect(await setWorktreePinned(linked, true, null, 1234)).toEqual({ pinned: true, branch: 'feature/task' });
-    expect((await entryOf())?.pinnedAt).toBe(1234);
-    // Pinning again keeps the first pin's time.
-    await setWorktreePinned(linked, true, null, 5678);
-    expect((await entryOf())?.pinnedAt).toBe(1234);
-
-    expect(await setWorktreePinned(linked, false)).toEqual({ pinned: false, branch: 'feature/task' });
-    expect((await entryOf())?.pinnedAt).toBeUndefined();
-  });
-
-  it('files a pinned worktree into a pin list and back, keeping the first pin time', async () => {
-    const { repo, linked } = createLinkedWorktree();
-    const entryOf = async () => (await getWorktrees(repo)).find((worktree) => fs.realpathSync(worktree.path) === fs.realpathSync(linked));
-
-    await setWorktreePinned(linked, true, 'release', 1234);
-    expect(await entryOf()).toMatchObject({ pinnedAt: 1234, pinList: 'release' });
-    await setWorktreePinned(linked, true, null, 5678);
-    const entry = await entryOf();
-    expect(entry?.pinnedAt).toBe(1234);
-    expect(entry?.pinList).toBeUndefined();
-    await expect(setWorktreePinned(linked, true, 'bad list')).rejects.toMatchObject({ status: 400 });
-  });
-});
-
-describe.runIf(canRunGit())('getRangeFileVersions', () => {
-  it('reads a binary file at the merge base and at the head, untouched', async () => {
-    const repository = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-range-versions-'));
-    const run = (...args) => execFileSync('git', args, { cwd: repository });
-    run('init', '-q', '-b', 'main');
-    run('config', 'user.email', 't@t');
-    run('config', 'user.name', 't');
-    const before = Buffer.from([0x50, 0x4b, 0x00, 0xff, 0x01]);
-    const after = Buffer.from([0x50, 0x4b, 0x00, 0xff, 0x02]);
-    fs.writeFileSync(path.join(repository, 'book.xlsx'), before);
-    run('add', '.');
-    run('commit', '-qm', 'base');
-    run('switch', '-qc', 'feature');
-    fs.writeFileSync(path.join(repository, 'book.xlsx'), after);
-    run('commit', '-qam', 'change');
-    const versions = await getRangeFileVersions(repository, { base: 'main', head: 'feature', path: 'book.xlsx' });
-    expect(versions.original).toBe(`data:application/octet-stream;base64,${before.toString('base64')}`);
-    expect(versions.modified).toBe(`data:application/octet-stream;base64,${after.toString('base64')}`);
-    fs.rmSync(repository, { recursive: true, force: true });
-  });
-
-  it('finds a renamed file under its old name on the base side', async () => {
-    const repository = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-range-rename-'));
-    const run = (...args) => execFileSync('git', args, { cwd: repository });
-    run('init', '-q', '-b', 'main');
-    run('config', 'user.email', 't@t');
-    run('config', 'user.name', 't');
-    const before = Buffer.from([0x50, 0x4b, 0x00, 0xff, 0x01]);
-    fs.mkdirSync(path.join(repository, 'old'));
-    fs.mkdirSync(path.join(repository, 'new'));
-    fs.writeFileSync(path.join(repository, 'old', 'book.xlsx'), before);
-    fs.writeFileSync(path.join(repository, 'new', '.keep'), '');
-    run('add', '.');
-    run('commit', '-qm', 'base');
-    run('switch', '-qc', 'feature');
-    run('mv', 'old/book.xlsx', 'new/report.xlsx');
-    run('commit', '-qm', 'rename');
-    const dataUrl = `data:application/octet-stream;base64,${before.toString('base64')}`;
-    const range = await getRangeFileVersions(repository, { base: 'main', head: 'feature', path: 'new/report.xlsx', previousPath: 'old/book.xlsx' });
-    expect(range).toEqual({ original: dataUrl, modified: dataUrl });
-    const hash = run('rev-parse', 'HEAD').toString().trim();
-    const commit = await getCommitFileDiff(repository, hash, 'new/report.xlsx', true, 'old/book.xlsx');
-    expect(commit.original).toBe(dataUrl);
-    expect(commit.modified).toBe(dataUrl);
-    fs.rmSync(repository, { recursive: true, force: true });
-  });
-
-  it('reads a rename inside a subfolder, past a file of the old name at the root', async () => {
-    const repository = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-range-subfolder-')));
-    const run = (...args) => execFileSync('git', args, { cwd: repository });
-    run('init', '-q', '-b', 'main');
-    run('config', 'user.email', 't@t');
-    run('config', 'user.name', 't');
-    const unrelated = Buffer.from([0x50, 0x4b, 0x09]);
-    const before = Buffer.from([0x50, 0x4b, 0x01]);
-    fs.mkdirSync(path.join(repository, 'sub'));
-    fs.writeFileSync(path.join(repository, 'old.xlsx'), unrelated);
-    fs.writeFileSync(path.join(repository, 'sub', 'old.xlsx'), before);
-    run('add', '.');
-    run('commit', '-qm', 'base');
-    run('switch', '-qc', 'feature');
-    run('mv', 'sub/old.xlsx', 'sub/new.xlsx');
-    run('commit', '-qm', 'rename');
-    const dataUrl = `data:application/octet-stream;base64,${before.toString('base64')}`;
-    const directory = path.join(repository, 'sub');
-    const range = await getRangeFileVersions(directory, { base: 'main', head: 'feature', path: 'new.xlsx', previousPath: 'old.xlsx' });
-    expect(range).toEqual({ original: dataUrl, modified: dataUrl });
-    const hash = run('rev-parse', 'HEAD').toString().trim();
-    const commit = await getCommitFileDiff(directory, hash, 'new.xlsx', true, 'old.xlsx');
-    expect(commit.original).toBe(dataUrl);
-    fs.rmSync(repository, { recursive: true, force: true });
-  });
->>>>>>> bc50ba56a
 });
