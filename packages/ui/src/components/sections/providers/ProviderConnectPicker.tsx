@@ -26,7 +26,7 @@ const ProviderRow: React.FC<{ provider: ConnectableProvider; onSelect: (provider
 );
 
 interface ProviderConnectPickerProps {
-  /** Null until the provider list is read. */
+  /** Null until the integration list is read. */
   providers: readonly ConnectableProvider[] | null;
   loadFailed: boolean;
   onSelect: (providerId: string) => void;
@@ -101,12 +101,7 @@ export const ProviderConnectPicker: React.FC<ProviderConnectPickerProps> = ({ pr
               onOpen={() => onSelect(provider.id)}
             />
           ))}
-          <SettingsAddCard
-            label={customLabel}
-            hint={t('settings.providers.connect.customHint')}
-            onClick={onSelectCustom}
-            settingsItem="providers.custom"
-          />
+          <SettingsAddCard label={customLabel} hint={t('settings.providers.connect.customHint')} onClick={onSelectCustom} />
         </div>
       </SettingsSection>
 

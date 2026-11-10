@@ -125,7 +125,6 @@ export const CommandsPage: React.FC = () => {
         title={`/${selectedName}`}
         description={t('settings.commands.sidebar.section.builtIn')}
       >
-<<<<<<< HEAD
         <SettingsSection title={t('settings.commands.page.section.identity')} divider={false} contentClassName="space-y-3">
           <SettingsStackedField className="py-1.5" label={t('settings.common.field.description')} controlClassName="w-full max-w-none">
             <p className="typography-body text-foreground leading-relaxed whitespace-pre-wrap">
@@ -153,56 +152,6 @@ export const CommandsPage: React.FC = () => {
             <span className="typography-ui-label text-muted-foreground mr-1">/</span>
             <Input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })}
               placeholder={t('settings.commands.page.field.commandNamePlaceholder')} className="h-7 w-40 px-2" />
-=======
-        {isNewCommand && (
-          <SettingsFieldRow
-            settingsItem="commands.name"
-            label={t('settings.commands.page.field.commandName')}
-          >
-            <div className="flex items-center">
-              <span className="typography-ui-label text-muted-foreground me-1">/</span>
-              <Input
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                placeholder={t('settings.commands.page.field.commandNamePlaceholder')}
-                className="h-7 w-40 px-2"
-              />
-            </div>
-            <Select value={draftScope} onValueChange={(v) => setDraftScope(v as CommandScope)}>
-              <SelectTrigger className="w-fit min-w-[100px]">
-                <SelectValue>
-                  {draftScope === 'project' ? t('settings.common.scope.project') : t('settings.common.scope.global')}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent align="end">
-                <SelectItem value="user">
-                  <div className="flex items-center gap-2">
-                    <Icon name="user-3" className="h-3.5 w-3.5" />
-                    <span>{t('settings.common.scope.global')}</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="project">
-                  <div className="flex items-center gap-2">
-                    <Icon name="folder" className="h-3.5 w-3.5" />
-                    <span>{t('settings.common.scope.project')}</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </SettingsFieldRow>
-        )}
-
-        <div className="py-1.5">
-          <span className="typography-ui-label text-foreground">{t('settings.common.field.description')}</span>
-          <div className="mt-1.5">
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={t('settings.commands.page.field.descriptionPlaceholder')}
-              rows={2}
-              className="w-full resize-none min-h-[60px] bg-transparent"
-            />
->>>>>>> bc50ba56a
           </div>
           <Select value={form.scope} onValueChange={scope => {
             if (scope === 'agent' || scope === 'workspace') setForm({ ...form, scope });

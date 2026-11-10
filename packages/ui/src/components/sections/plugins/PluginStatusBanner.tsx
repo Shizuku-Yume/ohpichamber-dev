@@ -24,7 +24,6 @@ const TONE_TITLE_CLASS = {
 /** A committed configuration and an active worker publication are independent outcomes. */
 export const PluginStatusBanner: React.FC<{ result: PluginMutationResult }> = ({ result }) => {
   const { t } = useI18n();
-<<<<<<< HEAD
   const failedWorkers = result.workers.filter(worker => worker.outcome === 'failed');
   const failedCount = failedWorkers.length;
   const presentation = result.status === 'applied'
@@ -35,87 +34,6 @@ export const PluginStatusBanner: React.FC<{ result: PluginMutationResult }> = ({
         ? { tone: 'error' as const, icon: 'error-warning' as const, label: t('settings.plugins.apply.failed') }
         : { tone: 'neutral' as const, icon: 'time' as const, label: t('settings.plugins.apply.noActiveWorkers') };
   const runtimeProblem = presentation.tone === 'warning' || presentation.tone === 'error';
-=======
-  const status = usePluginRuntimeStatus(target);
-  const packageUpdate = usePluginPackageUpdate(target);
-  const loadRuntime = usePluginsStore((s) => s.loadRuntime);
-  const updatePackage = usePluginsStore((s) => s.updatePackage);
-
-  if (status.kind === 'loading') return null;
-
-  if (status.kind === 'unknown') {
-    return (
-      <div className="oc-tile rounded-md p-3 flex items-start gap-3">
-        <Icon name="question" className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <p className="typography-label text-foreground">{t('settings.plugins.status.unknown.title')}</p>
-          <p className="typography-micro text-muted-foreground mt-0.5">
-            {t('settings.plugins.status.unknown.description')}
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => void loadRuntime()}>
-          {t('settings.plugins.status.retry')}
-        </Button>
-      </div>
-    );
-  }
-
-  const { load, update } = status;
-  const packageTarget = status.target.kind === 'package' ? status.target.target : null;
-  const isUpdating = update === 'updating' || packageUpdate?.kind === 'running';
-
-  const handleUpdate = async () => {
-    if (!packageTarget) return;
-    const ok = await updatePackage(packageTarget);
-    if (ok) toast.success(t('settings.plugins.update.toast.done', { name }));
-    else toast.error(t('settings.plugins.update.toast.failed', { name }));
-  };
-
-  const loadBlock = (() => {
-    switch (load.kind) {
-      case 'active':
-        return (
-          <p className="typography-meta flex items-center gap-1.5 text-muted-foreground">
-            <Icon name="checkbox-circle" className="h-4 w-4 text-[var(--status-success)]" />
-            {load.version
-              ? t('settings.plugins.status.loadedVersion', { version: load.version })
-              : t('settings.plugins.status.loaded')}
-          </p>
-        );
-      case 'notReported':
-        return (
-          <div className="oc-tile rounded-md p-3 flex items-start gap-3">
-            <Icon name="time" className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="typography-label text-foreground">{t('settings.plugins.status.notReported.title')}</p>
-              <p className="typography-micro text-muted-foreground mt-0.5">
-                {t('settings.plugins.status.notReported.description')}
-              </p>
-            </div>
-          </div>
-        );
-      case 'failed':
-        return (
-          <div className="oc-tile rounded-md p-3 flex items-start gap-3">
-            <Icon name="error-warning" className="h-5 w-5 text-[var(--status-error)] shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="typography-label text-[var(--status-error)]">{t('settings.plugins.status.failed.title')}</p>
-              <p dir="ltr" className="typography-micro font-mono text-foreground mt-1 whitespace-pre-wrap break-words">
-                {load.error}
-              </p>
-              {load.ref ? (
-                <p className="typography-micro text-muted-foreground mt-1">
-                  {t('settings.plugins.status.failed.ref', { ref: load.ref })}
-                </p>
-              ) : null}
-            </div>
-          </div>
-        );
-    }
-  })();
-
-  const showUpdate = packageTarget !== null && (update !== 'none' || packageUpdate !== null);
->>>>>>> bc50ba56a
 
   return (
     <div role="status" className="rounded-md border border-border bg-card p-3 flex items-start gap-3">

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
+import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,12 +22,14 @@ import {
   SettingsTwoColumn,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
+import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { useI18n } from '@/lib/i18n';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import type { RoutingCategory, RoutingConfig } from '@/lib/routing/routingApi';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
+import { modelVariantNames } from '@/lib/modelVariants';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { useRoutingStore } from '@/stores/useRoutingStore';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
@@ -49,15 +52,15 @@ const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean =>
 };
 
 const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
-/** The thinking efforts OMP reports for one model; 'off' plus reasoningOptions. Empty when the model has none. */
-const useModelReasoningEfforts = (providerID: string | null | undefined, modelID: string | null | undefined): string[] => {
+
+/** The thinking levels OpenCode reports for one model; empty when the model has none. */
+const useModelVariants = (providerID: string | null | undefined, modelID: string | null | undefined): string[] => {
   const providers = useConfigStore((state) => state.providers);
   return React.useMemo(() => {
     if (!providerID || !modelID) return [];
-    const provider = providers.find((entry) => entry.providerId === providerID);
-    const model = provider?.models.find((entry) => entry.modelId === modelID);
-    if (!model?.reasoningEffortSupported && !model?.reasoningOptions?.length) return [];
-    return ['off', ...model.reasoningOptions.map((option) => option.reasoningEffort).filter((effort) => effort !== 'off')];
+    const provider = providers.find((entry) => entry.id === providerID);
+    const model = provider?.models.find((entry) => entry.id === modelID);
+    return modelVariantNames(model);
   }, [modelID, providerID, providers]);
 };
 
@@ -79,22 +82,20 @@ const VariantSelect: React.FC<{
   className?: string;
 }> = ({ providerID, modelID, value, onChange, ariaLabel, className }) => {
   const { t } = useI18n();
-  const efforts = useModelReasoningEfforts(providerID, modelID);
-  const selected = knownVariant(value, efforts) ?? DEFAULT_VARIANT_VALUE;
-  const label = (variant: string) => {
-    if (variant === DEFAULT_VARIANT_VALUE) return t('settings.routing.thinking.default');
-    if (variant === 'off') return t('chat.modelControls.off');
-    return variant.charAt(0).toUpperCase() + variant.slice(1);
-  };
+  const variants = useModelVariants(providerID, modelID);
+  const selected = knownVariant(value, variants) ?? DEFAULT_VARIANT_VALUE;
+  const label = (variant: string) => (variant === DEFAULT_VARIANT_VALUE
+    ? t('settings.routing.thinking.default')
+    : variant.charAt(0).toUpperCase() + variant.slice(1));
   return (
-    <Select value={selected} onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? null : next)} disabled={efforts.length === 0}>
+    <Select value={selected} onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? null : next)} disabled={variants.length === 0}>
       <SelectTrigger className={cn(SETTINGS_SELECT_ROW_TRIGGER_CLASS, className)} aria-label={ariaLabel}>
         <SelectValue>{label(selected)}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={DEFAULT_VARIANT_VALUE}>{label(DEFAULT_VARIANT_VALUE)}</SelectItem>
-        {efforts.map((effort) => (
-          <SelectItem key={effort} value={effort}>{label(effort)}</SelectItem>
+        {variants.map((variant) => (
+          <SelectItem key={variant} value={variant}>{label(variant)}</SelectItem>
         ))}
       </SelectContent>
     </Select>
@@ -112,25 +113,25 @@ const CategoryRow: React.FC<{
   onRemove: () => void;
 }> = ({ category, expanded, onToggle, onChange, onReset, onRemove }) => {
   const { t } = useI18n();
-  const efforts = useModelReasoningEfforts(category.model?.providerID, category.model?.modelID);
-  const shownVariant = knownVariant(category.variant, efforts);
+  const variants = useModelVariants(category.model?.providerID, category.model?.modelID);
+  const shownVariant = knownVariant(category.variant, variants);
   const modelLabel = category.model
     ? `${category.model.modelID}${shownVariant ? ` / ${shownVariant}` : ''}`
     : t('settings.routing.model.useFallback');
-  const summary = modelLabel;
+  const summary = [modelLabel, category.agent].filter(Boolean).join(' · ');
   return (
     <div className={cn('py-1', !category.enabled && 'opacity-60')}>
       <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
+        <button
+          type="button"
           onClick={onToggle}
           aria-expanded={expanded}
-          className="flex h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1.5"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-start hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Icon name={expanded ? 'arrow-down-s' : 'arrow-right-s'} className="size-4 shrink-0 text-muted-foreground" />
+          <Icon name={expanded ? 'arrow-down-s' : 'arrow-right-s'} className="size-4 flex-shrink-0 text-muted-foreground" />
           <span className="typography-ui-label font-medium text-foreground truncate">{category.name || category.id}</span>
           <span className="typography-meta text-muted-foreground truncate">{summary}</span>
-        </Button>
+        </button>
         <Switch
           checked={category.enabled}
           onCheckedChange={(checked) => onChange({ enabled: checked })}
@@ -145,9 +146,16 @@ const CategoryRow: React.FC<{
                 value={category.name}
                 onChange={(event) => onChange({ name: event.target.value })}
                 aria-label={t('settings.routing.category.name')}
-                inputSize="compact"
-                className="w-full"
+                className="h-8 w-full rounded-md px-3"
                 maxLength={60}
+              />
+            </SettingsStackedField>
+            <SettingsStackedField label={t('settings.routing.category.agent')} info={t('settings.routing.category.agentInfo')} controlClassName="max-w-none">
+              <AgentSelector
+                agentName={category.agent ?? ''}
+                onChange={(agentName) => onChange({ agent: agentName || null })}
+                filter={(agent) => isPrimaryMode(agent.mode)}
+                className={cn(SETTINGS_CUSTOM_TRIGGER_CLASS, 'w-full')}
               />
             </SettingsStackedField>
             <SettingsStackedField label={t('settings.routing.category.model')} info={t('settings.routing.category.modelInfo')} controlClassName="max-w-none">
@@ -159,16 +167,17 @@ const CategoryRow: React.FC<{
                 placeholder={t('settings.routing.model.useFallback')}
               />
             </SettingsStackedField>
+            <SettingsStackedField label={t('settings.routing.category.thinking')} controlClassName="max-w-none">
+              <VariantSelect
+                providerID={category.model?.providerID}
+                modelID={category.model?.modelID}
+                value={category.variant}
+                onChange={(variant) => onChange({ variant })}
+                ariaLabel={t('settings.routing.category.thinking')}
+                className="w-full"
+              />
+            </SettingsStackedField>
           </SettingsTwoColumn>
-          <SettingsFieldRow label={t('settings.routing.category.thinking')} settingsItem="routing.category-thinking">
-            <VariantSelect
-              providerID={category.model?.providerID}
-              modelID={category.model?.modelID}
-              value={category.variant}
-              onChange={(variant) => onChange({ variant })}
-              ariaLabel={t('settings.routing.category.thinking')}
-            />
-          </SettingsFieldRow>
           <SettingsStackedField
             label={t('settings.routing.category.description')}
             info={t('settings.routing.category.descriptionInfo')}
@@ -185,9 +194,9 @@ const CategoryRow: React.FC<{
           </SettingsStackedField>
           <div className="flex flex-wrap items-center gap-2">
             {onReset ? (
-              <Button size="xs" variant="outline" onClick={onReset}>{t('settings.routing.category.reset')}</Button>
+              <Button size="sm" variant="outline" onClick={onReset}>{t('settings.routing.category.reset')}</Button>
             ) : null}
-            <Button size="xs" variant="ghost" onClick={onRemove}>{t('settings.routing.category.remove')}</Button>
+            <Button size="sm" variant="ghost" onClick={onRemove}>{t('settings.routing.category.remove')}</Button>
           </div>
         </div>
       ) : null}
@@ -263,6 +272,7 @@ export const RoutingPage: React.FC = () => {
   // A first visit starts from the session defaults: the model the user already
   // chose for new sessions is the natural fallback, and it saves a required step.
   const settingsDefaultModel = useConfigStore((state) => state.settingsDefaultModel);
+  const settingsDefaultVariant = useConfigStore((state) => state.settingsDefaultVariant);
   const prefilledRef = React.useRef(false);
   React.useEffect(() => {
     if (prefilledRef.current || !loaded || !serverConfig || serverConfig.fallback) return;
@@ -272,11 +282,11 @@ export const RoutingPage: React.FC = () => {
     prefilledRef.current = true;
     update((config) => (config.fallback ? config : {
       ...config,
-      fallback: { model: { providerID: parsed.providerId, modelID: parsed.modelId }, variant: null },
+      fallback: { model: { providerID: parsed.providerId, modelID: parsed.modelId }, variant: settingsDefaultVariant ?? null },
     }));
   // `update` is stable; the effect keys on what decides whether to prefill.
   // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, serverConfig, settingsDefaultModel]);
+  }, [loaded, serverConfig, settingsDefaultModel, settingsDefaultVariant]);
 
   const update = React.useCallback((mutate: (config: RoutingConfig) => RoutingConfig) => {
     setDraft((current) => {
@@ -423,7 +433,7 @@ export const RoutingPage: React.FC = () => {
               {removedBuiltins.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-2">
                   {removedBuiltins.map((builtin) => (
-                    <Button key={builtin.id} size="xs" variant="outline" onClick={() => restoreCategory(builtin.id)}>
+                    <Button key={builtin.id} size="sm" variant="outline" onClick={() => restoreCategory(builtin.id)}>
                       {t('settings.routing.category.restore', { name: builtin.name })}
                     </Button>
                   ))}
@@ -437,11 +447,10 @@ export const RoutingPage: React.FC = () => {
                     onKeyDown={(event) => { if (event.key === 'Enter') addCategory(); }}
                     placeholder={t('settings.routing.categories.addPlaceholder')}
                     aria-label={t('settings.routing.categories.addLabel')}
-                    inputSize="compact"
-                    className="min-w-0 flex-1"
+                    className="h-8 rounded-md px-3 min-w-0 flex-1"
                     maxLength={60}
                   />
-                  <Button size="xs" variant="outline" onClick={addCategory} disabled={newCategoryName.trim().length === 0}>
+                  <Button size="sm" variant="outline" onClick={addCategory} disabled={newCategoryName.trim().length === 0}>
                     {t('settings.routing.categories.add')}
                   </Button>
                 </div>

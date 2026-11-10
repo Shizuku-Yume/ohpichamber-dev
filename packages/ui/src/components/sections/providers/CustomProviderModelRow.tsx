@@ -1,11 +1,11 @@
 import React from 'react';
-import type { Model } from '@openchamber/agent-contract';
 import {
   SettingsCheckboxRow,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Icon } from '@/components/icon/Icon';
@@ -14,22 +14,22 @@ import { formatGoalTokens } from '@/lib/sessionGoalMetadata';
 import { cn } from '@/lib/utils';
 import type { ModelFieldErrors, ModelRow } from './custom-provider-form';
 
-const MODEL_MODALITIES = ['text', 'image', 'audio', 'embedding'] as const;
+const MODEL_CAPABILITIES = ['text', 'image', 'audio', 'video', 'pdf'] as const;
 
-type ModelTextField = 'modelId' | 'name' | 'contextWindow' | 'maxOutputTokens';
+export type ModelTextField = 'id' | 'name' | 'variants' | 'contextWindow' | 'maxOutputTokens';
+export type ModelCapabilityList = 'inputCapabilities' | 'outputCapabilities';
 
-interface CustomProviderModelRowProps {
+type Props = {
   model: ModelRow;
   errors?: ModelFieldErrors;
   expanded: boolean;
   onToggle: () => void;
   onChange: (key: ModelTextField, value: string) => void;
-  onToggleModality: (modality: Model['modalities'][number]) => void;
+  onToggleCapability: (target: ModelCapabilityList, capability: string) => void;
   onToolsChange: (tools: boolean) => void;
   onImageGenerationChange: (imageGeneration: boolean) => void;
   onRemove?: () => void;
-  disabled?: boolean;
-}
+};
 
 const positive = (value: string): number | null => {
   const parsed = Number(value.trim());
@@ -41,31 +41,30 @@ const positive = (value: string): number | null => {
  * id, the limits and anything beyond plain text), so a provider with dozens
  * of imported models stays scannable; the editor opens on demand.
  */
-export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
+export const CustomProviderModelRow: React.FC<Props> = ({
   model,
   errors,
   expanded,
   onToggle,
   onChange,
-  onToggleModality,
+  onToggleCapability,
   onToolsChange,
   onImageGenerationChange,
   onRemove,
-  disabled = false,
 }) => {
   const { t } = useI18n();
   const editorId = React.useId();
-  const modelId = model.modelId.trim();
+  const id = model.id.trim();
   const name = model.name.trim();
-  const title = name || modelId || t('settings.providers.page.custom.models.untitled');
+  const title = name || id || t('settings.providers.page.custom.models.untitled');
   const context = positive(model.contextWindow);
   const output = positive(model.maxOutputTokens);
-  const extraInputs = model.modalities.filter((modality) => modality !== 'text');
+  const extraInputs = model.inputCapabilities.filter((capability) => capability !== 'text');
   const summary = [
     context ? t('settings.providers.page.custom.discovery.contextValue', { value: formatGoalTokens(context) }) : null,
     output ? t('settings.providers.page.custom.discovery.outputValue', { value: formatGoalTokens(output) }) : null,
     extraInputs.length > 0 ? extraInputs.join(', ') : null,
-    model.toolsSupported === false ? t('settings.providers.page.custom.models.toolsOff') : null,
+    model.tools ? null : t('settings.providers.page.custom.models.toolsOff'),
   ].filter(Boolean).join(' · ');
 
   const fieldError = (message?: string) => (
@@ -78,7 +77,6 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
         <button
           type="button"
           onClick={onToggle}
-          disabled={disabled}
           aria-expanded={expanded}
           aria-controls={editorId}
           className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-start hover:bg-[var(--interactive-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--interactive-focus-ring)]"
@@ -90,9 +88,9 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
           />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="flex min-w-0 items-baseline gap-2">
-              <span className={cn('truncate', SETTINGS_FIELD_LABEL_CLASS, !name && !modelId && 'text-muted-foreground')}>{title}</span>
-              {name && modelId && name !== modelId ? (
-                <span className="truncate font-mono text-xs text-muted-foreground">{modelId}</span>
+              <span className={cn('truncate', SETTINGS_FIELD_LABEL_CLASS, !name && !id && 'text-muted-foreground')}>{title}</span>
+              {name && id && name !== id ? (
+                <span className="truncate font-mono text-xs text-muted-foreground">{id}</span>
               ) : null}
             </span>
             {summary ? <span className={cn('truncate', SETTINGS_HELPER_CLASS)}>{summary}</span> : null}
@@ -105,7 +103,6 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
             size="icon"
             className={SETTINGS_ICON_BUTTON_CLASS}
             onClick={onRemove}
-            disabled={disabled}
             aria-label={t('settings.providers.page.custom.models.remove')}
           >
             <Icon name="delete-bin" className="size-4" />
@@ -119,15 +116,14 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
             <div>
               <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.idLabel')}</label>
               <Input
-                value={model.modelId}
-                onChange={(event) => onChange('modelId', event.target.value)}
+                value={model.id}
+                onChange={(event) => onChange('id', event.target.value)}
                 placeholder={t('settings.providers.page.custom.models.idPlaceholder')}
                 className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
-                aria-invalid={Boolean(errors?.modelId)}
+                aria-invalid={Boolean(errors?.id)}
                 aria-label={t('settings.providers.page.custom.models.idLabel')}
-                disabled={disabled}
               />
-              {fieldError(errors?.modelId)}
+              {fieldError(errors?.id)}
             </div>
             <div>
               <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.nameLabel')}</label>
@@ -138,7 +134,6 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                 className="mt-1 h-8 rounded-md px-3"
                 aria-invalid={Boolean(errors?.name)}
                 aria-label={t('settings.providers.page.custom.models.nameLabel')}
-                disabled={disabled}
               />
               {fieldError(errors?.name)}
             </div>
@@ -155,7 +150,6 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                 className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
                 aria-invalid={Boolean(errors?.contextWindow)}
                 aria-label={t('settings.providers.page.custom.models.contextWindow')}
-                disabled={disabled}
               />
               {fieldError(errors?.contextWindow)}
             </div>
@@ -169,32 +163,47 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                 className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
                 aria-invalid={Boolean(errors?.maxOutputTokens)}
                 aria-label={t('settings.providers.page.custom.models.maxOutputTokens')}
-                disabled={disabled}
               />
               {fieldError(errors?.maxOutputTokens)}
             </div>
           </div>
 
-          <div className="space-y-1">
-            <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.inputCapabilities')}</span>
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
-              {MODEL_MODALITIES.map((modality) => (
-                <SettingsCheckboxRow
-                  key={modality}
-                  checked={model.modalities.includes(modality)}
-                  onChange={() => onToggleModality(modality)}
-                  disabled={disabled || (model.modalities.includes(modality) && model.modalities.length === 1)}
-                  label={modality}
-                  ariaLabel={modality}
-                />
-              ))}
+          <div>
+            <div className="flex items-center gap-1">
+              <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.variantsLabel')}</label>
+              <SettingsInfoHint>{t('settings.providers.page.custom.models.variantsInfo')}</SettingsInfoHint>
             </div>
+            <Input
+              value={model.variants}
+              onChange={(event) => onChange('variants', event.target.value)}
+              placeholder={t('settings.providers.page.custom.models.variantsPlaceholder')}
+              className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
+              aria-label={t('settings.providers.page.custom.models.variantsLabel')}
+            />
           </div>
 
+          {(['inputCapabilities', 'outputCapabilities'] as const).map((target) => (
+            <div key={target} className="space-y-1">
+              <span className={SETTINGS_FIELD_LABEL_CLASS}>
+                {target === 'inputCapabilities'
+                  ? t('settings.providers.page.custom.models.inputCapabilities')
+                  : t('settings.providers.page.custom.models.outputCapabilities')}
+              </span>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {MODEL_CAPABILITIES.map((capability) => (
+                  <SettingsCheckboxRow
+                    key={capability}
+                    checked={model[target].includes(capability)}
+                    onChange={() => onToggleCapability(target, capability)}
+                    label={capability}
+                    ariaLabel={capability}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+
           <SettingsCheckboxRow
-<<<<<<< HEAD
-            checked={model.toolsSupported === true}
-=======
             checked={model.type === 'image'}
             onChange={onImageGenerationChange}
             label={t('settings.providers.page.custom.models.imageGeneration')}
@@ -203,12 +212,18 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
 
           <SettingsCheckboxRow
             checked={model.tools}
->>>>>>> bc50ba56a
             onChange={onToolsChange}
-            disabled={disabled}
             label={t('settings.providers.page.custom.models.tools')}
             ariaLabel={t('settings.providers.page.custom.models.tools')}
           />
+
+          {model.metadataSource === 'models.dev' || model.metadataSource === 'provider-api' ? (
+            <p className={SETTINGS_HELPER_CLASS}>
+              {model.metadataSource === 'models.dev'
+                ? t('settings.providers.page.custom.discovery.source.models.dev')
+                : t('settings.providers.page.custom.discovery.source.provider-api')}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </div>
