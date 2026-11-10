@@ -791,3 +791,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Supersedes:** the "visual selectors for all 16 `modelRoles` + `modelPresets`" and settings/command exposure parts of 2026-11-05 - Scope M4 to full OMP 18.16.0 TUI feature/display parity; refines part (1) of 2026-11-06 - Preserve OpenChamber frontend capabilities alongside full OMP engine parity.
 - **Revisit when:** a concrete GUI user need appears for a hidden OMP setting.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge
+
+- **Choice:** the lane 12 work modules (`openchamber-sessions`, `openchamber-control`, `quota`, `small-model`, `routing`, `session-assist`, `session-work`, `scheduled-tasks`, `workflows`, `tts`, `package-manager.js`) keep the fork's Host/Canonical API shape; upstream v2.7.0 engine code is not adopted there.
+- **Instead of:** taking upstream's `@opencode/client` and `server/lib/opencode/*` implementations for those modules.
+- **Because:** every one of those modules now dispatches on `/api/agent/v1` through the Host (`sessionService`, `resolveSessionScope`, `credentialAccessToken`, `selected-credential`); upstream's side reintroduces the retired OpenCode runtime, duplicate declarations, and reads of `opencode/auth.js`.
+- **Also retired here:** `session-goal/` (the fork removed the goal runtime), and upstream-only helpers with no fork consumer (`quota/console-budgets`, `quota/extension-quota[s]`, `quota/utils/auth.js`, `scheduled-tasks/model-catalog.js`, `openchamber-control/{form-answer,usage-read,secret-run,tool-envelope}.js`, `openchamber-sessions/session-archive.js`).
+- **Consequence:** the cluster's five remaining failing test files are `main`-identical and fail on tree-wide dependency bumps, not on this resolution: installed `zod@4.6.7` makes `.omit()` throw on the refined canonical event schemas (`agent-service/dist/supervisor/host-authorization-protocol.js`), and `supertest@7.3.2`/`superagent@10.4.2` break `packages/web/test/loopback-supertest.js` (its own self-test fails). Fixing them belongs to the lockfile lane, not this cluster.
+- **Decided by:** agent (conservative option; no maintainer question)
+- **Revisit when:** the zod/supertest pins return to `4.3.6`/`7.2.2`, or the canonical event schemas drop their refinements and the loopback harness is repaired.
