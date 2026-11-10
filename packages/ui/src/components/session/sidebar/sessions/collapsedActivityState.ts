@@ -3,9 +3,9 @@ import type { SessionNode } from '../types';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
 import { useBackgroundShellsStore } from '@/sync/background-shells';
-import { useBackgroundImagesStore } from '@/sync/background-images';
-import { usePrWatchStore } from '@/sync/pr-watch';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { usePrWatchStore } from '@/sync/pr-watch';
+import { useNotificationStore } from '@/sync/notification-store';
 import { isSessionUnread } from '@/sync/session-unread';
 
 // Ordered by how much the user is needed: a blocked turn outranks a running
@@ -25,17 +25,18 @@ const getSessionNodeActivityState = (
   node: SessionNode,
   activeSessionIds: Set<string>,
   unreadSessionIds: Set<string>,
+  includeUnreadSubtasks: boolean,
 ): CollapsedActivityState => {
-  if (activeSessionIds.has(node.session.id)) return 'active';
+  if (activeSessionIds.has(node.session.sessionId)) return 'active';
 
   let state: CollapsedActivityState = null;
-  // A subtask is never unread on its own; its parent carries the mark.
-  if (unreadSessionIds.has(node.session.id) && !session.parentSessionId) state = 'unread';
+  const isSubtask = Boolean(node.session.parentSessionId);
+  if (unreadSessionIds.has(node.session.sessionId) && (includeUnreadSubtasks || !isSubtask)) state = 'unread';
 
   for (const child of node.children) {
     state = mergeCollapsedActivityStates(
       state,
-      getSessionNodeActivityState(child, activeSessionIds, unreadSessionIds),
+      getSessionNodeActivityState(child, activeSessionIds, unreadSessionIds, includeUnreadSubtasks),
     );
     if (state === 'active') return state;
   }
@@ -47,12 +48,13 @@ export const getSessionNodesActivityState = (
   nodes: SessionNode[],
   activeSessionIds: Set<string>,
   unreadSessionIds: Set<string>,
+  includeUnreadSubtasks: boolean,
 ): CollapsedActivityState => {
   let state: CollapsedActivityState = null;
   for (const node of nodes) {
     state = mergeCollapsedActivityStates(
       state,
-      getSessionNodeActivityState(node, activeSessionIds, unreadSessionIds),
+      getSessionNodeActivityState(node, activeSessionIds, unreadSessionIds, includeUnreadSubtasks),
     );
     if (state === 'active') return state;
   }
@@ -64,15 +66,15 @@ type SessionActivityProps = {
   // Sessions not present as nodes whose pending requests still count, such as
   // the hidden subagents of timeline rows.
   blockingSessionIds?: readonly string[];
+  includeUnreadSubtasks?: boolean;
 };
 
-/** Every session in the hidden subtrees, and the top-level ones among them: only those can be unread. */
-const collectActivityIds = (nodes: readonly SessionNode[]) => {
+const collectActivityIds = (nodes: readonly SessionNode[], includeUnreadSubtasks: boolean) => {
   const active = new Set<string>();
   const unread = new Set<string>();
   const visit = (node: SessionNode, isSubtask: boolean): void => {
-    active.add(node.session.id);
-    if (!isSubtask) unread.add(node.session.id);
+    active.add(node.session.sessionId);
+    if (!isSubtask || includeUnreadSubtasks) unread.add(node.session.sessionId);
     node.children.forEach((child) => visit(child, true));
   };
   nodes.forEach((node) => visit(node, false));
@@ -82,9 +84,10 @@ const collectActivityIds = (nodes: readonly SessionNode[]) => {
 export const useCollapsedSessionActivityState = ({
   nodes,
   blockingSessionIds,
+  includeUnreadSubtasks = false,
   enabled = true,
 }: SessionActivityProps & { enabled?: boolean }): CollapsedActivityState => {
-  const ids = React.useMemo(() => collectActivityIds(enabled ? nodes : []), [enabled, nodes]);
+  const ids = React.useMemo(() => collectActivityIds(enabled ? nodes : [], includeUnreadSubtasks), [enabled, includeUnreadSubtasks, nodes]);
   const blockingIds = React.useMemo(
     () => (blockingSessionIds && blockingSessionIds.length > 0 ? new Set([...ids.active, ...blockingSessionIds]) : ids.active),
     [blockingSessionIds, ids.active],
@@ -92,21 +95,13 @@ export const useCollapsedSessionActivityState = ({
   const active = useGlobalSessionStatusStore(React.useCallback((state): CollapsedActivityState => {
     if (!enabled) return null;
     for (const sessionId of ids.active) {
-      const status = state.statusById.get(sessionId)?.status.type;
-      if (status === 'busy' || status === 'retry') return 'active';
+      const status = state.statusById.get(sessionId)?.status;
+      if (status === 'running') return 'active';
     }
     return null;
   }, [enabled, ids.active]));
   // A session idling while its background command runs is still at work.
   const waitingOnShell = useBackgroundShellsStore(React.useCallback((state): CollapsedActivityState => {
-    if (!enabled) return null;
-    for (const sessionId of ids.active) {
-      if (state.sessionIds.has(sessionId)) return 'active';
-    }
-    return null;
-  }, [enabled, ids.active]));
-  // And one waiting on an image it started.
-  const waitingOnImage = useBackgroundImagesStore(React.useCallback((state): CollapsedActivityState => {
     if (!enabled) return null;
     for (const sessionId of ids.active) {
       if (state.sessionIds.has(sessionId)) return 'active';
@@ -121,13 +116,25 @@ export const useCollapsedSessionActivityState = ({
     }
     return null;
   }, [enabled, ids.active]));
-  const unread = useGlobalSessionsStore(React.useCallback((state): CollapsedActivityState => {
+  // The Host ends turns on the root session, so a subtask's record never
+  // carries its own idle mark. A subtask turn is known from the client's
+  // notification index, which is why `notifyOnSubtasks` reads both sources —
+  // the same union the tray counts with.
+  const unreadFromMetadata = useGlobalSessionsStore(React.useCallback((state): CollapsedActivityState => {
     if (!enabled) return null;
     for (const sessionId of ids.unread) {
       if (isSessionUnread(state.entityById.get(sessionId))) return 'unread';
     }
     return null;
   }, [enabled, ids.unread]));
+  const unreadFromNotifications = useNotificationStore(React.useCallback((state): CollapsedActivityState => {
+    if (!enabled) return null;
+    for (const sessionId of ids.unread) {
+      if ((state.index.session.unseenCount[sessionId] ?? 0) > 0) return 'unread';
+    }
+    return null;
+  }, [enabled, ids.unread]));
+  const unread = unreadFromMetadata ?? unreadFromNotifications;
   // Pending requests come from the cross-directory index, which every
   // directory feeds live and the host seeds, so a collapsed group in a project
   // that was never opened still shows the request. Subtasks count too: a
@@ -139,10 +146,9 @@ export const useCollapsedSessionActivityState = ({
       const pending = state.bySession.get(sessionId);
       if (!pending) continue;
       if (pending.permissions.length > 0) return 'permission';
-      // A page that waits for the user's answer blocks the agent like a form.
-      if (pending.forms.length > 0 || pending.pages.length > 0) result = 'form';
+      if (pending.forms.length > 0) result = 'form';
     }
     return result;
   }, [enabled, blockingIds]));
-  return blocked ?? active ?? waitingOnShell ?? waitingOnImage ?? waitingOnPullRequest ?? unread;
+  return blocked ?? active ?? waitingOnShell ?? waitingOnPullRequest ?? unread;
 };
