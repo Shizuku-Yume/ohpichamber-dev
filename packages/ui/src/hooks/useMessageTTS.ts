@@ -11,24 +11,16 @@ import { useServerTTS } from './useServerTTS';
 import { useSayTTS } from './useSayTTS';
 import { useLocalTTS } from './useLocalTTS';
 import { browserVoiceService } from '@/lib/voice/browserVoiceService';
-import { startFocusedReading } from '@/lib/voice/readingAudioFocus';
 import { ensureLineTerminalPunctuation, sanitizeForTTS } from '@/lib/voice/summarize';
 import { completionText, requestSmallModel, type SmallModelRequest } from '@/lib/smallModelRequest';
 import type { ModelSelection } from '@openchamber/agent-contract';
 import {
-<<<<<<< HEAD
  finishReading,
  isCurrentReading,
  startReading,
  stopActiveReading,
  stopReadingUnderKey,
  useIsReading,
-=======
-    isCurrentReading,
-    stopActiveReading,
-    stopReadingUnderKey,
-    useIsReading,
->>>>>>> bc50ba56a
 } from '@/lib/voice/activeReading';
 
 // Below this length the reply is comfortable to listen to as-is; summarizing
@@ -57,17 +49,10 @@ async function summarizeForSpeech(
 }
 
 export interface PlayMessageTTSOptions {
-<<<<<<< HEAD
  /** Rechecked immediately before the first audio starts, after preparation. */
  canStart?: () => boolean;
  /** False reads the text as-is even when the voice settings ask for a summary. */
  summarize?: boolean;
-=======
-    /** Rechecked immediately before the first audio starts, after preparation. */
-    canStart?: () => boolean;
-    /** False reads the text as-is even when the voice settings ask for a summary. */
-    summarize?: boolean;
->>>>>>> bc50ba56a
 }
 
 export interface UseMessageTTSReturn {
@@ -84,35 +69,10 @@ export interface UseMessageTTSReturn {
  * key the reading is private to this hook.
  */
 export function useMessageTTS(readingKey?: string): UseMessageTTSReturn {
-<<<<<<< HEAD
  const instanceKey = useId();
  const key = readingKey ?? instanceKey;
  const isPlaying = useIsReading(key);
  const ownTokenRef = useRef<symbol | null>(null);
-=======
-    const instanceKey = useId();
-    const key = readingKey ?? instanceKey;
-    const isPlaying = useIsReading(key);
-    const ownTokenRef = useRef<symbol | null>(null);
-    
-    const voiceProvider = useConfigStore((state) => state.voiceProvider);
-    const speechRate = useConfigStore((state) => state.speechRate);
-    const speechPitch = useConfigStore((state) => state.speechPitch);
-    const speechVolume = useConfigStore((state) => state.speechVolume);
-    const sayVoice = useConfigStore((state) => state.sayVoice);
-    const localTtsVoiceId = useConfigStore((state) => state.localTtsVoiceId);
-    const localTtsModelId = useConfigStore((state) => state.localTtsModelId);
-    const ttsFollowTextLanguage = useConfigStore((state) => state.ttsFollowTextLanguage);
-    const browserVoice = useConfigStore((state) => state.browserVoice);
-    const openaiVoice = useConfigStore((state) => state.openaiVoice);
-    const openaiCompatibleVoice = useConfigStore((state) => state.openaiCompatibleVoice);
-    const openaiCompatibleUrl = useConfigStore((state) => state.openaiCompatibleUrl);
-    const openaiCompatibleTtsModel = useConfigStore((state) => state.openaiCompatibleTtsModel);
-    const openaiCompatibleTtsEndpointPath = useConfigStore((state) => state.openaiCompatibleTtsEndpointPath);
-    const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
-    const autoReadAloudEnabled = useConfigStore((state) => state.autoReadAloudEnabled);
-    const ttsInputMode = useConfigStore((state) => state.ttsInputMode);
->>>>>>> bc50ba56a
 
  const voiceProvider = useConfigStore((state) => state.voiceProvider);
  const speechRate = useConfigStore((state) => state.speechRate);
@@ -276,150 +236,9 @@ export function useMessageTTS(readingKey?: string): UseMessageTTSReturn {
   stopPlayback,
  ]);
 
-<<<<<<< HEAD
  return {
   isPlaying,
   play,
   stop,
  };
-=======
-    const stop = useCallback(() => stopReadingUnderKey(key), [key]);
-
-    // The players above go silent when this hook unmounts; a reading it
-    // started must not stay marked as playing.
-    useEffect(() => () => {
-        const token = ownTokenRef.current;
-        if (token && isCurrentReading(token)) {
-            stopActiveReading();
-        }
-    }, []);
-    
-    const play = useCallback(async (text: string, options?: PlayMessageTTSOptions) => {
-        if (!text.trim()) return;
-        
-        const { token, finish, beforePlayback } = startFocusedReading(key, stopPlayback, options?.canStart);
-        ownTokenRef.current = token;
-        
-        try {
-            // Summarized mode: replace long replies with a short spoken-prose
-            // summary from the small model; fall back to the sanitized
-            // original when summarization is unavailable.
-            let sourceText = text;
-            const shouldSummarize = options?.summarize !== false
-                && ttsInputMode === 'summarized'
-                && text.length >= TTS_SUMMARIZE_MIN_CHARS;
-            if (shouldSummarize) {
-                const { currentProviderId, currentModelId } = useConfigStore.getState();
-                const summary = await summarizeForSpeech(text, {
-                    providerID: currentProviderId || undefined,
-                    modelID: currentModelId || undefined,
-                });
-                // Stopped or replaced while the summary was being written.
-                if (!isCurrentReading(token)) return;
-                if (summary) {
-                    sourceText = summary;
-                }
-            }
-
-            const shouldUseRaw = ttsInputMode === 'raw' && isServerProvider;
-            const sanitizedText = sanitizeForTTS(sourceText);
-            const textToSpeak = shouldUseRaw ? sourceText : sanitizedText;
-            
-            if (isServerProvider && isServerTTSAvailable) {
-                const voice = voiceProvider === 'openai-compatible' ? openaiCompatibleVoice : openaiVoice;
-                const baseURL = voiceProvider === 'openai-compatible' ? openaiCompatibleUrl : undefined;
-                const model = voiceProvider === 'openai-compatible' ? openaiCompatibleTtsModel : undefined;
-                const endpointPath = voiceProvider === 'openai-compatible' ? openaiCompatibleTtsEndpointPath : undefined;
-                await speakServerTTS(textToSpeak, {
-                    voice,
-                    model,
-                    speed: speechRate,
-                    pitch: speechPitch,
-                    volume: speechVolume,
-                    summarize: false,
-                    baseURL,
-                    beforePlayback,
-                    endpointPath,
-                    onEnd: finish,
-                    onError: finish,
-                });
-            } else if (voiceProvider === 'local') {
-                await speakLocalTTS(sanitizedText, {
-                    model: localTtsModelId,
-                    speakerId: localTtsVoiceId,
-                    speed: speechRate,
-                    language: ttsFollowTextLanguage ? 'auto' : undefined,
-                    beforePlayback,
-                    onEnd: finish,
-                    onError: finish,
-                });
-            } else if (voiceProvider === 'say' && isSayTTSAvailable) {
-                const wordsPerMinute = Math.round(100 + (speechRate - 0.5) * 200);
-                await speakSayTTS(ensureLineTerminalPunctuation(sanitizedText), {
-                    voice: sayVoice,
-                    rate: wordsPerMinute,
-                    language: ttsFollowTextLanguage ? 'auto' : undefined,
-                    beforePlayback,
-                    onEnd: finish,
-                    onError: finish,
-                });
-            } else {
-                // Browser TTS
-                await browserVoiceService.waitForVoices();
-                await browserVoiceService.resumeAudioContext();
-                if (!isCurrentReading(token)) return;
-                await browserVoiceService.speakText(
-                    ensureLineTerminalPunctuation(sanitizedText),
-                    navigator.language || 'en-US',
-                    finish,
-                    {
-                        rate: speechRate,
-                        pitch: speechPitch,
-                        volume: speechVolume,
-                        voiceName: browserVoice || undefined,
-                        beforePlayback,
-                        onError: finish,
-                    }
-                );
-            }
-        } catch (err) {
-            if (err instanceof Error && err.name === 'AbortError') {
-                finish();
-                return;
-            }
-            console.error('[useMessageTTS] Playback error:', err);
-            finish();
-        }
-    }, [
-        voiceProvider,
-        isServerProvider,
-        speechRate,
-        speechPitch,
-        speechVolume,
-        sayVoice,
-        browserVoice,
-        openaiVoice,
-        openaiCompatibleVoice,
-        openaiCompatibleUrl,
-        openaiCompatibleTtsModel,
-        openaiCompatibleTtsEndpointPath,
-        isServerTTSAvailable,
-        isSayTTSAvailable,
-        ttsInputMode,
-        speakServerTTS,
-        speakSayTTS,
-        speakLocalTTS,
-        localTtsVoiceId,
-        localTtsModelId,
-        ttsFollowTextLanguage,
-        key,
-        stopPlayback,
-    ]);
-    
-    return {
-        isPlaying,
-        play,
-        stop,
-    };
->>>>>>> bc50ba56a
 }

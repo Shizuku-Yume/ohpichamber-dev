@@ -8,11 +8,6 @@ import { toast } from '@/components/ui';
 import { useSessionUIStore, type NewSessionDraftState } from '@/sync/session-ui-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-<<<<<<< HEAD
-import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
-import { useContextStore } from '@/stores/contextStore';
-=======
->>>>>>> bc50ba56a
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { checkIsGitRepository, resolveGitPrimaryRoot, resolveGitRepositoryPrefix } from '@/lib/gitApi';
 import { generateBranchName } from '@/lib/git/branchNameGenerator';
@@ -93,6 +88,7 @@ export const resolveFolderProjectRef = async (directory: string): Promise<Projec
   const project = projectPath ? projects.find((entry) => normalizePath(entry.path) === projectPath) : undefined;
   return project ? { id: project.id, path: project.path } : owner;
 };
+
 export const createQuickWorktree = async (
   project: ProjectRef,
   options: { preferredName?: string; startRef?: string; cancelOnTrustDismiss?: boolean } = {},
@@ -120,61 +116,11 @@ let isCreatingWorktreeSession = false;
 
 
 
-<<<<<<< HEAD
-const applyDefaultAgentAndModelSelection = (sessionId: string, configState = useConfigStore.getState()) => {
-  try {
-    const visibleAgents = selectAgentsForDirectory(useAgentsStore.getState(), configState.activeDirectoryKey);
-    let agentName: string | undefined;
-
-    if (configState.settingsDefaultAgent) {
-      const settingsAgent = visibleAgents.find((a) => a.agentId === configState.settingsDefaultAgent);
-      if (settingsAgent) {
-        agentName = settingsAgent.agentId;
-      }
-    }
-
-    if (!agentName) {
-      agentName = visibleAgents[0]?.agentId;
-    }
-
-    if (!agentName) {
-      return;
-    }
-
-    configState.setAgent(agentName);
-    useContextStore.getState().saveSessionAgentSelection(sessionId, agentName);
-
-    const settingsDefaultModel = configState.settingsDefaultModel;
-    if (!settingsDefaultModel) {
-      return;
-    }
-
-    const parsed = parseModelIdentifier(settingsDefaultModel);
-    if (!parsed) {
-      return;
-    }
-
-    const { providerId, modelId } = parsed;
-    const modelMetadata = configState.getModelMetadata(providerId, modelId);
-    if (!modelMetadata) {
-      return;
-    }
-
-    useContextStore.getState().saveSessionModelSelection(sessionId, providerId, modelId);
-    useContextStore.getState().saveAgentModelForSession(sessionId, agentName, providerId, modelId);
-  } catch {
-    // Ignore errors setting default agent
-  }
-};
-
-/** `startDirectory` is where the session runs inside `metadata.path`; the worktree root stays the checkout. */
-=======
 /**
  * `startDirectory` is where the session runs inside `metadata.path`; the worktree root stays the checkout.
  * The session's agent and model are the caller's: it resolves them for `startDirectory`
  * (`resolveExecutionForDirectory`) and sends the first message with them.
  */
->>>>>>> bc50ba56a
 const initializeSessionForWorktree = (sessionId: string, startDirectory: string, metadata: {
   path: string;
   projectDirectory: string;
@@ -185,11 +131,7 @@ const initializeSessionForWorktree = (sessionId: string, startDirectory: string,
   kind?: 'pr' | 'standard';
 }) => {
   const sessionStore = useSessionUIStore.getState();
-<<<<<<< HEAD
-  const configState = useConfigStore.getState();
-=======
   sessionStore.initializeNewOpenChamberSession(sessionId, useConfigStore.getState().agents);
->>>>>>> bc50ba56a
   sessionStore.setSessionDirectory(sessionId, startDirectory);
   sessionStore.setWorktreeMetadata(sessionId, metadata, startDirectory);
   useDirectoryStore.getState().setDirectory(startDirectory, { showOverlay: false });
@@ -348,14 +290,11 @@ export async function createWorktreeDraft(options?: { initialPrompt?: string; ti
 /**
  * Create a worktree session for a new branch name.
  * Callers can still use startPoint for metadata or follow-up git operations.
- * @param selection Optional model/variant selection to apply at creation time.
- * @returns Created session descriptor or null.
  */
 export async function createWorktreeSessionForNewBranch(
   projectDirectory: string,
   preferredBranchName: string,
   startPoint?: string,
-  selection?: { providerId: string; modelId: string; variant?: string },
   options?: {
     kind?: 'pr' | 'standard';
     worktreeName?: string;
@@ -429,17 +368,15 @@ export async function createWorktreeSessionForNewBranch(
 
       const sessionStore = useSessionUIStore.getState();
       const startDirectory = await resolveCreatedWorktreeStartDirectory(projectRef, metadata);
-      const session = await sessionStore.createSession(undefined, startDirectory, undefined, selection
-        ? { model: { providerId: selection.providerId, modelId: selection.modelId }, variant: selection.variant || undefined }
-        : undefined);
+      const session = await sessionStore.createSession(undefined, startDirectory);
       if (!session) {
         await removeProjectWorktree(projectRef, metadata, { deleteLocalBranch: true }).catch(() => undefined);
         throw new Error('Could not create a session for the worktree.');
       }
 
-      initializeSessionForWorktree(session.sessionId, startDirectory, createdMetadata);
+      initializeSessionForWorktree(session.id, startDirectory, createdMetadata);
 
-      return { id: session.sessionId, branch: metadata.branch || base, path: metadata.path, directory: startDirectory };
+      return { id: session.id, branch: metadata.branch || base, path: metadata.path, directory: startDirectory };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to create worktree session';
       toast.error('Failed to create worktree', { description: message });

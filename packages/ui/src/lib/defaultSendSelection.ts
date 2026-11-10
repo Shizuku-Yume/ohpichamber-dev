@@ -1,9 +1,6 @@
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
-<<<<<<< HEAD
-=======
 import { resolveEffortChoice, resolveEffortForModelSelection } from '@/lib/modelEfforts';
 import { modelVariantNames } from '@/lib/modelVariants';
->>>>>>> bc50ba56a
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSelectionStore } from '@/sync/selection-store';
 
@@ -18,7 +15,12 @@ const resolveDefaultAgentName = (): string | undefined => {
   if (configState.settingsDefaultAgent) {
     return configState.settingsDefaultAgent;
   }
-  return configState.currentAgentName ?? undefined;
+  const visibleAgents = configState.agents.filter((agent) => !agent.hidden);
+  return (
+    configState.currentAgentName
+    || visibleAgents.find((agent) => agent.mode === 'primary' || !agent.mode)?.name
+    || visibleAgents[0]?.name
+  );
 };
 
 const resolveDefaultModelSelection = (): { providerID: string; modelID: string } | null => {
@@ -43,9 +45,9 @@ const resolveDefaultVariant = (
   const currentVariant = configState.currentProviderId === providerID && configState.currentModelId === modelID
     ? configState.currentVariant
     : undefined;
-  const provider = configState.providers.find((entry) => entry.providerId === providerID);
-  const model = provider?.models.find((entry) => entry.modelId === modelID);
-  const variantNames = model?.variants ? model.variants.map((v) => v.variant) : [];
+  const provider = configState.providers.find((entry) => entry.id === providerID);
+  const model = provider?.models.find((entry) => entry.id === modelID);
+  const variantNames = modelVariantNames(model);
   if (variantNames.length === 0) {
     return configuredVariant || currentVariant || undefined;
   }

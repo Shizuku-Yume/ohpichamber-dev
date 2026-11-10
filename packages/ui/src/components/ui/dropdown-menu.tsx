@@ -9,11 +9,7 @@ import { handleDropdownNavigationKey } from "./dropdown-navigation";
 import { useMenuWindowDismiss } from "./menu-window-dismiss";
 import { dropdownMenuItemClass, dropdownMenuPopupClass, dropdownMenuSeparatorClass, dropdownMenuSubTriggerClass } from "./dropdown-menu.styles";
 import { GlassRedrawGuard } from "./glass-redraw-guard"
-<<<<<<< HEAD
-import { PopupOverlayScrollbar } from "./AttachedOverlayScrollbar";
-=======
 import { PopupOverlayScrollbar } from "./AttachedOverlayScrollbar"
->>>>>>> bc50ba56a
 
 type AsChildProps = { asChild?: boolean };
 type AsChildRenderProps = {
@@ -34,13 +30,11 @@ const resolveDialogContainer = (element: HTMLElement | null): HTMLElement | null
   if (!element) {
     return null;
   }
-  // SAFETY: closest query matches dialog HTMLElement
   return element.closest('[data-slot="dialog-content"], [role="dialog"]') as HTMLElement | null;
 };
 
 function renderFromAsChild(asChild: boolean | undefined, children: React.ReactNode) {
   if (asChild && React.isValidElement(children)) {
-    // SAFETY: React.isValidElement verifies children is a ReactElement
     return { render: children as React.ReactElement } satisfies AsChildRenderProps;
   }
   return { children };
@@ -175,9 +169,6 @@ function DropdownMenuContent({
 }: ContentProps) {
   const portalContext = React.useContext(DropdownPortalContext);
   void onCloseAutoFocus
-<<<<<<< HEAD
-  const [popup, setPopup] = React.useState<HTMLDivElement | null>(null);
-=======
   // Content that changes while the menu is open (a filtered picker list,
   // items that arrive late) eases the popup into its new height.
   const morphHeight = useHeightMorphRef();
@@ -197,7 +188,6 @@ function DropdownMenuContent({
       else if (ref) ref.current = null;
     };
   }, [morphHeight, ref]);
->>>>>>> bc50ba56a
 
   const handleKeyDown: NonNullable<React.ComponentProps<typeof BaseMenu.Popup>['onKeyDown']> = (event) => {
     onKeyDown?.(event);
@@ -222,11 +212,7 @@ function DropdownMenuContent({
         className={cn("app-region-no-drag z-50", positionerClassName)}
       >
         <BaseMenu.Popup
-<<<<<<< HEAD
-          ref={setPopup}
-=======
           ref={setPopupRef}
->>>>>>> bc50ba56a
           data-slot="dropdown-menu-content"
           style={{
             color: 'var(--surface-elevated-foreground)',
@@ -243,11 +229,8 @@ function DropdownMenuContent({
           {children}
           <GlassRedrawGuard />
         </BaseMenu.Popup>
-<<<<<<< HEAD
-=======
         {/* A menu scrolls only where its caller gave it overflow; the thumb
             shows only then. */}
->>>>>>> bc50ba56a
         <PopupOverlayScrollbar scroller={popup} />
       </BaseMenu.Positioner>
     </BaseMenu.Portal>

@@ -17,8 +17,6 @@ describe('parseGuestCatalogJson', () => {
     expect(readGuests(JSON.stringify({ guests: [guest] }))?.[0]?.blocks?.[0]?.answers).toBe(true);
   });
 
-<<<<<<< HEAD
-=======
   test('a row keeps its provider logos, and logos it cannot read cost only themselves', () => {
     const guest = { id: 'hello', name: 'Hello', icon: 'window', capabilities: { requested: [], granted: [] }, source: 'path' };
     expect(readGuests(JSON.stringify({ guests: [{ ...guest, providerLogos: { acme: 'logos/acme.svg' } }] }))?.[0]?.providerLogos)
@@ -29,7 +27,6 @@ describe('parseGuestCatalogJson', () => {
     expect(unreadable?.providerLogos).toBeUndefined();
   });
 
->>>>>>> bc50ba56a
   test('one row it cannot read keeps the others and is listed by name', () => {
     const valid = {
       id: 'hello',
@@ -430,19 +427,11 @@ describe('notification channels on a catalog row', () => {
   });
 });
 
-<<<<<<< HEAD
-test('reads a service role and its approval capability from the catalog', () => {
-  const row = {
-    id: 'api-provider', name: 'API provider', icon: 'plug',
-    service: { runtime: 'host', provides: ['quota'], granted: false },
-    capabilities: { requested: ['service', 'transcript'], granted: ['service'] },
-=======
 test('reads an OpenCode service role and its approval capability from the catalog', () => {
   const row = {
     id: 'api-provider', name: 'API provider', icon: 'plug',
     service: { runtime: 'host', provides: ['opencode'], granted: false },
     capabilities: { requested: ['service', 'opencode'], granted: ['service'] },
->>>>>>> bc50ba56a
   };
   expect(parseGuestCatalogJson(JSON.stringify({ guests: [row] }))).toEqual({
     guests: [row],
@@ -451,20 +440,6 @@ test('reads an OpenCode service role and its approval capability from the catalo
   });
 });
 
-<<<<<<< HEAD
-test('a row asking for the capability this build retired is listed, never half-read', () => {
-  // `opencode` was a capability of the OpenCode runtime; OMP has none, so the
-  // row cannot be granted what it asks for and stays out of the catalog.
-  const row = {
-    id: 'api-provider', name: 'API provider', icon: 'plug',
-    service: { runtime: 'host', provides: ['quota'], granted: false },
-    capabilities: { requested: ['service', 'opencode'], granted: ['service'] },
-  };
-  expect(parseGuestCatalogJson(JSON.stringify({ guests: [row] }))).toEqual({
-    guests: [],
-    opencodePlugins: null,
-    unreadable: [{ id: 'api-provider', name: 'API provider', builtIn: false }],
-=======
 describe('links on a catalog row', () => {
   const links = {
     action: 'open',
@@ -495,6 +470,5 @@ describe('links on a catalog row', () => {
       expect(parsed?.id).toBe('tasks');
       expect(parsed?.links).toBeUndefined();
     }
->>>>>>> bc50ba56a
   });
 });

@@ -651,16 +651,11 @@ export type GitManagedSshCandidate =
       capability: { status: 'unavailable'; reason: 'unreadable' | 'encrypted-or-unverifiable' | 'insecure-permissions' };
     };
 
-<<<<<<< HEAD
 /**
  * `passphrase` is needed only to read or import an encrypted candidate; the
  * server never stores it. Omitted for inventory, which reads nothing.
  */
 export type GitManagedSshIntent = { operation: 'inventory' | 'discover'; passphrase?: string }
-=======
-export type GitManagedSshIntent = { operation: 'inventory' }
-  | { operation: 'discover'; passphrase?: string }
->>>>>>> bc50ba56a
   | { operation: 'import'; candidateId: string; expectedFingerprint: string; confirmed: true; passphrase?: string };
 
 export type GitManagedSshResult =
@@ -1000,31 +995,9 @@ export interface GitWorktreeInfo {
   name: string;
   branch: string;
   path: string;
-<<<<<<< HEAD
   provenance?: GitContributorWorktreeProvenance;
 }
 
-=======
-  /** The task's name: the first line of the branch description, when set. */
-  title?: string;
-  /** When the user pinned the task to the top of the sidebar; absent while unpinned. */
-  pinnedAt?: number;
-  /** The user's pin list the pin is filed in; absent for Pinned. */
-  pinList?: string;
-  provenance?: GitContributorWorktreeProvenance;
-}
-
-export interface GitWorktreeTitleResult {
-  title: string;
-  branch: string;
-}
-
-export interface GitWorktreePinResult {
-  pinned: boolean;
-  branch: string;
-}
-
->>>>>>> bc50ba56a
 export interface GitContributorWorktreeProvenance {
   kind: 'contributor-fork';
   revision: number;
@@ -1136,14 +1109,8 @@ export interface RemoveGitWorktreePayload {
 
 /** Runs a worktree's teardown commands without removing it. */
 export interface TeardownGitWorktreePayload {
-<<<<<<< HEAD
   directory: string;
   teardownCommand?: string;
-=======
-  /** The worktree. */
-  directory: string;
-  teardownCommand: string;
->>>>>>> bc50ba56a
 }
 
 /** Private ref (`refs/openchamber/runs/<group>/<session>`) holding a worktree snapshot. */
@@ -1245,13 +1212,6 @@ interface GitWorktreeAPI {
   remove?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
   /** `directory` is the project; runs the worktree's teardown and keeps it. */
   teardown?(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }>;
-<<<<<<< HEAD
-=======
-  /** Sets the task title of the worktree at `directory` as the user's; an empty title clears it. */
-  setTitle?(directory: string, title: string, by?: 'user' | 'agent'): Promise<GitWorktreeTitleResult>;
-  /** Pins or unpins the task of the worktree at `directory`. */
-  setPinned?(directory: string, pinned: boolean, list?: string | null): Promise<GitWorktreePinResult>;
->>>>>>> bc50ba56a
   /** `directory` is the worktree to snapshot. */
   snapshot?(directory: string, payload: GitWorktreeSnapshotPayload): Promise<GitWorktreeSnapshotResult>;
   setTitle?(directory: string, title: string): Promise<GitWorktreeTitleResult>;
@@ -1267,25 +1227,8 @@ export interface GitAPI {
   initializeGit(directory: string): Promise<void>;
   checkIsGitRepository(directory: string): Promise<boolean>;
   getGitStatus(directory: string, options?: { mode?: 'light'; fresh?: boolean }): Promise<GitStatus>;
-<<<<<<< HEAD
   getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse>;
   getGitFileDiff(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>;
-=======
-  /**
-   * Warm the status cache for many directories with one request, so the
-   * per-directory `getGitStatus` reads that follow are cache hits. Runtimes
-   * without a batched status read (VS Code) omit it and read one by one.
-   */
-  prefetchProjectStatuses?(directories: string[]): Promise<void>;
-  getGitDiff?(directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse>;
-  /**
-   * `getGitDiff` for many paths of one side in one request. Rejects when the
-   * request itself fails; per-path failures are entries. Absent in runtimes
-   * that read per path (VS Code).
-   */
-  getGitDiffs?(directory: string, options: GetGitDiffsOptions): Promise<GitPathDiffBatchEntry[]>;
-  getGitFileDiff?(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>;
->>>>>>> bc50ba56a
   getGitRangeDiff?(directory: string, options: GetGitRangeDiffOptions): Promise<GitDiffResponse>;
   getGitRangeFiles?(directory: string, options: GetGitRangeFilesOptions): Promise<GitRangeFileEntry[]>;
   getBranchBase?(directory: string, branch: string): Promise<GitBranchBaseResponse>;
@@ -1309,13 +1252,8 @@ export interface GitAPI {
   getGitUnpushedBranchCounts(directory: string, branches: string[]): Promise<GitUnpushedBranchCounts>;
   deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }>;
   removeRemote(directory: string, payload: GitRemoveRemotePayload): Promise<{ success: boolean }>;
-<<<<<<< HEAD
   generateCommitMessage(directory: string, files: string[], options?: { zenModel?: string; providerId?: string; modelId?: string; reasoning?: boolean }): Promise<{ message: GeneratedCommitMessage }>;
   generatePullRequestDescription(
-=======
-  generateCommitMessage?(directory: string, files: string[], options?: { zenModel?: string; providerId?: string; modelId?: string }): Promise<{ message: GeneratedCommitMessage }>;
-  generatePullRequestDescription?(
->>>>>>> bc50ba56a
     directory: string,
     payload: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string }
   ): Promise<GeneratedPullRequestDescription>;
@@ -1325,7 +1263,6 @@ export interface GitAPI {
   previewGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   createGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   deleteGitWorktree?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
-<<<<<<< HEAD
   teardownGitWorktree?(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }>;
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
   /** Amends HEAD with a host-computed Change-Id trailer; refuses unless HEAD is still `expectedHead`. */
@@ -1333,12 +1270,6 @@ export interface GitAPI {
   gitPush(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
   gitPull(directory: string, options?: GitPullOptions): Promise<GitPullResult>;
   gitFetch(directory: string, options?: { remote?: string; branch?: string }): Promise<{ success: boolean }>;
-=======
-  createGitCommit?(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
-  gitPush?(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
-  gitPull?(directory: string, options?: GitPullOptions): Promise<GitPullResult>;
-  gitFetch?(directory: string, options?: { remote?: string; branch?: string }): Promise<{ success: boolean }>;
->>>>>>> bc50ba56a
   planNetworkOperation(request: GitNetworkOperationRequest): Promise<GitNetworkOperationPlan>;
   issueContributorDestination(request: GitContributorDestinationRequest): Promise<GitContributorDestinationSelection>;
   listContributorDestinations(directory: string): Promise<GitContributorDestinationCandidates>;
@@ -1364,19 +1295,8 @@ export interface GitAPI {
   checkoutBranch?(directory: string, branch: string): Promise<{ success: boolean; branch: string }>;
   createBranch(directory: string, name: string, startPoint?: string): Promise<{ success: boolean; branch: string }>;
   renameBranch(directory: string, oldName: string, newName: string): Promise<{ success: boolean; branch: string }>;
-<<<<<<< HEAD
   getGitLog(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
   getCommitFiles(directory: string, hash: string): Promise<GitCommitFilesResponse>;
-=======
-  getGitLog?(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
-  /**
-   * Amends the checked-out commit to carry a Change-Id trailer, computed the
-   * way a review host's commit-msg hook computes it. Refuses when HEAD is no
-   * longer `expectedHead` or already has one. Absent where the runtime cannot.
-   */
-  addChangeIdToHead?(directory: string, expectedHead: string): Promise<{ sha: string; changeId: string }>;
-  getCommitFiles?(directory: string, hash: string): Promise<GitCommitFilesResponse>;
->>>>>>> bc50ba56a
   getGitCommitDiff?(directory: string, options: GetGitCommitDiffOptions): Promise<GitDiffResponse>;
   getCommitFileDiff?(directory: string, hash: string, filePath: string, isBinary: boolean): Promise<CommitFileDiffResponse>;
   getCurrentGitIdentity?(directory: string): Promise<GitIdentitySummary | null>;
@@ -1485,7 +1405,6 @@ export interface FileSearchResult {
   preview?: string[];
 }
 
-<<<<<<< HEAD
 export interface CommandExecResult {
   command: string;
   success: boolean;
@@ -1495,42 +1414,6 @@ export interface CommandExecResult {
   error?: string;
 }
 
-=======
-/** Find in files: lines of workspace files containing a text or a regular expression. */
-export interface FileContentSearchQuery {
-  directory: string;
-  query: string;
-  regex: boolean;
-  limit?: number;
-  includeHidden?: boolean;
-  respectGitignore?: boolean;
-  signal?: AbortSignal;
-}
-
-export interface FileContentSearchMatch {
-  path: string;
-  relativePath: string;
-  line: number;
-  /** 1-based column of the first match on the line, in UTF-16 code units. */
-  column: number;
-  /** The line, without indentation and cut to what a result row can show. */
-  text: string;
-  /** `[start, end)` offsets of the matches inside `text`. */
-  ranges: Array<[number, number]>;
-  /** `text` begins after the line's start, so the row shows an ellipsis first. */
-  cutStart: boolean;
-}
-
-/** Why a search returned fewer matches than exist: the limit or the server's deadline. */
-export type FileContentSearchStop = 'limit' | 'deadline';
-
-export type FileContentSearchOutcome =
-  | { status: 'ok'; matches: FileContentSearchMatch[]; stopped: FileContentSearchStop | null }
-  | { status: 'invalid-pattern'; message: string }
-  /** The server has no ripgrep to search with. */
-  | { status: 'unavailable' };
-
->>>>>>> bc50ba56a
 interface ListDirectoryOptions {
   respectGitignore?: boolean;
 }
@@ -2155,10 +2038,7 @@ export type ProviderReadsRefreshScope = { item: RepositoryItemRef } | { lists: t
 
 /** Live fields of a known PR, refreshed in batches for list surfaces. */
 export type ChangeRequestLiveSummary = RepositoryItemRef & {
-<<<<<<< HEAD
   /** Queued for merge on the host, or waiting on a merge method's conditions. */
-=======
->>>>>>> bc50ba56a
   isInMergeQueue?: boolean;
   mergeQueueEntry?: { state: string; position: number } | null;
   autoMergeRequest?: { enabledAt: string; mergeMethod: string } | null;
@@ -2860,14 +2740,6 @@ export interface LinearAPI {
 
 /** Linux's PRIMARY buffer; only a local desktop page reaches it. */
 export interface ClipboardAPI {
-  selection: {
-    readText(): Promise<string>;
-    writeText(text: string): Promise<void>;
-  };
-}
-
-export interface ClipboardAPI {
-  /** Present on a Linux desktop, the only runtime that can reach PRIMARY. */
   selection: {
     readText(): Promise<string>;
     writeText(text: string): Promise<void>;

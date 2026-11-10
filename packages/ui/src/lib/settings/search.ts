@@ -1,40 +1,41 @@
-import type { I18nKey } from '@/lib/i18n/store';
+import type { I18nKey, I18nParams } from '@/lib/i18n/store';
+import { getCustomizableShortcutActions } from '@/lib/shortcuts';
+import { isIsolatedSpacesPageVisible } from '@/lib/spaces/release';
 import { useUIStore } from '@/stores/useUIStore';
-<<<<<<< HEAD
-=======
 import { useConfigStore } from '@/stores/useConfigStore';
 import { trackerPresentation } from '@/lib/trackers/presentation';
 import type { TrackerDescriptor } from '@/lib/trackers/types';
 import type { ChangeRequestTerm, SourceControlProviderDescriptor } from '@/lib/source-control/providers/descriptor';
->>>>>>> bc50ba56a
 import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
-import { getCustomizableShortcutActions } from '@/lib/shortcuts';
 
-/** The search anchor of one shortcut's row: the id the Shortcuts page names it by. */
-export const shortcutSearchItemId = (actionId: string): string => `shortcuts.action.${actionId}`;
+/**
+ * A title is a translated key, or a literal for an entry named after a
+ * product the server describes (a source-control provider's label), since
+ * product names stay untranslated in every locale.
+ */
+type SettingsSearchTitle =
+  | { titleKey: I18nKey; titleParams?: I18nParams; literalTitle?: never }
+  | { literalTitle: string; titleKey?: never; titleParams?: never };
 
-interface SettingsSearchItem {
+type SettingsSearchItem = SettingsSearchTitle & {
   id: string;
   page: SettingsPageSlug;
-  titleKey: I18nKey;
   descriptionKey?: I18nKey;
+  descriptionParams?: I18nParams;
   keywords?: string[];
   isAvailable?: (ctx: SettingsSearchAvailabilityContext) => boolean;
-}
+};
 
-export interface SettingsSearchResult extends SettingsSearchItem {
+export type SettingsSearchResult = SettingsSearchItem & {
   title: string;
   description: string | null;
   pageTitle: string;
-}
+};
 
 export interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
-<<<<<<< HEAD
-=======
   voiceSettings?: Pick<ReturnType<typeof useConfigStore.getState>,
     'showMessageTTSButtons' | 'autoReadAloudEnabled' | 'voiceProvider' | 'dictationEnabled' | 'sttProvider'>;
->>>>>>> bc50ba56a
   isMobile: boolean;
   isDesktopLocalOrigin: boolean;
   // macOS desktop shell — for controls that only render on darwin (e.g. dock badge).
@@ -45,139 +46,10 @@ export interface SettingsSearchAvailabilityContext extends SettingsRuntimeContex
   isLinux: boolean;
 }
 
+/** The search target (and highlight anchor) of one shortcut row on the Shortcuts page. */
+export const shortcutSearchItemId = (actionId: string): string => `shortcuts.action.${actionId}`;
+
 const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
-  {
-    id: 'omp.behaviour',
-    page: 'omp',
-    titleKey: 'settings.page.omp.title',
-    descriptionKey: 'settings.page.omp.description',
-    keywords: ['omp', 'compaction', 'retry', 'approval', 'thinking', 'budget', 'skills', 'mcp', 'lsp', 'model roles', 'enabled models', 'plan', 'goal', 'config.yml'],
-  },
-  {
-    id: 'omp.advanced',
-    page: 'omp',
-    titleKey: 'settings.omp.advanced',
-    keywords: ['advanced', 'config.yml', 'settings', 'dynamic', 'omp configuration'],
-  },
-  {
-    id: 'omp.modelRoles',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.title',
-    descriptionKey: 'settings.omp.modelRoles.description',
-    keywords: ['model roles', 'roles', 'models', 'thinking effort', 'assignments'],
-  },
-  {
-    id: 'omp.modelRoles.default',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.default.label',
-    descriptionKey: 'settings.omp.modelRoles.role.default.desc',
-    keywords: ['model role', 'default', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.smol',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.smol.label',
-    descriptionKey: 'settings.omp.modelRoles.role.smol.desc',
-    keywords: ['model role', 'smol', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.slow',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.slow.label',
-    descriptionKey: 'settings.omp.modelRoles.role.slow.desc',
-    keywords: ['model role', 'slow', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.vision',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.vision.label',
-    descriptionKey: 'settings.omp.modelRoles.role.vision.desc',
-    keywords: ['model role', 'vision', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.plan',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.plan.label',
-    descriptionKey: 'settings.omp.modelRoles.role.plan.desc',
-    keywords: ['model role', 'plan', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.commit',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.commit.label',
-    descriptionKey: 'settings.omp.modelRoles.role.commit.desc',
-    keywords: ['model role', 'commit', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.tiny',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.tiny.label',
-    descriptionKey: 'settings.omp.modelRoles.role.tiny.desc',
-    keywords: ['model role', 'tiny', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.memory',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.memory.label',
-    descriptionKey: 'settings.omp.modelRoles.role.memory.desc',
-    keywords: ['model role', 'memory', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.task',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.task.label',
-    descriptionKey: 'settings.omp.modelRoles.role.task.desc',
-    keywords: ['model role', 'task', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.advisor',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.advisor.label',
-    descriptionKey: 'settings.omp.modelRoles.role.advisor.desc',
-    keywords: ['model role', 'advisor', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.widget',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.widget.label',
-    descriptionKey: 'settings.omp.modelRoles.role.widget.desc',
-    keywords: ['model role', 'widget', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.image',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.image.label',
-    descriptionKey: 'settings.omp.modelRoles.role.image.desc',
-    keywords: ['model role', 'image', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.web',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.web.label',
-    descriptionKey: 'settings.omp.modelRoles.role.web.desc',
-    keywords: ['model role', 'web', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.speech',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.speech.label',
-    descriptionKey: 'settings.omp.modelRoles.role.speech.desc',
-    keywords: ['model role', 'speech', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.dictation',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.dictation.label',
-    descriptionKey: 'settings.omp.modelRoles.role.dictation.desc',
-    keywords: ['model role', 'dictation', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.judge',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.judge.label',
-    descriptionKey: 'settings.omp.modelRoles.role.judge.desc',
-    keywords: ['model role', 'judge', 'role'],
-  },
   {
     id: 'chat.activity-default',
     page: 'chat',
@@ -215,24 +87,22 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'appearance',
     titleKey: 'settings.openchamber.visual.field.lightTheme',
     keywords: ['theme', 'color', 'light mode'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'appearance.dark-theme',
     page: 'appearance',
     titleKey: 'settings.openchamber.visual.field.darkTheme',
     keywords: ['theme', 'color', 'dark mode'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'appearance.import-theme',
     page: 'appearance',
     titleKey: 'settings.themeImport.action',
     descriptionKey: 'settings.themeImport.catalogHint',
-<<<<<<< HEAD
-    keywords: ['theme', 'import', 'vscode', 'open vsx', 'openvsx', 'json', 'jsonc', 'syntax', 'palette'],
-=======
     keywords: ['theme', 'import', 'browse', 'catalog', 'vs code', 'vscode', 'open vsx', 'openvsx', 'json', 'jsonc', 'syntax', 'palette'],
     isAvailable: (ctx) => !ctx.isVSCode,
->>>>>>> bc50ba56a
   },
   {
     id: 'appearance.dock-badge',
@@ -267,7 +137,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.installAppName',
     descriptionKey: 'settings.openchamber.visual.field.installAppNameHint',
     keywords: ['pwa', 'installed app'],
-    isAvailable: (ctx) => ctx.isWeb && !ctx.isDesktop,
+    isAvailable: (ctx) => ctx.isWeb && !ctx.isDesktop && !ctx.isVSCode,
   },
   {
     id: 'appearance.pwa-orientation',
@@ -275,7 +145,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.installOrientation',
     descriptionKey: 'settings.openchamber.visual.field.installOrientationHint',
     keywords: ['pwa', 'portrait', 'landscape'],
-    isAvailable: (ctx) => ctx.isWeb && !ctx.isDesktop,
+    isAvailable: (ctx) => ctx.isWeb && !ctx.isDesktop && !ctx.isVSCode,
   },
   {
     id: 'appearance.mobile-keyboard-mode',
@@ -283,7 +153,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.mobileKeyboardMode',
     descriptionKey: 'settings.openchamber.visual.field.mobileKeyboardModeHint',
     keywords: ['mobile', 'keyboard', 'resize'],
-    isAvailable: (ctx) => ctx.isMobile && ctx.isWeb && !ctx.isDesktop,
+    isAvailable: (ctx) => ctx.isMobile && ctx.isWeb && !ctx.isDesktop && !ctx.isVSCode,
   },
   {
     id: 'appearance.animated-activity-indicators',
@@ -311,11 +181,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'appearance',
     titleKey: 'settings.openchamber.visual.field.interfaceFontWeight',
     descriptionKey: 'settings.openchamber.visual.field.interfaceFontWeightInfo',
-<<<<<<< HEAD
-    keywords: ['font weight', 'bold', 'regular', 'balanced', 'strong', 'typography'],
-=======
     keywords: ['font', 'weight', 'bold', 'medium', 'thickness', 'text'],
->>>>>>> bc50ba56a
     isAvailable: (ctx) => !ctx.isMobile,
   },
   {
@@ -330,6 +196,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.terminalShell',
     descriptionKey: 'settings.openchamber.visual.field.terminalShellHint',
     keywords: ['terminal', 'shell', 'bash', 'zsh', 'fish', 'pwsh', 'powershell'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'appearance.terminal-close-on-exit',
@@ -372,7 +239,54 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'general',
     titleKey: 'settings.openchamber.visual.field.confirmFileTreeMove',
     keywords: ['files', 'tree', 'move', 'drag', 'drop', 'confirm'],
-    isAvailable: (ctx) => !ctx.isMobile,
+    isAvailable: (ctx) => !ctx.isMobile && !ctx.isVSCode,
+  },
+  {
+    id: 'appearance.file-tree-side',
+    page: 'general',
+    titleKey: 'settings.openchamber.visual.field.fileTreeSide',
+    keywords: ['files', 'tree', 'explorer', 'left', 'right', 'side', 'editor'],
+    isAvailable: (ctx) => !ctx.isMobile && !ctx.isVSCode,
+  },
+  {
+    id: 'appearance.layout-animations',
+    page: 'general',
+    titleKey: 'settings.openchamber.visual.field.layoutAnimations',
+    descriptionKey: 'settings.openchamber.visual.field.layoutAnimationsInfo',
+    keywords: ['animation', 'motion', 'sidebar', 'panel', 'slide', 'instant'],
+    isAvailable: (ctx) => !ctx.isMobile && !ctx.isVSCode,
+  },
+  {
+    id: 'appearance.open-links-in-browser-panel',
+    page: 'general',
+    titleKey: 'settings.openchamber.visual.field.openLinksInBrowserPanel',
+    descriptionKey: 'settings.openchamber.visual.field.openLinksInBrowserPanelInfo',
+    keywords: ['links', 'url', 'browser', 'open', 'preview', 'external'],
+    isAvailable: (ctx) => ctx.isDesktop && !ctx.isMobile && !ctx.isVSCode,
+  },
+  {
+    id: 'appearance.live-browser-tabs',
+    page: 'general',
+    titleKey: 'settings.openchamber.visual.field.liveBrowserTabs',
+    descriptionKey: 'settings.openchamber.visual.field.liveBrowserTabsInfo',
+    keywords: ['browser', 'tabs', 'memory', 'reload', 'background', 'loaded'],
+    isAvailable: (ctx) => ctx.isDesktop && !ctx.isMobile && !ctx.isVSCode,
+  },
+  {
+    id: 'layout.mobile-workspace-tabs',
+    page: 'general',
+    titleKey: 'settings.layout.general.mobileTabs.title',
+    descriptionKey: 'settings.layout.general.mobileTabs.info',
+    keywords: ['tabs', 'workspace', 'panel', 'order', 'hide', 'status', 'git', 'files', 'terminal', 'mobile'],
+    isAvailable: (ctx) => ctx.isMobile,
+  },
+  {
+    id: 'appearance.open-tracker-links-on-board',
+    page: 'general',
+    titleKey: 'settings.openchamber.visual.field.openTrackerLinksOnBoard',
+    descriptionKey: 'settings.openchamber.visual.field.openTrackerLinksOnBoardInfo',
+    keywords: ['links', 'github', 'gitlab', 'linear', 'issue', 'pull request', 'merge request', 'board'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'appearance.file-editor-keymap',
@@ -386,23 +300,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.sessionTabsGroup',
     descriptionKey: 'settings.openchamber.visual.field.sessionTabsInfo',
     keywords: ['session', 'tabs', 'header', 'working set'],
-    isAvailable: (ctx) => !ctx.isMobile,
-  },
-  {
-    id: 'appearance.live-browser-tabs',
-    page: 'general',
-    titleKey: 'settings.openchamber.visual.field.liveBrowserTabs',
-    descriptionKey: 'settings.openchamber.visual.field.liveBrowserTabsInfo',
-    keywords: ['browser', 'tabs', 'memory', 'reload', 'background', 'loaded'],
-    isAvailable: (ctx) => ctx.isDesktop && !ctx.isMobile,
-  },
-  {
-    id: 'layout.mobile-workspace-tabs',
-    page: 'general',
-    titleKey: 'settings.layout.general.mobileTabs.title',
-    descriptionKey: 'settings.layout.general.mobileTabs.info',
-    keywords: ['tabs', 'workspace', 'panel', 'order', 'hide', 'status', 'git', 'files', 'terminal', 'mobile'],
-    isAvailable: (ctx) => ctx.isMobile,
+    isAvailable: (ctx) => !ctx.isMobile && !ctx.isVSCode,
   },
   {
     id: 'appearance.terminal-quick-keys',
@@ -410,7 +308,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.terminalQuickKeys',
     descriptionKey: 'settings.openchamber.visual.field.terminalQuickKeysTooltip',
     keywords: ['terminal', 'keyboard', 'esc', 'ctrl', 'arrows'],
-    isAvailable: (ctx) => !ctx.isMobile,
+    isAvailable: (ctx) => !ctx.isMobile && !ctx.isVSCode,
   },
   {
     id: 'appearance.usage-reports',
@@ -425,12 +323,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.appLinks.title',
     descriptionKey: 'settings.openchamber.appLinks.info',
     keywords: ['security', 'app link', 'deep link', 'scheme', 'protocol', 'obsidian', 'notion'],
-  },
-  {
-    id: 'chat.render-mode',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.section.chatRenderMode',
-    keywords: ['messages', 'conversation', 'rendering'],
   },
   {
     id: 'chat.message-transport',
@@ -462,18 +354,36 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.sessionReviewOffer',
     descriptionKey: 'settings.openchamber.visual.field.sessionReviewOfferInfo',
     keywords: ['review', 'walkthrough', 'changes', 'diff', 'jev', 'classification'],
+    // Jev runs on the OpenChamber server; VS Code has no such offer.
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'chat.session-goal',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.sessionGoal',
     keywords: ['goal', 'objective', 'auto continue'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
+    id: 'chat.session-goal-checker',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.goal.checkerLabel',
+    keywords: ['goal', 'progress', 'check', 'jev', 'classification', 'small model'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
+    id: 'chat.session-goal-max-turns',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.goal.maxTurnsLabel',
+    keywords: ['goal', 'turns', 'limit', 'continuations', 'safety'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'chat.session-goal-budget',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.goal.budgetLabel',
     keywords: ['goal', 'budget', 'tokens', 'limit'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'chat.reasoning-traces',
@@ -488,12 +398,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['thinking', 'traces', 'collapse', 'expand', 'streaming'],
   },
   {
-    id: 'chat.streaming',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.section.streaming',
-    keywords: ['stream', 'scroll'],
-  },
-  {
     id: 'chat.streaming-auto-follow',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.streamingAutoFollow',
@@ -504,7 +408,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     id: 'chat.sticky-user-header',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.stickyUserHeader',
-    keywords: ['messages', 'header'],
+    keywords: ['sticky', 'pin', 'prompt', 'header', 'user messages'],
   },
   {
     id: 'chat.prompt-navigator',
@@ -527,7 +431,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   {
     id: 'chat.message-appearance',
     page: 'chat',
-    titleKey: 'settings.openchamber.visual.section.messageAppearance',
+    titleKey: 'settings.layout.chat.section.reading',
     keywords: ['layout', 'messages', 'appearance'],
   },
   {
@@ -577,16 +481,17 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['subagent', 'read only', 'prompt', 'banner'],
   },
   {
+    id: 'chat.save-pasted-images',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.savePastedImagesAsFiles',
+    descriptionKey: 'settings.openchamber.visual.field.savePastedImagesAsFilesInfo',
+    keywords: ['image', 'screenshot', 'paste', 'vision', 'text-only', 'model', 'path', 'attachment', 'file', 'link'],
+  },
+  {
     id: 'chat.tool-file-icons',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.showToolFileIcons',
     keywords: ['tools', 'files', 'icons'],
-  },
-  {
-    id: 'chat.tools-and-files',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.section.toolsAndFiles',
-    keywords: ['tools', 'files', 'dotfiles'],
   },
   {
     id: 'chat.changed-files',
@@ -596,9 +501,35 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   },
   {
     id: 'chat.dotfiles',
-    page: 'chat',
+    page: 'general',
     titleKey: 'settings.openchamber.visual.field.showDotfiles',
-    keywords: ['hidden files'],
+    keywords: ['hidden files', 'dotfiles', 'file tree', 'files'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
+    id: 'general.file-viewer-preview',
+    page: 'general',
+    titleKey: 'settings.openchamber.defaults.field.openFilesPreview',
+    keywords: ['preview', 'markdown', 'files', 'viewer', 'rendered'],
+  },
+  {
+    id: 'chat.user-message-rendering',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.userMessageRendering',
+    keywords: ['markdown', 'plain text', 'user message', 'format'],
+  },
+  {
+    id: 'chat.mermaid-rendering',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.mermaidRendering',
+    keywords: ['mermaid', 'diagram', 'svg', 'ascii'],
+  },
+  {
+    id: 'chat.diff-layout',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.section.diffLayout',
+    keywords: ['diff', 'inline', 'side by side', 'split', 'changes'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'chat.follow-up-behavior',
@@ -626,30 +557,27 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'chat',
     titleKey: 'settings.openchamber.messageSearch.title',
     keywords: ['search', 'find', 'index', 'messages', 'history', 'full text'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'chat.message-search-enabled',
     page: 'chat',
     titleKey: 'settings.openchamber.messageSearch.field.enabled',
     keywords: ['search', 'find', 'index', 'messages'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'chat.message-search-reasoning',
     page: 'chat',
     titleKey: 'settings.openchamber.messageSearch.field.reasoning',
     keywords: ['search', 'reasoning', 'thinking', 'index'],
-  },
-  {
-    id: 'chat.persist-drafts',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.persistDraftMessages',
-    keywords: ['draft', 'message'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'chat.composer',
     page: 'chat',
-    titleKey: 'settings.openchamber.visual.section.composer',
-    keywords: ['input', 'draft', 'spellcheck', 'paste'],
+    titleKey: 'settings.layout.chat.section.sending',
+    keywords: ['composer', 'input', 'send', 'paste', 'follow-up'],
   },
   {
     id: 'chat.spellcheck',
@@ -678,33 +606,28 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.mobileReturnKeySends',
     descriptionKey: 'settings.openchamber.visual.field.mobileReturnKeySendsHint',
-    keywords: ['mobile', 'keyboard', 'return', 'send', 'composer'],
+    keywords: ['enter', 'return', 'send', 'newline', 'keyboard', 'enterkeyhint', 'voice', 'dictation', 'swipe up'],
     isAvailable: (ctx) => ctx.isMobile,
-  },
-  {
-    id: 'chat.save-pasted-images',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.savePastedImagesAsFiles',
-    descriptionKey: 'settings.openchamber.visual.field.savePastedImagesAsFilesInfo',
-    keywords: ['paste', 'image', 'file', 'asset', 'screenshot', 'composer'],
   },
   {
     id: 'sessions.default-model',
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.defaultModel',
-    keywords: ['model', 'provider', 'new sessions'],
+    keywords: ['model', 'provider', 'new sessions', 'thinking', 'reasoning', 'variant'],
   },
   {
-    id: 'sessions.default-thinking',
+    id: 'sessions.fallback-model',
     page: 'sessions',
-    titleKey: 'settings.openchamber.defaults.field.defaultThinking',
-    keywords: ['thinking', 'reasoning', 'variant'],
+    titleKey: 'settings.openchamber.defaults.field.fallbackModel',
+    descriptionKey: 'settings.openchamber.defaults.field.fallbackModelInfo',
+    keywords: ['fallback', 'backup', 'usage limit', 'quota', 'rate limit', 'model', 'thinking'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
-    id: 'sessions.default-mode',
+    id: 'sessions.default-agent',
     page: 'sessions',
-    titleKey: 'chat.chatInput.mode.label',
-    keywords: ['mode', 'session mode', 'main', 'plan', 'vibe', 'goal', 'default'],
+    titleKey: 'settings.openchamber.defaults.field.defaultAgent',
+    keywords: ['agent', 'new sessions'],
   },
   {
     id: 'sessions.deletion-dialog',
@@ -717,9 +640,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.sessionWarming',
     descriptionKey: 'settings.openchamber.defaults.field.sessionWarmingInfo',
-<<<<<<< HEAD
-    keywords: ['warming', 'warm', 'cache', 'prompt cache', 'keep-alive', 'idle'],
-=======
     keywords: ['warming', 'warm', 'cache', 'prompt cache', 'keep-alive', 'idle', 'per session', 'keep warm', 'duration', 'how long', 'hour'],
   },
   {
@@ -758,20 +678,20 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['permissions', 'auto-accept', 'accept', 'safety net', 'ask', 'shield', 'approval', 'new session'],
     // The server writes the default onto new sessions; VS Code has none.
     isAvailable: (ctx) => !ctx.isVSCode,
->>>>>>> bc50ba56a
   },
   {
     id: 'sessions.show-chats',
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.showChats',
     keywords: ['chats', 'sidebar', 'hide', 'show', 'section'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'sessions.work',
     page: 'sessions',
     titleKey: 'settings.openchamber.sessionWork.title',
     descriptionKey: 'settings.openchamber.sessionWork.info',
-    keywords: ['in work', 'in progress', 'track', 'done', 'inbox', 'sidebar', 'jev'],
+    keywords: ['in work', 'in progress', 'track', 'done', 'inbox', 'sidebar', 'recent', 'jev'],
   },
   {
     id: 'sessions.work-enabled',
@@ -780,25 +700,11 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['in work', 'in progress', 'track', 'done', 'sidebar'],
   },
   {
-    id: 'sessions.work-auto-open',
-    page: 'sessions',
-    titleKey: 'settings.openchamber.sessionWork.field.autoOpen',
-    descriptionKey: 'settings.openchamber.sessionWork.field.autoOpenInfo',
-    keywords: ['in work', 'automatic', 'jev', 'classification', 'track'],
-  },
-  {
-    id: 'sessions.work-keep-in-group',
-    page: 'sessions',
-    titleKey: 'settings.openchamber.sessionWork.field.keepInGroup',
-    descriptionKey: 'settings.openchamber.sessionWork.field.keepInGroupInfo',
-    keywords: ['in work', 'track', 'project group', 'folder', 'sidebar', 'keep'],
-  },
-  {
     id: 'sessions.small-model',
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.smallModel.title',
     descriptionKey: 'settings.openchamber.defaults.smallModel.description',
-    keywords: ['small model', 'utility', 'summary', 'recap', 'cheap', 'override'],
+    keywords: ['small model', 'utility', 'summary', 'recap', 'cheap', 'override', 'thinking', 'reasoning', 'effort', 'variant'],
   },
   {
     id: 'sessions.walkthrough-model',
@@ -815,18 +721,22 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['retention', 'archive', 'delete'],
   },
   {
-    id: 'sessions.merged-worktree-cleanup',
-    page: 'sessions',
-    titleKey: 'settings.openchamber.mergedWorktreeCleanup.field.enable',
-    descriptionKey: 'settings.openchamber.mergedWorktreeCleanup.field.enableDescription',
-    keywords: ['pr', 'pull request', 'merged', 'worktree', 'branch', 'archive', 'cleanup', 'remove'],
-  },
-  {
     id: 'sessions.worktree-archive-on-done',
     page: 'sessions',
     titleKey: 'settings.openchamber.finishedWorktrees.field.archiveOnDone',
     descriptionKey: 'settings.openchamber.finishedWorktrees.info',
-    keywords: ['worktree', 'archive', 'done', 'cleanup'],
+    keywords: ['done', 'finish', 'in work', 'worktree', 'archive', 'cleanup', 'remove'],
+    // The section renders everywhere but VS Code, which has no archives.
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
+    id: 'sessions.merged-worktree-cleanup',
+    page: 'sessions',
+    titleKey: 'settings.openchamber.mergedWorktreeCleanup.field.enable',
+    descriptionKey: 'settings.openchamber.finishedWorktrees.info',
+    keywords: ['pr', 'pull request', 'merged', 'worktree', 'branch', 'archive', 'cleanup', 'remove'],
+    // The section renders everywhere but VS Code, which has no archives.
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'sessions.retention-only-archived',
@@ -945,20 +855,38 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => ctx.isDesktopLocalOrigin,
   },
   {
+    id: 'sessions.opencode-binary',
+    page: 'general',
+    titleKey: 'settings.openchamber.opencodeCli.field.binaryPath',
+    keywords: ['opencode', 'cli', 'binary', 'path'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
+    id: 'sessions.opencode-restart',
+    page: 'general',
+    titleKey: 'settings.openchamber.opencodeCli.actions.restart',
+    keywords: ['opencode', 'restart', 'reload', 'plugin'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
     id: 'general.environment-variables',
     page: 'general',
     titleKey: 'settings.environment.user.title',
     descriptionKey: 'settings.environment.user.info',
     keywords: ['environment', 'env', 'variables', 'api key', 'token', 'secret', 'opencode', 'terminal', 'git'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
+    id: 'sessions.opencode-update-notifications',
+    page: 'general',
+    titleKey: 'settings.openchamber.opencodeCli.field.showUpdateNotifications',
+    keywords: ['opencode', 'cli', 'updates'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'sessions.agent-control-tool',
     page: 'general',
     titleKey: 'settings.openchamber.tools.field.agentControlTool',
-<<<<<<< HEAD
-    descriptionKey: 'settings.openchamber.tools.field.agentControlToolInfo',
-    keywords: ['agent', 'tool', 'orchestration', 'openchamber', 'sessions', 'schedule', 'control'],
-=======
     descriptionKey: 'settings.openchamber.tools.field.agentControlToolSummary',
     keywords: ['agent', 'tool', 'orchestration', 'openchamber', 'sessions', 'worktree', 'control'],
     isAvailable: (ctx) => !ctx.isVSCode,
@@ -970,7 +898,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.openchamber.tools.field.agentScheduleToolSummary',
     keywords: ['agent', 'tool', 'schedule', 'scheduled', 'task', 'cron', 'recurring', 'openchamber'],
     isAvailable: (ctx) => !ctx.isVSCode,
->>>>>>> bc50ba56a
   },
   {
     id: 'sessions.agent-web-tool',
@@ -978,6 +905,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.tools.field.agentWebTool',
     descriptionKey: 'settings.openchamber.tools.field.agentWebToolSummary',
     keywords: ['agent', 'tool', 'web', 'browser', 'page', 'preview', 'openchamber'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'sessions.browser-provider',
@@ -985,11 +913,8 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.tools.browserProvider.label',
     descriptionKey: 'settings.openchamber.tools.browserProvider.info',
     keywords: ['agent', 'browser', 'provider', 'extension', 'chrome', 'server', 'headless'],
-<<<<<<< HEAD
-=======
     // Rendered only while its tool is on.
     isAvailable: (ctx) => !ctx.isVSCode && useUIStore.getState().agentWebToolEnabled,
->>>>>>> bc50ba56a
   },
   {
     id: 'sessions.agent-notify-tool',
@@ -997,8 +922,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.tools.field.agentNotifyTool',
     descriptionKey: 'settings.openchamber.tools.field.agentNotifyToolSummary',
     keywords: ['agent', 'tool', 'notify', 'notification', 'alert', 'ping', 'openchamber'],
-<<<<<<< HEAD
-=======
     isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
@@ -1076,7 +999,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['machine', 'ssh', 'remote', 'docker', 'space', 'spaces', 'host', 'server'],
     // Rendered only while the switch is on, and never in VS Code.
     isAvailable: (ctx) => !ctx.isVSCode && useUIStore.getState().isolatedSpacesEnabled,
->>>>>>> bc50ba56a
   },
   {
     id: 'sessions.agent-memory-tool',
@@ -1086,22 +1008,9 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['agent', 'tool', 'memory', 'remember', 'recall', 'preferences', 'openchamber'],
     // Unreleased: searching for a setting that is not rendered would take the
     // user to an empty spot on the page.
-    isAvailable: () => useUIStore.getState().agentMemoryFeatureAvailable,
+    isAvailable: (ctx) => !ctx.isVSCode && useUIStore.getState().agentMemoryFeatureAvailable,
   },
   {
-<<<<<<< HEAD
-    id: 'git.gitlab-account',
-    page: 'integrations',
-    titleKey: 'settings.gitlab.title',
-    descriptionKey: 'settings.gitlab.info',
-    keywords: ['gitlab', 'account', 'oauth', 'pat', 'merge request', 'issues', 'glab'],
-  },
-  {
-    id: 'git.gitlab-connect',
-    page: 'integrations',
-    titleKey: 'settings.gitlab.actions.connect',
-    keywords: ['gitlab', 'connect', 'add account', 'oauth', 'pat', 'token', 'instance'],
-=======
     id: 'sessions.agent-workflow-tool',
     page: 'general',
     titleKey: 'settings.openchamber.tools.field.agentWorkflowTool',
@@ -1109,7 +1018,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['agent', 'tool', 'workflow', 'workflows', 'subagents', 'fan out', 'parallel', 'openchamber'],
     // Only where an OpenChamber server backs workflows, like memory.
     isAvailable: (ctx) => !ctx.isVSCode && useUIStore.getState().agentWorkflowFeatureAvailable,
->>>>>>> bc50ba56a
   },
   {
     id: 'routing.token',
@@ -1117,11 +1025,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.routing.token.label',
     descriptionKey: 'settings.routing.token.info',
     keywords: ['jev', 'typesafe', 'api key', 'token', 'routing'],
-<<<<<<< HEAD
-    isAvailable: (ctx) => ctx.routingAvailable,
-=======
     isAvailable: (ctx) => !ctx.isVSCode && ctx.routingAvailable,
->>>>>>> bc50ba56a
   },
   {
     id: 'routing.enabled',
@@ -1129,7 +1033,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.routing.auto.enable',
     descriptionKey: 'settings.routing.auto.enableInfo',
     keywords: ['auto', 'routing', 'model', 'jev', 'automatic'],
-    isAvailable: (ctx) => ctx.routingAvailable && !ctx.jevBlockedByEnterprise,
+    isAvailable: (ctx) => !ctx.isVSCode && ctx.routingAvailable && !ctx.jevBlockedByEnterprise,
   },
   {
     id: 'routing.preserve-cache',
@@ -1137,7 +1041,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.routing.auto.preserveCache',
     descriptionKey: 'settings.routing.auto.preserveCacheInfo',
     keywords: ['cache', 'prompt cache', 'auto', 'routing', 'switch', 'model', 'cost'],
-    isAvailable: (ctx) => ctx.routingAvailable && !ctx.jevBlockedByEnterprise,
+    isAvailable: (ctx) => !ctx.isVSCode && ctx.routingAvailable && !ctx.jevBlockedByEnterprise,
   },
   {
     id: 'routing.fallback-model',
@@ -1145,7 +1049,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.routing.auto.fallbackModel',
     descriptionKey: 'settings.routing.auto.fallbackModelInfo',
     keywords: ['fallback', 'default', 'model', 'routing'],
-    isAvailable: (ctx) => ctx.routingAvailable && !ctx.jevBlockedByEnterprise,
+    isAvailable: (ctx) => !ctx.isVSCode && ctx.routingAvailable && !ctx.jevBlockedByEnterprise,
   },
   {
     id: 'routing.add-category',
@@ -1153,7 +1057,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.routing.categories.title',
     descriptionKey: 'settings.routing.categories.description',
     keywords: ['category', 'categories', 'task type', 'routing'],
-    isAvailable: (ctx) => ctx.routingAvailable && !ctx.jevBlockedByEnterprise,
+    isAvailable: (ctx) => !ctx.isVSCode && ctx.routingAvailable && !ctx.jevBlockedByEnterprise,
   },
   {
     id: 'git.identities',
@@ -1161,41 +1065,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.gitIdentities.page.section.title',
     descriptionKey: 'settings.gitIdentities.page.empty.description',
     keywords: ['identity', 'profile', 'author', 'email', 'credentials', 'account', 'transport', 'ssh', 'ssh key', 'signing', 'commit signing', 'ssh signing', 'gpg'],
-  },
-  {
-    id: 'git.commit-model',
-    page: 'git',
-    titleKey: 'settings.omp.modelRoles.role.commit.label',
-    descriptionKey: 'settings.omp.modelRoles.role.commit.desc',
-    keywords: ['commit', 'message', 'model', 'role', 'commit message model', 'generation', 'pr description'],
-  },
-  {
-    id: 'git.commit-generation',
-    page: 'git',
-    titleKey: 'settings.openchamber.git.commitGeneration.generateMessages.label',
-    descriptionKey: 'settings.openchamber.git.commitGeneration.generateMessages.desc',
-    keywords: ['commit', 'commit message', 'generate', 'generation', 'ai'],
-  },
-  {
-    id: 'git.commit-reasoning',
-    page: 'git',
-    titleKey: 'settings.openchamber.git.commitGeneration.reasoning.label',
-    descriptionKey: 'settings.openchamber.git.commitGeneration.reasoning.desc',
-    keywords: ['commit', 'reasoning', 'effort', 'thinking', 'model'],
-  },
-  {
-    id: 'git.commit-notes',
-    page: 'git',
-    titleKey: 'settings.openchamber.git.commitGeneration.notes.label',
-    descriptionKey: 'settings.openchamber.git.commitGeneration.notes.desc',
-    keywords: ['commit', 'notes', 'git notes', 'note'],
-  },
-  {
-    id: 'git.commit-change-id',
-    page: 'git',
-    titleKey: 'settings.openchamber.git.commitGeneration.changeId.label',
-    descriptionKey: 'settings.openchamber.git.commitGeneration.changeId.desc',
-    keywords: ['commit', 'change-id', 'gerrit', 'review', 'trailer'],
   },
   {
     id: 'git.changes-view',
@@ -1253,29 +1122,30 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['thinking', 'variant', 'reasoning', 'effort', 'model', 'project metadata'],
   },
   {
-    id: 'projects.accent-color',
-    page: 'projects',
-    titleKey: 'settings.projects.page.field.accentColor',
-    keywords: ['color', 'appearance', 'project metadata'],
-  },
-  {
     id: 'projects.icon',
     page: 'projects',
     titleKey: 'settings.projects.page.field.projectIcon',
-    keywords: ['icon', 'favicon', 'upload', 'project metadata'],
+    keywords: ['icon', 'favicon', 'upload', 'color', 'accent color', 'appearance', 'project metadata'],
+  },
+  {
+    id: 'projects.close',
+    page: 'projects',
+    titleKey: 'settings.projects.page.actions.closeProject',
+    keywords: ['close', 'remove', 'delete', 'forget', 'project'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
+    id: 'projects.actions',
+    page: 'projects',
+    titleKey: 'settings.projects.actions.title',
+    descriptionKey: 'settings.projects.actions.info',
+    keywords: ['run', 'run button', 'commands', 'dev server', 'scripts', 'project actions'],
   },
   {
     id: 'projects.worktree',
     page: 'projects',
     titleKey: 'settings.projects.page.section.worktree',
     keywords: ['worktree', 'branch', 'repository'],
-  },
-  {
-    id: 'projects.worktree.directory',
-    page: 'projects',
-    titleKey: 'settings.openchamber.worktrees.directory.label',
-    descriptionKey: 'settings.openchamber.worktrees.directory.info',
-    keywords: ['worktree', 'directory', 'folder', 'location', 'path', 'home', 'absolute', 'relative'],
   },
   {
     id: 'projects.worktree.setup.wait',
@@ -1301,12 +1171,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.projects.environment.title',
     descriptionKey: 'settings.projects.environment.info',
     keywords: ['environment', 'env', 'variables', 'direnv', 'devenv', 'nix', 'envrc', 'path', 'terminal', 'git hooks'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'projects.shared',
     page: 'projects',
-    titleKey: 'settings.projects.shared.title',
-    descriptionKey: 'settings.projects.shared.description',
+    titleKey: 'settings.projects.team.title',
+    descriptionKey: 'settings.projects.team.info',
     keywords: ['shared', 'team', 'repository', '.openchamber', 'project.json', 'trust'],
   },
   {
@@ -1322,6 +1193,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.remoteInstances.clientAuth.title',
     descriptionKey: 'settings.remoteInstances.clientAuth.description',
     keywords: ['pairing link', 'client token', 'connect desktop', 'remote access', 'relay', 'devices', 'connect from anywhere'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'remote-instances.direct-hosts',
@@ -1330,6 +1202,20 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.remoteInstances.direct.description',
     keywords: ['server url', 'connection token', 'import link', 'host switcher', 'additional headers', 'request headers', 'cloudflare access', 'service token'],
     isAvailable: (ctx) => ctx.isDesktop,
+  },
+  {
+    id: 'behavior.system-prompt',
+    page: 'behavior',
+    titleKey: 'settings.behavior.page.section.systemPrompt',
+    descriptionKey: 'settings.behavior.page.warning.title',
+    keywords: ['agents.md', 'global instructions', 'system prompt'],
+  },
+  {
+    id: 'behavior.response-style',
+    page: 'behavior',
+    titleKey: 'settings.behavior.page.section.responseStyle',
+    descriptionKey: 'settings.behavior.page.responseStyle.tooltip',
+    keywords: ['tone', 'concise', 'detailed', 'custom instructions'],
   },
   {
     id: 'agents.create',
@@ -1416,22 +1302,29 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['slash command', 'name'],
   },
   {
+    id: 'commands.agent',
+    page: 'commands',
+    titleKey: 'settings.commands.page.field.overrideAgent',
+    keywords: ['agent', 'execution'],
+  },
+  {
     id: 'commands.model',
     page: 'commands',
     titleKey: 'settings.agents.page.field.overrideModel',
     keywords: ['model', 'provider'],
   },
   {
-    id: 'commands.argument-hint',
+    id: 'commands.variant',
     page: 'commands',
-    titleKey: 'settings.commands.page.field.argumentHint',
-    keywords: ['arguments', 'argument hint', '$arguments', 'user input'],
+    titleKey: 'settings.agents.page.field.variant',
+    keywords: ['variant', 'reasoning', 'thinking'],
   },
   {
-    id: 'commands.group',
+    id: 'commands.subagent',
     page: 'commands',
-    titleKey: 'settings.commands.page.field.group',
-    keywords: ['group', 'folder', 'category', 'command group'],
+    titleKey: 'settings.commands.page.field.subagent',
+    descriptionKey: 'settings.commands.page.field.subagentTooltip',
+    keywords: ['subagent', 'background', 'child session'],
   },
   {
     id: 'commands.template',
@@ -1518,7 +1411,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.classification.page.title',
     descriptionKey: 'settings.classification.page.description',
     keywords: ['jev', 'typesafe', 'zen', 'api key', 'token', 'safety net', 'auto', 'routing', 'classification', 'promotion', 'off', 'disable', 'privacy', 'custom endpoint', 'base url', 'openai-compatible', 'system one', 'self-hosted', 'proxy'],
-    isAvailable: (ctx) => ctx.routingAvailable,
+    isAvailable: (ctx) => !ctx.isVSCode && ctx.routingAvailable,
   },
   {
     id: 'providers.custom',
@@ -1550,27 +1443,15 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     id: 'web-search.provider',
     page: 'web-search',
     titleKey: 'settings.webSearch.section.provider',
-    descriptionKey: 'settings.webSearch.native.info',
-    keywords: ['web search', 'web_search', 'internet', 'provider', 'disable', 'off', 'fallback', 'timeout'],
+    descriptionKey: 'settings.webSearch.section.providerInfo',
+    keywords: ['web search', 'websearch', 'internet', 'default provider', 'disable', 'off', 'random'],
   },
   {
-    id: 'web-search.fallbacks',
+    id: 'web-search.providers',
     page: 'web-search',
-    titleKey: 'settings.webSearch.native.fallbacks',
-    descriptionKey: 'settings.webSearch.native.fallbackInfo',
-    keywords: ['fallback', 'fallbacks', 'chain', 'order', 'backup provider'],
-  },
-  {
-    id: 'web-search.timeout',
-    page: 'web-search',
-    titleKey: 'settings.webSearch.native.timeout',
-    keywords: ['timeout', 'latency', 'seconds', 'deadline'],
-  },
-  {
-    id: 'web-search.keys',
-    page: 'web-search',
-    titleKey: 'settings.webSearch.section.keys',
-    keywords: ['api key', 'exa', 'tavily', 'firecrawl', 'parallel', 'tinyfish', 'credentials'],
+    titleKey: 'settings.webSearch.section.providers',
+    descriptionKey: 'settings.webSearch.section.providersInfo',
+    keywords: ['api key', 'exa', 'tavily', 'firecrawl', 'parallel', 'tinyfish', 'searxng', 'brave', 'kagi', 'perplexity', 'linkup', 'serper', 'credentials'],
   },
   {
     id: 'skills.create',
@@ -1615,22 +1496,32 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['external repository', 'add source', 'catalog'],
   },
   {
+    id: 'magic-prompts.scope',
+    page: 'magic-prompts',
+    titleKey: 'settings.magicPrompts.page.scope.label',
+    keywords: ['global', 'project', 'project overrides', 'project.json', 'inherit'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
     id: 'magic-prompts.visible-prompt',
     page: 'magic-prompts',
     titleKey: 'settings.magicPrompts.page.block.visiblePrompt',
     keywords: ['prompt text', 'user message', 'template'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'magic-prompts.instructions',
     page: 'magic-prompts',
     titleKey: 'settings.magicPrompts.page.block.instructions',
     keywords: ['hidden prompt', 'instructions', 'template'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'magic-prompts.reset-overrides',
     page: 'magic-prompts',
     titleKey: 'settings.magicPrompts.page.actions.resetAllOverrides',
     keywords: ['reset', 'default prompts', 'overrides'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'shortcuts.keyboard-shortcuts',
@@ -1639,8 +1530,8 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.openchamber.keyboardShortcuts.tooltip',
     keywords: ['keyboard', 'hotkeys', 'bindings'],
   },
-  // Every in-app shortcut the page lists, by its own name. The system-wide
-  // ones (category `desktop`) live on General.
+  // Every in-app shortcut the Shortcuts page lists, by its own name. The
+  // system-wide ones (category `desktop`) live on General.
   ...getCustomizableShortcutActions()
     .filter((action) => action.category !== 'desktop')
     .map((action): SettingsSearchItem => ({
@@ -1655,6 +1546,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'voice',
     titleKey: 'settings.voice.page.section.playbackAndSummary',
     keywords: ['tts', 'read aloud', 'voice', 'provider', 'speech rate', 'speech pitch', 'speech volume', 'tts input mode', 'markdown'],
+  },
+  {
+    id: 'voice.auto-read-aloud',
+    page: 'voice',
+    titleKey: 'settings.voice.page.field.autoReadAloud',
+    descriptionKey: 'settings.voice.page.tooltip.autoReadAloud',
+    keywords: ['tts', 'read aloud', 'automatic', 'auto', 'speech', 'finished', 'reply'],
   },
   {
     id: 'voice.speech-recognition',
@@ -1696,15 +1594,15 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'tunnel',
     titleKey: 'settings.openchamber.tunnel.field.provider',
     descriptionKey: 'settings.openchamber.tunnel.description',
-    keywords: ['remote access', 'cloudflare', 'ngrok'],
-    isAvailable: (ctx) => !ctx.enterpriseMode,
+    keywords: ['remote access', 'cloudflare', 'ngrok', 'tailscale', 'tailnet'],
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.enterpriseMode,
   },
   {
     id: 'tunnel.type',
     page: 'tunnel',
     titleKey: 'settings.openchamber.tunnel.field.tunnelType',
-    keywords: ['quick', 'managed remote', 'managed local'],
-    isAvailable: (ctx) => !ctx.enterpriseMode,
+    keywords: ['quick', 'managed remote', 'managed local', 'serve', 'funnel', 'https port'],
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.enterpriseMode,
   },
   {
     id: 'tunnel.ttl',
@@ -1712,14 +1610,14 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.tunnel.field.connectLinkTtl',
     descriptionKey: 'settings.openchamber.tunnel.field.tunnelSessionTtl',
     keywords: ['expiry', 'expiration', 'session ttl', 'connect link ttl'],
-    isAvailable: (ctx) => !ctx.enterpriseMode,
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.enterpriseMode,
   },
   {
     id: 'tunnel.managed-remote',
     page: 'tunnel',
     titleKey: 'settings.openchamber.tunnel.section.savedManagedRemoteTunnels',
     keywords: ['cloudflare', 'hostname', 'token', 'managed remote'],
-    isAvailable: (ctx) => !ctx.enterpriseMode,
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.enterpriseMode,
   },
   {
     id: 'tunnel.managed-local-config',
@@ -1727,7 +1625,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.tunnel.field.configurationFile',
     descriptionKey: 'settings.openchamber.tunnel.note.managedLocalUsesConfig',
     keywords: ['cloudflared', 'config', 'yaml', 'json', 'managed local'],
-    isAvailable: (ctx) => !ctx.enterpriseMode,
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.enterpriseMode,
   },
   {
     id: 'tunnel.start',
@@ -1735,7 +1633,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.tunnel.actions.startTunnel',
     descriptionKey: 'settings.openchamber.tunnel.note.connectLinksOneTime',
     keywords: ['connect link', 'qr code', 'public url', 'remote access'],
-    isAvailable: (ctx) => !ctx.enterpriseMode,
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.enterpriseMode,
   },
   {
     id: 'notifications.delivery',
@@ -1762,7 +1660,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'notifications',
     titleKey: 'settings.notifications.page.push.title',
     keywords: ['background', 'push'],
-    isAvailable: (ctx) => ctx.isWeb && !ctx.isDesktop,
+    isAvailable: (ctx) => ctx.isWeb && !ctx.isDesktop && !ctx.isVSCode,
   },
 
   {
@@ -1779,65 +1677,15 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.integrations.firstParty.title',
     descriptionKey: 'settings.integrations.firstParty.info',
     keywords: ['built-in', 'first-party', 'native', 'github', 'linear'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
-    id: 'integrations.github',
-    page: 'integrations',
-    titleKey: 'settings.integrations.github.title',
-    descriptionKey: 'settings.integrations.github.description',
-    keywords: ['github', 'account', 'oauth', 'gh', 'cli', 'prs', 'pull request', 'issues', 'connect'],
-  },
-  {
-    id: 'git.github-connect',
-    page: 'integrations',
-    titleKey: 'settings.github.page.actions.connect',
-    keywords: ['github', 'connect', 'add account', 'oauth', 'device flow'],
-  },
-  {
-    id: 'integrations.linear',
-    page: 'integrations',
-    titleKey: 'settings.integrations.linear.title',
-    descriptionKey: 'settings.integrations.linear.description',
-    keywords: ['linear', 'issues', 'oauth', 'connect', 'workspace'],
-  },
-  {
-    id: 'integrations.linear.add-workspace',
-    page: 'integrations',
-    titleKey: 'settings.integrations.linear.actions.addWorkspace',
-    descriptionKey: 'settings.integrations.linear.description',
-    keywords: ['linear', 'workspace', 'add', 'connect', 'oauth'],
-  },
-  {
-    id: 'integrations.linear.mapping',
-    page: 'integrations',
-    titleKey: 'settings.integrations.linear.mapping.defaultProject',
-    descriptionKey: 'settings.integrations.linear.mapping.defaultProject.info',
-    keywords: ['linear', 'project', 'team', 'map', 'workspace', 'directory'],
-  },
-  {
-<<<<<<< HEAD
-    id: 'integrations.third-party',
-    page: 'integrations',
-    titleKey: 'settings.integrations.thirdParty.title',
-    descriptionKey: 'settings.integrations.thirdParty.info',
-    keywords: ['plugin', 'provider', 'install', 'update', 'remove', 'subscription'],
-  },
-  {
-    id: 'integrations.third-party.opencode-claude',
-    page: 'integrations',
-    titleKey: 'settings.integrations.thirdParty.opencodeClaude.name',
-    descriptionKey: 'settings.integrations.thirdParty.opencodeClaude.description',
-    keywords: ['claude', 'anthropic', 'claude code', 'pro', 'max', 'agent sdk', '@openchamber/opencode-claude'],
-  },
-  {
-=======
->>>>>>> bc50ba56a
     id: 'integrations.extensions',
     page: 'integrations',
     titleKey: 'settings.integrations.extensionCatalog.title',
     descriptionKey: 'settings.integrations.extensionCatalog.info',
     keywords: ['extension', 'install', 'update', 'remove', 'openchamber'],
-    isAvailable: (ctx) => !ctx.isMobile,
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
   },
   {
     id: 'integrations.extensions.excalidraw',
@@ -1845,7 +1693,15 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.integrations.extensionCatalog.excalidraw.name',
     descriptionKey: 'settings.integrations.extensionCatalog.excalidraw.description',
     keywords: ['excalidraw', 'drawing', 'diagram', 'canvas', 'whiteboard', 'obsidian', 'sketch'],
-    isAvailable: (ctx) => !ctx.isMobile,
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
+  },
+  {
+    id: 'integrations.extensions.resource-monitor',
+    page: 'integrations',
+    titleKey: 'settings.integrations.extensionCatalog.resourceMonitor.name',
+    descriptionKey: 'settings.integrations.extensionCatalog.resourceMonitor.description',
+    keywords: ['resource', 'monitor', 'cpu', 'memory', 'ram', 'process', 'activity', 'task manager', 'dev server', 'port', 'performance'],
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
   },
   {
     id: 'integrations.guests',
@@ -1853,6 +1709,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.integrations.guests.title',
     descriptionKey: 'settings.integrations.guests.info',
     keywords: ['guest', 'extension', 'oauth', 'clickup', 'gitlab', 'panel', 'connect'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'extensions.add',
@@ -1860,7 +1717,15 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.extensions.add.label',
     descriptionKey: 'settings.extensions.add.info',
     keywords: ['folder', 'path', 'zip', 'git', 'url', 'install', 'guest', 'panel'],
-    isAvailable: (ctx) => !ctx.isMobile,
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
+  },
+  {
+    id: 'extensions.browse',
+    page: 'extensions',
+    titleKey: 'settings.extensions.browse.label',
+    descriptionKey: 'settings.extensions.browse.hint',
+    keywords: ['community', 'catalog', 'marketplace', 'store', 'gallery', 'website', 'discover', 'find', 'extension'],
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile && !ctx.enterpriseMode,
   },
   {
     id: 'extensions.gitIdentity',
@@ -1868,14 +1733,14 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.extensions.identity.title',
     descriptionKey: 'settings.extensions.add.info',
     keywords: ['ssh', 'key', 'identity', 'git', 'private', 'clone', 'extension'],
-    isAvailable: (ctx) => !ctx.isMobile,
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
   },
   {
     id: 'extensions.updates.check',
     page: 'extensions',
     titleKey: 'settings.extensions.updates.check',
     keywords: ['update', 'upgrade', 'version', 'git', 'extension', 'guest', 'refresh'],
-    isAvailable: (ctx) => !ctx.isMobile,
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
   },
 ] as const;
 
@@ -1895,8 +1760,99 @@ interface BuildSettingsSearchResultsOptions {
   query: string;
   runtimeCtx: SettingsSearchAvailabilityContext;
   visiblePageSlugs?: SettingsPageSlug[];
-  t: (key: I18nKey) => string;
+  t: (key: I18nKey, params?: I18nParams) => string;
   getPageTitle: (slug: SettingsPageSlug) => string;
+  /** The trackers the connected server serves; each adds its own entries. */
+  trackers?: readonly TrackerDescriptor[];
+  /** The source-control providers the connected server serves; each adds its card and connect entries. */
+  sourceControlProviders?: readonly SourceControlProviderDescriptor[];
+}
+
+const CHANGE_REQUEST_SEARCH_NOUNS = {
+  pullRequest: ['pull request', 'pr', 'issues'],
+  mergeRequest: ['merge request', 'mr', 'issues'],
+  change: ['change', 'code review', 'patchset'],
+} satisfies Record<ChangeRequestTerm, string[]>;
+
+/**
+ * Each served source-control provider's entries on the Integrations page: its
+ * card, `integrations.source-control.<id>`, and the connect block inside it,
+ * `.connect`. The card is the anchor `SourceControlProviderCard` renders, so a
+ * provider the server adds is searchable with no entry of its own here.
+ */
+function sourceControlSearchItems(providers: readonly SourceControlProviderDescriptor[]): SettingsSearchItem[] {
+  const notInVSCode = (ctx: SettingsSearchAvailabilityContext) => !ctx.isVSCode;
+  return providers.flatMap((descriptor) => {
+    const term = descriptor.terminology.changeRequest;
+    const id = `integrations.source-control.${descriptor.id}`;
+    const params = { provider: descriptor.label };
+    const keywords = [
+      descriptor.id,
+      descriptor.label.toLowerCase(),
+      ...CHANGE_REQUEST_SEARCH_NOUNS[term],
+      'account',
+      'token',
+      ...(descriptor.auth.cliName ? [descriptor.auth.cliName] : []),
+    ];
+    return [
+      {
+        id,
+        page: 'integrations',
+        literalTitle: descriptor.label,
+        descriptionKey: `settings.sourceControl.provider.description.${term}`,
+        descriptionParams: params,
+        keywords,
+        isAvailable: notInVSCode,
+      },
+      {
+        id: `${id}.connect`,
+        page: 'integrations',
+        titleKey: 'settings.sourceControl.actions.connect',
+        titleParams: params,
+        keywords: [...keywords, 'connect', 'add account', 'instance', 'oauth', 'pat'],
+        isAvailable: notInVSCode,
+      },
+    ];
+  });
+}
+
+/**
+ * Each served tracker's entries on the Integrations page: the tracker itself,
+ * adding an account and its project mapping where its capabilities offer
+ * them. Ids are `integrations.<tracker>[.add-workspace|.mapping]`, the ids
+ * Linear's entries always had. A tracker without words of its own has none.
+ */
+function trackerSearchItems(trackers: readonly TrackerDescriptor[]): SettingsSearchItem[] {
+  const notInVSCode = (ctx: SettingsSearchAvailabilityContext) => !ctx.isVSCode;
+  return trackers.flatMap((descriptor) => {
+    const search = trackerPresentation(descriptor.id).settingsSearch;
+    if (!search) return [];
+    const id = `integrations.${descriptor.id}`;
+    const items: SettingsSearchItem[] = [
+      { id, page: 'integrations', titleKey: search.title, descriptionKey: search.description, keywords: search.keywords, isAvailable: notInVSCode },
+    ];
+    if (descriptor.capabilities.multipleAccounts) {
+      items.push({
+        id: `${id}.add-workspace`,
+        page: 'integrations',
+        titleKey: search.addAccount.title,
+        descriptionKey: search.description,
+        keywords: search.addAccount.keywords,
+        isAvailable: notInVSCode,
+      });
+    }
+    if (descriptor.capabilities.projectMapping) {
+      items.push({
+        id: `${id}.mapping`,
+        page: 'integrations',
+        titleKey: search.mapping.title,
+        descriptionKey: search.mapping.description,
+        keywords: search.mapping.keywords,
+        isAvailable: notInVSCode,
+      });
+    }
+    return items;
+  });
 }
 
 function normalizeSearchText(value: string): string {
@@ -1909,6 +1865,8 @@ export function buildSettingsSearchResults({
   visiblePageSlugs,
   t,
   getPageTitle,
+  trackers = [],
+  sourceControlProviders = [],
 }: BuildSettingsSearchResultsOptions): SettingsSearchResult[] {
   const normalizedQuery = normalizeSearchText(query);
   if (!normalizedQuery) {
@@ -1918,7 +1876,11 @@ export function buildSettingsSearchResults({
   const allowedPages = visiblePageSlugs ? new Set<SettingsPageSlug>(visiblePageSlugs) : null;
   const terms = normalizedQuery.split(/\s+/).filter(Boolean);
 
-  return SETTINGS_SEARCH_ITEMS.flatMap((item) => {
+  return [
+    ...SETTINGS_SEARCH_ITEMS,
+    ...sourceControlSearchItems(sourceControlProviders),
+    ...trackerSearchItems(trackers),
+  ].flatMap((item) => {
     if (allowedPages && !allowedPages.has(item.page)) {
       return [];
     }
@@ -1928,8 +1890,8 @@ export function buildSettingsSearchResults({
       return [];
     }
 
-    const title = t(item.titleKey);
-    const description = item.descriptionKey ? t(item.descriptionKey) : null;
+    const title = item.literalTitle !== undefined ? item.literalTitle : t(item.titleKey, item.titleParams);
+    const description = item.descriptionKey ? t(item.descriptionKey, item.descriptionParams) : null;
     const haystack = normalizeSearchText([
       title,
       description,
@@ -1949,15 +1911,3 @@ export function buildSettingsSearchResults({
     }];
   });
 }
-
-/** Static anchors used to seed the first-install baseline. */
-export const SETTINGS_ANCHOR_PAGES: ReadonlyMap<string, SettingsPageSlug> = new Map(
-  SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item.page] as const),
-);
-
-export const getAvailableSettingsAnchorPages = (ctx: SettingsSearchAvailabilityContext): ReadonlyMap<string, SettingsPageSlug> => new Map(
-  SETTINGS_SEARCH_ITEMS.filter((item) => {
-    const page = getSettingsPageMeta(item.page);
-    return page && (!page.isAvailable || page.isAvailable(ctx)) && (!item.isAvailable || item.isAvailable(ctx));
-  }).map((item) => [item.id, item.page] as const),
-);

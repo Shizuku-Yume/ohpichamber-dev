@@ -1,9 +1,4 @@
 /**
-<<<<<<< HEAD
- * Project knowledge for the UI: what the session carries for display, and the
- * pin switches. Prompt delivery belongs to the Host, which attaches the user's
- * pins itself, so the client never assembles or reports prompt text.
-=======
  * Project knowledge for a session, as decided by the server.
  *
  * The client neither assembles project knowledge nor tracks what the session was told.
@@ -16,13 +11,10 @@
  * Nothing here throws. A message must go out even when its background cannot
  * be written: sending without it costs the agent some context, failing the
  * send costs the user their message.
->>>>>>> bc50ba56a
  */
 
 import { z } from 'zod';
 
-<<<<<<< HEAD
-=======
 import { runtimeFetch } from './runtime-fetch';
 import { getRuntimeKey } from './runtime-switch';
 import { isVSCodeRuntime } from './desktop';
@@ -67,7 +59,6 @@ export const syncSessionKnowledge = async (
     // Only means this message goes without its background.
   }
 };
->>>>>>> bc50ba56a
 
 export interface SessionKnowledgeSummary {
   notes: Array<{ id: string; body: string }>;

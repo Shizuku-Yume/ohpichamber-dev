@@ -1,5 +1,6 @@
 import type { SidebarSection } from '@/constants/sidebar';
 import type { IconName } from '@/components/icon/icons';
+import { isIsolatedSpacesPageVisible } from '@/lib/spaces/release';
 
 export type SettingsPageSlug =
   | 'home'
@@ -8,10 +9,9 @@ export type SettingsPageSlug =
   | 'remote-instances'
   | 'providers'
   | 'web-search'
-  | 'omp'
-  | 'behavior'
   | 'usage'
   | 'agents'
+  | 'behavior'
   | 'commands'
   | 'mcp'
   | 'plugins'
@@ -28,6 +28,7 @@ export type SettingsPageSlug =
   | 'notifications'
   | 'voice'
   | 'tunnel'
+  | 'isolated-spaces'
   | 'about'
   | 'integrations'
   | 'extensions';
@@ -35,10 +36,11 @@ export type SettingsPageSlug =
 type SettingsPageGroup =
   | 'general'
   | 'projects'
-  | 'agent'
+  | 'opencode'
   | 'content';
 
 export interface SettingsRuntimeContext {
+  isVSCode: boolean;
   isWeb: boolean;
   isDesktop: boolean;
   isMobile: boolean;
@@ -89,18 +91,19 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'projects',
     kind: 'single',
     keywords: ['ssh', 'remote', 'instances', 'tunnels', 'forwarding', 'connection'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     slug: 'providers',
     title: 'Providers',
-    group: 'agent',
+    group: 'opencode',
     kind: 'single',
     keywords: ['provider', 'providers', 'models', 'model', 'api key', 'api keys', 'openai', 'anthropic', 'ollama', 'credentials'],
   },
   {
     slug: 'web-search',
     title: 'Web search',
-    group: 'agent',
+    group: 'opencode',
     kind: 'single',
     keywords: ['web search', 'websearch', 'search', 'internet', 'exa', 'tavily', 'firecrawl', 'parallel', 'tinyfish'],
   },
@@ -112,45 +115,37 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     keywords: ['quota', 'billing', 'tokens', 'usage', 'limits'],
   },
   {
-    slug: 'omp',
-    title: 'OMP',
-    group: 'agent',
-    kind: 'single',
-    description: 'Agent behaviour shared with OMP\'s config.yml. Changes apply to new sessions.',
-    keywords: ['omp', 'behavior', 'behaviour', 'compaction', 'retry', 'approval', 'thinking', 'budget', 'skills', 'mcp', 'lsp', 'model roles', 'enabled models', 'plan', 'goal'],
-  },
-  {
-    slug: 'behavior',
-    title: 'Behavior',
-    group: 'agent',
-    kind: 'single',
-    keywords: ['behavior', 'response style', 'tone', 'instructions', 'custom instructions', 'agents.md', 'global rules', 'project rules'],
-  },
-  {
     slug: 'agents',
     title: 'Agents',
-    group: 'agent',
+    group: 'opencode',
     kind: 'split',
     keywords: ['agent', 'agents', 'prompts', 'tools', 'permissions'],
   },
   {
+    slug: 'behavior',
+    title: 'Behavior',
+    group: 'opencode',
+    kind: 'single',
+    keywords: ['behavior', 'agents.md', 'system prompt', 'global rules', 'instructions', 'override'],
+  },
+  {
     slug: 'commands',
     title: 'Commands',
-    group: 'agent',
+    group: 'opencode',
     kind: 'split',
     keywords: ['command', 'commands', 'slash', 'macros', 'automation'],
   },
   {
     slug: 'mcp',
     title: 'MCP',
-    group: 'agent',
+    group: 'opencode',
     kind: 'single',
     keywords: ['mcp', 'model context protocol', 'servers', 'tools', 'remote', 'stdio'],
   },
   {
     slug: 'plugins',
-    title: 'OMP Plugins',
-    group: 'agent',
+    title: 'Plugins',
+    group: 'opencode',
     kind: 'single',
     keywords: ['plugin', 'plugins', 'addons', 'npm', 'opencode-wakatime'],
   },
@@ -174,6 +169,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'projects',
     kind: 'single',
     keywords: ['git', 'github', 'gitlab', 'identity', 'identities', 'ssh', 'profiles', 'credentials', 'keys', 'commit', 'gitmoji', 'oauth', 'prs', 'issues'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     slug: 'appearance',
@@ -195,6 +191,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'general',
     kind: 'single',
     keywords: ['keyboard', 'hotkeys', 'shortcuts', 'bindings'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     slug: 'sessions',
@@ -210,7 +207,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     kind: 'single',
     description: 'Pick the right model for each message automatically, and get asked before risky actions in auto-accepted sessions.',
     keywords: ['routing', 'auto', 'jev', 'typesafe', 'model routing', 'categories', 'safety net', 'auto-accept', 'fallback'],
-    isAvailable: (ctx) => ctx.routingAvailable && !ctx.jevBlockedByEnterprise,
+    isAvailable: (ctx) => !ctx.isVSCode && ctx.routingAvailable && !ctx.jevBlockedByEnterprise,
   },
   {
     slug: 'magic-prompts',
@@ -218,22 +215,17 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'content',
     kind: 'split',
     keywords: ['prompts', 'templates', 'git', 'github', 'review', 'commit', 'pull request'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     slug: 'snippets',
-    title: 'Prompt Templates',
+    title: 'Snippets',
     group: 'content',
     kind: 'split',
     keywords: ['prompt', 'templates', 'multi-run', 'strategy', 'approach'],
   },
 
   { slug: 'notifications', title: 'Notifications', group: 'general', kind: 'single', keywords: ['alerts', 'native', 'summary', 'summarization'], },
-<<<<<<< HEAD
-  { slug: 'voice', title: 'Voice', group: 'general', kind: 'single', keywords: ['tts', 'speech', 'voice'] },
-  { slug: 'tunnel', title: 'External Tunnel', group: 'projects', kind: 'single', keywords: ['tunnel', 'external', 'cloudflare', 'tailscale', 'qr', 'remote', 'mobile', 'share'], isAvailable: (ctx) => !ctx.enterpriseMode },
-  { slug: 'about', title: 'About', group: 'general', kind: 'single', keywords: ['about', 'version', 'updates', 'release', 'changelog'], isAvailable: (ctx) => ctx.isMobile },
-  { slug: 'integrations', title: 'Integrations', group: 'general', kind: 'single', keywords: ['integration', 'connect', 'oauth', 'github', 'linear', 'extension', 'claude', 'plugin'] },
-=======
   { slug: 'voice', title: 'Voice', group: 'general', kind: 'single', keywords: ['tts', 'speech', 'voice'], isAvailable: (ctx) => !ctx.isVSCode },
   { slug: 'tunnel', title: 'External Tunnel', group: 'projects', kind: 'single', keywords: ['tunnel', 'external', 'cloudflare', 'tailscale', 'qr', 'remote', 'mobile', 'share'], isAvailable: (ctx) => !ctx.isVSCode && !ctx.enterpriseMode },
   {
@@ -247,14 +239,13 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   },
   { slug: 'about', title: 'About', group: 'general', kind: 'single', keywords: ['about', 'version', 'updates', 'release', 'changelog', 'canary', 'channel'], isAvailable: (ctx) => !ctx.isVSCode },
   { slug: 'integrations', title: 'Integrations', group: 'general', kind: 'single', keywords: ['integration', 'connect', 'oauth', 'github', 'linear', 'extension', 'claude', 'plugin'], isAvailable: (ctx) => !ctx.isVSCode },
->>>>>>> bc50ba56a
   {
     slug: 'extensions',
-    title: 'Guest Extensions',
+    title: 'Extensions',
     group: 'general',
     kind: 'single',
     keywords: ['extension', 'extensions', 'guest', 'panel', 'rail', 'folder', 'zip', 'git', 'url'],
-    isAvailable: (ctx) => !ctx.isMobile,
+    isAvailable: (ctx) => !ctx.isVSCode && !ctx.isMobile,
   },
 ] as const;
 
@@ -326,12 +317,10 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
       return 'cloud';
     case 'web-search':
       return 'global';
-    case 'omp':
-      return 'equalizer-2';
-    case 'behavior':
-      return 'brain';
     case 'agents':
       return 'ai-agent';
+    case 'behavior':
+      return 'brain';
     case 'commands':
       return 'slash-commands-2';
     case 'mcp':
@@ -358,11 +347,8 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
       return 'mic';
     case 'tunnel':
       return 'home-office';
-<<<<<<< HEAD
-=======
     case 'isolated-spaces':
       return 'instance';
->>>>>>> bc50ba56a
     case 'about':
       return 'information';
     case 'home':

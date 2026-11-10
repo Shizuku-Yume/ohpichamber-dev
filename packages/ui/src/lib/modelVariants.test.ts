@@ -1,7 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-<<<<<<< HEAD
-import { listModelVariantIds } from './modelVariants';
-=======
 import { listModelVariantIds, modelVariantNames, nextThinkingVariant } from './modelVariants';
 
 describe('nextThinkingVariant', () => {
@@ -18,7 +15,6 @@ describe('nextThinkingVariant', () => {
     expect(nextThinkingVariant(levels, 'medium')).toBeNull();
   });
 });
->>>>>>> bc50ba56a
 
 describe('listModelVariantIds', () => {
   test('reads ids from the OpenCode 2 array, not array indices', () => {
@@ -32,5 +28,7 @@ describe('listModelVariantIds', () => {
 
   test('is empty for a model without variants', () => {
     expect(listModelVariantIds(undefined)).toEqual([]);
+    expect(modelVariantNames(undefined)).toEqual([]);
+    expect(modelVariantNames({})).toEqual([]);
   });
 });

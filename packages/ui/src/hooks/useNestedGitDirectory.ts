@@ -235,9 +235,5 @@ export const useNestedGitDirectory = (
   // nothing more is coming, and a root that is not searched has none to wait for.
   const repositoriesKnown = rootIsGitRepo !== null && (!searchesNested || nestedRepos !== undefined);
 
-<<<<<<< HEAD
-  return { rootIsGitRepo, gitDirectory, nestedRepos, nestedRepoSelection, repositoryOptions, repositoriesKnown };
-=======
   return { rootIsGitRepo, gitDirectory, nestedRepos, nestedRepoSelection, repositoryOptions, repositoriesKnown, unreadable };
->>>>>>> bc50ba56a
 };

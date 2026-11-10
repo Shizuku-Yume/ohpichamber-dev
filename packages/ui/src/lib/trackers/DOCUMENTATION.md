@@ -119,16 +119,13 @@ on the source-control side (`lib/source-control/`).
   status has not arrived), so the board can wait instead of reading "none
   connected"; it asks a served tracker nobody asked yet, and a failed read
   ends the wait without counting as a disconnect.
-<<<<<<< HEAD
 - Account activations in Settings and the board belong to their starting
   runtime. Switching endpoints invalidates pending responses and their
   notifications or board refreshes, including when returning to the same key.
-=======
 - A status of `connected: false` may still carry `accounts`: every stored
   account was written off (the server refused its credential). Such a tracker
   is not signed in for any surface; only the Settings card reads the list, to
   show the attention state and let the user remove the account.
->>>>>>> bc50ba56a
 - Settings follows the capability gates: one `TrackerSettings` card per served
   tracker (`components/sections/integrations/`), with the account switch and a
   second sign-in only where `multipleAccounts` is set, `TrackerProjectMapping`

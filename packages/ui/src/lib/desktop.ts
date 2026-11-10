@@ -4,7 +4,6 @@ import { getInjectedBootOutcome } from '@/lib/desktopBoot';
 import { getRuntimeBearerTokenSync } from '@/lib/runtime-auth';
 import { getRuntimeApiBaseUrl, getRuntimeKey } from '@/lib/runtime-switch';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-<<<<<<< HEAD
 
 export type UpdateInfo = {
  available: boolean;
@@ -26,35 +25,6 @@ export type UpdateInfo = {
   * administrator password on its own screen, so it updates only there.
   */
  installBlocked?: 'service-manager' | 'manual-install' | 'desktop-host';
-=======
-import { isVSCodeBootstrapPresent } from '@/lib/vscodeBootstrap';
-import { isUpdateChannel, type UpdateChannel } from '@/lib/updateChannel';
-
-export type UpdateInfo = {
-  available: boolean;
-  version?: string;
-  currentVersion: string;
-  body?: string;
-  date?: string;
-  releaseUrl?: string;
-  downloadUrl?: string;
-  nextSuggestedCheckInSec?: number;
-  // Web-specific fields
-  packageManager?: string;
-  updateCommand?: string;
-  /**
-   * The server cannot install this update itself. `service-manager`: run
-   * `updateCommand` by hand. `manual-install`: no package manager installed
-   * this copy, so the new version is installed the way this one was.
-   * `desktop-host`: a desktop installed from a Linux package asks for the
-   * administrator password on its own screen, so it updates only there.
-   * `opencode-version`: the new version needs OpenCode
-   * `requiredOpenCodeVersion`, newer than the server's `openCodeVersion`.
-   */
-  installBlocked?: 'service-manager' | 'manual-install' | 'desktop-host' | 'opencode-version';
-  requiredOpenCodeVersion?: string;
-  openCodeVersion?: string;
->>>>>>> bc50ba56a
 };
 
 export type UpdateProgress = {
@@ -75,7 +45,6 @@ export type DesktopWindowControlsStyle = 'classic' | 'traffic-lights';
 export type { DesktopSettings } from '@/lib/settings/registry';
 
 type DesktopClipboardBridge = {
-<<<<<<< HEAD
  readSelection?: () => Promise<string>;
  writeSelection?: (text: string) => Promise<boolean>;
 };
@@ -92,24 +61,6 @@ type DesktopBridgeGlobal = {
   event: string,
   handler: (evt: { payload?: unknown }) => void,
  ) => Promise<() => void>;
-=======
-  readSelection?: () => Promise<string>;
-  writeSelection?: (text: string) => Promise<boolean>;
-};
-
-type DesktopBridgeGlobal = {
-  pickThemeFile?: () => Promise<unknown>;
-  clipboard?: DesktopClipboardBridge;
-  invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
-  openDialog?: (options: Record<string, unknown>) => Promise<unknown>;
-  grantFileAccess?: (path: string) => Promise<unknown>;
-  openExternal?: (url: string) => Promise<unknown>;
-  pathForFile?: (file: File) => string;
-  listen?: (
-    event: string,
-    handler: (evt: { payload?: unknown }) => void,
-  ) => Promise<() => void>;
->>>>>>> bc50ba56a
 };
 
 type ElectronRuntimeGlobal = {
@@ -189,7 +140,6 @@ export const canUseElectronDesktopIPC = (): boolean => isElectronShell() && hasD
 
 /** Linux's PRIMARY buffer is reachable only through the local Electron bridge. */
 export const createDesktopClipboardAPI = (): RuntimeAPIs['clipboard'] => {
-<<<<<<< HEAD
  const bridge = getDesktopBridge()?.clipboard;
  if (!bridge?.readSelection || !bridge.writeSelection) return undefined;
  const { readSelection, writeSelection } = bridge;
@@ -201,19 +151,6 @@ export const createDesktopClipboardAPI = (): RuntimeAPIs['clipboard'] => {
    },
   },
  };
-=======
-  const bridge = getDesktopBridge()?.clipboard;
-  if (!bridge?.readSelection || !bridge.writeSelection) return undefined;
-  const { readSelection, writeSelection } = bridge;
-  return {
-    selection: {
-      readText: async () => z.string().parse(await readSelection()),
-      writeText: async (text) => {
-        z.literal(true).parse(await writeSelection(text));
-      },
-    },
-  };
->>>>>>> bc50ba56a
 };
 
 export const createDesktopThemeFileAPI = (): RuntimeAPIs['themeFiles'] => {
@@ -302,41 +239,6 @@ export const setDesktopLaunchAtLogin = async (enabled: boolean): Promise<LaunchA
   console.warn('Failed to set launch at login status', error);
   return null;
  }
-};
-
-// What main answers; the channel is checked, not trusted, like the other statuses.
-type UpdateChannelStatus = { channel?: string };
-
-const parseUpdateChannelStatus = (result: UpdateChannelStatus | null): UpdateChannel | null => (
-  isUpdateChannel(result?.channel) ? result.channel : null
-);
-
-/** The update channel the desktop app follows; null where the app does not update itself. */
-export const getDesktopUpdateChannel = async (): Promise<UpdateChannel | null> => {
-  if (!canUseElectronDesktopIPC() || !isDesktopLocalOriginActive()) {
-    return null;
-  }
-
-  try {
-    return parseUpdateChannelStatus(await invokeDesktop<UpdateChannelStatus>('desktop_get_update_channel'));
-  } catch (error) {
-    console.warn('Failed to get the update channel', error);
-    return null;
-  }
-};
-
-/** Stores the channel; the next update check reads it. Returns the stored channel, or null when it was not saved. */
-export const setDesktopUpdateChannel = async (channel: UpdateChannel): Promise<UpdateChannel | null> => {
-  if (!canUseElectronDesktopIPC() || !isDesktopLocalOriginActive()) {
-    return null;
-  }
-
-  try {
-    return parseUpdateChannelStatus(await invokeDesktop<UpdateChannelStatus>('desktop_set_update_channel', { channel }));
-  } catch (error) {
-    console.warn('Failed to set the update channel', error);
-    return null;
-  }
 };
 
 export const getDesktopMinimizeToTray = async (): Promise<MinimizeToTrayStatus | null> => {
@@ -603,13 +505,6 @@ export const getDesktopWindowVisibility = async (): Promise<boolean | null> => {
  return parsed.success ? parsed.data.visible : null;
 };
 
-/** Native visibility includes minimized and tray-hidden windows, independently of focus. */
-export const getDesktopWindowVisibility = async (): Promise<boolean | null> => {
-  if (!isDesktopShell()) return null;
-  const parsed = z.object({ visible: z.boolean() }).safeParse(await invokeDesktop('desktop_get_current_window_state'));
-  return parsed.success ? parsed.data.visible : null;
-};
-
 /**
  * Raises the desktop window.
  *
@@ -662,19 +557,12 @@ export const canRequestNativeDirectoryAccess = (): boolean => (
 );
 
 const pendingSessionLinksSchema = z.array(z.object({
-<<<<<<< HEAD
  sessionId: z.string().min(1),
  messageId: z.string().min(1).optional(),
  runtimeKey: z.string().min(1).optional(),
-=======
-  sessionId: z.string().min(1),
-  messageId: z.string().min(1).optional(),
-  runtimeKey: z.string().min(1).optional(),
-  requireKnownSession: z.boolean().optional(),
->>>>>>> bc50ba56a
 }));
 
-type PendingDesktopSessionLink = { sessionId: string; messageId: string | null; runtimeKey: string | null; requireKnownSession: boolean };
+type PendingDesktopSessionLink = { sessionId: string; messageId: string | null; runtimeKey: string | null };
 
 /**
  * Extension install links (`openchamber://extensions/install?url=…`) that
@@ -700,19 +588,7 @@ export const takePendingDesktopExtensionInstalls = async (): Promise<string[]> =
  * host (`?host=<id>`) carries that host's runtime key. Taking them removes
  * them; outside the desktop local page there are none.
  */
-/** Install links that launched the app, before any window could listen. */
-export const takePendingDesktopExtensionInstalls = async (): Promise<string[]> => {
-  if (!isDesktopShell()) return [];
-  try {
-    const parsed = z.array(z.string()).safeParse(await invokeDesktop('desktop_take_pending_extension_installs'));
-    return parsed.success ? parsed.data : [];
-  } catch {
-    return [];
-  }
-};
-
 export const takePendingDesktopSessionLinks = async (): Promise<PendingDesktopSessionLink[]> => {
-<<<<<<< HEAD
  if (!isDesktopShell() || !isDesktopLocalOriginActive()) return [];
  try {
   const parsed = pendingSessionLinksSchema.safeParse(await invokeDesktop('desktop_take_pending_session_links'));
@@ -727,23 +603,6 @@ export const takePendingDesktopSessionLinks = async (): Promise<PendingDesktopSe
   console.warn('Failed to read pending session links', error);
   return [];
  }
-=======
-  if (!isDesktopShell() || !isDesktopLocalOriginActive()) return [];
-  try {
-    const parsed = pendingSessionLinksSchema.safeParse(await invokeDesktop('desktop_take_pending_session_links'));
-    return parsed.success
-      ? parsed.data.map((link) => ({
-        sessionId: link.sessionId,
-        messageId: link.messageId ?? null,
-        runtimeKey: link.runtimeKey ?? null,
-        requireKnownSession: link.requireKnownSession === true,
-      }))
-      : [];
-  } catch (error) {
-    console.warn('Failed to read pending session links', error);
-    return [];
-  }
->>>>>>> bc50ba56a
 };
 
 const pendingHostActionsSchema = z.array(z.discriminatedUnion('type', [

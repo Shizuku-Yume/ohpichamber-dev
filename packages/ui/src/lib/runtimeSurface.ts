@@ -1,4 +1,4 @@
-import { isDesktopShell } from '@/lib/desktop';
+import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { isCapacitorApp } from '@/lib/platform';
 
 export type HostedSurface = 'desktop' | 'mobile';
@@ -16,44 +16,23 @@ export const TABLET_LAYOUT_MIN_SHORT_SIDE_PX = 600;
 const SURFACE_SWITCH_DEBOUNCE_MS = 800;
 
 const isTouchOrCoarsePointer = (): boolean => {
- if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined') return false;
 
- const coarsePointer = typeof window.matchMedia === 'function'
-  ? window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(hover: none)').matches
-  : false;
- const touchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints ?? 0 : 0;
- return coarsePointer || touchPoints > 0;
+  const coarsePointer = typeof window.matchMedia === 'function'
+    ? window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(hover: none)').matches
+    : false;
+  const touchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints ?? 0 : 0;
+  return coarsePointer || touchPoints > 0;
 };
 
 const hasSurfaceUrlOverride = (): boolean => {
- if (typeof window === 'undefined') return false;
- const override = new URLSearchParams(window.location.search).get('surface');
- return override === 'mobile' || override === 'desktop';
+  if (typeof window === 'undefined') return false;
+  const override = new URLSearchParams(window.location.search).get('surface');
+  return override === 'mobile' || override === 'desktop';
 };
 
 /** Viewport half of the surface decision; re-evaluated on resize by the watcher. */
 const isPhoneViewport = (): boolean => {
-<<<<<<< HEAD
- if (typeof window === 'undefined') return false;
- const screenWidth = window.screen?.width;
- const screenHeight = window.screen?.height;
- const width = Math.min(
-  window.innerWidth || Number.POSITIVE_INFINITY,
-  screenWidth || Number.POSITIVE_INFINITY,
- );
- const viewportWidthMatches = Number.isFinite(width)
-  && width <= MOBILE_SURFACE_MAX_WIDTH
-  && isTouchOrCoarsePointer();
- // Rotation swaps the viewport width, so a phone is recognized by its short
- // screen side. Tablets and fine-pointer touch desktops keep the width rule.
- const screenShortSideMatches = Number.isFinite(screenWidth)
-  && screenWidth > 0
-  && Number.isFinite(screenHeight)
-  && screenHeight > 0
-  && Math.min(screenWidth, screenHeight) < TABLET_LAYOUT_MIN_SHORT_SIDE_PX
-  && window.matchMedia?.('(pointer: coarse)')?.matches === true;
- return viewportWidthMatches || screenShortSideMatches;
-=======
   if (typeof window === 'undefined') return false;
   const screenWidth = window.screen?.width;
   const screenHeight = window.screen?.height;
@@ -73,7 +52,6 @@ const isPhoneViewport = (): boolean => {
     && Math.min(screenWidth, screenHeight) < TABLET_LAYOUT_MIN_SHORT_SIDE_PX
     && window.matchMedia?.('(pointer: coarse)')?.matches === true;
   return viewportWidthMatches || screenShortSideMatches;
->>>>>>> bc50ba56a
 };
 
 /**
@@ -83,22 +61,22 @@ const isPhoneViewport = (): boolean => {
  * shell (always the mobile surface) → desktop shells → phone heuristic.
  */
 const detectHostedSurface = (): HostedSurface => {
- if (typeof window === 'undefined') return 'desktop';
+  if (typeof window === 'undefined') return 'desktop';
 
- const explicitSurface = window.__OPENCHAMBER_SURFACE__;
- if (explicitSurface === 'mobile' || explicitSurface === 'desktop') {
-  return explicitSurface;
- }
+  const explicitSurface = window.__OPENCHAMBER_SURFACE__;
+  if (explicitSurface === 'mobile' || explicitSurface === 'desktop') {
+    return explicitSurface;
+  }
 
- const override = new URLSearchParams(window.location.search).get('surface');
- if (override === 'mobile' || override === 'desktop') {
-  return override;
- }
+  const override = new URLSearchParams(window.location.search).get('surface');
+  if (override === 'mobile' || override === 'desktop') {
+    return override;
+  }
 
- if (isCapacitorApp()) return 'mobile';
- if (isDesktopShell()) return 'desktop';
+  if (isCapacitorApp()) return 'mobile';
+  if (isDesktopShell() || isVSCodeRuntime()) return 'desktop';
 
- return isPhoneViewport() ? 'mobile' : 'desktop';
+  return isPhoneViewport() ? 'mobile' : 'desktop';
 };
 
 /**
@@ -107,11 +85,11 @@ const detectHostedSurface = (): HostedSurface => {
  * reads the same stable answer instead of re-running viewport heuristics.
  */
 export const resolveHostedSurface = (): HostedSurface => {
- const surface = detectHostedSurface();
- if (typeof window !== 'undefined') {
-  window.__OPENCHAMBER_SURFACE__ = surface;
- }
- return surface;
+  const surface = detectHostedSurface();
+  if (typeof window !== 'undefined') {
+    window.__OPENCHAMBER_SURFACE__ = surface;
+  }
+  return surface;
 };
 
 export const isMobileSurfaceRuntime = (): boolean => detectHostedSurface() === 'mobile';
@@ -123,31 +101,31 @@ export const isMobileSurfaceRuntime = (): boolean => detectHostedSurface() === '
  * safe). Watch for the viewport heuristic disagreeing with the stamp and
  * reload — the same mechanism a surface change has always used — once the
  * resize settles. Fixed shells never switch: Capacitor is always mobile,
- * desktop shells are always desktop, and an explicit ?surface=
+ * desktop/VS Code shells are always desktop, and an explicit ?surface=
  * override wins over the heuristic.
  */
 export const watchHostedSurfaceViewport = (): (() => void) => {
- if (typeof window === 'undefined') return () => { };
- if (isCapacitorApp() || isDesktopShell()) return () => { };
- if (hasSurfaceUrlOverride()) return () => { };
+  if (typeof window === 'undefined') return () => {};
+  if (isCapacitorApp() || isDesktopShell() || isVSCodeRuntime()) return () => {};
+  if (hasSurfaceUrlOverride()) return () => {};
 
- let timeout: ReturnType<typeof setTimeout> | null = null;
- const handleResize = () => {
-  if (timeout) clearTimeout(timeout);
-  timeout = setTimeout(() => {
-   timeout = null;
-   const stamped = window.__OPENCHAMBER_SURFACE__;
-   const desired: HostedSurface = isPhoneViewport() ? 'mobile' : 'desktop';
-   if (stamped && stamped !== desired) {
-    window.__OPENCHAMBER_SURFACE__ = undefined;
-    window.location.reload();
-   }
-  }, SURFACE_SWITCH_DEBOUNCE_MS);
- };
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const handleResize = () => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      timeout = null;
+      const stamped = window.__OPENCHAMBER_SURFACE__;
+      const desired: HostedSurface = isPhoneViewport() ? 'mobile' : 'desktop';
+      if (stamped && stamped !== desired) {
+        window.__OPENCHAMBER_SURFACE__ = undefined;
+        window.location.reload();
+      }
+    }, SURFACE_SWITCH_DEBOUNCE_MS);
+  };
 
- window.addEventListener('resize', handleResize);
- return () => {
-  if (timeout) clearTimeout(timeout);
-  window.removeEventListener('resize', handleResize);
- };
+  window.addEventListener('resize', handleResize);
+  return () => {
+    if (timeout) clearTimeout(timeout);
+    window.removeEventListener('resize', handleResize);
+  };
 };

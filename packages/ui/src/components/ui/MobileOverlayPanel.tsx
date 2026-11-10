@@ -196,13 +196,8 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
       // deliberately still covers everything. The screen's own side insets
       // (a landscape notch, the status bar column of iPhone Duo) come on top.
       style={{
-<<<<<<< HEAD
-        paddingLeft: chatInsets.left,
-        paddingRight: chatInsets.right,
-=======
         paddingLeft: `calc(${chatInsets.left}px + var(--oc-safe-area-left, 0px))`,
         paddingRight: `calc(${chatInsets.right}px + var(--oc-safe-area-right, 0px))`,
->>>>>>> bc50ba56a
       }}
     >
         <div
@@ -236,11 +231,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
 
           return (
             <div className="flex items-center justify-between ps-4 pe-3 py-2 border-b border-edge-muted">
-<<<<<<< HEAD
-              <h2 className="typography-ui-label font-semibold text-foreground">{title}</h2>
-=======
               <h2 dir="auto" className="typography-ui-label font-semibold text-foreground">{title}</h2>
->>>>>>> bc50ba56a
               {closeButton}
             </div>
           );

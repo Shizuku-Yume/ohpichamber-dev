@@ -50,65 +50,11 @@ const labels = {
   unfavorite: 'Unfavorite',
 };
 
-<<<<<<< HEAD
 const renderPicker = async (props: Partial<React.ComponentProps<typeof ModelPickerList>> = {}) => {
   const host = document.createElement('div');
   document.body.append(host);
   const mounted = createRoot(host);
   root = mounted;
-=======
-beforeEach(async () => {
-  dom = new Window({ url: 'http://localhost', width: 1280, height: 800 });
-  const values = {
-    window: dom, document: dom.document, navigator: dom.navigator,
-    localStorage: dom.localStorage, sessionStorage: dom.sessionStorage,
-    Node: dom.Node, Element: dom.Element, HTMLElement: dom.HTMLElement,
-    HTMLInputElement: dom.HTMLInputElement, HTMLButtonElement: dom.HTMLButtonElement,
-    SVGElement: dom.SVGElement, Document: dom.Document, ShadowRoot: dom.ShadowRoot,
-    Event: dom.Event, MouseEvent: dom.MouseEvent, PointerEvent: dom.PointerEvent,
-    KeyboardEvent: dom.KeyboardEvent, CustomEvent: dom.CustomEvent,
-    MutationObserver: dom.MutationObserver, ResizeObserver: dom.ResizeObserver,
-    getComputedStyle: dom.getComputedStyle.bind(dom),
-    requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
-    cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom), IS_REACT_ACT_ENVIRONMENT: true,
-  };
-  for (const [name, value] of Object.entries(values)) {
-    globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
-    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
-  }
-  // happy-dom lays nothing out; the list's scroller gets a menu's height so
-  // the virtual list mounts the rows in view, as it does in a browser.
-  for (const [name, size] of [['clientHeight', 400], ['clientWidth', 380]] as const) {
-    Object.defineProperty(dom.HTMLElement.prototype, name, {
-      configurable: true,
-      get(this: HTMLElement) { return this.classList.contains('overlay-scrollbar-target') ? size : 0; },
-    });
-  }
-  // The stores this list reads start background loads; keep them pending.
-  const fetch = spyOn(globalThis, 'fetch').mockImplementation(() => new Promise<Response>(() => undefined));
-  restoreFetch = () => fetch.mockRestore();
-  ({ ModelPickerList } = await import('./ModelPickerList'));
-  host = document.createElement('div');
-  document.body.appendChild(host);
-  const { createRoot } = await import('react-dom/client');
-  root = createRoot(host);
-});
-
-afterEach(async () => {
-  await act(async () => root.unmount());
-  host.remove();
-  restoreFetch();
-  for (const [name, descriptor] of globals) {
-    if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-    else Reflect.deleteProperty(globalThis, name);
-  }
-  globals.clear();
-  await dom.happyDOM.abort();
-  dom.close();
-});
-
-const renderPicker = async (favoriteModels: ModelPickerEntry[] = []) => {
->>>>>>> bc50ba56a
   await act(async () => {
     mounted.render(
       <ModelPickerList

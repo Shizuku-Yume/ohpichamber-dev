@@ -38,7 +38,6 @@ export const useSessionAutoCleanup = ({ autoRun = true, enabled = true }: Cleanu
   const workKeeps = inWorkKeepsSessions({ sessionWorkEnabled, sessionRetentionIncludeInWork: includeInWork });
   // Pin changes must refresh the Settings preview of what cleanup would take.
   const pinnedIds = useSessionPinnedStore((state) => state.ids);
-  const workKeeps = useUIStore(inWorkKeepsSessions);
 
   React.useEffect(() => {
     if (needsGlobalSessions) void ensureGlobalSessionsLoaded();
@@ -51,13 +50,9 @@ export const useSessionAutoCleanup = ({ autoRun = true, enabled = true }: Cleanu
     action,
     onlyArchived,
     activeSessionIds,
-<<<<<<< HEAD
     // Pins and the In work block's setting change what cleanup may take; the
     // preview must follow both.
     isKept: (session) => isSessionKeptByUser(session, pinnedIds, undefined, workKeeps),
-=======
-    isKept: (session) => isSessionKeptByUser(session, pinnedIds, workKeeps),
->>>>>>> bc50ba56a
   }), [activeSessions, archivedSessions, currentSessionId, autoDeleteAfterDays, action, onlyArchived, activeSessionIds, pinnedIds, workKeeps]);
 
   React.useEffect(() => {

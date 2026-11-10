@@ -18,11 +18,6 @@ export interface MultiRunAutoFusion extends ModelSelection {
   variant?: string;
 }
 
-export interface MultiRunGoal {
-  /** Applies to each lane separately. */
-  tokenBudget: number | null;
-}
-
 export interface CreateMultiRunParams {
   /** Seed for the group slug, worktree and branch names. */
   name: string;
@@ -40,14 +35,11 @@ export interface CreateMultiRunParams {
   autoFusion?: MultiRunAutoFusion;
   /** Every lane starts a goal of its own, with its prompt as the objective. */
   goal?: MultiRunGoal;
-<<<<<<< HEAD
 }
 
 export interface MultiRunGoal {
   /** Applies to each lane separately. */
   tokenBudget: number | null;
-=======
->>>>>>> bc50ba56a
 }
 
 export interface CreateMultiRunResult {

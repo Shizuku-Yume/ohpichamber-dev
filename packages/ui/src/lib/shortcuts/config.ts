@@ -10,20 +10,17 @@ type ShortcutConfig = {
   prefixStyle?: true;
   /** The handler matches single key presses, so Settings records one chord. */
   singleChord?: true;
-<<<<<<< HEAD
-=======
   /** The desktop app menu owns the key as a native accelerator: it works from
       every focused surface and window, and needs no renderer handler. The key
       exists only where that menu item does; the recorder takes one chord. */
   nativeMenu?: 'all' | 'non-mac';
->>>>>>> bc50ba56a
 } & (
-    | { customizable: false }
-    | {
+  | { customizable: false }
+  | {
       customizable: true;
       settingsLabelKey: `settings.openchamber.keyboardShortcuts.action.${string}.label`;
     }
-  );
+);
 
 // Default layout, unified around three modes:
 // - Single chords for everyday actions.
@@ -32,24 +29,6 @@ type ShortcutConfig = {
 //   switches context panel surfaces (mod+shift+digit is reserved by macOS
 //   screenshots).
 // Everything else lives only in the command palette, outside this schema.
-/** Commands the palette also lists; bindable here, unassigned until the person sets them. */
-export const PALETTE_COMMANDS = [
-  'open_new_worktree_dialog',
-  'add_project',
-  'show_context_usage',
-  'show_opencode_status',
-  'open_overview',
-  'reload_ui',
-  'restart_opencode',
-  'open_archive',
-  'open_notes',
-  'open_todos',
-  'pin_current_session',
-  'copy_current_session_id',
-  'toggle_work_current_session',
-  'open_multi_run',
-] as const;
-
 const SHORTCUT_GROUPS = {
   session: [
     {
@@ -187,8 +166,6 @@ const SHORTCUT_GROUPS = {
       customizable: true,
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.toggle_dictation.label',
     },
-<<<<<<< HEAD
-=======
     {
       id: 'sessions_bulk_delete',
       defaultBinding: 'mod+backspace',
@@ -223,38 +200,16 @@ const SHORTCUT_GROUPS = {
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.permission_deny.label',
     },
     { id: 'abort_run', defaultBinding: 'escape', customizable: false },
->>>>>>> bc50ba56a
     {
-      id: 'sessions_bulk_delete',
-      defaultBinding: 'mod+backspace',
+      // Not ctrl+b (the OpenCode TUI's key): the composer editor's macOS
+      // emacs keymap moves the caret on it, and elsewhere it is mod+b
+      // (toggle_sidebar).
+      id: 'background_session_work',
+      defaultBinding: 'mod+shift+b',
       customizable: true,
-      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.sessions_bulk_delete.label',
+      settingsLabelKey:
+        'settings.openchamber.keyboardShortcuts.action.background_session_work.label',
     },
-    {
-      id: 'sessions_select_all',
-      defaultBinding: 'mod+a',
-      customizable: true,
-      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.sessions_select_all.label',
-    },
-    {
-      id: 'permission_allow_once',
-      defaultBinding: 'alt+enter',
-      customizable: true,
-      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.permission_allow_once.label',
-    },
-    {
-      id: 'permission_allow_always',
-      defaultBinding: 'alt+shift+enter',
-      customizable: true,
-      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.permission_allow_always.label',
-    },
-    {
-      id: 'permission_deny',
-      defaultBinding: 'alt+backspace',
-      customizable: true,
-      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.permission_deny.label',
-    },
-    { id: 'abort_run', defaultBinding: 'escape', customizable: false },
   ],
   models: [
     {
@@ -428,16 +383,12 @@ const SHORTCUT_GROUPS = {
     },
   ],
   navigation: [
-<<<<<<< HEAD
-    { id: 'save_file', defaultBinding: 'mod+s', customizable: false },
-=======
     {
       id: 'save_file',
       defaultBinding: 'mod+s',
       customizable: true,
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.save_file.label',
     },
->>>>>>> bc50ba56a
     {
       id: 'find_in_file',
       defaultBinding: 'mod+f',
@@ -445,8 +396,6 @@ const SHORTCUT_GROUPS = {
       customizable: true,
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.find_in_file.label',
     },
-<<<<<<< HEAD
-=======
     {
       id: 'diff_next_file',
       defaultBinding: 'alt+arrowdown',
@@ -473,7 +422,6 @@ const SHORTCUT_GROUPS = {
       customizable: true,
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.next_project.label',
     },
->>>>>>> bc50ba56a
     {
       id: 'open_go_to_line',
       defaultBinding: 'alt+g',
@@ -520,16 +468,6 @@ const SHORTCUT_GROUPS = {
       customizable: true,
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.cycle_theme.label',
     },
-<<<<<<< HEAD
-    // The palette's own commands, each bindable but unset by default so
-    // nothing fires that the person did not ask for.
-    ...PALETTE_COMMANDS.map((id) => ({
-      id,
-      defaultBinding: UNASSIGNED_SHORTCUT,
-      customizable: true as const,
-      settingsLabelKey: `settings.openchamber.keyboardShortcuts.action.${id}.label` as const,
-    })),
-=======
     {
       id: 'open_archive',
       defaultBinding: UNASSIGNED_SHORTCUT,
@@ -663,7 +601,6 @@ const SHORTCUT_GROUPS = {
       customizable: true,
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.zoom_reset.label',
     },
->>>>>>> bc50ba56a
   ],
   // Desktop-shell capabilities: registered as OS-level global shortcuts rather
   // than in-app keybindings, so they carry no in-app default binding. The

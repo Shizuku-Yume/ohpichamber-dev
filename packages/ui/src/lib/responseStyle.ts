@@ -58,20 +58,5 @@ export const resolveResponseStyleInstruction = ({
   if (preset === 'custom') {
     return typeof customInstructions === 'string' ? customInstructions.trim() : '';
   }
-<<<<<<< HEAD
   return PRESET_INSTRUCTIONS[preset];
-=======
-  if (!isResponseStylePreset(preset)) return null;
-  return getResponseStylePresetInstructions(preset);
-};
-
-export const fetchResponseStyleInstruction = async (): Promise<string | null | undefined> => {
-  const settings = await loadDesktopSettings();
-  if (!settings) return undefined;
-  return buildResponseStyleInstruction({
-    enabled: settings.responseStyleEnabled === true,
-    preset: settings.responseStylePreset,
-    customInstructions: settings.responseStyleCustomInstructions,
-  });
->>>>>>> bc50ba56a
 };

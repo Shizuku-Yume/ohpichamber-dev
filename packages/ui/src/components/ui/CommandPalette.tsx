@@ -21,10 +21,6 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { orderVisibleRootSessions } from '@/lib/sessionListOrder';
 import { settingsPageTitleKey } from '@/lib/settings/pageTitle';
-<<<<<<< HEAD
-=======
-import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
->>>>>>> bc50ba56a
 import {
   EMPTY_SESSION_ORDER_RANKS,
   useSessionOrderingStore,
@@ -35,39 +31,16 @@ import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import {
-  addProject,
-  copyCurrentSessionId,
-  openArchive,
-  openMultiRun,
-  openNewWorktreeDialog,
-  openNotes,
-  openOverview,
-  openTodos,
-  pinCurrentSession,
-  reloadUi,
-  restartOpenCode,
-  showContextUsage,
-  showDiagnosticTimeline,
-} from '@/lib/paletteCommands';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { toastContextFileOpenFailure, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
-<<<<<<< HEAD
 import { toast } from '@/components/ui';
-=======
->>>>>>> bc50ba56a
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import type { Session } from '@openchamber/agent-contract';
 import { isSessionDirectoryAdmitted } from '@/sync/session-admission-rule';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
-<<<<<<< HEAD
 import { formatShortcutForDisplay, getEffectiveShortcutCombo, shortcutRegistry } from '@/lib/shortcuts';
 import { showRuntimeStatus } from '@/lib/runtimeStatus';
 import { canUseElectronDesktopIPC, getMiniChatRuntimeArgs, invokeDesktop, isDesktopShell, isWebRuntime } from '@/lib/desktop';
-=======
-import { formatShortcutForDisplay, getEffectiveShortcutCombo, shortcutRegistry, type ShortcutActionId } from '@/lib/shortcuts';
-import { canUseElectronDesktopIPC, getMiniChatRuntimeArgs, invokeDesktop, isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
->>>>>>> bc50ba56a
 import { SETTINGS_PAGE_METADATA, type SettingsRuntimeContext } from '@/lib/settings/metadata';
 
 const EMPTY_PINNED_SESSION_IDS = new Set<string>();
@@ -80,9 +53,12 @@ import { matchSegments, type MatchRange } from '@/lib/search/matchSegments';
 import { MatchHighlight } from './MatchHighlight';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { sessionEvents } from '@/lib/sessionEvents';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { buildCommandPaletteFileSearchKey, scoreCommandPaletteFiles } from './commandPaletteFilesState';
 import { fileRowMatchRanges, projectRowMatchRanges, splitRelativePath } from './commandPaletteMatches';
+import { openParallelComposer } from '@/lib/multirun/openParallelComposer';
 import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 import { useMessageSearch } from '@/hooks/useMessageSearch';
 import type { MessageSearchHit } from '@/lib/messageSearch';
@@ -102,13 +78,12 @@ type ProjectActionsRunnerLike = {
 const useProjectActions = (): ProjectActionsRunnerLike | null => null;
 const useObserveProjectActionRuns = (_enabled: boolean) => {};
 import { resolveProjectActionIconName } from '@/lib/projectActions';
-import { isSessionDirectoryAdmitted } from '@/sync/session-admission-rule';
 
 type CommandEntry = {
   id: string;
   title: string;
   icon: React.ReactNode;
-  shortcutId?: ShortcutActionId;
+  shortcutId?: string;
   searchText: string;
   /** Search-only command: reachable by typing, hidden from the initial list
       so the first screen stays scroll-free. */
@@ -174,13 +149,16 @@ export const CommandPalette: React.FC = () => {
   const setSettingsPage = useUIStore((s) => s.setSettingsPage);
   const setSessionSwitcherOpen = useUIStore((s) => s.setSessionSwitcherOpen);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
-  const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
+  const openContextOverview = useUIStore((s) => s.openContextOverview);
   const openContextSurface = useUIStore((s) => s.openContextSurface);
   const openContextFile = useUIStore((s) => s.openContextFile);
   const shortcutOverrides = useUIStore((s) => s.shortcutOverrides);
+  const setArchivePageOpen = useUIStore((s) => s.setArchivePageOpen);
+  const setProjectContextTab = useUIStore((s) => s.setProjectContextTab);
 
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
   const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
+  const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
 
   const activeSessions = useGlobalSessionsStore(React.useCallback(
     (state) => isCommandPaletteOpen ? state.activeSessions : EMPTY_SESSIONS,
@@ -246,7 +224,7 @@ export const CommandPalette: React.FC = () => {
 
   const close = React.useCallback(() => setCommandPaletteOpen(false), [setCommandPaletteOpen]);
   const run = React.useCallback(
-    (fn: () => void | boolean | Promise<void>) => () => {
+    (fn: () => void | Promise<void>) => () => {
       close();
       void fn();
     },
@@ -283,18 +261,20 @@ export const CommandPalette: React.FC = () => {
       {
         id: 'new-worktree-dialog',
         title: t('commandPalette.item.newWorktreeDialog'),
-        icon: <Icon name="worktree" className="me-2 h-4 w-4" />,
-        shortcutId: 'open_new_worktree_dialog',
+        icon: <Icon name="git-branch" className="me-2 h-4 w-4" />,
         searchText: t('commandPalette.item.newWorktreeDialog'),
-        onSelect: run(openNewWorktreeDialog),
+        onSelect: run(() => {
+          useUIStore.getState().setNewWorktreeDialogOpen(true);
+        }),
       },
       {
         id: 'add-project',
         title: t('commandPalette.item.addProject'),
         icon: <Icon name="folder-add" className="me-2 h-4 w-4" />,
-        shortcutId: 'add_project',
         searchText: t('commandPalette.item.addProject'),
-        onSelect: run(addProject),
+        onSelect: run(() => {
+          sessionEvents.requestDirectoryDialog();
+        }),
       },
       {
         id: 'toggle-sidebar',
@@ -329,9 +309,10 @@ export const CommandPalette: React.FC = () => {
         id: 'context-usage',
         title: t('commandPalette.item.showContextUsage'),
         icon: <Icon name="pie-chart" className="me-2 h-4 w-4" />,
-        shortcutId: 'show_context_usage',
         searchText: t('commandPalette.item.showContextUsage'),
-        onSelect: run(showContextUsage),
+        onSelect: run(() => {
+          if (currentDirectory) openContextOverview(currentDirectory);
+        }),
       },
       {
         id: 'cycle-theme',
@@ -349,16 +330,10 @@ export const CommandPalette: React.FC = () => {
         secondary: true,
         title: t('commandPalette.item.showRuntimeStatus'),
         icon: <Icon name="pulse" className="me-2 h-4 w-4" />,
-<<<<<<< HEAD
         searchText: t('commandPalette.item.showRuntimeStatus'),
         onSelect: run(() => {
           void showRuntimeStatus();
         }),
-=======
-        shortcutId: 'show_opencode_status',
-        searchText: t('commandPalette.item.showOpenCodeStatus'),
-        onSelect: run(showDiagnosticTimeline),
->>>>>>> bc50ba56a
       },
       {
         id: 'open-settings',
@@ -375,9 +350,8 @@ export const CommandPalette: React.FC = () => {
         secondary: true,
         title: t('overview.title'),
         icon: <Icon name="compass-3" className="me-2 h-4 w-4" />,
-        shortcutId: 'open_overview',
         searchText: t('overview.title'),
-        onSelect: run(openOverview),
+        onSelect: run(() => useUIStore.getState().setOverviewOpen(true)),
       });
     }
       list.push({
@@ -396,111 +370,80 @@ export const CommandPalette: React.FC = () => {
         secondary: true,
         title: t('commandPalette.item.reloadUi'),
         icon: <Icon name="refresh" className="me-2 h-4 w-4" />,
-        shortcutId: 'reload_ui',
         searchText: t('commandPalette.item.reloadUi'),
-        onSelect: run(reloadUi),
+        onSelect: run(() => window.location.reload()),
       });
     list.push(
-<<<<<<< HEAD
 
-=======
-      {
-        id: 'collapse-sessions-all',
-        secondary: true,
-        title: t('sessions.sidebar.header.displayMode.collapseAll'),
-        icon: <Icon name="contract-up-down" className="me-2 h-4 w-4" />,
-        shortcutId: 'collapse_sessions_all',
-        searchText: t('sessions.sidebar.header.displayMode.collapseAll'),
-        onSelect: run(() => {
-          // The sidebar handler acts on hidden sidebars too; opening it shows the result.
-          setSidebarOpen(true);
-          shortcutRegistry.invoke('collapse_sessions_all');
-        }),
-      },
-      {
-        id: 'expand-sessions-all',
-        secondary: true,
-        title: t('sessions.sidebar.header.displayMode.expandAll'),
-        icon: <Icon name="expand-up-down" className="me-2 h-4 w-4" />,
-        shortcutId: 'expand_sessions_all',
-        searchText: t('sessions.sidebar.header.displayMode.expandAll'),
-        onSelect: run(() => {
-          // The sidebar handler acts on hidden sidebars too; opening it shows the result.
-          setSidebarOpen(true);
-          shortcutRegistry.invoke('expand_sessions_all');
-        }),
-      },
-      {
-        id: 'pin-session',
-        secondary: true,
-        title: t('commandPalette.item.pinSession'),
-        icon: <Icon name="pushpin" className="me-2 h-4 w-4" />,
-        shortcutId: 'pin_current_session',
-        searchText: t('commandPalette.item.pinSession'),
-        onSelect: run(pinCurrentSession(t)),
-      },
->>>>>>> bc50ba56a
       {
         id: 'copy-session-id',
         secondary: true,
         title: t('commandPalette.item.copySessionId'),
         icon: <Icon name="file-copy" className="me-2 h-4 w-4" />,
-        shortcutId: 'copy_current_session_id',
         searchText: t('commandPalette.item.copySessionId'),
-        onSelect: run(copyCurrentSessionId(t)),
+        onSelect: run(() => {
+          if (!currentSessionId) return;
+          void copyTextToClipboard(currentSessionId)
+            .then((result) => {
+              if (result.ok) {
+                toast.success(t('sessions.sidebar.session.copyId.success'));
+                return;
+              }
+              toast.error(t('sessions.sidebar.session.copyId.error'));
+            })
+            .catch(() => toast.error(t('sessions.sidebar.session.copyId.error')));
+        }),
       },
       {
         id: 'open-multi-run',
         secondary: true,
         title: t('commandPalette.item.openMultiRun'),
         icon: <ArrowsMerge className="me-2 h-4 w-4" />,
-        shortcutId: 'open_multi_run',
         searchText: t('commandPalette.item.openMultiRun'),
-        onSelect: run(openMultiRun),
+        onSelect: run(() => {
+          setSessionSwitcherOpen(false);
+          openParallelComposer();
+        }),
       },
       {
         id: 'open-archive',
         secondary: true,
         title: t('commandPalette.item.openArchive'),
         icon: <Icon name="archive" className="me-2 h-4 w-4" />,
-        shortcutId: 'open_archive',
         searchText: t('commandPalette.item.openArchive'),
-        onSelect: run(openArchive),
+        onSelect: run(() => {
+          setSessionSwitcherOpen(false);
+          setArchivePageOpen(true);
+        }),
       },
       {
         id: 'open-notes',
         secondary: true,
         title: t('commandPalette.item.openNotes'),
         icon: <Icon name="sticky-note" className="me-2 h-4 w-4" />,
-        shortcutId: 'open_notes',
         searchText: t('commandPalette.item.openNotes'),
-        onSelect: run(openNotes),
+        onSelect: run(() => {
+          if (currentDirectory) {
+            setProjectContextTab('notes');
+            openContextSurface(currentDirectory, 'notes');
+          }
+        }),
       },
       {
         id: 'open-todos',
         secondary: true,
         title: t('commandPalette.item.openTodos'),
         icon: <Icon name="checkbox-circle" className="me-2 h-4 w-4" />,
-        shortcutId: 'open_todos',
         searchText: t('commandPalette.item.openTodos'),
-        onSelect: run(openTodos),
+        onSelect: run(() => {
+          if (currentDirectory) {
+            setProjectContextTab('todos');
+            openContextSurface(currentDirectory, 'notes');
+          }
+        }),
       },
     );
-<<<<<<< HEAD
 
-=======
-    if (!isVSCodeRuntime()) {
-      list.push({
-        id: 'restart-opencode',
-        secondary: true,
-        title: t('commandPalette.item.restartOpenCode'),
-        icon: <Icon name="restart" className="me-2 h-4 w-4" />,
-        shortcutId: 'restart_opencode',
-        searchText: t('commandPalette.item.restartOpenCode'),
-        onSelect: run(restartOpenCode(t)),
-      });
-    }
->>>>>>> bc50ba56a
     list.push({
       id: 'toggle-memory-debug',
       secondary: true,
@@ -568,15 +511,18 @@ export const CommandPalette: React.FC = () => {
     t,
     run,
     isMobile,
-    setSessionSwitcherOpen,
+        setSessionSwitcherOpen,
     openNewSessionDraft,
     toggleSidebar,
-    setSidebarOpen,
     openContextSurface,
     currentDirectory,
+    openContextOverview,
     setSettingsDialogOpen,
     activeProject?.id,
     activeProject?.path,
+    currentSessionId,
+    setArchivePageOpen,
+    setProjectContextTab,
     projectActions,
     overviewAvailable,
   ]);
@@ -622,11 +568,7 @@ export const CommandPalette: React.FC = () => {
   const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const orderedActiveSessions = React.useMemo(
     () => orderVisibleRootSessions(activeSessions.filter((session) => (
-<<<<<<< HEAD
       isSessionDirectoryAdmitted(resolveGlobalSessionDirectory(session) ?? session.displayPath, projects, worktreesByProject)
-=======
-      isSessionDirectoryAdmitted(resolveGlobalSessionDirectory(session), projects, worktreesByProject)
->>>>>>> bc50ba56a
     )), pinnedSessionIds, sessionOrderRanks),
     [activeSessions, pinnedSessionIds, projects, sessionOrderRanks, worktreesByProject],
   );
@@ -876,7 +818,7 @@ export const CommandPalette: React.FC = () => {
   );
 
   const shortcut = React.useCallback(
-    (actionId: ShortcutActionId) =>
+    (actionId: string) =>
       formatShortcutForDisplay(getEffectiveShortcutCombo(actionId, shortcutOverrides)),
     [shortcutOverrides],
   );
@@ -926,7 +868,6 @@ export const CommandPalette: React.FC = () => {
         showCloseButton={false}
       >
         <Command
-          loop
           shouldFilter={false}
           className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:!text-[0.6875rem] [&_[cmdk-group-heading]]:!leading-4 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-4 [&_[cmdk-input-wrapper]_svg]:w-4 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]_svg]:h-4 [&_[cmdk-item]_svg]:w-4 [&_[cmdk-item]]:typography-meta"
         >
@@ -1055,12 +996,12 @@ export const CommandPalette: React.FC = () => {
                           <Icon name="chat-ai-3" className="me-2 h-4 w-4" />
                           <span dir="auto" className="min-w-0 flex-1 truncate oc-ui-start-align"><Matched text={title} ranges={ranges} /></span>
                           {projectLabel ? (
-                            <span dir="auto" className="max-w-[180px] shrink-0 truncate text-muted-foreground typography-meta">{projectLabel}</span>
+                            <span className="max-w-[180px] shrink-0 truncate text-muted-foreground typography-meta">{projectLabel}</span>
                           ) : null}
                           {branch ? (
                             <span className="inline-flex max-w-[160px] shrink-0 items-center gap-1 text-muted-foreground typography-meta">
                               <Icon name="git-branch" className="h-3 w-3" />
-                              <span dir="ltr" className="truncate">{branch}</span>
+                              <span className="truncate">{branch}</span>
                             </span>
                           ) : null}
                         </CommandItem>
@@ -1086,7 +1027,7 @@ export const CommandPalette: React.FC = () => {
                         onSelect={() => handleOpenProject(project.id, project.path)}
                       >
                         <Icon name="folder" className="me-2 h-4 w-4" />
-                        <span dir="auto" className="shrink-0 truncate"><Matched text={project.displayName} ranges={nameRanges} /></span>
+                        <span className="shrink-0 truncate"><Matched text={project.displayName} ranges={nameRanges} /></span>
                         <LeadingTruncated text={project.path} ranges={pathRanges} className="flex-1" />
                       </CommandItem>
                     ))}

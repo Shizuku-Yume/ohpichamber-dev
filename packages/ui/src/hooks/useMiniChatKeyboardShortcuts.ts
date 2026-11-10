@@ -1,11 +1,7 @@
 import React from 'react';
 import { focusChatInput } from '@/components/chat/composer/editor/dom';
-<<<<<<< HEAD
-import { canUseElectronDesktopIPC, invokeDesktop } from '@/lib/desktop';
-=======
 import { canUseElectronDesktopIPC, getMiniChatRuntimeArgs, invokeDesktop } from '@/lib/desktop';
 import { getNextFavoriteModel } from '@/lib/modelRefs';
->>>>>>> bc50ba56a
 import { ShortcutDispatcher, getEffectiveShortcutCombo, shortcutRegistry } from '@/lib/shortcuts';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { cycleThinkingVariant } from '@/lib/cycleThinkingVariant';
@@ -67,6 +63,7 @@ export const useMiniChatKeyboardShortcuts = () => {
       void invokeDesktop('desktop_open_draft_mini_chat_window', {
         directory: '',
         projectId: null,
+        ...getMiniChatRuntimeArgs(),
       })?.catch((error) => {
         console.warn('[mini-chat-shortcuts] failed to open draft mini chat window', error);
       });
@@ -85,14 +82,7 @@ export const useMiniChatKeyboardShortcuts = () => {
     },
     cycle_thinking_variant: () => {
       if (hasActiveBtwComposer()) return false;
-<<<<<<< HEAD
-      const configState = useConfigStore.getState();
-      if (configState.getCurrentModelVariants().length === 0) return false;
-
-      configState.cycleCurrentVariant();
-=======
       if (!cycleThinkingVariant(useSessionUIStore.getState().currentSessionId)) return false;
->>>>>>> bc50ba56a
     },
     cycle_favorite_model_forward: () => cycleFavoriteModel(1),
     cycle_favorite_model_backward: () => cycleFavoriteModel(-1),

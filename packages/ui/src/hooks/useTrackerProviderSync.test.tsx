@@ -64,11 +64,7 @@ test('re-reads the tracker list and every status when the server announces a cha
 
     // An extension's tracker attached: the list and the statuses are read again.
     served = [linearLikeTrackerDescriptor(), acmeTrackerDescriptor({ id: 'ext-acme' })];
-<<<<<<< HEAD
-    await act(async () => source.emit('openchamber:guests-changed'));
-=======
     await act(async () => source.emit('openchamber:tracker-providers-changed'));
->>>>>>> bc50ba56a
     expect(reads).toBe(2);
     expect(ids()).toEqual(['linear', 'ext-acme']);
     expect(statusReads).toContain('ext-acme');

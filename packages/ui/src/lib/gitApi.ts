@@ -8,11 +8,7 @@ import { loadMagicPrompts } from './magicPrompts';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { runtimeFetch } from '@/lib/runtime-fetch';
-<<<<<<< HEAD
 import { getRuntimeSwitchRevision } from './runtime-switch';
-=======
-import { GitNetworkOperationRequestError } from './api/types';
->>>>>>> bc50ba56a
 import { notifyGitStatusInvalidated } from './gitStatusInvalidation';
 export type ChangeRequestProviderWords = {
   label: string;
@@ -31,16 +27,7 @@ const getRuntimeGit = () => {
   return getRegisteredRuntimeAPIs()?.git ?? null;
 };
 
-<<<<<<< HEAD
 // Runtime git adapters do not necessarily go through the HTTP
-=======
-// A registered runtime that omits an operation does not have it. Falling back
-// to the HTTP adapter would call a server that runtime does not run.
-const unsupportedByRuntime = (operation: string): Promise<never> =>
-  Promise.reject(new GitNetworkOperationRequestError('RUNTIME_UNSUPPORTED', `${operation} is not supported in this runtime`, 501));
-
-// Runtime git adapters (the VS Code bridge today) do not go through the HTTP
->>>>>>> bc50ba56a
 // adapter's cache, so the invalidation signal `useGitStore` relies on has to be
 // emitted here, at the dispatch layer, once a runtime mutation succeeds. The
 // HTTP adapter keeps emitting it itself when it clears its own cache, so a
@@ -568,13 +555,9 @@ async function teardownGitWorktree(
   if (runtime?.worktree?.teardown) {
     return runtime.worktree.teardown(directory, payload);
   }
-<<<<<<< HEAD
   if (runtime?.teardownGitWorktree) {
     return runtime.teardownGitWorktree(directory, payload);
   }
-=======
-  if (runtime) throw new Error('Running teardown commands alone is not available here');
->>>>>>> bc50ba56a
   return gitHttp.teardownGitWorktree(directory, payload);
 }
 
@@ -740,17 +723,10 @@ export async function getCommitFileDiff(
   hash: string,
   filePath: string,
   isBinary: boolean,
-<<<<<<< HEAD
   previousPath?: string
 ): Promise<import('./api/types').CommitFileDiffResponse> {
   const runtime = getRuntimeGit();
   if (runtime?.getCommitFileDiff) return runtime.getCommitFileDiff(directory, hash, filePath, isBinary);
-=======
-  previousPath?: string,
-): Promise<import('./api/types').CommitFileDiffResponse> {
-  const runtime = getRuntimeGit();
-  if (runtime) return runtime.getCommitFileDiff ? runtime.getCommitFileDiff(directory, hash, filePath, isBinary) : unsupportedByRuntime('getCommitFileDiff');
->>>>>>> bc50ba56a
   return gitHttp.getCommitFileDiff(directory, hash, filePath, isBinary, previousPath);
 }
 

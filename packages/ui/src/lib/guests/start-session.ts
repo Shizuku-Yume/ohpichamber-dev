@@ -1,5 +1,3 @@
-import { useSelectionStore } from '@/sync/selection-store';
-import { captureDefaultSendSelection } from '@/lib/defaultSendSelection';
 import { toast } from 'sonner';
 import type {
   AttachIssueRequest,
@@ -15,7 +13,7 @@ import { HostRequestError, clampPromptRequest, clampStartSessionRequest } from '
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { generateBranchSlug } from '@/lib/git/branchNameGenerator';
 import { buildLinkedGuestIssue, type LinkedGuestIssue } from '@/lib/linkedIssues';
-import { parseModelIdentifier } from '@/lib/modelIdentifier';
+import { captureDefaultSendSelection } from '@/lib/defaultSendSelection';
 import { resolveProjectRef } from '@/lib/worktreeSessionCreator';
 import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
 import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
@@ -28,11 +26,7 @@ import { isAutoModel } from '@/lib/routing/autoModel';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { useConfigStore } from '@/stores/useConfigStore';
-<<<<<<< HEAD
-import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
-=======
 import { useContextStore } from '@/stores/contextStore';
->>>>>>> bc50ba56a
 import { useUIStore } from '@/stores/useUIStore';
 import * as sessionActions from '@/sync/session-actions';
 import { useSelectionStore } from '@/sync/selection-store';
@@ -112,6 +106,7 @@ export type StartGuestSessionDeps = {
     branch: string,
     kind: 'pr' | 'standard',
   ) => Promise<CreatedSession | null>;
+  initializeSession: (sessionId: string) => void;
   setLinkedIssue: (sessionId: string, directory: string, issue: LinkedGuestIssue) => Promise<void>;
   sendFirstMessage: (sessionId: string, directory: string, text: string) => Promise<'sent' | 'no-model' | 'failed'>;
   closeSurfaces: () => void;
@@ -131,6 +126,7 @@ export const runStartGuestSession = async (
   if (!created) {
     return { ok: false, reason: plan.worktree ? 'worktree-failed' : 'create-failed' };
   }
+  deps.initializeSession(created.id);
   deps.closeSurfaces();
   await deps.setLinkedIssue(created.id, created.directory, plan.linked);
   if (!plan.text) {
@@ -138,54 +134,6 @@ export const runStartGuestSession = async (
   }
   const sent = await deps.sendFirstMessage(created.id, created.directory, plan.text);
   return { ok: true, sessionId: created.id, sent };
-};
-
-const resolveDefaultAgentName = (): string | undefined => {
-  const configState = useConfigStore.getState();
-  if (configState.settingsDefaultAgent) {
-    return configState.settingsDefaultAgent;
-  }
-  const agents = selectAgentsForDirectory(useAgentsStore.getState(), configState.activeDirectoryKey);
-  return (
-    configState.currentAgentName
-    || agents[0]?.agentId
-  );
-};
-
-const resolveDefaultModelSelection = (): { providerId: string; modelId: string } | null => {
-  const parsed = parseModelIdentifier(useConfigStore.getState().settingsDefaultModel);
-  if (!parsed) {
-    return null;
-  }
-  if (!useConfigStore.getState().getModelMetadata(parsed.providerId, parsed.modelId)) {
-    return null;
-  }
-  return { providerId: parsed.providerId, modelId: parsed.modelId };
-};
-
-const resolveDefaultVariant = (providerId: string, modelId: string): string | undefined => {
-  const configState = useConfigStore.getState();
-  const currentVariant = configState.currentProviderId === providerId && configState.currentModelId === modelId
-    ? configState.currentVariant
-    : undefined;
-  const provider = configState.providers.find((entry) => entry.providerId === providerId);
-  const model = provider?.models.find((entry) => entry.modelId === modelId);
-  const variantNames = model?.variants.map((entry) => entry.variant) ?? [];
-  if (currentVariant && variantNames.includes(currentVariant)) return currentVariant;
-  return undefined;
-};
-
-const _captureGuestSendSelection = () => {
-  const configState = useConfigStore.getState();
-  const lastUsedProvider = useSelectionStore.getState().lastUsedProvider;
-  const defaultModel = resolveDefaultModelSelection();
-  const providerId = defaultModel?.providerId || configState.currentProviderId || lastUsedProvider?.providerID;
-  const modelId = defaultModel?.modelId || configState.currentModelId || lastUsedProvider?.modelID;
-  const agentName = resolveDefaultAgentName() || configState.currentAgentName || undefined;
-  if (!providerId || !modelId) {
-    return null;
-  }
-  return { providerId, modelId, agentName, variant: resolveDefaultVariant(providerId, modelId) };
 };
 
 const sendGuestFirstMessage = async (
@@ -475,22 +423,21 @@ export const startGuestSession = async (args: {
       undefined,
       sendSelection
         ? {
-            model: { providerId: sendSelection.providerID, modelId: sendSelection.modelID },
+            model: { providerID: sendSelection.providerID, id: sendSelection.modelID, variant: sendSelection.variant },
             agent: sendSelection.agentName,
-            variant: sendSelection.variant,
           }
         : undefined,
       navigation,
     );
     assertCurrent();
     if (!session) return null;
-    createdDirectory = session.displayPath || directory;
+    createdDirectory = session.directory ?? directory;
     if (metadata) {
       const latest = project ? guestProjectWorktrees(project.path).find((entry) => entry.path === metadata?.path) : undefined;
       metadata = { ...metadata, worktreeStatus: latest?.worktreeStatus ?? metadata.worktreeStatus };
-      useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, metadata);
+      useSessionUIStore.getState().setWorktreeMetadata(session.id, metadata, createdDirectory);
     }
-    return { id: session.sessionId, directory: createdDirectory };
+    return { id: session.id, directory: createdDirectory };
   };
   try {
     const result = await runStartGuestSession(plan, {
@@ -508,6 +455,9 @@ export const startGuestSession = async (args: {
         assertCurrent();
         metadata = { ...metadata, kind, createdFromBranch: custom?.baseBranch };
         return createTargetSession(plan.title, metadata.path);
+      },
+      initializeSession: (sessionId) => {
+        useSessionUIStore.getState().initializeNewOpenChamberSession(sessionId, useConfigStore.getState().agents);
       },
       setLinkedIssue: async (sessionId, directory, issue) => {
         assertCurrent();

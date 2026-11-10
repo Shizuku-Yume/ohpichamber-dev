@@ -86,29 +86,11 @@ const projectSession = (session: CanonicalSession, directory: string, projectId:
   // The guest SDK has no cancelled outcome; do not label cancellation a failure.
   const outcome = observed?.outcome;
   return {
-<<<<<<< HEAD
     id, title: session.title ?? id, projectId, directory, parentId: session.parentSessionId ?? null,
     createdAt: session.createdAt, updatedAt: session.updatedAt, archivedAt: session.archivedAt ?? null, worktree, activity,
     outcome: activity === 'idle' && (outcome === 'completed' || outcome === 'failed') ? outcome : null,
     items: guestItems(session, guestId),
     links: getLinkedIssues(session).map((item) => ({ title: item.title, url: item.url, kind: isLinkedChange(item) ? 'change' : 'issue', linkedAt: item.linkedAt })),
-=======
-    id: session.id, title: session.title || session.id, projectId, directory,
-    ...(session.agent ? { agent: session.agent } : {}),
-    parentId: session.parentID ?? null, createdAt: session.time.created, updatedAt: session.time.updated,
-    archivedAt: session.time.archived || null, worktree,
-    activity, outcome: activity === 'idle' ? observed?.outcome ?? null : null,
-    items: linked.flatMap((item) => {
-      if (item.kind !== 'guest' || item.providerId !== guestId) return [];
-      const reference: GuestSessionRecord['items'][number] = { id: item.identifier };
-      if (item.data !== undefined) reference.data = item.data;
-      return [reference];
-    }),
-    // Every extension with `sessions` sees every link, the agent's and the
-    // user's too: no more than the session titles it already reads. Another
-    // extension's opaque `data` stays out.
-    links: linked.map((item) => ({ title: item.title, url: item.url, kind: isLinkedChange(item) ? 'change' : 'issue', linkedAt: item.linkedAt })),
->>>>>>> bc50ba56a
   };
 };
 

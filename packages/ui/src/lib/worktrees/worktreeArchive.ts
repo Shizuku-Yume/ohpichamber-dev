@@ -7,19 +7,7 @@ import { canArchiveWorktrees, git } from '@/lib/gitApi';
 import { normalizePath } from '@/lib/pathNormalization';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { resolveWorktreeSetupCommandsOrCancel } from '@/lib/sharedTrustConfirmation';
-<<<<<<< HEAD
 import { archiveProjectWorktree, createWorktree, listProjectWorktrees, removeProjectWorktree, type ProjectRef } from '@/lib/worktrees/worktreeManager';
-=======
-import {
-  archiveProjectWorktree,
-  createWorktree,
-  listProjectWorktrees,
-  removeProjectWorktree,
-  resolveWorktreeTeardownCommand,
-  type ProjectRef,
-} from '@/lib/worktrees/worktreeManager';
-import { archiveSessionsThenRemoveWorktree } from '@/lib/worktrees/worktreeRemovalFlow';
->>>>>>> bc50ba56a
 import { clearWorktreeRemoval, markWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import type { WorktreeMetadata } from '@/types/worktree';
@@ -100,42 +88,13 @@ export async function archiveWorktreeWork(input: {
   sessions: readonly Session[];
   /** The name the sidebar showed for the work, kept when the worktree has no task title. */
   title?: string;
-  /** False for an archive nobody started by hand; see `resolveWorktreeTeardownCommand`. */
-  askForTrust?: boolean;
 }): Promise<void> {
   // Session scope is derived by the Host, not from this client's loaded page.
   markWorktreeRemoving(input.worktree.path);
   try {
-<<<<<<< HEAD
     await archiveProjectWorktree(input.project, input.worktree, {
       id: newArchiveId(),
       title: input.title ?? input.worktree.title,
-=======
-    // Before any session is archived: a teardown that cannot run (untrusted
-    // in a pass nobody started, an unreadable setup) or that fails leaves the
-    // sessions alone, so the merged-PR cleanup's retries do not churn them. The
-    // server snapshots the worktree later, with what the teardown left.
-    const teardownCommand = await resolveWorktreeTeardownCommand(input.project, input.worktree, { ask: input.askForTrust });
-    if (teardownCommand) {
-      await git.worktree.teardown(normalizePath(input.project.path) ?? input.project.path, { directory: input.worktree.path, teardownCommand });
-    }
-    await archiveSessionsThenRemoveWorktree({
-      sessionIds,
-      archiveSessions: (ids) => archiveSessions(ids),
-      restoreSessions: (ids) => unarchiveSessions(ids, { undo: true }),
-      removeWorktree: async (archivedIds) => {
-        if (archivedIds.length !== sessionIds.length) {
-          throw new Error(`Could not archive ${sessionIds.length - archivedIds.length} session(s)`);
-        }
-        try {
-          await archiveProjectWorktree(input.project, input.worktree, { id: newArchiveId(), sessionIds: archivedIds, title: input.title });
-        } catch (error) {
-          if (!(error instanceof GitWorktreeRequestError) || error.code !== 'WORKTREE_ARCHIVE_PARTIAL') throw error;
-          partial = error;
-        }
-        return true;
-      },
->>>>>>> bc50ba56a
     });
   } finally {
     clearWorktreeRemoval(input.worktree.path);

@@ -13,6 +13,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': 'unclear effect',
     'routing.toast.safetySkipped': 'The safety net could not check an action, so it is waiting for you',
     'settings.page.routing.title': 'Routing',
+    'settings.page.routing.description': 'Pick the right model for each prompt automatically.',
     'settings.routing.loadError': 'Could not load routing settings: {error}',
     'settings.routing.unavailable': 'Routing is not available on this server.',
     'settings.routing.token.label': 'TypeSafe API key',
@@ -86,10 +87,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': 'Nothing is sent anywhere. The safety net and Auto are hidden, and sessions move into work only when you move them.',
     'settings.classification.source.zenPromo.name': 'OpenCode Zen promotion',
     'settings.classification.source.zenPromo.description': 'Free for a limited time, no key needed. When the promotion ends, switch to a key.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'The promotion has ended.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': 'Temporarily unavailable. Add an OpenCode Zen API key meanwhile.',
     'settings.classification.source.zenKey.name': 'OpenCode Zen key',
     'settings.classification.source.zenKey.description': 'Uses the API key configured for OpenCode Zen. Charges your Zen balance.',
@@ -136,6 +134,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Routine actions run on their own; anything risky or hard to undo waits for you. Jev decides, via {provider}.',
     'settings.sessions.permissions.explain.auto': 'Every approval request is accepted without asking.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Needs Jev, which needs a classification provider: the free OpenCode Zen promotion, a Zen API key in Settings → Providers, or a TypeSafe key.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Agent permissions',
   },
   nl: {
     'settings.classification.status.enterprise': 'Deze server draait in enterprise-modus. Jev blijft uit, zodat gesprekken alleen de providers in uw Agent Service-configuratie bereiken. Functies die Jev nodig hebben, blijven verborgen.',
@@ -181,6 +180,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': 'onduidelijk effect',
     'routing.toast.safetySkipped': 'Het vangnet kon een actie niet controleren en wacht daarom op u',
     'settings.page.routing.title': 'Routering',
+    'settings.page.routing.description': 'Kies automatisch het juiste model voor elke prompt.',
     'settings.routing.loadError': 'Kan de routeringsinstellingen niet laden: {error}',
     'settings.routing.unavailable': 'Routering is niet beschikbaar op deze server.',
     'settings.routing.token.label': 'TypeSafe API-sleutel',
@@ -249,10 +249,7 @@ export const routingI18n = {
     'settings.classification.status.fallback': 'Uw keuze kan nu niet worden gebruikt, waardoor Jev via {provider} loopt.',
     'settings.classification.source.zenPromo.name': 'OpenCode Zen-actie',
     'settings.classification.source.zenPromo.description': 'Tijdelijk gratis, geen sleutel nodig. Als de actie eindigt, schakelt u over op een sleutel.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'De actie is afgelopen.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': 'Tijdelijk niet beschikbaar. Voeg intussen een OpenCode Zen-API-sleutel toe.',
     'settings.classification.source.zenKey.name': 'OpenCode Zen-sleutel',
     'settings.classification.source.zenKey.description': 'Gebruikt de voor OpenCode Zen geconfigureerde API-sleutel. Wordt verrekend met uw Zen-saldo.',
@@ -273,6 +270,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Routinehandelingen draaien vanzelf; alles wat riskant of moeilijk ongedaan te maken is, wacht op u. Jev beslist, via {provider}.',
     'settings.sessions.permissions.explain.auto': 'Elk goedkeuringsverzoek wordt zonder vragen geaccepteerd.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Vereist Jev, en Jev vereist een classificatieprovider: de gratis OpenCode Zen-aanbieding, een Zen API-sleutel bij de providers of een TypeSafe-sleutel.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Agenttoestemmingen',
   },
   uk: {
     'chat.modelControls.autoModel': 'Авто',
@@ -287,6 +285,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': 'невизначений ефект',
     'routing.toast.safetySkipped': 'Запобіжник не зміг перевірити дію, тож вона чекає на ваше рішення',
     'settings.page.routing.title': 'Роутинг',
+    'settings.page.routing.description': 'Автоматично добирає модель під кожен запит.',
     'settings.routing.loadError': 'Не вдалося завантажити налаштування роутингу: {error}',
     'settings.routing.unavailable': 'Роутинг недоступний на цьому сервері.',
     'settings.routing.token.label': 'API-ключ TypeSafe',
@@ -360,10 +359,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': 'Нічого нікуди не надсилається. Запобіжник і Auto приховано, а сесії переходять у роботу, лише коли ви їх переносите.',
     'settings.classification.source.zenPromo.name': 'Акція OpenCode Zen',
     'settings.classification.source.zenPromo.description': 'Безкоштовно на обмежений час, ключ не потрібен. Коли акція закінчиться, перейдіть на ключ.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'Акція закінчилася.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': 'Тимчасово недоступно. Поки що додайте API-ключ OpenCode Zen.',
     'settings.classification.source.zenKey.name': 'Ключ OpenCode Zen',
     'settings.classification.source.zenKey.description': 'Використовує API-ключ, налаштований для OpenCode Zen. Списує кошти з вашого балансу Zen.',
@@ -410,6 +406,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Звичайні дії виконуються самі; усе ризиковане чи важко відворотне чекає на вас. Вирішує Jev через {provider}.',
     'settings.sessions.permissions.explain.auto': 'Кожен запит на схвалення приймається без запитання.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Потрібен Jev, а йому потрібен постачальник класифікації: безкоштовна акція OpenCode Zen, API-ключ Zen у розділі Постачальники або ключ TypeSafe.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Дозволи агента',
   },
   de: {
     'chat.modelControls.autoModel': 'Auto',
@@ -424,6 +421,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': 'unklare Wirkung',
     'routing.toast.safetySkipped': 'Das Sicherheitsnetz konnte eine Aktion nicht prüfen, deshalb wartet sie auf Ihre Entscheidung',
     'settings.page.routing.title': 'Routing',
+    'settings.page.routing.description': 'Wählt für jeden Prompt automatisch das passende Modell.',
     'settings.routing.loadError': 'Routing-Einstellungen konnten nicht geladen werden: {error}',
     'settings.routing.unavailable': 'Routing ist auf diesem Server nicht verfügbar.',
     'settings.routing.token.label': 'TypeSafe-API-Schlüssel',
@@ -497,10 +495,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': 'Es wird nichts gesendet. Sicherheitsnetz und Auto sind ausgeblendet, und Sitzungen wechseln nur in Arbeit, wenn Sie sie verschieben.',
     'settings.classification.source.zenPromo.name': 'OpenCode-Zen-Aktion',
     'settings.classification.source.zenPromo.description': 'Für begrenzte Zeit kostenlos, kein Schlüssel nötig. Wechseln Sie zu einem Schlüssel, wenn die Aktion endet.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'Die Aktion ist beendet.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': 'Vorübergehend nicht verfügbar. Fügen Sie bis dahin einen OpenCode-Zen-API-Schlüssel hinzu.',
     'settings.classification.source.zenKey.name': 'OpenCode-Zen-Schlüssel',
     'settings.classification.source.zenKey.description': 'Verwendet den für OpenCode Zen konfigurierten API-Schlüssel. Wird über Ihr Zen-Guthaben abgerechnet.',
@@ -547,6 +542,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Routineaktionen laufen von selbst; alles Riskante oder schwer Rückgängigzumachende wartet auf Sie. Jev entscheidet, via {provider}.',
     'settings.sessions.permissions.explain.auto': 'Jede Berechtigungsanfrage wird ohne Nachfrage akzeptiert.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Benötigt Jev, und Jev braucht einen Klassifizierungsanbieter: die kostenlose OpenCode Zen-Aktion, einen Zen-API-Schlüssel unter Einstellungen → Anbieter oder einen TypeSafe-Schlüssel.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Agent-Berechtigungen',
   },
   fr: {
     'chat.modelControls.autoModel': 'Auto',
@@ -561,6 +557,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': 'effet incertain',
     'routing.toast.safetySkipped': 'Le filet de sécurité n’a pas pu vérifier une action, elle attend donc votre décision',
     'settings.page.routing.title': 'Routage',
+    'settings.page.routing.description': 'Choisit automatiquement le bon modèle pour chaque prompt.',
     'settings.routing.loadError': 'Impossible de charger les réglages de routage : {error}',
     'settings.routing.unavailable': 'Le routage n’est pas disponible sur ce serveur.',
     'settings.routing.token.label': 'Clé API TypeSafe',
@@ -634,10 +631,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': 'Rien n’est envoyé nulle part. Le filet de sécurité et Auto sont masqués, et les sessions passent en cours uniquement quand vous les y placez.',
     'settings.classification.source.zenPromo.name': 'Promotion OpenCode Zen',
     'settings.classification.source.zenPromo.description': 'Gratuit pour une durée limitée, sans clé. À la fin de la promotion, passez à une clé.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'La promotion est terminée.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': 'Temporairement indisponible. Ajoutez une clé API OpenCode Zen en attendant.',
     'settings.classification.source.zenKey.name': 'Clé OpenCode Zen',
     'settings.classification.source.zenKey.description': 'Utilise la clé API configurée pour OpenCode Zen. Facturé sur votre solde Zen.',
@@ -684,6 +678,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Les actions courantes s’exécutent seules ; tout ce qui est risqué ou difficile à annuler vous attend. Jev fait le tri, via {provider}.',
     'settings.sessions.permissions.explain.auto': 'Chaque demande d’autorisation est acceptée sans confirmation.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Nécessite Jev, qui a besoin d’un fournisseur de classification : la promotion gratuite OpenCode Zen, une clé API Zen dans Réglages → Fournisseurs ou une clé TypeSafe.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Permissions de l’agent',
   },
   es: {
     'chat.modelControls.autoModel': 'Auto',
@@ -698,6 +693,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': 'efecto incierto',
     'routing.toast.safetySkipped': 'La red de seguridad no pudo comprobar una acción, así que espera tu decisión',
     'settings.page.routing.title': 'Enrutamiento',
+    'settings.page.routing.description': 'Elige automáticamente el modelo adecuado para cada prompt.',
     'settings.routing.loadError': 'No se pudieron cargar los ajustes de enrutamiento: {error}',
     'settings.routing.unavailable': 'El enrutamiento no está disponible en este servidor.',
     'settings.routing.token.label': 'Clave API de TypeSafe',
@@ -771,10 +767,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': 'No se envía nada a ningún sitio. La red de seguridad y Auto están ocultos, y las sesiones pasan a en curso solo cuando tú las mueves.',
     'settings.classification.source.zenPromo.name': 'Promoción de OpenCode Zen',
     'settings.classification.source.zenPromo.description': 'Gratis por tiempo limitado, sin clave. Cuando termine la promoción, cambia a una clave.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'La promoción ha terminado.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': 'No disponible temporalmente. Mientras tanto, añade una clave de API de OpenCode Zen.',
     'settings.classification.source.zenKey.name': 'Clave de OpenCode Zen',
     'settings.classification.source.zenKey.description': 'Usa la clave API configurada para OpenCode Zen. Con cargo a tu saldo de Zen.',
@@ -821,6 +814,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Las acciones rutinarias se ejecutan solas; lo arriesgado o difícil de deshacer te espera. Decide Jev, a través de {provider}.',
     'settings.sessions.permissions.explain.auto': 'Cada solicitud de permiso se acepta sin preguntar.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Necesita Jev, que necesita un proveedor de clasificación: la promoción gratuita de OpenCode Zen, una clave API de Zen en Ajustes → Proveedores o una clave de TypeSafe.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Permisos del agente',
   },
   ja: {
     'chat.modelControls.autoModel': '自動',
@@ -835,6 +829,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': '影響が不明',
     'routing.toast.safetySkipped': 'セーフティネットが操作を確認できなかったため、あなたの判断を待っています',
     'settings.page.routing.title': 'ルーティング',
+    'settings.page.routing.description': 'プロンプトごとに適切なモデルを自動で選びます。',
     'settings.routing.loadError': 'ルーティング設定を読み込めませんでした: {error}',
     'settings.routing.unavailable': 'このサーバーではルーティングを利用できません。',
     'settings.routing.token.label': 'TypeSafe API キー',
@@ -908,10 +903,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': 'どこにも何も送信しません。セーフティネットと Auto は非表示になり、セッションは自分で移したときだけ作業中になります。',
     'settings.classification.source.zenPromo.name': 'OpenCode Zen プロモーション',
     'settings.classification.source.zenPromo.description': '期間限定で無料、キー不要。プロモーション終了後はキーに切り替えてください。',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'プロモーションは終了しました。',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': '一時的に利用できません。その間は OpenCode Zen の API キーを追加してください。',
     'settings.classification.source.zenKey.name': 'OpenCode Zen キー',
     'settings.classification.source.zenKey.description': 'OpenCode Zen 用に設定された API キーを使用します。Zen の残高から支払われます。',
@@ -958,6 +950,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': '通常の操作はそのまま実行され、危険な操作や取り消しにくい操作はあなたを待ちます。{provider} 経由の Jev が判断します。',
     'settings.sessions.permissions.explain.auto': 'すべての承認リクエストは、確認なしで受け入れられます。',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Jev が必要で、Jev には分類プロバイダーが必要です: 無料の OpenCode Zen プロモーション、設定 → プロバイダーの Zen API キー、または TypeSafe キー。',
+    'settings.sessions.permissions.agentPermissionsLink': 'エージェントの権限',
   },
   ko: {
     'chat.modelControls.autoModel': '자동',
@@ -972,6 +965,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': '효과 불명확',
     'routing.toast.safetySkipped': '안전망이 작업을 확인하지 못해 직접 결정하기를 기다리고 있습니다',
     'settings.page.routing.title': '라우팅',
+    'settings.page.routing.description': '프롬프트마다 알맞은 모델을 자동으로 고릅니다.',
     'settings.routing.loadError': '라우팅 설정을 불러오지 못했습니다: {error}',
     'settings.routing.unavailable': '이 서버에서는 라우팅을 사용할 수 없습니다.',
     'settings.routing.token.label': 'TypeSafe API 키',
@@ -1045,10 +1039,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': '아무것도 보내지 않습니다. 안전망과 Auto는 숨겨지고, 세션은 직접 옮길 때만 진행 중이 됩니다.',
     'settings.classification.source.zenPromo.name': 'OpenCode Zen 프로모션',
     'settings.classification.source.zenPromo.description': '기간 한정 무료, 키가 필요 없습니다. 프로모션이 끝나면 키로 바꾸세요.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': '프로모션이 끝났습니다.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': '일시적으로 사용할 수 없습니다. 그동안 OpenCode Zen API 키를 추가하세요.',
     'settings.classification.source.zenKey.name': 'OpenCode Zen 키',
     'settings.classification.source.zenKey.description': 'OpenCode Zen에 설정된 API 키를 사용합니다. Zen 잔액에서 차감됩니다.',
@@ -1095,6 +1086,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': '일상적인 작업은 알아서 실행되고, 위험하거나 되돌리기 어려운 작업은 기다립니다. {provider}를 통해 Jev가 판단합니다.',
     'settings.sessions.permissions.explain.auto': '모든 승인 요청이 묻지 않고 수락됩니다.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Jev가 필요하며, Jev에는 분류 제공자가 필요합니다: 무료 OpenCode Zen 프로모션, 설정 → 제공자에서의 Zen API 키, 또는 TypeSafe 키.',
+    'settings.sessions.permissions.agentPermissionsLink': '에이전트 권한',
   },
   pl: {
     'chat.modelControls.autoModel': 'Auto',
@@ -1109,6 +1101,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': 'niejasny skutek',
     'routing.toast.safetySkipped': 'Siatka bezpieczeństwa nie mogła sprawdzić działania, więc czeka ono na Twoją decyzję',
     'settings.page.routing.title': 'Routing',
+    'settings.page.routing.description': 'Automatycznie dobiera odpowiedni model do każdego promptu.',
     'settings.routing.loadError': 'Nie udało się wczytać ustawień routingu: {error}',
     'settings.routing.unavailable': 'Routing nie jest dostępny na tym serwerze.',
     'settings.routing.token.label': 'Klucz API TypeSafe',
@@ -1182,10 +1175,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': 'Nic nie jest nigdzie wysyłane. Siatka bezpieczeństwa i Auto są ukryte, a sesje przechodzą do toku tylko wtedy, gdy sam je przeniesiesz.',
     'settings.classification.source.zenPromo.name': 'Promocja OpenCode Zen',
     'settings.classification.source.zenPromo.description': 'Bezpłatnie przez ograniczony czas, bez klucza. Gdy promocja się skończy, przejdź na klucz.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'Promocja się zakończyła.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': 'Chwilowo niedostępne. Na razie dodaj klucz API OpenCode Zen.',
     'settings.classification.source.zenKey.name': 'Klucz OpenCode Zen',
     'settings.classification.source.zenKey.description': 'Używa klucza API skonfigurowanego dla OpenCode Zen. Rozliczany z Twojego salda Zen.',
@@ -1232,6 +1222,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Rutynowe działania wykonują się same; wszystko ryzykowne lub trudne do cofnięcia czeka na Ciebie. Rozstrzyga Jev przez {provider}.',
     'settings.sessions.permissions.explain.auto': 'Każde żądanie zatwierdzenia jest akceptowane bez pytania.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Wymaga Jev, a Jev potrzebuje dostawcy klasyfikacji: darmowej promocji OpenCode Zen, klucza API Zen w Ustawienia → Dostawcy lub klucza TypeSafe.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Uprawnienia agenta',
   },
   'pt-BR': {
     'chat.modelControls.autoModel': 'Auto',
@@ -1246,6 +1237,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': 'efeito incerto',
     'routing.toast.safetySkipped': 'A rede de segurança não conseguiu verificar uma ação, então ela aguarda sua decisão',
     'settings.page.routing.title': 'Roteamento',
+    'settings.page.routing.description': 'Escolhe automaticamente o modelo certo para cada prompt.',
     'settings.routing.loadError': 'Não foi possível carregar as configurações de roteamento: {error}',
     'settings.routing.unavailable': 'O roteamento não está disponível neste servidor.',
     'settings.routing.token.label': 'Chave de API da TypeSafe',
@@ -1319,10 +1311,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': 'Nada é enviado para lugar nenhum. A rede de segurança e o Auto ficam ocultos, e as sessões entram em andamento só quando você as move.',
     'settings.classification.source.zenPromo.name': 'Promoção do OpenCode Zen',
     'settings.classification.source.zenPromo.description': 'Grátis por tempo limitado, sem chave. Quando a promoção acabar, mude para uma chave.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'A promoção terminou.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': 'Indisponível no momento. Enquanto isso, adicione uma chave de API do OpenCode Zen.',
     'settings.classification.source.zenKey.name': 'Chave do OpenCode Zen',
     'settings.classification.source.zenKey.description': 'Usa a chave de API configurada para o OpenCode Zen. Cobrada do seu saldo Zen.',
@@ -1369,6 +1358,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Ações rotineiras rodam sozinhas; tudo que é arriscado ou difícil de desfazer espera por você. Quem decide é o Jev, via {provider}.',
     'settings.sessions.permissions.explain.auto': 'Cada solicitação de permissão é aceita sem perguntar.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Precisa do Jev, que precisa de um provedor de classificação: a promoção gratuita do OpenCode Zen, uma chave de API do Zen em Configurações → Provedores, ou uma chave da TypeSafe.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Permissões do agente',
   },
   tr: {
     'chat.modelControls.autoModel': 'Otomatik',
@@ -1383,6 +1373,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': 'etkisi belirsiz',
     'routing.toast.safetySkipped': 'Güvenlik ağı bir eylemi kontrol edemedi, bu yüzden eylem kararınızı bekliyor',
     'settings.page.routing.title': 'Yönlendirme',
+    'settings.page.routing.description': 'Her istem için doğru modeli otomatik olarak seçer.',
     'settings.routing.loadError': 'Yönlendirme ayarları yüklenemedi: {error}',
     'settings.routing.unavailable': 'Yönlendirme bu sunucuda kullanılamıyor.',
     'settings.routing.token.label': 'TypeSafe API anahtarı',
@@ -1456,10 +1447,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': 'Hiçbir yere bir şey gönderilmez. Güvenlik ağı ve Auto gizlenir, oturumlar yalnızca siz taşıdığınızda çalışmaya geçer.',
     'settings.classification.source.zenPromo.name': 'OpenCode Zen kampanyası',
     'settings.classification.source.zenPromo.description': 'Sınırlı bir süre ücretsiz, anahtar gerekmez. Kampanya bitince bir anahtara geçin.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'Kampanya sona erdi.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': 'Geçici olarak kullanılamıyor. Bu sırada bir OpenCode Zen API anahtarı ekleyin.',
     'settings.classification.source.zenKey.name': 'OpenCode Zen anahtarı',
     'settings.classification.source.zenKey.description': 'OpenCode Zen için yapılandırılmış API anahtarını kullanır. Zen bakiyenizden düşülür.',
@@ -1506,6 +1494,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Rutin eylemler kendiliğinden çalışır; riskli veya geri alınması zor olan her şey sizi bekler. {provider} üzerinden Jev karar verir.',
     'settings.sessions.permissions.explain.auto': 'Her onay isteği sormadan kabul edilir.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Jev gerekir; Jev de bir sınıflandırma sağlayıcısına ihtiyaç duyar: ücretsiz OpenCode Zen kampanyası, Ayarlar → Sağlayıcılar bölümünde bir Zen API anahtarı veya bir TypeSafe anahtarı.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Ajan izinleri',
   },
   'zh-CN': {
     'chat.modelControls.autoModel': '自动',
@@ -1520,6 +1509,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': '影响不明',
     'routing.toast.safetySkipped': '安全检查无法评估此操作，正在等待你的决定',
     'settings.page.routing.title': '路由',
+    'settings.page.routing.description': '为每条提示自动选择合适的模型。',
     'settings.routing.loadError': '无法加载路由设置：{error}',
     'settings.routing.unavailable': '此服务器不提供路由功能。',
     'settings.routing.token.label': 'TypeSafe API 密钥',
@@ -1593,10 +1583,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': '不会向任何地方发送内容。风险拦截和 Auto 会隐藏，会话只有在你手动移入时才会进入进行中。',
     'settings.classification.source.zenPromo.name': 'OpenCode Zen 促销',
     'settings.classification.source.zenPromo.description': '限时免费，无需密钥。促销结束后请改用密钥。',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': '促销已结束。',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': '暂时不可用。在此期间请添加 OpenCode Zen API 密钥。',
     'settings.classification.source.zenKey.name': 'OpenCode Zen 密钥',
     'settings.classification.source.zenKey.description': '使用为 OpenCode Zen 配置的 API 密钥。从你的 Zen 余额扣费。',
@@ -1643,6 +1630,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': '常规操作会自动运行；任何有风险或难以撤销的操作都会等你决定。由 Jev 通过 {provider} 判断。',
     'settings.sessions.permissions.explain.auto': '每个批准请求都会直接接受，不再询问。',
     'settings.sessions.permissions.explain.safetyUnavailable': '需要 Jev，而 Jev 需要一个分类提供方：免费的 OpenCode Zen 促销、设置 → 提供方中的 Zen API 密钥，或 TypeSafe 密钥。',
+    'settings.sessions.permissions.agentPermissionsLink': '智能体权限',
   },
   'zh-TW': {
     'chat.modelControls.autoModel': '自動',
@@ -1657,6 +1645,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': '影響不明',
     'routing.toast.safetySkipped': '安全網無法檢查某個操作，因此它正在等待你的決定',
     'settings.page.routing.title': '路由',
+    'settings.page.routing.description': '為每則提示自動選擇合適的模型。',
     'settings.routing.loadError': '無法載入路由設定：{error}',
     'settings.routing.unavailable': '此伺服器不提供路由功能。',
     'settings.routing.token.label': 'TypeSafe API 金鑰',
@@ -1730,10 +1719,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': '不會向任何地方傳送內容。安全網與 Auto 會隱藏，工作階段只有在你手動移入時才會進入進行中。',
     'settings.classification.source.zenPromo.name': 'OpenCode Zen 促銷',
     'settings.classification.source.zenPromo.description': '限時免費，無需金鑰。促銷結束後請改用金鑰。',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': '促銷已結束。',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': '暫時無法使用。在此期間請新增 OpenCode Zen API 金鑰。',
     'settings.classification.source.zenKey.name': 'OpenCode Zen 金鑰',
     'settings.classification.source.zenKey.description': '使用為 OpenCode Zen 設定的 API 金鑰。從你的 Zen 餘額扣款。',
@@ -1780,6 +1766,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': '一般操作會自動執行；任何有風險或難以復原的操作都會等你決定。由 Jev 透過 {provider} 判斷。',
     'settings.sessions.permissions.explain.auto': '每個核准要求都會直接接受，不再詢問。',
     'settings.sessions.permissions.explain.safetyUnavailable': '需要 Jev，而 Jev 需要一個分類提供者：免費的 OpenCode Zen 促銷、設定 → 供應商中的 Zen API 金鑰，或 TypeSafe 金鑰.',
+    'settings.sessions.permissions.agentPermissionsLink': '代理權限',
   },
   ar: {
     'chat.modelControls.autoModel': 'تلقائي',
@@ -1794,6 +1781,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': 'تأثير غير واضح',
     'routing.toast.safetySkipped': 'تعذّر على شبكة الأمان فحص إجراء، لذا فهو بانتظارك',
     'settings.page.routing.title': 'التوجيه',
+    'settings.page.routing.description': 'اختيار النموذج المناسب لكل طلب تلقائيًا.',
     'settings.routing.loadError': 'تعذّر تحميل إعدادات التوجيه: {error}',
     'settings.routing.unavailable': 'التوجيه غير متاح على هذا الخادم.',
     'settings.routing.token.label': 'مفتاح TypeSafe API',
@@ -1867,10 +1855,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': "لا يُرسل أي شيء إلى أي مكان. شبكة الأمان و\"تلقائي\" مخفيان، ولا تنتقل الجلسات إلى العمل إلا عندما تنقلها بنفسك.",
     'settings.classification.source.zenPromo.name': 'عرض OpenCode Zen',
     'settings.classification.source.zenPromo.description': 'مجاني لفترة محدودة، دون حاجة إلى مفتاح. عند انتهاء العرض، انتقل إلى استخدام مفتاح.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'انتهى العرض.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': 'غير متاح مؤقتًا. أضف مفتاح API لـ OpenCode Zen في هذه الأثناء.',
     'settings.classification.source.zenKey.name': 'مفتاح OpenCode Zen',
     'settings.classification.source.zenKey.description': 'مفتاح Zen API المحفوظ في OpenCode، على رصيد Zen الخاص بك.',
@@ -1932,6 +1917,7 @@ export const routingI18n = {
     'routing.safetyKind.unknown': 'השפעה לא ברורה',
     'routing.toast.safetySkipped': 'רשת הביטחון לא הצליחה לבדוק פעולה, ולכן היא ממתינה לך',
     'settings.page.routing.title': 'ניתוב',
+    'settings.page.routing.description': 'בחירה אוטומטית של המודל המתאים לכל הנחיה.',
     'settings.routing.loadError': 'לא ניתן היה לטעון את הגדרות הניתוב: {error}',
     'settings.routing.unavailable': 'ניתוב אינו זמין בשרת הזה.',
     'settings.routing.token.label': 'מפתח API של TypeSafe',
@@ -2005,10 +1991,7 @@ export const routingI18n = {
     'settings.classification.source.off.description': 'שום דבר לא נשלח לשום מקום. רשת הביטחון והמצב האוטומטי מוסתרים, והפעלות עוברות לעבודה רק כשמעבירים אותן ידנית.',
     'settings.classification.source.zenPromo.name': 'מבצע OpenCode Zen',
     'settings.classification.source.zenPromo.description': 'חינם לזמן מוגבל, בלי צורך במפתח. כשהמבצע יסתיים, יש לעבור למפתח.',
-<<<<<<< HEAD
     'settings.classification.source.zenPromo.ended': 'המבצע הסתיים.',
-=======
->>>>>>> bc50ba56a
     'settings.classification.source.zenPromo.unavailable': 'לא זמין זמנית. בינתיים הוסיפו מפתח API של OpenCode Zen.',
     'settings.classification.source.zenKey.name': 'מפתח OpenCode Zen',
     'settings.classification.source.zenKey.description': 'מפתח ה-API של Zen ששמור ב-OpenCode, על חשבון יתרת ה-Zen.',

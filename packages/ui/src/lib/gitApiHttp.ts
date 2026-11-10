@@ -1609,28 +1609,18 @@ export async function deleteGitWorktree(directory: string, payload: RemoveGitWor
     body: JSON.stringify(payload ?? {}),
   });
 
-<<<<<<< HEAD
   // A removal stopped by the project's teardown commands carries its code, so
   // the failure toast can offer to go on without the teardown.
   if (!response.ok) throw await worktreeCodeAwareError(response, 'Failed to delete worktree');
   return response.json();
 }
 
-=======
-  if (!response.ok) await throwWorktreeTeardownAwareError(response, 'Failed to delete worktree');
-
-  return response.json();
-}
-
-/** Runs the worktree's teardown commands and keeps it. */
->>>>>>> bc50ba56a
 export async function teardownGitWorktree(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }> {
   const response = await runtimeFetch(buildUrl(`${API_BASE}/worktrees/teardown`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-<<<<<<< HEAD
   if (!response.ok) throw await worktreeCodeAwareError(response, 'Failed to tear down worktree');
   return response.json();
 }
@@ -1641,18 +1631,6 @@ const worktreeCodeAwareError = async (response: Response, fallback: string): Pro
     .parse(await response.json().catch(() => null));
   const message = body.error || response.statusText || fallback;
   return body.code ? new GitWorktreeRequestError(body.code, message, response.status) : new Error(message);
-=======
-  if (!response.ok) await throwWorktreeTeardownAwareError(response, 'Failed to tear down worktree');
-  return response.json();
-}
-
-// A failed teardown carries its code, so the delete can offer to go on without it.
-const throwWorktreeTeardownAwareError = async (response: Response, fallback: string): Promise<never> => {
-  const body = z.object({ error: z.string().optional(), code: z.string().optional() }).catch({})
-    .parse(await response.json().catch(() => null));
-  const message = body.error || response.statusText || fallback;
-  throw body.code ? new GitWorktreeRequestError(body.code, message, response.status) : new Error(message);
->>>>>>> bc50ba56a
 };
 
 const worktreeTitleResultSchema = z.object({ title: z.string(), branch: z.string() });
@@ -2188,21 +2166,14 @@ export async function getCommitFileDiff(
   hash: string,
   filePath: string,
   isBinary: boolean,
-<<<<<<< HEAD
   previousPath?: string
-=======
-  previousPath?: string,
->>>>>>> bc50ba56a
 ): Promise<CommitFileDiffResponse> {
   const response = await runtimeFetch(
     buildUrl(`${API_BASE}/commit-file-diff`, directory, {
       hash,
       path: filePath,
       binary: isBinary ? 'true' : undefined,
-<<<<<<< HEAD
       // A rename's diff is read against the path it had before.
-=======
->>>>>>> bc50ba56a
       previousPath,
     })
   );

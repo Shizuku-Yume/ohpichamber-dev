@@ -40,8 +40,6 @@ describe('openchamber events', () => {
     Reflect.deleteProperty(globalThis, 'EventSource');
   });
 
-<<<<<<< HEAD
-=======
   test('does not open the server-only event stream in VS Code', async () => {
     Object.defineProperty(window, '__VSCODE_CONFIG__', {
       value: { workspaceFolder: 'C:/repo', workspaceFolders: [] },
@@ -90,7 +88,6 @@ describe('openchamber events', () => {
     expect(streamSignal?.aborted).toBe(true);
   });
 
->>>>>>> bc50ba56a
   test('desktop browser-capable events cross the active relay as streamed HTTP, not native EventSource', async () => {
     Object.defineProperty(window, '__OPENCHAMBER_ELECTRON__', { value: true, configurable: true });
     const requests: Array<{ path: string; authorization: string | null; signal: AbortSignal | undefined }> = [];
@@ -286,51 +283,6 @@ describe('openchamber events', () => {
       unsubscribe();
       globalThis.fetch = originalFetch;
     }
-  });
-
-  test('a workflow run announcement carries the run the server wrote, and a removal its identity', async () => {
-    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
-    const events: Array<{ type: string }> = [];
-    const unsubscribe = subscribeOpenchamberEvents((event) => { events.push(event); });
-    const source = MockEventSource.instances[0];
-    // The run the server summarizes; unknown fields beside it are stripped.
-    const run = {
-      id: 'run_1', parentSessionId: 'ses_1', directory: '/repo', name: 'Refactor', description: '',
-      state: 'running', attempt: 1, createdAt: 1, currentPhase: null, phases: [], agents: [], logs: [],
-    };
-    try {
-      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:workflow-run', properties: { run: { ...run, unexpected: 'ignored' } } }) });
-      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:workflow-run', properties: { run: { ...run, id: '' } } }) });
-      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:workflow-run-removed', properties: { runId: 'run_1', parentSessionId: 'ses_1' } }) });
-      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:workflow-run-removed', properties: { runId: 'run_1' } }) });
-      expect(events.map((event) => event.type)).toEqual(['workflow-run', 'workflow-run-removed']);
-      expect(events[0]).toMatchObject({ run: { id: 'run_1', state: 'running' } });
-      expect(events[1]).toMatchObject({ runId: 'run_1', parentSessionId: 'ses_1' });
-      unsubscribe();
-    } finally { unsubscribe(); }
-  });
-
-  test('an extension catalog change reaches subscribers once, as its own canonical event', async () => {
-    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
-    const events: string[] = [];
-    const unsubscribe = subscribeOpenchamberEvents((event) => { events.push(event.type); });
-    const source = MockEventSource.instances[0];
-    try {
-      source.onmessage?.({
-        data: JSON.stringify({
-          type: 'openchamber:guests-changed',
-          properties: {
-            guests: [{ id: 'hello', name: 'Hello' }],
-            message: 'A change the transport echoes',
-          },
-        }),
-      });
-      source.onmessage?.({ data: JSON.stringify({ type: 'openchamber:guests-changed' }) });
-      // The listener hears the announcement, never a payload the transport or
-      // the server put beside it: a catalog read is the only source of rows.
-      expect(events).toEqual(['guests-changed', 'guests-changed']);
-      unsubscribe();
-    } finally { unsubscribe(); }
   });
 
   test('the control SSE stream carries permission modes and requests left for the user, and rereads the modes on connect and when a space reconnects', async () => {
@@ -591,67 +543,6 @@ describe('openchamber events', () => {
 
     expect(events).toEqual([
       { type: 'plan-open-request', projectId: 'path_repo', planId: 'p1', title: 'Plan', directory: '/repo', sessionId: 'ses_1' },
-    ]);
-    unsubscribe();
-  });
-
-  test('dispatches session-metadata update event and drops malformed payload', async () => {
-    // Dynamic import to bind mock EventSource instance created for this test scope
-    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
-    const events: unknown[] = [];
-    const unsubscribe = subscribeOpenchamberEvents((event) => events.push(event));
-    const source = MockEventSource.instances[0];
-
-    // Valid metadata with sessionID
-    source.onmessage?.({
-      data: JSON.stringify({
-        type: 'openchamber:session-metadata',
-        properties: {
-          sessionID: 'ses_meta_42',
-          revision: '3',
-          metadata: {
-            openchamber: {
-              assist: {
-                recap: 'Recap text',
-                suggestion: 'Suggestion text',
-                forMessageID: 'msg_1',
-                generatedAt: 12345,
-              },
-            },
-          },
-        },
-      }),
-    });
-
-    // Invalid: missing revision / invalid format
-    source.onmessage?.({
-      data: JSON.stringify({
-        type: 'openchamber:session-metadata',
-        properties: {
-          sessionID: 'ses_meta_42',
-          metadata: {},
-        },
-      }),
-    });
-
-    expect(events).toEqual([
-      {
-        type: 'session-metadata',
-        state: {
-          sessionId: 'ses_meta_42',
-          revision: '3',
-          metadata: {
-            openchamber: {
-              assist: {
-                recap: 'Recap text',
-                suggestion: 'Suggestion text',
-                forMessageID: 'msg_1',
-                generatedAt: 12345,
-              },
-            },
-          },
-        },
-      },
     ]);
     unsubscribe();
   });

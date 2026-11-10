@@ -2,26 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import type { Snippet } from '@/types/snippet';
 import { snippetNameProblem, suggestSnippetName, uniqueSnippetName, withoutSnippetToken } from './snippetNames';
 
-<<<<<<< HEAD
-const snippet = (name: string): Snippet => ({
-  templateId: `tpl-${name}`,
-  name,
-  description: `${name} desc`,
-  content: `${name} body`,
-  scope: 'workspace',
-  source: 'workspace',
-  editable: true,
-});
-
-describe('snippet names', () => {
-  test('a name in use is taken, except by the snippet that owns it', () => {
-    const review = snippet('review');
-    const snippets = [review, snippet('deploy')];
-
-    expect(snippetNameProblem('Review', snippets)).toBe('taken');
-    expect(snippetNameProblem('review', snippets)).toBe('taken');
-    expect(snippetNameProblem('review', snippets, review)).toBeNull();
-=======
 const snippet = (name: string, aliases: string[] = []): Snippet => ({
   name,
   content: `${name} body`,
@@ -38,18 +18,12 @@ describe('snippet names', () => {
     expect(snippetNameProblem('Review', snippets)).toBe('taken');
     expect(snippetNameProblem('rev', snippets)).toBe('taken');
     expect(snippetNameProblem('rev', snippets, review)).toBeNull();
->>>>>>> bc50ba56a
     expect(snippetNameProblem('-bad', snippets)).toBe('invalid');
     expect(snippetNameProblem('fresh', snippets)).toBeNull();
   });
 
-<<<<<<< HEAD
-  test('a free name counts past names in use', () => {
-    expect(uniqueSnippetName('new-snippet', [snippet('new-snippet'), snippet('new-snippet-2')])).toBe('new-snippet-3');
-=======
   test('a free name counts past names and aliases in use', () => {
     expect(uniqueSnippetName('new-snippet', [snippet('new-snippet'), snippet('other', ['new-snippet-2'])])).toBe('new-snippet-3');
->>>>>>> bc50ba56a
   });
 
   test('a suggestion takes the first words, in Latin letters', () => {

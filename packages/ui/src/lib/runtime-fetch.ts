@@ -87,8 +87,7 @@ const withSpaceDirectory = (input: string | URL | Request, init: RequestInit, di
   if (input instanceof Request && input.headers.has('x-opencode-directory')) return init;
   const own: [string, string][] = !init.headers ? []
     : init.headers instanceof Headers ? Array.from(init.headers.entries())
-    : Array.isArray(init.headers) ? (init.headers as [string, string][])
-    : Object.entries(init.headers as Record<string, string>);
+    : Array.isArray(init.headers) ? init.headers : Object.entries(init.headers);
   return { ...init, headers: [...own, ...Object.entries(spaceHeaders)] };
 };
 
@@ -406,29 +405,14 @@ export const fetchBypassingRuntimeBridge = (input: RequestInfo | URL, init?: Req
   (fetchBypassingRuntimeBridgeImpl ?? globalThis.fetch.bind(globalThis))(input, init)
 );
 
-// The browser's own fetch, kept before the bridge replaces window.fetch. A
-// request to a runtime that is no longer active must not resolve through the
-// active one.
-let fetchBypassingRuntimeBridgeImpl: typeof fetch | null = null;
-
-/** The browser's own fetch, for a cleanup that must reach the runtime it captured. */
-export const fetchBypassingRuntimeBridge = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => (
-  (fetchBypassingRuntimeBridgeImpl ?? globalThis.fetch.bind(globalThis))(input, init)
-);
-
 export const installRuntimeFetchBridge = (): void => {
   if (runtimeFetchBridgeInstalled || typeof window === 'undefined') return;
   runtimeFetchBridgeInstalled = true;
 
-<<<<<<< HEAD
-  const nativeFetch = window.fetch.bind(window);
-  fetchBypassingRuntimeBridgeImpl = nativeFetch;
-=======
   const originalFetch = window.fetch.bind(window);
   fetchBypassingRuntimeBridgeImpl = originalFetch;
   const nativeFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
     originalFetch(input, mobileRedirectPolicy(input, init));
->>>>>>> bc50ba56a
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const relayResponse = await tryRelayFetch(input, init ?? {});
     if (relayResponse) return relayResponse;

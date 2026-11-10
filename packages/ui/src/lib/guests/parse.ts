@@ -239,10 +239,7 @@ const installedGuestSchema = z.object({
   skills: z.literal(true).optional().catch(undefined),
   opencodePlugin: z.literal(true).optional().catch(undefined),
   mentions: z.object({ label: z.string().trim().min(1) }).optional().catch(undefined),
-<<<<<<< HEAD
-=======
   links: publicLinksSchema.optional().catch(undefined),
->>>>>>> bc50ba56a
   needsConfiguration: z.string().trim().min(1).optional().catch(undefined),
   blocks: z.array(guestBlockSchema).max(GUEST_BLOCKS_MAX).optional(),
   actions: z.array(guestActionSchema).max(GUEST_ACTIONS_MAX).optional(),

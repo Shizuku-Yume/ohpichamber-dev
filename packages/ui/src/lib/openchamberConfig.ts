@@ -1,6 +1,6 @@
 /**
- * Client for the project setup routes: worktree setup commands, the worktree
- * directory, project actions, and pinned draft starters.
+ * Client for the project setup routes: worktree setup commands, project
+ * actions, and pinned draft starters.
  *
  * A project's setup is the merge of two files the server (or the VS Code
  * extension host) owns: the personal one in `~/.config/openchamber/projects/`
@@ -92,11 +92,6 @@ const personalSchema = z.object({
   setupWorktree: z.array(z.string()),
   setupWorktreeWait: z.boolean().nullable(),
   setupWorktreeMode: z.enum(['append', 'replace']),
-<<<<<<< HEAD
-  /** Base directory for new worktrees; `null` uses the default location. */
-  worktreeDirectory: z.string().nullable(),
-=======
->>>>>>> bc50ba56a
   teardownWorktree: z.array(z.string()).default([]),
   projectActions: z.array(projectActionSchema),
   projectActionsPrimaryId: z.string().nullable(),
@@ -125,10 +120,6 @@ export type ProjectSetupPatch = Partial<{
   setupWorktree: string[];
   setupWorktreeWait: boolean;
   setupWorktreeMode: 'append' | 'replace';
-<<<<<<< HEAD
-  worktreeDirectory: string | null;
-=======
->>>>>>> bc50ba56a
   teardownWorktree: string[];
   projectActions: OpenChamberProjectAction[];
   projectActionsPrimaryId: string | null;
@@ -160,10 +151,6 @@ const EMPTY_PROJECT_SETUP: ProjectSetup = {
     setupWorktree: [],
     setupWorktreeWait: null,
     setupWorktreeMode: 'append',
-<<<<<<< HEAD
-    worktreeDirectory: null,
-=======
->>>>>>> bc50ba56a
     teardownWorktree: [],
     projectActions: [],
     projectActionsPrimaryId: null,
@@ -299,12 +286,6 @@ export async function getWorktreeSetupWaitEnabled(project: ProjectRef): Promise<
 
 export async function saveWorktreeSetupWaitEnabled(project: ProjectRef, enabled: boolean): Promise<boolean> {
   return updateProjectSetup(project, { setupWorktreeWait: enabled });
-}
-
-/** Change the personal base directory for new worktrees. Empty input clears it. */
-export async function saveProjectWorktreeDirectory(project: ProjectRef, directory: string): Promise<boolean> {
-  const value = directory.trim() || null;
-  return updateProjectSetup(project, { worktreeDirectory: value });
 }
 
 /** The starters pinned for this project, shared ones first, each marked with its source. */

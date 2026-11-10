@@ -78,17 +78,12 @@ export type InstalledGuest = {
   skills?: true;
   /** The package ships an OpenCode plugin, listed in the managed OpenCode config while the extension is on. */
   opencodePlugin?: true;
-<<<<<<< HEAD
-  /** The section the extension adds to the composer's `@` menu. */
-  mentions?: { label: string };
-=======
   /** `contributes.providerLogos`: OpenCode provider id to a package image, drawn in place of a logo the app ships. */
   providerLogos?: Record<string, string>;
   /** The section the extension adds to the composer's `@` menu. */
   mentions?: { label: string };
   /** Identifiers and links in chat messages a click hands to the extension (`contributes.links`, compiled by the server). */
   links?: PublicGuestLinks;
->>>>>>> bc50ba56a
   /** What the running service says is missing; shown on its card. */
   needsConfiguration?: string;
   /** Declared `contributes.blocks`; agents write them only for an active guest. */
@@ -136,8 +131,6 @@ export type OpenCodePlugins = {
   inGlobalConfig: string[];
 };
 
-<<<<<<< HEAD
-=======
 /** `contributes.links` as the catalog serves it: literal keys and compiled link patterns. */
 export type PublicGuestLinks = {
   action: GuestLinkAction;
@@ -152,7 +145,6 @@ export type PublicGuestLinks = {
   } | null;
 };
 
->>>>>>> bc50ba56a
 export type GuestCatalog = { guests: InstalledGuest[]; unreadable: UnreadableGuest[]; opencodePlugins: OpenCodePlugins | null };
 
 export type GuestGitOrigin = { url: string; ref?: string };

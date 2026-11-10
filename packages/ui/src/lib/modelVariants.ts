@@ -6,7 +6,7 @@
  * session's `low` stopped matching and the picker fell back to "Default".
  * Every place that needs the ids goes through here.
  */
-type ModelVariantSource =
+export type ModelVariantSource =
   | ReadonlyArray<{ readonly id: string }>
   | Readonly<Record<string, { readonly id?: string } | null>>
   | null
@@ -20,8 +20,6 @@ export const listModelVariantIds = (variants: ModelVariantSource): string[] => {
   return Object.keys(variants);
 };
 
-<<<<<<< HEAD
-=======
 /**
  * The level the effort shortcut moves to from `current`: the first level
  * after "Default" (`null` or no choice), the next one after a level, and
@@ -36,4 +34,3 @@ export const nextThinkingVariant = (variants: readonly string[], current: string
 /** Names of the thinking levels a model exposes, empty when it has none. */
 export const modelVariantNames = (model: { readonly variants?: ModelVariantSource } | undefined): string[] =>
   listModelVariantIds(model?.variants);
->>>>>>> bc50ba56a

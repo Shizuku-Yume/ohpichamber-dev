@@ -1,57 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-<<<<<<< HEAD
-type ModelRef = { providerID: string; modelID: string };
-interface TestModel {
-  id: string;
-  modelID: string;
-  providerID: string;
-  name: string;
-  capabilities: { tools: boolean; input: string[]; output: string[] };
-  variants: never[];
-  time: { released: number };
-  cost: Array<{ input: number; output: number; cache: { read: number; write: number } }>;
-  status: 'active';
-  enabled: boolean;
-  limit: { context: number; output: number };
-}
-interface TestProvider {
-  id: string;
-  name: string;
-  activation: 'enabled';
-  package: string;
-  models: TestModel[];
-}
-
-const resolveModelRefs = (
-  refs: readonly ModelRef[],
-  providersList: readonly TestProvider[],
-  hiddenModels: readonly ModelRef[],
-): Array<ModelRef & { provider: TestProvider; model: TestModel }> => refs.flatMap(({ providerID, modelID }) => {
-  const p = providersList.find((entry) => entry.id === providerID);
-  const m = p?.models.find((entry) => entry.modelID === modelID);
-  if (!p || !m) return [];
-  if (hiddenModels.some((item) => item.providerID === providerID && item.modelID === modelID)) return [];
-  return [{ provider: p, model: m, providerID, modelID }];
-});
-
-const getNextFavoriteModel = (
-  favs: readonly ModelRef[],
-  providersList: readonly TestProvider[],
-  hiddenModels: readonly ModelRef[],
-  current: ModelRef,
-  delta: number,
-): ModelRef | null => {
-  const available = resolveModelRefs(favs, providersList, hiddenModels);
-  if (available.length === 0) return null;
-  const index = available.findIndex((item) => (
-    item.providerID === current.providerID && item.modelID === current.modelID
-  ));
-  const next = available[(index + delta + available.length) % available.length];
-  return next ? { providerID: next.providerID, modelID: next.modelID } : null;
-};
-=======
 import { getNextFavoriteModel, resolveModelRefs } from './modelRefs';
->>>>>>> bc50ba56a
 
 const model = (providerId: string, modelId: string) => ({
   id: `${providerId}/${modelId}`,

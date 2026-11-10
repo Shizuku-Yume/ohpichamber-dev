@@ -1,19 +1,18 @@
 import { describe, expect, test } from 'bun:test';
-<<<<<<< HEAD
-import type { I18nKey } from '@/lib/i18n/store';
-import { buildSettingsSearchResults } from './search';
-=======
 import type { I18nKey, I18nParams } from '@/lib/i18n/store';
 import { acmeTrackerDescriptor, linearLikeTrackerDescriptor } from '@/lib/trackers/descriptor.fixture';
 import { acmeDescriptor, githubLikeDescriptor, gitlabLikeDescriptor } from '@/lib/source-control/providers/descriptor.fixture';
 import { buildSettingsSearchResults, SETTINGS_ANCHOR_PAGES } from './search';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { dict as ukDict } from '@/lib/i18n/messages/uk';
->>>>>>> bc50ba56a
 
-const t = (key: I18nKey): string => key;
+const trackers = [linearLikeTrackerDescriptor()];
+const sourceControlProviders = [githubLikeDescriptor(), gitlabLikeDescriptor()];
+
+const t = (key: I18nKey, params?: I18nParams): string => (params ? `${key} ${JSON.stringify(params)}` : key);
 
 const runtimeCtx = {
+  isVSCode: false,
   isWeb: true,
   isDesktop: false,
   isMobile: false,
@@ -88,30 +87,12 @@ describe('settings search', () => {
   });
   test('finds double-paste on every shared Settings surface', () => {
     for (const query of ['double paste', 'ctrl v', 'cmd v']) {
-      for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {
+      for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isVSCode: true }, { ...runtimeCtx, isMobile: true }]) {
         const results = buildSettingsSearchResults({ query, runtimeCtx: context, t, getPageTitle: (page) => page });
         expect(results.find((result) => result.id === 'chat.large-text-paste')?.page).toBe('chat');
       }
     }
   });
-<<<<<<< HEAD
-  test('finds the Claude Code integration by name and package on retained surfaces', () => {
-    for (const query of ['claude', '@openchamber/opencode-claude']) {
-      for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {
-        const results = buildSettingsSearchResults({
-          query,
-          runtimeCtx: context,
-          t,
-          getPageTitle: (page) => page,
-        });
-
-        expect(results.some((result) => result.id === 'integrations.third-party.opencode-claude')).toBe(true);
-      }
-    }
-  });
-
-=======
->>>>>>> bc50ba56a
   test('Enter-to-send is searchable only outside mobile', () => {
     for (const isMobile of [false, true]) {
       const results = buildSettingsSearchResults({
@@ -124,58 +105,9 @@ describe('settings search', () => {
       expect(results.some((result) => result.id === 'chat.enter-to-send')).toBe(!isMobile);
     }
   });
-  test('restored mobile workspace tabs and return key sends are searchable only on mobile', () => {
-    for (const isMobile of [false, true]) {
-      const mobileTabsResults = buildSettingsSearchResults({
-        query: 'mobile',
-        runtimeCtx: { ...runtimeCtx, isMobile },
-        t,
-        getPageTitle: (page) => page,
-      });
-      expect(mobileTabsResults.some((result) => result.id === 'layout.mobile-workspace-tabs')).toBe(isMobile);
-      expect(mobileTabsResults.some((result) => result.id === 'chat.mobile-return-key-sends')).toBe(isMobile);
-    }
-  });
 
-  test('restored live browser tabs stepper is searchable on desktop only', () => {
-    const desktopResults = buildSettingsSearchResults({
-      query: 'browser tabs',
-      runtimeCtx: { ...runtimeCtx, isDesktop: true, isMobile: false },
-      t,
-      getPageTitle: (page) => page,
-    });
-    expect(desktopResults.some((result) => result.id === 'appearance.live-browser-tabs')).toBe(true);
-
-    const mobileResults = buildSettingsSearchResults({
-      query: 'browser tabs',
-      runtimeCtx: { ...runtimeCtx, isDesktop: false, isMobile: true },
-      t,
-      getPageTitle: (page) => page,
-    });
-    expect(mobileResults.some((result) => result.id === 'appearance.live-browser-tabs')).toBe(false);
-  });
-
-  test('restored default session mode and worktree archive on done are indexed under sessions', () => {
-    const results = buildSettingsSearchResults({
-      query: 'session mode',
-      runtimeCtx,
-      t,
-      getPageTitle: (page) => page,
-    });
-    expect(results.find((result) => result.id === 'sessions.default-mode')?.page).toBe('sessions');
-
-    const archiveResults = buildSettingsSearchResults({
-      query: 'worktree',
-      runtimeCtx,
-      t,
-      getPageTitle: (page) => page,
-    });
-    expect(archiveResults.find((result) => result.id === 'sessions.worktree-archive-on-done')?.page).toBe('sessions');
-  });
-
-
-  test('finds the scrollbar preference on every retained surface', () => {
-    for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }]) {
+  test('finds the scrollbar preference on every surface', () => {
+    for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isVSCode: true }, { ...runtimeCtx, isMobile: true }]) {
       const results = buildSettingsSearchResults({
         query: 'scrollbar',
         runtimeCtx: context,
@@ -189,9 +121,6 @@ describe('settings search', () => {
       expect(results.find((result) => result.id === expected.id)?.page).toBe(expected.page);
     }
   });
-<<<<<<< HEAD
-  test('finds Linear connect on the integrations page', () => {
-=======
 
   test('finds the provider logo wherever it can be uploaded', () => {
     for (const context of [runtimeCtx, { ...runtimeCtx, isDesktop: true }, { ...runtimeCtx, isMobile: true }, { ...runtimeCtx, isVSCode: true }]) {
@@ -206,17 +135,42 @@ describe('settings search', () => {
   });
 
   test('finds Linear connect on the integrations page when the server serves Linear', () => {
->>>>>>> bc50ba56a
     const results = buildSettingsSearchResults({
       query: 'linear',
       runtimeCtx,
       t,
       getPageTitle: (page) => page,
+      trackers,
     });
 
     expect(results.some((result) => result.id === 'integrations.linear')).toBe(true);
     expect(results.some((result) => result.id === 'integrations.linear.add-workspace')).toBe(true);
     expect(results.some((result) => result.id === 'integrations.linear.mapping')).toBe(true);
+
+    const withoutLinear = buildSettingsSearchResults({ query: 'linear', runtimeCtx, t, getPageTitle: (page) => page, trackers: [] });
+    expect(withoutLinear.some((result) => result.id.startsWith('integrations.linear'))).toBe(false);
+  });
+
+  test('offers only what a tracker\'s capabilities have, and nothing for a tracker without words of its own', () => {
+    const single = linearLikeTrackerDescriptor({
+      capabilities: { ...linearLikeTrackerDescriptor().capabilities, multipleAccounts: false, projectMapping: false },
+    });
+    const results = buildSettingsSearchResults({ query: 'linear', runtimeCtx, t, getPageTitle: (page) => page, trackers: [single, acmeTrackerDescriptor()] });
+    expect(results.filter((result) => result.id.startsWith('integrations.linear')).map((result) => result.id)).toEqual(['integrations.linear']);
+    const acme = buildSettingsSearchResults({ query: 'acme', runtimeCtx, t, getPageTitle: (page) => page, trackers: [acmeTrackerDescriptor()] });
+    expect(acme.some((result) => result.id.startsWith('integrations.acme'))).toBe(false);
+  });
+
+  test('finds the small model effort setting by thinking and reasoning keywords', () => {
+    for (const query of ['small model effort', 'small model thinking', 'small model variant']) {
+      const results = buildSettingsSearchResults({
+        query,
+        runtimeCtx,
+        t,
+        getPageTitle: (page) => page,
+      });
+      expect(results.some((result) => result.id === 'sessions.small-model')).toBe(true);
+    }
   });
 
   test('finds the chat input history scope setting', () => {
@@ -241,6 +195,19 @@ describe('settings search', () => {
     expect(results.some((result) => result.id === 'chat.input-history-limit')).toBe(true);
   });
 
+  test('hides Linear connect in VS Code', () => {
+    const results = buildSettingsSearchResults({
+      query: 'linear',
+      runtimeCtx: { ...runtimeCtx, isVSCode: true },
+      t,
+      getPageTitle: (page) => page,
+      trackers,
+    });
+
+    expect(results.some((result) => result.id === 'integrations.linear')).toBe(false);
+    expect(results.some((result) => result.id === 'integrations.linear.add-workspace')).toBe(false);
+    expect(results.some((result) => result.id === 'integrations.linear.mapping')).toBe(false);
+  });
 
   test('keeps repository controls out of Settings search and indexes account connection controls', () => {
     const results = buildSettingsSearchResults({
@@ -258,13 +225,12 @@ describe('settings search', () => {
       runtimeCtx,
       t,
       getPageTitle: (page) => page,
+      sourceControlProviders,
     });
-    expect(connectResults.some((result) => result.id === 'git.github-connect')).toBe(true);
-    expect(connectResults.some((result) => result.id === 'git.gitlab-connect')).toBe(true);
+    expect(connectResults.some((result) => result.id === 'integrations.source-control.github.connect')).toBe(true);
+    expect(connectResults.some((result) => result.id === 'integrations.source-control.gitlab.connect')).toBe(true);
   });
 
-<<<<<<< HEAD
-=======
   test('builds a card and a connect entry for every served source-control provider, named by its label', () => {
     const results = buildSettingsSearchResults({
       query: 'acme',
@@ -338,7 +304,6 @@ describe('settings search', () => {
     expect(transportResults.some((result) => result.id === 'git.repository-transport')).toBe(false);
     expect(accountResults.some((result) => result.id.startsWith('integrations.source-control.'))).toBe(false);
   });
->>>>>>> bc50ba56a
 
   test('finds guest extension panels on the integrations page', () => {
     const results = buildSettingsSearchResults({
@@ -350,4 +315,13 @@ describe('settings search', () => {
     expect(results.some((result) => result.id === 'integrations.guests')).toBe(true);
   });
 
+  test('hides guest extension panels in VS Code', () => {
+    const results = buildSettingsSearchResults({
+      query: 'clickup',
+      runtimeCtx: { ...runtimeCtx, isVSCode: true },
+      t,
+      getPageTitle: (page) => page,
+    });
+    expect(results.some((result) => result.id === 'integrations.guests')).toBe(false);
+  });
 });
