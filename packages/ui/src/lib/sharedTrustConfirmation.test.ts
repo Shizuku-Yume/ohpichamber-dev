@@ -54,6 +54,7 @@ const baseSetup = (): ProjectSetup => ({
     setupWorktree: ['cp .env.example .env'],
     setupWorktreeWait: null,
     setupWorktreeMode: 'append',
+    worktreeDirectory: null,
     teardownWorktree: ['rm -f .dev.pid'],
     projectActions: [],
     projectActionsPrimaryId: null,
