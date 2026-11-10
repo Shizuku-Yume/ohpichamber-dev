@@ -30,13 +30,7 @@ const QuickCreateForm: React.FC<{ request: SnippetQuickCreate; onDone: () => voi
   const loadSnippets = useSnippetsStore((state) => state.loadSnippets);
   const createSnippet = useSnippetsStore((state) => state.createSnippet);
   const [name, setName] = React.useState(() => request.name ?? suggestSnippetName(request.content, snippets));
-<<<<<<< HEAD
-  // The dialog speaks the user's words (global, project); the canonical
-  // template scope is agent or workspace.
-  const [scope, setScope] = React.useState<SnippetScope>('agent');
-=======
   const [scope, setScope] = React.useState<SnippetScope>('global');
->>>>>>> bc50ba56a
   const [content, setContent] = React.useState(request.content);
   const [saving, setSaving] = React.useState(false);
 
@@ -50,17 +44,10 @@ const QuickCreateForm: React.FC<{ request: SnippetQuickCreate; onDone: () => voi
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
-<<<<<<< HEAD
-    const saved = await createSnippet(name, content, { scope });
-    setSaving(false);
-    if (!saved) {
-      toast.error(t('settings.snippets.page.toast.saveFailed'));
-=======
     const result = await createSnippet(name, content, { scope });
     setSaving(false);
     if (!result.ok) {
       toast.error(result.reason === 'taken' ? t('snippets.name.taken', { name }) : t('settings.snippets.page.toast.saveFailed'));
->>>>>>> bc50ba56a
       return;
     }
     toast.success(t('snippets.toast.saved', { name }));
@@ -90,15 +77,6 @@ const QuickCreateForm: React.FC<{ request: SnippetQuickCreate; onDone: () => voi
               className="min-w-0 flex-1"
               autoFocus
             />
-<<<<<<< HEAD
-            <Select value={scope} onValueChange={(value) => setScope(value === 'workspace' ? 'workspace' : 'agent')}>
-              <SelectTrigger className="w-fit shrink-0" aria-label={t('snippets.field.scopeAria')}>
-                <SelectValue>{scope === 'workspace' ? t('settings.common.scope.project') : t('settings.common.scope.global')}</SelectValue>
-              </SelectTrigger>
-              <SelectContent align="end">
-                <SelectItem value="agent">{t('settings.common.scope.global')}</SelectItem>
-                <SelectItem value="workspace">{t('settings.common.scope.project')}</SelectItem>
-=======
             <Select value={scope} onValueChange={(value) => setScope(value === 'project' ? 'project' : 'global')}>
               <SelectTrigger className="w-fit shrink-0" aria-label={t('snippets.field.scopeAria')}>
                 <SelectValue>{scope === 'project' ? t('settings.common.scope.project') : t('settings.common.scope.global')}</SelectValue>
@@ -106,7 +84,6 @@ const QuickCreateForm: React.FC<{ request: SnippetQuickCreate; onDone: () => voi
               <SelectContent align="end">
                 <SelectItem value="global">{t('settings.common.scope.global')}</SelectItem>
                 <SelectItem value="project">{t('settings.common.scope.project')}</SelectItem>
->>>>>>> bc50ba56a
               </SelectContent>
             </Select>
           </div>

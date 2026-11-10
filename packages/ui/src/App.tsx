@@ -3,7 +3,6 @@ import { AppStartupOverlay } from '@/components/ui/AppStartupOverlay';
 import { LegacyDataNotice } from '@/components/onboarding/LegacyDataNotice';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { AppLinkConfirmDialog } from '@/components/chat/AppLinkConfirmDialog';
-import { SnippetQuickCreateDialog } from '@/components/snippets/SnippetQuickCreateDialog';
 import { SharedTrustConfirmDialog } from '@/components/projects/SharedTrustConfirmDialog';
 import { FireworksProvider } from '@/contexts/FireworksContext';
 import { Toaster } from '@/components/ui/sonner';
@@ -14,7 +13,6 @@ import { setRequestsInFlightTrackingEnabled } from '@/stores/utils/requestsInFli
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 // useEventStream removed — replaced by SyncProvider + SyncBridge
 import { useMenuActions } from '@/hooks/useMenuActions';
-import { useGuestInstallLinks } from '@/hooks/useGuestInstallLinks';
 import { useSessionStatusBootstrap } from '@/hooks/useSessionStatusBootstrap';
 import { useTraySync } from '@/hooks/useTraySync';
 import { useGlobalSessionsPolling } from '@/hooks/useGlobalSessionsPolling';
@@ -25,14 +23,6 @@ import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
 import { useGuestCatalogSync } from '@/hooks/useGuestCatalogSync';
 import { useGuestInstallLinks } from '@/hooks/useGuestInstallLinks';
 import { useBrowserProviderSync } from '@/hooks/useBrowserProviderSync';
-<<<<<<< HEAD
-=======
-import { useSourceControlProviderSync } from '@/hooks/useSourceControlProviderSync';
-import { useTrackerProviderSync } from '@/hooks/useTrackerProviderSync';
-import { useQuotaProviderSync } from '@/hooks/useQuotaProviderSync';
-import { useGuestCatalogSync } from '@/hooks/useGuestCatalogSync';
-import { useLimitFailoverNotices } from '@/hooks/useLimitFailoverNotices';
->>>>>>> bc50ba56a
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useRelayLimitToast } from '@/hooks/useRelayLimitToast';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
@@ -53,7 +43,7 @@ import {
 } from '@/lib/desktopBoot';
 import type { RecoveryVariant } from '@/components/onboarding/DesktopConnectionRecovery';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { openSession, openSessionLink } from '@/lib/router/openSessionFromRoute';
+import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 import { parseRoute } from '@/lib/router';
 import { beginLastSessionRestore, type LastSessionRestoreResult } from '@/sync/last-session-restore';
 import { markSessionViewed } from '@/sync/notification-store';
@@ -177,11 +167,6 @@ type AppProps = {
 };
 
 function App({ apis }: AppProps) {
-<<<<<<< HEAD
-=======
-  useGuestInstallLinks();
-  React.useEffect(() => startDiagnosticCapture(), []);
->>>>>>> bc50ba56a
   React.useEffect(() => {
     markStartupTrace('App:mounted');
     if (startupTraceEnabled()) {
@@ -439,13 +424,12 @@ function App({ apis }: AppProps) {
     if (typeof window === 'undefined') return;
 
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ sessionId?: string; directory?: string; messageId?: string; runtimeKey?: string; requireKnownSession?: boolean }>).detail;
+      const detail = (event as CustomEvent<{ sessionId?: string; directory?: string; messageId?: string; runtimeKey?: string }>).detail;
       const sessionId = typeof detail?.sessionId === 'string' ? detail.sessionId.trim() : '';
       if (!sessionId) return;
       const directory = typeof detail?.directory === 'string' && detail.directory.trim().length > 0
         ? detail.directory.trim()
         : null;
-<<<<<<< HEAD
       // A notification click names the runtime that owns the session. When
       // this window is on another instance, the desktop shell opens the
       // session in a window for the owning one.
@@ -461,13 +445,6 @@ function App({ apis }: AppProps) {
         return;
       }
       void useSessionUIStore.getState().setCurrentSession(sessionId, directory);
-=======
-      const messageId = typeof detail?.messageId === 'string' ? detail.messageId.trim() || null : null;
-      if (openSessionInOwningHostWindow(sessionId, String(detail?.runtimeKey ?? '').trim(), messageId)) return;
-      // A session event carries the owning directory; a link carries none and
-      // lets the opener resolve it from the global session list.
-      void openSession(sessionId, { directory, messageId, requireKnownSession: detail?.requireKnownSession === true });
->>>>>>> bc50ba56a
     };
 
     window.addEventListener('openchamber:open-session', handler as EventListener);
@@ -475,15 +452,7 @@ function App({ apis }: AppProps) {
     // desktop shell keeps it until the window asks. Taking is one-shot, so a
     // cleanup must not drop links already taken (Strict Mode re-runs this).
     void takePendingDesktopSessionLinks().then((links) => {
-<<<<<<< HEAD
       for (const link of links) void openSessionLink(link.sessionId, link.messageId);
-=======
-      for (const link of links) {
-        if (openSessionInOwningHostWindow(link.sessionId, link.runtimeKey, link.messageId)) continue;
-        if (link.requireKnownSession) void openSession(link.sessionId, { messageId: link.messageId, requireKnownSession: true });
-        else void openSessionLink(link.sessionId, link.messageId);
-      }
->>>>>>> bc50ba56a
     });
     return () => window.removeEventListener('openchamber:open-session', handler as EventListener);
   }, []);
@@ -625,14 +594,6 @@ function App({ apis }: AppProps) {
   useGuestCatalogSync();
   useGuestInstallLinks();
   useBrowserProviderSync();
-<<<<<<< HEAD
-=======
-  useSourceControlProviderSync(apis.sourceControl);
-  useTrackerProviderSync(apis.trackers);
-  useQuotaProviderSync();
-  useGuestCatalogSync();
-  useLimitFailoverNotices();
->>>>>>> bc50ba56a
   useRoutingSync();
   useEnterprisePolicySync();
   // Desktop windows on a relay host; the phone has its own handling in MobileApp.
@@ -838,7 +799,6 @@ function App({ apis }: AppProps) {
                   {isDesktopRuntime ? <AppStartupOverlay ready={bootOutcomeKnown && bootViewIsMain} /> : null}
                   <Toaster />
                   <AppLinkConfirmDialog />
-                  <SnippetQuickCreateDialog />
                   <SharedTrustConfirmDialog />
                   <AboutDialogWrapper />
                   {showMemoryDebug && (

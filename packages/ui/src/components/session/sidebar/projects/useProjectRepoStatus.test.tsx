@@ -61,9 +61,9 @@ describe('useProjectRepoStatus', () => {
     dom.restore();
   });
 
-  const render = (projects: Project[], enabled = true) => act(async () => {
+  const render = (projects: Project[], enabled = true, apis: RuntimeAPIs = runtimeAPIs) => act(async () => {
     root.render(
-      <RuntimeAPIContext.Provider value={runtimeAPIs}>
+      <RuntimeAPIContext.Provider value={apis}>
         <Probe projects={projects} enabled={enabled} />
       </RuntimeAPIContext.Provider>,
     );
@@ -97,8 +97,6 @@ describe('useProjectRepoStatus', () => {
     expect(reads).toEqual(['/a', '/b', '/a', '/b']);
   });
 
-<<<<<<< HEAD
-=======
   test('new paths are prefetched in one batch before the per-project reads', async () => {
     const events: string[] = [];
     // SAFETY: the hook only calls `prefetchProjectStatuses` and passes `git` through to the store's `ensureStatus`, which these tests replace.
@@ -135,7 +133,6 @@ describe('useProjectRepoStatus', () => {
     expect(reads).toEqual([]);
   });
 
->>>>>>> bc50ba56a
   test('a failed read is retried on the next list change; a removed and re-added project is read again', async () => {
     failing.add('/b');
     await render([project('a'), project('b')]);

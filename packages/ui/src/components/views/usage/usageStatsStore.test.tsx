@@ -3,7 +3,7 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import type { UsageStats, UsageTools } from '@/lib/opencode/session-stats';
+import type { UsageStats, UsageTools } from '@openchamber/agent-contract';
 
 import { createUsageStatsStore, usageStatsKey, useTodayRollover, type UsageStatsRequest } from './usageStatsStore';
 

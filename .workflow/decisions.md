@@ -782,6 +782,15 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** upstream changes license or repository, or the fork stops tracking upstream.
 - **Effort:** ux-v270-omp-alignment
 
+### Within the same merge: workbench shell resolutions
+
+- **Header project action:** the upstream `HeaderProjectControls` (and its test) is the header's one project-action surface; the fork's `ProjectActionsButton` and its test are deleted rather than kept beside it. `ProjectActionsProvider`, `ProjectActionsScope`, `projectActionsRunnerContext` and `ProjectActionRunIndicator` come from upstream and the main layout mounts the provider and the on-demand dialog.
+- **Isolated spaces in the workbench:** the merge drops upstream's draft-space branches (`useDraftSpaceTarget`, `panelContentDirectory`, `SpacePreparing`, `isSpaceDirectory`) from `Header`, `ContextSurfacePanes` and `SidebarFilesTree` instead of restoring `components/session/spaces/SpacePreparing`; isolated spaces stay unreleased behind `ISOLATED_SPACES_RELEASED = false`, so no surface can reach a draft-space state.
+- **Guest panes:** `PluginPane` keeps the fork's private `MessagePort` bootstrap transport (decision `2026-10-24 - Break the Guest SDK version for the private bootstrap transport`) and takes upstream's value from `usePageColors` plus the `DockedPanelSurfaceContext` provider around the floating popover, and upstream's `/btw` shell stop is left as the fork's `createGuestShellRequests`.
+- **RTL:** the upstream conversion to logical CSS and `getInlineStartSide` in `Sidebar`, `TitlebarLeftControls` and `Header` is not taken here; these files keep the fork's `--oc-titlebar-left-inset` and physical props until the separate RTL conversion lands, so one tree does not mix two conventions.
+- **Header terminal control:** `HeaderTerminalAction` is the fork's addition and has no upstream counterpart; it is kept and mounted in the header's right cluster.
+- **Files tree rows:** `fileTreeRows.ts` (+test) is restored because the adopted `SidebarFilesTree` imports it; the upstream `SidebarFilesTree.test.tsx` is retired with the draft-space behavior it tests.
+
 ## 2026-11-10 - OMP TUI parity means function and display parity, not a mirror of OMP's settings and commands
 
 - **Decided:** "OMP TUI parity" covers what the user can do and see in the agent experience (status, tool intent, live streaming, tool summaries, todo, modes, goals, subagents), presented in OpenChamber's UI idioms. GUI Settings expose only settings a GUI user acts on; terminal-presentation settings, internal tuning knobs and duplicates of an existing OpenChamber control are not shown, and the OMP Settings page offers "open config.yml" for the rest. When OpenChamber already has a control for a concept, it is the single surface. The Commands page manages prompt templates; built-in OMP commands stay in chat autocomplete.

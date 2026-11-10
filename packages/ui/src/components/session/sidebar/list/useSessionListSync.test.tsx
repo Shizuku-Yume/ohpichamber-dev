@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -38,27 +38,15 @@ const childStores = {
   },
   clearBootstrapDemand: (owner: string) => state.clearedOwners.push(owner),
 };
-<<<<<<< HEAD
-// The fork's global list is authoritative as a whole once its status is
-// ready; there is no separate snapshot beside it.
-type GlobalSessionsState = { activeSessions: unknown[]; archivedSessions: unknown[]; status: 'ready' };
-const globalSessions: GlobalSessionsState = { activeSessions: [], archivedSessions: [], status: 'ready' };
-=======
 type GlobalSessionsState = { activeSessions: never[]; archivedSessions: never[]; authoritativeSessions: never[]; status: 'ready' };
 const globalSessions: GlobalSessionsState = { activeSessions: [], archivedSessions: [], authoritativeSessions: [], status: 'ready' };
->>>>>>> bc50ba56a
 
 mock.module('@/sync/sync-context', () => ({
   useChildStoreManager: () => childStores,
 }));
 mock.module('@/sync/sync-refs', () => ({ getAllSyncSessions: () => [] }));
-const realGlobalSessionsStore = await import('@/stores/useGlobalSessionsStore');
 mock.module('@/stores/useGlobalSessionsStore', () => ({
-  ...realGlobalSessionsStore,
-  useGlobalSessionsStore: Object.assign(
-    <T,>(selector: (value: GlobalSessionsState) => T): T => selector(globalSessions),
-    realGlobalSessionsStore.useGlobalSessionsStore,
-  ),
+  useGlobalSessionsStore: <T,>(selector: (value: GlobalSessionsState) => T): T => selector(globalSessions),
   refreshGlobalSessions: () => { state.globalRefreshes += 1; },
   refreshGlobalSessionsForDirectories: (directories: string[]) => { state.directoryRefreshes.push(directories); },
 }));
@@ -88,13 +76,13 @@ const { useSessionListSync } = await import('./useSessionListSync');
 const projects = [{ id: 'project', path: '/project' }];
 const worktree: WorktreeMetadata = { path: '/worktree', projectDirectory: '/project', branch: 'feature', label: 'feature' };
 
-const LifecycleProbe: React.FC = () => {
-  useSessionListSync();
+const LifecycleProbe: React.FC<{ isVSCode: boolean }> = ({ isVSCode }) => {
+  useSessionListSync({ isVSCode });
   return null;
 };
 
-const LifecycleHarness: React.FC<{ branch: 'hidden' | 'visible' | 'expanded' }> = ({ branch }) => <>
-  <LifecycleProbe />
+const LifecycleHarness: React.FC<{ isVSCode: boolean; branch: 'hidden' | 'visible' | 'compact-sessions' | 'compact-chat' | 'expanded' }> = ({ isVSCode, branch }) => <>
+  <LifecycleProbe isVSCode={isVSCode} />
   <span>{branch}</span>
 </>;
 
@@ -125,7 +113,7 @@ describe('useSessionListSync', () => {
 
   test('leaves initial global refresh to the root poller and demands only the current directory', () => {
     act(() => useSessionUIStore.setState({ availableWorktreesByProject: new Map([['/project', [worktree]]]) }));
-    act(() => root.render(<LifecycleProbe />));
+    act(() => root.render(<LifecycleProbe isVSCode={false} />));
 
     expect(state.globalRefreshes).toBe(0);
     expect(state.demands).toHaveLength(1);
@@ -136,19 +124,15 @@ describe('useSessionListSync', () => {
     expect(state.cleanupInputs.at(-1)).toEqual({ enabled: true, hasAuthoritativeGlobalSessions: true, sessionCount: 0, sessions: [] });
   });
 
-  test('refreshes newly discovered topology without bootstrapping unselected directories', () => {
-    act(() => root.render(<LifecycleProbe />));
-    act(() => useSessionUIStore.setState({ availableWorktreesByProject: new Map([['/project', [worktree]]]) }));
+  test('refreshes every VS Code directory on first mount and only topology additions afterward', () => {
+    act(() => root.render(<LifecycleProbe isVSCode />));
+    act(() => useProjectsStore.setState({ projects: [...projects, { id: 'added', path: '/added' }] }));
 
-    expect(state.directoryRefreshes).toEqual([['/worktree']]);
-    expect(state.demands).toHaveLength(1);
-    expect(state.demands[0]?.directories).toEqual(['/project']);
-    expect(state.globalRefreshes).toBe(0);
+    expect(state.directoryRefreshes).toEqual([['/project'], ['/added']]);
   });
 
-
   test('coalesces control events and clears the listener, timeout, and demand on unmount', async () => {
-    act(() => root.render(<LifecycleProbe />));
+    act(() => root.render(<LifecycleProbe isVSCode={false} />));
     state.listener?.({ type: 'session-created', directory: '/created-a' });
     state.listener?.({ type: 'session-created', directory: '/created-b' });
     state.listener?.({ type: 'scheduled-task-ran' });
@@ -163,10 +147,10 @@ describe('useSessionListSync', () => {
     expect(state.clearedOwners).toEqual([owner]);
   });
 
-  test('does not duplicate lifecycle ownership when MainLayout rerenders', () => {
-    act(() => root.render(<LifecycleProbe />));
+  test('does not duplicate lifecycle ownership when a hidden MainLayout or compact VS Code view rerenders', () => {
+    act(() => root.render(<LifecycleProbe isVSCode={false} />));
     const cleanupSessions = state.cleanupInputs.at(-1)?.sessions;
-    act(() => root.render(<LifecycleProbe />));
+    act(() => root.render(<LifecycleProbe isVSCode={false} />));
     expect(state.globalRefreshes).toBe(0);
     expect(state.subscriptions).toBe(1);
     expect(state.demands).toHaveLength(1);
@@ -174,33 +158,13 @@ describe('useSessionListSync', () => {
 
     act(() => root.unmount());
     root = createRoot(dom.container);
-    act(() => root.render(<LifecycleProbe />));
+    act(() => root.render(<LifecycleProbe isVSCode />));
     expect(state.globalRefreshes).toBe(0);
     expect(state.subscriptions).toBe(2);
     expect(state.unsubscriptions).toBe(1);
   });
 
   test('head updates to visible arrays never advance the authoritative cleanup snapshot', () => {
-<<<<<<< HEAD
-    const kept = { sessionId: 'kept' };
-    globalSessions.activeSessions = [kept];
-    act(() => root.render(<LifecycleProbe />));
-    const baseline = state.cleanupInputs.at(-1)?.sessions;
-    expect(baseline).toEqual([kept]);
-
-    // A head refresh republishes the same sessions in new arrays; the
-    // snapshot the cleanup reconciles against keeps the same content.
-    globalSessions.activeSessions = [{ ...kept }];
-    globalSessions.archivedSessions = [];
-    act(() => root.render(<LifecycleProbe />));
-    expect(state.cleanupInputs.at(-1)?.sessions).toEqual(baseline);
-
-    // A session the snapshot no longer holds must still reach cleanup, or its
-    // deletion would never be reconciled.
-    globalSessions.activeSessions = [];
-    act(() => root.render(<LifecycleProbe />));
-    expect(state.cleanupInputs.at(-1)?.sessions).toEqual([]);
-=======
     act(() => root.render(<LifecycleProbe isVSCode={false} />));
     const baseline = state.cleanupInputs.at(-1)?.sessions;
     globalSessions.activeSessions = [];
@@ -210,11 +174,10 @@ describe('useSessionListSync', () => {
     globalSessions.authoritativeSessions = [];
     act(() => root.render(<LifecycleProbe isVSCode={false} />));
     expect(state.cleanupInputs.at(-1)?.sessions).not.toBe(baseline);
->>>>>>> bc50ba56a
   });
 
   test('cancels a pending control-event refresh before a layout remount', async () => {
-    act(() => root.render(<LifecycleProbe />));
+    act(() => root.render(<LifecycleProbe isVSCode={false} />));
     state.listener?.({ type: 'session-created', directory: '/created' });
     act(() => root.unmount());
 
@@ -234,16 +197,64 @@ describe('useSessionListSync', () => {
       availableWorktreesByProject: new Map([['/project', [worktree]]]),
     });
 
-    act(() => root.render(<LifecycleHarness branch="hidden" />));
-    act(() => root.render(<LifecycleHarness branch="visible" />));
-    act(() => root.render(<LifecycleHarness branch="expanded" />));
+    act(() => root.render(<LifecycleHarness isVSCode={false} branch="hidden" />));
+    act(() => root.render(<LifecycleHarness isVSCode={false} branch="visible" />));
+    act(() => root.render(<LifecycleHarness isVSCode={false} branch="expanded" />));
 
     expect(state.demands).toHaveLength(1);
     expect(state.demands[0]?.directories).toEqual(['/project', '/worktree']);
     expect(state.globalRefreshes).toBe(0);
     expect(state.subscriptions).toBe(1);
   });
-  afterAll(() => {
-    mock.module('@/stores/useGlobalSessionsStore', () => realGlobalSessionsStore);
+
+  test('binds VS Code ownership to Store projects without worktrees and refreshes its first directories once', () => {
+    useProjectsStore.setState({
+      projects: [{ id: 'project', path: '/project' }],
+      activeProjectId: 'project',
+    });
+    useDirectoryStore.setState({ currentDirectory: '/project' });
+    useSessionUIStore.setState({
+      currentSessionDirectory: '/project',
+      availableWorktreesByProject: new Map([['/project', [worktree]]]),
+    });
+
+    act(() => root.render(<LifecycleHarness isVSCode branch="compact-sessions" />));
+    act(() => root.render(<LifecycleHarness isVSCode branch="compact-chat" />));
+    act(() => root.unmount());
+    root = createRoot(dom.container);
+    act(() => root.render(<LifecycleHarness isVSCode branch="compact-sessions" />));
+
+    expect(state.demands.map((demand) => demand.directories)).toEqual([['/project'], ['/project']]);
+    expect(state.directoryRefreshes).toEqual([['/project'], ['/project']]);
+    expect(state.globalRefreshes).toBe(0);
+    expect(state.subscriptions).toBe(2);
+    expect(state.unsubscriptions).toBe(1);
+  });
+
+  test('does not rerender VS Code lifecycle ownership for worktree-map-only changes', () => {
+    useProjectsStore.setState({
+      projects: [{ id: 'project', path: '/project' }],
+      activeProjectId: 'project',
+    });
+    useDirectoryStore.setState({ currentDirectory: '/project' });
+    useSessionUIStore.setState({
+      currentSessionDirectory: '/project',
+      availableWorktreesByProject: new Map([['/project', [worktree]]]),
+    });
+
+    act(() => root.render(<LifecycleHarness isVSCode branch="compact-sessions" />));
+    const cleanupInputCount = state.cleanupInputs.length;
+    const demandCount = state.demands.length;
+    const directoryRefreshCount = state.directoryRefreshes.length;
+    const subscriptionCount = state.subscriptions;
+
+    act(() => useSessionUIStore.setState({
+      availableWorktreesByProject: new Map([['/project', [{ ...worktree, path: '/other-worktree' }]]]),
+    }));
+
+    expect(state.cleanupInputs).toHaveLength(cleanupInputCount);
+    expect(state.demands).toHaveLength(demandCount);
+    expect(state.directoryRefreshes).toHaveLength(directoryRefreshCount);
+    expect(state.subscriptions).toBe(subscriptionCount);
   });
 });

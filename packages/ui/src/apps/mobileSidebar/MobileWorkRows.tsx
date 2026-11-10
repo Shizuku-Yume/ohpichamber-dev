@@ -11,8 +11,6 @@ import type { SessionSidebarRow } from '@/components/session/sidebar/sessionSide
 import { useSessionDraftRow } from '@/components/session/sidebar/works/useSessionDraftRow';
 import { useWorktreeWork } from '@/components/session/sidebar/works/useWorktreeWork';
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
-import { SpaceStatusMark } from '@/components/session/spaces/SpaceStatus';
-import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { useI18n } from '@/lib/i18n';
 import { refTintStyle } from '@/lib/source-control/prVisualState';
 import { cn } from '@/lib/utils';
@@ -46,9 +44,7 @@ const MobileSlotMark: React.FC<{ slotLeft: number; children: React.ReactNode }> 
  * A worktree work in the phone's list: one row for the worktree and every
  * session in it, as on the desktop. A tap opens what was last worked on
  * there; the chevron opens its sessions. Swiping reveals Done or Track,
- * Rename, Pin or Unpin, Archive worktree and Delete. An isolated space has
- * this row too, with its instance icon, its state as a mark at the end, and Done or
- * Track beside its actions sheet, which says what the mark stands for.
+ * Rename, Pin or Unpin, Archive worktree and Delete.
  */
 export const MobileWorktreeRow: React.FC<{
   row: Extract<SessionSidebarRow, { kind: 'group-header' }>;
@@ -59,7 +55,7 @@ export const MobileWorktreeRow: React.FC<{
   const actions = useMobileSidebarActions();
   const { revealed, renaming } = useMobileRowSwipe(row.key);
   const work = useWorktreeWork({ group: row.group, projectId: row.projectId, collapsed: row.collapsed, onNavigate: actions.close });
-  const { worktree, space, spaceName, project, refs, label, secondName, branch, title, inWork, selected, finishing, worktreeRemoving, activityState } = work;
+  const { worktree, project, refs, label, secondName, branch, title, inWork, selected, finishing, worktreeRemoving, activityState } = work;
   const mixedProject = useMixedRowProject(row.projectId, row.mixed && row.detailed);
   const expandable = !row.empty;
   const expanded = row.forceExpanded || !row.collapsed;
@@ -81,9 +77,7 @@ export const MobileWorktreeRow: React.FC<{
   const stateMark = worktreeRemoving || finishing
     ? <Spinner className="size-3" />
     : activityState ? <CollapsedActivityIndicator state={activityState} /> : null;
-  const branchMark = space ? (
-    <Icon name="instance" className="size-3.5 shrink-0 text-muted-foreground" aria-hidden={false} role="img" aria-label={t('sessions.sidebar.group.space')} />
-  ) : (
+  const branchMark = (
     <Icon
       name="git-branch"
       className={cn('size-3.5 shrink-0', refs.prColor ? 'oc-ref-tint' : 'text-muted-foreground')}
@@ -128,7 +122,7 @@ export const MobileWorktreeRow: React.FC<{
       initialTitle={title ?? ''}
       indent={indent}
       className={className}
-      placeholder={branch ?? spaceName ?? t('sessions.sidebar.work.rename.placeholder')}
+      placeholder={branch ?? t('sessions.sidebar.work.rename.placeholder')}
       onSubmit={(next) => {
         stopRename();
         void work.saveTitle(next);
@@ -140,7 +134,7 @@ export const MobileWorktreeRow: React.FC<{
     <span className="inline-flex shrink-0 items-center text-status-warning" role="img" aria-label={t('sessions.sidebar.group.worktreeMissing')}>
       <Icon name="alert" className="size-3" />
     </span>
-  ) : space ? <SpaceStatusMark spaceId={space.id} /> : null;
+  ) : null;
   const directoryIndicator = row.group.directory ? <DirectoryActionIndicator directory={row.group.directory} /> : null;
   // With the Pinned section shown a pinned work is listed there, whose header
   // already says so; otherwise the row carries the mark, as a session's does.
@@ -194,7 +188,7 @@ export const MobileWorktreeRow: React.FC<{
     </>;
   }
 
-  const slots = (work.workAction ? 1 : 0) + (work.canRename ? 1 : 0) + (space ? 1 : 0) + (work.canPin ? 1 : 0) + (work.canArchive ? 1 : 0) + (worktree && !worktreeRemoving ? 1 : 0);
+  const slots = (work.workAction ? 1 : 0) + (work.canRename ? 1 : 0) + (work.canPin ? 1 : 0) + (work.canArchive ? 1 : 0) + (worktree && !worktreeRemoving ? 1 : 0);
   return (
     <MobileSwipeActionsRow
       actionsWidth={slots * ROW_ACTION_SLOT_WIDTH}
@@ -219,14 +213,6 @@ export const MobileWorktreeRow: React.FC<{
             label={t('sessions.sidebar.work.menu.rename')}
             revealed={revealed}
             onClick={() => useMobileSidebarRowsStore.getState().startRename(row.key)}
-          />
-        ) : null}
-        {space ? (
-          <MobileSwipeAction
-            icon="more"
-            label={t('spaces.actions.menuAria', { label })}
-            revealed={revealed}
-            onClick={after(() => useSpacesStore.getState().openActionsSheet(space.id))}
           />
         ) : null}
         {work.canPin ? (

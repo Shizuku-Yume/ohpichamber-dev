@@ -1,21 +1,15 @@
 import * as React from 'react';
 
 import { useMobileAppActions } from '@/apps/mobileAppContext';
-import { useFireworksCelebration } from '@/contexts/FireworksContext';
 import { Icon } from '@/components/icon/Icon';
 import { DiffViewIcon } from '@/components/icons/DiffIcon';
-import { ButtonTooltip } from '@/components/ui/action-toolbar';
 import { REFERENCE_META_TEXT, referenceNumberLabel } from '@/components/references/referencePickerItems';
 import type { IconName } from '@/components/icon/icons';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
+import { ButtonTooltip } from '@/components/ui/action-toolbar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { reviewDraftCount, useChangeRequestReview } from '@/components/review/useChangeRequestReview';
 import { useConfirmDialog } from '@/components/ui/confirm-dialog';
-<<<<<<< HEAD
-=======
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
->>>>>>> bc50ba56a
 import { usePendingComposerReferences, type ComposerReferenceHandoff } from '@/components/chat/composer/pendingComposerReferences';
 import type { ReferencePickerItem, ReferencePickerSelection } from '@/components/references/referencePickerItems';
 import { readTrackerItemDetail } from '@/components/references/referenceSources';
@@ -35,7 +29,6 @@ import { usePullRequestSelectionStore } from '@/stores/usePullRequestSelectionSt
 import { useUIStore } from '@/stores/useUIStore';
 import { useWalkthroughStore } from '@/stores/useWalkthroughStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { getRuntimeKey } from '@/lib/runtime-switch';
 import type { TrackedThread } from '@/lib/trackedItems/model';
 import { useTrackedRecords } from '@/stores/useTrackedItemsStore';
 import { useSession } from '@/sync/sync-context';
@@ -147,7 +140,6 @@ export const SourceBoardActions: React.FC<{
     const { t } = useI18n();
     const { sourceControl, trackers } = useRuntimeAPIs();
     const confirmation = useConfirmDialog();
-    const { triggerFireworks } = useFireworksCelebration();
     const [busy, setBusy] = React.useState<'merge' | 'ready' | null>(null);
 
     const pull: RepositoryChangeRequestReference | null = item.source === 'repository' && item.reference.kind === 'pull' ? item.reference : null;
@@ -160,7 +152,7 @@ export const SourceBoardActions: React.FC<{
     // The board/branch preview already owns visibility-scoped interest.
     const [liveRecord] = useTrackedRecords(trackedPulls);
     const liveMerge = liveRecord?.type === 'pull' ? liveRecord.state : null;
-    const waitingMerge = liveMerge?.state === 'open' && (liveMerge.isInMergeQueue || liveMerge.autoMergeRequest);
+    const waitingMerge = liveMerge?.state === 'open' && (liveMerge.isInMergeQueue || liveMerge.autoMergeRequest) === true;
     const waitingLabel = liveMerge?.isInMergeQueue
         ? liveMerge.mergeQueueEntry?.position != null
             ? t('sourceBoard.merge.queuePosition', { position: liveMerge.mergeQueueEntry.position })
@@ -173,17 +165,13 @@ export const SourceBoardActions: React.FC<{
     const currentSessionId = useSessionUIStore((state) => (state.newSessionDraft?.open ? null : state.currentSessionId));
     const currentSession = useSession(currentSessionId, currentSessionId ? useSessionUIStore.getState().getDirectoryForSession(currentSessionId) ?? undefined : undefined);
 
-<<<<<<< HEAD
     // The item lands on the composer as a chip, never as a sent message, and
     // in the composer it was addressed to: the draft this flow opened, or the
     // chat the board covered.
-=======
-    // The item lands on the composer as a chip, never as a sent message.
->>>>>>> bc50ba56a
     const attachToComposer = (target: ComposerReferenceHandoff) => {
         void resolveComposerReferences([selectionOf(item)], {
             sourceControl,
-            context: readContext,
+            context,
             readTrackerDetail: (provider, itemId) => (trackers
                 ? readTrackerItemDetail(trackers, provider, itemId)
                 : Promise.reject(new Error('Trackers are not available here'))),
@@ -241,7 +229,7 @@ export const SourceBoardActions: React.FC<{
     const stackOnTop = onStartOnTop && openPull && descriptor.features.branchHeads && isStackable(openPull) ? () => onStartOnTop(openPull) : null;
     const stackOnTopLabel = t('stacks.actions.newOnTop');
 
-    const merge = async (origin?: HTMLElement) => {
+    const merge = async () => {
         if (!openPull || !context || !mergeMethod || submitBlocked) return;
         const methodNote = t(MERGE_METHOD_KEYS[mergeMethod], { base: openPull.base });
         const stackNote = submits
@@ -268,8 +256,6 @@ export const SourceBoardActions: React.FC<{
                 method: mergeMethod,
             });
             const { merged, outcome, message } = receipt.result;
-            // One volley more than a push, plus one for each layer of a stack landing with it.
-            if (merged) triggerFireworks({ kind: 'merge', volleys: 2 + landsBelow.length, origin });
             if (submits) {
                 if (merged) toast.success(t('sourceBoard.toast.submitted', { reference }));
                 else toast.message(t('sourceBoard.toast.notSubmitted', { reference }), { description: message });
@@ -281,8 +267,6 @@ export const SourceBoardActions: React.FC<{
                         : t('stacks.toast.mergedWithBelow.other', { reference, count: landsBelow.length }));
             } else if (outcome === 'queued') {
                 toast.message(t('sourceBoard.toast.mergeQueued', { reference }));
-            } else if (outcome === 'auto-merge') {
-                toast.message(t('sourceBoard.toast.autoMerge', { reference }));
             } else if (outcome === 'merging') {
                 toast.message(t('sourceBoard.toast.mergeRunning', { reference }), { description: t('sourceBoard.toast.mergeRunningDescription') });
             } else {
@@ -307,7 +291,10 @@ export const SourceBoardActions: React.FC<{
             toast.success(t(receipt.result.merged ? 'sourceBoard.toast.merged' : 'sourceBoard.toast.mergeCancelled', { reference }));
         } catch (error) {
             toast.error(t('sourceBoard.toast.mergeCancelFailed', { reference }), { description: error instanceof Error ? error.message : String(error) });
-        } finally { setBusy(null); onChanged(); }
+        } finally {
+            setBusy(null);
+            onChanged();
+        }
     };
 
     const markReady = async () => {
@@ -339,34 +326,30 @@ export const SourceBoardActions: React.FC<{
                 // One control, as on the host: the button says how it merges,
                 // the arrow beside it picks another way.
                 <div className="flex shrink-0 items-center">
-                    <ButtonTooltip label={t(submits ? 'contextTooltips.tracker.submitTo' : 'contextTooltips.tracker.mergeInto', { branch: openPull.base })}>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            // Two halves of one control: the inner corners stay square.
-                            className={cn(mergeMethods.length > 1 && 'rounded-e-none')}
-                            disabled={busy === 'merge' || submitBlocked}
-                            onClick={(event) => void merge(event.currentTarget)}
-                        >
-                            <Icon name={busy === 'merge' ? 'loader-4' : 'git-merge'} className={busy === 'merge' ? 'size-3.5 animate-spin' : 'size-3.5'} />
-                            {t(MERGE_METHOD_LABELS[mergeMethod])}
-                        </Button>
-                    </ButtonTooltip>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        // Two halves of one control: the inner corners stay square.
+                        className={cn(mergeMethods.length > 1 && 'rounded-e-none')}
+                        disabled={busy === 'merge' || submitBlocked}
+                        onClick={() => void merge()}
+                    >
+                        <Icon name={busy === 'merge' ? 'loader-4' : 'git-merge'} className={busy === 'merge' ? 'size-3.5 animate-spin' : 'size-3.5'} />
+                        {t(MERGE_METHOD_LABELS[mergeMethod])}
+                    </Button>
                     {mergeMethods.length > 1 ? (
                         <DropdownMenu>
-                            <ButtonTooltip label={t('contextTooltips.tracker.chooseMergeMethod')}>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="rounded-s-none border-s-0 px-1.5"
-                                        disabled={busy === 'merge'}
-                                        aria-label={t('sourceBoard.merge.methodAria')}
-                                    >
-                                        <Icon name="arrow-down-s" className="size-3.5" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                            </ButtonTooltip>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="rounded-s-none border-s-0 px-1.5"
+                                    disabled={busy === 'merge'}
+                                    aria-label={t('sourceBoard.merge.methodAria')}
+                                >
+                                    <Icon name="arrow-down-s" className="size-3.5" />
+                                </Button>
+                            </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="w-56">
                                 <DropdownMenuRadioGroup value={mergeMethod} onValueChange={(value) => chooseMergeMethod(String(value))}>
                                     {mergeMethods.map((method) => (
@@ -379,7 +362,7 @@ export const SourceBoardActions: React.FC<{
                 </div>
             ) : null}
             {openPull && !openPull.draft && unmet.length > 0 ? (
-                // What the disabled button waits for is said beside it.
+                // A disabled button shows no tooltip, so what it waits for is said beside it.
                 <span
                     className="min-w-0 max-w-[16rem] truncate typography-meta text-muted-foreground"
                     title={unmet.map((requirement) => requirement.description ? `${requirement.name}: ${requirement.description}` : requirement.name).join('\n')}
@@ -413,18 +396,13 @@ export const SourceBoardActions: React.FC<{
             </div>
             {project || currentSessionId ? (
                 <DropdownMenu>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <DropdownMenuTrigger asChild>
-                                <Button size="sm" variant="default" className="shrink-0">
-                                    <Icon name="attachment-2" className="size-3.5" />
-                                    {t('sourceBoard.actions.attach')}
-                                    <Icon name="arrow-down-s" className="size-3.5 opacity-70" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent sideOffset={6}>{t('contextTooltips.tracker.chooseAttachTarget')}</TooltipContent>
-                    </Tooltip>
+                    <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="default" className="shrink-0">
+                            <Icon name="attachment-2" className="size-3.5" />
+                            {t('sourceBoard.actions.attach')}
+                            <Icon name="arrow-down-s" className="size-3.5 opacity-70" />
+                        </Button>
+                    </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-64">
                         {currentSessionId ? (
                             <DropdownMenuItem onSelect={attachToCurrentSession}>
@@ -445,7 +423,7 @@ export const SourceBoardActions: React.FC<{
                                 </DropdownMenuItem>
                                 {worktreeAvailable ? (
                                     <DropdownMenuItem onSelect={() => onStartWorktree(project, selectionOf(item))}>
-                                        <Icon name="worktree" className="size-4 shrink-0" />
+                                        <Icon name="git-branch" className="size-4 shrink-0" />
                                         {t(pull ? 'sourceBoard.actions.checkoutWorktree' : 'sourceBoard.actions.newWorktreeSession')}
                                     </DropdownMenuItem>
                                 ) : null}
@@ -485,7 +463,7 @@ const LINK_CLASS = cn(
  * With an earlier revision picked (`revision`), both read that revision, the
  * one whose counts sit beside them.
  */
-type PullLinkProps = {
+export const SourceBoardPullLinks: React.FC<{
     pull: RepositoryChangeRequestReference;
     project: SourceBoardProject;
     /** The folder the board reads; a repository under the project's root when the root is not one. */
@@ -496,15 +474,14 @@ type PullLinkProps = {
     onLeave?: () => void;
     /** The earlier revision (a patchset's full SHA) the preview shows; null for the current one. */
     revision?: string | null;
-};
-
-const useOpenPull = ({ pull, project, repository, context, projectOwnsDirectory, currentDirectory, onLeave, revision = null }: PullLinkProps) => {
+}> = ({ pull, project, repository, context, projectOwnsDirectory, currentDirectory, onLeave, revision = null }) => {
+    const { t } = useI18n();
     const mobile = useMobileAppActions();
-    return (surface: 'diff' | 'walkthrough') => {
+    const diffServing = useChangeRequestDiffServing(context.provider);
+    const open = (surface: 'diff' | 'walkthrough') => {
         const source: PullRequestSource = {
             kind: 'pr', number: pull.number, sourceRepo: { owner: pull.sourceRepo.owner, repo: pull.sourceRepo.repo },
             ...(revision ? { revision } : {}),
-            linked: context.linked,
         };
         const ui = useUIStore.getState();
         const target = resolvePullLinkTarget({
@@ -536,70 +513,25 @@ const useOpenPull = ({ pull, project, repository, context, projectOwnsDirectory,
         useWalkthroughStore.getState().requestTarget(requestDirectory, { source, context });
         ui.openContextPanelTab(panelDirectory, { mode: 'walkthrough', targetDirectory });
     };
-};
-
-export const SourceBoardPullLinks: React.FC<PullLinkProps> = (props) => {
-    const { t } = useI18n();
-    const mobile = useMobileAppActions();
-    const diffServing = useChangeRequestDiffServing(props.context.provider);
-    const open = useOpenPull(props);
     if (diffServing === 'not-served') return null;
     return (
         <span className="inline-flex items-center gap-1">
-            <Tooltip>
-                <TooltipTrigger asChild>
-                    <button type="button" className={LINK_CLASS} onClick={() => open('diff')}>
-                        <DiffViewIcon className="size-3.5" />
-                        {t('sourceBoard.actions.changes')}
-                        <Icon name="external-link" className="size-3.5" />
-                    </button>
-                </TooltipTrigger>
-                <TooltipContent sideOffset={6}>{t('contextTooltips.tracker.openChanges')}</TooltipContent>
-            </Tooltip>
+            <button type="button" className={LINK_CLASS} onClick={() => open('diff')}>
+                <DiffViewIcon className="size-3.5" />
+                {t('sourceBoard.actions.changes')}
+                <Icon name="external-link" className="size-3.5" />
+            </button>
             {mobile ? null : (
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button type="button" className={LINK_CLASS} onClick={() => open('walkthrough')}>
-                            <Icon name="route" className="size-3.5 text-[var(--status-info)]" />
-                            {t('walkthrough.action.open')}
-                            <Icon name="external-link" className="size-3.5" />
-                        </button>
-                    </TooltipTrigger>
-                    <TooltipContent sideOffset={6}>{t('contextTooltips.tracker.openWalkthrough')}</TooltipContent>
-                </Tooltip>
+                <button type="button" className={LINK_CLASS} onClick={() => open('walkthrough')}>
+                    <Icon name="route" className="size-3.5 text-[var(--status-info)]" />
+                    {t('walkthrough.action.open')}
+                    <Icon name="external-link" className="size-3.5" />
+                </button>
             )}
         </span>
     );
 };
 
-
-/**
- * The viewer's unsent review of the previewed PR, beside its reviewers: who it
- * is and how many comments wait. Opens the diff it was written on.
- */
-export const SourceBoardReviewDraft: React.FC<PullLinkProps> = (props) => {
-    const { pull, context, project } = props;
-    const { t } = useI18n();
-    const open = useOpenPull(props);
-    const target = React.useMemo(() => (pull.state === 'open' ? {
-        context,
-        provider: context.provider,
-        project: { owner: pull.sourceRepo.owner, name: pull.sourceRepo.repo },
-        number: pull.number,
-        headSha: pull.headSha,
-        directory: context.directory ?? project.path,
-    } : null), [context, project.path, pull.headSha, pull.number, pull.sourceRepo.owner, pull.sourceRepo.repo, pull.state]);
-    const review = useChangeRequestReview(target);
-    const count = reviewDraftCount(review);
-    if (count === 0) return null;
-    const login = review?.state?.draft?.comments[0]?.author?.login;
-    const label = t(count === 1 ? 'review.board.draft.one' : 'review.board.draft.other', { count });
-    return (
-        <button type="button" className={LINK_CLASS} onClick={() => open('diff')}>
-            {login ? `${login} · ${label}` : label}
-        </button>
-    );
-};
 
 const DISCUSSION_CLOSE_REASONS = ['resolved', 'outdated', 'duplicate'] as const satisfies readonly DiscussionCloseReason[];
 const DISCUSSION_CLOSE_KEYS = {

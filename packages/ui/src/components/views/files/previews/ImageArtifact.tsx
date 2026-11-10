@@ -1,4 +1,3 @@
-import { isRightToLeft } from '@/lib/i18n';
 import React from 'react';
 import { flushSync } from 'react-dom';
 
@@ -73,14 +72,8 @@ type ImageArtifactProps = {
  * shows the loading state, and an image the browser cannot decode shows a
  * failure with retry and download in its place.
  */
-<<<<<<< HEAD
-const ImageArtifactView: React.FC<ImageArtifactProps> = ({ src, name, sizeBytes, neighbors }) => {
-  const { t } = useI18n();
-  const direction = isRightToLeft(null) ? 'rtl' : 'ltr';
-=======
 const ImageArtifactView: React.FC<ImageArtifactProps> = ({ src, name, sizeBytes, neighbors, onRetry, download }) => {
   const { t, direction } = useI18n();
->>>>>>> bc50ba56a
   // null is fit: the scale then follows the viewer's size.
   const [scale, setScale] = React.useState<number | null>(null);
   const [natural, setNatural] = React.useState<Size | null>(null);

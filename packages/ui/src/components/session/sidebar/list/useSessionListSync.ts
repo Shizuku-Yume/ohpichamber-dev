@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { refreshGlobalSessions, refreshGlobalSessionsForDirectories, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useChildStoreManager } from '@/sync/sync-context';
@@ -11,9 +11,6 @@ import { buildSessionBootstrapDemands } from './sessionBootstrapDemands';
 import { buildKnownSessionDirectories } from './sessionListDirectories';
 import { useAuthoritativeSessionCleanup } from './useAuthoritativeSessionCleanup';
 
-<<<<<<< HEAD
-export const useSessionListSync = () => {
-=======
 const EMPTY_WORKTREES_BY_PROJECT = new Map();
 const EMPTY_SESSIONS: Session[] = [];
 
@@ -24,15 +21,14 @@ type UseSessionListSyncOptions = {
 export const useSessionListSync = ({
   isVSCode,
 }: UseSessionListSyncOptions) => {
->>>>>>> bc50ba56a
   const childStores = useChildStoreManager();
   const projects = useProjectsStore((state) => state.projects);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const currentSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
-  const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
+  const availableWorktreesByProject = useSessionUIStore((state) => isVSCode ? EMPTY_WORKTREES_BY_PROJECT : state.availableWorktreesByProject);
   const knownDirectories = React.useMemo(
-    () => buildKnownSessionDirectories(projects, availableWorktreesByProject),
-    [availableWorktreesByProject, projects],
+    () => buildKnownSessionDirectories(projects, availableWorktreesByProject, { includeWorktrees: !isVSCode }),
+    [availableWorktreesByProject, isVSCode, projects],
   );
   const authoritativeSessions = useGlobalSessionsStore((state) => state.authoritativeSessions);
   const bootstrapDemandOwner = `session-list-sync:${React.useId()}`;
@@ -55,9 +51,9 @@ export const useSessionListSync = ({
     const directories = new Set(knownDirectories);
     const previous = knownProjectSessionDirectoriesRef.current;
     knownProjectSessionDirectoriesRef.current = directories;
-    const added = previous ? [...directories].filter((directory) => !previous.has(directory)) : [];
+    const added = previous ? [...directories].filter((directory) => !previous.has(directory)) : isVSCode ? [...directories] : [];
     if (added.length) void refreshGlobalSessionsForDirectories(added, getAllSyncSessions());
-  }, [knownDirectories]);
+  }, [isVSCode, knownDirectories]);
 
   React.useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -87,15 +83,6 @@ export const useSessionListSync = ({
     };
   }, []);
 
-<<<<<<< HEAD
-  // The fork's global list is authoritative as a whole once its status is
-  // ready; there is no separate snapshot to prefer.
-  const cleanupSessions = React.useMemo(
-    () => [...globalActiveSessions, ...archivedSessions],
-    [archivedSessions, globalActiveSessions],
-  );
-=======
->>>>>>> bc50ba56a
   useAuthoritativeSessionCleanup({
     enabled: true,
     hasAuthoritativeGlobalSessions: authoritativeSessions != null,

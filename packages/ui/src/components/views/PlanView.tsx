@@ -1,11 +1,10 @@
 import React from 'react';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
+import { PreviewToggleButton } from './PreviewToggleButton';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-<<<<<<< HEAD
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -15,11 +14,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { buildCodeMirrorCommentWidgets, FilePreviewCommentMenu, normalizeLineRange, useInlineCommentController } from '@/components/comments';
-=======
-import { ActionToolbar } from '@/components/ui/action-toolbar';
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { buildCodeMirrorCommentWidgets, FilePreviewCommentMenu, normalizeLineRange, useInlineCommentController, useLineNumberDragSelection } from '@/components/comments';
->>>>>>> bc50ba56a
 
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useDeviceInfo } from '@/lib/device';
@@ -51,26 +45,11 @@ import { getRuntimeKey, getRuntimeSwitchRevision, subscribeRuntimeEndpointChange
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { createWorktreeSessionForNewBranch } from '@/lib/worktreeSessionCreator';
 import { TodoSendDialog } from '@/components/session/TodoSendDialog';
-<<<<<<< HEAD
 import type { TodoSendExecution } from '@/components/session/todoSendExecution';
 import { Icon } from "@/components/icon/Icon";
-=======
-import { resolveExecutionForDirectory, type TodoSendExecution } from '@/components/session/todoSendExecution';
->>>>>>> bc50ba56a
 import { useMessageTTS } from '@/hooks/useMessageTTS';
 import { loadMagicPrompts } from '@/lib/magicPrompts';
 import { useI18n } from '@/lib/i18n';
-<<<<<<< HEAD
-=======
-import { ContextPanelHeaderToolbar } from '@/components/layout/contextPanelHeaderSlot';
-import { useInContextPanelHeader } from '@/components/layout/contextPanelHeaderSlotContext';
-import { cn } from '@/lib/utils';
-import { useMarkdownLocalAssets } from './files/previews/useMarkdownLocalAssets';
-import { watchFileOnScreen } from '@/lib/watchedFiles';
-
-/** The open plan's check while OpenCode watches its file: only for a watch lost on an OpenCode restart. */
-const WATCHED_PLAN_POLL_MS = 30_000;
->>>>>>> bc50ba56a
 
 type PlanViewProps = {
   targetPath?: string | null;
@@ -631,81 +610,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
     return () => {
       cancelled = true;
     };
-<<<<<<< HEAD
   }, [activeRuntimeKey, homeDirectory, runtimeApis.files, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, scheduleSave, sessionDirectory, targetPath]);
-=======
-  }, [activeRuntimeKey, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, scheduleSave]);
-
-  // An agent can change the open plan, through the knowledge tool or by
-  // editing its file. With no unsaved edits the editor takes the new text, so
-  // a later edit starts from it instead of writing the old document back over
-  // it. Unsaved edits win: the next save replaces the agent's version, the way
-  // typing in a note does. A save through the API announces itself; a file
-  // edit does not, so the open plan also watches or polls its file, as the
-  // file panel does for open files.
-  React.useEffect(() => {
-    if (!visible || !savedPlanProjectRef || !savedPlanId || !savedPlanKey || loadedProjectPlanId !== savedPlanId) return;
-    const doc = docRef.current;
-    if (doc.key !== savedPlanKey) return;
-    const poller = createFileContentPoller({
-      readContent: async () => {
-        await saveQueue.pendingFor(savedPlanKey);
-        const plan = await fetchProjectPlan(savedPlanProjectRef, savedPlanId);
-        // A deleted plan keeps its text on screen; the next save reports it gone.
-        if (!plan) throw new Error('Plan not found');
-        return plan.raw;
-      },
-      getLoadedContent: () => doc.content,
-      getLoadedRevision: () => doc.editRevision,
-      isDirty: () => docRef.current !== doc || doc.editRevision > doc.savedRevision,
-      applyContent: (raw) => {
-        doc.content = raw;
-        setContent(raw);
-      },
-    });
-    let polling = false;
-    // A change reported while a check runs gets a check of its own after it.
-    let pollAgain = false;
-    const poll = async () => {
-      if (document.visibilityState === 'hidden') return;
-      if (polling) {
-        pollAgain = true;
-        return;
-      }
-      polling = true;
-      try {
-        await poller.poll();
-      } finally {
-        polling = false;
-        if (pollAgain) {
-          pollAgain = false;
-          void poll();
-        }
-      }
-    };
-    const release = observeProjectContext(savedPlanProjectRef, poll);
-    let interval = window.setInterval(() => { void poll(); }, 2000);
-    // A plan kept in the repository is watched by OpenCode, so its change
-    // event starts the check and the poll only covers a watch lost on an
-    // OpenCode restart. A plan in OpenChamber's own data folder keeps polling.
-    const watch = loadedProjectPlanPath
-      ? watchFileOnScreen(savedPlanProjectRef.path, loadedProjectPlanPath, () => { void poll(); })
-      : null;
-    let stopped = false;
-    void watch?.watching.then((watching) => {
-      if (!watching || stopped) return;
-      window.clearInterval(interval);
-      interval = window.setInterval(() => { void poll(); }, WATCHED_PLAN_POLL_MS);
-    });
-    return () => {
-      stopped = true;
-      window.clearInterval(interval);
-      watch?.stop();
-      release();
-      poller.dispose();
-    };
-  }, [loadedProjectPlanId, loadedProjectPlanPath, savedPlanId, savedPlanKey, savedPlanProjectRef, saveQueue, visible]);
->>>>>>> bc50ba56a
 
   // Synchronous buffer tracking: if an edit and an unmount land in the same
   // batch, the passive content effect would never run and a flush would save
@@ -756,7 +661,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
   }, [onNavigatedToChat, setSessionSwitcherOpen]);
 
   const handleConfirmPlanSend = React.useCallback(
-    async (dialogExecution: TodoSendExecution) => {
+    async (execution: TodoSendExecution) => {
       // A saved plan sends against its own project — the one it is stored
       // under — not against whatever directory the viewer is currently in.
       // For filesystem plans those are the same directory.
@@ -829,43 +734,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
             ].join('\n');
         const syntheticParts = [{ synthetic: true as const, text: planSubstance }];
 
-<<<<<<< HEAD
-=======
-        routeToChat();
-
-        let sessionId: string | null = null;
-        let directoryHint: string | null = sendTargetProject.path;
-        let execution = dialogExecution;
-
-        if (pendingPlanSend.target === 'worktree') {
-          if (!canCreateWorktree) {
-            return;
-          }
-          const created = await createWorktreeSessionForNewBranch(sendTargetProject.path, generateBranchName());
-          if (!created?.id) {
-            return;
-          }
-          sessionId = created.id;
-          directoryHint = created.directory;
-          execution = await resolveExecutionForDirectory(created.directory, dialogExecution);
-        } else {
-          const sessionResult = await createSession(undefined, sendTargetProject.path, undefined, {
-            model: { providerID: execution.providerID, id: execution.modelID, variant: execution.variant || undefined },
-            agent: execution.agent.trim() || undefined,
-          });
-          if (!sessionResult?.id) {
-            return;
-          }
-          sessionId = sessionResult.id;
-          directoryHint = sessionResult.directory ?? sendTargetProject.path;
-          initializeNewOpenChamberSession(sessionResult.id, useConfigStore.getState().agents ?? []);
-        }
-
-        if (!sessionId) {
-          return;
-        }
-
->>>>>>> bc50ba56a
         const selectionState = useSelectionStore.getState();
         selectionState.saveSessionModelSelection(sessionId, execution.providerID, execution.modelID);
 
@@ -928,118 +796,145 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
     });
   }, [commentText, deleteDraft, editingDraftId, handleCancelComment, handleSaveComment, isDragging, lineSelection, planFileDrafts, planFileLabel, setCommentText, startEdit]);
 
-  // Improve and implement each open the same choice of where the plan goes.
-  const sendMenu = (action: 'improve' | 'implement') => (
-    <>
-      <DropdownMenuItem
-        onClick={() => setPendingPlanSend({ action, target: 'session' })}
-        disabled={isManagedChatPlan}
-      >
-        {t('planView.actions.sendToNewSession')}
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        onClick={() => setPendingPlanSend({ action, target: 'worktree' })}
-        disabled={!canCreateWorktree}
-      >
-        {t('planView.actions.sendToNewWorktreeSession')}
-      </DropdownMenuItem>
-    </>
-  );
-
-  const copyPlanContents = async () => {
-    const result = await copyTextToClipboard(content);
-    if (!result.ok) return;
-    setCopiedContent(true);
-    if (copiedContentTimeoutRef.current !== null) {
-      window.clearTimeout(copiedContentTimeoutRef.current);
-    }
-    copiedContentTimeoutRef.current = window.setTimeout(() => {
-      setCopiedContent(false);
-    }, 1200);
-  };
-
   return (
     <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-background">
-<<<<<<< HEAD
       <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-1.5 flex-shrink-0">
         <div className="min-w-0 flex-1">
           <div className="typography-ui-label font-medium truncate">{parsedTitle}</div>
           {loadError ? (
             <div className="typography-micro text-[color:var(--status-error)] truncate" title={loadError}>
               {t('planView.error.loadFailed')}
-=======
-      <ContextPanelHeaderToolbar>
-      <div className={cn('flex min-w-0 items-center gap-2', inPanelHeader ? 'flex-1 py-1 pe-1' : 'border-b border-edge-muted px-3 py-1.5 flex-shrink-0')}>
-        {leading}
-        <ActionToolbar
-          className="flex-1"
-          start={(
-            <div className="min-w-0 flex-1">
-              <div className="typography-ui-label font-medium truncate">{parsedTitle}</div>
-              {loadError ? (
-                <div className="typography-micro text-[color:var(--status-error)] truncate" title={loadError}>
-                  {t('planView.error.loadFailed')}
-                </div>
-              ) : null}
-              {saveError ? (
-                <div className="typography-micro text-[color:var(--status-error)] truncate" title={saveError}>
-                  {t('planView.error.saveFailed')}
-                </div>
-              ) : null}
->>>>>>> bc50ba56a
             </div>
-          )}
-          groups={hasDocument ? [
-            [{
-              id: 'mode',
-              label: t('documentToolbar.preview'),
-              icon: 'eye',
-              pressed: mdViewMode === 'preview',
-              onSelect: () => saveMdViewMode(mdViewMode === 'preview' ? 'edit' : 'preview'),
-              pinned: true,
-            }],
-            [
-              {
-                id: 'improve',
-                label: t('planView.actions.improve'),
-                icon: 'loop-right-ai',
-                disabled: !content.trim() || isManagedChatPlan,
-                menu: sendMenu('improve'),
-              },
-              {
-                id: 'implement',
-                label: t('planView.actions.implement'),
-                icon: 'code-ai',
-                disabled: !content.trim() || isManagedChatPlan,
-                menu: sendMenu('implement'),
-              },
-            ],
-            [
-              // Reads the plan's text, so it works in either mode.
-              showMessageTTSButtons && {
-                id: 'read-aloud',
-                label: isTTSPlaying ? t('planView.tts.stopSpeaking') : t('planView.tts.readAloud'),
-                icon: 'volume-up',
-                iconClassName: isTTSPlaying ? 'text-[var(--primary-text)]' : undefined,
-                onSelect: () => {
-                  if (isTTSPlaying) {
-                    stopTTS();
-                  } else if (content.trim()) {
-                    void playTTS(content);
+          ) : null}
+          {saveError ? (
+            <div className="typography-micro text-[color:var(--status-error)] truncate" title={saveError}>
+              {t('planView.error.saveFailed')}
+            </div>
+          ) : null}
+        </div>
+        {hasDocument ? (
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0"
+                      aria-label={t('planView.actions.improvePlanAria')}
+                      disabled={!content.trim() || isManagedChatPlan}
+                    >
+                      <Icon name="loop-right-ai" className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={8}>{t('planView.actions.improve')}</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => setPendingPlanSend({ action: 'improve', target: 'session' })}
+                  disabled={isManagedChatPlan}
+                >
+                  {t('planView.actions.sendToNewSession')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setPendingPlanSend({ action: 'improve', target: 'worktree' })}
+                  disabled={!canCreateWorktree}
+                >
+                  {t('planView.actions.sendToNewWorktreeSession')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0"
+                      aria-label={t('planView.actions.implementPlanAria')}
+                      disabled={!content.trim() || isManagedChatPlan}
+                    >
+                      <Icon name="code-ai" className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={8}>{t('planView.actions.implement')}</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => setPendingPlanSend({ action: 'implement', target: 'session' })}
+                  disabled={isManagedChatPlan}
+                >
+                  {t('planView.actions.sendToNewSession')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setPendingPlanSend({ action: 'implement', target: 'worktree' })}
+                  disabled={!canCreateWorktree}
+                >
+                  {t('planView.actions.sendToNewWorktreeSession')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <PreviewToggleButton
+              currentMode={mdViewMode}
+              onToggle={() => saveMdViewMode(mdViewMode === 'preview' ? 'edit' : 'preview')}
+            />
+            {mdViewMode === 'preview' && showMessageTTSButtons && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 w-5 p-0"
+                    aria-label={isTTSPlaying ? t('planView.tts.stopSpeaking') : t('planView.tts.readAloud')}
+                    onClick={() => {
+                      if (isTTSPlaying) {
+                        stopTTS();
+                      } else if (content.trim()) {
+                        void playTTS(content);
+                      }
+                    }}
+                  >
+                    <Icon name="volume-up" className={isTTSPlaying ? 'h-4 w-4 text-[var(--primary-text)]' : 'h-4 w-4'} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={8}>
+                  {isTTSPlaying ? t('planView.tts.stopSpeaking') : t('planView.tts.readAloud')}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                const result = await copyTextToClipboard(content);
+                if (result.ok) {
+                  setCopiedContent(true);
+                  if (copiedContentTimeoutRef.current !== null) {
+                    window.clearTimeout(copiedContentTimeoutRef.current);
                   }
-                },
-              },
-              {
-                id: 'copy-contents',
-                label: t('planView.actions.copyPlanContents'),
-                icon: 'file-copy',
-                done: copiedContent,
-                onSelect: () => void copyPlanContents(),
-              },
-            ],
-          ] : []}
-          fold
-        />
+                  copiedContentTimeoutRef.current = window.setTimeout(() => {
+                    setCopiedContent(false);
+                  }, 1200);
+                } else {
+                  // ignored
+                }
+              }}
+              className="h-5 w-5 p-0"
+              title={t('planView.actions.copyPlanContents')}
+              aria-label={t('planView.actions.copyPlanContents')}
+            >
+              {copiedContent ? (
+                <Icon name="check" className="h-4 w-4 text-[color:var(--status-success)]" />
+              ) : (
+                <Icon name="clipboard" className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <TodoSendDialog
@@ -1064,12 +959,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
             <div className="relative h-full">
               <div className="h-full">
                 {mdViewMode === 'preview' ? (
-<<<<<<< HEAD
                   <div className="h-full overflow-auto p-3" ref={previewRef}>
-=======
-                  <>
-                  <div className="overlay-scrollbar-target overlay-scrollbar-container h-full overflow-auto p-3" ref={setPreviewContainer}>
->>>>>>> bc50ba56a
                     {/* Same comment-on-selection as a markdown file preview. */}
                     <FilePreviewCommentMenu
                       containerRef={previewRef}
@@ -1089,8 +979,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
                       <SimpleMarkdownRenderer content={content} className="typography-markdown-body" enableFileReferences={false} />
                     </ErrorBoundary>
                   </div>
-                  <OverlayScrollbar containerRef={previewRef} />
-                  </>
                 ) : (
                   <div className="relative h-full" ref={editorWrapperRef}>
                     <CodeMirrorEditor

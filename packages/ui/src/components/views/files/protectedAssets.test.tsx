@@ -29,30 +29,14 @@ test('protected Files media and prepared chat images load through header-aware H
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   }
   const requests: { path: string; header: string }[] = [];
-<<<<<<< HEAD
-  let pendingStarted = () => { };
-  const pendingRequest = new Promise<void>((resolve) => { pendingStarted = resolve; });
-  let pendingClosed = () => { };
-=======
   let pendingStarted = () => {};
   const pendingRequest = new Promise<void>((resolve) => { pendingStarted = resolve; });
   let pendingClosed = () => {};
->>>>>>> bc50ba56a
   const pendingCancelled = new Promise<void>((resolve) => { pendingClosed = resolve; });
   const server = await serveTestHttp((request, response) => {
     requests.push({ path: request.url || '', header: String(request.headers['x-proxy'] || '') });
     if (request.headers['x-proxy'] !== 'synthetic-secret') { response.writeHead(403).end(); return; }
     const url = new URL(request.url || '/', 'http://fixture');
-<<<<<<< HEAD
-    // The app mints a short-lived URL token for the assets it loads; the real
-    // host serves it at this route (ui-auth), so the fixture does too.
-    if (url.pathname === '/auth/url-token') {
-      response.setHeader('Content-Type', 'application/json');
-      response.end(JSON.stringify({ token: 'fixture-url-token', expiresAt: Date.now() + 60_000, expiresIn: 60_000 }));
-      return;
-    }
-=======
->>>>>>> bc50ba56a
     if (url.pathname.endsWith('/markdown-image-grants')) {
       response.setHeader('Content-Type', 'application/json');
       response.end(JSON.stringify({ results: [{ source: 'picture.png', status: 'ready', path: '/repo/picture.png' }] }));

@@ -14,12 +14,9 @@ import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useMcpConfigStore } from '@/stores/useMcpConfigStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
-<<<<<<< HEAD
-=======
 import { projectSettingsTabForSearchTarget, useProjectSettingsTabStore } from '@/components/sections/projects/projectSettingsTabs';
 import { chatSettingsTabForSearchTarget, useChatSettingsTabStore } from '@/components/sections/openchamber/chatSettingsTabs';
 import { themeVariantForSearchTarget, useThemeVariantTabStore } from '@/components/sections/openchamber/themeVariantTab';
->>>>>>> bc50ba56a
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { Tooltip, TooltipTrigger } from '@/components/ui/tooltip';
@@ -75,23 +72,14 @@ import {
   type SettingsPageMeta,
 } from '@/lib/settings/metadata';
 import { buildSettingsSearchResults, type SettingsSearchResult } from '@/lib/settings/search';
-<<<<<<< HEAD
-import { settingsPageTitleKey } from '@/lib/settings/pageTitle';
-import { chatSettingsTabForSearchTarget, useChatSettingsTabStore } from '@/components/sections/openchamber/chatSettingsTabs';
-=======
-import { useTrackerDescriptors } from '@/lib/trackers/registry';
-import { useSourceControlProviders } from '@/lib/source-control/providers/registry';
 import { acknowledgeNewSettingPage, getNewSettingPages } from '@/lib/settings/newSettings';
 import { MOBILE_HEADER_BUTTON_CLASS, MOBILE_HEADER_CLASS, MOBILE_HEADER_TITLE_CLASS } from '@/components/ui/mobileHeader';
->>>>>>> bc50ba56a
 
 // UI Kit: fixed split-page sidebar width
 const SETTINGS_SPLIT_SIDEBAR_WIDTH = 280;
 // The desktop close button: top-1 offset plus its h-7 height.
 const SETTINGS_CLOSE_BUTTON_CLEARANCE = 32;
 const SETTINGS_DETAIL_HISTORY_KEY = '__openchamberSettingsDetail';
-<<<<<<< HEAD
-=======
 /** Pages that show one tab at a time (Chat, the Appearance theme list): open the one that holds the item. */
 const openSettingsTabFor = (itemId: string): void => {
   const chatTab = chatSettingsTabForSearchTarget(itemId);
@@ -100,7 +88,6 @@ const openSettingsTabFor = (itemId: string): void => {
   if (themeVariant) useThemeVariantTabStore.getState().setVariant(themeVariant);
 };
 
->>>>>>> bc50ba56a
 /** How long (in frames, ~0.5 s) a search result or a link waits for its item to render. */
 const PENDING_ITEM_MAX_FRAMES = 30;
 
@@ -389,11 +376,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       t,
       getPageTitle,
     });
-<<<<<<< HEAD
-  }, [getPageTitle, isDesktopLocalOrigin, isMac, isWindows, isLinux, runtimeCtx, settingsSearchQuery, t, visiblePageSlugs]);
-=======
   }, [getPageTitle, searchAvailabilityCtx, settingsSearchQuery, sourceControlProviders, t, trackers, visiblePageSlugs]);
->>>>>>> bc50ba56a
 
   const prepareSettingsSearchTarget = React.useCallback((result: SettingsSearchResult): string => {
     if (result.id.startsWith('agents.')) {
@@ -456,17 +439,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       return 'extensions.add';
     }
 
-<<<<<<< HEAD
-    const chatTab = chatSettingsTabForSearchTarget(result.id);
-    if (chatTab) useChatSettingsTabStore.getState().setTab(chatTab);
-=======
     const projectTab = projectSettingsTabForSearchTarget(result.id);
     if (projectTab) {
       useProjectSettingsTabStore.getState().setTab(projectTab);
     }
 
     openSettingsTabFor(result.id);
->>>>>>> bc50ba56a
 
     return result.id;
   }, []);
@@ -568,14 +546,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       return;
     }
     useUIStore.getState().clearSettingsJumpRequest();
-<<<<<<< HEAD
-    if (settingsJumpRequest.itemId) {
-      const chatTab = chatSettingsTabForSearchTarget(settingsJumpRequest.itemId);
-      if (chatTab) useChatSettingsTabStore.getState().setTab(chatTab);
-    }
-=======
     if (settingsJumpRequest.itemId) openSettingsTabFor(settingsJumpRequest.itemId);
->>>>>>> bc50ba56a
     setPendingSearchItemId(settingsJumpRequest.itemId);
     openPage(resolveSettingsSlug(settingsJumpRequest.page));
     if (isMobile) {
@@ -767,11 +738,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     : t('settings.view.actions.closeSettings');
 
   const pushMobileSplitDetailHistory = React.useCallback((slug: SettingsPageSlug) => {
-<<<<<<< HEAD
-    if (registerBackHandler) {
-=======
     if (runtimeCtx.isVSCode || registerBackHandler) {
->>>>>>> bc50ba56a
       return;
     }
 
@@ -788,11 +755,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       '',
       window.location.href,
     );
-<<<<<<< HEAD
-  }, [registerBackHandler]);
-=======
   }, [registerBackHandler, runtimeCtx.isVSCode]);
->>>>>>> bc50ba56a
 
   const handleMobilePageSidebarItemSelect = React.useCallback(() => {
     shouldFocusMobilePageContentRef.current = true;
@@ -849,11 +812,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   }, [handleBack, isMobile, mobileStage, registerBackHandler]);
 
   React.useEffect(() => {
-<<<<<<< HEAD
-    if (!isMobile || registerBackHandler) {
-=======
     if (!isMobile || runtimeCtx.isVSCode || registerBackHandler) {
->>>>>>> bc50ba56a
       return;
     }
 
@@ -875,11 +834,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-<<<<<<< HEAD
-  }, [isMobile, registerBackHandler, settingsSlug]);
-=======
   }, [isMobile, registerBackHandler, runtimeCtx.isVSCode, settingsSlug]);
->>>>>>> bc50ba56a
 
   const renderSettingsNav = () => {
     const hasSearchQuery = settingsSearchQuery.trim().length > 0;

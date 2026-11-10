@@ -2,11 +2,7 @@ import { useCallback, useState } from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { Button } from '@/components/ui/button';
-<<<<<<< HEAD
-=======
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useCallableModelProviders } from '@/hooks/useCallableModelProviders';
->>>>>>> bc50ba56a
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { canonicalClient } from '@/api/canonicalClient';

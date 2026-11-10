@@ -6,12 +6,12 @@ import { HoverTooltip } from '@/components/ui/row-tooltip';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { Icon } from "@/components/icon/Icon";
 import { cn } from '@/lib/utils';
-import { HoverTooltip } from '@/components/ui/row-tooltip';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
 import { isRightToLeft, useI18n } from '@/lib/i18n';
-import { ModelPickerList, type ModelPickerEntry } from '@/components/model-picker/ModelPickerList';
+import { ModelPickerList, type ModelPickerEntry, type ModelPickerProvider } from '@/components/model-picker/ModelPickerList';
+import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 import type { MultiRunModelSelection } from '@/types/multirun';
 
 /** Chip height class - shared between chips and add button */
@@ -39,13 +39,8 @@ const ModelChip: React.FC<{
   const label = totalSameModel > 1 ? `${displayName} (${instanceIndex})` : displayName;
 
   return (
-<<<<<<< HEAD
-    <div className={cn('flex items-center gap-1.5 px-2 rounded-md bg-interactive-selection/20 border border-border/30', CHIP_HEIGHT_CLASS)}>
-      <ProviderLogo providerId={model.providerId} className="h-3.5 w-3.5" />
-=======
     <div className={cn('flex items-center gap-1.5 px-2 rounded-md bg-interactive-selection/20 border border-edge-muted', CHIP_HEIGHT_CLASS)}>
-      <ProviderLogo providerId={model.providerID} className="h-3.5 w-3.5" />
->>>>>>> bc50ba56a
+      <ProviderLogo providerId={model.providerId} className="h-3.5 w-3.5" />
       <span className="typography-meta font-medium truncate max-w-[140px]">
         {label}
       </span>
@@ -116,7 +111,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   addButtonTooltip,
 }) => {
   const { t } = useI18n();
-  const providers = useConfigStore((state) => state.providers);
+  const providers = useConfigStore((state) => state.providers) as ModelPickerProvider[];
   const toggleFavoriteModel = useUIStore((state) => state.toggleFavoriteModel);
   const isFavoriteModel = useUIStore((state) => state.isFavoriteModel);
   const { favoriteModelsList, recentModelsList } = useModelLists();
@@ -228,7 +223,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
     const nextModel = {
       providerId: entry.providerId,
       modelId: entry.modelId,
-      displayName: entry.model.name || entry.modelId,
+      displayName: (entry.model.name as string) || entry.modelId,
       instanceId: generateInstanceId(),
     };
     if (isSingleSelect && selectedModels.length > 0 && onUpdate) {
@@ -289,33 +284,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
       <div className="flex flex-wrap gap-1.5 items-center">
         {/* Add model button (dropdown trigger) */}
         <div className={cn('relative', containerClassName)} ref={dropdownRef}>
-<<<<<<< HEAD
-          {(() => {
-            const trigger = (
-              <button
-                ref={triggerRef}
-                type="button"
-                data-popup-open={isOpen ? '' : undefined}
-                className={cn(
-                  dropdownTriggerVariants({ size: 'default' }),
-                  'w-fit',
-                  addButtonClassName,
-                )}
-                disabled={!canAddModel}
-                aria-label={addButtonAriaLabel}
-                onClick={() => {
-                  setIsOpen(!isOpen);
-                }}
-              >
-                {triggerIcon ?? <Icon name="add" className="h-3.5 w-3.5 me-1" />}
-                {addButtonLabel ?? t('multirun.modelMultiSelect.actions.addModel')}
-              </button>
-            );
-            return addButtonTooltip ? <HoverTooltip label={addButtonTooltip}>{trigger}</HoverTooltip> : trigger;
-          })()}
-=======
           {addButtonTooltip ? <HoverTooltip label={addButtonTooltip}>{trigger}</HoverTooltip> : trigger}
->>>>>>> bc50ba56a
 
           {isOpen && (!portal || portalStyle) ? mountPopup(
             <div
@@ -367,8 +336,11 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
               const totalSameModel = modelCounts.get(key) || 1;
               const instanceIndex = getInstanceIndex(model);
 
-              const providerModel = providers.find((provider) => provider.providerId === model.providerId)?.models.find((entry) => entry.modelId === model.modelId);
-              const variantKeys = providerModel?.variants.map((entry) => entry.variant) ?? [];
+              const provider = providers.find((p) => p.id === model.providerId);
+              const providerModel = provider?.models?.find((m: Record<string, unknown>) => (m as { id?: string }).id === model.modelId) as
+                | { variants?: ModelVariantSource }
+                | undefined;
+              const variantKeys = listModelVariantIds(providerModel?.variants);
               const hasVariants = variantKeys.length > 0;
 
               const DEFAULT_VARIANT_VALUE = '__default__';

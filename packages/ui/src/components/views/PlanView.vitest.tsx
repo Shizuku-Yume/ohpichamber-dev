@@ -54,7 +54,7 @@ const withPlanView = async (run: (fixture: PlanFixture) => Promise<void>) => {
   const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
   const { createWebAPIs } = await import('../../../../web/src/api/index');
   const { SyncProvider } = await import('@/sync/sync-context');
-  const { opencodeClient } = await import('@/lib/opencode/client');
+  const { canonicalClient } = await import('@/api/canonicalClient');
   const { useProjectContextStore } = await import('@/stores/useProjectContextStore');
   const { PlanView } = await import('./PlanView');
   const projectRef = { id: 'plan-fixture', path: '/plan-fixture' };
@@ -66,7 +66,7 @@ const withPlanView = async (run: (fixture: PlanFixture) => Promise<void>) => {
   try {
     useProjectContextStore.getState().reset();
     await act(async () => root.render(<I18nProvider><ThemeSystemProvider><RuntimeAPIContext.Provider value={apis}>
-      <SyncProvider sdk={opencodeClient.getSdkClient()} directory="/plan-fixture">
+      <SyncProvider client={canonicalClient} directory="/plan-fixture">
         <PlanView savedProjectPlan={{ projectRef, planId: 'A' }} />
       </SyncProvider>
     </RuntimeAPIContext.Provider></ThemeSystemProvider></I18nProvider>));

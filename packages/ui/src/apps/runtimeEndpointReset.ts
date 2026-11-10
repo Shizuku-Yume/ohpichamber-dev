@@ -12,7 +12,6 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
-import { resetPrWatchesForRuntimeSwitch } from '@/sync/pr-watch';
 import { usePermissionStore } from '@/stores/permissionStore';
 import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
@@ -43,13 +42,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { resetStreamingState } from '@/sync/streaming';
 import { replaceGlobalSessionStatusById } from '@/sync/global-session-status';
 import { resetGlobalBlockingRequests } from '@/sync/global-blocking-requests';
-<<<<<<< HEAD
-=======
-import { resetPendingSessionAssists } from '@/sync/pending-session-assists';
-import { resetRecoverableQuestions } from '@/sync/recoverable-questions';
->>>>>>> bc50ba56a
 import { resetBackgroundShells } from '@/sync/background-shells';
-import { resetBackgroundImages } from '@/sync/background-images';
 import { useMultiRunStore } from '@/stores/useMultiRunStore';
 import { resetSessionOrdering } from '@/sync/session-ordering';
 import { resetSessionActivityTiming } from '@/sync/session-activity-timing';
@@ -65,9 +58,7 @@ export const reconnectAppForTransportSwitch = (): void => {
 
 export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedDetail): void => {
   useSessionUIStore.getState().prepareForRuntimeSwitch(detail.previousRuntimeKey);
-  // The previous server keeps its runs going; this window shows the new one's.
   useAutoReviewStore.getState().resetForRuntimeSwitch();
-  resetPrWatchesForRuntimeSwitch();
   disposeTerminalInputTransport();
   useTerminalStore.getState().clearAll();
   hostFilesystem.resetRequests();
@@ -95,13 +86,7 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   useAgentsStore.getState().resetForRuntimeSwitch();
   replaceGlobalSessionStatusById(new Map());
   resetGlobalBlockingRequests();
-<<<<<<< HEAD
-=======
-  resetPendingSessionAssists();
-  resetRecoverableQuestions();
->>>>>>> bc50ba56a
   resetBackgroundShells();
-  resetBackgroundImages();
   resetSessionOrdering();
   // Turn timings belong to the previous instance's sessions, and the reset also
   // restarts the resume window so the switch is treated as a fresh load.
@@ -146,9 +131,6 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   useSessionUIStore.getState().restoreForRuntimeSwitch(detail.runtimeKey, detail.previousRuntimeKey);
   useSessionUIStore.setState({ worktreeDiscoveryByProject: new Map() });
   useUIStore.getState().setOpenGuestPage(null);
-  // Uploaded provider logos live on the instance; a server that never stored any
-  // omits the key, and the sync below keeps an omitted key as it was.
-  useUIStore.setState({ customProviderLogos: {} });
   resetStreamingState();
   queueMicrotask(() => void syncDesktopSettings());
 };
@@ -166,8 +148,8 @@ export const isSameRuntimeEndpoint = (detail: RuntimeEndpointChangedDetail): boo
 // switch from that gate must still clear runtime-scoped state before App mounts
 // against the new host.
 // A same-runtime credential change stays with App, which resets only while
-// mounted: a sign-in on the login screen must keep the terminal tabs of the
-// host being unlocked. Mobile keeps its own subscriber
+// mounted: a sign-in on the login screen must keep the terminal tabs and
+// auto-review runs of the host being unlocked. Mobile keeps its own subscriber
 // because it tells transport switches apart from runtime switches.
 export const installRuntimeEndpointReset = (): (() => void) => (
   subscribeRuntimeEndpointChanged((detail) => {
