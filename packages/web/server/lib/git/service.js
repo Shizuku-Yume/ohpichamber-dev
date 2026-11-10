@@ -1,4 +1,3 @@
-const readProjectStartCommand = async () => null;
 import { z } from 'zod';
 import { simpleGit } from 'simple-git';
 import { createSerialRefresh } from './serial-refresh.js';
@@ -2283,18 +2282,9 @@ const cleanupFailedFastWorktreeCreate = async (context, candidate) => {
  }
 };
 
-// `projectDirectory` is the directory the worktree was requested from: the user
-// already works there, so OpenCode answers without starting another location.
-const runWorktreeStartScripts = async (directory, projectDirectory, startCommand, signal) => {
- const projectStart = await readProjectStartCommand(projectDirectory);
- if (projectStart) {
-  const projectResult = await runWorktreeStartCommand(directory, projectStart, { signal });
-  if (!projectResult.success) {
-   console.warn('Worktree project start command failed:', projectResult.message || projectResult.stderr || projectResult.stdout);
-   return;
-  }
- }
-
+// Git reads no stored project start command: the Host project setup API is the
+// sole configured source, and it composes one explicit command per request.
+const runWorktreeStartScripts = async (directory, startCommand, signal) => {
  const extraCommand = String(startCommand || '').trim();
  if (!extraCommand) {
   return;
@@ -2308,7 +2298,6 @@ const runWorktreeStartScripts = async (directory, projectDirectory, startCommand
 const queueWorktreeBootstrap = (args) => {
  const {
   directory,
-  projectDirectory = args.primaryWorktree,
   primaryWorktree,
   localBranch,
   setUpstream,
@@ -2366,7 +2355,7 @@ const queueWorktreeBootstrap = (args) => {
     bootstrapStore,
    );
    if (!contributorFork) {
-    await runWorktreeStartScripts(directory, projectDirectory, startCommand, setupCancellation.signal).catch((error) => {
+    await runWorktreeStartScripts(directory, startCommand, setupCancellation.signal).catch((error) => {
      console.warn('Worktree start script task failed:', error instanceof Error ? error.message : String(error));
     });
    }
