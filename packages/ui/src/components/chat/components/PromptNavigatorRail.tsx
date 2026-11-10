@@ -6,7 +6,6 @@ import { useI18n } from '@/lib/i18n';
 import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
 import { useChatColumnActions } from '../chatColumnSession';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 type PromptEntry = {
     turnId: string;
@@ -523,7 +522,6 @@ export function PromptNavigatorRail({
             aria-label={t('chat.promptNavigator.aria')}
             className="pointer-events-none absolute right-1.5 top-1/2 z-20 -translate-y-1/2"
         >
-<<<<<<< HEAD
             <div className="pointer-events-auto flex flex-col items-end">
                 {canLoadEarlier ? (
                     <button
@@ -557,96 +555,6 @@ export function PromptNavigatorRail({
                 <div
                     ref={gutterRef}
                     role="listbox"
-=======
-            {isOpen ? (
-                // Opens over the indicator, in its place.
-                <div
-                    className={cn(
-                        // About a dozen rows, less in a short chat; the rest scrolls.
-                        'pointer-events-auto flex max-h-[min(100%,24rem)] w-full max-w-80 flex-col overflow-hidden rounded-xl',
-                        'oc-glass-popover oc-glass-floating',
-                    )}
-                >
-                    {canLoadEarlier ? (
-                        <button
-                            type="button"
-                            tabIndex={-1}
-                            className={cn(
-                                'mx-1 mt-1 flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-start',
-                                'typography-meta text-muted-foreground transition-colors hover:text-foreground',
-                                isLoadingOlder && 'cursor-wait',
-                            )}
-                            disabled={isLoadingOlder}
-                            // Keeps the keyboard in the list.
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() => {
-                                if (!isLoadingOlder) {
-                                    onLoadEarlier();
-                                }
-                            }}
-                        >
-                            {isLoadingOlder ? (
-                                <Icon name="loader-4" className="size-3.5 shrink-0 animate-spin" />
-                            ) : (
-                                <Icon name="arrow-up-s" className="size-3.5 shrink-0" />
-                            )}
-                            <span className="truncate">{loadMoreLabel}</span>
-                        </button>
-                    ) : null}
-                    <ScrollableOverlay
-                        ref={listRef}
-                        role="listbox"
-                        tabIndex={-1}
-                        aria-label={t('chat.promptNavigator.aria')}
-                        aria-activedescendant={highlightedPrompt ? rowId(highlightedPrompt.turnId) : undefined}
-                        // Positioned, so row offsets are measured within the list.
-                        outerClassName="min-h-0"
-                        className="relative overscroll-contain p-1 outline-none"
-                        onKeyDown={handleKeyDown}
-                        onBlur={handleListBlur}
-                        disableHorizontal
-                    >
-                        {prompts.map((prompt, index) => {
-                            const isActive = index === activeIndex;
-                            const isHighlighted = index === highlightedIndex;
-                            const text = prompt.preview.trim() || emptyPreviewLabel;
-                            return (
-                                <div
-                                    key={prompt.turnId}
-                                    id={rowId(prompt.turnId)}
-                                    role="option"
-                                    aria-selected={isHighlighted}
-                                    aria-current={isActive ? 'true' : undefined}
-                                    data-prompt-index={index}
-                                    title={isActive ? `${currentPromptLabel}: ${text}` : text}
-                                    // The current prompt carries the only fill; the row
-                                    // under the pointer or keyboard brightens its text.
-                                    className={cn(
-                                        'cursor-pointer truncate rounded-lg px-2 py-1.5 typography-meta',
-                                        isActive
-                                            ? 'bg-interactive-selection text-interactive-selection-foreground'
-                                            : isHighlighted
-                                                ? 'text-foreground'
-                                                : 'oc-title-rest',
-                                    )}
-                                    onMouseMove={() => {
-                                        if (highlightedIndex !== index) {
-                                            setHighlightedIndex(index);
-                                        }
-                                    }}
-                                    onMouseDown={(event) => event.preventDefault()}
-                                    onClick={() => handleSelect(index)}
-                                >
-                                    {text}
-                                </div>
-                            );
-                        })}
-                    </ScrollableOverlay>
-                </div>
-            ) : (
-                <button
-                    type="button"
->>>>>>> bc50ba56a
                     tabIndex={-1}
                     aria-activedescendant={
                         highlightedPrompt ? `prompt-rail-tick-${highlightedPrompt.turnId}` : undefined

@@ -4,11 +4,8 @@ import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 
 import type { Snippet } from '@/types/snippet';
-<<<<<<< HEAD
 import { SyncProvider } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-=======
->>>>>>> bc50ba56a
 import type { SnippetAutocompleteHandle } from './SnippetAutocomplete';
 
 let SnippetAutocomplete: typeof import('./SnippetAutocomplete')['SnippetAutocomplete'];
@@ -20,7 +17,6 @@ let host: HTMLDivElement;
 let restore: Array<() => void>;
 const globals = new Map<string, PropertyDescriptor | undefined>();
 
-<<<<<<< HEAD
 const snippet = (name: string): Snippet => ({
   templateId: `tpl-${name}`,
   name,
@@ -29,14 +25,6 @@ const snippet = (name: string): Snippet => ({
   scope: 'workspace',
   source: 'workspace',
   editable: true,
-=======
-const snippet = (name: string, aliases: string[] = []): Snippet => ({
-  name,
-  content: `${name} body`,
-  aliases,
-  filePath: `/snippets/${name}.md`,
-  source: 'global',
->>>>>>> bc50ba56a
 });
 
 beforeEach(async () => {
@@ -71,15 +59,11 @@ beforeEach(async () => {
     () => useUIStore.setState(priorUI),
   ];
   useUIStore.setState({ isMobile: false });
-<<<<<<< HEAD
   useDirectoryStore.setState({ currentDirectory: '/test' });
   useSnippetsStore.setState({
     catalogsByDirectory: new Map([['/test', { workspaceId: 'ws-test', templates: [snippet('deploy'), snippet('fix-pr')], revision: '1' }]]),
     loadSnippets: async () => true,
   });
-=======
-  useSnippetsStore.setState({ snippets: [snippet('fix-pr', ['ship']), snippet('deploy')], loadSnippets: async () => true, quickCreate: null });
->>>>>>> bc50ba56a
   host = document.createElement('div');
   document.body.appendChild(host);
   const { createRoot } = await import('react-dom/client');
@@ -100,7 +84,6 @@ afterEach(async () => {
 
 const rowLabels = () => Array.from(host.querySelectorAll<HTMLElement>('.cursor-pointer')).map((row) => row.textContent?.trim());
 
-<<<<<<< HEAD
 async function mountPicker(searchQuery: string) {
   const handle = React.createRef<SnippetAutocompleteHandle>();
   const selected: string[] = [];
@@ -143,54 +126,4 @@ test('ArrowDown navigates to the next snippet', async () => {
   await press('ArrowDown');
   await press('Enter');
   expect(selected).toEqual(['fix-pr']);
-=======
-async function mountPicker(searchQuery: string, draftText?: string) {
-  const handle = React.createRef<SnippetAutocompleteHandle>();
-  const selected: string[] = [];
-  const saved: string[] = [];
-  await act(async () => root.render(
-    <I18nProvider>
-      <SnippetAutocomplete
-        ref={handle}
-        searchQuery={searchQuery}
-        onClose={() => undefined}
-        onSnippetSelect={(_snippet, trigger) => selected.push(trigger)}
-        draftText={draftText}
-        onDraftSaved={(name) => saved.push(name)}
-      />
-    </I18nProvider>,
-  ));
-  const press = (key: string) => act(async () => handle.current?.handleKeyDown(key));
-  return { press, selected, saved };
-}
-
-test('a new name in a draft offers to save the draft first, and Enter opens the dialog without writing', async () => {
-  const { press, saved } = await mountPicker('ship-it', 'Run the CI and push');
-  expect(rowLabels().slice(0, 2)).toEqual(['Save draft as #ship-it', 'Create #ship-it']);
-
-  await press('Enter');
-  const request = useSnippetsStore.getState().quickCreate;
-  expect(request?.name).toBe('ship-it');
-  expect(request?.content).toBe('Run the CI and push');
-  // The token leaves the composer only once the dialog saves.
-  expect(saved).toEqual([]);
-  request?.onSaved?.('ship-it');
-  expect(saved).toEqual(['ship-it']);
-});
-
-test('a name a snippet answers to offers no create row, and Enter picks the match', async () => {
-  const { press, selected } = await mountPicker('ship', 'Run the CI');
-  expect(rowLabels()).not.toContain('Create #ship');
-  expect(rowLabels()[0]).toBe('Add new snippet');
-
-  await press('Enter');
-  expect(selected).toEqual(['ship']);
-  expect(useSnippetsStore.getState().quickCreate).toBeNull();
-});
-
-test('an empty draft offers only to create the typed name', async () => {
-  await mountPicker('brand-new', '  ');
-  expect(rowLabels()[0]).toBe('Create #brand-new');
-  expect(rowLabels()).not.toContain('Save draft as #brand-new');
->>>>>>> bc50ba56a
 });

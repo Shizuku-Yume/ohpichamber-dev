@@ -3,11 +3,7 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { getDefaultTheme } from '@/lib/theme/themes';
-<<<<<<< HEAD
 import * as actualEffectiveDirectory from '@/hooks/useEffectiveDirectory';
-=======
-import { legacyChatQuoteAnchor, resolveChatQuoteAnchor } from '@/lib/chatQuoteAnchor';
->>>>>>> bc50ba56a
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -17,7 +13,6 @@ Object.assign(globalThis, {
   SVGElement: browser.SVGElement, MutationObserver: browser.MutationObserver, DOMParser: browser.DOMParser,
   Event: browser.Event,
   Range: browser.Range,
-<<<<<<< HEAD
   requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
   cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
   getComputedStyle: browser.getComputedStyle.bind(browser),
@@ -29,20 +24,6 @@ const state = { codeBlockLineWrap: false, tableCellWrap: true, copyMessagesAsPla
 mock.module('@/stores/useUIStore', () => ({ useUIStore: Object.assign((select: (value: typeof state) => never) => select(state), { getState: () => state, subscribe: () => () => undefined }) }));
 mock.module('@/lib/router/openSessionFromRoute', () => ({ openSessionLink: async () => undefined }));
 mock.module('@/hooks/useEffectiveDirectory', () => ({ ...actualEffectiveDirectory, useEffectiveDirectory: () => '/project' }));
-=======
-  XMLSerializer: browser.XMLSerializer, IntersectionObserver: browser.IntersectionObserver, ResizeObserver: browser.ResizeObserver,
-  requestAnimationFrame: browser.requestAnimationFrame.bind(browser), cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser) });
-Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { configurable: true, value: true });
-Object.defineProperty(globalThis, 'customElements', { configurable: true, value: browser.customElements });
-const state = { codeBlockLineWrap: false, tableCellWrap: true, copyMessagesAsPlainText: false, mermaidRenderingMode: 'svg', setCodeBlockLineWrap: () => undefined, setTableCellWrap: () => undefined, openContextFile: (_directory: string, _path: string) => undefined, openContextFileAtLine: (_directory: string, _path: string, _line: number, _column: number) => undefined };
-mock.module('@/stores/useUIStore', () => ({ useUIStore: Object.assign((select: (value: typeof state) => never) => select(state), { getState: () => state }), normalizeContextPanelDirectoryKey: (value: string) => value }));
-mock.module('@/lib/router/openSessionFromRoute', () => ({
-  openSession: async () => undefined,
-  openSessionLink: async () => undefined,
-}));
-mock.module('@/hooks/useEffectiveDirectory', () => ({ useEffectiveDirectory: () => '/project' }));
-mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ runtime: { isVSCode: false }, editor: undefined }) }));
->>>>>>> bc50ba56a
 const openedLinks: string[] = [];
 const actualUrlModule = await import('@/lib/url');
 mock.module('@/lib/url', () => ({
@@ -84,17 +65,6 @@ test('renders semantic Markdown through native Streamdown code and table compone
   expect(tableWrapper?.lastElementChild?.querySelector('table')).not.toBeNull();
   expect(Array.from(host.querySelector('pre code')?.children ?? []).map((line) => line.textContent).join('\n')).toBe('first\nsecond');
   expect(host.querySelector('[data-oc-code-source]')?.getAttribute('data-oc-code-source')).toBe('first\nsecond');
-});
-
-test('legacy quotes cross prose and fenced code in the application renderer', async () => {
-  for (const language of ['js', 'JS', '']) {
-    const markdown = `Before\n\n\`\`\`${language}\nconst x=1;\n\`\`\`\n\nAfter`;
-    await render(markdown);
-    const content = host.querySelector('[data-markdown-content]')!;
-    const anchor = legacyChatQuoteAnchor(markdown);
-    expect(anchor.text).toBe(content.textContent?.trim());
-    expect(resolveChatQuoteAnchor(content, anchor)?.toString()).toBe(anchor.text);
-  }
 });
 
 test('invisible-only blocks leave no paragraphs or arrival wrappers in either render mode', async () => {
@@ -185,7 +155,7 @@ test('on the phone a file link also opens the files drawer (#5486)', async () =>
   const open = spyOn(state, 'openContextFile');
   const { DedicatedMobileAppProvider } = await import('@/apps/mobileAppContext');
   let filesOpened = 0;
-  const actions = { openChanges: () => undefined, openFiles: () => { filesOpened += 1; }, openSourceBoard: () => undefined, openPlan: () => undefined };
+  const actions = { openChanges: () => undefined, openFiles: () => { filesOpened += 1; }, openSettings: () => undefined, openSourceBoard: () => undefined };
   try {
     const content = React.createElement(Renderer.MarkdownContent, { content: '[View README.md](README.md)', directory: '/project', enableFileReferences: true, settled: true });
     await act(() => root.render(React.createElement(I18nProvider, null, React.createElement(DedicatedMobileAppProvider, { actions, children: content }))));
@@ -195,30 +165,6 @@ test('on the phone a file link also opens the files drawer (#5486)', async () =>
     expect(filesOpened).toBe(1);
   } finally {
     open.mockRestore();
-  }
-});
-
-test('a file:// folder link opens in the file manager in the desktop app only, as the Files tree reveal does (#5521)', async () => {
-  const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
-  const { createWebAPIs } = await import('../../../../web/src/api/index');
-  const web = createWebAPIs();
-  const revealed: string[] = [];
-  const files = { ...web.files, revealPath: async (path: string) => { revealed.push(path); return { success: true }; } };
-  const content = React.createElement(Renderer.MarkdownContent, { content: '[Open the test folder](file:///Users/me/some_path/)', directory: '/project', enableFileReferences: true, settled: true });
-  // Electron reports the web platform and differs from a browser only by its shell.
-  const surfaces = [['browser', 'web', false], ['vscode', 'vscode', false], ['desktop', 'web', true]] as const;
-  try {
-    for (const [surface, platform, electron] of surfaces) {
-      Object.assign(window, { __OPENCHAMBER_ELECTRON__: electron ? { runtime: 'electron' } : undefined });
-      const apis = { ...web, files, runtime: { ...web.runtime, platform } };
-      await act(() => root.render(React.createElement(I18nProvider, null, React.createElement(RuntimeAPIContext.Provider, { value: apis }, content))));
-      const event = new window.MouseEvent('click', { bubbles: true, cancelable: true });
-      host.querySelector('a')?.dispatchEvent(event);
-      expect([surface, event.defaultPrevented]).toEqual([surface, electron]);
-    }
-    expect(revealed).toEqual(['/Users/me/some_path/']);
-  } finally {
-    Object.assign(window, { __OPENCHAMBER_ELECTRON__: undefined });
   }
 });
 
@@ -260,16 +206,6 @@ test('links keep the old renderer behaviour: inert when unsafe, bare URLs LTR, f
   expect(openedLinks).toEqual([]);
 });
 
-test('a bare link takes the same way as a named one', async () => {
-  openedLinks.length = 0;
-  const url = 'https://github.com/openchamber/openchamber/pull/6206';
-  await render(`${url} and [#6206](${url})`);
-  for (const anchor of host.querySelectorAll('a')) {
-    anchor.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
-  }
-  expect(openedLinks).toEqual([url, url]);
-});
-
 test('a code block without a language is labelled text', async () => {
   await render('```\nplain\n```');
   expect(host.querySelector('[data-streamdown="code-block-header"]')?.textContent).toContain('text');
@@ -302,11 +238,7 @@ test('code rows and selection preserve intentional trailing blank lines', async 
 
 test('table columns preserve short content and allocate remaining width to long content', async () => {
   const clientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
-<<<<<<< HEAD
   const bounds = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function(this: HTMLElement) {
-=======
-  const bounds = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
->>>>>>> bc50ba56a
     // A heading measured at min-content is as wide as its longest word.
     if (this.style.width === 'min-content') return new window.DOMRect(0, 0, 60, 30);
     const width = this.tagName === 'TH' || this.tagName === 'TD' ? this.textContent?.includes('long') ? 600 : 120 : 502;
@@ -448,77 +380,6 @@ test('GitHub alerts render as titled callouts in both HTML modes and leave other
   expect(host.querySelector('blockquote')?.hasAttribute('data-oc-alert')).toBe(false);
 });
 
-<<<<<<< HEAD
-=======
-test('file preview preserves single-tilde strikethrough without an explicit parser option', async () => {
-  await act(() => root.render(React.createElement(I18nProvider, null,
-    React.createElement(Renderer.SimpleMarkdownRenderer, {
-      content: '---\ntitle: Preview\n---\n\n~removed~ and ~~deleted~~',
-      frontmatter: 'properties', allowRawHtml: true, enableFileReferences: false,
-    }))));
-  expect(Array.from(host.querySelectorAll('del')).map(node => node.textContent)).toEqual(['removed', 'deleted']);
-});
-
-test('single tildes stay literal in chat and strike in host-authored Markdown', async () => {
-  const content = 'a ~removed~ b and ~~deleted~~ c';
-  for (const singleTilde of [false, true, false]) {
-    await act(() => root.render(React.createElement(I18nProvider, null,
-      React.createElement(Renderer.SimpleMarkdownRenderer, { content, singleTilde, allowRawHtml: true, enableFileReferences: false }))));
-    expect(Array.from(host.querySelectorAll('del')).map(node => node.textContent)).toEqual(
-      singleTilde ? ['removed', 'deleted'] : ['deleted'],
-    );
-  }
-});
-
-test('chat exports preserve literal single tildes and double-tilde strikethrough', async () => {
-  const { renderMarkdownForExport } = await import('./markdown/renderMarkdownForExport');
-  for (const purpose of ['copy', 'image'] as const) {
-    let output!: HTMLElement;
-    await act(async () => { output = await renderMarkdownForExport('~literal~ and ~~deleted~~', { purpose }); });
-    expect(output.textContent).toContain('~literal~');
-    expect(Array.from(output.querySelectorAll('del')).map(node => node.textContent)).toEqual(['deleted']);
-  }
-});
-
-test('item text links its repository references and leaves code, words and paths alone', async () => {
-  const { githubLikeDescriptor, gitlabLikeDescriptor } = await import('@/lib/source-control/providers/descriptor.fixture');
-  const github = { descriptor: githubLikeDescriptor(), origin: 'https://github.com', owner: 'acme', repo: 'app' };
-  const draw = (content: string, repositoryLinks: typeof github) => act(async () => root.render(
-    React.createElement(I18nProvider, null, React.createElement(Renderer.SimpleMarkdownRenderer, { content, allowRawHtml: true, enableFileReferences: false, repositoryLinks }))));
-  const links = () => Array.from(host.querySelectorAll('a')).map((link) => [link.textContent, link.getAttribute('href')]);
-
-  await draw('Fixes #12 and other/lib#3, thanks @octo-cat, see abc1234f.\n\nNot C#5, a@b.com, @scope/pkg, 1234567, defaced, `#9` or [#7](https://x.test/7).', github);
-  expect(links()).toEqual([
-    ['#12', 'https://github.com/acme/app/issues/12'],
-    ['other/lib#3', 'https://github.com/other/lib/issues/3'],
-    ['@octo-cat', 'https://github.com/octo-cat'],
-    ['abc1234', 'https://github.com/acme/app/commit/abc1234f'],
-    // GFM's own email link, never read as a mention.
-    ['a@b.com', 'mailto:a@b.com'],
-    ['#7', 'https://x.test/7'],
-  ]);
-  expect(host.querySelector('a[href$="/commit/abc1234f"] code')?.textContent).toBe('abc1234');
-  // A host's own references draw without the favicon a pasted link gets.
-  expect(host.querySelectorAll('a[data-oc-reference]')).toHaveLength(4);
-  expect(host.querySelectorAll('img')).toHaveLength(1);
-
-  // An author's own inline link or code keeps its text; their markup cannot pass as a reference.
-  await draw('Fixes <a href="https://x.test/12">#12</a>, <code>abc1234f</code> and <a data-oc-reference href="https://x.test/y">y</a> after #3', github);
-  expect(links()).toEqual([
-    ['#12', 'https://x.test/12'],
-    ['y', 'https://x.test/y'],
-    ['#3', 'https://github.com/acme/app/issues/3'],
-  ]);
-  expect(host.querySelector('a[href="https://x.test/y"]')?.hasAttribute('data-oc-reference')).toBe(false);
-
-  await draw('MR !7 closes #4', { descriptor: gitlabLikeDescriptor(), origin: 'https://gitlab.example.com', owner: 'group', repo: 'app' });
-  expect(links()).toEqual([
-    ['!7', 'https://gitlab.example.com/group/app/-/merge_requests/7'],
-    ['#4', 'https://gitlab.example.com/group/app/-/issues/4'],
-  ]);
-});
-
->>>>>>> bc50ba56a
 test('a suggestion fence in a review comment draws as a suggested change; elsewhere it stays code', async () => {
   const { MarkdownSuggestionContext } = await import('./markdown/markdownSuggestion');
   const content = 'Try this:\n\n```suggestion:-0+0\n  const c = 5;\n```';
@@ -557,18 +418,6 @@ test('handles empty, shrink and same-length replacement without stale text', asy
   expect(host.textContent).toBe('x');
   await render('');
   expect(host.textContent).toBe('');
-});
-
-test('preserves prose ranges while chat streams and after settlement', async () => {
-  for (const isStreaming of [true, false]) {
-    await act(() => root.render(React.createElement(I18nProvider, null,
-      React.createElement(Renderer.MarkdownRenderer, {
-        content: 'ETA 5~20s and 8~10 minutes. ~literal~ ~~Removed~~', isStreaming,
-        messageId: 'tilde-stream', isAnimated: false, enableFileReferences: false,
-      }))));
-    expect(host.textContent).toContain('ETA 5~20s and 8~10 minutes.');
-    expect(Array.from(host.querySelectorAll('del')).map(node => node.textContent)).toEqual(['Removed']);
-  }
 });
 
 test('chooses static history and preserves the live block tree through settlement', async () => {
@@ -705,34 +554,6 @@ test('wrap settings update the actual Markdown root without replacing content', 
   expect(host.querySelector('p') === stable).toBe(true);
   expect(paragraph?.textContent).toBe('same source');
   state.tableCellWrap = true;
-});
-
-test('wrap toggle buttons show their pressed fill while active (#6042)', async () => {
-  const source = '```js\nconst x = 1;\n```\n\n| a | b |\n| --- | --- |\n| 1 | 2 |';
-  const rerender = () => act(async () => {
-    root.render(React.createElement(I18nProvider, null, React.createElement(Renderer.MarkdownContent, { content: source, enableFileReferences: false })));
-  });
-  await render(source);
-
-  state.codeBlockLineWrap = true;
-  state.tableCellWrap = true;
-  await rerender();
-  const codeWrap = host.querySelector('[data-streamdown="code-block-actions"] button[aria-pressed="true"]');
-  expect(codeWrap).not.toBeNull();
-  // The pressed fill is what tells the user the toggle is on; aria-pressed
-  // alone was invisible on the ghost variant (#6042).
-  expect(codeWrap?.className).toContain('bg-interactive-selection');
-  const tableWrap = host.querySelector('[data-streamdown="table-controls"] button[aria-pressed="true"]');
-  expect(tableWrap).not.toBeNull();
-  expect(tableWrap?.className).toContain('bg-interactive-selection');
-
-  state.codeBlockLineWrap = false;
-  state.tableCellWrap = false;
-  await rerender();
-  const restingCodeWrap = host.querySelector('[data-streamdown="code-block-actions"] button[aria-pressed="false"]');
-  expect(restingCodeWrap?.className).not.toContain('bg-interactive-selection');
-  const restingTableWrap = host.querySelector('[data-streamdown="table-controls"] button[aria-pressed="false"]');
-  expect(restingTableWrap?.className).not.toContain('bg-interactive-selection');
 });
 
 test('same-source theme repaint keeps nodes and publishes syntax variables on the consumer root', async () => {

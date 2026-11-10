@@ -24,11 +24,7 @@
  * prompts for safety.
  */
 import { spawnSync } from 'node:child_process';
-<<<<<<< HEAD
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
-=======
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync } from 'node:fs';
->>>>>>> bc50ba56a
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -247,17 +243,6 @@ function validateAdbAddress(address) {
   return normalized;
 }
 
-<<<<<<< HEAD
-=======
-function removeFilesByPrefixSuffix(directory, prefix, suffix) {
-  if (!existsSync(directory)) return;
-  for (const entry of readdirSync(directory)) {
-    if (!entry.startsWith(prefix) || !entry.endsWith(suffix)) continue;
-    unlinkSync(path.join(directory, entry));
-  }
-}
-
->>>>>>> bc50ba56a
 function latestFileByExtensions(directory, extensions) {
   if (!existsSync(directory)) return '';
   return readdirSync(directory)

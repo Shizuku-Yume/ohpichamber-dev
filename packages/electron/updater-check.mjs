@@ -6,8 +6,6 @@ const isMissingUpdateFeedError = (error) => {
   return MISSING_UPDATE_FEED_RE.test(message);
 };
 
-<<<<<<< HEAD
-=======
 const NETWORK_ERROR_RE = /net::(ERR_[A-Z_]+)|\b(ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH)\b/;
 
 /**
@@ -25,7 +23,6 @@ export const describeCheckFailure = (error) => {
   return message.split('\n')[0].trim().slice(0, 200) || 'unknown error';
 };
 
->>>>>>> bc50ba56a
 const releaseNumbers = (version) => String(version ?? '').replace(/^v/, '').split('-')[0].split('.')
   .map((part) => Number.parseInt(part, 10) || 0);
 
@@ -44,15 +41,11 @@ export const isDowngrade = (nextVersion, currentVersion) => {
   return false;
 };
 
-<<<<<<< HEAD
-export const checkForDesktopUpdate = async ({ autoUpdater, currentVersion, pendingUpdate }) => {
-=======
 /**
  * `missingFeedIsError`: the Stable mirror always carries the manifests, so a
  * 404 there means the mirror is broken and GitHub should be asked instead.
  */
 export const checkForDesktopUpdate = async ({ autoUpdater, currentVersion, pendingUpdate, missingFeedIsError = false }) => {
->>>>>>> bc50ba56a
   let updateResult;
   try {
     updateResult = await autoUpdater.checkForUpdates();
@@ -60,11 +53,7 @@ export const checkForDesktopUpdate = async ({ autoUpdater, currentVersion, pendi
     // Before the first Linux (or platform) release publishes its feed, electron-updater
     // returns 404 for latest-*.yml. With no pending package, keep the first-release
     // "no update" behavior. A failed feed must preserve an existing package.
-<<<<<<< HEAD
-    if (isMissingUpdateFeedError(error) && !pendingUpdate) {
-=======
     if (isMissingUpdateFeedError(error) && !pendingUpdate && !missingFeedIsError) {
->>>>>>> bc50ba56a
       return {
         available: false,
         updateInfo: null,

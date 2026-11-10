@@ -1,11 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-<<<<<<< HEAD
 import type { Agent } from '@openchamber/agent-contract';
 import { getAgentDisplayName, getCycledAgentId } from './mobileControlsUtils';
-=======
-import type { Agent } from '@/lib/opencode/model';
-import { getCycledPrimaryAgentName, getEffortTone } from './mobileControlsUtils';
->>>>>>> bc50ba56a
 
 type TestAgent = Pick<Agent, 'agentId' | 'name'>;
 const agent = (agentId: string, name = agentId): TestAgent => ({ agentId, name });
@@ -65,24 +60,5 @@ describe('getAgentDisplayName', () => {
     expect(getAgentDisplayName([agent('first', 'build'), agent('build', 'Builder')])).toBe('Builder');
     expect(getAgentDisplayName([agent('first', 'first label')])).toBe('first label');
     expect(getAgentDisplayName([], undefined, 'translated placeholder')).toBe('translated placeholder');
-  });
-});
-
-describe('getEffortTone', () => {
-  test('only the default level, or no level, stays grey', () => {
-    expect(getEffortTone(undefined)).toBe('default');
-    expect(getEffortTone('default')).toBe('default');
-    expect(getEffortTone('Default')).toBe('default');
-  });
-
-  test('tints each OpenCode level by how hard it thinks', () => {
-    for (const level of ['none', 'minimal', 'low', 'thinking']) expect(getEffortTone(level)).toBe('info');
-    for (const level of ['medium', 'High']) expect(getEffortTone(level)).toBe('warning');
-    for (const level of ['xhigh', 'max']) expect(getEffortTone(level)).toBe('error');
-  });
-
-  test('an unknown level reads as info', () => {
-    expect(getEffortTone('turbo')).toBe('info');
-    expect(getEffortTone('8000')).toBe('info');
   });
 });

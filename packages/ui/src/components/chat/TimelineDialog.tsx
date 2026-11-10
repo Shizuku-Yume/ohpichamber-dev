@@ -10,7 +10,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionMessageLoader, useSessionMessageRecords, useSyncDirectory } from '@/sync/sync-context';
+import { useSessionMessageRecords } from '@/sync/sync-context';
 import { useChatSessionSelection } from './chatColumnSession';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
@@ -18,7 +18,6 @@ import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { getFullText, getPromptPreviewText } from './lib/messagePreview';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 
 interface TimelineDialogProps {
@@ -111,14 +110,6 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
 }) => {
     const { t } = useI18n();
     const messages = useSessionMessageRecords(currentSessionId, currentSessionDirectory);
-    const messageLoader = useSessionMessageLoader();
-    const syncDirectory = useSyncDirectory();
-    const historyDirectory = currentSessionDirectory ?? syncDirectory;
-    // Keep the chat's background trim from removing prompts shown in the dialog.
-    React.useEffect(() => {
-        if (!historyDirectory) return;
-        return messageLoader.retainSessionHistory({ directory: historyDirectory, sessionID: currentSessionId }, 'browsing');
-    }, [currentSessionId, historyDirectory, messageLoader]);
     const revertToMessage = useSessionUIStore((state) => state.revertToMessage);
     const forkFromMessage = useSessionUIStore((state) => state.forkFromMessage);
     const { isMobile, isTablet } = useDeviceInfo();
@@ -286,11 +277,7 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
         <>
             <button
                 type="button"
-<<<<<<< HEAD
                 className="text-[11px] uppercase tracking-wide text-muted-foreground/90 hover:text-foreground"
-=======
-                className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground hover:text-foreground"
->>>>>>> bc50ba56a
                 onClick={() => {
                     void onScrollByTurnOffset?.(-1);
                     onOpenChange(false);
@@ -301,11 +288,7 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
             <span className="text-muted-foreground/50">/</span>
             <button
                 type="button"
-<<<<<<< HEAD
                 className="text-[11px] uppercase tracking-wide text-muted-foreground/90 hover:text-foreground"
-=======
-                className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground hover:text-foreground"
->>>>>>> bc50ba56a
                 onClick={() => {
                     onResumeToLatest?.();
                     onOpenChange(false);
@@ -385,11 +368,7 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                             return (
                                 <React.Fragment key={message.messageId}>
                                     {showDateGroup && (
-<<<<<<< HEAD
                                         <div className="sticky top-0 z-10 flex items-center gap-3 bg-surface-elevated/95 py-2 backdrop-blur-sm">
-=======
-                                        <div className="sticky top-0 z-10 flex items-center gap-3 bg-background/95 py-2 backdrop-blur-sm">
->>>>>>> bc50ba56a
                                             <div className="h-px flex-1 bg-edge" />
                                             <span className="typography-meta text-muted-foreground">
                                                 {dateGroup}
@@ -415,8 +394,8 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                                         )}>
                                             {messageTime}
                                         </span>
-                                        <p dir="auto" className={cn(
-                                            "flex-1 min-w-0 typography-small truncate oc-ui-start-align",
+                                        <p className={cn(
+                                            "flex-1 min-w-0 typography-small truncate",
                                             isSelected ? "text-interactive-selection-foreground" : "text-foreground"
                                         )}>
                                             {snippet ?? (preview || t('chat.timeline.noTextContent'))}

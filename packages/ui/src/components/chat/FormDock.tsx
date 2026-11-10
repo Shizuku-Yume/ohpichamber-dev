@@ -8,41 +8,17 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
-<<<<<<< HEAD
 import { useI18n } from '@/lib/i18n';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { isIMECompositionEvent } from '@/lib/ime';
-=======
-import { isIMECompositionEvent } from '@/lib/ime';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useI18n } from '@/lib/i18n';
-import { copyTextToClipboard } from '@/lib/clipboard';
-import type { FormRequest } from '@/lib/opencode/model';
-import type { RecoveredQuestion } from '@/sync/recoverable-questions';
-import { readWebSearchConsent } from '@/lib/opencode/websearch';
->>>>>>> bc50ba56a
 import { useUIStore } from '@/stores/useUIStore';
-import { useScopedBlockingForms, useRecoveredQuestions, useSessions } from '@/sync/sync-context';
+import { useScopedBlockingForms, useSessions } from '@/sync/sync-context';
 import { useRequestReveal } from '@/sync/request-reveal';
 import { useChatSessionSelection } from './chatColumnSession';
-<<<<<<< HEAD
-=======
-import * as sessionActions from '@/sync/session-actions';
-import { agentUnavailableFrom, isFormRequestNotFoundError } from '@/sync/form-request-error';
->>>>>>> bc50ba56a
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
 import { AskCountdown } from './AskCountdown';
 import { FormFieldControl } from './FormFieldControl';
-<<<<<<< HEAD
 import { PlanReviewCard } from './PlanReviewCard';
-=======
-import { WebSearchConsentDock } from './WebSearchConsent';
-import { FormMarkdown } from './FormMarkdown';
-import { serializeFormAnswerAsMarkdown, serializeFormAsJson, serializeFormAsMarkdown } from './formSerializers';
-import { formDraftScope, loadFormDraft, saveFormDraft, dropFormDraft } from './formDrafts';
-import { noteLocalFormCancelled } from '@/sync/recoverable-questions';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
->>>>>>> bc50ba56a
 import {
     type AskAnswerState,
     type AskQuestion,
@@ -79,7 +55,6 @@ interface FormDockProps {
 const FormDockView: React.FC<FormDockProps> = ({ sessionId, directory, hidden }) => {
     const forms = useScopedBlockingForms(sessionId, directory);
     const form = forms[0];
-<<<<<<< HEAD
     // Keyed on the request id so a different request starts clean and the
     // panels cross-fade instead of swapping content in place.
     return (
@@ -87,35 +62,10 @@ const FormDockView: React.FC<FormDockProps> = ({ sessionId, directory, hidden })
             {hidden || !form ? null : parsePlanReview(form.schema) ? (
                 <PlanReviewCard key={form.questionId} form={form} docked forms={forms} />
             ) : <FormDockPanel key={form.questionId} form={form} forms={forms} />}
-=======
-    const webSearchConsent = form ? readWebSearchConsent(form) : null;
-    // A question whose ask died with its turn waits behind the live requests;
-    // answering it starts a new turn instead of replying to a form.
-    const recovered = useRecoveredQuestions(sessionId, directory);
-    const recoveredFirst = form ? undefined : recovered[0];
-    // Keyed on the form id so a different request starts from a clean slate
-    // (and the panels cross-fade instead of swapping content in place).
-    return (
-        <AnimatePresence>
-            {hidden ? null : form ? (
-                webSearchConsent
-                    ? <WebSearchConsentDock key={form.id} form={form} consent={webSearchConsent} />
-                    : <FormDockPanel key={form.id} form={form} forms={forms} directory={directory} />
-            ) : recoveredFirst ? (
-                <FormDockPanel
-                    key={recoveredFirst.form.id}
-                    form={recoveredFirst.form}
-                    forms={forms}
-                    directory={directory}
-                    recovered={recoveredFirst}
-                />
-            ) : null}
->>>>>>> bc50ba56a
         </AnimatePresence>
     );
 };
 
-<<<<<<< HEAD
 type FormDraft = { signature: string; answers: AskAnswerState[]; step: number };
 
 // Answers in progress outlive the panel: switching sessions unmounts it, and
@@ -134,22 +84,6 @@ const saveFormDraft = (questionId: string, draft: FormDraft) => {
 };
 
 const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] }> = ({ form, forms }) => {
-=======
-const isStepAnswered = (field: FormField, values: FormValues): boolean => {
-    if (!isAnswerableField(field)) return valueOf(values, field.key).acknowledged;
-    const answer = fieldAnswer(field, values);
-    if (answer === undefined) return false;
-    return !(Array.isArray(answer) && answer.length === 0);
-};
-
-const FormDockPanel: React.FC<{
-    form: FormRequest;
-    forms: FormRequest[];
-    directory?: string;
-    /** Set when this card re-asks a question whose turn died before it was answered. */
-    recovered?: RecoveredQuestion;
-}> = ({ form, forms, directory, recovered }) => {
->>>>>>> bc50ba56a
     const { t } = useI18n();
     const isMobile = useUIStore((state) => state.isMobile);
     // The sessions of the chat this dock belongs to, which may be a chat of
@@ -158,32 +92,16 @@ const FormDockPanel: React.FC<{
     const sessions = useSessions(directory ?? undefined);
     const bodyRef = React.useRef<HTMLDivElement | null>(null);
 
-<<<<<<< HEAD
     const questions = React.useMemo(() => parseAskQuestions(form.schema), [form.schema]);
     const timeoutMs = React.useMemo(() => parseAskTimeout(form.schema), [form.schema]);
     const signature = React.useMemo(() => askSchemaSignature(form.schema), [form.schema]);
     const [restored] = React.useState(() => {
         const draft = formDrafts.get(form.questionId);
         return draft?.signature === signature ? draft : null;
-=======
-    const fields = form.fields;
-    // A rebuilt pending list hands over a new object with the same content;
-    // only fields that actually changed start the answers over.
-    const fieldsSignature = fields.map((field) => `${field.key}:${field.type}`).join('|');
-    const draftScope = React.useMemo(() => formDraftScope(form, recovered?.directory ?? directory), [directory, form, recovered?.directory]);
-    const [restored] = React.useState(() => {
-        const draft = loadFormDraft(draftScope);
-        return draft?.fieldsSignature === fieldsSignature ? draft : null;
->>>>>>> bc50ba56a
     });
     const [answers, setAnswers] = React.useState<AskAnswerState[]>(() => restored?.answers ?? initialAskAnswers(questions));
     const [step, setStep] = React.useState(restored?.step ?? 0);
     const [collapsed, setCollapsed] = React.useState(false);
-<<<<<<< HEAD
-=======
-    const [isResponding, setIsResponding] = React.useState(false);
-    const respondingRef = React.useRef(false);
->>>>>>> bc50ba56a
     const [showErrors, setShowErrors] = React.useState(false);
     const { isResponding, hasResponded, answer, cancel } = useQuestionResponse(form);
     const waiting = forms.length - 1;
@@ -203,15 +121,9 @@ const FormDockPanel: React.FC<{
     }, [questions, signature]);
 
     React.useEffect(() => {
-<<<<<<< HEAD
         if (appliedSignatureRef.current !== signature || hasResponded) return;
         saveFormDraft(form.questionId, { signature, answers, step });
     }, [answers, form.questionId, hasResponded, signature, step]);
-=======
-        if (appliedSignatureRef.current !== fieldsSignature) return;
-        saveFormDraft(draftScope, { fieldsSignature, values, step });
-    }, [draftScope, fieldsSignature, step, values]);
->>>>>>> bc50ba56a
 
     const isFromSubagent = React.useMemo(() => {
         if (!currentSessionId || form.sessionId === currentSessionId) return false;
@@ -232,25 +144,11 @@ const FormDockPanel: React.FC<{
 
     const availableMaxHeight = useMobileAutocompleteMaxHeight(bodyRef, !collapsed, 320);
 
-<<<<<<< HEAD
     const updateAnswer = React.useCallback((index: number, next: AskAnswerState) => {
         setAnswers((previous) => previous.map((entry, entryIndex) => (entryIndex === index ? next : entry)));
-=======
-    // The phone's keyboard rises after the answer box takes focus and shrinks
-    // the body under it, which leaves the box below the part still shown.
-    React.useLayoutEffect(() => {
-        const focused = document.activeElement;
-        if (!focused || !bodyRef.current?.contains(focused)) return;
-        focused.scrollIntoView({ block: 'nearest' });
-    }, [availableMaxHeight]);
-
-    const updateValue = React.useCallback((key: string, patch: Partial<FormValues[string]>) => {
-        setValues((previous) => ({ ...previous, [key]: { ...valueOf(previous, key), ...patch } }));
->>>>>>> bc50ba56a
     }, []);
 
     const handleSubmit = React.useCallback(async () => {
-        if (respondingRef.current) return;
         if (!canSubmit) {
             // Jump to the first question that still needs an answer.
             setShowErrors(true);
@@ -258,64 +156,12 @@ const FormDockPanel: React.FC<{
             if (firstMissing !== undefined) setStep(firstMissing);
             return;
         }
-<<<<<<< HEAD
         if (await answer(buildAskAnswer(questions, answers))) formDrafts.delete(form.questionId);
     }, [answer, answers, canSubmit, form.questionId, missing, questions]);
 
     const handleDismiss = React.useCallback(async () => {
         if (await cancel()) formDrafts.delete(form.questionId);
     }, [cancel, form.questionId]);
-=======
-        respondingRef.current = true;
-        setIsResponding(true);
-        try {
-            const answer = buildFormAnswer(fields, values);
-            if (recovered) {
-                await sessionActions.sendRecoveredFormAnswer(recovered, serializeFormAnswerAsMarkdown(form, answer));
-            } else {
-                await sessionActions.replyToForm(form.sessionID, form.id, answer);
-            }
-            dropFormDraft(draftScope);
-        } catch (error) {
-            if (!recovered && isFormRequestNotFoundError(error)) {
-                dropFormDraft(draftScope);
-                return;
-            }
-            const unavailableAgent = agentUnavailableFrom(error instanceof Error ? error : null);
-            if (unavailableAgent) {
-                toast.error(t('chat.chatInput.toast.agentUnavailable', { agent: unavailableAgent }));
-                return;
-            }
-            toast.error(t('chat.formCard.submitFailed'), { description: t('chat.formCard.tryAgain') });
-        } finally {
-            respondingRef.current = false;
-            setIsResponding(false);
-        }
-    }, [canSubmit, draftScope, fields, form, missing, recovered, shown, t, values]);
-
-    const handleDismiss = React.useCallback(async () => {
-        if (respondingRef.current) return;
-        respondingRef.current = true;
-        setIsResponding(true);
-        try {
-            if (recovered) {
-                noteLocalFormCancelled(recovered.form.id);
-            } else {
-                await sessionActions.cancelForm(form.sessionID, form.id);
-            }
-            dropFormDraft(draftScope);
-        } catch (error) {
-            if (!recovered && isFormRequestNotFoundError(error)) {
-                dropFormDraft(draftScope);
-                return;
-            }
-            toast.error(t('chat.formCard.cancelFailed'), { description: t('chat.formCard.tryAgain') });
-        } finally {
-            respondingRef.current = false;
-            setIsResponding(false);
-        }
-    }, [draftScope, form.id, form.sessionID, recovered, t]);
->>>>>>> bc50ba56a
 
     const goNext = React.useCallback(() => {
         setStep(Math.min(currentStep + 1, lastStep));
@@ -357,16 +203,10 @@ const FormDockPanel: React.FC<{
         toast.error(t('chat.questionCard.copyFailed'));
     }, [form.prompt, form.schema, questions, t]);
 
-<<<<<<< HEAD
     const title = t('chat.formCard.inputNeeded');
     const stepLabel = (question: AskQuestion, index: number) =>
         question.header?.trim() || question.question?.trim() || t('chat.questionCard.questionFallback', { index: String(index + 1) });
     const iconButtonClass = 'rounded p-1 text-muted-foreground/70 transition-colors hover:bg-interactive-hover/30 hover:text-foreground';
-=======
-    const title = form.title?.trim() || t('chat.formCard.inputNeeded');
-    const stepLabel = (field: FormField, index: number) => field.title?.trim() || t('chat.questionCard.questionFallback', { index: String(index + 1) });
-    const iconButtonClass = 'rounded p-1 text-muted-foreground transition-colors hover:bg-interactive-hover/30 hover:text-foreground';
->>>>>>> bc50ba56a
 
     if (hasResponded || form.status !== 'pending') return null;
 
@@ -376,8 +216,6 @@ const FormDockPanel: React.FC<{
             ariaLabel={title}
             compact={collapsed}
             header={<>
-                <Tooltip>
-                <TooltipTrigger asChild>
                 <button
                     type="button"
                     onClick={() => setCollapsed((value) => !value)}
@@ -387,7 +225,7 @@ const FormDockPanel: React.FC<{
                 >
                     <Icon name="question" className="size-3.5 shrink-0 text-[var(--status-warning)]" />
                     <Icon name={collapsed ? 'arrow-up-s' : 'arrow-down-s'} className="size-4 shrink-0" />
-                    <span dir="auto" className="typography-ui-label min-w-0 truncate oc-ui-start-align text-foreground">{title}</span>
+                    <span className="typography-ui-label min-w-0 truncate text-foreground">{title}</span>
                     {isFromSubagent ? (
                         <span className="typography-micro shrink-0 rounded bg-foreground/5 px-1.5 py-0.5 text-muted-foreground">
                             {t('chat.formCard.fromSubagent')}
@@ -402,13 +240,9 @@ const FormDockPanel: React.FC<{
                         <AskCountdown timeoutMs={timeoutMs} requestedAt={form.requestedAt} />
                     </span>
                 </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={6}>{collapsed ? t('chat.formDock.expandAria') : t('chat.formDock.collapseAria')}</TooltipContent>
-                </Tooltip>
                 {/* One dot per question: filled when answered, the current one solid. */}
                 {!collapsed && questions.length > 1 ? (
                     <div className="flex shrink-0 items-center gap-1" role="tablist">
-<<<<<<< HEAD
                         {questions.map((question, index) => (
                             <button
                                 key={`${index}:${question.id}`}
@@ -431,33 +265,6 @@ const FormDockPanel: React.FC<{
                                     )}
                                 />
                             </button>
-=======
-                        {shown.map((field, index) => (
-                            <Tooltip key={field.key}>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
-                                        role="tab"
-                                        aria-selected={index === currentStep}
-                                        aria-label={t('chat.formDock.stepAria', { index: String(index + 1), title: stepLabel(field, index) })}
-                                        onClick={() => setStep(index)}
-                                        className="flex size-4 items-center justify-center"
-                                    >
-                                        <span
-                                            className={cn(
-                                                'block size-1.5 rounded-full transition-colors',
-                                                index === currentStep
-                                                    ? 'bg-primary'
-                                                    : answered[index]
-                                                        ? 'bg-primary/40'
-                                                        : 'bg-foreground/15',
-                                            )}
-                                        />
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" sideOffset={6}>{stepLabel(field, index)}</TooltipContent>
-                            </Tooltip>
->>>>>>> bc50ba56a
                         ))}
                     </div>
                 ) : null}
@@ -486,7 +293,6 @@ const FormDockPanel: React.FC<{
         >
             {!collapsed ? (
                 <div onKeyDown={handlePanelKeyDown}>
-<<<<<<< HEAD
                     <ScrollableOverlay
                         ref={bodyRef}
                         preventOverscroll
@@ -511,51 +317,6 @@ const FormDockPanel: React.FC<{
                                 <FormMarkdownFallback prompt={form.prompt} />
                             </div>
                         )}
-=======
-                    {recovered ? (
-                        <div className="typography-micro mx-1.5 mb-1 rounded bg-[var(--status-warning-background)] px-2 py-1.5 text-[var(--status-warning-text)]">
-                            {t('chat.formCard.recoveredNotice')}
-                        </div>
-                    ) : null}
-                    <ScrollableOverlay
-                        ref={bodyRef}
-                        outerClassName="max-h-[50vh]"
-                        outerStyle={availableMaxHeight === undefined ? undefined : { maxHeight: Math.max(120, availableMaxHeight - 96) }}
-                        className="overscroll-contain px-1.5"
-                        disableHorizontal
-                    >
-                        {currentField ? (
-                            currentField.type === 'external' ? (
-                                <div className="px-1.5 py-1">
-                                    <div className="typography-meta font-medium text-foreground">{stepLabel(currentField, currentStep)}</div>
-                                    {currentField.description ? (
-                                        <FormMarkdown content={currentField.description} size="micro" className="mb-1 text-muted-foreground" />
-                                    ) : null}
-                                    <a
-                                        href={currentField.url}
-                                        target="_blank"
-                                        rel="noreferrer noopener"
-                                        className="typography-meta inline-flex items-center gap-1 text-primary hover:underline"
-                                    >
-                                        <Icon name="external-link" className="size-3" />
-                                        {t('chat.formCard.openLink')}
-                                    </a>
-                                    <div className="typography-micro mt-1 text-muted-foreground">{t('chat.formDock.linkInfo')}</div>
-                                </div>
-                            ) : (
-                                <FormFieldControl
-                                    key={currentField.key}
-                                    field={currentField}
-                                    values={values}
-                                    missing={missing}
-                                    showErrors={showErrors}
-                                    isResponding={isResponding}
-                                    updateValue={updateValue}
-                                    onTextKeyDown={handleTextKeyDown}
-                                />
-                            )
-                        ) : null}
->>>>>>> bc50ba56a
                     </ScrollableOverlay>
 
                     <div className="flex items-center gap-1.5 px-3 pb-2 pt-1">
