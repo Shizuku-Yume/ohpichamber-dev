@@ -7,7 +7,7 @@ helper shares (`callback-address.js`). The managed tools an agent calls are
 declared in `../openchamber-control/actions.js` and dispatched by the same
 control service the CLI uses, so tool, UI and CLI behavior have one owner.
 
-The Agent Service exposes five tools to the model from its worker
+The Agent Service exposes six tools to the model from its worker
 (`packages/agent-service/src/worker/host-tool.ts`):
 
 - `openchamber` — projects, models, sessions, scheduled tasks, workflows, and
@@ -23,6 +23,10 @@ The Agent Service exposes five tools to the model from its worker
   (same limits and rate window as `POST /api/notifications/emit`). Off by
   default: enabled only while `agentNotifyToolEnabled` is `true`, and the
   control service refuses the action when the setting is off.
+- `openchamber_image` — `image.generate`, an image made or edited by the image
+  model the user chose in Settings (`../openchamber-control/generate-image.js`,
+  which reads `agentImageModel`). Off by default: the control service runs it
+  only while `agentImageToolEnabled` is `true`.
 
 Each tool accepts `{ action, input }`; the Host checks that the action belongs
 to that tool's set, applies the feature policy named above, and dispatches.
