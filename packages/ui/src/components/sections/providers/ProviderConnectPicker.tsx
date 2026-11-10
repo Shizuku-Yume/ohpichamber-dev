@@ -26,7 +26,7 @@ const ProviderRow: React.FC<{ provider: ConnectableProvider; onSelect: (provider
 );
 
 interface ProviderConnectPickerProps {
-  /** Null until the provider list is read. */
+  /** Null until the integration list is read. */
   providers: readonly ConnectableProvider[] | null;
   loadFailed: boolean;
   onSelect: (providerId: string) => void;

@@ -29,7 +29,6 @@ import type {
   GitWorktreeArchive,
   GitWorktreeArchiveRestoreResult,
   GitWorktreeTitleResult,
-  GitWorktreePinResult,
   GitWorktreeValidationResult,
   CreateGitCommitOptions,
   GitCommitResult,
@@ -73,15 +72,11 @@ import { getRuntimeKey } from './runtime-switch';
 import { notifyGitStatusInvalidated, subscribeGitStatusInvalidations } from './gitStatusInvalidation';
 import { notifyGitPush } from './gitPushEvents';
 import { GitPathUnavailableError, gitPathUnavailableBodySchema, gitSubmoduleStateSchema } from './api/git-path-diff';
-import { GIT_REPOSITORY_UNREADABLE, GitRepositoryUnreadableError } from './gitRepositoryUnreadable';
 
 const API_BASE = '/api/git';
-const gitFileVersionsSchema = z.object({ original: z.string(), modified: z.string() });
 const gitRangeDiffSchema = z.object({ diff: z.string() });
 const gitRangeFilesSchema = z.object({ files: z.array(z.object({ path: z.string(), status: z.string(), revision: z.string().optional() })) });
 const gitRangeErrorSchema = z.object({ error: z.string() });
-// `/api/git/status` when Git could not tell whether the directory is a repository.
-const gitRepositoryUnreadableBodySchema = z.object({ error: z.string(), code: z.literal(GIT_REPOSITORY_UNREADABLE) });
 const gitCommitFilesSchema = z.object({ files: z.array(z.object({
   path: z.string(), previousPath: z.string().optional(), changeType: z.string(),
   insertions: z.number(), deletions: z.number(), isBinary: z.boolean(),
@@ -110,12 +105,7 @@ const gitFileDiffSchema = z.object({
 });
 
 async function pathDiffResponseError(response: Response, fallback: string): Promise<Error> {
-  const body: unknown = await response.json().catch(() => null);
-  const nonRepository = z.object({ code: z.literal('not_repository'), error: z.string() }).safeParse(body);
-  if (response.status === 409 && nonRepository.success) {
-    return new Error(nonRepository.data.error);
-  }
-  const parsed = gitPathUnavailableBodySchema.safeParse(body);
+  const parsed = gitPathUnavailableBodySchema.safeParse(await response.json().catch(() => null));
   if (parsed.success && (response.status === 404 || response.status === 422)) {
     return new GitPathUnavailableError(parsed.data.error, parsed.data.code);
   }
@@ -374,7 +364,6 @@ const operationErrorCodeSchema = z.enum([
     'STALE_BINDING',
     'STALE_CONFIG',
     'REMOTE_CHANGED',
-    'REMOTE_URL_USERINFO',
     'AUTHENTICATION_REQUIRED',
     'DESTINATION_SELECTION_REQUIRED',
     'CONTRIBUTOR_MANAGED_TRANSPORT_REQUIRED',
@@ -841,8 +830,6 @@ type ProjectOverviewResponse = {
   worktrees?: GitWorktreeInfo[] | null;
   errors?: string[];
   error?: string;
-  /** `GIT_REPOSITORY_UNREADABLE` when Git could not answer for the directory. */
-  code?: string;
 };
 
 type ProjectOverviewWaiter = {
@@ -969,9 +956,7 @@ const flushProjectOverviews = async (batchKey: string): Promise<void> => {
       if (!overview) {
         waiter.reject(new Error('Project repository read missing from batch response'));
       } else if (overview.error) {
-        waiter.reject(overview.code === GIT_REPOSITORY_UNREADABLE
-          ? new GitRepositoryUnreadableError(overview.error)
-          : new Error(overview.error));
+        waiter.reject(new Error(overview.error));
       } else if (overview.errors?.includes(batch.field)) {
         waiter.reject(new Error(`Failed to read project ${batch.field}`));
       } else {
@@ -1124,8 +1109,6 @@ export async function getGitStatus(directory: string, options?: { mode?: 'light'
     // list warms this cache through `prefetchProjectStatuses` instead.
     const response = await runtimeFetch(buildUrl(`${API_BASE}/status`, directory, mode ? { mode } : undefined));
     if (!response.ok) {
-      const unreadable = gitRepositoryUnreadableBodySchema.safeParse(await response.json().catch(() => null));
-      if (unreadable.success) throw new GitRepositoryUnreadableError(unreadable.data.error);
       throw new Error(`Failed to get git status: ${response.statusText}`);
     }
     // SAFETY: `/api/git/status` is this app's own route; its body is a GitStatus.
@@ -1246,7 +1229,7 @@ export async function getGitDiffs(directory: string, options: GetGitDiffsOptions
       body: JSON.stringify({ paths: paths.slice(start, start + GIT_DIFFS_MAX_PATHS), staged: staged === true, context: contextLines }),
     });
     if (!response.ok) {
-      throw await pathDiffResponseError(response, 'Failed to get git diffs');
+      throw new Error(`Failed to get git diffs: ${response.statusText}`);
     }
     for (const entry of gitPathDiffsSchema.parse(await response.json()).diffs) {
       entries.push('diff' in entry
@@ -1635,11 +1618,11 @@ const worktreeCodeAwareError = async (response: Response, fallback: string): Pro
 
 const worktreeTitleResultSchema = z.object({ title: z.string(), branch: z.string() });
 
-export async function setGitWorktreeTitle(directory: string, title: string, by: 'user' | 'agent' = 'user'): Promise<GitWorktreeTitleResult> {
+export async function setGitWorktreeTitle(directory: string, title: string): Promise<GitWorktreeTitleResult> {
   const response = await runtimeFetch(buildUrl(`${API_BASE}/worktrees/title`, directory), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, by }),
+    body: JSON.stringify({ title }),
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
@@ -1648,24 +1631,6 @@ export async function setGitWorktreeTitle(directory: string, title: string, by: 
   }
   const parsed = worktreeTitleResultSchema.safeParse(body);
   if (!parsed.success) throw new Error('Malformed task title response');
-  return parsed.data;
-}
-
-const worktreePinResultSchema = z.object({ pinned: z.boolean(), branch: z.string() });
-
-export async function setGitWorktreePinned(directory: string, pinned: boolean, list: string | null = null): Promise<GitWorktreePinResult> {
-  const response = await runtimeFetch(buildUrl(`${API_BASE}/worktrees/pin`, directory), {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(list ? { pinned, list } : { pinned }),
-  });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message = z.object({ error: z.string() }).safeParse(body).data?.error;
-    throw new Error(message || 'Failed to pin the task');
-  }
-  const parsed = worktreePinResultSchema.safeParse(body);
-  if (!parsed.success) throw new Error('Malformed pin response');
   return parsed.data;
 }
 
@@ -2143,22 +2108,6 @@ export async function getCommitFiles(
     throw await rangeResponseError(response, 'Failed to get commit files');
   }
   return gitCommitFilesSchema.parse(await response.json());
-}
-
-export async function getGitRangeFileVersions(
-  directory: string,
-  options: { base: string; head: string; path: string; previousPath?: string; includeWorkingTree?: boolean },
-): Promise<{ original: string; modified: string }> {
-  const { base, head, path, previousPath, includeWorkingTree } = options;
-  const response = await runtimeFetch(buildUrl(`${API_BASE}/range-file-versions`, directory, {
-    base,
-    head,
-    path,
-    previousPath,
-    includeWorkingTree: includeWorkingTree ? 'true' : undefined,
-  }));
-  if (!response.ok) throw await rangeResponseError(response, 'Failed to read file versions');
-  return gitFileVersionsSchema.parse(await response.json());
 }
 
 export async function getCommitFileDiff(

@@ -7,20 +7,28 @@ import { NumberInput } from '@/components/ui/number-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
-import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SettingsCardPill } from '@/components/sections/shared/SettingsCards';
 import { reportSettingsSaveState } from '@/lib/persistence';
+import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
- SettingsFieldRow,
- SettingsSection,
- SETTINGS_CALLOUT_TITLE_CLASS,
- SETTINGS_CONTROL_CLUSTER_CLASS,
- SETTINGS_HELPER_CLASS,
- SETTINGS_ICON_BUTTON_CLASS,
- SETTINGS_NUMBER_INPUT_CLASS,
- SETTINGS_NUMBER_STEPPER_ROW_CLASS,
- SETTINGS_NUMBER_UNIT_CLASS,
- SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_CARD_GRID_CLASS,
+  SettingsBackButton,
+  SettingsCard,
+  SettingsCardIcon,
+  SettingsCardPill,
+  type SettingsCardAction,
+} from '@/components/sections/shared/SettingsCards';
+import {
+  SETTINGS_CALLOUT_TITLE_CLASS,
+  SETTINGS_CONTROL_CLUSTER_CLASS,
+  SETTINGS_HELPER_CLASS,
+  SETTINGS_ICON_BUTTON_CLASS,
+  SETTINGS_NUMBER_INPUT_CLASS,
+  SETTINGS_NUMBER_STEPPER_ROW_CLASS,
+  SETTINGS_NUMBER_UNIT_CLASS,
+  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SettingsChipGroup,
+  SettingsFieldRow,
+  SettingsSection,
 } from '@/components/sections/shared/SettingsSection';
 import { getWebSearchScopeKey, useWebSearchStore, type WebSearchSnapshot } from '@/stores/useWebSearchStore';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
@@ -30,21 +38,10 @@ import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
  * fallback chain, the request timeout, and the write-only credential each
  * provider takes. Configuration belongs to the selected agent directory; the
  * worker is authoritative and every write is applied with a revision CAS.
+ *
+ * The page opens on the mode (default, off) and a card per provider; a card
+ * opens the provider, where its key is added and it is chosen for search.
  */
-
-type Selection =
- | { kind: 'off' }
- | { kind: 'default' }
- | { kind: 'provider'; id: string };
-
-const currentSelection = (snapshot: WebSearchSnapshot): Selection => {
- if (!snapshot.enabled) return { kind: 'off' };
- if (snapshot.selectedProviderId === null) return { kind: 'default' };
- return { kind: 'provider', id: snapshot.selectedProviderId };
-};
-
-const sameSelection = (a: Selection, b: Selection): boolean =>
- a.kind === b.kind && (a.kind !== 'provider' || (b.kind === 'provider' && a.id === b.id));
 
 /** Sentinel for the add-fallback select; it never leaves the control. */
 const ADD_FALLBACK_VALUE = '__add-fallback__';
@@ -52,403 +49,373 @@ const ADD_FALLBACK_VALUE = '__add-fallback__';
 /** OMP's native `providers.webSearchTimeoutSeconds` default, used by the reset action. */
 const DEFAULT_TIMEOUT_SECONDS = 60;
 
-const SelectionSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => {
- const { t } = useI18n();
- const update = useWebSearchStore((store) => store.update);
- const busy = useWebSearchStore((store) => store.busy);
- const selected = currentSelection(snapshot);
- const selectedProvider = snapshot.selectedProviderId === null
-  ? null
-  : snapshot.providers.find((provider) => provider.providerId === snapshot.selectedProviderId) ?? null;
- // A provider from the persisted configuration that the native catalog no
- // longer offers stays visible so the user can see why search does not run.
- const missingProvider = selected.kind === 'provider' && selectedProvider === null ? selected.id : null;
- const availableFallbacks = snapshot.providers.filter(
-  (provider) => provider.providerId !== snapshot.selectedProviderId
-   && !snapshot.fallbackProviderIds.includes(provider.providerId),
- );
+type ModeValue = 'default' | 'off';
 
- const commit = async (changes: Parameters<typeof update>[0]): Promise<void> => {
-  reportSettingsSaveState('saving');
-  const ok = await update(changes);
-  if (ok) {
-   reportSettingsSaveState('saved');
-  } else {
-   reportSettingsSaveState('error');
-   toast.error(t('settings.webSearch.toast.saveFailed'));
-  }
- };
+const useChoose = (snapshot: WebSearchSnapshot) => {
+  const { t } = useI18n();
+  const update = useWebSearchStore((store) => store.update);
+  const busy = useWebSearchStore((store) => store.busy);
 
- const choose = (selection: Selection): void => {
-  if (busy || sameSelection(selection, selected)) return;
-  if (selection.kind === 'off') {
-   void commit({ enabled: false });
-   return;
-  }
-  if (selection.kind === 'default') {
-   void commit({ enabled: true, selectedProviderId: null });
-   return;
-  }
-  // Removing the new primary from the fallback chain keeps the same CAS
-  // write and honours the contract's primary-not-fallback rule.
-  void commit({
-   enabled: true,
-   selectedProviderId: selection.id,
-   fallbackProviderIds: snapshot.fallbackProviderIds.filter((providerId) => providerId !== selection.id),
-  });
- };
+  const commit = async (changes: Parameters<typeof update>[0]): Promise<boolean> => {
+    if (busy) return false;
+    reportSettingsSaveState('saving');
+    const ok = await update(changes);
+    reportSettingsSaveState(ok ? 'saved' : 'error');
+    if (!ok) toast.error(t('settings.webSearch.toast.saveFailed'));
+    return ok;
+  };
 
+  const chooseMode = (mode: ModeValue): void => {
+    if (mode === 'off') {
+      if (!snapshot.enabled) return;
+      void commit({ enabled: false });
+      return;
+    }
+    if (snapshot.enabled && snapshot.selectedProviderId === null) return;
+    void commit({ enabled: true, selectedProviderId: null });
+  };
 
- return (
-  <SettingsSection
-   title={t('settings.webSearch.section.provider')}
-   info={t('settings.webSearch.section.providerInfo')}
-   divider={false}
-   settingsItem="web-search.provider"
-  >
-   <div className="space-y-4">
-    <SettingsFieldRow
-     label={t('settings.webSearch.section.provider')}
-     info={t('settings.webSearch.section.providerInfo')}
-     settingsItem="web-search.provider"
-    >
-     <Select
-      value={selected.kind === 'off' ? 'off' : selected.kind === 'default' ? 'default' : selected.id}
-      disabled={busy}
-      onValueChange={(val) => {
-       if (val === 'off') choose({ kind: 'off' });
-       else if (val === 'default') choose({ kind: 'default' });
-       else choose({ kind: 'provider', id: val });
-      }}
-     >
-      <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={t('settings.webSearch.section.provider')}>
-       <SelectValue>
-        {selected.kind === 'off'
-         ? t('settings.webSearch.option.off')
-         : selected.kind === 'default'
-          ? t('settings.webSearch.option.default')
-          : (selectedProvider?.name ?? selected.id)}
-       </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-       <SelectItem value="default">{t('settings.webSearch.option.default')}</SelectItem>
-       {snapshot.providers.map((p) => (
-        <SelectItem key={p.providerId} value={p.providerId}>{p.name}</SelectItem>
-       ))}
-       {missingProvider ? (
-        <SelectItem value={missingProvider}>{missingProvider}</SelectItem>
-       ) : null}
-       <SelectItem value="off">{t('settings.webSearch.option.off')}</SelectItem>
-      </SelectContent>
-     </Select>
-    </SettingsFieldRow>
+  const chooseProvider = (providerId: string): void => {
+    // Re-enabling a provider already stored as the selection still writes it:
+    // only a provider that is both selected and enabled needs no change.
+    if (snapshot.enabled && snapshot.selectedProviderId === providerId) return;
+    // Removing the new primary from the fallback chain keeps the same CAS
+    // write and honours the contract's primary-not-fallback rule.
+    void commit({
+      enabled: true,
+      selectedProviderId: providerId,
+      fallbackProviderIds: snapshot.fallbackProviderIds.filter((id) => id !== providerId),
+    });
+  };
 
-    <SettingsFieldRow
-     label={t('settings.webSearch.native.fallbacks')}
-     info={t('settings.webSearch.native.fallbackInfo')}
-     settingsItem="web-search.fallbacks"
-    >
-     <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} space-y-2`}>
-      {snapshot.fallbackProviderIds.length > 0 ? (
-       <div className="space-y-2">
-        {snapshot.fallbackProviderIds.map((providerId) => {
-         const fallbackName = snapshot.providers.find((provider) => provider.providerId === providerId)?.name ?? providerId;
-         return (
-          <div key={providerId} className="flex min-w-0 items-center justify-between gap-2">
-           <span className="min-w-0 truncate typography-ui-label text-foreground">{fallbackName}</span>
-           <Button
-            variant="outline"
-            size="xs"
-            disabled={busy}
-            aria-label={t('settings.webSearch.native.removeFallback', { provider: fallbackName })}
-            onClick={() => void commit({
-             fallbackProviderIds: snapshot.fallbackProviderIds.filter((value) => value !== providerId),
-            })}
-           >
-            {t('settings.webSearch.keys.remove')}
-           </Button>
-          </div>
-         );
-        })}
-       </div>
-      ) : null}
-      <Select
-       value={ADD_FALLBACK_VALUE}
-       disabled={busy || availableFallbacks.length === 0}
-       onValueChange={(value) => {
-        if (value === ADD_FALLBACK_VALUE) return;
-        void commit({ fallbackProviderIds: [...snapshot.fallbackProviderIds, value] });
-       }}
-      >
-       <SelectTrigger
-        className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
-        aria-label={t('settings.webSearch.native.addFallback')}
-       >
-        <SelectValue placeholder={t('settings.webSearch.native.addFallback')}>
-         {t('settings.webSearch.native.addFallback')}
-        </SelectValue>
-       </SelectTrigger>
-       <SelectContent>
-        <SelectItem value={ADD_FALLBACK_VALUE}>{t('settings.webSearch.native.addFallback')}</SelectItem>
-        {availableFallbacks.map((provider) => (
-         <SelectItem key={provider.providerId} value={provider.providerId}>
-          {provider.name}
-         </SelectItem>
-        ))}
-       </SelectContent>
-      </Select>
-     </div>
-    </SettingsFieldRow>
-
-    <SettingsFieldRow
-     label={t('settings.webSearch.native.timeout')}
-     settingsItem="web-search.timeout"
-    >
-     <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
-      <NumberInput
-       value={snapshot.timeoutSeconds}
-       onValueChange={(value) => {
-        if (!Number.isFinite(value) || value < 1 || value > 300) return;
-        void commit({ timeoutSeconds: value });
-       }}
-       min={1}
-       max={300}
-       step={1}
-       disabled={busy}
-       className={SETTINGS_NUMBER_INPUT_CLASS}
-       aria-label={t('settings.webSearch.native.timeout')}
-      />
-      <span className={SETTINGS_NUMBER_UNIT_CLASS} aria-hidden="true">{t('settings.webSearch.native.timeoutUnit')}</span>
-      <Button
-       variant="ghost"
-       size="icon"
-       className={SETTINGS_ICON_BUTTON_CLASS}
-       disabled={busy || snapshot.timeoutSeconds === DEFAULT_TIMEOUT_SECONDS}
-       onClick={() => void commit({ timeoutSeconds: DEFAULT_TIMEOUT_SECONDS })}
-       aria-label={t('settings.webSearch.native.resetTimeout')}
-       title={t('settings.common.actions.reset')}
-      >
-       <Icon name="restart" className="size-3.5" />
-      </Button>
-     </div>
-    </SettingsFieldRow>
-   </div>
-  </SettingsSection>
- );
+  return { chooseMode, chooseProvider, busy, commit };
 };
 
-const ProviderKeyRow: React.FC<{ provider: WebSearchProviderEntry }> = ({ provider }) => {
- const { t } = useI18n();
- const saveKey = useWebSearchStore((store) => store.saveKey);
- const removeKey = useWebSearchStore((store) => store.removeKey);
- const busy = useWebSearchStore((store) => store.busy);
- const enterprise = useEnterpriseMode();
- const canWrite = provider.credentialWritable && !enterprise;
- const [draft, setDraft] = React.useState('');
- const [showPassword, setShowPassword] = React.useState(false);
- const [expanded, setExpanded] = React.useState(!provider.credentialConfigured);
+const ModeSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => {
+  const { t } = useI18n();
+  const { chooseMode } = useChoose(snapshot);
+  const selectedProvider = snapshot.selectedProviderId === null
+    ? null
+    : snapshot.providers.find((provider) => provider.providerId === snapshot.selectedProviderId) ?? null;
+  // A chosen provider presses neither chip: the two describe the fallback
+    // modes, and the status line names the provider, as on the connect page.
+  const mode: 'default' | 'off' | 'provider' = !snapshot.enabled
+    ? 'off'
+    : snapshot.selectedProviderId === null ? 'default' : 'provider';
 
- const handleSave = async () => {
-  const key = draft.trim();
-  if (!key || busy || !canWrite) return;
-  reportSettingsSaveState('saving');
-  const ok = await saveKey(provider.providerId, key);
-  if (ok) {
-   setDraft('');
-   reportSettingsSaveState('saved');
-   toast.success(t('settings.webSearch.toast.keySaved', { provider: provider.name }));
-  } else {
-   reportSettingsSaveState('error');
-   toast.error(t('settings.webSearch.toast.keySaveFailed'));
-  }
- };
+  const status = !snapshot.enabled
+    ? t('settings.webSearch.mode.offDescription')
+    : snapshot.selectedProviderId === null
+      ? t('settings.webSearch.option.defaultDescription')
+      : selectedProvider
+        ? t('settings.webSearch.mode.providerDescription', { provider: selectedProvider.name })
+        : t('settings.webSearch.mode.missingDescription', { provider: snapshot.selectedProviderId });
 
- const handleRemove = async () => {
-  if (busy) return;
-  reportSettingsSaveState('saving');
-  const ok = await removeKey(provider.providerId);
-  if (ok) {
-   reportSettingsSaveState('saved');
-  } else {
-   reportSettingsSaveState('error');
-   toast.error(t('settings.webSearch.toast.keyRemoveFailed'));
-  }
- };
-
- return (
-  <div className="rounded-lg border border-border/50 bg-[var(--surface-subtle)] p-3">
-   <div className="flex items-center justify-between gap-2">
-    <button
-     type="button"
-     onClick={() => setExpanded(!expanded)}
-     className="flex min-w-0 flex-1 items-center gap-2 text-start"
+  return (
+    <SettingsSection
+      title={t('settings.webSearch.section.provider')}
+      info={t('settings.webSearch.native.info')}
+      divider={false}
+      settingsItem="web-search.provider"
     >
-     <Icon
-      name={expanded ? 'arrow-down-s' : 'arrow-right-s'}
-      className="size-4 shrink-0 text-muted-foreground"
-     />
-     <span className="typography-ui-label text-foreground">{provider.name}</span>
-     <SettingsCardPill tone={provider.credentialConfigured ? 'success' : 'neutral'}>
-      {t(provider.credentialConfigured ? 'settings.webSearch.keys.saved' : 'settings.webSearch.native.unconfigured')}
-     </SettingsCardPill>
-    </button>
-   </div>
-
-   {expanded ? (
-    <div className="mt-3 border-t border-border/40 pt-3">
-     {provider.credentialConfigured ? (
-      <div className="flex items-center justify-between gap-2">
-       <span className="typography-meta text-muted-foreground">{t('settings.webSearch.native.configured')}</span>
-       <Button variant="outline" size="xs" disabled={busy} onClick={() => void handleRemove()}>
-        {t('settings.webSearch.keys.remove')}
-       </Button>
-      </div>
-     ) : canWrite ? (
       <div className="space-y-2">
-       <div className="flex items-center gap-2">
-        <div className="relative min-w-0 flex-1">
-         <Input
-          type={showPassword ? 'text' : 'password'}
-          autoComplete="off"
-          value={draft}
-          disabled={busy}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-           if (event.key === 'Enter') void handleSave();
+        <SettingsChipGroup<'default' | 'off' | 'provider'>
+          aria-label={t('settings.webSearch.section.provider')}
+          value={mode}
+          options={[
+            { value: 'default', label: t('settings.webSearch.option.default') },
+            { value: 'off', label: t('settings.webSearch.option.off') },
+          ]}
+          onChange={(value) => {
+            if (value !== 'provider') chooseMode(value);
           }}
-          placeholder={t('settings.webSearch.keys.placeholder')}
-          aria-label={t('settings.webSearch.keys.inputAria', { provider: provider.name })}
-          inputSize="compact"
-          className="pe-8 font-mono"
-         />
-         <button
-          type="button"
-          tabIndex={-1}
-          className="absolute inset-y-0 end-0 flex items-center pe-2 text-muted-foreground hover:text-foreground"
-          onClick={() => setShowPassword(!showPassword)}
-          aria-label={t(showPassword ? 'settings.providers.page.actions.hide' : 'settings.projects.shared.actions.show')}
-         >
-          <Icon name={showPassword ? 'eye-off' : 'eye'} className="size-3.5" />
-         </button>
-        </div>
-        <Button size="xs" disabled={busy || draft.trim().length === 0} onClick={() => void handleSave()}>
-         {t('settings.webSearch.keys.save')}
-        </Button>
-       </div>
+        />
+        <p className={SETTINGS_HELPER_CLASS}>{status}</p>
       </div>
-     ) : (
-      <p className="typography-meta text-muted-foreground">{t('settings.webSearch.native.enterprise')}</p>
-     )}
-    </div>
-   ) : null}
-  </div>
- );
+    </SettingsSection>
+  );
 };
 
-const KeysSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => {
- const { t } = useI18n();
- // Enterprise mode: the runtime refuses new keys; saved keys can still be
- // removed. There is no env-name metadata in the native contract, so the
- // only key state shown is the provider's write-only credential flag.
- const enterprise = useEnterpriseMode();
+const ProviderCard: React.FC<{ provider: WebSearchProviderEntry; snapshot: WebSearchSnapshot; onOpen: () => void }> = ({ provider, snapshot, onOpen }) => {
+  const { t } = useI18n();
+  const { chooseProvider, busy } = useChoose(snapshot);
+  const inUse = snapshot.enabled && snapshot.selectedProviderId === provider.providerId;
+  const needsKey = provider.requiresCredential && !provider.credentialConfigured;
 
- return (
-  <SettingsSection
-   title={t('settings.webSearch.section.keys')}
-   info={t('settings.webSearch.native.keyInfo')}
-   settingsItem="web-search.keys"
-  >
-   <div className="space-y-4">
-    {enterprise ? <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.native.enterprise')}</p> : null}
-    {snapshot.providers.length === 0 ? (
-     <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.native.noProviders')}</p>
-    ) : (
-     snapshot.providers.map((provider) => <ProviderKeyRow key={provider.providerId} provider={provider} />)
-    )}
-   </div>
-  </SettingsSection>
- );
+  const pill = inUse
+    ? <SettingsCardPill tone="success">{t('settings.webSearch.card.inUse')}</SettingsCardPill>
+    : needsKey
+      ? <SettingsCardPill tone="warning">{t('settings.webSearch.card.needsKey')}</SettingsCardPill>
+      : !provider.configured
+        ? <SettingsCardPill tone="warning">{t('settings.webSearch.card.needsSetup')}</SettingsCardPill>
+        : null;
+
+  const footer = provider.credentialConfigured
+    ? t('settings.webSearch.keys.saved')
+    : !provider.requiresCredential
+      ? t('settings.webSearch.card.keyOptional')
+      : null;
+
+  const actions: SettingsCardAction[] = !inUse && !busy && provider.configured
+    ? [{ label: t('settings.webSearch.actions.use'), icon: 'check', onSelect: () => chooseProvider(provider.providerId) }]
+    : [];
+
+  return (
+    <SettingsCard
+      icon={<SettingsCardIcon name="global" />}
+      title={provider.name}
+      badges={pill}
+      footer={footer ? <span className="min-w-0 truncate">{footer}</span> : null}
+      muted={!provider.configured || needsKey}
+      onOpen={onOpen}
+      actions={actions}
+      actionsLabel={t('settings.webSearch.card.actions', { provider: provider.name })}
+    />
+  );
+};
+
+const FallbacksAndTimeout: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => {
+  const { t } = useI18n();
+  const { busy, commit } = useChoose(snapshot);
+  const availableFallbacks = snapshot.providers.filter(
+    (provider) => provider.providerId !== snapshot.selectedProviderId
+      && !snapshot.fallbackProviderIds.includes(provider.providerId),
+  );
+
+  return (
+    <>
+      <SettingsSection
+        title={t('settings.webSearch.native.fallbacks')}
+        info={t('settings.webSearch.native.fallbackInfo')}
+        settingsItem="web-search.fallbacks"
+      >
+        <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} space-y-2`}>
+          {snapshot.fallbackProviderIds.length > 0 ? (
+            <div className="space-y-2">
+              {snapshot.fallbackProviderIds.map((providerId) => {
+                const fallbackName = snapshot.providers.find((provider) => provider.providerId === providerId)?.name ?? providerId;
+                return (
+                  <div key={providerId} className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="min-w-0 truncate typography-ui-label text-foreground">{fallbackName}</span>
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      disabled={busy}
+                      aria-label={t('settings.webSearch.native.removeFallback', { provider: fallbackName })}
+                      onClick={() => void commit({
+                        fallbackProviderIds: snapshot.fallbackProviderIds.filter((value) => value !== providerId),
+                      })}
+                    >
+                      {t('settings.webSearch.keys.remove')}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+          <Select
+            value={ADD_FALLBACK_VALUE}
+            disabled={busy || availableFallbacks.length === 0}
+            onValueChange={(value) => {
+              if (value === ADD_FALLBACK_VALUE) return;
+              void commit({ fallbackProviderIds: [...snapshot.fallbackProviderIds, value] });
+            }}
+          >
+            <SelectTrigger
+              className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+              aria-label={t('settings.webSearch.native.addFallback')}
+            >
+              <SelectValue placeholder={t('settings.webSearch.native.addFallback')}>
+                {t('settings.webSearch.native.addFallback')}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ADD_FALLBACK_VALUE}>{t('settings.webSearch.native.addFallback')}</SelectItem>
+              {availableFallbacks.map((provider) => (
+                <SelectItem key={provider.providerId} value={provider.providerId}>
+                  {provider.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </SettingsSection>
+      <SettingsSection title={t('settings.webSearch.native.timeout')} settingsItem="web-search.timeout">
+        <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+          <NumberInput
+            value={snapshot.timeoutSeconds}
+            onValueChange={(value) => {
+              if (!Number.isFinite(value) || value < 1 || value > 300) return;
+              void commit({ timeoutSeconds: value });
+            }}
+            min={1}
+            max={300}
+            step={1}
+            disabled={busy}
+            className={SETTINGS_NUMBER_INPUT_CLASS}
+            aria-label={t('settings.webSearch.native.timeout')}
+          />
+          <span className={SETTINGS_NUMBER_UNIT_CLASS} aria-hidden="true">{t('settings.webSearch.native.timeoutUnit')}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={SETTINGS_ICON_BUTTON_CLASS}
+            disabled={busy || snapshot.timeoutSeconds === DEFAULT_TIMEOUT_SECONDS}
+            onClick={() => void commit({ timeoutSeconds: DEFAULT_TIMEOUT_SECONDS })}
+            aria-label={t('settings.webSearch.native.resetTimeout')}
+            title={t('settings.common.actions.reset')}
+          >
+            <Icon name="restart" className="size-3.5" />
+          </Button>
+        </div>
+      </SettingsSection>
+    </>
+  );
+};
+
+const ProviderDetail: React.FC<{ provider: WebSearchProviderEntry; snapshot: WebSearchSnapshot; onBack: () => void }> = ({ provider, snapshot, onBack }) => {
+  const { t } = useI18n();
+  const { chooseProvider, busy } = useChoose(snapshot);
+  // Enterprise mode blocks adding a key; a saved one can still be removed.
+  const enterprise = useEnterpriseMode();
+  const saveKey = useWebSearchStore((store) => store.saveKey);
+  const removeKey = useWebSearchStore((store) => store.removeKey);
+  const [draft, setDraft] = React.useState('');
+  const inUse = snapshot.enabled && snapshot.selectedProviderId === provider.providerId;
+
+  const handleSave = async () => {
+    const key = draft.trim();
+    if (!key || busy || enterprise) return;
+    reportSettingsSaveState('saving');
+    const ok = await saveKey(provider.providerId, key);
+    if (ok) setDraft('');
+    reportSettingsSaveState(ok ? 'saved' : 'error');
+    if (ok) toast.success(t('settings.webSearch.toast.keySaved', { provider: provider.name }));
+    else toast.error(t('settings.webSearch.toast.keySaveFailed'));
+  };
+
+  const handleRemove = async () => {
+    if (busy) return;
+    reportSettingsSaveState('saving');
+    const ok = await removeKey(provider.providerId);
+    reportSettingsSaveState(ok ? 'saved' : 'error');
+    if (!ok) toast.error(t('settings.webSearch.toast.keyRemoveFailed'));
+  };
+
+  const useLine = inUse
+    ? t('settings.webSearch.mode.providerDescription', { provider: provider.name })
+    : !provider.configured
+      ? t('settings.webSearch.detail.needsSetup', { provider: provider.name })
+      : null;
+
+  return (
+    <SettingsPageLayout
+      title={provider.name}
+      titleLeading={<SettingsBackButton label={t('settings.webSearch.detail.back')} onClick={onBack} />}
+      showSaveStatus
+    >
+      <SettingsSection divider={false}>
+        <div className="space-y-2">
+          {useLine ? <p className="typography-meta text-foreground">{useLine}</p> : null}
+          {provider.configured && !inUse ? (
+            <Button size="sm" disabled={busy} onClick={() => chooseProvider(provider.providerId)}>
+              {t('settings.webSearch.actions.use')}
+            </Button>
+          ) : null}
+        </div>
+      </SettingsSection>
+      <SettingsSection>
+        <div className="space-y-4">
+          {enterprise ? <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.keys.enterpriseMode')}</p> : null}
+          {!provider.credentialWritable ? (
+            <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.detail.noKey')}</p>
+          ) : provider.credentialConfigured ? (
+            <SettingsFieldRow label={t('settings.webSearch.keys.label')} info={t('settings.webSearch.native.keyInfo')}>
+              <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex items-center justify-end gap-2`}>
+                <span className="typography-meta text-muted-foreground">{t('settings.webSearch.keys.saved')}</span>
+                <Button variant="outline" size="xs" disabled={busy} onClick={() => void handleRemove()}>
+                  {t('settings.webSearch.keys.remove')}
+                </Button>
+              </div>
+            </SettingsFieldRow>
+          ) : enterprise ? null : (
+            <SettingsFieldRow label={t('settings.webSearch.keys.label')} info={t('settings.webSearch.native.keyInfo')}>
+              <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex items-center gap-2`}>
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  value={draft}
+                  disabled={busy}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') void handleSave();
+                  }}
+                  placeholder={t('settings.webSearch.keys.placeholder')}
+                  aria-label={t('settings.webSearch.keys.inputAria', { provider: provider.name })}
+                  inputSize="compact"
+                  className="min-w-0 flex-1 font-mono"
+                />
+                <Button size="xs" disabled={busy || draft.trim().length === 0} onClick={() => void handleSave()}>
+                  {t('settings.webSearch.keys.save')}
+                </Button>
+              </div>
+            </SettingsFieldRow>
+          )}
+        </div>
+      </SettingsSection>
+    </SettingsPageLayout>
+  );
 };
 
 const OutcomeSection: React.FC<{ outcome: WebSearchMutationResult }> = ({ outcome }) => {
- const { t } = useI18n();
- const failedWorkers = outcome.workers.filter((worker) => worker.status === 'failed');
- return (
-  <SettingsSection divider={false} settingsItem="web-search.outcome">
-   <div role="alert" className="space-y-1.5">
-    <p className={SETTINGS_CALLOUT_TITLE_CLASS}>{t('settings.webSearch.native.partial')}</p>
-    {outcome.persistence === 'failed' ? (
-     <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.native.persistenceFailed')}</p>
-    ) : null}
-    {failedWorkers.map((worker) => (
-     <p key={`${worker.sessionId}:${worker.workerGeneration}`} className={SETTINGS_HELPER_CLASS}>
-      {t('settings.webSearch.native.workerFailed', {
-       session: worker.sessionId,
-       code: worker.code ?? '—',
-      })}
-     </p>
-    ))}
-   </div>
-  </SettingsSection>
- );
+  const { t } = useI18n();
+  const failedWorkers = outcome.workers.filter((worker) => worker.status === 'failed');
+  return (
+    <SettingsSection divider={false} settingsItem="web-search.outcome">
+      <div role="alert" className="space-y-1.5">
+        <p className={SETTINGS_CALLOUT_TITLE_CLASS}>{t('settings.webSearch.native.partial')}</p>
+        {outcome.persistence === 'failed' ? (
+          <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.native.persistenceFailed')}</p>
+        ) : null}
+        {failedWorkers.map((worker) => (
+          <p key={`${worker.sessionId}:${worker.workerGeneration}`} className={SETTINGS_HELPER_CLASS}>
+            {t('settings.webSearch.native.workerFailed', {
+              session: worker.sessionId,
+              code: worker.code ?? '—',
+            })}
+          </p>
+        ))}
+      </div>
+    </SettingsSection>
+  );
 };
 
 export const WebSearchPage: React.FC = () => {
- const { t } = useI18n();
- const state = useWebSearchStore((store) => store.state);
- const error = useWebSearchStore((store) => store.error);
- const outcome = useWebSearchStore((store) => store.outcome);
- const load = useWebSearchStore((store) => store.load);
+  const { t } = useI18n();
+  const state = useWebSearchStore((store) => store.state);
+  const error = useWebSearchStore((store) => store.error);
+  const outcome = useWebSearchStore((store) => store.outcome);
+  const load = useWebSearchStore((store) => store.load);
+  const [openId, setOpenId] = React.useState<string | null>(null);
 
- // Read on open, and again when the page is opened for another project or
- // runtime (the snapshot is scoped to both).
- const scope = getWebSearchScopeKey();
- React.useEffect(() => {
-  void load();
- }, [load, scope]);
+  // Read on open, and again when the page is opened for another project or
+  // runtime (the snapshot is scoped to both).
+  const scope = getWebSearchScopeKey();
+  React.useEffect(() => {
+    void load();
+  }, [load, scope]);
 
- const snapshot = state.kind === 'ready' && state.snapshot.scope === scope ? state.snapshot : null;
- const failed = state.kind === 'failed';
- const partial = outcome !== null
-  && (outcome.status !== 'applied'
-   || outcome.persistence !== 'persisted'
-   || outcome.workers.some((worker) => worker.status === 'failed'));
+  const snapshot = state.kind === 'ready' && state.snapshot.scope === scope ? state.snapshot : null;
+  const failed = state.kind === 'failed';
+  const partial = outcome !== null
+    && (outcome.status !== 'applied'
+      || outcome.persistence !== 'persisted'
+      || outcome.workers.some((worker) => worker.status === 'failed'));
 
-<<<<<<< HEAD
- return (
-  <SettingsPageLayout
-   title={t('settings.page.webSearch.title')}
-   description={t('settings.page.webSearch.description')}
-   showSaveStatus
-  >
-   {error !== null || failed ? (
-    <SettingsSection divider={false}>
-     <div role="alert" className="flex flex-wrap items-center gap-3">
-      <p className="typography-meta text-[var(--status-error)]">
-       {t(error === 'write' ? 'settings.webSearch.toast.saveFailed' : 'settings.webSearch.native.loadFailed')}
-      </p>
-      <Button variant="outline" size="xs" onClick={() => void load()}>
-       {t('settings.webSearch.actions.retry')}
-      </Button>
-     </div>
-    </SettingsSection>
-   ) : null}
-   {snapshot ? (
-    <>
-     {partial && outcome ? <OutcomeSection outcome={outcome} /> : null}
-     <SelectionSection key={scope} snapshot={snapshot} />
-     <KeysSection snapshot={snapshot} />
-    </>
-   ) : failed || error !== null ? null : (
-    <SettingsSection divider={false}>
-     <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.state.loading')}</p>
-    </SettingsSection>
-   )}
-  </SettingsPageLayout>
- );
-=======
+  // A provider that went away closes its screen.
+  const open = snapshot && openId ? snapshot.providers.find((entry) => entry.providerId === openId) ?? null : null;
   if (snapshot && open) {
-    return <ProviderDetail entry={open} snapshot={snapshot} onBack={() => setOpenId(null)} />;
+    return <ProviderDetail provider={open} snapshot={snapshot} onBack={() => setOpenId(null)} />;
   }
 
   return (
@@ -457,43 +424,51 @@ export const WebSearchPage: React.FC = () => {
       namedBySidebar
       showSaveStatus
     >
+      {error !== null || failed ? (
+        <SettingsSection divider={false}>
+          <div role="alert" className="flex flex-wrap items-center gap-3">
+            <p className="typography-meta text-[var(--status-error)]">
+              {t(error === 'write' ? 'settings.webSearch.toast.saveFailed' : 'settings.webSearch.native.loadFailed')}
+            </p>
+            <Button variant="outline" size="xs" onClick={() => void load()}>
+              {t('settings.webSearch.actions.retry')}
+            </Button>
+          </div>
+        </SettingsSection>
+      ) : null}
       {snapshot ? (
         <>
+          {partial && outcome ? <OutcomeSection outcome={outcome} /> : null}
           <ModeSection snapshot={snapshot} />
           <SettingsSection
             title={t('settings.webSearch.section.providers')}
             info={t('settings.webSearch.section.providersInfo')}
             settingsItem="web-search.providers"
           >
-            {entries.length === 0 ? (
-              <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.state.noProviders')}</p>
+            {/* Each key is on its provider's own screen, so the registry's
+                "API keys" result lands on the cards that open those screens. */}
+            {snapshot.providers.length === 0 ? (
+              <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.native.noProviders')}</p>
             ) : (
-              <div className={SETTINGS_CARD_GRID_CLASS}>
-                {entries.map((entry) => (
-                  <ProviderCard key={entry.provider.id} entry={entry} snapshot={snapshot} onOpen={() => setOpenId(entry.provider.id)} />
+              <div className={SETTINGS_CARD_GRID_CLASS} data-settings-item="web-search.keys">
+                {snapshot.providers.map((provider) => (
+                  <ProviderCard
+                    key={provider.providerId}
+                    provider={provider}
+                    snapshot={snapshot}
+                    onOpen={() => setOpenId(provider.providerId)}
+                  />
                 ))}
               </div>
             )}
-            {snapshot.access === null ? (
-              <p className={`${SETTINGS_HELPER_CLASS} mt-3`}>{t('settings.webSearch.state.keysUnavailable')}</p>
-            ) : null}
           </SettingsSection>
+          <FallbacksAndTimeout snapshot={snapshot} />
         </>
-      ) : state.kind === 'failed' ? (
-        <SettingsSection divider={false}>
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="typography-meta text-[var(--status-error)]">{t('settings.webSearch.state.loadFailed')}</p>
-            <Button variant="outline" size="xs" onClick={() => void load()}>
-              {t('settings.webSearch.actions.retry')}
-            </Button>
-          </div>
-        </SettingsSection>
-      ) : (
+      ) : failed || error !== null ? null : (
         <SettingsSection divider={false}>
           <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.state.loading')}</p>
         </SettingsSection>
       )}
     </SettingsPageLayout>
   );
->>>>>>> bc50ba56a
 };

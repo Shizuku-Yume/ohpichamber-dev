@@ -1,7 +1,6 @@
 import { getActiveRelayTunnel } from './relay/runtime-tunnel';
 import { TUNNEL_PARSE_BASE } from './relay/tunnel-payloads';
-import { buildRuntimeAuthHeaders, getRuntimeExtraHeadersSync } from './runtime-auth';
-import { isCapacitorApp } from './platform';
+import { buildRuntimeAuthHeaders } from './runtime-auth';
 import { observeRuntimeAuthResponse } from './runtime-auth-expiry';
 import { getRuntimeUrlResolver, type RuntimeUrlQuery } from './runtime-url';
 import { spaceDirectoryHeaders } from './spaces/space-route';
@@ -87,7 +86,8 @@ const withSpaceDirectory = (input: string | URL | Request, init: RequestInit, di
   if (input instanceof Request && input.headers.has('x-opencode-directory')) return init;
   const own: [string, string][] = !init.headers ? []
     : init.headers instanceof Headers ? Array.from(init.headers.entries())
-    : Array.isArray(init.headers) ? init.headers : Object.entries(init.headers);
+    : Array.isArray(init.headers) ? (init.headers as [string, string][])
+    : Object.entries(init.headers as Record<string, string>);
   return { ...init, headers: [...own, ...Object.entries(spaceHeaders)] };
 };
 
@@ -169,12 +169,6 @@ const shouldAttachRuntimeAuth = (input: string | URL | Request): boolean => {
     return false;
   }
 };
-
-// Redirects can forward custom credentials outside the configured address.
-const mobileRedirectPolicy = (input: string | URL | Request, init?: RequestInit): RequestInit | undefined =>
-  Object.keys(getRuntimeExtraHeadersSync()).length > 0 && isCapacitorApp() && shouldAttachRuntimeAuth(input)
-    ? { ...init, redirect: 'error' }
-    : init;
 
 // Headers API only accepts ISO-8859-1 (Latin-1) characters. Any value containing
 // characters outside \u0000-\u00FF causes "Failed to construct/set 'Headers':
@@ -357,10 +351,9 @@ export const runtimeFetch = async (rawInput: string | URL | Request, init: Runti
       : resolvedInput instanceof URL ? resolvedInput.toString()
       : String(resolvedInput);
     addRuntimeProxyHeaders(resolvedUrl, headers);
-    const networkInit = mobileRedirectPolicy(resolvedInput, { ...requestInit, headers });
     doFetch = resolvedInput instanceof Request
-      ? () => fetch(new Request(resolvedInput, networkInit))
-      : () => fetch(resolvedInput, networkInit);
+      ? () => fetch(new Request(resolvedInput, { ...requestInit, headers }))
+      : () => fetch(resolvedInput, { ...requestInit, headers });
     scopeHeaders = headers;
     url = resolvedUrl;
     method = String(
@@ -396,11 +389,13 @@ export const runtimeFetch = async (rawInput: string | URL | Request, init: Runti
 };
 
 let runtimeFetchBridgeInstalled = false;
+
 // The browser's own fetch, kept before the bridge replaces window.fetch. A
 // request to a runtime that is no longer active must not resolve through the
 // active one.
 let fetchBypassingRuntimeBridgeImpl: typeof fetch | null = null;
 
+/** The browser's own fetch, for a cleanup that must reach the runtime it captured. */
 export const fetchBypassingRuntimeBridge = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => (
   (fetchBypassingRuntimeBridgeImpl ?? globalThis.fetch.bind(globalThis))(input, init)
 );
@@ -409,10 +404,8 @@ export const installRuntimeFetchBridge = (): void => {
   if (runtimeFetchBridgeInstalled || typeof window === 'undefined') return;
   runtimeFetchBridgeInstalled = true;
 
-  const originalFetch = window.fetch.bind(window);
-  fetchBypassingRuntimeBridgeImpl = originalFetch;
-  const nativeFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
-    originalFetch(input, mobileRedirectPolicy(input, init));
+  const nativeFetch = window.fetch.bind(window);
+  fetchBypassingRuntimeBridgeImpl = nativeFetch;
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const relayResponse = await tryRelayFetch(input, init ?? {});
     if (relayResponse) return relayResponse;

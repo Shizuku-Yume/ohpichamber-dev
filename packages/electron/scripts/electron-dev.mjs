@@ -235,11 +235,7 @@ async function main() {
   // first-launch chooser, a settings change); the dev server keeps running and
   // Electron starts again.
   const relaunchExitCode = 75;
-<<<<<<< HEAD
-  const startElectron = () => spawnProcess('bun', ['x', 'electron', '.'], {
-=======
   const startElectron = () => spawnProcess('bun', ['x', 'electron', './entry.mjs'], {
->>>>>>> bc50ba56a
     cwd: electronDir,
     env: {
       ...process.env,
@@ -254,10 +250,6 @@ async function main() {
   });
 
   let electron = null;
-<<<<<<< HEAD
-
-=======
->>>>>>> bc50ba56a
   let cleaning = false;
   const teardown = async (code) => {
     if (cleaning) {

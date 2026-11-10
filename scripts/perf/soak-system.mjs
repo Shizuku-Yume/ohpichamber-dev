@@ -4,11 +4,7 @@
  *
  * - `ps` every 250 ms: cumulative CPU time per process of the app's tree, so a
  *   delta between two samples is exact CPU, and every process that appears in
-<<<<<<< HEAD
  *   the tree (a `git` the server spawned, an MCP server the agent worker started) is
-=======
- *   the tree (a `git` the server spawned, an MCP server OpenCode started) is
->>>>>>> bc50ba56a
  *   recorded with its command line. A child that lives under 250 ms can be
  *   missed; `soak-capture.sh` adds `eslogger exec` for a complete count.
  * - `footprint` every 30 s: physical footprint per long-lived process, the
@@ -52,11 +48,7 @@ const listProcesses = async () => {
 
 /**
  * Names a process of the app's tree by its role, so the report reads
-<<<<<<< HEAD
  * "renderer" and "agent" instead of helper binaries and pids.
-=======
- * "renderer" and "opencode" instead of helper binaries and pids.
->>>>>>> bc50ba56a
  */
 export const classifyProcess = (row, rootPid) => {
   const command = row.command
@@ -64,11 +56,7 @@ export const classifyProcess = (row, rootPid) => {
   if (command.includes("--type=renderer")) return "renderer"
   if (command.includes("--type=gpu-process")) return "gpu"
   if (command.includes("--type=utility")) return command.includes("NetworkService") ? "network" : "utility"
-<<<<<<< HEAD
   if (/ohl-my-pi\/omp|\/omp(?:\s|$)|\.omp\//.test(command) || command.includes("agent-service")) return "agent"
-=======
-  if (/opencode(-cli)?\/opencode serve|\/opencode serve/.test(command)) return "opencode"
->>>>>>> bc50ba56a
   const executable = command.split(/\s+/)[0].split("/").pop()
   if (executable === "git") return "git"
   return "child"
@@ -97,11 +85,7 @@ const treeOf = (rows, rootPid, excludePids) => {
 /**
  * Started from an agent shell inside the app, the recorder and the `ps`,
  * `footprint` and `nettop` it runs sit in the app's tree. Leaves out the
-<<<<<<< HEAD
  * subtree of the recorder's topmost ancestor below the agent worker or the app.
-=======
- * subtree of the recorder's topmost ancestor below OpenCode or the app.
->>>>>>> bc50ba56a
  */
 const excludeOwnShell = (rows, rootPid, excludePids) => {
   const byPid = new Map(rows.map((row) => [row.pid, row]))
@@ -109,11 +93,7 @@ const excludeOwnShell = (rows, rootPid, excludePids) => {
   while (current) {
     const parent = byPid.get(current.ppid)
     if (!parent || parent.pid <= 1) return
-<<<<<<< HEAD
     if (parent.pid === rootPid || classifyProcess(parent, rootPid) === "agent") {
-=======
-    if (parent.pid === rootPid || classifyProcess(parent, rootPid) === "opencode") {
->>>>>>> bc50ba56a
       excludePids.add(current.pid)
       return
     }

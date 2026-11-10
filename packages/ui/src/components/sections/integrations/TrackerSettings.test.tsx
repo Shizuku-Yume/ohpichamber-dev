@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
@@ -8,8 +8,6 @@ import { acmeTrackerDescriptor, linearLikeTrackerDescriptor } from '@/lib/tracke
 import type { TrackerSettingsExtension } from './TrackerSettings';
 import type { InstalledGuest } from '@/lib/guests/types';
 import { useTrackerAuthStore } from '@/stores/useTrackerAuthStore';
-import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
-import { toast } from '@/components/ui';
 
 const unexpected = (): never => { throw new Error('Unexpected runtime API access'); };
 
@@ -32,7 +30,6 @@ describe('TrackerSettings', () => {
   let statusFailures = 0;
   let connectFailure: { ok: false; code: 'TOKEN_REFUSED'; message: string | null } | null = null;
   let pollTick: (() => void) | null = null;
-  let activation: Promise<TrackerAuthStatus> | null = null;
 
   const trackers: TrackerAPI = {
     providers: unexpected,
@@ -49,7 +46,7 @@ describe('TrackerSettings', () => {
       return { authorizationUrl: 'https://tracker.example/authorize', expiresIn: 600 };
     },
     authDisconnect: async (provider) => { calls.push(`disconnect:${provider}`); status = { connected: false }; return { removed: true }; },
-    authActivate: async (provider, accountId) => { calls.push(`activate:${provider}:${accountId}`); return activation ?? status; },
+    authActivate: async (provider, accountId) => { calls.push(`activate:${provider}:${accountId}`); return status; },
     mappingGet: async (provider) => {
       calls.push(`mapping:${provider}`);
       return { connected: true, defaultProjectPath: null, containers: [{ id: 'team-1', key: 'ENG', name: 'Engineering', projectPath: null }] };
@@ -67,10 +64,9 @@ describe('TrackerSettings', () => {
     },
     list: unexpected, refreshListReads: unexpected, get: unexpected, states: unexpected, updateState: unexpected,
     mappingSet: unexpected, sessionStatusPost: unexpected, preferencesSet: unexpected,
-    authConnectToken: unexpected, authSaveOAuthClient: unexpected,
   };
   const apis: RuntimeAPIs = {
-    runtime: { platform: 'web', isDesktop: false }, trackers,
+    runtime: { platform: 'web', isVSCode: false, isDesktop: false }, trackers,
     get sourceControl() { return unexpected(); },
     get git() { return unexpected(); }, get terminal() { return unexpected(); },
     get files() { return unexpected(); },
@@ -114,11 +110,7 @@ describe('TrackerSettings', () => {
     calls.length = 0;
     status = { connected: false };
     statusFailures = 0;
-<<<<<<< HEAD
-    activation = null;
-=======
     connectFailure = null;
->>>>>>> bc50ba56a
     useTrackerAuthStore.getState().resetForRuntimeSwitch();
     registerRuntimeAPIs(apis);
     container = document.createElement('div');
@@ -202,42 +194,6 @@ describe('TrackerSettings', () => {
 
     await click('Switch to');
     expect(calls).toContain('activate:linear:org-b');
-  });
-
-  test.each([
-    { roundTrip: false, fails: false },
-    { roundTrip: true, fails: false },
-    { roundTrip: false, fails: true },
-  ])('discards a delayed account activation after a runtime switch ($roundTrip, $fails)', async ({ roundTrip, fails }) => {
-    status = connectedStatus;
-    const { promise, resolve, reject } = Promise.withResolvers<TrackerAuthStatus>();
-    activation = promise;
-    const success = spyOn(toast, 'success');
-    const error = spyOn(toast, 'error');
-    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{}'));
-    const owner = { apiBaseUrl: 'https://host-a.example', runtimeKey: 'host-a' };
-    try {
-      switchRuntimeEndpoint(owner);
-      await mount(linearLikeTrackerDescriptor());
-      await click('Switch to');
-      expect(calls).toContain('activate:linear:org-b');
-      await act(async () => {
-        switchRuntimeEndpoint({ apiBaseUrl: 'https://host-b.example', runtimeKey: 'host-b' });
-        if (roundTrip) switchRuntimeEndpoint(owner);
-        useTrackerAuthStore.getState().resetForRuntimeSwitch();
-        useTrackerAuthStore.getState().setStatus('linear', { connected: false });
-        if (fails) reject(new Error('old host failed'));
-        else resolve(connectedStatus);
-        await promise.catch(() => undefined);
-      });
-      expect(useTrackerAuthStore.getState().entries.linear?.status).toEqual({ connected: false });
-      expect(success).not.toHaveBeenCalled();
-      expect(error).not.toHaveBeenCalled();
-    } finally {
-      success.mockRestore();
-      error.mockRestore();
-      fetchSpy.mockRestore();
-    }
   });
 
   test('shows neither other accounts nor a second sign-in for a tracker with one account', async () => {

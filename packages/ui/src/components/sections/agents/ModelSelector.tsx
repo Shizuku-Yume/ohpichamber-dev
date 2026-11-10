@@ -1,4 +1,3 @@
-import { HoverTooltip } from '@/components/ui/row-tooltip';
 import React from 'react';
 import {
     DropdownMenu,
@@ -46,13 +45,10 @@ interface ModelSelectorProps {
      * Defaults); a routing category or fallback must name a real model.
      */
     offerAuto?: boolean;
-<<<<<<< HEAD
-=======
     /**
      * Tooltip on the desktop trigger alone, so it never catches focus or the
      * mouse from the list.
      */
->>>>>>> bc50ba56a
     triggerTooltip?: string;
 }
 
@@ -167,13 +163,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             onSelectNone={handleSelectNone}
             onEscape={closePicker}
             tooltipsEnabled={tooltipsEnabled && (isActuallyMobile ? isMobilePanelOpen : isDropdownOpen)}
-<<<<<<< HEAD
             isFavorite={(entry) => isFavoriteModel(entry.providerId, entry.modelId)}
             onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerId, entry.modelId)}
-=======
-            isFavorite={(entry) => isFavoriteModel(entry.providerID, entry.modelID)}
-            onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerID, entry.modelID)}
->>>>>>> bc50ba56a
             {...(isActuallyMobile ? {
                 autoFocus: false,
                 maxHeightClassName: 'min-h-0 flex-1',

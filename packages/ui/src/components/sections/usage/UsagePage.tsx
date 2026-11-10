@@ -1,18 +1,9 @@
-import { cn } from '@/lib/utils';
-import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import React from 'react';
 import { UsageCard } from './UsageCard';
 import { QuotaCredentials } from './QuotaCredentials';
 import { ClaudeCodeSignIn } from './ClaudeCodeSignIn';
-<<<<<<< HEAD
-import { QUOTA_PROVIDERS } from '@/lib/quota';
-import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
-=======
 import { ConsoleBudgetsSection } from './ConsoleBudgetsSection';
 import { useQuotaAutoRefresh, useQuotaProviders, useQuotaStore } from '@/stores/useQuotaStore';
->>>>>>> bc50ba56a
 import { updateDesktopSettings } from '@/lib/persistence';
 import { QuotaProviderLogo } from '@/components/usage/QuotaProviderLogo';
 import {
@@ -24,6 +15,8 @@ import type { UsageWindows, QuotaProviderId } from '@/types';
 import { getAllModelFamilies, getDisplayModelName, sortModelFamilies, groupModelsByFamilyWithGetter } from '@/lib/quota/model-families';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
+import { useWaitingBlink } from '@/hooks/useDurationTicker';
+import { cn } from '@/lib/utils';
 import { formatTimeForPreference } from '@/lib/timeFormat';
 import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
@@ -31,7 +24,6 @@ import {
   SettingsSection,
   SettingsCheckboxRow,
 } from '@/components/sections/shared/SettingsSection';
-import { resolveUsagePanelState, usageQuotaReady } from './usagePageState';
 
 const formatTime = (timestamp: number | null, timeFormatPreference: TimeFormatPreference) => {
   if (!timestamp) return '-';
@@ -49,15 +41,11 @@ interface ModelInfo {
 
 export const UsagePage: React.FC = () => {
   const { t } = useI18n();
-  const enterprise = useEnterpriseMode();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const results = useQuotaStore((state) => state.results);
   const selectedProviderId = useQuotaStore((state) => state.selectedProviderId);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
   const fetchProviderQuota = useQuotaStore((state) => state.fetchProviderQuota);
-  const isInitialized = useConfigStore((state) => state.isInitialized);
-  const workspaceId = useConfigStore((state) => state.workspaceId);
-  const catalogReady = usageQuotaReady(isInitialized, workspaceId);
   const isLoading = useQuotaStore((state) => state.isLoading);
   const blink = useWaitingBlink(isLoading);
   const lastUpdated = useQuotaStore((state) => state.lastUpdated);
@@ -69,23 +57,7 @@ export const UsagePage: React.FC = () => {
   const applyDefaultSelections = useQuotaStore((state) => state.applyDefaultSelections);
   const providers = useQuotaProviders();
 
-<<<<<<< HEAD
-  useQuotaAutoRefresh();
-
-  React.useEffect(() => {
-    void loadSettings();
-  }, [loadSettings]);
-
-  // Quota reads need the resolved workspace. Mount can precede catalog
-  // readiness, so wait for the workspace instead of firing an empty-context
-  // request that would leave the page blank until the periodic refresh.
-  React.useEffect(() => {
-    if (!catalogReady || !workspaceId) return;
-    void fetchAllQuotas();
-  }, [catalogReady, workspaceId, fetchAllQuotas]);
-=======
   useQuotaAutoRefresh(true, true);
->>>>>>> bc50ba56a
 
   React.useEffect(() => {
     if (selectedProviderId) {
@@ -102,19 +74,8 @@ export const UsagePage: React.FC = () => {
 
   const providerMeta = providers.find((provider) => provider.id === selectedProviderId);
   const providerName = providerMeta?.name ?? selectedProviderId ?? t('settings.usage.sidebar.title');
+  const usage = selectedResult?.usage;
   const refreshError = selectedProviderId ? refreshErrors[selectedProviderId] : undefined;
-<<<<<<< HEAD
-  const {
-    usage,
-    error: selectedProviderError,
-    empty: showEmptyState,
-    unconfigured: providerUnconfigured,
-  } = resolveUsagePanelState(
-    selectedResult,
-    refreshError,
-    (error) => t('header.services.usageRefreshFailedStale', { error }),
-  );
-=======
   const selectedProviderError = refreshError
     ? usage
       ? t('header.services.usageRefreshFailedStale', { error: refreshError })
@@ -123,13 +84,13 @@ export const UsagePage: React.FC = () => {
     : selectedResult?.configured && selectedResult.error
       ? selectedResult.error
       : null;
->>>>>>> bc50ba56a
   const showInDropdown = selectedProviderId ? dropdownProviderIds.includes(selectedProviderId) : false;
   const credentialProviderId = selectedProviderId === 'exe-dev'
     || selectedProviderId === 'cursor'
     || selectedProviderId === 'zenmux'
     ? selectedProviderId
     : null;
+  const hasCredentialsForm = credentialProviderId !== null;
   const handleDropdownToggle = React.useCallback((enabled: boolean) => {
     if (!selectedProviderId) {
       return;
@@ -195,7 +156,7 @@ export const UsagePage: React.FC = () => {
   if (!selectedProviderId) {
     return (
         <div className="flex h-full items-center justify-center text-muted-foreground">
-        <p className="typography-body">{t('settings.usage.page.empty.selectProvider')}</p>
+        <p className="typography-ui-label">{t('settings.usage.page.empty.selectProvider')}</p>
       </div>
     );
   }
@@ -233,8 +194,7 @@ export const UsagePage: React.FC = () => {
         />
       </SettingsSection>
 
-      {/* No result at all: the page can only say so, and a fix would not apply. */}
-      {showEmptyState && (
+      {!selectedResult && (
         <p className="typography-ui-label text-foreground pb-8">{t('settings.usage.page.state.noData')}</p>
       )}
 
@@ -249,21 +209,14 @@ export const UsagePage: React.FC = () => {
         </div>
       )}
 
-      {/* A provider that answered without a stored credential is not a refresh
-          failure; the callout names the fix. Providers with an inline
-          credentials form already show it, so they skip the "go to Providers"
-          banner. */}
-      {providerUnconfigured && !credentialProviderId && (
+      {/* Providers with an inline credentials form don't need the "go to Providers" banner — the form IS the fix. */}
+      {selectedResult && !selectedResult.configured && !hasCredentialsForm && (
         <div className="mb-8 rounded-lg bg-[var(--status-warning-background)] px-4 py-3">
-          {/* Claude usage reads Claude's native login, which Providers cannot add. */}
+          {/* Claude usage comes from Claude Code's own login, which Providers cannot add. */}
           {selectedProviderId === 'claude' ? (
             <>
               <p className="typography-ui-label font-medium text-[var(--status-warning)]">{t('settings.usage.page.state.claudeSignedOutTitle')}</p>
-              {enterprise ? (
-                <p className="typography-meta text-[var(--status-warning)]/80 mt-1">{t('settings.providers.native.enterprise')}</p>
-              ) : (
-                <ClaudeCodeSignIn onSignedIn={() => void fetchProviderQuota('claude', true)} />
-              )}
+              <ClaudeCodeSignIn onSignedIn={() => void fetchProviderQuota('claude')} />
             </>
           ) : (
             <>
@@ -317,9 +270,9 @@ export const UsagePage: React.FC = () => {
                       </span>
                     </div>
                     {isCollapsed ? (
-                      <Icon name="arrow-right-s" className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+                      <Icon name="arrow-right-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                     ) : (
-                      <Icon name="arrow-down-s" className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+                      <Icon name="arrow-down-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                     )}
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -369,9 +322,9 @@ export const UsagePage: React.FC = () => {
                       </span>
                     </div>
                     {isCollapsed ? (
-                      <Icon name="arrow-right-s" className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+                      <Icon name="arrow-right-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                     ) : (
-                      <Icon name="arrow-down-s" className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+                      <Icon name="arrow-down-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                     )}
                   </CollapsibleTrigger>
                   <CollapsibleContent>

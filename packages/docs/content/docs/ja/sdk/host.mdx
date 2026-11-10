@@ -27,11 +27,7 @@ const host = connectHost();
 | `theme.tokens` | アプリの色(サーフェス、テキスト、操作状態、primary、success/warning/error/info)、`font`、`mono`、`radius`。UI をマウントする前に `applyHostReady` に渡してください。 |
 | `locale` | アプリの言語タグ |
 | `directory` | 現在のプロジェクトディレクトリ、または `null` |
-<<<<<<< HEAD
 | `session` | `{ id, title, busy }` または `null`。タイトルがなければセッション ID になります。`busy` はライブの状態です。セッションが持っていれば `model` と `agent`(Host のエージェント)も含まれます。 |
-=======
-| `session` | `{ id, title, busy }` または `null`。タイトルがなければセッション ID になります。`busy` はライブの状態です。セッションが持っていれば `model` と `agent`(OpenCode のエージェント)も含まれます。 |
->>>>>>> bc50ba56a
 | `surface` | レールは `panel`、添付ウィンドウは `dialog`、全画面は `page`、Work Status パネルは `status`、Files のファイルエディターは `file`、チャットの UI ブロック内は `block` |
 | `item` | この画面が何のために開かれたか、または `null`。ユーザーがクリックした添付済みの項目(`attach` に渡したのと同じフィールド、`data` を含む)、または宣言したアクションから来たメッセージ(`kind: "message"`)かセッション(`kind: "session"`)。[アクション](/sdk/#アクションコマンドバッジ) を参照。 |
 | `connection` | あなたの連携の `{ connected, account }` |
@@ -251,15 +247,11 @@ await host.setInstructions(directory, 'Deploys run through the release branch.')
 await host.emit('deploy-finished', { id: 42 });
 ```
 
-<<<<<<< HEAD
-`sessions.start`、`sessions.send`、`sessions.retry`、`sessions.status` には `contributes.sessionControl` が必要で、ユーザーはこれを独立した行として承認します。`sessions.lastReply` には `sessionControl: { content: true }` が必要です。`setInstructions` には `contributes.instructions` が必要で、エージェントが読む内容に、1 つのフォルダー単位で、または `null` を渡してすべての場所に追加します。
-=======
 `sessions.start`、`sessions.send`、`sessions.retry`、`sessions.status`、`sessions.stop` には `contributes.sessionControl` が必要で、ユーザーはこれを独立した行として承認します。`sessions.lastReply` には `sessionControl: { content: true }` が必要です。`sessions.send` で送ったメッセージは、チャットに入力したメッセージと同じように、そのセッションでエージェントが待っているフォームやページを閉じます。
 
 エージェントのリクエストをチャットアプリなど別の場所へ運ぶには、`answers: true` を追加します。ユーザーはこれをもう 1 行として承認し、サービスはどのセッションでもユーザーの代わりに応答できるようになります。`permission-asked` イベントには `sessions.answerPermission(sessionId, requestId, { decision: 'allow' })`(またはエージェントが読む `message` を付けた `'deny'`)、`event.question.kind` が `form` の `question-asked` イベントには `sessions.answerForm(sessionId, formId, values)` を使います。イベントの内容には、フォームのフィールドが `key` と選択肢付きで並びます。値の代わりに `null` を渡すとフォームを閉じます。許可はその 1 件のリクエストだけに適用されます。
 
 `setInstructions` には `contributes.instructions` が必要で、エージェントが読む内容に、1 つのフォルダー単位で、または `null` を渡してすべての場所に追加します。
->>>>>>> bc50ba56a
 
 `emit` は `host.onServiceEvent` を通じて開いているフレームに届くので、パネルはポーリングをやめられます。再送はないため、あとから開いたフレームは最初に現在の状態を読み取ります。`readSettings` はインテグレーションの設定を `secret` フィールドも含めてサービスに渡し、`needsConfiguration` は拡張機能のカードにメッセージを表示します。
 
@@ -394,22 +386,14 @@ if (url.pathname === TRACKER_PROVIDER_PATH) {
 
 ## 使用量プロバイダー
 
-<<<<<<< HEAD
-サービスは、組み込みのプロバイダーの隣で使用量を報告できます。`provides: ["quota"]` を宣言し、`contributes.quota.providers` に必要な認証情報を持つ Host プロバイダーを列挙します。OpenChamber はそのプロバイダーを `ext-<panel.id>` と名付け、拡張機能の名前とアイコンでカードを描き、組み込みのプロバイダーと同じように問い合わせます。
-=======
 サービスは、組み込みのプロバイダーの隣で使用量を報告できます。`provides: ["quota"]` を宣言し、`contributes.quota.providers` に必要な認証情報を持つ OpenCode プロバイダーを列挙します。OpenChamber はそのプロバイダーを `ext-<panel.id>` と名付け、拡張機能の名前とアイコンでカードを描き、組み込みのプロバイダーと同じように問い合わせます。
->>>>>>> bc50ba56a
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-<<<<<<< HEAD
-承認ダイアログにはそれらのプロバイダーが列挙され、リストを変えたバージョンは改めて承認を求めます。更新のたびに OpenChamber は `POST /quota` に `usage.read` を 1 回送ります。`input.credentials` には、列挙されたプロバイダーのうち Host が認証情報を持つものについて、その認証情報（API キー、またはブラウザーログインのトークン）だけが入り、ストアのそれ以外は入りません。Host が認証情報を持たない列挙済みプロバイダーは未設定として表示され、サービスは呼ばれません。空のリストも許されます。拡張機能自身の設定にキーを持つプロバイダー向けです。
-=======
 承認ダイアログにはそれらのプロバイダーが列挙され、リストを変えたバージョンは改めて承認を求めます。更新のたびに OpenChamber は `POST /quota` に `usage.read` を 1 回送ります。`input.credentials` には、列挙されたプロバイダーのうち OpenCode が認証情報を持つものについて、その認証情報（API キー、またはブラウザーログインのトークン）だけが入り、ストアのそれ以外は入りません。OpenCode が認証情報を持たない列挙済みプロバイダーは未設定として表示され、サービスは呼ばれません。空のリストも許されます。拡張機能自身の設定にキーを持つプロバイダー向けです。
->>>>>>> bc50ba56a
 
 ボディは `readQuotaProviderRequest` で読み、組み込みのプロバイダーが算出する結果を `{ ok: true, data }` で答えます。`ok`、`configured`、`error`、`planLabel`、そしてウィンドウ名をキーにした `usage.windows`（それぞれ `usedPercent`、`windowSeconds`、`resetAt`（エポックミリ秒）、任意の `valueLabel` または `value`）、加えてモデル別ウィンドウの `usage.models` です。残りの割合、リセットまでのカウントダウン、整形済み文字列は OpenChamber が導出するため、カードは組み込みのプロバイダーと一致します。
 

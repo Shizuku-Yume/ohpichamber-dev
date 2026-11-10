@@ -1,52 +1,7 @@
-export type {
-  TrackerAPI,
-  TrackerAccount,
-  TrackerAuthMethod,
-  TrackerAuthOrigin,
-  TrackerAuthStart,
-  TrackerAuthStatus,
-  TrackerComment,
-  TrackerConnectFailureCode,
-  TrackerConnectResult,
-  TrackerConnectTokenInput,
-  TrackerContainer,
-  TrackerContainerMapping,
-  TrackerDescriptor,
-  TrackerItem,
-  TrackerItemResult,
-  TrackerItemState,
-  TrackerItemSummary,
-  TrackerLabel,
-  TrackerListOptions,
-  TrackerListResult,
-  TrackerLiveSummary,
-  TrackerMappingResult,
-  TrackerMappingWrite,
-  TrackerOAuthClientInput,
-  TrackerPeopleFilter,
-  TrackerPerson,
-  TrackerPreferences,
-  TrackerPriority,
-  TrackerPriorityFilter,
-  TrackerProgress,
-  TrackerProviderId,
-  TrackerSessionStatusKind,
-  TrackerSessionStatusPostInput,
-  TrackerSessionStatusPostResult,
-  TrackerStateCategory,
-  TrackerStateUpdateInput,
-  TrackerStatesResult,
-  TrackerWorkflowState,
-} from '../trackers/types';
-
-import type { SourceControlProviderDescriptor } from '../source-control/providers/descriptor';
-import type { TrackerAPI } from '../trackers/types';
-
-
-import type { GitPathUnavailableReason } from './git-path-diff';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { DesktopSettings } from '@/lib/settings/registry';
 import type { GitIdentityProfile, GitIdentitySummary } from './git-identity';
+import type { GitPathUnavailableReason } from './git-path-diff';
 import type {
   ChangeRequest,
   ChangeRequestContext,
@@ -106,20 +61,25 @@ import type {
   GitAuxiliaryBindingResult,
   UpdateChangeRequestInput,
 } from '../source-control/types';
+import type { SourceControlProviderDescriptor } from '../source-control/providers/descriptor';
+import type { TrackerAPI } from '../trackers/types';
 
 export type * from '../source-control/types';
+export type * from '../trackers/types';
 export type {
   GitIdentityProfile,
   GitIdentitySummary,
   GitIdentityTransport,
 } from './git-identity';
 
-type RuntimePlatform = 'web' | 'desktop';
+type RuntimePlatform = 'web' | 'desktop' | 'vscode';
 
 interface RuntimeDescriptor {
   platform: RuntimePlatform;
 
   isDesktop: boolean;
+
+  isVSCode: boolean;
 
   label?: string;
 }
@@ -290,6 +250,11 @@ export interface GitStatus {
   files: GitStatusFile[];
   isClean: boolean;
   /**
+   * True when the branch has no commit yet (a fresh `git init`). Absent from
+   * runtimes that do not report it (VS Code), which reads as false.
+   */
+  unborn?: boolean;
+  /**
    * Per-file line stats split by Git scope. A file with edits in both scopes
    * appears in both maps; the values are never summed into each other.
    */
@@ -305,11 +270,6 @@ export interface GitStatus {
   rebaseInProgress?: GitRebaseInProgress | null;
   /** Phase 1: reason for attention-required state */
   attentionReason?: 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'bisect' | null;
-  /**
-   * True when the branch has no commit yet (a fresh `git init`). Absent from
-   * runtimes that do not report it, which reads as false.
-   */
-  unborn?: boolean;
 }
 
 export interface GitUnpushedBranchCounts {
@@ -342,21 +302,25 @@ export interface GitPathDiffResponse extends GitDiffResponse {
   submodule: GitSubmoduleState | null;
 }
 
+export interface GetGitDiffOptions {
+  path: string;
+  staged?: boolean;
+  contextLines?: number;
+}
+
 export interface GetGitDiffsOptions {
   paths: string[];
   staged?: boolean;
   contextLines?: number;
 }
 
+/**
+ * One path of a batched `getGitDiff`: the same diff, or the failure that read
+ * would have thrown. `reason` is set when the path no longer resolves.
+ */
 export type GitPathDiffBatchEntry =
   | { path: string; ok: true; diff: GitPathDiffResponse }
   | { path: string; ok: false; error: string; reason: GitPathUnavailableReason | null };
-
-export interface GetGitDiffOptions {
-  path: string;
-  staged?: boolean;
-  contextLines?: number;
-}
 
 /**
  * Diff between two refs. Uses three-dot (`base...head`) semantics server-side, so changes
@@ -382,6 +346,11 @@ export interface GetGitRangeFilesOptions {
 export interface GitRangeFileEntry {
   path: string;
   status: string;
+  /**
+   * Working-tree listings only: changes exactly when this file's patch can
+   * change (merge base moved, or the file was written). Absent elsewhere.
+   */
+  revision?: string;
 }
 
 export interface GitBranchBaseResponse {
@@ -432,26 +401,6 @@ export interface GitCommitResult {
   commit: string;
   branch: string;
   summary: GitCommitSummary;
-  /** The `Change-Id` trailer the commit carries when it was requested. */
-  changeId?: string;
-  /** Whether the requested Git note was written on the commit. */
-  notes?: boolean;
-}
-
-/** One requested commit extra that did not apply; the commit itself exists. */
-export interface GitCommitExtraFailure {
-  extra: 'changeId' | 'notes';
-  code: string;
-  message: string;
-}
-
-/** `COMMIT_EXTRAS_FAILED`: the commit exists and `extras` says what did not apply. */
-export interface GitCommitExtrasFailure {
-  error: string;
-  code: 'COMMIT_EXTRAS_FAILED';
-  commit: string;
-  branch: string;
-  extras: { changeId: string | null; notes: boolean; failed: GitCommitExtraFailure[] };
 }
 
 export interface GitPushResult {
@@ -481,14 +430,14 @@ export interface GitPullOptions {
   rebase?: boolean;
 }
 
-type GitNetworkTransportMode = 'managed' | 'system' | 'anonymous';
+export type GitNetworkTransportMode = 'managed' | 'system' | 'anonymous';
 
 export interface GitNetworkRedactedEndpoint {
   displayUrl: string;
   fingerprint: string;
 }
 
-interface GitNetworkRedactedDestination {
+export interface GitNetworkRedactedDestination {
   displayName: string;
   fingerprint: string;
 }
@@ -499,7 +448,7 @@ interface GitNetworkRuntimeIdentity {
   label?: string;
 }
 
-type GitNetworkTransportActor =
+export type GitNetworkTransportActor =
   | {
       kind: 'provider';
       provider: string;
@@ -512,7 +461,7 @@ type GitNetworkTransportActor =
       fingerprint: string;
     };
 
-type GitNetworkTransport =
+export type GitNetworkTransport =
   | { mode: 'anonymous'; verification: { status: 'anonymous' } }
   | {
       mode: 'managed';
@@ -559,6 +508,7 @@ export type GitNetworkOperationRequest =
       forceWithLease?: { expectedRemoteSha: string };
       configureUpstream?: boolean;
       destinationSelectionId?: string;
+      /** A push for review (`destinationRef` is `refs/for/<target>`); the server composes the refspec from these fields. */
       review?: GitPushReviewIntent;
     })
   | (ExistingRepositoryNetworkOperationRequest & { operation: 'fetch'; fetchScope?: 'ref' })
@@ -624,6 +574,11 @@ export type GitNetworkOperationRequest =
       | { transportMode: 'managed'; sshCredentialId: string; credentialAccount?: never; unverifiedConfirmed?: never }
     ));
 
+/**
+ * What a push for review asks of a review host: the branch the change is for,
+ * and the options the host applies to it. Topic and hashtags take letters,
+ * digits, dots, dashes and underscores only.
+ */
 export type GitPushReviewIntent = {
   target: string;
   topic?: string;
@@ -651,11 +606,8 @@ export type GitManagedSshCandidate =
       capability: { status: 'unavailable'; reason: 'unreadable' | 'encrypted-or-unverifiable' | 'insecure-permissions' };
     };
 
-/**
- * `passphrase` is needed only to read or import an encrypted candidate; the
- * server never stores it. Omitted for inventory, which reads nothing.
- */
-export type GitManagedSshIntent = { operation: 'inventory' | 'discover'; passphrase?: string }
+export type GitManagedSshIntent = { operation: 'inventory' }
+  | { operation: 'discover'; passphrase?: string }
   | { operation: 'import'; candidateId: string; expectedFingerprint: string; confirmed: true; passphrase?: string };
 
 export type GitManagedSshResult =
@@ -665,7 +617,7 @@ export type GitManagedSshResult =
   | { status: 'rejected'; reason: 'candidate-expired' | 'candidate-changed' | 'fingerprint-mismatch' | 'candidate-unavailable' | 'inventory-full' }
   | { status: 'unsupported'; reason: 'host-setup-required' };
 
-type GitNetworkOperationTarget =
+export type GitNetworkOperationTarget =
   | {
       operation: 'push';
       repositoryId: string;
@@ -776,8 +728,6 @@ export type GitNetworkOperationErrorCode =
   | 'RUNTIME_UNSUPPORTED'
   | 'GIT_LFS_CLIENT_MISSING'
   | 'CHECKOUT_TOO_LARGE'
-  // The server refuses a remote whose URL embeds a user name before `@`.
-  | 'REMOTE_URL_USERINFO'
   | 'UNKNOWN';
 
 export interface GitNetworkOperationError<Code extends GitNetworkOperationErrorCode = GitNetworkOperationErrorCode> {
@@ -995,7 +945,23 @@ export interface GitWorktreeInfo {
   name: string;
   branch: string;
   path: string;
+  /** The task's name: the first line of the branch description, when set. */
+  title?: string;
+  /** When the user pinned the task to the top of the sidebar; absent while unpinned. */
+  pinnedAt?: number;
+  /** The user's pin list the pin is filed in; absent for Pinned. */
+  pinList?: string;
   provenance?: GitContributorWorktreeProvenance;
+}
+
+export interface GitWorktreeTitleResult {
+  title: string;
+  branch: string;
+}
+
+export interface GitWorktreePinResult {
+  pinned: boolean;
+  branch: string;
 }
 
 export interface GitContributorWorktreeProvenance {
@@ -1067,10 +1033,19 @@ export interface CreateGitWorktreePayload {
   ensureRemoteUrl?: string;
   /** Exact commit the selected existing ref must resolve to before checkout. */
   expectedRevision?: string;
-  /** Server-resolved change-request checkout. */
+  /** Server-resolved change-request checkout. Unsupported by VS Code. */
   changeRequestSource?: GitChangeRequestSourceRequest;
   /** Return once the target directory exists and finish Git worktree setup in the background. */
   returnAfterDirectoryCreated?: boolean;
+  /**
+   * The task title of a worktree made for a pull request or an issue: written
+   * as the agent's, so the agent can replace it with a short name.
+   */
+  taskTitle?: string;
+  /** Set to the branch name when OpenChamber generated it, so the agent may later rename it after the task. */
+  generatedBranchName?: string;
+  /** The part of a generated name the rename keeps, such as an issue's `issue-180-`. */
+  generatedBranchPrefix?: string;
 }
 
 export interface GitChangeRequestSourceRequest {
@@ -1091,13 +1066,15 @@ export interface GitWorktreeCreateResult {
   sourceFetchFailed?: true;
   /** Set when the failed fetch was the repository's access: an account that needs attention, refused credentials. */
   sourceFetchReason?: 'access';
+  /** A leftover local branch of the change request had diverged from its head; its old tip is kept in this branch. */
+  branchBackup?: string;
   provenance?: GitContributorWorktreeProvenance;
 }
 
 export interface GitCheckoutTrustInspection {
   state: 'awaiting-trust';
   digest: string;
-  actions: Array<{ kind: 'post-checkout-hook' | 'setup-command'; label: string }>;
+  actions: Array<{ kind: 'post-checkout-hook' | 'project-start-command' | 'setup-command'; label: string }>;
 }
 
 export interface RemoveGitWorktreePayload {
@@ -1109,8 +1086,9 @@ export interface RemoveGitWorktreePayload {
 
 /** Runs a worktree's teardown commands without removing it. */
 export interface TeardownGitWorktreePayload {
+  /** The worktree. */
   directory: string;
-  teardownCommand?: string;
+  teardownCommand: string;
 }
 
 /** Private ref (`refs/openchamber/runs/<group>/<session>`) holding a worktree snapshot. */
@@ -1124,6 +1102,50 @@ export interface GitWorktreeSnapshotResult {
   commit: string;
   /** The worktree HEAD the snapshot was taken on top of. */
   head: string;
+}
+
+/**
+ * An archived worktree: its folder is gone, and `refs/openchamber/archive/<id>`
+ * holds what restoring it needs.
+ */
+export interface GitWorktreeArchive {
+  id: string;
+  ref: string;
+  /** Snapshot commit: the branch's commit plus every change git did not ignore. */
+  commit: string;
+  /** The commit the branch stood on when archived. */
+  head: string;
+  /** Where the worktree was. */
+  path: string;
+  /** Empty for a worktree that had no branch checked out. */
+  branch: string;
+  branchExists: boolean;
+  /** The task title it had; empty when it had none. */
+  title: string;
+  archivedAt: number;
+  /** The sessions archived with it. */
+  sessionIds: string[];
+}
+
+export interface ArchiveGitWorktreePayload {
+  /** The worktree to archive. */
+  directory: string;
+  id: string;
+  sessionIds: string[];
+  /** The name the sidebar showed for the work, kept when the worktree has no task title. */
+  title?: string;
+}
+
+export interface GitWorktreeArchiveRestoreResult {
+  id: string;
+  /** The changes clashed with the branch: git's conflict state is left and the archive is kept. */
+  conflicts: boolean;
+}
+
+export interface DeleteGitWorktreeArchivePayload {
+  id: string;
+  /** Also delete the archive's local branch, unless a checkout uses it. */
+  deleteBranch?: boolean;
 }
 
 export interface GitDeleteBranchPayload {
@@ -1140,10 +1162,6 @@ export interface CreateGitCommitOptions {
   addAll?: boolean;
   files?: string[];
   stageFiles?: string[];
-  /** Add the deterministic `Change-Id` trailer the review-host hook would have written. */
-  changeId?: boolean;
-  /** Write a Git note on the commit, recording its message. */
-  notes?: boolean;
 }
 
 export interface GitLogOptions {
@@ -1164,45 +1182,6 @@ export interface GeneratedPullRequestDescription {
   body: string;
 }
 
-export interface GitWorktreeTitleResult {
-  title: string;
-  branch: string;
-}
-
-export interface GitWorktreeArchive {
-  id: string;
-  ref: string;
-  /** Snapshot commit: the branch's commit plus every change git did not ignore. */
-  commit: string;
-  /** The commit the branch stood on when archived. */
-  head: string;
-  /** Where the worktree was. */
-  path: string;
-  /** Empty for a worktree that had no branch checked out. */
-  branch: string;
-  branchExists?: boolean;
-  title?: string;
-  archivedAt?: number;
-  /** Host-derived authority; Git metadata does not authorize session mutations. */
-  sessionBinding: { status: 'bound' | 'verified-empty' | 'unbound' | 'ref-changed'; phase?: string; revision?: number; recoveryHead?: string };
-}
-
-export interface ArchiveGitWorktreePayload {
-  directory: string;
-  id: string;
-  title?: string;
-}
-
-export interface GitWorktreeArchiveRestoreResult {
-  id: string;
-  conflicts: boolean;
-}
-
-export interface DeleteGitWorktreeArchivePayload {
-  id: string;
-  deleteBranch?: boolean;
-}
-
 interface GitWorktreeAPI {
   list(directory: string): Promise<GitWorktreeInfo[]>;
   validate?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult>;
@@ -1212,23 +1191,37 @@ interface GitWorktreeAPI {
   remove?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
   /** `directory` is the project; runs the worktree's teardown and keeps it. */
   teardown?(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }>;
+  /** Sets the task title of the worktree at `directory` as the user's; an empty title clears it. */
+  setTitle?(directory: string, title: string, by?: 'user' | 'agent'): Promise<GitWorktreeTitleResult>;
+  /** Pins or unpins the task of the worktree at `directory`. */
+  setPinned?(directory: string, pinned: boolean, list?: string | null): Promise<GitWorktreePinResult>;
   /** `directory` is the worktree to snapshot. */
   snapshot?(directory: string, payload: GitWorktreeSnapshotPayload): Promise<GitWorktreeSnapshotResult>;
-  setTitle?(directory: string, title: string): Promise<GitWorktreeTitleResult>;
+  /** `directory` is the project; the worktree is removed, its branch kept. */
   archive?(directory: string, payload: ArchiveGitWorktreePayload): Promise<GitWorktreeArchive>;
   listArchives?(directory: string): Promise<GitWorktreeArchive[]>;
-  restoreArchive?(directory: string, id: string, recovery?: { mode: 'new_checkout' | 'same_target'; revision: number }): Promise<GitWorktreeArchiveRestoreResult>;
+  /** `directory` is the new checkout of the archive's branch. */
+  restoreArchive?(directory: string, id: string): Promise<GitWorktreeArchiveRestoreResult>;
   deleteArchive?(directory: string, payload: DeleteGitWorktreeArchivePayload): Promise<{ id: string; branchDeleted: boolean }>;
 }
 
 export interface GitAPI {
-  resolveRepositoryPrefix?(directory: string): Promise<string>;
-  getGitDiffs?(directory: string, options: GetGitDiffsOptions): Promise<GitPathDiffBatchEntry[]>;
-  initializeGit(directory: string): Promise<void>;
   checkIsGitRepository(directory: string): Promise<boolean>;
   getGitStatus(directory: string, options?: { mode?: 'light'; fresh?: boolean }): Promise<GitStatus>;
-  getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse>;
-  getGitFileDiff(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>;
+  /**
+   * Warm the status cache for many directories with one request, so the
+   * per-directory `getGitStatus` reads that follow are cache hits. Runtimes
+   * without a batched status read (VS Code) omit it and read one by one.
+   */
+  prefetchProjectStatuses?(directories: string[]): Promise<void>;
+  getGitDiff?(directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse>;
+  /**
+   * `getGitDiff` for many paths of one side in one request. Rejects when the
+   * request itself fails; per-path failures are entries. Absent in runtimes
+   * that read per path (VS Code).
+   */
+  getGitDiffs?(directory: string, options: GetGitDiffsOptions): Promise<GitPathDiffBatchEntry[]>;
+  getGitFileDiff?(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>;
   getGitRangeDiff?(directory: string, options: GetGitRangeDiffOptions): Promise<GitDiffResponse>;
   getGitRangeFiles?(directory: string, options: GetGitRangeFilesOptions): Promise<GitRangeFileEntry[]>;
   getBranchBase?(directory: string, branch: string): Promise<GitBranchBaseResponse>;
@@ -1252,8 +1245,8 @@ export interface GitAPI {
   getGitUnpushedBranchCounts(directory: string, branches: string[]): Promise<GitUnpushedBranchCounts>;
   deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }>;
   removeRemote(directory: string, payload: GitRemoveRemotePayload): Promise<{ success: boolean }>;
-  generateCommitMessage(directory: string, files: string[], options?: { zenModel?: string; providerId?: string; modelId?: string; reasoning?: boolean }): Promise<{ message: GeneratedCommitMessage }>;
-  generatePullRequestDescription(
+  generateCommitMessage?(directory: string, files: string[], options?: { zenModel?: string; providerId?: string; modelId?: string }): Promise<{ message: GeneratedCommitMessage }>;
+  generatePullRequestDescription?(
     directory: string,
     payload: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string }
   ): Promise<GeneratedPullRequestDescription>;
@@ -1263,13 +1256,10 @@ export interface GitAPI {
   previewGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   createGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   deleteGitWorktree?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
-  teardownGitWorktree?(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }>;
-  createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
-  /** Amends HEAD with a host-computed Change-Id trailer; refuses unless HEAD is still `expectedHead`. */
-  addChangeIdToHead?(directory: string, expectedHead: string): Promise<{ sha: string; changeId: string }>;
-  gitPush(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
-  gitPull(directory: string, options?: GitPullOptions): Promise<GitPullResult>;
-  gitFetch(directory: string, options?: { remote?: string; branch?: string }): Promise<{ success: boolean }>;
+  createGitCommit?(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
+  gitPush?(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
+  gitPull?(directory: string, options?: GitPullOptions): Promise<GitPullResult>;
+  gitFetch?(directory: string, options?: { remote?: string; branch?: string }): Promise<{ success: boolean }>;
   planNetworkOperation(request: GitNetworkOperationRequest): Promise<GitNetworkOperationPlan>;
   issueContributorDestination(request: GitContributorDestinationRequest): Promise<GitContributorDestinationSelection>;
   listContributorDestinations(directory: string): Promise<GitContributorDestinationCandidates>;
@@ -1278,7 +1268,7 @@ export interface GitAPI {
   executeNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
   getNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
   cancelNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
-  /** Connected-server managed SSH credential inventory. */
+  /** Connected-server inventory only; the VS Code webview does not implement it. */
   managedSshCredentials?(intent: GitManagedSshIntent): Promise<GitManagedSshResult>;
   /** Host-owned credential setup is available only in runtimes that implement this operation. */
   configureTransportBinding?(intent: GitTransportBindingIntent): Promise<GitTransportBindingResult>;
@@ -1295,8 +1285,14 @@ export interface GitAPI {
   checkoutBranch?(directory: string, branch: string): Promise<{ success: boolean; branch: string }>;
   createBranch(directory: string, name: string, startPoint?: string): Promise<{ success: boolean; branch: string }>;
   renameBranch(directory: string, oldName: string, newName: string): Promise<{ success: boolean; branch: string }>;
-  getGitLog(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
-  getCommitFiles(directory: string, hash: string): Promise<GitCommitFilesResponse>;
+  getGitLog?(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
+  /**
+   * Amends the checked-out commit to carry a Change-Id trailer, computed the
+   * way a review host's commit-msg hook computes it. Refuses when HEAD is no
+   * longer `expectedHead` or already has one. Absent where the runtime cannot.
+   */
+  addChangeIdToHead?(directory: string, expectedHead: string): Promise<{ sha: string; changeId: string }>;
+  getCommitFiles?(directory: string, hash: string): Promise<GitCommitFilesResponse>;
   getGitCommitDiff?(directory: string, options: GetGitCommitDiffOptions): Promise<GitDiffResponse>;
   getCommitFileDiff?(directory: string, hash: string, filePath: string, isBinary: boolean): Promise<CommitFileDiffResponse>;
   getCurrentGitIdentity?(directory: string): Promise<GitIdentitySummary | null>;
@@ -1329,6 +1325,8 @@ export interface GitAPI {
     resolvedWorktreeRoot: string | null;
     resolvedCwd: string | null;
   }>;
+  /** Where `directory` sits inside its checkout (`ai`, or `''` at the root); rejects when unknown. */
+  resolveRepositoryPrefix?(directory: string): Promise<string>;
   /** Phase 1: canonicalize a directory to full worktree state */
   canonicalizeWorktreeState?(directory: string): Promise<{
     worktreeRoot: string | null;
@@ -1405,28 +1403,7 @@ export interface FileSearchResult {
   preview?: string[];
 }
 
-export interface CommandExecResult {
-  command: string;
-  success: boolean;
-  exitCode?: number;
-  stdout?: string;
-  stderr?: string;
-  error?: string;
-}
-
-interface ListDirectoryOptions {
-  respectGitignore?: boolean;
-}
-
-interface FileReadOptions {
-  allowOutsideWorkspace?: boolean;
-  outsideFileGrant?: string;
-  optional?: boolean;
-  directory?: string;
-  fresh?: boolean;
-}
-
-
+/** Find in files: lines of workspace files containing a text or a regular expression. */
 export interface FileContentSearchQuery {
   directory: string;
   query: string;
@@ -1441,23 +1418,46 @@ export interface FileContentSearchMatch {
   path: string;
   relativePath: string;
   line: number;
+  /** 1-based column of the first match on the line, in UTF-16 code units. */
   column: number;
+  /** The line, without indentation and cut to what a result row can show. */
   text: string;
+  /** `[start, end)` offsets of the matches inside `text`. */
   ranges: Array<[number, number]>;
+  /** `text` begins after the line's start, so the row shows an ellipsis first. */
   cutStart: boolean;
 }
 
+/** Why a search returned fewer matches than exist: the limit or the server's deadline. */
 export type FileContentSearchStop = 'limit' | 'deadline';
 
 export type FileContentSearchOutcome =
   | { status: 'ok'; matches: FileContentSearchMatch[]; stopped: FileContentSearchStop | null }
   | { status: 'invalid-pattern'; message: string }
+  /** The server has no ripgrep to search with. */
   | { status: 'unavailable' };
 
+interface ListDirectoryOptions {
+  respectGitignore?: boolean;
+}
+
+interface FileReadOptions {
+  allowOutsideWorkspace?: boolean;
+  outsideFileGrant?: string;
+  optional?: boolean;
+  directory?: string;
+  fresh?: boolean;
+}
+
 export interface FilesAPI {
-  searchContents?(payload: FileContentSearchQuery): Promise<FileContentSearchOutcome>;
   listDirectory(path: string, options?: ListDirectoryOptions): Promise<DirectoryListResult>;
   search(payload: FileSearchQuery): Promise<FileSearchResult[]>;
+  /**
+   * Find in files. Absent on runtimes without it (VS Code has its own
+   * search), so the files tree offers the mode only when it is here.
+   * Resolves to the search outcome; rejects on a transport or server failure.
+   */
+  searchContents?(payload: FileContentSearchQuery): Promise<FileContentSearchOutcome>;
   createDirectory(path: string): Promise<{ success: boolean; path: string }>;
   statFile?(path: string, options?: FileReadOptions): Promise<{ path: string; isFile: boolean; size: number; mtimeMs?: number }>;
   readFile?(path: string, options?: FileReadOptions): Promise<{ content: string; path: string }>;
@@ -1507,6 +1507,8 @@ export interface SettingsLoadResult {
 export interface SettingsAPI {
   load(): Promise<SettingsLoadResult>;
   save(changes: Partial<SettingsPayload>): Promise<SettingsPayload>;
+
+  restartOpenCode?: () => Promise<{ restarted: boolean }>;
 }
 
 export interface DirectoryPermissionRequest {
@@ -1565,6 +1567,15 @@ export interface EditorAPI {
   ): Promise<void>;
 }
 
+export interface VSCodeAPI {
+  executeCommand(command: string, ...args: unknown[]): Promise<unknown>;
+  openExternalUrl(url: string): Promise<void>;
+  pickFiles?(options?: { extensions?: string[] }): Promise<unknown>;
+  saveImage?(payload: unknown): Promise<unknown>;
+  saveMarkdown?(payload: unknown): Promise<unknown>;
+  /** Add a directory as a VS Code workspace folder; resolves with the full folder list after the add. */
+  addWorkspaceFolder?(path: string): Promise<Array<{ name: string; path: string }>>;
+}
 
 export interface PushSubscribePayload {
   endpoint: string;
@@ -1573,7 +1584,7 @@ export interface PushSubscribePayload {
     auth: string;
   };
   origin?: string;
-  /** Runtime surface ('ios' | 'android' | 'desktop' | 'web') for presence-aware routing. */
+  /** Runtime surface ('ios' | 'android' | 'vscode' | 'desktop' | 'web') for presence-aware routing. */
   platform?: string;
 }
 
@@ -1608,75 +1619,12 @@ export interface PushAPI {
   unregisterApnsToken(payload: ApnsTokenPayload): Promise<{ ok: true } | null>;
 }
 
-export type GitHubUserSummary = {
-  login: string;
-  id?: number;
-  avatarUrl?: string;
-  name?: string;
-  email?: string;
-};
-
 type GitHubRepoRef = {
   owner: string;
   repo: string;
+  /** GitHub Enterprise host (e.g. "ghe.example.com"); github.com when absent. */
+  host?: string;
   url: string;
-};
-
-export type GitHubChecksSummary = {
-  state: 'success' | 'failure' | 'pending' | 'unknown';
-  total: number;
-  success: number;
-  failure: number;
-  /** queued + in_progress + unconcluded runs. */
-  pending: number;
-  inProgress?: number;
-  queued?: number;
-  /** Earliest started_at among in-progress runs (ISO), for elapsed display. */
-  startedAt?: string;
-};
-
-export type GitHubCheckRun = {
-  id?: number;
-  name: string;
-  startedAt?: string;
-  completedAt?: string;
-  app?: {
-    name?: string;
-    slug?: string;
-  };
-  status?: string;
-  conclusion?: string | null;
-  detailsUrl?: string;
-  output?: {
-    title?: string;
-    summary?: string;
-    text?: string;
-  };
-  job?: {
-    runId?: number;
-    jobId?: number;
-    url?: string;
-    name?: string;
-    workflowName?: string;
-    conclusion?: string | null;
-    steps?: Array<{
-      name: string;
-      status?: string;
-      conclusion?: string | null;
-      number?: number;
-      startedAt?: string;
-      completedAt?: string;
-    }>;
-  };
-  annotations?: Array<{
-    path?: string;
-    startLine?: number;
-    endLine?: number;
-    level?: string;
-    message: string;
-    title?: string;
-    rawDetails?: string;
-  }>;
 };
 
 export type GitHubPullRequest = {
@@ -1704,333 +1652,6 @@ type GitHubPullRequestHeadRepo = {
   sshUrl?: string;
 };
 
-export type GitHubPullRequestSummary = GitHubPullRequest & {
-  author?: GitHubUserSummary | null;
-  body?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  headLabel?: string;
-  headRepo?: GitHubPullRequestHeadRepo | null;
-  sourceRepo?: (GitHubRepoSelector & { source: string }) | null;
-};
-
-type GitHubPullRequestFile = {
-  filename: string;
-  status?: string;
-  additions?: number;
-  deletions?: number;
-  changes?: number;
-  patch?: string;
-};
-
-type GitHubPullRequestReviewComment = {
-  id: number;
-  url: string;
-  body: string;
-  author?: GitHubUserSummary | null;
-  path?: string;
-  line?: number | null;
-  position?: number | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-export type GitHubPullRequestsListResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  prs?: GitHubPullRequestSummary[];
-  page?: number;
-  hasMore?: boolean;
-  failedRepos?: Array<{ owner: string; repo: string }>;
-};
-
-export type GitHubPullRequestContextResult = {
-  connected: boolean;
-  /** Server-side stamp of when the data was fetched from GitHub (ms epoch); survives server cache serves. */
-  fetchedAt?: number;
-  repo?: GitHubRepoRef | null;
-  pr?: GitHubPullRequestSummary | null;
-  issueComments?: GitHubIssueComment[];
-  reviewComments?: GitHubPullRequestReviewComment[];
-  files?: GitHubPullRequestFile[];
-  diff?: string;
-  checks?: GitHubChecksSummary | null;
-  checkRuns?: GitHubCheckRun[];
-};
-
-export type GitHubPullRequestStatus = {
-  connected: boolean;
-  /** Server-side stamp of when the data was fetched from GitHub (ms epoch); survives server cache serves. */
-  fetchedAt?: number;
-  repo?: GitHubRepoRef | null;
-  branch?: string;
-  pr?: GitHubPullRequest | null;
-  checks?: GitHubChecksSummary | null;
-  canMerge?: boolean;
-  defaultBranch?: string | null;
-  resolvedRemoteName?: string | null;
-};
-
-export type GitHubPullRequestRef = GitHubRepoSelector & { number: number };
-
-/** Live fields of a known PR, refreshed in batches for list surfaces. */
-export type GitHubPullRequestLiveSummary = GitHubPullRequestRef & {
-  state: GitHubPullRequest['state'];
-  draft: boolean;
-  title: string;
-  headSha?: string;
-  mergeable: boolean | null;
-  mergeableState: string | null;
-  /** Null for closed/merged PRs, whose checks are not actionable. */
-  checks: GitHubChecksSummary | null;
-};
-
-/** Live state of a known issue; a closed one says whether it was done or dropped. */
-export type GitHubIssueLiveSummary = GitHubPullRequestRef & {
-  title: string;
-  state: 'open' | 'completed' | 'not_planned';
-};
-
-
-export type GitHubIssueLabel = {
-  name: string;
-  color?: string;
-};
-
-export type GitHubRepoSelector = {
-  owner: string;
-  repo: string;
-};
-
-export type GitHubIssueSummary = {
-  number: number;
-  title: string;
-  url: string;
-  state: 'open' | 'closed';
-  author?: GitHubUserSummary | null;
-  labels?: GitHubIssueLabel[];
-  sourceRepo?: (GitHubRepoSelector & { source: string }) | null;
-};
-
-export type GitHubIssue = GitHubIssueSummary & {
-  body?: string;
-  assignees?: GitHubUserSummary[];
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-export type GitHubIssueComment = {
-  id: number;
-  url: string;
-  body: string;
-  author?: GitHubUserSummary | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-export type GitHubIssuesListResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  issues?: GitHubIssueSummary[];
-  page?: number;
-  hasMore?: boolean;
-  failedRepos?: Array<{ owner: string; repo: string }>;
-};
-
-export type GitHubReferenceKind = 'issue' | 'pull';
-
-
-
-export type GitHubReferencesOptions = {
-  kind: GitHubReferenceKind;
-  state?: RepositoryReferenceState;
-  people?: RepositoryReferencePeople;
-  /** Search text, or a pasted link or number, which names one item of either kind. */
-  query?: string;
-  cursor?: string | null;
-};
-
-type GitHubReferenceCommon = {
-  number: number;
-  title: string;
-  url: string;
-  /** The description as the preview shows it, cut at 20 000 characters. */
-  body: string;
-  bodyTruncated: boolean;
-  createdAt: string | null;
-  updatedAt: string | null;
-  author: { login: string; avatarUrl?: string } | null;
-  labels: GitHubIssueLabel[];
-  commentCount: number;
-  sourceRepo: GitHubRepoSelector & { source: string };
-  /** The provider's own project id (GitLab's is numeric); absent on GitHub, where `owner/repo` is the id. */
-  projectId?: string;
-  /**
-   * Set on items read from a GitLab project, which the picker shows the same
-   * way; absent on GitHub's own answers.
-   */
-  provider?: SourceControlProvider;
-};
-
-export type GitHubIssueReference = GitHubReferenceCommon & {
-  kind: 'issue';
-  state: GitHubIssueLiveSummary['state'];
-};
-
-export type GitHubPullReference = GitHubReferenceCommon & {
-  kind: 'pull';
-  state: GitHubPullRequest['state'];
-  draft: boolean;
-  head: string;
-  base: string;
-  headSha: string;
-  headRepo: GitHubPullRequestHeadRepo | null;
-};
-
-/** A comment as the picker preview shows it; review entries carry their verdict or file and line. */
-export type GitHubReferenceComment = {
-  author: { login: string; avatarUrl?: string } | null;
-  body: string;
-  createdAt: string | null;
-  url: string;
-  path: string | null;
-  line: number | null;
-  review: 'approved' | 'changes_requested' | 'commented' | 'dismissed' | null;
-};
-
-/** Someone asked to review, or who can be; `id` is what the host names them by (a login on GitHub). */
-export type GitHubReferenceReviewer = {
-  id: string;
-  login: string;
-  avatarUrl?: string;
-};
-
-/** What the preview adds for one item; too slow to ask for a whole page. */
-export type GitHubReferenceDetail = {
-  number: number;
-  /** Oldest first: the newest 50 comments and, for a PR, its reviews. */
-  comments: GitHubReferenceComment[];
-  /** How many conversation comments the item has in all. */
-  commentTotal: number;
-  /** Null for an issue. */
-  pull: {
-    reviewDecision: 'approved' | 'changes_requested' | 'review_required' | null;
-    /** Asked to review and not done yet (GitHub); everyone set as a reviewer (GitLab). */
-    reviewers: GitHubReferenceReviewer[];
-    additions: number;
-    deletions: number;
-    changedFiles: number;
-    /**
-     * GitLab merge requests only, null when closed or merged. A GitHub PR's
-     * checks come with its status, the answer that also colours it.
-     */
-    checks?: GitHubChecksSummary | null;
-    /** The newest commits, oldest first, for the timeline beside the comments. */
-    commits: GitHubReferenceCommit[];
-    /** How many commits the PR has in all; null when the host does not say. */
-    commitTotal: number | null;
-  } | null;
-};
-
-export type GitHubReferenceCommit = {
-  sha: string;
-  headline: string;
-  /** The host account behind the commit, when it is known. */
-  author: { login: string; avatarUrl?: string } | null;
-  authorName: string | null;
-  committedAt: string | null;
-  url: string | null;
-};
-
-export type GitHubReferenceDetailResult =
-  | { connected: false }
-  | { connected: true; detail: GitHubReferenceDetail | null };
-
-/** An issue or PR as the reference picker lists and previews it. */
-export type GitHubReference = GitHubIssueReference | GitHubPullReference;
-
-/** What colours a listed open PR: its checks and whether it conflicts. */
-export type GitHubPullStatus = GitHubPullRequestRef & {
-  checks: GitHubChecksSummary | null;
-  mergeable: boolean | null;
-  mergeableState: string | null;
-};
-
-/** PRs GitHub could not resolve are left out of `statuses`. */
-export type GitHubPullStatusesResult =
-  | { connected: false }
-  | { connected: true; statuses: GitHubPullStatus[] };
-
-export type GitHubReferencesResult =
-  | { connected: false }
-  | {
-      connected: true;
-      /** Null when the project has no GitHub remote. */
-      repo: GitHubRepoRef | null;
-      items: GitHubReference[];
-      cursor: string | null;
-      hasMore: boolean;
-      total: number;
-    };
-
-export type GitHubRepoUpstreamResult = {
-  connected: boolean;
-  isFork: boolean;
-  upstream: { owner: string; repo: string; url: string; defaultBranch: string; defaultBranchSha: string | null; remoteName: string | null } | null;
-};
-
-export type GitHubIssueGetResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  issue?: GitHubIssue | null;
-};
-
-export type GitHubIssueCommentsResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  comments?: GitHubIssueComment[];
-};
-
-export type GitHubAuthStatus = {
-  connected: boolean;
-  user?: GitHubUserSummary | null;
-  scope?: string;
-  accounts?: GitHubAuthAccount[];
-  ghCli?: {
-    available: boolean;
-    disabled: boolean;
-    active: boolean;
-    user?: GitHubUserSummary | null;
-  } | null;
-};
-
-type GitHubAuthAccount = {
-  id: string;
-  credentialId: string;
-  credentialRevision: number;
-  providerUserId: string;
-  providerUserStatus: 'available' | 'unavailable';
-  user: GitHubUserSummary;
-  scope?: string;
-  current?: boolean;
-  source?: 'oauth' | 'pat' | 'cli' | 'gh-cli';
-  status?: 'valid' | 'invalid';
-};
-
-export type GitHubDeviceFlowStart = {
-  flowId: string;
-  userCode: string;
-  verificationUri: string;
-  verificationUriComplete?: string;
-  expiresIn: number;
-  interval: number;
-  scope?: string;
-};
-
-export type GitHubDeviceFlowComplete =
-  | { connected: true; user: GitHubUserSummary; scope?: string }
-  | { connected: false; status?: string; error?: string };
-
 export type RepositoryItemRef = RepositorySelector & { number: number; host?: string };
 
 /** What a refresh of the server's short-lived provider answers covers. */
@@ -2038,7 +1659,6 @@ export type ProviderReadsRefreshScope = { item: RepositoryItemRef } | { lists: t
 
 /** Live fields of a known PR, refreshed in batches for list surfaces. */
 export type ChangeRequestLiveSummary = RepositoryItemRef & {
-  /** Queued for merge on the host, or waiting on a merge method's conditions. */
   isInMergeQueue?: boolean;
   mergeQueueEntry?: { state: string; position: number } | null;
   autoMergeRequest?: { enabledAt: string; mergeMethod: string } | null;
@@ -2077,7 +1697,6 @@ export type RepositorySelector = {
 };
 
 /** `discussion` only where the provider keeps them (`features.discussions`). */
-
 export type RepositoryReferenceKind = 'issue' | 'pull' | 'discussion';
 
 /** A repository list's state; `merged` applies to change requests, `unanswered` to discussions. */
@@ -2288,6 +1907,20 @@ export type RepositoryReferencesAcrossResult = {
   >;
 };
 
+/**
+ * Connecting refused an instance that belongs on another provider's card:
+ * the card it is already connected on, or the provider its server is (two
+ * providers can share one API). `provider` is that card's provider id.
+ */
+export class SourceControlInstanceOtherProviderError extends Error {
+  readonly provider: string;
+
+  constructor(message: string, provider: string) {
+    super(message);
+    this.name = 'SourceControlInstanceOtherProviderError';
+    this.provider = provider;
+  }
+}
 
 export interface SourceControlAPI {
   /**
@@ -2512,234 +2145,12 @@ export interface ClientAuthAPI {
   resetRelayIdentity(): Promise<RelayHostStatus>;
 }
 
-export type RelayHostStatus = {
+export interface RelayHostStatus {
   identityConflict: boolean;
-};
-
-export type LinearUserSummary = {
-  id: string;
-  name: string | null;
-  displayName: string | null;
-  email: string | null;
-  avatarUrl: string | null;
-};
-
-export type LinearOrganizationSummary = {
-  id: string;
-  name: string;
-  urlKey: string | null;
-};
-
-export type LinearWorkspaceSummary = {
-  id: string;
-  name: string | null;
-  urlKey: string | null;
-  current: boolean;
-  user?: LinearUserSummary | null;
-  authorizedAt?: number | null;
-};
-
-export type LinearAuthStatus = {
-  connected: boolean;
-  user?: LinearUserSummary | null;
-  organization?: LinearOrganizationSummary | null;
-  scope?: string;
-  workspaces?: LinearWorkspaceSummary[];
-};
-
-export type LinearAuthStart = {
-  authorizationUrl: string;
-  expiresIn: number;
-  scope: string;
-};
-
-export type LinearAuthOrigin = 'desktop' | 'web';
-
-export type LinearIssueState = {
-  id: string | null;
-  name: string | null;
-  type: string | null;
-};
-
-export type LinearWorkflowState = {
-  id: string;
-  name: string;
-  type: string | null;
-  position: number;
-};
-
-export type LinearIssueAssignee = {
-  name: string | null;
-  displayName: string | null;
-  avatarUrl: string | null;
-};
-
-export type LinearIssueTeam = {
-  id: string;
-  key: string;
-  name: string;
-};
-
-export type LinearIssuePriority = 0 | 1 | 2 | 3 | 4;
-
-export type LinearIssueLabel = {
-  id: string;
-  name: string;
-  color: string | null;
-};
-
-export type LinearIssueSummary = {
-  id: string;
-  identifier: string;
-  title: string;
-  url: string;
-  state?: LinearIssueState | null;
-  assignee?: LinearIssueAssignee | null;
-  team?: LinearIssueTeam | null;
-  priority?: LinearIssuePriority | null;
-  /** Absent on a related issue (a parent, a sub-issue): Linear is not asked for them there. */
-  labels?: LinearIssueLabel[];
-  updatedAt?: string | null;
-  /** The issue this one is a sub-issue of. */
-  parent?: LinearIssueSummary | null;
-  /** Null without sub-issues. Only the first few are counted; `more` says there are others. */
-  subIssueProgress?: LinearSubIssueProgress | null;
-};
-
-export type LinearSubIssueProgress = {
-  total: number;
-  /** Completed, canceled or a duplicate. */
-  done: number;
-  more: boolean;
-};
-
-export type LinearIssueComment = {
-  id: string;
-  body: string;
-  createdAt: string | null;
-  user?: { name: string | null; displayName: string | null; avatarUrl?: string | null } | null;
-};
-
-export type LinearIssue = LinearIssueSummary & {
-  description?: string | null;
-  comments?: LinearIssueComment[];
-  /** In Linear's order; the first page only, `subIssuesMore` says there are others. */
-  subIssues?: LinearIssueSummary[];
-  subIssuesMore?: boolean;
-};
-
-/** `open`: not done, canceled or a duplicate; the server's default. */
-export type LinearIssueListStatus = 'open' | 'all' | 'backlog' | 'todo' | 'started' | 'inReview' | 'completed' | 'canceled' | 'duplicate';
-/** Whose issues: anyone's, assigned to me, or created by me. */
-export type LinearIssueListAssignee = 'any' | 'me' | 'created';
-export type LinearIssueListPriority = 'all' | 'none' | 'urgent' | 'high' | 'medium' | 'low';
-
-export type LinearIssuesListOptions = {
-  query?: string;
-  cursor?: string;
-  status?: LinearIssueListStatus;
-  assignee?: LinearIssueListAssignee;
-  teamId?: string;
-  priority?: LinearIssueListPriority;
-};
-
-export type LinearIssuesListResult = {
-  connected: boolean;
-  issues?: LinearIssueSummary[];
-  cursor?: string | null;
-  hasMore?: boolean;
-};
-
-export type LinearIssueGetResult = {
-  connected: boolean;
-  issue?: LinearIssue | null;
-};
-
-/** Linear's workflow category; team-specific state names map onto these. */
-export type LinearStateType = 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled';
-
-/** Live state of a linked Linear issue, refreshed in batches for list surfaces. */
-export type LinearIssueLiveSummary = {
-  identifier: string;
-  title: string;
-  state: { name: string; type: LinearStateType };
-};
-
-
-export type LinearIssueStatesResult = {
-  connected: boolean;
-  states?: LinearWorkflowState[];
-};
-
-export type LinearIssueUpdateInput = {
-  id: string;
-  stateId: string;
-};
-
-export type LinearIssueUpdateResult = {
-  connected: boolean;
-  issue?: LinearIssue | null;
-};
-
-export type LinearTeamMapping = {
-  id: string;
-  key: string;
-  name: string;
-  projectPath: string | null;
-};
-
-export type LinearMappingResult = {
-  connected: boolean;
-  defaultProjectPath?: string | null;
-  teams?: LinearTeamMapping[];
-};
-
-export type LinearMappingWrite = {
-  defaultProjectPath: string | null;
-  teamProjectPaths: { [teamId: string]: string };
-};
-
-export type LinearSessionStatusKind = 'started' | 'completed' | 'failure';
-
-export type LinearSessionStatusPostInput = {
-  kind: LinearSessionStatusKind;
-  sessionId: string;
-  issueIdentifier?: string;
-  sessionOrigin?: string;
-};
-
-export type LinearSessionStatusPostResult =
-  | { connected: false }
-  | { connected: true; posted: true; commentId: string | null }
-  | {
-    connected: true;
-    posted: false;
-    skipped: 'already-posted' | 'issue-not-found' | 'not-started' | 'disabled' | 'origin-not-public';
-  };
-
-export type LinearPreferences = {
-  /** Status comments are off until the user opts in. */
-  sessionComments: boolean;
-};
-
-export interface LinearAPI {
-  authStatus(): Promise<LinearAuthStatus>;
-  authStart(origin?: LinearAuthOrigin): Promise<LinearAuthStart>;
-  authDisconnect(): Promise<{ removed: boolean }>;
-  authActivate(organizationId: string): Promise<LinearAuthStatus>;
-  issuesList(options?: LinearIssuesListOptions): Promise<LinearIssuesListResult>;
-  issueGet(id: string): Promise<LinearIssueGetResult>;
-  issueStates(teamId: string): Promise<LinearIssueStatesResult>;
-  issueUpdate(input: LinearIssueUpdateInput): Promise<LinearIssueUpdateResult>;
-  mappingGet(): Promise<LinearMappingResult>;
-  mappingSet(mapping: LinearMappingWrite): Promise<LinearMappingResult>;
-  sessionStatusPost(input: LinearSessionStatusPostInput): Promise<LinearSessionStatusPostResult>;
-  preferencesGet(): Promise<LinearPreferences>;
-  preferencesSet(preferences: LinearPreferences): Promise<LinearPreferences>;
 }
 
-/** Linux's PRIMARY buffer; only a local desktop page reaches it. */
 export interface ClipboardAPI {
+  /** Present on a Linux desktop, the only runtime that can reach PRIMARY. */
   selection: {
     readText(): Promise<string>;
     writeText(text: string): Promise<void>;
@@ -2747,9 +2158,7 @@ export interface ClipboardAPI {
 }
 
 export interface RuntimeAPIs {
-  /** Linux desktop's native PRIMARY buffer; absent in browsers and remote pages. */
-  clipboard?: ClipboardAPI;
-  /** Native local picker. Web/mobile fall back to their browser file input. */
+  /** Native local picker. Web/mobile fall back to their browser file input; VS Code does not import themes. */
   themeFiles?: {
     pick(): Promise<{ status: 'unsupported' } | { status: 'picked'; file: { name: string; size: number; text: string } | null }>;
   };
@@ -2763,23 +2172,120 @@ export interface RuntimeAPIs {
   permissions: PermissionsAPI;
   notifications: NotificationsAPI;
   sourceControl: SourceControlAPI;
+  /** Work-item trackers the server serves; VS Code has none. */
   trackers?: TrackerAPI;
-  linear?: LinearAPI;
   push?: PushAPI;
   diagnostics?: DiagnosticsAPI;
   clientAuth?: ClientAuthAPI;
   editor?: EditorAPI;
+  vscode?: VSCodeAPI;
   worktrees?: WorktreeMetadata[];
 }
 
+export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue;
 
+// ============== Skills Catalog Types ==============
 
-export class SourceControlInstanceOtherProviderError extends Error {
-  readonly provider: string;
-  constructor(message: string, provider: string) {
-    super(message);
-    this.name = 'SourceControlInstanceOtherProviderError';
-    this.provider = provider;
-  }
+type SkillsCatalogSourceId = string;
+
+type SkillsCatalogSourceType = 'github';
+
+export interface SkillsCatalogSource {
+  id: SkillsCatalogSourceId;
+  label: string;
+  description?: string;
+  source: string;
+  defaultSubpath?: string;
+  sourceType?: SkillsCatalogSourceType;
+  /** GitHub repository star count (null when unavailable) */
+  stars?: number | null;
+  /** GitHub repository last-push timestamp, ISO (null when unavailable) */
+  repoUpdatedAt?: string | null;
 }
 
+interface SkillsCatalogItemInstalledBadge {
+  isInstalled: boolean;
+  scope?: 'user' | 'project';
+  source?: 'opencode' | 'agents' | 'claude';
+}
+
+export interface SkillsCatalogItem {
+  sourceId: SkillsCatalogSourceId;
+  repoSource: string;
+  repoSubpath?: string;
+  gitIdentityId?: string;
+  skillDir: string;
+  skillName: string;
+  frontmatterName?: string;
+  description?: string;
+  installable: boolean;
+  warnings?: string[];
+  installed?: SkillsCatalogItemInstalledBadge;
+}
+
+export interface SkillsCatalogResponse {
+  ok: boolean;
+  sources?: SkillsCatalogSource[];
+  itemsBySource?: Record<SkillsCatalogSourceId, SkillsCatalogItem[]>;
+  error?: { kind: string; message: string };
+}
+
+export interface SkillsCatalogSourceResponse {
+  ok: boolean;
+  items?: SkillsCatalogItem[];
+  error?: { kind: string; message: string };
+}
+
+export interface SkillsRepoScanRequest {
+  source: string;
+  subpath?: string;
+  gitIdentityId?: string;
+}
+
+type SkillsRepoScanError =
+  | { kind: 'authRequired'; message: string; sshOnly: true; identities?: Array<{ id: string; name: string }> }
+  | { kind: 'invalidSource'; message: string }
+  | { kind: 'gitUnavailable'; message: string }
+  | { kind: 'networkError'; message: string }
+  | { kind: 'unknown'; message: string };
+
+export interface SkillsRepoScanResponse {
+  ok: boolean;
+  items?: SkillsCatalogItem[];
+  error?: SkillsRepoScanError;
+}
+
+interface SkillsInstallSelection {
+  skillDir: string;
+}
+
+export interface SkillsInstallRequest {
+  source: string;
+  subpath?: string;
+  sourceId?: string;
+  gitIdentityId?: string;
+  scope: 'user' | 'project';
+  targetSource?: 'opencode' | 'agents';
+  selections: SkillsInstallSelection[];
+  conflictPolicy?: 'prompt' | 'skipAll' | 'overwriteAll';
+  conflictDecisions?: Record<string, 'skip' | 'overwrite'>;
+}
+
+export type SkillsInstallError = SkillsRepoScanError | {
+  kind: 'conflicts';
+  message: string;
+  conflicts: Array<{ skillName: string; scope: 'user' | 'project'; source?: 'opencode' | 'agents' }>;
+};
+
+export interface SkillsInstallResponse {
+  ok: boolean;
+  installed?: Array<{ skillName: string; skillDir?: string; scope: 'user' | 'project'; source?: 'opencode' | 'agents' }>;
+  skipped?: Array<{ skillName: string; reason: string }>;
+  error?: SkillsInstallError;
+  requiresReload?: boolean;
+  requiresManualRestart?: boolean;
+  reloadFailed?: boolean;
+  warning?: string;
+  message?: string;
+  reloadDelayMs?: number;
+}

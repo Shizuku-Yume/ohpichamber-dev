@@ -32,9 +32,6 @@ on the source-control side (`lib/source-control/`).
   runtime without the API, is authoritative. Like the source-control registry
   it reads `getRuntimeKey()` when it refreshes, never writes a snapshot under a
   transient key, and keeps the held objects when an answer is unchanged.
-- Tracker operations belong to the runtime on which they start. After the
-  provider-wire lookup, the adapter refuses to dispatch if the runtime changed;
-  the wire cache is scoped to that runtime as well.
 - An id the registry does not hold reads as `unknownTrackerDescriptor(id)`: the
   id as its name, no auth methods, every capability off, only the `open` and
   `all` filters, no URL patterns (it matches no link). One object per id.
@@ -45,10 +42,11 @@ on the source-control side (`lib/source-control/`).
   first a provider's id is never also a tracker. One malformed descriptor is
   left out, never the list; a capability an older server does not name is off;
   an unknown auth method is dropped.
-- Surfaces use tracker descriptors and capabilities rather than choosing
-  behavior by tracker id. Per-id words and marks live in `presentation.ts`;
-  the legacy readers below still produce `linear` for data written before
-  trackers.
+- No surface picks behavior by comparing a tracker id: the source-control
+  neutrality guard (`lib/source-control/providers/neutrality.test.ts`) also
+  refuses string-literal comparisons against `linear`. Per-id words and marks
+  live in `presentation.ts`; the legacy readers below still produce `linear`
+  for data written before trackers.
 - Translated text never comes from the server. `presentation.ts` holds the
   mark, the sentences that name a tracker, the branch prefix and the Settings
   search words per id, with a generic fallback: the generic mark and the
@@ -92,11 +90,6 @@ on the source-control side (`lib/source-control/`).
   beside it (`toStoredLinkedIssue`); other trackers as `kind: 'tracker'`.
   Clients from before trackers read only `linear` and rewrite the list without
   entries they cannot read, so a `tracker` Linear link would vanish for good.
-  The Host link operation validates neutral tracker provider and identifier,
-  checks their composite id, and normalizes a neutral Linear entry to the same
-  stored form. Mixed link or unlink batches are applied atomically against the
-  Host's current session metadata; an invalid entry rejects the whole batch.
-  A failed composer link write is reported separately from the sent message.
 - State looks are by category (`stateLook.ts`): a glyph for lists and status
   menus (in progress open, done merged, canceled closed, the rest not
   started), an issue look for badges (done completed, canceled not planned,
@@ -119,9 +112,6 @@ on the source-control side (`lib/source-control/`).
   status has not arrived), so the board can wait instead of reading "none
   connected"; it asks a served tracker nobody asked yet, and a failed read
   ends the wait without counting as a disconnect.
-- Account activations in Settings and the board belong to their starting
-  runtime. Switching endpoints invalidates pending responses and their
-  notifications or board refreshes, including when returning to the same key.
 - A status of `connected: false` may still carry `accounts`: every stored
   account was written off (the server refused its credential). Such a tracker
   is not signed in for any surface; only the Settings card reads the list, to

@@ -5,11 +5,7 @@
 //   node scripts/model-bench/bench.mjs run <task|all> <provider/model[#variant]>... [--parallel N] [--keep]
 //
 // A run copies the repository at the commit's parent into a fresh folder with
-<<<<<<< HEAD
 // no git history (so the model cannot read the real fix), lets `omp run`
-=======
-// no git history (so the model cannot read the real fix), lets `opencode run`
->>>>>>> bc50ba56a
 // work there, then drops in the commit's own tests and runs them. Every
 // task × model pair goes into one queue that runs N at a time. Results go to
 // ~/.config/openchamber/model-bench/results.jsonl; each run's patch, event log
@@ -17,12 +13,8 @@
 // the copy itself is deleted unless --keep is given.
 
 import { spawn, spawnSync } from 'node:child_process';
-<<<<<<< HEAD
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { stringify as stringifyYaml } from 'yaml';
-=======
-import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
->>>>>>> bc50ba56a
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,12 +45,8 @@ const PROMPT_SUFFIX = [
   'Nobody can answer questions during this task: decide open points yourself and say what you decided.',
 ].join('\n');
 
-<<<<<<< HEAD
 const shell = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : (existsSync('/bin/bash') ? '/bin/bash' : (process.env.SHELL || '/bin/sh'));
 const sh = (cmd, opts = {}) => spawnSync(shell, ['-c', cmd], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, ...opts });
-=======
-const sh = (cmd, opts = {}) => spawnSync('/bin/zsh', ['-c', cmd], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, ...opts });
->>>>>>> bc50ba56a
 const must = (cmd, opts) => {
   const r = sh(cmd, opts);
   if (r.status !== 0) throw new Error(`${cmd}\n${r.stderr || r.stdout}`);
@@ -77,11 +65,7 @@ const stopGroup = (child) => {
 };
 
 const shAsync = (cmd, { cwd, timeout } = {}) => new Promise((resolve) => {
-<<<<<<< HEAD
   const child = spawn(shell, ['-c', cmd], { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
-=======
-  const child = spawn('/bin/zsh', ['-c', cmd], { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
->>>>>>> bc50ba56a
   active.add(child);
   let out = '';
   child.stdout.on('data', (d) => { out += d; });
@@ -158,7 +142,6 @@ const validate = async (task) => {
 // and found the shipped fix. A private config home without either keeps
 // provider logins, which live in the data home.
 const isolatedEnv = (dir) => {
-<<<<<<< HEAD
   const agentDir = path.join(cacheRoot, 'agent');
   mkdirSync(agentDir, { recursive: true });
   writeFileSync(path.join(agentDir, 'config.yml'), stringifyYaml({
@@ -168,30 +151,6 @@ const isolatedEnv = (dir) => {
   const env = Object.fromEntries(Object.entries(process.env)
     .filter(([key]) => !/^(OPENCHAMBER|PI_|OMP_)/.test(key)));
   return { ...env, PI_CODING_AGENT_DIR: agentDir, PI_CONFIG_DIR: agentDir, PWD: dir };
-=======
-  const configHome = path.join(cacheRoot, 'xdg-config');
-  mkdirSync(path.join(configHome, 'opencode'), { recursive: true });
-  writeFileSync(path.join(configHome, 'opencode', 'opencode.json'), JSON.stringify({
-    $schema: 'https://opencode.ai/config.json',
-    autoupdate: false,
-    autoshare: false,
-    shell: 'zsh',
-    lsp: false,
-    disabled_providers: ['claude-code'],
-    // `--auto` approves everything not explicitly denied; file tools stay in the copy.
-    // The repository is public: web tools fetched the shipped fix from GitHub.
-    permissions: [
-      { action: 'external_directory', resource: '*', effect: 'deny' },
-      { action: 'webfetch', resource: '*', effect: 'deny' },
-      { action: 'websearch', resource: '*', effect: 'deny' },
-    ],
-  }, null, 2));
-  const env = Object.fromEntries(Object.entries(process.env)
-    .filter(([key]) => !/^(OPENCODE|OPENCHAMBER)/.test(key)));
-  // OpenCode takes its directory from PWD, not from the process cwd: an
-  // inherited PWD put every run in the real checkout.
-  return { ...env, XDG_CONFIG_HOME: configHome, PWD: dir };
->>>>>>> bc50ba56a
 };
 
 // A model's shell can still reach the real checkout. Any tool call whose input
@@ -241,20 +200,12 @@ const killLeftovers = (dir) => {
 
 const runModel = (dir, model, prompt) => new Promise((resolve) => {
   const started = Date.now();
-<<<<<<< HEAD
   const ompBin = process.env.OMP_BINARY || 'omp';
   const child = spawn(ompBin, ['run', '--standalone', '--auto', '--format', 'json', '--agent', 'build', '-m', model, prompt], {
     cwd: dir,
     env: isolatedEnv(dir),
     detached: true,
     // An open stdin pipe makes `omp run` wait for more message text and never start.
-=======
-  const child = spawn('opencode', ['run', '--standalone', '--auto', '--format', 'json', '--agent', 'build', '-m', model, prompt], {
-    cwd: dir,
-    env: isolatedEnv(dir),
-    detached: true,
-    // An open stdin pipe makes `opencode run` wait for more message text and never start.
->>>>>>> bc50ba56a
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   active.add(child);
@@ -333,11 +284,7 @@ const run = async (task, model, { keep }) => {
   const leftovers = killLeftovers(dir);
   if (aborted) {
     const { sessionID } = summarize(result.log);
-<<<<<<< HEAD
     if (sessionID) sh(`omp session delete ${sessionID}`, { env: isolatedEnv(dir) });
-=======
-    if (sessionID) sh(`opencode session delete ${sessionID}`, { env: isolatedEnv(dir) });
->>>>>>> bc50ba56a
     if (!keep) rmSync(dir, { recursive: true, force: true });
     return null;
   }
@@ -353,11 +300,7 @@ const run = async (task, model, { keep }) => {
   const usage = summarize(result.log);
   // events.jsonl holds the whole run, so the session would only clutter the
   // user's session list.
-<<<<<<< HEAD
   if (usage.sessionID) sh(`omp session delete ${usage.sessionID}`, { env: isolatedEnv(dir) });
-=======
-  if (usage.sessionID) sh(`opencode session delete ${usage.sessionID}`, { env: isolatedEnv(dir) });
->>>>>>> bc50ba56a
   if (usage.steps === 0) {
     // The model never answered: a harness or provider failure, not a result.
     console.log(`${tag}: NO RUN (exit ${result.code}, ${result.stopReason ?? 'no steps'}); see ${out}/stderr.txt`);

@@ -1,49 +1,16 @@
 # Settings sections
 
 One directory per Settings page. `shared/` holds the page chrome and controls
-every page is built from; see [PATTERNS.md](PATTERNS.md#quick-primitive-selection) for
-primitive selection and [layout](references/layout.md), [controls](references/controls.md)
-or [search](references/search.md) for the affected branch.
+every page is built from; see `.agents/skills/settings-ui-patterns/SKILL.md` for
+which primitive to reach for.
 
-## Project settings and the personal setup file
+## Autosave on the OpenCode configuration pages
 
-`projects/ProjectSettingsPanel.tsx` composes the project Settings page from
-identity, actions, environment, the worktree section and the shared repository
-file. Per-user project setup values are read and written through
-`lib/openchamberConfig.ts`, which speaks only to the Host route
-`GET/PUT /api/projects/:projectId/config`; it never reads or composes a file
-path, so Web/PWA, Electron, hosted mobile and Capacitor behave the same.
-
-`openchamber/WorktreeSectionContent.tsx` edits the personal worktree directory:
-the base folder where new worktrees are created. It is a per-user value on the
-project's setup, not part of the repository's shared
-`.openchamber/project.json`. The field saves on blur or Enter through the same
-personal setup write as the other values; empty input clears the override
-(`null`) so new worktrees use the default location. The field keeps the path
-syntax as typed — `~`, relative segments and absolute paths pass through
-unchanged — because the Host owns resolution: relative paths start at the
-primary worktree, `~` at the user's home, and absolute paths stay absolute. A
-failed write shows the section's save-failed toast and restores the last saved
-value.
-
-## About and local connection setup
-
-About displays the application and native app versions supplied by the connected Host or native shell. No OMP SDK build version is exposed, and the agent protocol version is not a build version. OpenCode installation, binary-path, restart and upgrade controls are retired. Application updates, native app updates and remote OpenChamber Host selection remain independent and available.
-
-The desktop first-launch chooser records the user's local or remote Host choice without probing for an agent executable. Local startup failures use the existing Retry Local and remote connection recovery, not an engine installer. Environment variable editing remains Host-owned and no longer offers an OpenCode restart banner.
-
-
-## Autosave on configuration and behavior pages
-
-Settings entity pages (`agents/`, `commands/`, `skills/`, `mcp/`, `plugins/`, and
-prompt templates) persist through Canonical APIs and the Bun Agent Service. Host
-authentication and workspace authorization remain authoritative. Mutations use
-structured Canonical API contracts with revision CAS and report typed outcomes.
-These pages have no page-level Save, Apply or Discard button. The plugins page
-also shows applied state; applying persisted plugins to idle sessions requires a
-separate confirmation. `behavior/` writes profile response-style preferences
-through `updateDesktopSettings` with the same silent-success and error-toast
-autosave contract.
+`agents/`, `commands/`, `skills/`, `mcp/`, `plugins/` and `behavior/` edit files
+that OpenCode v2 watches: it picks up a change and applies it within a second or
+two, and the server answers every config mutation with a plain
+`{ success, message }`. There is no restart to wait for and no restart state to
+show, so these pages carry no Save, Apply or Discard button.
 
 The contract, implemented by `shared/SettingsAutosave.tsx`:
 
@@ -59,8 +26,10 @@ The contract, implemented by `shared/SettingsAutosave.tsx`:
   silent and there is no inline "Saving…"/"Saved" indicator: a write is not
   something the user waits for. A failure is an error toast,
   "Couldn't save: <reason>", raised by the hook itself.
-- **One page, one save routine.** All writes on a page go through that page's
-  save routine, so a failure is reported once.
+- **One page, one save routine.** A section that writes its own request still
+  reports through the page: `agents/AgentPermissionsEditor.tsx` hands its save
+  routine to `AgentsPage` via `registerSave`, and the page's save runs it, so a
+  failure is reported once.
 - Saves run serially. A save request received during a write queues one follow-up
   using the latest committed form state. Unmounting prevents that follow-up.
 
@@ -70,7 +39,7 @@ is deliberately silent on success.
 
 ### Reconciliation
 
-Store and catalog refreshes from the Bun Agent Service or Host can arrive before the
+OpenCode re-reads files after writes. Store refreshes can arrive before the
 save promise settles, while the user is already editing the next version.
 Commands compare incoming values with both the saved baseline and the normalized
 submitted snapshot. Successful saves keep that normalized baseline for late
@@ -78,6 +47,7 @@ echoes. Agents and MCP preserve dirty drafts and their baseline during refreshes
 of the same entity; successful saves advance that baseline. Skills and plugins
 preserve dirty drafts while updating their server baseline. A failed write leaves
 the form dirty for retry. Superseded skill detail reads are ignored.
+Behavior only normalizes the submitted prompt if the user has not changed it.
 
 Scope reconciliation to the selected entity and Settings directory. Selecting
 another entity hydrates its form, and an older save completion must not replace
@@ -86,61 +56,17 @@ its baseline. Runtime endpoint changes remount Settings through the keyed
 
 ### Creating an entity
 
-A new agent, command, skill or MCP server begins as an in-memory draft in its store.
+A new agent, command, skill or MCP server is a draft in its store, not a file.
 Nothing is written while the draft is being filled in: the page shows Create and
 Cancel, Create validates (name, and whatever else the entity needs) and writes
 once, and Cancel drops the draft. Abandoning a half-typed entity leaves nothing
-persisted. Once the entity exists, the page switches to the autosave rules above.
+on disk. Once the entity exists, the page switches to the autosave rules above.
 
 `skills/` follows the same split for supporting files: editing an existing file
 writes when the dialog closes, while a new file is only created on confirm.
 
-## Native plugins
-
-`plugins/` consumes canonical native plugin DTOs through `usePluginsStore` and the
-namespaced `canonicalClient.plugins` API on Web/PWA, Electron, hosted mobile and
-Capacitor. SDK managers and extension execution remain private to the Bun service.
-The Settings page uses the native plugin catalog and management actions; it does
-not use an agent-auth integration catalog.
-
-Package install, marketplace install, enable/disable, update and uninstall retain
-native target identity. Plugin setting writes always target native global settings,
-independently of installation scope. The editable JSON uses `globalSettings` and
-sends explicit `settingsScope: "global"`; omitted declared nonsecret global values
-are removed, while omitted secrets remain unchanged. Declared secret values are
-never read back; separate masked replacement inputs use `globalConfigured`.
-Existing native project overrides remain read inputs, never synthesized writes.
-When overrides exist, the editor explains the distinction and shows effective
-nonsecret `settings` as read-only JSON. JSON and local extension text autosave on
-blur or Cmd/Ctrl+Enter; dirty drafts survive same-entity catalog refreshes and failed
-writes. A failed local source read stays visibly failed rather than opening a
-synthetic empty file.
-
-Mutation banners distinguish committed persistence from applied, partially
-applied, failed and no-active-worker outcomes. The runtime list shows each worker's
-actual applied revision and errors. A separate confirmation explicitly restarts
-idle sessions to apply persisted plugins; ordinary saves never restart sessions.
-Marketplace discovery and doctor checks run only on explicit user action. Local
-extension creation/edit/removal remains available independently of marketplace
-egress policy; only the Host authorizes external operations.
-
 ## Providers
 
-<<<<<<< HEAD
-The page owns a non-persisted provider/model catalog store scoped to the selected
-workspace and active runtime. It resolves the workspace through
-`CanonicalClient`, then loads the canonical provider and model catalogs. A
-failed request stays an error; it does not become an empty provider list. The
-store contains no credentials or header values and resets when the runtime
-endpoint changes.
-
-Provider accounts, configuration, and OAuth methods are separate canonical
-reads. Account mutation, API-key writes, OAuth completion, and custom-provider
-updates use `CanonicalClient`; the page refreshes authoritative catalogs after
-successful changes. Public catalog records never expose stored credential
-values. Provider discovery is an explicit action and its result is a prefill,
-not a recurring synchronization process.
-=======
 Source-control cards whose descriptor carries `auth.login` show its service-owned sign-in hint when that instance has no account. With no PAT method, the instance renders its signed-in user without token, add-account or CLI-switch controls. The service owns sign-in outside the app. Opening that card rechecks status; a failed read keeps the auth store's prior account metadata and reports an error, while only a successful empty result removes the displayed login. The same card is used by the web, desktop and mobile Integrations pages.
 
 `providers/` is not an autosave page. Connecting a provider is an action, not a
@@ -168,21 +94,14 @@ the same `ProviderFormFields`, check required fields with the helpers in
 rejects a key whose required fields are missing. A `custom` field with options
 (AWS profiles, Azure resources OpenCode found on the server) offers "Other…"
 for a value it did not find.
->>>>>>> bc50ba56a
 
-The settings directory comes from `useSettingsDirectory`. The same page-owned
-flow is used in Web/PWA, Electron, hosted mobile, and Capacitor; transport and
-authentication stay in the Canonical Client and Host Gateway. Enterprise policy
-continues to control which credential and custom-provider actions are shown and
-accepted by the server.
+A provider's sign-in buttons come from its integration's `oauth` and
+`external` methods in declared order (`getSignInMethods`), both rendered by
+`providers/ProviderOAuthMethods.tsx`. An `external` method (2.0.25+: Azure CLI
+login, AWS profile for Bedrock) asks only its form and calls
+`integration.connect.external`, which stores a reference to credentials managed
+outside OpenCode; the account then lists as "External credentials".
 
-<<<<<<< HEAD
-The native custom-provider editor uses canonical configuration revisions and
-the service's provider mutation contract. Catalog refreshes reflect the
-authoritative result; a partial result remains distinct from an empty success.
-Host-owned provider classification stays in its existing host-owned settings
-surface.
-=======
 A provider's credentials show as one collapsible card per kind: API key,
 browser sign-in, credentials on the server machine
 (`providers/ProviderAuthMethodCards.tsx`, built on the Integrations page's
@@ -292,7 +211,6 @@ it when Settings opens. The snapshot is only a starting point: the page reads
 the list again on every visit and after every credential write, a read
 started earlier never replaces a later one, and a snapshot from another
 runtime is ignored.
->>>>>>> bc50ba56a
 
 ### Why runtime-only MCP rows wait for the config read
 
@@ -305,11 +223,6 @@ nor delete because no config entry backs them.
 
 ### MCP OAuth
 
-<<<<<<< HEAD
-MCP OAuth is native and workspace-scoped through `CanonicalClient`. `mcp/McpOAuthSignIn.tsx`
-resolves the workspace directory with `canonicalClient.resolveWorkspace` and reads
-server OAuth state through `canonicalClient.getWorkspaceMcpOAuth`.
-=======
 A remote MCP server with OAuth enabled is registered by OpenCode as an
 integration (`mcp_<hash>`, `metadata.source: "mcp"`, named after the server)
 with `oauth` methods, so signing in is the same connect / status /
@@ -373,27 +286,20 @@ runtime changes to `needs_auth` during that flow.
 The Integrations catalog also offers sign-in for connected entries with
 `auth: 'oauth'`, labeled Authorize. Its view is mounted by `MainLayout` on web
 and desktop, not by mobile or VS Code; those use the shared MCP Settings page.
->>>>>>> bc50ba56a
 
-Flow mutations coordinate revision and worker ownership using `persistedRevision`
-and `workerGeneration`. Actions (`start`, `complete`, `disconnect`) submitted via
-`canonicalClient.submitWorkspaceMcpOAuth` pass both identifiers. Client secrets are
-stored via a write-only credential reference using
-`canonicalClient.writeWorkspaceMcpCredential`: the returned `credentialRef` is
-passed as `oauth.clientSecretRef` on flow start, while the plaintext secret is
-cleared immediately and never included in requests or catalog reads. Once the
-flow yields an `authenticated` status, the page reconnects the MCP server to
-update runtime connectivity.
+### Claude sign-in on Usage
 
-### Authored resource visibility and authorization
+Claude usage reads Claude Code's own login on the server machine, which the
+Providers page cannot add. When Claude reports not configured, the Usage page
+shows `usage/ClaudeCodeSignIn.tsx` in its warning instead of the "go to
+Providers" text. With the opencode-claude plugin installed it mounts the
+plugin's `claude-code` integration sign-in through the shared
+`providers/ProviderOAuthMethods.tsx` and re-reads Claude usage once it
+finishes. Without the plugin, or when the integration list cannot be read, it
+shows the `claude auth login` command, which works in both cases.
 
-Commands, prompt templates and skills use the native file-resource catalogs through `CanonicalClient.fileResources`. SDK discovery and filtering remain in the Bun worker. The renderer does not reconstruct legacy integration-use policies, and `allowedTools` is not treated as a file-resource authorization rule. Host authorization and native execution policy remain authoritative. The settings skill roster also exposes authored files that native discovery rejects, so malformed Markdown can be repaired without making it available to the composer.
+### Policy-blocked MCP servers and skills
 
-<<<<<<< HEAD
-The commands catalog projects all 29 built-in OMP commands alongside the dedicated `/btw` control as read-only, inherited entries with native descriptions and argument hints, skipping synthetic records when an inherited template is already discovered. Authored `.omp/commands/*.md` templates remain editable and uniquely addressable. Command selection operates on canonical `commandId` so same-name custom and built-in entries stay distinct in the sidebar and inspector; expansion on synthetic builtins preserves the literal command input rather than expanding empty content.
-
-Authored files use the native workspace or selected-agent roots and canonical revision CAS. Commands and templates preserve Markdown bodies, source/group metadata and canonical `agentId`/`modelSelection`; inherited definitions are read-only. Rename uses the canonical update operation rather than a create/delete pair. Skills preserve raw `SKILL.md` and supporting-file contents through Host source commits; a committed source revision is distinct from worker apply success.
-=======
 OpenCode drops an MCP server or skill an `mcp.use` or `skill.use` deny names
 (the server name or skill id, wildcards allowed) from its own lists, while the
 MCP and Skills pages list what the config files and the disk hold.
@@ -419,61 +325,21 @@ every config file OpenCode reads for the directory, hand-written ones included. 
 reads "Off" in the sidebar. A wildcard deny is someone else's rule: the choice
 is locked, the row reads "Blocked", and the page names the rule and its file.
 An allow that decides the skill is named the same way.
->>>>>>> bc50ba56a
 
-Templates invoke native `/name` argument rules, not legacy aliases or `#` substitution. Argument parsing and expansion are worker-owned. All retained Web/PWA, Electron, hosted-mobile and Capacitor settings surfaces use the same authenticated Canonical gateway contract.
+### Why one choice and not a switch beside the checkbox
 
-## Refreshed settings surfaces
+"Run only when called" and "off" answer the same question, when an agent may
+take the skill, so two controls let a user set a combination that reads as
+nonsense (off, but only when called). One three-way choice keeps them apart
+in storage and together on screen.
 
-The Settings shell and its shared chrome were refreshed from the 2026-10-26 upstream
-tree and re-pointed at the fork's canonical data sources:
+### Why Off writes where the skill lives and not into a chosen scope
 
-- **Chrome and controls.** `shared/SettingsSection.tsx` carries the upstream control
-  primitives and size constants the pages now share; `shared/SettingsCards.tsx`
-  exports `SettingsCardAction` for the Extensions page cards; the sidebar item and
-  search rows take the upstream logical-direction classes. `views/SettingsWindow.tsx`
-  focuses the search field through `data-settings-search`, and `views/SettingsView.tsx`
-  resolves page titles through `lib/settings/pageTitle.ts` and opens the Chat tab
-  that holds a search result through `chatSettingsTabs.ts`.
-- **Chat.** `openchamber/ChatSettings.tsx` splits the former long Visual page into
-  Messages, Composer and Assistance tabs. Every control still writes through
-  `updateDesktopSettings` or `useUIStore`; the tab choice lives in
-  `chatSettingsTabs.ts` so a search result or a deep link can select it. The desktop
-  return-key and pasted-image preferences wait for their store and settings-registry
-  keys (task 23/25), so they are not offered yet.
-- **Session goal.** The Assistance tab mounts `openchamber/SessionGoalCheckerField.tsx`:
-  the checker chip group selects OMP's native `judge` role (`classifier`) or the
-  native small-model resolution (`small-model`), and the max-autoturns field edits
-  `sessionGoalMaxAutoTurns` within 1–200 (default 20). A selected small checker
-  explains itself and links to the Sessions small-model row; the `classifier` option
-  keeps OMP's own `judge` role chain authoritative instead of claiming a Host
-  classification provider is missing.
-- **Session warming.** Only the workspace control remains:
-  `openchamber/SessionWarmingCheckbox.tsx` reads and writes the workspace's cache
-  warming through `CanonicalClient.readCacheWarming`/`updateCacheWarming`
-  (`GET/PUT /api/agent/v1/workspaces/:workspaceId/cache-warming`) and shows the
-  per-worker apply outcome. Upstream's per-session warming, its settings field and
-  the session-menu toggle were removed (see the decision in `.workflow/decisions.md`);
-  per-session warming returns only once the Agent Service owns it.
-- **Extensions.** `extensions/ExtensionsPage.tsx` renders installed and guest
-  extensions as cards with a detail view, install-source badges, the approval dialog
-  and the website locale links. Guest capabilities and permissions come from the
-  Host's extension records; nothing is installed from the page without an explicit
-  action.
-- **Adopted pages.** Voice, session retention, managed SSH credentials, app-link
-  security, notifications, shortcut recording, the theme catalog dialog and picker,
-  and the Extensions grid take upstream's current copy and layout.
+A scope picker would make every user learn how OpenCode orders global and
+project policies (global wins) before turning a skill off. Writing where the
+skill lives covers the common case with one control, and turning it back on
+clears the skill's exact deny wherever it is, so no file keeps a stale rule.
 
-<<<<<<< HEAD
-Deferred to the tasks that own their data, with the dependency named in each commit:
-the General/Chat/Appearance page split (`GeneralWorkspaceSettings`,
-`DesktopAppSettings`, `FinishedWorktreesSettings`, `MobileWorkspaceTabsSettings`),
-the settings-registry keys for helper-model thinking levels and tunnel HTTPS port,
-the tracker and source-control provider cards (`lib/trackers/registry`,
-`lib/source-control/providers/registry`), the Magic Prompts scoped-override page,
-the agent knowledge/workflow/render tool toggles, the tunnel mode rework, passkey
-rename, plugin runtime status and the skills catalog rows.
-=======
 ### Switching a plugin off
 
 The Plugins list is the only place a plugin is switched on or off; the detail
@@ -527,18 +393,12 @@ launch. The document a statement came from is in every read. The cost is that a
 user's exact deny written into `OPENCODE_CONFIG_CONTENT` by hand reads as ours.
 
 ## Skills catalog list
->>>>>>> bc50ba56a
 
-## Canonical entity ownership and shapes
+The catalog page lists one source, or every source's search matches, in
+`skills/catalog/SkillsCatalogRows.tsx`. From 100 rows on it mounts only the
+rows near the viewport, measured inside the settings page's own scroller; a
+shorter list renders every row.
 
-<<<<<<< HEAD
-Entity configuration and authored resources are owned by Canonical APIs and the
-Bun Agent Service. Host authentication and workspace authorization remain
-authoritative across Web/PWA, Electron, hosted mobile, and Capacitor. Mutations
-use canonical revision CAS (`expectedRevision`, `expectedPersistedRevision`, or
-`expectedSourceRevision`), ensuring concurrent or outdated mutations are detected
-and rejected.
-=======
 ### Why a threshold and not a virtualized list for every source
 
 A source can hold thousands of skills: `sickn33/agentic-awesome-skills` has
@@ -733,51 +593,35 @@ Every OpenCode entity these pages read and write speaks the v2 shape defined in
 `packages/web/server/lib/opencode/DOCUMENTATION.md`, section "Entity routes (v2
 shapes)". The server reads v1 files too and rewrites them in place as v2; the UI
 only ever sends v2.
->>>>>>> bc50ba56a
 
 | Entity | What the page reads and writes |
 |---|---|
-| Agent | Canonical native profile: `name`, `description`, `model` (`{ providerId, modelId }` or `null`), `allowedTools`, optional `systemPromptOverride`, optional `permissionPresetId` |
-| Command | Canonical authored entry: `name`, `description`, `content`, `argumentHint`, `scope` (`workspace` \| `agent`), `group`, `agentId`, `modelSelection`; worker-owned expansion |
-| Prompt template | Canonical authored entry: `name`, `description`, `content`, `scope` (`workspace` \| `agent`), `group`, `agentId`, `modelSelection`; worker-owned expansion |
-| Skill | Authored `SKILL.md` and supporting files scoped to workspace or agent; discovered skills report runtime metadata and content |
-| MCP server | Canonical `MCPServerConfig`: `serverId`, `label`, `enabled`, `transport` (`stdio` with `command`, `args`, optional `envCredentialRefs`; `http` or `sse` with `url`, optional `credentialRef`, optional `headerCredentialRefs`) |
-| Provider | Canonical `ProviderConfiguration`: `providerId`, `name`, `endpoint`, `protocol`, `credentialRef`; associated models and secret credentials |
-| Plugin | Canonical `InstalledPluginEntry`: `id`, `target`, `name`, `version`, `description`, `scope`, `enabled`, `enabledFeatures`, `settingsScope: "global"`, `globalSettings`, `settings`, `settingDefinitions`; local extensions in `.omp/extensions/` |
+| Agent | `system` (the markdown body), `description`, `model` as `provider/model#variant`, `mode`, `steps`, `hidden`, `color`, `request.body.temperature` / `request.body.top_p`, and an ordered `permissions` rule list |
+| Command | `template` (the markdown body), `description`, `agent`, `model` with `#variant`, `subagent` |
+| MCP server | `type` (required), `command` / `url`, `environment`, `headers`, `disabled`, `codemode`, `timeout: { startup, catalog, execution }`, snake_case `oauth` |
+| Provider | `package` with the `aisdk:` prefix, `settings.baseURL`, `headers`, `body`, models keyed by id with `modelID`, `capabilities`, `variants`, `cost.cache.read/write`, `disabled` |
+| Plugin | `{ package, options }`, serialized as a bare string when there are no options |
 
-Core ownership rules:
+Two consequences worth knowing:
 
-- **Edit stored canonical entries directly.** Stores read canonical DTOs and
-  submit explicit mutation payloads. Pages avoid round-tripping resolved runtime
-  defaults back into canonical storage.
-- **MCP server enablement and per-write runtime guards.** The `enabled` boolean
-  field controls whether the server is active. Setting `enabled: false` leaves the
-  server configuration intact in the catalog while inactive. Mutations enforce
-  per-write runtime guards: transport fields are validated per transport type
-  (`stdio` requires command/args; `http` and `sse` require valid endpoint URLs),
-  sensitive headers, URLs, and environment variables require write-only credential
-  references (`credentialRef`, `headerCredentialRefs`, `envCredentialRefs`), and
-  updates enforce `expectedPersistedRevision` CAS checks to prevent concurrent
-  overwrites. Plaintext secrets are never accepted in configuration DTOs.
-- **Agent allowedTools and execution authorization.** Agent `allowedTools`
-  describes tool availability for the profile. Approval authorization belongs to
-  Host authorization and native runtime execution policy (`respondApproval`).
-  Agent profiles do not expose an ordered permission rules editor or preset
-  catalog. Native profiles do not have hidden-agent flags.
-## Sessions (DefaultsSettings)
+- **Edit the stored entry, never the resolved one.** `AgentInfo` and the model
+  catalog are what OpenCode resolved: built-in defaults, global config and live
+  session grants are already merged in. Writing that back would bake them into
+  the file. `agents/AgentsPage.tsx` and `AgentPermissionsEditor.tsx` therefore
+  read `GET /api/config/agents/:name/config` and `…/permissions`, and the
+  commands store reads `GET /api/config/commands/:name/config` because the v2
+  `CommandInfo` carries only a name and a description.
+- **`request` is replaced wholesale.** A PATCH that sends `request` overwrites
+  the whole block, so `AgentsPage` merges the fields it owns into the stored
+  `request` instead of sending only what changed.
 
-`DefaultsSettings.tsx` configures what a new session starts with. Model roles are OMP's own `modelRoles` record, written through `canonicalClient.updateOmpSettings`; the app keeps no second copy.
+`disabled: true` is not a soft toggle: OpenCode 2 drops the entity entirely, so
+no page exposes it as an on/off switch for agents. For MCP servers `disabled` is
+the documented way to keep a server configured but inactive, and the page's
+"Enable" checkbox writes it.
 
-- **Default model and thinking:** writes `modelRoles.default`, with the chosen thinking level as the `:effort` suffix. `supportsReasoning` decides whether the effort picker is shown.
-- **Default agent and auto-apply:** writes `defaultAgent` (the shared settings registry). Picking an agent calls `setAgent(name, { keepModel: !autoApplyAgentModel })`, so auto-apply makes the agent's pinned model win; without it the open chat keeps the model it already had.
-- **Small and walkthrough models:** each has its own "use default" checkbox plus a picker. Unchecking enables the picker immediately, even before a value exists, and writes the native role (`smol`, `slow`). The walkthrough pick writes only the native `slow` role, which is exactly what `lib/walkthrough/index.js` resolves (`describeSmallModel(..., { role: 'slow' })`); there is no second Host copy of the choice.
-- **Fallback model:** reads and writes native `retry.fallbackChains` for the `default` selector, enables `retry.modelFallback` on a pick, and "None" deletes the whole default chain rather than leaving a hidden later link.
-- **Concurrent edits:** a 409 re-fetches the workspace settings and re-applies only the entries this write changed (`changedRoles`); every other role, including array-valued ones, survives. Role values are parsed with the canonical `JsonObjectSchema`, so an array-valued role is never dropped by an unrelated edit.
-- **Permissions and Plan mode:** `PermissionDefaultModeField` writes `permissionDefaultMode` (the Host applies it to new top-level sessions). The "allow subagents in Plan mode" row writes `planModeAllowAgents`, which the Host captures into the worker bootstrap and the worker enforces while Plan mode is active.
+### Agent permissions
 
-<<<<<<< HEAD
-All labels come from the shared dictionaries; none are hardcoded here.
-=======
 Settings lists hidden custom agents so their files remain editable, renameable, and deletable. Hidden built-in agents stay out of Settings, and all hidden agents stay out of the composer pickers. Duplicate and rename read the stored entry and preserve its `hidden` flag.
 
 OpenCode 2 replaced the v1 `permission` map (`bash`/`task`/`list`/`lsp` keys with
@@ -911,4 +755,3 @@ the theme's canvas and accent.
 
 Imported themes add up quickly (the catalog, a themes folder). Without a cap
 the page below the list moves further down with every import.
->>>>>>> bc50ba56a

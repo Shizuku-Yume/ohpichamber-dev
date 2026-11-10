@@ -6,7 +6,7 @@ import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
-import type { ToolPart } from '@/lib/opencode/model';
+import type { CanonicalToolView } from './toolView';
 import { useUIStore } from '@/stores/useUIStore';
 import { loadMessageImageBlob } from '../../markdown/markdownImageAssets';
 import { MarkdownContent } from '../../MarkdownRenderer';
@@ -32,7 +32,7 @@ const ToolOutputDialog = lazyWithChunkRecovery(() => import('../ToolOutputDialog
  * still working there is no message yet, so the card keeps a viewer of its own.
  */
 export function GeneratedImages({ part, paths, onShowPopup }: {
-    part: ToolPart;
+    part: CanonicalToolView;
     paths: readonly string[];
     onShowPopup?: (content: ToolPopupContent) => void;
 }) {
@@ -74,7 +74,7 @@ export function GeneratedImages({ part, paths, onShowPopup }: {
  * size: the same grant the chat drew it with, read whole.
  */
 function GeneratedImage({ part, path, directory, onShowPopup }: {
-    part: ToolPart;
+    part: CanonicalToolView;
     path: string;
     directory: string;
     onShowPopup: (content: ToolPopupContent) => void;

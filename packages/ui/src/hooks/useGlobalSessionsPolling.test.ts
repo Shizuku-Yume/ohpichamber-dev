@@ -3,18 +3,21 @@ import { readFileSync } from 'node:fs';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { opencodeClient } from '@/lib/opencode/client';
-import { subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
+import type { Session } from '@openchamber/agent-contract';
+import { canonicalClient } from '@/api/canonicalClient';
+import { hostFilesystem } from '@/lib/host-filesystem';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import type { SessionPage } from '@/lib/opencode/client';
 import {
   GLOBAL_SESSIONS_REFRESH_INTERVAL_MS,
-  GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS,
   startGlobalSessionsPolling,
   useGlobalSessionsPolling,
 } from './useGlobalSessionsPolling';
 
+type SessionList = { items: Session[]; errors: Record<string, string> };
+
 const flush = async () => { await new Promise<void>((resolve) => queueMicrotask(resolve)); };
+const settlePromises = async () => { for (let turn = 0; turn < 32; turn += 1) await Promise.resolve(); };
 const timers = () => {
   let nextId = 0;
   const pending = new Map<number, { callback: () => void; delay: number }>();
@@ -192,61 +195,18 @@ describe('global sessions polling lifecycle', () => {
     await flush();
     expect(refreshes).toBe(1);
     expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
-    // Returning before another poll comes due still takes a full snapshot.
+    notifyVisible();
+    await flush();
+    expect(refreshes).toBe(1);
+
+    // Visible again before anything came due: nothing extra.
     await clock.fire();
     expect(refreshes).toBe(2);
     notifyVisible();
     await flush();
-    expect(refreshes).toBe(3);
+    expect(refreshes).toBe(2);
     dispose();
     expect(listening).toBe(false);
-  });
-
-  test('checks the head between full snapshots and takes a full snapshot by ten minutes', async () => {
-    const clock = timers();
-    let now = 0;
-    let fullLoads = 0;
-    let headChecks = 0;
-    const full = async () => { fullLoads += 1; return true; };
-    const dispose = startGlobalSessionsPolling(full, full, clock.schedule, clock.clear,
-      undefined, undefined, async () => { headChecks += 1; return true; }, () => now);
-    await flush();
-    expect(fullLoads).toBe(1);
-    for (let index = 0; index < 13; index += 1) {
-      now += clock.delay() ?? 0;
-      await clock.fire();
-    }
-    expect(headChecks).toBe(13);
-    expect(fullLoads).toBe(1);
-    expect(clock.delay()).toBe(15_000);
-    now += clock.delay() ?? 0;
-    expect(now).toBe(GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS);
-    await clock.fire();
-    expect(fullLoads).toBe(2);
-    expect(headChecks).toBe(13);
-    dispose();
-  });
-
-  test('returning from hidden before a poll is due takes a complete snapshot, then resumes head checks', async () => {
-    const clock = timers();
-    let visible: () => void = () => undefined;
-    let fullLoads = 0;
-    let headChecks = 0;
-    const full = async () => { fullLoads += 1; return true; };
-    const dispose = startGlobalSessionsPolling(full, full, clock.schedule, clock.clear, {
-      isHidden: () => false,
-      onVisible: (listener) => { visible = listener; return () => undefined; },
-    }, undefined, async () => { headChecks += 1; return true; });
-    await flush();
-    visible();
-    await flush();
-    expect(fullLoads).toBe(2);
-    expect(headChecks).toBe(0);
-    expect(clock.pending.size).toBe(1);
-    await clock.fire();
-    expect(fullLoads).toBe(2);
-    expect(headChecks).toBe(1);
-    dispose();
   });
 
   test('disposal during a load prevents a late completion from scheduling more work', async () => {
@@ -273,16 +233,17 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   }
   const fetch = spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }));
-  const home = spyOn(opencodeClient, 'getFilesystemHomeInfo')
+  const home = spyOn(hostFilesystem, 'getFilesystemHomeInfo')
     .mockRejectedValueOnce(new Error('startup unavailable'))
     .mockResolvedValue({ home: '/home/user', chatsRoot: '/chats' });
-  const host = spyOn(opencodeClient, 'getHostSessionStatusSnapshot').mockResolvedValue(null);
-  const session = (id: string): SessionPage => ({ sessions: [{
-    id, projectID: 'project', directory: '/project', title: id,
-    time: { created: 1, updated: 2 },
-    cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  }], cursor: {} });
-  const list = spyOn(opencodeClient, 'listSessionsPage').mockResolvedValue(session('restored'));
+  const workspace = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace', projectId: 'project', name: 'Project' });
+  const subagents = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
+  const session = (sessionId: string): SessionList => ({ items: [{
+    sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '.', rootSessionId: sessionId,
+    createdAt: 1, updatedAt: 2, epoch: 'epoch_1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+    metadata: null, metadataRevision: '0', archiveRevision: '0',
+  }], errors: {} });
+  const list = spyOn(canonicalClient, 'listSessions').mockResolvedValue(session('restored'));
   const clock = timers();
   // happy-dom returns Node timer handles; retain that contract while controlling time.
   const originalTimeout = dom.setTimeout.bind(dom);
@@ -303,7 +264,18 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
   switchRuntimeEndpoint({ apiBaseUrl: 'http://sessions.test', runtimeKey: 'startup-a' });
   const root = createRoot(document.createElement('div'));
   const Harness = ({ enabled }: { enabled: boolean }) => { useGlobalSessionsPolling(enabled); return null; };
-  let resolveOldPage: (page: SessionPage) => void = () => undefined;
+  let resolveOldPage: (page: SessionList) => void = () => undefined;
+  const subscribeToNextReady = (): Promise<void> => {
+    let unsubscribe: () => void = () => undefined;
+    const ready = new Promise<void>((resolve) => {
+      unsubscribe = useGlobalSessionsStore.subscribe((state) => {
+        if (state.status !== 'ready') return;
+        unsubscribe();
+        resolve();
+      });
+    });
+    return ready;
+  };
   try {
     await act(async () => root.render(React.createElement(Harness, { enabled: false })));
     expect(home.mock.calls.length).toBe(0);
@@ -311,43 +283,41 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
     expect(useGlobalSessionsStore.getState().status).toBe('error');
     expect(useGlobalSessionsStore.getState().hasLoaded).toBe(false);
     expect(clock.delay()).toBe(1_000);
-    await act(async () => clock.fire());
-    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.id)).toEqual(['restored']);
+    const recovered = subscribeToNextReady();
+    await act(async () => { await clock.fire(); await recovered; });
+    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['restored']);
     expect(useGlobalSessionsStore.getState().status).toBe('ready');
     expect(clock.delay()).toBe(GLOBAL_SESSIONS_REFRESH_INTERVAL_MS);
-    expect(list.mock.calls.every(([options]) => options?.global === true)).toBe(true);
-    const seedsBeforeHeadCheck = host.mock.calls.length;
-    await act(async () => clock.fire());
-    expect(list.mock.calls.at(-1)?.[0]?.limit).toBe(20);
-    expect(host.mock.calls.length).toBe(seedsBeforeHeadCheck);
+    expect(list.mock.calls.every(([workspaceId]) => workspaceId === undefined)).toBe(true);
 
-    const oldPage = new Promise<SessionPage>((resolve) => { resolveOldPage = resolve; });
-    list.mockImplementationOnce(() => oldPage);
+    const oldPage = new Promise<SessionList>((resolve) => { resolveOldPage = resolve; });
+    list.mockImplementation(() => getRuntimeKey() === 'startup-a' ? oldPage : Promise.resolve(session('new-runtime')));
     await act(async () => clock.fire());
+    // The pass between full loads is a head check: it applies what it reads as
+    // mutations and never flashes the list into a loading state.
     expect(useGlobalSessionsStore.getState().status).toBe('ready');
     expect(useGlobalSessionsStore.getState().hasLoaded).toBe(true);
     expect(clock.pending.size).toBe(0);
-    list.mockResolvedValue(session('new-runtime'));
-    await act(async () => switchRuntimeEndpoint({ apiBaseUrl: 'http://sessions.test', runtimeKey: 'startup-b' }));
-    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.id)).toEqual(['new-runtime']);
+    const switched = subscribeToNextReady();
+    await act(async () => { switchRuntimeEndpoint({ apiBaseUrl: 'http://sessions.test', runtimeKey: 'startup-b' }); await switched; });
+    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['new-runtime']);
     expect(clock.pending.size).toBe(1);
-    const seedsBeforeOldCompletion = host.mock.calls.length;
-    await act(async () => resolveOldPage(session('stale')));
-    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.id)).toEqual(['new-runtime']);
-    expect(host.mock.calls.length).toBe(seedsBeforeOldCompletion);
+    await act(async () => { resolveOldPage(session('stale')); await settlePromises(); });
+    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['new-runtime']);
     expect(clock.pending.size).toBe(1);
     // The app may reset stores when the endpoint changes but runtime identity stays the same.
+    const reconnected = subscribeToNextReady();
     list.mockResolvedValue(session('reconnected'));
-    await act(async () => switchRuntimeEndpoint({ apiBaseUrl: 'http://reconnected.test', runtimeKey: 'startup-b' }));
-    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.id)).toEqual(['reconnected']);
+    await act(async () => { switchRuntimeEndpoint({ apiBaseUrl: 'http://reconnected.test', runtimeKey: 'startup-b' }); await reconnected; });
+    expect(useGlobalSessionsStore.getState().activeSessions.map((item) => item.sessionId)).toEqual(['reconnected']);
     expect(clock.pending.size).toBe(1);
     await act(async () => root.render(React.createElement(Harness, { enabled: false })));
     expect(clock.pending.size).toBe(0);
   } finally {
-    resolveOldPage({ sessions: [], cursor: {} });
+    resolveOldPage(session('stale'));
     await act(async () => root.unmount());
     reset();
-    for (const spy of [fetch, home, host, list, timeout, clear]) spy.mockRestore();
+    for (const spy of [fetch, home, workspace, subagents, list, timeout, clear]) spy.mockRestore();
     await dom.happyDOM.close();
     for (const [name, descriptor] of originals) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
@@ -363,13 +333,11 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
  * empty store because its root never did (#4643).
  */
 describe('global session polling root coverage', () => {
-  // VS Code's Settings editor tab is a VSCodeApp root that lists no
-  // sessions, so there the poller is gated on the panel kind; the chat panel
-  // still polls.
+  // The desktop root lists sessions from the global store, so it starts the
+  // poller. Mini Chat and VS Code roots do not exist on the retained surfaces
+  // (VS Code is retired; Mini Chat reads the canonical sync stores).
   const rootSources: Array<[string, string, RegExp]> = [
     ['App', '../App.tsx', /^\s*useGlobalSessionsPolling\(true\);/m],
-    ['VSCodeApp', '../apps/VSCodeApp.tsx', /^\s*useGlobalSessionsPolling\(!isSettingsPanel\);/m],
-    ['ElectronMiniChatApp', '../apps/ElectronMiniChatApp.tsx', /^\s*useGlobalSessionsPolling\(true\);/m],
   ];
 
   for (const [rootName, sourcePath, mountCall] of rootSources) {
