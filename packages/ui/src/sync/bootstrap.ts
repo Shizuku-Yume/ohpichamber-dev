@@ -2,19 +2,8 @@ import type { CanonicalClient } from "@/api/canonicalClient"
 import { canonicalClient } from "@/api/canonicalClient"
 import { registerWorkspaceDirectory } from "@/stores/globalSessions"
 import { refreshBackgroundShells } from "./background-shells"
-<<<<<<< HEAD
 import type { GlobalState, State } from "./types"
 import { isRetryableBootstrapError, retry, STARTUP_RETRY } from "./retry"
-=======
-import {
-  readDirectoryStatusSnapshot,
-  selectHeldSessionStatuses,
-  readDirectoryFormSnapshot,
-  readDirectoryPermissionSnapshot,
-  type DirectoryRecoverySource,
-} from "./directory-recovery-snapshots"
-import { noteQuestionFormSnapshot } from "./recoverable-questions"
->>>>>>> bc50ba56a
 
 /** Discovery failures are scoped, never permission to erase a failed sibling. */
 export async function bootstrapGlobal(
@@ -128,100 +117,5 @@ export function bootstrapDirectory(input: DirectoryBootstrapInput) {
       return { status: "failed", retryable: isRetryableBootstrapError(error) }
     }
   })()
-<<<<<<< HEAD
   return { sessions, environment }
 }
-=======
-  // Initialization has its own completion and network capacity. A slow config
-  // or directory cannot hold the session-list scheduler's slot.
-  const environment = initializeDirectory(input, sessions)
-  return { sessions, environment }
-}
-
-async function initializeDirectory(input: DirectoryBootstrapInput, sessions: Promise<BootstrapResult>): Promise<BootstrapResult> {
-  const { directory, store, set, global: g } = input
-  const read = <T>(request: () => Promise<T>, priority?: "active-session") => retry(() => runBackgroundNetworkTask(() => {
-    if (input.isStale?.()) throw new Error("Directory initialization superseded")
-    return request()
-  }, priority))
-  const commit = (patch: Partial<State>): boolean => {
-    if (input.isStale?.()) return false
-    set(patch)
-    return true
-  }
-  const state = store.getState()
-
-  // Seed from global state while we fetch directory-specific data
-  const seededProject = projectID(directory, g.projects)
-  if (seededProject) commit({ project: seededProject })
-  if (Object.keys(state.config ?? {}).length === 0 && Object.keys(g.config ?? {}).length > 0) {
-    if (commit({ config: g.config })) emitSyncConfigChanged(directory, g.config)
-  }
-  commit({ status: "partial" })
-  if (input.isStale?.()) return "stale"
-
-  // Queue live recovery first. Each read commits independently and a failing
-  // config read cannot suppress pending form or permission recovery.
-  const critical = Promise.allSettled([
-    // The host's active list covers every directory, so it speaks for this one
-    // only once the session list says which of those sessions are here. Without
-    // that list the statuses stay unknown.
-    sessions.then(async (listed) => {
-      if (listed !== "complete") return
-      await read(async () => {
-        const session_status = await readDirectoryStatusSnapshot(store, async () => {
-          const statuses = await opencodeClient.getActiveSessionStatuses(directory)
-          if (statuses === null) throw new Error("session.active failed")
-          return selectHeldSessionStatuses(statuses, store.getState().session)
-        })
-        commit({ session_status, sessionStatusReady: true })
-      }, "active-session")
-    }),
-    read(async () => {
-      const form = await readDirectoryFormSnapshot(store, () => (
-        opencodeClient.listPendingForms({ directories: [directory] })
-      ))
-      if (commit({ form })) noteQuestionFormSnapshot(directory, Object.values(form).flat())
-    }),
-    read(async () => {
-      const permission = await readDirectoryPermissionSnapshot(store, () => (
-        opencodeClient.listPendingPermissions({ directories: [directory] })
-      ))
-      commit({ permission })
-    }),
-    read(() => opencodeClient.getConfig(directory).then((config) => {
-      if (commit({ config })) emitSyncConfigChanged(directory, config)
-    })),
-    read(() =>
-      opencodeClient.getLocation(directory).then((location) => {
-        commit({
-          project: location.project.id,
-          path: { directory: location.directory, worktree: location.project.directory, home: g.path.home },
-        })
-      }),
-    ),
-  ])
-  // MCP status and the command list are deliberately not read here. Reading
-  // MCP state initializes the directory's whole stdio server fleet as an
-  // OpenCode side effect, and listing commands enumerates MCP prompts, which
-  // touches that same state. Both surfaces fetch on demand through their own
-  // stores (useMcpStore, useCommandsStore) instead.
-  const enrichment = Promise.allSettled([
-    read(() => opencodeClient.getVcs(directory).then((vcs) => commit({ vcs }))),
-    // Commands the agent left running in the background, including ones whose
-    // start or exit this client missed.
-    read(() => refreshBackgroundShells(directory, (target) => opencodeClient.listRunningShells(target))),
-  ])
-  const [results, enrichmentResults] = await Promise.all([critical, enrichment])
-  if (input.isStale?.()) return "stale"
-  const enrichmentErrors = enrichmentResults.filter((result): result is PromiseRejectedResult => result.status === "rejected")
-  if (enrichmentErrors.length) console.warn(`[bootstrap] optional enrichment failed for ${directory}`, enrichmentErrors[0].reason)
-  const errors = results.filter((result): result is PromiseRejectedResult => result.status === "rejected")
-  if (errors.length) {
-    console.error(`[bootstrap] environment initialization failed for ${directory}`, errors[0].reason)
-    return "failed"
-  }
-  commit({ status: "complete" })
-  return "complete"
-}
->>>>>>> bc50ba56a

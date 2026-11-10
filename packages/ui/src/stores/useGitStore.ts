@@ -173,12 +173,9 @@ const inFlightDiffFetchesByDirectory = new Map<string, Set<string>>();
 const diffFetchGenerationByDirectory = new Map<string, number>();
 const inFlightStatusFetches = new Map<string, { promise: Promise<boolean>; statusMutationRevision: number }>();
 const inFlightEnsureAllByDirectory = new Map<string, Promise<void>>();
-<<<<<<< HEAD
-=======
 // Reads in a row that Git could not answer, per runtime and directory; any
 // answer from Git resets it (see `repoUnreadable`).
 const unreadableReadsInARow = new Map<string, number>();
->>>>>>> bc50ba56a
 const directoriesAskingRemotes = new Set<string>();
 const inFlightNestedRepoDiscovery = new Map<string, Promise<void>>();
 const requestGenerationByChannel = new Map<string, number>();
