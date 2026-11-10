@@ -44,7 +44,7 @@ import { OpenChamberControlError, asControlError } from '../openchamber-control/
  * @param {(directory: string) => Promise<Array<{ ref: string, message: string, hash: string }>>} dependencies.listStashes
  * @param {(directory: string, options: { remote: 'local' }) => Promise<{ all: string[], defaultBranches: Record<string, string> }>} dependencies.getBranches
  * @param {(directory: string) => Promise<{ root: string }>} dependencies.resolvePrimaryWorktreeRoot
- * @param {(sessionId: string, directory: string, context: { worktreeRoot: string, worktree: object }) => Promise<object[] | void>} dependencies.moveSession
+ * @param {(sessionId: string, directory: string) => Promise<void>} dependencies.moveSession
  * @param {(sourceDirectory: string) => Promise<{ startCommand: string, untrustedSkipped: string[] }>} [dependencies.resolveWorktreeSetup]
  *   The project's setup commands for the new worktree (`../projects/worktree-setup.js`); none without it.
  * @param {(message: string, error: unknown) => void} [dependencies.warn]
@@ -157,11 +157,7 @@ export const createSessionWorktreeMover = (dependencies) => {
    * names the files whose uncommitted changes go along; without it nothing
    * does.
    *
-   * `moveSession` and `setup` may be supplied per call: the Host service owns
-   * the destination admission and the project's setup policy, while the
-   * ordering, stash and rollback stay here.
-   *
-   * @param {{ sessionId: string, directory: string, name: string, branchName?: string, startRef?: string, existingBranch?: string, carry?: string[], setup?: object, startDirectory?: Function, moveSession?: Function }} input
+   * @param {{ sessionId: string, directory: string, name: string, branchName?: string, startRef?: string, existingBranch?: string, carry?: string[] }} input
    */
   const move = async (input) => {
     const sessionId = asNonEmptyString(input?.sessionId);
@@ -201,7 +197,7 @@ export const createSessionWorktreeMover = (dependencies) => {
       if (branchName) worktreeInput.branchName = branchName;
     }
     // The setup runs inside the bootstrap, so the session moves into a worktree it already prepared.
-    const setup = input.setup ?? await resolveWorktreeSetup(source);
+    const setup = await resolveWorktreeSetup(source);
     if (setup.startCommand) worktreeInput.startCommand = setup.startCommand;
 
     let worktree;
@@ -226,20 +222,14 @@ export const createSessionWorktreeMover = (dependencies) => {
     }
 
     let stash = null;
-    let movedSessions = null;
     let start = { directory: worktree.path, fallback: null };
     let setupStillRunning = false;
     try {
       ({ setupStillRunning } = await waitForWorktreeReady(worktree.path));
       if (!setupStillRunning) {
-        start = input.startDirectory
-          ? await input.startDirectory({ sourceDirectory: source, worktreeRoot: worktree.path })
-          : await resolveStartDirectory({ sourceDirectory: source, worktreeRoot: worktree.path });
+        start = await resolveStartDirectory({ sourceDirectory: source, worktreeRoot: worktree.path });
         if (paths.length > 0) stash = await carryChanges({ source, destination: worktree.path, sessionId, name, paths });
-        // The move is last, and gets the worktree root as well: a relocation
-        // needs the checkout, not only the start folder inside it.
-        const relocate = input.moveSession ?? moveSession;
-        movedSessions = await relocate(sessionId, start.directory, { worktreeRoot: worktree.path, worktree }) ?? null;
+        await moveSession(sessionId, start.directory);
       }
     } catch (error) {
       // The removal first stops the setup commands and waits for the bootstrap,
@@ -286,7 +276,6 @@ export const createSessionWorktreeMover = (dependencies) => {
       // What the agent named; anything else uncommitted stayed where it was.
       carried: paths,
     };
-    if (movedSessions) result.sessions = movedSessions;
     if (start.fallback) result.startDirectoryFallback = start.fallback;
     if (setup.untrustedSkipped.length > 0) result.untrustedSetupCommandsSkipped = setup.untrustedSkipped;
     return result;

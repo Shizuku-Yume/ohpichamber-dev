@@ -1,5 +1,6 @@
 import express from 'express';
-import { normalizeCustomOpenAIBaseURL, normalizeSelectedOpenAIBaseURL } from './base-url.js';
+import { normalizeCustomOpenAIBaseURL } from './base-url.js';
+import { normalizeEndpointPath } from './endpoint-path.js';
 import { summarizeText, sanitizeForTTS, sanitizeForNote } from '../text/summarization.js';
 
 import { detectTextLanguage, languageOfLocale, pickVoiceForLanguage } from './language-detect.js';
@@ -13,13 +14,13 @@ export function speechVoiceHeaderValue(voice) {
   return encodeURIComponent(voice);
 }
 
-export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTtsSelection }) {
-  if (!ttsService || typeof ttsService.isAvailable !== 'function') throw new TypeError('TTS routes require the configured TTS service');
-  if (typeof resolveTtsSelection !== 'function') throw new TypeError('TTS routes require selected credential context');
-  const selectionFor = async (req) => {
-    const selection = await resolveTtsSelection(req);
-    if (!selection || typeof selection !== 'object') throw new Error('Selected TTS credential is unavailable');
-    return selection;
+export function registerTtsRoutes(app, { sayTTSCapability }) {
+  let ttsModulePromise = null;
+  const getTtsModule = async () => {
+    if (!ttsModulePromise) {
+      ttsModulePromise = import('./index.js');
+    }
+    return ttsModulePromise;
   };
 
   // Which voice keys are stored; the keys themselves never leave the server.
@@ -31,42 +32,123 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
     try {
       res.json(updateVoiceKeys(req.body));
     } catch (error) {
-      res.status(400).json({ error: 'Invalid transcription key request' });
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid voice keys' });
     }
   });
 
   app.post('/api/voice/token', async (req, res) => {
+    console.log('[Voice] Token request received:', {
+      contentType: req.headers['content-type'] || null,
+    });
     try {
-      if (isEnterpriseMode()) return res.status(403).json({ allowed: false, error: ENTERPRISE_MODE_ERROR });
-      const selection = await selectionFor(req);
-      if (!await ttsService.isAvailable(selection)) return res.status(503).json({ allowed: false, error: 'Voice service unavailable' });
-      return res.json({ allowed: true, provider: 'openai', message: 'OpenAI TTS is available' });
-    } catch {
-      return res.status(503).json({ allowed: false, error: 'Voice service unavailable' });
+      if (isEnterpriseMode()) {
+        return res.status(403).json({ allowed: false, error: ENTERPRISE_MODE_ERROR });
+      }
+      const openaiApiKey = process.env.OPENAI_API_KEY;
+      console.log('[Voice] OpenAI API Key present:', !!openaiApiKey);
+
+      if (!openaiApiKey) {
+        return res.status(503).json({
+          allowed: false,
+          error: 'OpenAI voice service not configured. Set OPENAI_API_KEY environment variable.'
+        });
+      }
+
+      // Return success - OpenAI TTS is available
+      res.json({
+        allowed: true,
+        provider: 'openai',
+        message: 'OpenAI TTS is available'
+      });
+    } catch (error) {
+      console.error('[Voice] Token generation error:', error);
+      res.status(500).json({
+        allowed: false,
+        error: 'Voice service error'
+      });
     }
   });
 
   // Server-side TTS endpoint - streams audio from OpenAI TTS API
   app.post('/api/tts/speak', async (req, res) => {
     try {
-      const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, baseURL } = req.body || {};
-      if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'Text is required' });
-      const requested = normalizeCustomOpenAIBaseURL(baseURL);
-      if (requested.error) return res.status(400).json({ error: requested.error });
-      const selection = await selectionFor(req);
-      const normalized = normalizeSelectedOpenAIBaseURL(selection.baseURL);
-      if (normalized.error) return res.status(isEnterpriseMode() ? 403 : 503).json({ error: isEnterpriseMode() ? ENTERPRISE_MODE_ERROR : 'Selected TTS provider unavailable' });
-      if (requested.value && requested.value !== normalized.value) return res.status(400).json({ error: 'TTS endpoint must match the selected provider' });
-      if (isEnterpriseMode() && !normalized.value) return res.status(403).json({ error: ENTERPRISE_MODE_ERROR });
-      const result = await ttsService.generateSpeechStream({ ...selection, text: text.trim(), voice, model, speed, instructions, baseURL: normalized.value });
+      const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, providerId, modelId, apiKey, baseURL, endpointPath } = req.body || {};
+
+      const normalizedBaseURLResult = normalizeCustomOpenAIBaseURL(baseURL);
+      if (normalizedBaseURLResult.error) {
+        return res.status(400).json({ error: normalizedBaseURLResult.error });
+      }
+      const normalizedBaseURL = normalizedBaseURLResult.value;
+
+      const endpointPathResult = normalizeEndpointPath(endpointPath);
+      if (endpointPathResult.error) {
+        return res.status(400).json({ error: endpointPathResult.error });
+      }
+      const normalizedEndpointPath = endpointPathResult.value;
+      if (normalizedEndpointPath && !normalizedBaseURL) {
+        return res.status(400).json({ error: 'A custom endpoint path needs a custom server URL' });
+      }
+
+      console.log('[TTS] Request received:', { voice, model, speed, textLength: text?.length, hasApiKey: !!apiKey, hasBaseURL: !!baseURL });
+
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'Text is required' });
+      }
+
+      // Without a custom server this is OpenAI's cloud; a custom one has
+      // already been held to this machine by the URL check above.
+      if (isEnterpriseMode() && !normalizedBaseURL) {
+        return res.status(403).json({ error: ENTERPRISE_MODE_ERROR });
+      }
+
+      // Dynamically import the TTS service (ESM)
+      const { ttsService } = await getTtsModule();
+
+      // Check availability - server-configured key, client-provided key, or custom server URL
+      const hasServerKey = await ttsService.isAvailable();
+      const hasCustomBaseURL = typeof normalizedBaseURL === 'string' && normalizedBaseURL.length > 0;
+      // The key stored for this kind of server; a key in the body is what
+      // clients from before the server kept them sent, and still wins.
+      const requestKey = typeof apiKey === 'string' && apiKey.trim() ? apiKey.trim() : undefined;
+      const clientKey = requestKey ?? readVoiceKey(hasCustomBaseURL ? 'openaiCompatible' : 'openai');
+      const hasClientKey = Boolean(clientKey);
+
+      if (!hasServerKey && !hasClientKey && !hasCustomBaseURL) {
+        return res.status(503).json({ 
+          error: 'TTS service not available. Please configure OpenAI in OpenCode, provide an API key, or set a custom server URL in settings.' 
+        });
+      }
+
+      let textToSpeak = text.trim();
+
+      // Historical summarize request fields are intentionally ignored. The
+      // model-backed summarization provider is retired.
+
+      const result = await ttsService.generateSpeechStream({
+        text: textToSpeak,
+        voice,
+        model,
+        speed,
+        instructions,
+        apiKey: clientKey,
+        baseURL: hasCustomBaseURL ? normalizedBaseURL : undefined,
+        endpointPath: hasCustomBaseURL ? normalizedEndpointPath : undefined,
+      });
+
       res.setHeader('Content-Type', result.contentType);
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Content-Length', result.buffer.length);
-      return res.send(result.buffer);
-    } catch {
-      if (!res.headersSent) return res.status(503).json({ error: 'TTS service unavailable' });
-      return undefined;
-    }
+      res.send(result.buffer);
+      } catch (error) {
+        console.error('[TTS] Error:', error);
+        if (!res.headersSent) {
+          const { model: m, voice: v, baseURL: b } = req.body || {};
+          res.status(500).json({ 
+            error: error instanceof Error ? error.message : 'TTS generation failed',
+            detail: { model: m, voice: v, hasBaseURL: !!b },
+          });
+        }
+      }
   });
 
   app.post('/api/text/summarize', async (req, res) => {
@@ -85,25 +167,34 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
       });
 
       return res.json(result);
-    } catch {
+    } catch (error) {
+      console.error('[Summarize] Error:', error);
       const sanitized = typeof req.body?.mode === 'string' && req.body.mode === 'note'
         ? sanitizeForNote(req.body?.text || '')
         : sanitizeForTTS(req.body?.text || '');
-      return res.json({ summary: sanitized, summarized: false, reason: 'Summarization unavailable' });
+      return res.json({ summary: sanitized, summarized: false, reason: error.message });
     }
   });
 
        
   // TTS status endpoint
-  app.get('/api/tts/status', async (req, res) => {
+  app.get('/api/tts/status', async (_req, res) => {
     try {
-      const selection = await selectionFor(req);
+      const { ttsService } = await getTtsModule();
       const enterpriseMode = isEnterpriseMode();
-      return res.json({ available: !enterpriseMode && await ttsService.isAvailable(selection), enterpriseMode, voices: ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar'] });
-    } catch {
-      return res.status(503).json({ error: 'TTS service unavailable' });
+      res.json({
+        available: !enterpriseMode && await ttsService.isAvailable(),
+        enterpriseMode,
+        voices: [
+          'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable',
+          'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar'
+        ]
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to check TTS status' });
     }
   });
+
   // The startup probe runs concurrently with server bootstrap. An unusually
   // early status request waits for that same authoritative result.
   app.get('/api/tts/say/status', async (_req, res) => {
@@ -201,6 +292,11 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
         const language = typeof req.headers['x-language'] === 'string' && req.headers['x-language'].trim().length > 0
           ? req.headers['x-language'].trim()
           : undefined;
+        const endpointPathResult = normalizeEndpointPath(req.headers['x-endpoint-path']);
+        if (endpointPathResult.error) {
+          return res.status(400).json({ error: endpointPathResult.error });
+        }
+        const endpointPath = endpointPathResult.value;
         const authHeader = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
         const apiKey = (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined) || readVoiceKey('stt');
 
@@ -228,6 +324,7 @@ export function registerTtsRoutes(app, { sayTTSCapability, ttsService, resolveTt
           baseURL,
           apiKey,
           language,
+          endpointPath,
         });
 
         console.log('[STT] Transcript:', transcript?.slice(0, 120));
