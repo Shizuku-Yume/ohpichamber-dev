@@ -47,19 +47,9 @@ import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUISto
 import { useGuestSurfaces } from '@/hooks/useGuestSurfaces';
 import { useGuestBadgeStore } from '@/lib/guests/badge-store';
 import { isPluginContextPanelMode, pluginIdFromMode } from '@/lib/surfaces/modes';
-<<<<<<< HEAD
-=======
-import { shownContextModes, zoneOfMode } from '@/lib/workspace/zones';
-import { ContextRailSurfacesDialog } from './ContextRailSurfacesDialog';
-import { ContextRailTooltipDetails } from './ContextRailUsage';
-import { ZoneMoveMenuItems } from './ZoneMoveMenuItems';
-import { startZoneDragGesture, type ZoneDragGesture } from './zoneDrag';
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
->>>>>>> bc50ba56a
 import { useWorkflowsSurfaceShown } from '@/lib/workflows/panel';
 import { ContextRailSurfacesDialog } from './ContextRailSurfacesDialog';
-import { shownContextModes, zoneOfMode } from '@/lib/workspace/zones';
+import { ContextRailTooltipDetails } from './ContextRailUsage';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { ZoneMoveMenuItems } from './ZoneMoveMenuItems';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
@@ -102,17 +92,9 @@ const ContextPanelRailItem: React.FC<RailItemProps> = ({
 }) => {
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const surfacePrefix = getEffectiveShortcutPrefix('switch_context_surface', shortcutOverrides);
-<<<<<<< HEAD
-  const surfaceShortcut = surface.id === 'terminal'
-    ? formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_terminal', shortcutOverrides), '')
-    : (surfacePrefix && orderNumber != null && orderNumber <= 10
-      ? formatShortcutForDisplay(`${surfacePrefix}+${orderNumber === 10 ? '0' : orderNumber}`)
-      : undefined);
-=======
   const surfaceShortcut = surfacePrefix && surfacePrefix !== UNASSIGNED_SHORTCUT && orderNumber != null && orderNumber <= 10
     ? formatShortcutForDisplay(`${surfacePrefix}+${orderNumber === 10 ? '0' : orderNumber}`)
     : undefined;
->>>>>>> bc50ba56a
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: surface.id,
   });
@@ -120,88 +102,12 @@ const ContextPanelRailItem: React.FC<RailItemProps> = ({
   const hasBadge = badgeCount != null && badgeCount > 0;
 
   return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn('relative', isDragging && 'z-10 opacity-70')}
+    >
     <ContextMenu>
-<<<<<<< HEAD
-      <ContextMenuTrigger
-        render={(
-          <div
-            ref={setNodeRef}
-            style={{ transform: CSS.Translate.toString(transform), transition }}
-            className={cn('relative', isDragging && 'z-10 opacity-70')}
-          />
-        )}
-      >
-        <Tooltip delayDuration={RAIL_TOOLTIP_DELAY_MS}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              {...attributes}
-              {...listeners}
-              onClick={() => onSelect(surface)}
-              aria-label={badgeAriaLabel ?? label}
-              aria-pressed={isActive}
-              data-context-surface={surface.id}
-              className={cn(
-                'flex h-9 w-9 touch-none select-none items-center justify-center rounded-md transition-colors',
-                isActive
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {surface.id === 'diff' ? (
-                <DiffViewIcon className="h-[18px] w-[18px]" />
-              ) : (
-                <GuestIcon
-                  icon={surface.icon}
-                  iconSrc={surface.iconSrc}
-                  className="h-[18px] w-[18px]"
-                />
-              )}
-              {showOrderNumber && orderNumber != null ? (
-                <span
-                  aria-hidden="true"
-                  className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-surface-muted px-1 text-[0.625rem] font-medium leading-none text-muted-foreground"
-                >
-                  {orderNumber === 10 ? '0' : orderNumber}
-                </span>
-              ) : displayBadgeCount ? (
-                <span
-                  aria-hidden="true"
-                  // Muted digits on the muted surface sat at almost the same
-                  // luminance as the glyph they overlap. The count is a live
-                  // signal, so it takes the info tone on its own opaque chip.
-                  className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.625rem] font-semibold leading-none"
-                  style={{
-                    backgroundColor: 'var(--status-info-background)',
-                    color: 'var(--status-info)',
-                  }}
-                >
-                  {displayBadgeCount}
-                </span>
-              ) : showActivityDot ? (
-                <span
-                  aria-hidden="true"
-                  className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--status-info)]"
-                />
-              ) : null}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="left" sideOffset={8}>
-            <div className="flex flex-col gap-0.5">
-              <TooltipLabelWithShortcut label={label} shortcut={surfaceShortcut} />
-              <span className="typography-micro text-muted-foreground">{description}</span>
-              {badgeDescription ? (
-                <span className="typography-micro text-muted-foreground">{badgeDescription}</span>
-              ) : null}
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        {/* Placement is per surface: the same menu the panel's own tab strip offers. */}
-        <ZoneMoveMenuItems mode={surface.mode} />
-      </ContextMenuContent>
-=======
     <ContextMenuTrigger render={<div />}>
       <Tooltip delayDuration={RAIL_TOOLTIP_DELAY_MS}>
         <TooltipTrigger asChild>
@@ -268,8 +174,8 @@ const ContextPanelRailItem: React.FC<RailItemProps> = ({
     <ContextMenuContent>
       <ZoneMoveMenuItems mode={surface.mode} />
     </ContextMenuContent>
->>>>>>> bc50ba56a
     </ContextMenu>
+    </div>
   );
 };
 
@@ -418,12 +324,6 @@ export const ContextPanelRail: React.FC = () => {
       return;
     }
 
-<<<<<<< HEAD
-    // dnd-kit hands back its own id type; the registry ids are the strings it was given.
-    const orderedIds = sortContextSurfaces(useUIStore.getState().contextRailOrder, guestSurfaces).map((surface) => surface.id);
-    const fromIndex = orderedIds.findIndex((id) => id === String(active.id));
-    const toIndex = orderedIds.findIndex((id) => id === String(over.id));
-=======
     const ordered = sortContextSurfaces(useUIStore.getState().contextRailOrder, guestSurfaces);
     // An icon moves only among its own group; the groups' order is the dialog's.
     const groupOf = (id: string | number) => {
@@ -436,7 +336,6 @@ export const ContextPanelRail: React.FC = () => {
     const orderedIds = ordered.map((surface) => surface.id);
     const fromIndex = orderedIds.indexOf(active.id as (typeof orderedIds)[number]);
     const toIndex = orderedIds.indexOf(over.id as (typeof orderedIds)[number]);
->>>>>>> bc50ba56a
     if (fromIndex === -1 || toIndex === -1) {
       return;
     }
@@ -479,12 +378,6 @@ export const ContextPanelRail: React.FC = () => {
       aria-label={t('contextRail.aria.rail')}
       className="flex h-full w-11 flex-shrink-0 flex-col items-center gap-1 bg-background py-2"
     >
-<<<<<<< HEAD
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={surfaces.map((surface) => surface.id)} strategy={verticalListSortingStrategy}>
-          {surfaces.map((surface, index) => {
-            const label = surface.label ?? t(changeRequestCopy(surface.labelKey, repositoryProvider));
-=======
       <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={handleDragStart} onDragCancel={handleDragCancel} onDragEnd={handleDragEnd}>
         {groups.map((group, groupIndex) => (
           <React.Fragment key={contextSurfaceGroup(group[0])}>
@@ -493,7 +386,6 @@ export const ContextPanelRail: React.FC = () => {
           {group.map((surface) => {
             orderNumber += 1;
             const label = surface.label ?? t(changeRequestCopy(surface.labelKey, changeRequestTerm));
->>>>>>> bc50ba56a
             // Git shows a numeric badge instead of the old activity dot.
             // Other surfaces never inherit git's changed-files signal.
             // The work-status panel reports the same count in words a few
@@ -552,11 +444,7 @@ export const ContextPanelRail: React.FC = () => {
             type="button"
             aria-label={t('contextRail.configure.open')}
             onClick={() => setIsSurfacesDialogOpen(true)}
-<<<<<<< HEAD
-            className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:text-foreground"
-=======
             className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
->>>>>>> bc50ba56a
           >
             <Icon name="equalizer-2" className="h-[17px] w-[17px]" />
           </button>
