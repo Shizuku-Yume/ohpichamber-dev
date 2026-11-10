@@ -1,5 +1,4 @@
 import type { Session } from '@openchamber/agent-contract';
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { listedChildren } from './listedChildren';
 import type { SessionFolder, SessionFoldersMap } from '@/stores/useSessionFoldersStore';
 import { compareSessionsByLifecycleOrder, EMPTY_SESSION_ORDER_RANKS } from '@/sync/session-ordering';

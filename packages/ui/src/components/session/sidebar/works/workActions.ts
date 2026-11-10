@@ -1,5 +1,4 @@
 import type { Session } from '@openchamber/agent-contract';
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { isReviewSession } from '@/lib/sessionReviewMetadata';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
 import { markOverviewSessionsDone } from '@/components/overview/overviewActions';
@@ -64,7 +63,7 @@ export const isWorkInWork = (sessions: readonly Session[]): boolean => sessions.
 
 /** Puts a work back into In work through the session the user last worked in. */
 export const trackWork = async (session: Session): Promise<void> => {
-  await setSessionWorkState(session.sessionId, resolveGlobalSessionDirectory(session) ?? resolveGlobalSessionDirectory(session), 'open');
+  await setSessionWorkState(session.sessionId, resolveGlobalSessionDirectory(session), 'open');
 };
 
 export type FinishWorktreeWorkOutcome =

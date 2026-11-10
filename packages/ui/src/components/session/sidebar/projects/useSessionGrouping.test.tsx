@@ -3,7 +3,6 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Session } from '@openchamber/agent-contract';
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { I18nProvider } from '@/lib/i18n';
 import { useSessionActions } from '../sessions/useSessionActions';

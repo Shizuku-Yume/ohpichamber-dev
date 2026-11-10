@@ -1,4 +1,3 @@
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import React from 'react';
 import { useI18n } from '@/lib/i18n';
 import { SessionNodeItem } from './SessionNodeItem';
@@ -260,7 +259,7 @@ const isSameSessionForRow = (prev: SessionNode, next: SessionNode): boolean => (
   && prev.session.parentSessionId === next.session.parentSessionId
   && prev.session.createdAt === next.session.createdAt
   && prev.session.updatedAt === next.session.updatedAt
-  && prev.session.archivedAt !== undefined === next.session.archivedAt !== undefined
+  && (prev.session.archivedAt !== undefined) === (next.session.archivedAt !== undefined)
   && sameMultiRunIdentity(prev.session, next.session)
   && normalizePath(prev.worktree?.path ?? null) === normalizePath(next.worktree?.path ?? null)
   && prev.worktree?.branch === next.worktree?.branch
