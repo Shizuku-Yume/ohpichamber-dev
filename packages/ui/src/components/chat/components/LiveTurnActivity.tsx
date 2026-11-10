@@ -10,7 +10,7 @@ import {
     planActivityTrim,
 } from '../lib/turns/activityRows';
 import type { ChatMessageEntry, TurnRecord } from '../lib/turns/types';
-import { getLiveFinalMessage, getShownPages } from '../lib/turns/liveActivity';
+import { getLiveFinalMessage, getShownPages, toolResultsByCall } from '../lib/turns/liveActivity';
 import { summarizeLiveActivity } from '../lib/turns/liveActivitySummary';
 import { LiveActivityCollapse } from './LiveActivityCollapse';
 import { LiveFinalActivityContext, LiveTurnHoistedPagesContext } from './liveActivityContext';

@@ -3,10 +3,11 @@ import React, { memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useI18n } from '@/lib/i18n';
-import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useChatSessionSelection } from './chatColumnSession';
+import { useSessionDirectory } from '@/sync/sync-context';
+import { selectAutoReviewRun } from '@/stores/useAutoReviewStore';
 
 /**
  * A running review loop, as a top row of the composer next to the background
@@ -15,19 +16,16 @@ import { useChatSessionSelection } from './chatColumnSession';
 export const AutoReviewStrip = memo(() => {
   const { t } = useI18n();
   const currentSessionId = useChatSessionSelection().sessionId;
-  const run = useAutoReviewStore(React.useCallback((state) => {
-    if (!currentSessionId) return null;
-    const run = state.runsByOriginalSessionID[currentSessionId] ?? null;
-    return run?.runtimeKey === getRuntimeKey() ? run : null;
-  }, [currentSessionId]));
-  const stopRun = useAutoReviewStore((state) => state.stopRun);
+  const directory = useSessionDirectory(currentSessionId);
+  const run = useAutoReviewStore(selectAutoReviewRun(currentSessionId, directory));
+  const removeRun = useAutoReviewStore((state) => state.removeRun);
   const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
 
   if (!currentSessionId || !run || run.status !== 'running') {
     return null;
   }
 
-  const statusLabel = run.phase === 'waiting_for_reviewer'
+  const statusLabel = run.step === 'review'
     ? t('chat.autoReview.status.waitingForReviewer')
     : t('chat.autoReview.status.waitingForImplementer');
 
@@ -61,7 +59,7 @@ export const AutoReviewStrip = memo(() => {
         type="button"
         variant="ghost"
         size="sm"
-        onClick={() => stopRun(currentSessionId)}
+        onClick={() => { if (currentSessionId && directory) void removeRun(currentSessionId, directory); }}
         onMouseDown={(event) => event.preventDefault()}
         className="shrink-0 text-status-error/80 hover:bg-transparent hover:text-status-error"
       >

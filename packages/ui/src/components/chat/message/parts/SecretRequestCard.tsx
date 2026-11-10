@@ -4,7 +4,6 @@ import { dispatchPageWaiting } from '@/components/chat/lib/scroll/timelineScroll
 import { Icon } from '@/components/icon/Icon';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/lib/i18n';
 import type { CanonicalToolView, RequestedSecret } from './toolView';

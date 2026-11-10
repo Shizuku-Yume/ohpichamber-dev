@@ -19,6 +19,12 @@ const OPENCHAMBER_SECRET_TOOL = 'openchamber_secret';
 const OPENCHAMBER_WORKFLOW_TOOL = 'openchamber_workflow';
 const OPENCHAMBER_IMAGE_TOOL = 'openchamber_image';
 
+const optionalText = z.string().trim().min(1).optional().catch(undefined);
+const booleanish = z
+    .union([z.boolean(), z.enum(['true', 'false']).transform((value) => value === 'true')])
+    .optional()
+    .catch(undefined);
+
 const openChamberCallAwaits = z
     .object({
         action: z.string().optional().catch(undefined),
@@ -26,12 +32,6 @@ const openChamberCallAwaits = z
         parameters: z.object({ awaitAnswer: booleanish }).optional().catch(undefined),
     })
     .catch({});
-
-const optionalText = z.string().trim().min(1).optional().catch(undefined);
-const booleanish = z
-    .union([z.boolean(), z.enum(['true', 'false']).transform((value) => value === 'true')])
-    .optional()
-    .catch(undefined);
 
 const renderPageFields = z.object({
     html: z.string().optional().catch(undefined),
@@ -236,7 +236,7 @@ export const isSettledAsk = (view: CanonicalToolView): boolean => (
     && (view.tool === OPENCHAMBER_RENDER_TOOL || view.tool === OPENCHAMBER_SECRET_TOOL)
     && (() => {
         const parsed = openChamberCallAwaits.parse(view.state.input ?? {});
-        return parsed.awaitsAnswer === true;
+        return (parsed.parameters?.awaitAnswer ?? parsed.awaitAnswer) === true;
     })()
 );
 
