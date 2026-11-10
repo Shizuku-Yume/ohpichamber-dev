@@ -16,6 +16,7 @@ const mobileWorkspaceDrawerSource = readFileSync(
   'utf-8',
 );
 
+describe('issue #2644: Escape in terminal must not close the panel around it', () => {
   test('mobile drawer keeps its terminal Escape exception', () => {
     const handlerStart = mobileWorkspaceDrawerSource.indexOf("if (event.key !== 'Escape'");
     expect(handlerStart).toBeGreaterThan(-1);
