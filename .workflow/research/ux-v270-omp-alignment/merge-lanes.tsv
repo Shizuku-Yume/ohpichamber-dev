@@ -1082,9 +1082,6 @@ packages/web/src/api/git.ts	12
 packages/web/src/api/index.ts	12
 packages/web/src/api/trackers-legacy-linear.ts	12
 packages/web/src/api/trackers.ts	12
-scripts/brand/DOCUMENTATION.md	18
-scripts/brand/generate.mjs	18
-scripts/brand/raster.mjs	18
 scripts/generate-icon-sprite.mjs	18
 scripts/model-bench/README.md	18
 scripts/model-bench/bench.mjs	18
