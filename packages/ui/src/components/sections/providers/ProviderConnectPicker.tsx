@@ -101,7 +101,12 @@ export const ProviderConnectPicker: React.FC<ProviderConnectPickerProps> = ({ pr
               onOpen={() => onSelect(provider.id)}
             />
           ))}
-          <SettingsAddCard label={customLabel} hint={t('settings.providers.connect.customHint')} onClick={onSelectCustom} />
+          <SettingsAddCard
+            label={customLabel}
+            hint={t('settings.providers.connect.customHint')}
+            onClick={onSelectCustom}
+            settingsItem="providers.custom"
+          />
         </div>
       </SettingsSection>
 
