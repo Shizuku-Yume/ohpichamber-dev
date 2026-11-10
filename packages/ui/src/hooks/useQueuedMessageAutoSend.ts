@@ -6,14 +6,14 @@ import { useSelectionStore } from '@/sync/selection-store';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useContextStore } from '@/stores/contextStore';
 import { queuedContextToParts } from '@/components/chat/composer/submit/buildOutgoingMessage';
-import { getAllSyncSessionMap, getDirectoryState } from '@/sync/sync-refs';
+import { getDirectoryState } from '@/sync/sync-refs';
 import { hasActiveSubagent } from '@/sync/global-session-status';
 import { useDirectorySync } from '@/sync/sync-context';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { createInputHistorySubmission } from '@/stores/useInputHistoryStore';
 
-type SessionStatusType = 'idle' | 'busy' | 'retry';
+type SessionStatusType = 'idle' | 'busy';
 
 const RECENT_ABORT_WINDOW_MS = 2000;
 
@@ -121,7 +121,7 @@ export const sendQueuedAutoSendPayload = (
     payload.additionalParts.length > 0 ? payload.additionalParts : undefined,
     resolved.variant,
     'normal',
-    { target, historySubmissions: payload.historySubmissions, queuedGoal: payload.goal },
+    { target, historySubmissions: payload.historySubmissions },
   );
 };
 
@@ -179,8 +179,7 @@ export const shouldDispatchQueuedAutoSend = (
   hasQueuedItems: boolean = false,
 ): boolean => {
   if (hasQueuedItems && currentStatusType === 'idle') return true;
-  return (previousStatusType === 'busy' || previousStatusType === 'retry')
-    && currentStatusType === 'idle';
+  return previousStatusType === 'busy' && currentStatusType === 'idle';
 };
 
 /**
@@ -201,30 +200,22 @@ export const resolveQueuedSessionStatusType = (
   directory: string,
 ): SessionStatusType => {
   const state = getDirectoryState(directory);
-  const statusType = state?.session_status?.[sessionId]?.type;
-  if (statusType === 'busy' || statusType === 'retry') {
-    return statusType;
-  }
-  // A queued message waits for the whole turn: a parent idles while a
-  // background subagent works and runs again when OpenCode hands the result
-  // back. Mirrors the server queue's subagent gate.
-  const activeSessionIds = new Set(Object.entries(state?.session_status ?? {})
-    .filter(([, status]) => status.type === 'busy' || status.type === 'retry')
-    .map(([id]) => id));
-  const sessionsById = getAllSyncSessionMap();
-  const subagentRunning = activeSessionIds.size > 0
-    && hasActiveSubagent(sessionId, activeSessionIds, (id) => sessionsById.get(id)?.parentID);
-  if (subagentRunning) {
+  const status = state?.session_status?.[sessionId];
+  if (status && status !== 'idle') {
     return 'busy';
   }
-  const sessionMessages = state?.message?.[sessionId];
-  const lastMessage = sessionMessages && sessionMessages.length > 0
-    ? sessionMessages[sessionMessages.length - 1]
-    : undefined;
-  if (
-    lastMessage?.role === 'assistant'
-    && typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== 'number'
-  ) {
+  // A queued message waits for the whole turn: the parent's own child sessions
+  // count too, so a background subagent keeps the queue waiting. Mirrors the
+  // server queue's subagent gate.
+  const activeSessionIds = new Set(Object.entries(state?.session_status ?? {})
+    .filter(([, value]) => value !== 'idle')
+    .map(([id]) => id));
+  if (activeSessionIds.size > 0 && hasActiveSubagent(sessionId, activeSessionIds)) {
+    return 'busy';
+  }
+  // A turn is open until its snapshot says it reached a terminal status.
+  const latestTurn = state?.snapshot[sessionId]?.turns.at(-1);
+  if (latestTurn && latestTurn.status !== 'completed' && latestTurn.status !== 'failed' && latestTurn.status !== 'cancelled') {
     return 'busy';
   }
   return 'idle';
@@ -250,11 +241,10 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
   // Only the trailing message of a queued session matters: selecting the whole
   // message map would rerun this effect on every transcript change anywhere.
   const trailingMessageSignature = useDirectorySync(useShallow((state) => queuedSessionIds.map((sessionId) => {
-    const messages = state.message[sessionId];
-    const last = messages?.[messages.length - 1];
-    if (!last) return '';
-    const completed = last.role !== 'assistant' || last.time.completed !== undefined;
-    return `${last.id}:${completed}`;
+    const latestTurn = state.snapshot[sessionId]?.turns.at(-1);
+    if (!latestTurn) return '';
+    const settled = latestTurn.status !== 'running' && latestTurn.status !== 'pending';
+    return `${latestTurn.turnId}:${settled}`;
   })));
 
   const inFlightSessionsRef = React.useRef<Set<string>>(new Set());
@@ -357,7 +347,7 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
     const nextStatusMap = new Map(previousStatusRef.current);
     for (const [sessionId, status] of Object.entries(statusRecord)) {
       if (status) {
-        nextStatusMap.set(sessionId, status.type as SessionStatusType);
+        nextStatusMap.set(sessionId, status === 'idle' ? 'idle' : 'busy');
       }
     }
 

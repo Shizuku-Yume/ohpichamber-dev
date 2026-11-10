@@ -1,3 +1,5 @@
+import { useSelectionStore } from '@/sync/selection-store';
+import { captureDefaultSendSelection } from '@/lib/defaultSendSelection';
 import { toast } from 'sonner';
 import type {
   AttachIssueRequest,
@@ -13,7 +15,7 @@ import { HostRequestError, clampPromptRequest, clampStartSessionRequest } from '
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { generateBranchSlug } from '@/lib/git/branchNameGenerator';
 import { buildLinkedGuestIssue, type LinkedGuestIssue } from '@/lib/linkedIssues';
-import { captureDefaultSendSelection } from '@/lib/defaultSendSelection';
+import { parseModelIdentifier } from '@/lib/modelIdentifier';
 import { resolveProjectRef } from '@/lib/worktreeSessionCreator';
 import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
 import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
@@ -22,15 +24,12 @@ import { getWorktreeSetupWaitEnabled } from '@/lib/openchamberConfig';
 import { resolveWorktreeSetupCommands } from '@/lib/sharedTrustConfirmation';
 import { guestProject, guestProjectWorktrees } from './workspace';
 import { normalizePath } from '@/lib/pathNormalization';
-import { isAutoModel } from '@/lib/routing/autoModel';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useContextStore } from '@/stores/contextStore';
+import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import * as sessionActions from '@/sync/session-actions';
-import { useSelectionStore } from '@/sync/selection-store';
-import { getAllSyncSessions, getDirectoryState } from '@/sync/sync-refs';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
 type TranslateFn = (key: I18nKey, params?: I18nParams) => string;
@@ -106,7 +105,6 @@ export type StartGuestSessionDeps = {
     branch: string,
     kind: 'pr' | 'standard',
   ) => Promise<CreatedSession | null>;
-  initializeSession: (sessionId: string) => void;
   setLinkedIssue: (sessionId: string, directory: string, issue: LinkedGuestIssue) => Promise<void>;
   sendFirstMessage: (sessionId: string, directory: string, text: string) => Promise<'sent' | 'no-model' | 'failed'>;
   closeSurfaces: () => void;
@@ -126,7 +124,6 @@ export const runStartGuestSession = async (
   if (!created) {
     return { ok: false, reason: plan.worktree ? 'worktree-failed' : 'create-failed' };
   }
-  deps.initializeSession(created.id);
   deps.closeSurfaces();
   await deps.setLinkedIssue(created.id, created.directory, plan.linked);
   if (!plan.text) {
@@ -134,6 +131,54 @@ export const runStartGuestSession = async (
   }
   const sent = await deps.sendFirstMessage(created.id, created.directory, plan.text);
   return { ok: true, sessionId: created.id, sent };
+};
+
+const resolveDefaultAgentName = (): string | undefined => {
+  const configState = useConfigStore.getState();
+  if (configState.settingsDefaultAgent) {
+    return configState.settingsDefaultAgent;
+  }
+  const agents = selectAgentsForDirectory(useAgentsStore.getState(), configState.activeDirectoryKey);
+  return (
+    configState.currentAgentName
+    || agents[0]?.agentId
+  );
+};
+
+const resolveDefaultModelSelection = (): { providerId: string; modelId: string } | null => {
+  const parsed = parseModelIdentifier(useConfigStore.getState().settingsDefaultModel);
+  if (!parsed) {
+    return null;
+  }
+  if (!useConfigStore.getState().getModelMetadata(parsed.providerId, parsed.modelId)) {
+    return null;
+  }
+  return { providerId: parsed.providerId, modelId: parsed.modelId };
+};
+
+const resolveDefaultVariant = (providerId: string, modelId: string): string | undefined => {
+  const configState = useConfigStore.getState();
+  const currentVariant = configState.currentProviderId === providerId && configState.currentModelId === modelId
+    ? configState.currentVariant
+    : undefined;
+  const provider = configState.providers.find((entry) => entry.providerId === providerId);
+  const model = provider?.models.find((entry) => entry.modelId === modelId);
+  const variantNames = model?.variants.map((entry) => entry.variant) ?? [];
+  if (currentVariant && variantNames.includes(currentVariant)) return currentVariant;
+  return undefined;
+};
+
+const _captureGuestSendSelection = () => {
+  const configState = useConfigStore.getState();
+  const lastUsedProvider = useSelectionStore.getState().lastUsedProvider;
+  const defaultModel = resolveDefaultModelSelection();
+  const providerId = defaultModel?.providerId || configState.currentProviderId || lastUsedProvider?.providerID;
+  const modelId = defaultModel?.modelId || configState.currentModelId || lastUsedProvider?.modelID;
+  const agentName = resolveDefaultAgentName() || configState.currentAgentName || undefined;
+  if (!providerId || !modelId) {
+    return null;
+  }
+  return { providerId, modelId, agentName, variant: resolveDefaultVariant(providerId, modelId) };
 };
 
 const sendGuestFirstMessage = async (
@@ -160,66 +205,6 @@ const sendGuestFirstMessage = async (
   } catch {
     return 'failed';
   }
-};
-
-const captureGuestPromptSelection = (sessionId: string, directory: string) => {
-  const selection = useSelectionStore.getState();
-  const context = useContextStore.getState();
-  const sessions = useSessionUIStore.getState();
-  const config = useConfigStore.getState();
-  if (sessions.currentSessionId === sessionId && config.currentProviderId && config.currentModelId) {
-    return {
-      providerID: config.currentProviderId,
-      modelID: config.currentModelId,
-      agentName: selection.getSessionAgentPick(sessionId) ?? config.currentAgentName ?? undefined,
-      variant: config.currentVariantSelection.override === null ? null : config.currentVariant,
-    };
-  }
-  const last = sessions.getLastUserChoice(sessionId);
-  const fallback = captureDefaultSendSelection();
-  // Match resolveSendSelection's fallback when the panel's path form has no child store.
-  const sessionList = getDirectoryState(directory)?.session ?? getAllSyncSessions();
-  const record = sessionList.find((session) => session.id === sessionId);
-  const recordAgent = record?.agent;
-  const agentPick = selection.getSessionAgentPick(sessionId);
-  const agentSwitched = recordAgent ? selection.followSessionAgent(sessionId, recordAgent) : false;
-  const agentName = agentPick
-    ?? (agentSwitched ? recordAgent : undefined)
-    ?? selection.getSessionAgentSelection(sessionId)
-    ?? context.getSessionAgentSelection(sessionId)
-    ?? last?.agent
-    ?? fallback?.agentName;
-  const agentModel = agentName
-    ? selection.getAgentModelForSession(sessionId, agentName) ?? context.getAgentModelForSession(sessionId, agentName)
-    : null;
-  const savedModel = selection.getSessionModelSelection(sessionId) ?? context.getSessionModelSelection(sessionId);
-  const modelPick = selection.getSessionModelPick(sessionId);
-  const recordModel = record?.model;
-  const recordModelKey = recordModel?.providerID && recordModel.id
-    ? `${recordModel.providerID}/${recordModel.id}#${recordModel.variant ?? ''}` : null;
-  const switched = !modelPick && recordModelKey && selection.isSessionModelSwitched(sessionId, recordModelKey)
-    && !(savedModel && isAutoModel(savedModel.providerId, savedModel.modelId));
-  if (recordModelKey) selection.markSessionModelFollowed(sessionId, recordModelKey);
-  const model = modelPick
-    ?? (switched && recordModel ? { providerId: recordModel.providerID, modelId: recordModel.id } : null)
-    ?? (agentSwitched ? savedModel : agentModel) ?? savedModel
-    ?? (recordModel ? { providerId: recordModel.providerID, modelId: recordModel.id } : null)
-    ?? agentModel
-    ?? (last?.providerID && last.modelID ? { providerId: last.providerID, modelId: last.modelID } : null)
-    ?? (fallback ? { providerId: fallback.providerID, modelId: fallback.modelID } : null);
-  if (!model) return null;
-  const liveVariant = agentName
-    ? selection.getAgentModelVariantForSession(sessionId, agentName, model.providerId, model.modelId)
-    : undefined;
-  const storedVariant = agentName
-    ? context.getAgentModelVariantForSession(sessionId, agentName, model.providerId, model.modelId)
-    : undefined;
-  const recordVariant = recordModel?.providerID === model.providerId && recordModel.id === model.modelId ? recordModel.variant : undefined;
-  const variant = switched && recordVariant !== undefined ? recordVariant : liveVariant !== undefined ? liveVariant : storedVariant !== undefined ? storedVariant
-    : recordVariant !== undefined ? recordVariant
-    : last?.providerID === model.providerId && last.modelID === model.modelId && last.agent === agentName ? last.variant
-    : fallback?.providerID === model.providerId && fallback.modelID === model.modelId ? fallback.variant : undefined;
-  return { providerID: model.providerId, modelID: model.modelId, agentName, variant };
 };
 
 type GuestActionFailure = {
@@ -350,7 +335,7 @@ export const promptGuestSession = async (args: {
     args.compose(plan.text, 'replace');
     return { ok: true, result: { sent: 'skipped' } };
   }
-  const sent = await sendGuestFirstMessage(plan.sessionId, plan.directory, plan.text, captureGuestPromptSelection(plan.sessionId, plan.directory));
+  const sent = await sendGuestFirstMessage(plan.sessionId, plan.directory, plan.text);
   if (sent === 'no-model') {
     toast.error(args.t('contextPanel.plugin.prompt.noModel'));
   } else if (sent === 'failed') {
@@ -423,21 +408,22 @@ export const startGuestSession = async (args: {
       undefined,
       sendSelection
         ? {
-            model: { providerID: sendSelection.providerID, id: sendSelection.modelID, variant: sendSelection.variant },
+            model: { providerId: sendSelection.providerID, modelId: sendSelection.modelID },
             agent: sendSelection.agentName,
+            variant: sendSelection.variant,
           }
         : undefined,
       navigation,
     );
     assertCurrent();
     if (!session) return null;
-    createdDirectory = session.directory ?? directory;
+    createdDirectory = session.displayPath || directory;
     if (metadata) {
       const latest = project ? guestProjectWorktrees(project.path).find((entry) => entry.path === metadata?.path) : undefined;
       metadata = { ...metadata, worktreeStatus: latest?.worktreeStatus ?? metadata.worktreeStatus };
-      useSessionUIStore.getState().setWorktreeMetadata(session.id, metadata, createdDirectory);
+      useSessionUIStore.getState().setWorktreeMetadata(session.sessionId, metadata);
     }
-    return { id: session.id, directory: createdDirectory };
+    return { id: session.sessionId, directory: createdDirectory };
   };
   try {
     const result = await runStartGuestSession(plan, {
@@ -455,9 +441,6 @@ export const startGuestSession = async (args: {
         assertCurrent();
         metadata = { ...metadata, kind, createdFromBranch: custom?.baseBranch };
         return createTargetSession(plan.title, metadata.path);
-      },
-      initializeSession: (sessionId) => {
-        useSessionUIStore.getState().initializeNewOpenChamberSession(sessionId, useConfigStore.getState().agents);
       },
       setLinkedIssue: async (sessionId, directory, issue) => {
         assertCurrent();

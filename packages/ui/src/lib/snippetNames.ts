@@ -21,20 +21,20 @@ export const normalizeSnippetNameInput = (value: string): string => value
   .replace(/[^a-z0-9_-]/gi, '')
   .slice(0, 80);
 
-/** The snippet that `#name` already triggers, by its name or an alias. */
+/** The snippet that `#name` already triggers. */
 export const findSnippetByTrigger = (snippets: readonly Snippet[], name: string): Snippet | undefined => {
   const key = name.toLowerCase();
-  return snippets.find((snippet) => snippet.name.toLowerCase() === key || snippet.aliases.some((alias) => alias.toLowerCase() === key));
+  return snippets.find((snippet) => snippet.name.toLowerCase() === key);
 };
 
 /**
  * Why `name` cannot be saved, or null when it can; `own` is the snippet being
- * renamed, whose own name and aliases stay free for it.
+ * renamed, whose own name stays free for it.
  */
 export const snippetNameProblem = (name: string, snippets: readonly Snippet[], own?: Snippet): 'invalid' | 'taken' | null => {
   if (!isValidSnippetName(name)) return 'invalid';
   const owner = findSnippetByTrigger(snippets, name);
-  return owner && owner.filePath !== own?.filePath ? 'taken' : null;
+  return owner && owner.templateId !== own?.templateId ? 'taken' : null;
 };
 
 export const uniqueSnippetName = (base: string, snippets: readonly Snippet[]): string => {

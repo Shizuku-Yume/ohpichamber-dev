@@ -3,13 +3,10 @@ import { switchRuntimeEndpoint } from './runtime-switch';
 
 import {
   assertAutoReviewRuntimeStillCurrent,
-  claimAutoReviewForward,
-  releaseAutoReviewForward,
   hasFinalReviewMarker,
   isAutoReviewRuntimeCurrent,
   stripFinalReviewMarker,
 } from './reviewFlow';
-import type { AutoReviewRun } from '@/stores/useAutoReviewStore';
 import type { Session, SessionSnapshot } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import * as actions from '@/sync/session-actions';
@@ -48,30 +45,6 @@ describe('reviewFlow auto-review helpers', () => {
     switchRuntimeEndpoint({ apiBaseUrl: 'http://runtime-b.test', runtimeKey: 'runtime-b' });
     expect(isAutoReviewRuntimeCurrent('runtime-a')).toBe(false);
     expect(() => assertAutoReviewRuntimeStillCurrent('runtime-a')).toThrow('runtime changed');
-  });
-
-  test('claims only one in-flight forward for the same auto-review message', () => {
-    const run: AutoReviewRun = {
-      originalSessionID: 'original-1',
-      reviewSessionID: 'review-1',
-      directory: '/workspace',
-      runtimeKey: 'runtime-a',
-      status: 'running',
-      phase: 'waiting_for_reviewer',
-      iteration: 0,
-      maxIterations: 15,
-      expectedAssistantParentID: 'msg_user_prompt',
-    };
-
-    const key = claimAutoReviewForward(run, 'msg_assistant_review');
-
-    expect(typeof key).toBe('string');
-    expect(claimAutoReviewForward(run, 'msg_assistant_review')).toBeNull();
-
-    releaseAutoReviewForward(key!);
-    const nextKey = claimAutoReviewForward(run, 'msg_assistant_review');
-    expect(nextKey).toBe(key);
-    releaseAutoReviewForward(nextKey!);
   });
 });
 

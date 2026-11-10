@@ -254,6 +254,13 @@ const SHORTCUT_GROUPS = {
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.toggle_terminal.label',
     },
     {
+      id: 'toggle_terminal_expanded',
+      defaultBinding: 'mod+shift+j',
+      customizable: true,
+      settingsLabelKey:
+        'settings.openchamber.keyboardShortcuts.action.toggle_terminal_expanded.label',
+    },
+    {
       id: 'toggle_context_panel_expanded',
       defaultBinding: 'mod+shift+f',
       customizable: true,

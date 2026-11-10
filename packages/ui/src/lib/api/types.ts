@@ -1,7 +1,52 @@
+export type {
+  TrackerAPI,
+  TrackerAccount,
+  TrackerAuthMethod,
+  TrackerAuthOrigin,
+  TrackerAuthStart,
+  TrackerAuthStatus,
+  TrackerComment,
+  TrackerConnectFailureCode,
+  TrackerConnectResult,
+  TrackerConnectTokenInput,
+  TrackerContainer,
+  TrackerContainerMapping,
+  TrackerDescriptor,
+  TrackerItem,
+  TrackerItemResult,
+  TrackerItemState,
+  TrackerItemSummary,
+  TrackerLabel,
+  TrackerListOptions,
+  TrackerListResult,
+  TrackerLiveSummary,
+  TrackerMappingResult,
+  TrackerMappingWrite,
+  TrackerOAuthClientInput,
+  TrackerPeopleFilter,
+  TrackerPerson,
+  TrackerPreferences,
+  TrackerPriority,
+  TrackerPriorityFilter,
+  TrackerProgress,
+  TrackerProviderId,
+  TrackerSessionStatusKind,
+  TrackerSessionStatusPostInput,
+  TrackerSessionStatusPostResult,
+  TrackerStateCategory,
+  TrackerStateUpdateInput,
+  TrackerStatesResult,
+  TrackerWorkflowState,
+} from '../trackers/types';
+
+import type { SourceControlProviderDescriptor } from '../source-control/providers/descriptor';
+import type { TrackerAPI } from '../trackers/types';
+
+
+import type { GitPathUnavailableReason } from './git-path-diff';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { DesktopSettings } from '@/lib/settings/registry';
 import type { GitIdentityProfile, GitIdentitySummary } from './git-identity';
-import type { GitPathUnavailableReason } from './git-path-diff';
 import type {
   ChangeRequest,
   ChangeRequestContext,
@@ -61,11 +106,8 @@ import type {
   GitAuxiliaryBindingResult,
   UpdateChangeRequestInput,
 } from '../source-control/types';
-import type { SourceControlProviderDescriptor } from '../source-control/providers/descriptor';
-import type { TrackerAPI } from '../trackers/types';
 
 export type * from '../source-control/types';
-export type * from '../trackers/types';
 export type {
   GitIdentityProfile,
   GitIdentitySummary,
@@ -399,6 +441,9 @@ interface GitCommitSummary {
 export interface GitCommitResult {
   success: boolean;
   commit: string;
+  /** Change-Id git appended, and whether a note was written. */
+  changeId?: string;
+  notes?: boolean;
   branch: string;
   summary: GitCommitSummary;
 }
@@ -1088,6 +1133,7 @@ export interface RemoveGitWorktreePayload {
 export interface TeardownGitWorktreePayload {
   /** The worktree. */
   directory: string;
+  /** The project's teardown command, run by the host's shell. */
   teardownCommand: string;
 }
 
@@ -1131,7 +1177,8 @@ export interface ArchiveGitWorktreePayload {
   /** The worktree to archive. */
   directory: string;
   id: string;
-  sessionIds: string[];
+  /** The sessions to archive with it; the Host derives them when this omits them. */
+  sessionIds?: string[];
   /** The name the sidebar showed for the work, kept when the worktree has no task title. */
   title?: string;
 }
@@ -1201,27 +1248,18 @@ interface GitWorktreeAPI {
   archive?(directory: string, payload: ArchiveGitWorktreePayload): Promise<GitWorktreeArchive>;
   listArchives?(directory: string): Promise<GitWorktreeArchive[]>;
   /** `directory` is the new checkout of the archive's branch. */
-  restoreArchive?(directory: string, id: string): Promise<GitWorktreeArchiveRestoreResult>;
+  restoreArchive?(directory: string, id: string, recovery?: { mode: 'new_checkout' | 'same_target'; revision: number }): Promise<GitWorktreeArchiveRestoreResult>;
   deleteArchive?(directory: string, payload: DeleteGitWorktreeArchivePayload): Promise<{ id: string; branchDeleted: boolean }>;
 }
 
 export interface GitAPI {
+  resolveRepositoryPrefix?(directory: string): Promise<string>;
+  getGitDiffs?(directory: string, options: GetGitDiffsOptions): Promise<GitPathDiffBatchEntry[]>;
+  initializeGit(directory: string): Promise<void>;
   checkIsGitRepository(directory: string): Promise<boolean>;
   getGitStatus(directory: string, options?: { mode?: 'light'; fresh?: boolean }): Promise<GitStatus>;
-  /**
-   * Warm the status cache for many directories with one request, so the
-   * per-directory `getGitStatus` reads that follow are cache hits. Runtimes
-   * without a batched status read (VS Code) omit it and read one by one.
-   */
-  prefetchProjectStatuses?(directories: string[]): Promise<void>;
-  getGitDiff?(directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse>;
-  /**
-   * `getGitDiff` for many paths of one side in one request. Rejects when the
-   * request itself fails; per-path failures are entries. Absent in runtimes
-   * that read per path (VS Code).
-   */
-  getGitDiffs?(directory: string, options: GetGitDiffsOptions): Promise<GitPathDiffBatchEntry[]>;
-  getGitFileDiff?(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>;
+  getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitPathDiffResponse>;
+  getGitFileDiff(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>;
   getGitRangeDiff?(directory: string, options: GetGitRangeDiffOptions): Promise<GitDiffResponse>;
   getGitRangeFiles?(directory: string, options: GetGitRangeFilesOptions): Promise<GitRangeFileEntry[]>;
   getBranchBase?(directory: string, branch: string): Promise<GitBranchBaseResponse>;
@@ -1235,18 +1273,16 @@ export interface GitAPI {
   revertGitHunk?(directory: string, filePath: string, patch: string): Promise<void>;
   isLinkedWorktree(directory: string): Promise<boolean>;
   /**
-   * `remote: 'local'` lists what local refs know. `remote: 'live'` also asks
-   * each remote over the network, which can start an SSH sign-in, so only an
-   * explicit request from the person may pass it. Callers name the mode: a
-   * server older than this contract treats a missing one as live. Runtimes
-   * that never ask remotes ignore it.
+   * `remote: 'local'` lists what local refs know, without asking each remote
+   * over the network; for callers that need only the checked-out branch and
+   * its upstream. Runtimes that never ask remotes ignore it.
    */
   getGitBranches(directory: string, options?: GitBranchListOptions): Promise<GitBranch>;
   getGitUnpushedBranchCounts(directory: string, branches: string[]): Promise<GitUnpushedBranchCounts>;
   deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }>;
   removeRemote(directory: string, payload: GitRemoveRemotePayload): Promise<{ success: boolean }>;
-  generateCommitMessage?(directory: string, files: string[], options?: { zenModel?: string; providerId?: string; modelId?: string }): Promise<{ message: GeneratedCommitMessage }>;
-  generatePullRequestDescription?(
+  generateCommitMessage(directory: string, files: string[], options?: { zenModel?: string; providerId?: string; modelId?: string; reasoning?: boolean }): Promise<{ message: GeneratedCommitMessage }>;
+  generatePullRequestDescription(
     directory: string,
     payload: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string }
   ): Promise<GeneratedPullRequestDescription>;
@@ -1256,10 +1292,13 @@ export interface GitAPI {
   previewGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   createGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   deleteGitWorktree?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
-  createGitCommit?(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
-  gitPush?(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
-  gitPull?(directory: string, options?: GitPullOptions): Promise<GitPullResult>;
-  gitFetch?(directory: string, options?: { remote?: string; branch?: string }): Promise<{ success: boolean }>;
+  teardownGitWorktree?(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }>;
+  createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
+  /** Amends HEAD with a host-computed Change-Id trailer; refuses unless HEAD is still `expectedHead`. */
+  addChangeIdToHead?(directory: string, expectedHead: string): Promise<{ sha: string; changeId: string }>;
+  gitPush(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
+  gitPull(directory: string, options?: GitPullOptions): Promise<GitPullResult>;
+  gitFetch(directory: string, options?: { remote?: string; branch?: string }): Promise<{ success: boolean }>;
   planNetworkOperation(request: GitNetworkOperationRequest): Promise<GitNetworkOperationPlan>;
   issueContributorDestination(request: GitContributorDestinationRequest): Promise<GitContributorDestinationSelection>;
   listContributorDestinations(directory: string): Promise<GitContributorDestinationCandidates>;
@@ -1268,7 +1307,7 @@ export interface GitAPI {
   executeNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
   getNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
   cancelNetworkOperation(operationId: string): Promise<GitNetworkOperation>;
-  /** Connected-server inventory only; the VS Code webview does not implement it. */
+  /** Connected-server managed SSH credential inventory. */
   managedSshCredentials?(intent: GitManagedSshIntent): Promise<GitManagedSshResult>;
   /** Host-owned credential setup is available only in runtimes that implement this operation. */
   configureTransportBinding?(intent: GitTransportBindingIntent): Promise<GitTransportBindingResult>;
@@ -1282,22 +1321,16 @@ export interface GitAPI {
   applyGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }>;
   popGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }>;
   dropGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }>;
-  checkoutBranch?(directory: string, branch: string): Promise<{ success: boolean; branch: string }>;
+  checkoutBranch(directory: string, branch: string): Promise<{ success: boolean; branch: string }>;
   createBranch(directory: string, name: string, startPoint?: string): Promise<{ success: boolean; branch: string }>;
   renameBranch(directory: string, oldName: string, newName: string): Promise<{ success: boolean; branch: string }>;
-  getGitLog?(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
-  /**
-   * Amends the checked-out commit to carry a Change-Id trailer, computed the
-   * way a review host's commit-msg hook computes it. Refuses when HEAD is no
-   * longer `expectedHead` or already has one. Absent where the runtime cannot.
-   */
-  addChangeIdToHead?(directory: string, expectedHead: string): Promise<{ sha: string; changeId: string }>;
-  getCommitFiles?(directory: string, hash: string): Promise<GitCommitFilesResponse>;
+  getGitLog(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
+  getCommitFiles(directory: string, hash: string): Promise<GitCommitFilesResponse>;
   getGitCommitDiff?(directory: string, options: GetGitCommitDiffOptions): Promise<GitDiffResponse>;
   getCommitFileDiff?(directory: string, hash: string, filePath: string, isBinary: boolean): Promise<CommitFileDiffResponse>;
-  getCurrentGitIdentity?(directory: string): Promise<GitIdentitySummary | null>;
+  getCurrentGitIdentity(directory: string): Promise<GitIdentitySummary | null>;
   hasLocalIdentity?(directory: string): Promise<boolean>;
-  setGitIdentity?(directory: string, profileId: string): Promise<{ success: boolean; profile: GitIdentityProfile | null }>;
+  setGitIdentity(directory: string, profileId: string): Promise<{ success: boolean; profile: GitIdentityProfile | null }>;
   getGitIdentities(): Promise<GitIdentityProfile[]>;
   createGitIdentity(profile: GitIdentityProfile): Promise<GitIdentityProfile>;
   updateGitIdentity(id: string, updates: GitIdentityProfile): Promise<GitIdentityProfile>;
@@ -1305,19 +1338,19 @@ export interface GitAPI {
   getGlobalGitIdentity?(): Promise<GitIdentitySummary | null>;
   /** Returns a redacted display URL, never a transport credential source. */
   getRemotes(directory: string): Promise<GitRemote[]>;
-  rebase?(directory: string, options: { onto: string }): Promise<GitRebaseResult>;
-  abortRebase?(directory: string): Promise<{ success: boolean }>;
-  continueRebase?(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
-  merge?(directory: string, options: { branch: string }): Promise<GitMergeResult>;
-  abortMerge?(directory: string): Promise<{ success: boolean }>;
-  continueMerge?(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
-  checkoutCommit?(directory: string, hash: string): Promise<CheckoutCommitResponse>;
-  cherryPick?(directory: string, hash: string): Promise<CherryPickResponse>;
-  revertCommit?(directory: string, hash: string): Promise<RevertCommitResponse>;
-  resetToCommit?(directory: string, hash: string, mode: 'soft' | 'mixed' | 'hard', force?: boolean): Promise<ResetToCommitResponse>;
+  rebase(directory: string, options: { onto: string }): Promise<GitRebaseResult>;
+  abortRebase(directory: string): Promise<{ success: boolean }>;
+  continueRebase(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
+  merge(directory: string, options: { branch: string }): Promise<GitMergeResult>;
+  abortMerge(directory: string): Promise<{ success: boolean }>;
+  continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
+  checkoutCommit(directory: string, hash: string): Promise<CheckoutCommitResponse>;
+  cherryPick(directory: string, hash: string): Promise<CherryPickResponse>;
+  revertCommit(directory: string, hash: string): Promise<RevertCommitResponse>;
+  resetToCommit(directory: string, hash: string, mode: 'soft' | 'mixed' | 'hard', force?: boolean): Promise<ResetToCommitResponse>;
   stash(directory: string, options?: { message?: string; includeUntracked?: boolean }): Promise<{ success: boolean }>;
   stashPop(directory: string): Promise<{ success: boolean }>;
-  getConflictDetails?(directory: string): Promise<MergeConflictDetails>;
+  getConflictDetails(directory: string): Promise<MergeConflictDetails>;
   /** Phase 1: validate that a cwd is inside a worktreeRoot */
   validateWorktreeDirectory?(directory: string, worktreeRoot: string): Promise<{
     valid: boolean;
@@ -1325,8 +1358,6 @@ export interface GitAPI {
     resolvedWorktreeRoot: string | null;
     resolvedCwd: string | null;
   }>;
-  /** Where `directory` sits inside its checkout (`ai`, or `''` at the root); rejects when unknown. */
-  resolveRepositoryPrefix?(directory: string): Promise<string>;
   /** Phase 1: canonicalize a directory to full worktree state */
   canonicalizeWorktreeState?(directory: string): Promise<{
     worktreeRoot: string | null;
@@ -2174,6 +2205,8 @@ export interface RuntimeAPIs {
   sourceControl: SourceControlAPI;
   /** Work-item trackers the server serves; VS Code has none. */
   trackers?: TrackerAPI;
+  /** Linear's own API, kept beside the tracker contract for its issue and mapping routes. */
+  linear?: LinearAPI;
   push?: PushAPI;
   diagnostics?: DiagnosticsAPI;
   clientAuth?: ClientAuthAPI;
@@ -2289,3 +2322,730 @@ export interface SkillsInstallResponse {
   message?: string;
   reloadDelayMs?: number;
 }
+
+
+export interface GitCommitExtraFailure {
+  extra: 'changeId' | 'notes';
+  code: string;
+  message: string;
+}
+
+/** `COMMIT_EXTRAS_FAILED`: the commit exists and `extras` says what did not apply. */
+
+
+export interface GitCommitExtrasFailure {
+  error: string;
+  code: 'COMMIT_EXTRAS_FAILED';
+  commit: string;
+  branch: string;
+  extras: { changeId: string | null; notes: boolean; failed: GitCommitExtraFailure[] };
+}
+
+
+export interface CommandExecResult {
+  command: string;
+  success: boolean;
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+}
+
+
+export type GitHubUserSummary = {
+  login: string;
+  id?: number;
+  avatarUrl?: string;
+  name?: string;
+  email?: string;
+};
+
+
+export type GitHubChecksSummary = {
+  state: 'success' | 'failure' | 'pending' | 'unknown';
+  total: number;
+  success: number;
+  failure: number;
+  /** queued + in_progress + unconcluded runs. */
+  pending: number;
+  inProgress?: number;
+  queued?: number;
+  /** Earliest started_at among in-progress runs (ISO), for elapsed display. */
+  startedAt?: string;
+};
+
+
+export type GitHubCheckRun = {
+  id?: number;
+  name: string;
+  startedAt?: string;
+  completedAt?: string;
+  app?: {
+    name?: string;
+    slug?: string;
+  };
+  status?: string;
+  conclusion?: string | null;
+  detailsUrl?: string;
+  output?: {
+    title?: string;
+    summary?: string;
+    text?: string;
+  };
+  job?: {
+    runId?: number;
+    jobId?: number;
+    url?: string;
+    name?: string;
+    workflowName?: string;
+    conclusion?: string | null;
+    steps?: Array<{
+      name: string;
+      status?: string;
+      conclusion?: string | null;
+      number?: number;
+      startedAt?: string;
+      completedAt?: string;
+    }>;
+  };
+  annotations?: Array<{
+    path?: string;
+    startLine?: number;
+    endLine?: number;
+    level?: string;
+    message: string;
+    title?: string;
+    rawDetails?: string;
+  }>;
+};
+
+
+export type GitHubPullRequestSummary = GitHubPullRequest & {
+  author?: GitHubUserSummary | null;
+  body?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  headLabel?: string;
+  headRepo?: GitHubPullRequestHeadRepo | null;
+  sourceRepo?: (GitHubRepoSelector & { source: string }) | null;
+};
+
+
+type GitHubPullRequestFile = {
+  filename: string;
+  status?: string;
+  additions?: number;
+  deletions?: number;
+  changes?: number;
+  patch?: string;
+};
+
+
+type GitHubPullRequestReviewComment = {
+  id: number;
+  url: string;
+  body: string;
+  author?: GitHubUserSummary | null;
+  path?: string;
+  line?: number | null;
+  position?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+
+export type GitHubPullRequestsListResult = {
+  connected: boolean;
+  repo?: GitHubRepoRef | null;
+  prs?: GitHubPullRequestSummary[];
+  page?: number;
+  hasMore?: boolean;
+  failedRepos?: Array<{ owner: string; repo: string }>;
+};
+
+
+export type GitHubPullRequestContextResult = {
+  connected: boolean;
+  /** Server-side stamp of when the data was fetched from GitHub (ms epoch); survives server cache serves. */
+  fetchedAt?: number;
+  repo?: GitHubRepoRef | null;
+  pr?: GitHubPullRequestSummary | null;
+  issueComments?: GitHubIssueComment[];
+  reviewComments?: GitHubPullRequestReviewComment[];
+  files?: GitHubPullRequestFile[];
+  diff?: string;
+  checks?: GitHubChecksSummary | null;
+  checkRuns?: GitHubCheckRun[];
+};
+
+
+export type GitHubPullRequestStatus = {
+  connected: boolean;
+  /** Server-side stamp of when the data was fetched from GitHub (ms epoch); survives server cache serves. */
+  fetchedAt?: number;
+  repo?: GitHubRepoRef | null;
+  branch?: string;
+  pr?: GitHubPullRequest | null;
+  checks?: GitHubChecksSummary | null;
+  canMerge?: boolean;
+  defaultBranch?: string | null;
+  resolvedRemoteName?: string | null;
+};
+
+
+export type GitHubPullRequestRef = GitHubRepoSelector & { number: number };
+
+/** Live fields of a known PR, refreshed in batches for list surfaces. */
+
+
+export type GitHubPullRequestLiveSummary = GitHubPullRequestRef & {
+  state: GitHubPullRequest['state'];
+  draft: boolean;
+  title: string;
+  headSha?: string;
+  mergeable: boolean | null;
+  mergeableState: string | null;
+  /** Null for closed/merged PRs, whose checks are not actionable. */
+  checks: GitHubChecksSummary | null;
+};
+
+/** Live state of a known issue; a closed one says whether it was done or dropped. */
+
+
+export type GitHubIssueLiveSummary = GitHubPullRequestRef & {
+  title: string;
+  state: 'open' | 'completed' | 'not_planned';
+};
+
+
+export type GitHubIssueLabel = {
+  name: string;
+  color?: string;
+};
+
+
+export type GitHubRepoSelector = {
+  owner: string;
+  repo: string;
+};
+
+
+export type GitHubIssueSummary = {
+  number: number;
+  title: string;
+  url: string;
+  state: 'open' | 'closed';
+  author?: GitHubUserSummary | null;
+  labels?: GitHubIssueLabel[];
+  sourceRepo?: (GitHubRepoSelector & { source: string }) | null;
+};
+
+
+export type GitHubIssue = GitHubIssueSummary & {
+  body?: string;
+  assignees?: GitHubUserSummary[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+
+export type GitHubIssueComment = {
+  id: number;
+  url: string;
+  body: string;
+  author?: GitHubUserSummary | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+
+export type GitHubIssuesListResult = {
+  connected: boolean;
+  repo?: GitHubRepoRef | null;
+  issues?: GitHubIssueSummary[];
+  page?: number;
+  hasMore?: boolean;
+  failedRepos?: Array<{ owner: string; repo: string }>;
+};
+
+
+export type GitHubReferenceKind = 'issue' | 'pull';
+
+
+export type GitHubReferencesOptions = {
+  kind: GitHubReferenceKind;
+  state?: RepositoryReferenceState;
+  people?: RepositoryReferencePeople;
+  /** Search text, or a pasted link or number, which names one item of either kind. */
+  query?: string;
+  cursor?: string | null;
+};
+
+
+type GitHubReferenceCommon = {
+  number: number;
+  title: string;
+  url: string;
+  /** The description as the preview shows it, cut at 20 000 characters. */
+  body: string;
+  bodyTruncated: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+  author: { login: string; avatarUrl?: string } | null;
+  labels: GitHubIssueLabel[];
+  commentCount: number;
+  sourceRepo: GitHubRepoSelector & { source: string };
+  /** The provider's own project id (GitLab's is numeric); absent on GitHub, where `owner/repo` is the id. */
+  projectId?: string;
+  /**
+   * Set on items read from a GitLab project, which the picker shows the same
+   * way; absent on GitHub's own answers.
+   */
+  provider?: SourceControlProvider;
+};
+
+
+export type GitHubIssueReference = GitHubReferenceCommon & {
+  kind: 'issue';
+  state: GitHubIssueLiveSummary['state'];
+};
+
+
+export type GitHubPullReference = GitHubReferenceCommon & {
+  kind: 'pull';
+  state: GitHubPullRequest['state'];
+  draft: boolean;
+  head: string;
+  base: string;
+  headSha: string;
+  headRepo: GitHubPullRequestHeadRepo | null;
+};
+
+/** A comment as the picker preview shows it; review entries carry their verdict or file and line. */
+
+
+export type GitHubReferenceComment = {
+  author: { login: string; avatarUrl?: string } | null;
+  body: string;
+  createdAt: string | null;
+  url: string;
+  path: string | null;
+  line: number | null;
+  review: 'approved' | 'changes_requested' | 'commented' | 'dismissed' | null;
+};
+
+/** Someone asked to review, or who can be; `id` is what the host names them by (a login on GitHub). */
+
+
+export type GitHubReferenceReviewer = {
+  id: string;
+  login: string;
+  avatarUrl?: string;
+};
+
+/** What the preview adds for one item; too slow to ask for a whole page. */
+
+
+export type GitHubReferenceDetail = {
+  number: number;
+  /** Oldest first: the newest 50 comments and, for a PR, its reviews. */
+  comments: GitHubReferenceComment[];
+  /** How many conversation comments the item has in all. */
+  commentTotal: number;
+  /** Null for an issue. */
+  pull: {
+    reviewDecision: 'approved' | 'changes_requested' | 'review_required' | null;
+    /** Asked to review and not done yet (GitHub); everyone set as a reviewer (GitLab). */
+    reviewers: GitHubReferenceReviewer[];
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+    /**
+     * GitLab merge requests only, null when closed or merged. A GitHub PR's
+     * checks come with its status, the answer that also colours it.
+     */
+    checks?: GitHubChecksSummary | null;
+    /** The newest commits, oldest first, for the timeline beside the comments. */
+    commits: GitHubReferenceCommit[];
+    /** How many commits the PR has in all; null when the host does not say. */
+    commitTotal: number | null;
+  } | null;
+};
+
+
+export type GitHubReferenceCommit = {
+  sha: string;
+  headline: string;
+  /** The host account behind the commit, when it is known. */
+  author: { login: string; avatarUrl?: string } | null;
+  authorName: string | null;
+  committedAt: string | null;
+  url: string | null;
+};
+
+
+export type GitHubReferenceDetailResult =
+  | { connected: false }
+  | { connected: true; detail: GitHubReferenceDetail | null };
+
+/** An issue or PR as the reference picker lists and previews it. */
+
+
+export type GitHubReference = GitHubIssueReference | GitHubPullReference;
+
+/** What colours a listed open PR: its checks and whether it conflicts. */
+
+
+export type GitHubPullStatus = GitHubPullRequestRef & {
+  checks: GitHubChecksSummary | null;
+  mergeable: boolean | null;
+  mergeableState: string | null;
+};
+
+/** PRs GitHub could not resolve are left out of `statuses`. */
+
+
+export type GitHubPullStatusesResult =
+  | { connected: false }
+  | { connected: true; statuses: GitHubPullStatus[] };
+
+
+export type GitHubReferencesResult =
+  | { connected: false }
+  | {
+      connected: true;
+      /** Null when the project has no GitHub remote. */
+      repo: GitHubRepoRef | null;
+      items: GitHubReference[];
+      cursor: string | null;
+      hasMore: boolean;
+      total: number;
+    };
+
+
+export type GitHubRepoUpstreamResult = {
+  connected: boolean;
+  isFork: boolean;
+  upstream: { owner: string; repo: string; url: string; defaultBranch: string; defaultBranchSha: string | null; remoteName: string | null } | null;
+};
+
+
+export type GitHubIssueGetResult = {
+  connected: boolean;
+  repo?: GitHubRepoRef | null;
+  issue?: GitHubIssue | null;
+};
+
+
+export type GitHubIssueCommentsResult = {
+  connected: boolean;
+  repo?: GitHubRepoRef | null;
+  comments?: GitHubIssueComment[];
+};
+
+
+export type GitHubAuthStatus = {
+  connected: boolean;
+  user?: GitHubUserSummary | null;
+  scope?: string;
+  accounts?: GitHubAuthAccount[];
+  ghCli?: {
+    available: boolean;
+    disabled: boolean;
+    active: boolean;
+    user?: GitHubUserSummary | null;
+  } | null;
+};
+
+
+type GitHubAuthAccount = {
+  id: string;
+  credentialId: string;
+  credentialRevision: number;
+  providerUserId: string;
+  providerUserStatus: 'available' | 'unavailable';
+  user: GitHubUserSummary;
+  scope?: string;
+  current?: boolean;
+  source?: 'oauth' | 'pat' | 'cli' | 'gh-cli';
+  status?: 'valid' | 'invalid';
+};
+
+
+export type GitHubDeviceFlowStart = {
+  flowId: string;
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete?: string;
+  expiresIn: number;
+  interval: number;
+  scope?: string;
+};
+
+
+export type GitHubDeviceFlowComplete =
+  | { connected: true; user: GitHubUserSummary; scope?: string }
+  | { connected: false; status?: string; error?: string };
+
+
+export type LinearUserSummary = {
+  id: string;
+  name: string | null;
+  displayName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+};
+
+
+export type LinearOrganizationSummary = {
+  id: string;
+  name: string;
+  urlKey: string | null;
+};
+
+
+export type LinearWorkspaceSummary = {
+  id: string;
+  name: string | null;
+  urlKey: string | null;
+  current: boolean;
+  user?: LinearUserSummary | null;
+  authorizedAt?: number | null;
+};
+
+
+export type LinearAuthStatus = {
+  connected: boolean;
+  user?: LinearUserSummary | null;
+  organization?: LinearOrganizationSummary | null;
+  scope?: string;
+  workspaces?: LinearWorkspaceSummary[];
+};
+
+
+export type LinearAuthStart = {
+  authorizationUrl: string;
+  expiresIn: number;
+  scope: string;
+};
+
+
+export type LinearAuthOrigin = 'desktop' | 'web';
+
+
+export type LinearIssueState = {
+  id: string | null;
+  name: string | null;
+  type: string | null;
+};
+
+
+export type LinearWorkflowState = {
+  id: string;
+  name: string;
+  type: string | null;
+  position: number;
+};
+
+
+export type LinearIssueAssignee = {
+  name: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+};
+
+
+export type LinearIssueTeam = {
+  id: string;
+  key: string;
+  name: string;
+};
+
+
+export type LinearIssuePriority = 0 | 1 | 2 | 3 | 4;
+
+
+export type LinearIssueLabel = {
+  id: string;
+  name: string;
+  color: string | null;
+};
+
+
+export type LinearIssueSummary = {
+  id: string;
+  identifier: string;
+  title: string;
+  url: string;
+  state?: LinearIssueState | null;
+  assignee?: LinearIssueAssignee | null;
+  team?: LinearIssueTeam | null;
+  priority?: LinearIssuePriority | null;
+  /** Absent on a related issue (a parent, a sub-issue): Linear is not asked for them there. */
+  labels?: LinearIssueLabel[];
+  updatedAt?: string | null;
+  /** The issue this one is a sub-issue of. */
+  parent?: LinearIssueSummary | null;
+  /** Null without sub-issues. Only the first few are counted; `more` says there are others. */
+  subIssueProgress?: LinearSubIssueProgress | null;
+};
+
+
+export type LinearSubIssueProgress = {
+  total: number;
+  /** Completed, canceled or a duplicate. */
+  done: number;
+  more: boolean;
+};
+
+
+export type LinearIssueComment = {
+  id: string;
+  body: string;
+  createdAt: string | null;
+  user?: { name: string | null; displayName: string | null; avatarUrl?: string | null } | null;
+};
+
+
+export type LinearIssue = LinearIssueSummary & {
+  description?: string | null;
+  comments?: LinearIssueComment[];
+  /** In Linear's order; the first page only, `subIssuesMore` says there are others. */
+  subIssues?: LinearIssueSummary[];
+  subIssuesMore?: boolean;
+};
+
+/** `open`: not done, canceled or a duplicate; the server's default. */
+
+
+export type LinearIssueListStatus = 'open' | 'all' | 'backlog' | 'todo' | 'started' | 'inReview' | 'completed' | 'canceled' | 'duplicate';
+/** Whose issues: anyone's, assigned to me, or created by me. */
+
+
+export type LinearIssueListAssignee = 'any' | 'me' | 'created';
+
+
+export type LinearIssueListPriority = 'all' | 'none' | 'urgent' | 'high' | 'medium' | 'low';
+
+
+export type LinearIssuesListOptions = {
+  query?: string;
+  cursor?: string;
+  status?: LinearIssueListStatus;
+  assignee?: LinearIssueListAssignee;
+  teamId?: string;
+  priority?: LinearIssueListPriority;
+};
+
+
+export type LinearIssuesListResult = {
+  connected: boolean;
+  issues?: LinearIssueSummary[];
+  cursor?: string | null;
+  hasMore?: boolean;
+};
+
+
+export type LinearIssueGetResult = {
+  connected: boolean;
+  issue?: LinearIssue | null;
+};
+
+/** Linear's workflow category; team-specific state names map onto these. */
+
+
+export type LinearStateType = 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled';
+
+/** Live state of a linked Linear issue, refreshed in batches for list surfaces. */
+
+
+export type LinearIssueLiveSummary = {
+  identifier: string;
+  title: string;
+  state: { name: string; type: LinearStateType };
+};
+
+
+export type LinearIssueStatesResult = {
+  connected: boolean;
+  states?: LinearWorkflowState[];
+};
+
+
+export type LinearIssueUpdateInput = {
+  id: string;
+  stateId: string;
+};
+
+
+export type LinearIssueUpdateResult = {
+  connected: boolean;
+  issue?: LinearIssue | null;
+};
+
+
+export type LinearTeamMapping = {
+  id: string;
+  key: string;
+  name: string;
+  projectPath: string | null;
+};
+
+
+export type LinearMappingResult = {
+  connected: boolean;
+  defaultProjectPath?: string | null;
+  teams?: LinearTeamMapping[];
+};
+
+
+export type LinearMappingWrite = {
+  defaultProjectPath: string | null;
+  teamProjectPaths: { [teamId: string]: string };
+};
+
+
+export type LinearSessionStatusKind = 'started' | 'completed' | 'failure';
+
+
+export type LinearSessionStatusPostInput = {
+  kind: LinearSessionStatusKind;
+  sessionId: string;
+  issueIdentifier?: string;
+  sessionOrigin?: string;
+};
+
+
+export type LinearSessionStatusPostResult =
+  | { connected: false }
+  | { connected: true; posted: true; commentId: string | null }
+  | {
+    connected: true;
+    posted: false;
+    skipped: 'already-posted' | 'issue-not-found' | 'not-started' | 'disabled' | 'origin-not-public';
+  };
+
+
+export type LinearPreferences = {
+  /** Status comments are off until the user opts in. */
+  sessionComments: boolean;
+};
+
+
+export interface LinearAPI {
+  authStatus(): Promise<LinearAuthStatus>;
+  authStart(origin?: LinearAuthOrigin): Promise<LinearAuthStart>;
+  authDisconnect(): Promise<{ removed: boolean }>;
+  authActivate(organizationId: string): Promise<LinearAuthStatus>;
+  issuesList(options?: LinearIssuesListOptions): Promise<LinearIssuesListResult>;
+  issueGet(id: string): Promise<LinearIssueGetResult>;
+  issueStates(teamId: string): Promise<LinearIssueStatesResult>;
+  issueUpdate(input: LinearIssueUpdateInput): Promise<LinearIssueUpdateResult>;
+  mappingGet(): Promise<LinearMappingResult>;
+  mappingSet(mapping: LinearMappingWrite): Promise<LinearMappingResult>;
+  sessionStatusPost(input: LinearSessionStatusPostInput): Promise<LinearSessionStatusPostResult>;
+  preferencesGet(): Promise<LinearPreferences>;
+  preferencesSet(preferences: LinearPreferences): Promise<LinearPreferences>;
+}
+
+/** Linux's PRIMARY buffer; only a local desktop page reaches it. */

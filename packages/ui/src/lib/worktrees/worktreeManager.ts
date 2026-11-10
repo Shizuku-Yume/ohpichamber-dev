@@ -849,7 +849,7 @@ export const resolveWorktreeTeardownCommand = async (
 export async function archiveProjectWorktree(
   project: ProjectRef,
   worktree: WorktreeMetadata,
-  input: { id: string; sessionIds: string[]; title?: string },
+  input: { id: string; sessionIds?: string[]; title?: string },
 ): Promise<GitWorktreeArchive> {
   markWorktreeRemoving(worktree.path);
   let archive: GitWorktreeArchive;

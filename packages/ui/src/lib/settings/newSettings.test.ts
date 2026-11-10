@@ -9,7 +9,7 @@ import {
 import { SETTINGS_ANCHOR_PAGES, type SettingsSearchAvailabilityContext } from './search';
 
 const runtimeCtx: SettingsSearchAvailabilityContext = {
-  isVSCode: false, isWeb: true, isDesktop: false, isMobile: false,
+  isWeb: true, isDesktop: false, isMobile: false,
   isDesktopLocalOrigin: false, isMac: false, isWindows: false, isLinux: false,
   routingAvailable: false, enterpriseMode: false, jevBlockedByEnterprise: false,
 };
@@ -74,8 +74,8 @@ describe('new settings badge', () => {
     expect(storedBaseline()).not.toContain('appearance.dock-badge');
 
     const macCtx = { ...runtimeCtx, isDesktop: true, isWeb: false, isMac: true };
-    expect(getPages(macCtx)).toEqual(['general']);
-    acknowledgePage('general', macCtx);
+    expect(getPages(macCtx)).toEqual(['appearance']);
+    acknowledgePage('appearance', macCtx);
     expect(getPages(macCtx)).toEqual([]);
     resetNewSettingsBadgeCacheForTests();
     expect(getPages(macCtx)).toEqual([]);
@@ -84,19 +84,10 @@ describe('new settings badge', () => {
   test('a page with only unavailable new controls has no badge and cannot acknowledge them', () => {
     startFromBaseline(baselineWithout('appearance.dock-badge'));
     expect(getPages(runtimeCtx)).toEqual([]);
-    acknowledgePage('general', runtimeCtx);
+    acknowledgePage('appearance', runtimeCtx);
     expect(storedBaseline()).not.toContain('appearance.dock-badge');
     resetNewSettingsBadgeCacheForTests();
-    expect(getPages({ ...runtimeCtx, isDesktop: true, isMac: true })).toEqual(['general']);
-  });
-
-  test('VS Code cannot announce or acknowledge controls from an unavailable page', () => {
-    startFromBaseline(baselineWithout('voice.playback'));
-    const vscodeCtx = { ...runtimeCtx, isVSCode: true, isWeb: false };
-    expect(getPages(vscodeCtx)).toEqual([]);
-    acknowledgePage('voice', vscodeCtx);
-    expect(storedBaseline()).not.toContain('voice.playback');
-    expect(getPages(runtimeCtx)).toEqual(['voice']);
+    expect(getPages({ ...runtimeCtx, isDesktop: true, isMac: true })).toEqual(['appearance']);
   });
 
   test('a fresh install seeds the baseline and announces nothing', () => {

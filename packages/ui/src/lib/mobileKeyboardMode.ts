@@ -9,6 +9,18 @@ export const supportsMobileKeyboardResizeContent = (): boolean => {
 };
 
 export function normalizeMobileKeyboardMode(value: unknown): MobileKeyboardMode;
+export function normalizeMobileKeyboardMode(value: unknown, fallback: MobileKeyboardMode): MobileKeyboardMode;
+export function normalizeMobileKeyboardMode(value: unknown, fallback: undefined): MobileKeyboardMode | undefined;
+export function normalizeMobileKeyboardMode(
+  value: unknown,
+  fallback: MobileKeyboardMode | undefined = 'resize-content',
+): MobileKeyboardMode | undefined {
+  if (value === 'native' || value === 'resize-content') {
+    return value;
+  }
+  return fallback;
+}
+
 const getViewportContentForMobileKeyboardMode = (value: unknown): string => {
   const mode = normalizeMobileKeyboardMode(value);
   return mode === 'resize-content'

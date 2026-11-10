@@ -1259,7 +1259,7 @@ describe('updateDesktopSettings', () => {
 
   test('reconciles warm cached reads with pending and in-flight settings writes', async () => {
     const saveResult = deferred<SettingsPayload>();
-    const savedSettings = { defaultModel: 'provider/new-model' } satisfies SettingsPayload;
+    const savedSettings = { lastSelectedModel: 'provider/new-model' } satisfies SettingsPayload;
     const saveCalls: Array<Partial<SettingsPayload>> = [];
     registerSettingsApi(
       async (changes) => {
@@ -1267,21 +1267,21 @@ describe('updateDesktopSettings', () => {
         return saveResult.promise;
       },
       async () => ({
-        settings: { defaultModel: 'provider/old-model' },
+        settings: { lastSelectedModel: 'provider/old-model' },
         source: 'web',
       }),
     );
 
     const initialSettings = await loadDesktopSettings();
-    expect(initialSettings?.defaultModel).toBe('provider/old-model');
-    const update = updateDesktopSettings({ defaultModel: 'provider/new-model' });
+    expect(initialSettings?.lastSelectedModel).toBe('provider/old-model');
+    const update = updateDesktopSettings({ lastSelectedModel: 'provider/new-model' });
 
     const pendingSettings = await loadDesktopSettings();
-    expect(pendingSettings?.defaultModel).toBe('provider/new-model');
+    expect(pendingSettings?.lastSelectedModel).toBe('provider/new-model');
     await delay(250);
-    expect(saveCalls).toEqual([{ defaultModel: 'provider/new-model' }]);
+    expect(saveCalls).toEqual([{ lastSelectedModel: 'provider/new-model' }]);
     const inFlightSettings = await loadDesktopSettings();
-    expect(inFlightSettings?.defaultModel).toBe('provider/new-model');
+    expect(inFlightSettings?.lastSelectedModel).toBe('provider/new-model');
 
     saveResult.resolve(savedSettings);
     await update;
@@ -1289,16 +1289,16 @@ describe('updateDesktopSettings', () => {
 
   test('a delayed read retains an edit whose write finishes before the read', async () => {
     const readResult = deferred<{ settings: SettingsPayload; source: 'web' }>();
-    const newDefaults = { defaultModel: 'provider/new', defaultVariant: 'high', defaultAgent: 'review' };
+    const newDefaults = { lastSelectedModel: 'provider/new', zenModel: 'high', defaultAgent: 'review' };
     const writes: Array<Partial<SettingsPayload>> = [];
     registerSettingsApi(async (changes) => { writes.push(changes); return { ...changes }; }, () => readResult.promise);
     const update = updateDesktopSettings(newDefaults);
     const read = loadDesktopSettings();
     await update;
-    readResult.resolve({ settings: { defaultModel: 'provider/old', defaultVariant: 'low', defaultAgent: 'build' }, source: 'web' });
+    readResult.resolve({ settings: { lastSelectedModel: 'provider/old', zenModel: 'low', defaultAgent: 'build' }, source: 'web' });
     expect(await read).toMatchObject(newDefaults);
     expect(await loadDesktopSettings()).toMatchObject(newDefaults);
-    await updateDesktopSettings({ defaultModel: 'provider/old' });
+    await updateDesktopSettings({ lastSelectedModel: 'provider/old' });
     expect(writes).toHaveLength(2);
   });
 
@@ -1306,10 +1306,10 @@ describe('updateDesktopSettings', () => {
     const readResult = deferred<{ settings: SettingsPayload; source: 'web' }>();
     registerSettingsApi(async (changes) => ({ ...changes }), () => readResult.promise);
     const read = loadDesktopSettings();
-    await updateDesktopSettings({ defaultModel: 'provider/new' });
-    readResult.resolve({ settings: { defaultModel: 'provider/old' }, source: 'web' });
-    expect((await read)?.defaultModel).toBe('provider/new');
-    expect((await loadDesktopSettings())?.defaultModel).toBe('provider/new');
+    await updateDesktopSettings({ lastSelectedModel: 'provider/new' });
+    readResult.resolve({ settings: { lastSelectedModel: 'provider/old' }, source: 'web' });
+    expect((await read)?.lastSelectedModel).toBe('provider/new');
+    expect((await loadDesktopSettings())?.lastSelectedModel).toBe('provider/new');
   });
 
   test('toggling back to the server value inside the debounce window cancels the pending write', async () => {

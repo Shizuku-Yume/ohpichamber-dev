@@ -7,6 +7,7 @@ import { useTraySync } from './useTraySync';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useNotificationStore } from '@/sync/notification-store';
+import { markSessionViewed } from '@/sync/notification-store';
 
 const session = (sessionId: string, parentSessionId?: string): Session => ({
   sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/project',
@@ -32,9 +33,14 @@ describe('Dock badge with the macOS menu bar disabled', () => {
   };
   const listen = async () => { listenerCount += 1; return () => {}; };
   const intervals = () => { intervalCount += 1; return 1; };
-  const append = (id: string) => useNotificationStore.getState().append({
-    type: 'turn-complete', session: id, time: Date.now(), viewed: false,
-  });
+  // Unread state lives on the session's metadata now: an idle turn whose
+  // viewed watermark never caught up is what raises the badge.
+  const append = (id: string) => useGlobalSessionsStore.setState((state) => ({
+    entityById: new Map(state.entityById).set(id, { ...state.entityById.get(id)!, metadata: { openchamber: { workbench: { lastIdleAt: Date.now(), viewedAt: undefined } } } }),
+    activeSessions: state.activeSessions.map((entry) => entry.sessionId === id
+      ? { ...entry, metadata: { openchamber: { workbench: { lastIdleAt: Date.now(), viewedAt: undefined } } } }
+      : entry),
+  }));
   const flush = async () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 550)); });
   };
@@ -77,7 +83,7 @@ describe('Dock badge with the macOS menu bar disabled', () => {
     useUIStore.setState({ dockBadgeEnabled: true });
     await flush();
     expect(counts).toEqual([0, 1, 0, 1]);
-    useNotificationStore.getState().markSessionViewed('root');
+    markSessionViewed('root');
     await flush();
     expect(counts).toEqual([0, 1, 0, 1, 0]);
     expect(intervalCount).toBe(0);
@@ -105,7 +111,7 @@ describe('Dock badge with the macOS menu bar disabled', () => {
     append('root');
     await flush();
     expect(counts).toEqual([0, 1]);
-    useNotificationStore.getState().markSessionViewed('root');
+    markSessionViewed('root');
     await act(async () => root.unmount());
     await flush();
     expect(counts).toEqual([0, 1]);

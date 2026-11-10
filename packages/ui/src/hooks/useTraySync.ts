@@ -21,6 +21,8 @@ import {
 } from '@/stores/useGlobalSessionsStore';
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import { QUOTA_PROVIDERS, formatWindowLabel, formatQuotaValueLabel } from '@/lib/quota';
+import { formatMessage, useI18nStore } from '@/lib/i18n/store';
+import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useGitStore } from '@/stores/useGitStore';
@@ -162,6 +164,9 @@ const resolveSessionSubtitle = (
 // Build the usage groups exactly like the header/mobile: only providers the
 // user enabled for the dropdown AND that report as configured. Window rows only
 // (the headline limits) — model breakdowns stay in the full UI.
+const translateQuota = (key: I18nKey, params?: I18nParams): string =>
+  formatMessage(useI18nStore.getState().dictionary, key, params);
+
 const buildUsage = (): TrayUsage => {
   const { results, dropdownProviderIds, displayMode } = useQuotaStore.getState();
   const mode: TrayUsage['mode'] = displayMode === 'remaining' ? 'remaining' : 'usage';
@@ -177,7 +182,7 @@ const buildUsage = (): TrayUsage => {
     const rows: TrayUsageRow[] = [];
     for (const [label, window] of Object.entries(result.usage?.windows ?? {})) {
       const percent = mode === 'remaining' ? window.remainingPercent : window.usedPercent;
-      rows.push({ label: formatWindowLabel(label), value: formatQuotaValueLabel(window.valueLabel, percent) });
+      rows.push({ label: formatWindowLabel(label), value: formatQuotaValueLabel(window, percent, translateQuota) });
     }
 
     const status = !result.ok && result.error
@@ -278,7 +283,6 @@ const collectLiveData = (): LiveData => {
 //    upstream `/session/status?directory=` endpoint: that call creates an
 //    OpenCode instance per directory.
 const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot => {
-  const notif = useNotificationStore.getState().index.session;
 
   // The list source is the GLOBAL store — every project/worktree the backend
   // knows about, independent of which directories this client has opened. Live
@@ -316,10 +320,10 @@ const buildSnapshot = (instanceName: string, includeTray: boolean): TraySnapshot
     for (const session of allSessions) {
       if (!session?.sessionId || session.parentSessionId) continue;
       const isUnread = isSessionUnread(session);
-      let familyUnseen = isUnread ? 1 : (notif.unseenCount[session.sessionId] ?? 0);
+      let familyUnseen = isUnread ? 1 : 0;
       if (familyUnseen === 0 && ui.notifyOnSubtasks) {
         familyUnseen = collectDescendants(session.sessionId)
-          .reduce((sum, id) => sum + (isSessionUnread(useGlobalSessionsStore.getState().entityById.get(id)) ? 1 : (notif.unseenCount[id] ?? 0)), 0);
+          .reduce((sum, id) => sum + (isSessionUnread(useGlobalSessionsStore.getState().entityById.get(id)) ? 1 : 0), 0);
       }
       if (familyUnseen > 0) dockBadgeCount += 1;
     }
