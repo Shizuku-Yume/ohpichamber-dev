@@ -41,5 +41,8 @@ unresolved manifests.
 **Check after:** `bun scripts/upstream-drift.mjs --markers --lane 11` → `no conflict markers (lane 11)`, exit 0.
 `bun install --frozen-lockfile` → exit 0 (`Checked 1431 installs across 1579 packages (no changes)`).
 `bun scripts/upstream-drift.test.mjs` → 9 checks pass, `upstream-drift: all checks passed`, exit 0.
-`merge-lanes.tsv` → 1,298 rows, 1,298 unique paths, all assigned to lanes 12-18
-  (12: 263, 13: 162, 14: 199, 15: 102, 16: 262, 17: 67, 18: 243).
+`merge-lanes.tsv` → 1,093 rows, 1,093 unique paths, all assigned to lanes 12-18
+  (16: 225, 12: 194, 14: 177, 18: 167, 13: 162, 15: 101, 17: 67). The 205 rows
+  removed after the first pass are the paths the exclusion cleanup deleted:
+  the 17 upstream-only `packages/ui/src/lib/opencode/*` engine files, 59 clean-merged
+  UI files importing them, and 3 upstream-only `scripts/brand` files.
