@@ -11,8 +11,6 @@ navigation, expanded sections and editor state. Its `visible` prop combines
 the panel's open state with the selected tab. Hiding via CSS alone does not
 pause React effects.
 
-<<<<<<< HEAD
-=======
 Tabs belong to the panel's directory, the project root. A view showing a
 repository nested under a root that is not one (Git, Changes) still opens its
 diff and file tabs under that root: a tab keyed by the nested repository is
@@ -76,16 +74,12 @@ about 40 px wide. Extending on gutter `mouseover` froze the range as soon as a
 hand drifted into the code, never scrolled, and the click after a release that
 was not over the pressed line number often cleared the range (#5556).
 
->>>>>>> bc50ba56a
 File tree ownership and request rules are in `files/DOCUMENTATION.md`.
 `DiffView` gates repository discovery, comparisons, per-file reads, viewport
 measurement and keyboard navigation on visibility. Hidden refresh hints retain
 only dirty paths scoped to runtime and directory; reopening invalidates those
 paths and requests fresh status. Completed range diffs remain cached while
 pending reservations are cancelled and retried on resume. Hidden tabs never
-<<<<<<< HEAD
-consume another tab's pending navigation request.
-=======
 consume another tab's pending navigation request. A collapsed file entry is
 passed `visible: false` whatever the view's state, and its callbacks keep their
 identity, so showing or hiding the view re-renders only the expanded entries
@@ -213,7 +207,6 @@ Most files of a changeset are collapsed and have never been read, so their
 matches have to come from somewhere other than a mounted viewer. Each source's
 `revision` names what its data depends on, so the bar re-reads a file exactly
 when the viewer would show something different.
->>>>>>> bc50ba56a
 
 `WalkthroughView` gates discovery and source loading while retaining generated
 results and any explicitly started generation job.
@@ -272,8 +265,6 @@ limits must never truncate a writable draft or its dirty-comparison baseline.
 Large code previews render the current draft and hash its full content only
 while previewing, so same-length edits in the middle invalidate cached output.
 
-<<<<<<< HEAD
-=======
 Markdown plan previews use the file preview's local-asset handling. Relative
 images resolve from the plan file's directory, including personal plans stored
 under the OpenChamber data directory and repository plans in a custom folder.
@@ -351,7 +342,6 @@ A read of a running step makes OpenCode capture a fresh working-copy snapshot.
 Reading on every step only to keep a count current would cost one capture per
 step of every turn while the panel is open on another scope.
 
->>>>>>> bc50ba56a
 ## Pull request comparisons
 
 DiffView, mobile Changes and walkthrough share `PullRequestComparisonSelector`
@@ -386,8 +376,6 @@ expander asks `useGitComparison.fetchFullFile`, which reads both sides of that
 file from GitHub through `/api/walkthrough/pr-file` (merge base and PR head),
 never from disk, so local edits and unfetched fork commits cannot leak in or
 block it. Existing inline comment controls still attach selected code to chat.
-<<<<<<< HEAD
-=======
 
 A comment on a comparison (a pull request, a commit, a branch against its
 base) carries the diff it was written on (`lib/diffCommentOrigin.ts`): Changes,
@@ -413,7 +401,6 @@ Files view takes the same comment from its toolbar, as a `file` draft beside
 its line comments. Its editor and cards sit between the toolbar and the
 scroller, so they stay on screen at any scroll; the CodeMirror line widgets
 filter those drafts out, and the fullscreen overlay shows them while it is open.
->>>>>>> bc50ba56a
 Changes hands its PR source to walkthrough; walkthrough's Changes action opens
 PR mode with the shared selection. Picking a PR never generates a walkthrough.
 
@@ -437,20 +424,6 @@ archive. Restore brings it back on its own, under that parent. One rule,
 lists, when the chat header's session menu offers Restore, and what the restore
 action accepts, so the three never disagree.
 
-<<<<<<< HEAD
-The page also lists a selected project's archived worktrees above its archived
-sessions, and on the phone every project's archived worktrees above the list.
-Each row shows the worktree name, branch and archive date with **Restore** and
-**Delete** (always visible on touch). Restore creates the checkout on the
-recorded branch before the Host applies the archive, then reopens only sessions
-whose current canonical workspace is still in that project and checkout; a
-session moved elsewhere is left alone. A partial-removal refusal keeps the
-server's snapshot ref and rolls back the sessions archived for the attempt.
-Delete asks before removing sessions and the archive; its optional local-branch
-deletion is unchecked by default. The listing is
-`lib/worktrees/worktreeArchive.ts`; repository refs are the record, and a failed
-listing keeps the last one instead of showing an empty archive.
-=======
 On desktop the panel on the left groups by project, not by folder: a session
 belongs to its project the way the sidebar decides it (by folder, then by
 OpenCode's project, which still places a session whose worktree is gone).
@@ -528,4 +501,3 @@ reads them from `GET /api/git/range-file-versions` or from the change request
 route with `binary=true`. A provider that ignores the flag, as an extension
 provider may, answers text that is no data URL, and the diff keeps the binary
 placeholder.
->>>>>>> bc50ba56a

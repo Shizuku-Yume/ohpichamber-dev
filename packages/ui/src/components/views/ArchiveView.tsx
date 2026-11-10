@@ -3,14 +3,10 @@ import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/components/ui';
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { copyTextToClipboard } from '@/lib/clipboard';
 import { cn, formatDirectoryName } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { opencodeClient } from '@/lib/opencode/client';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -26,7 +22,6 @@ import { loadWorktreeArchives, useWorktreeArchivesByProject } from '@/lib/worktr
 import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
 import { ArchivedWorktreeRow } from './archive/ArchivedWorktreeRow';
 import { useWorktreeArchiveActions } from './archive/useWorktreeArchiveActions';
-import { isSessionDirectoryAdmitted } from '@/sync/session-admission-rule';
 
 type WorkspaceBucket = {
   workspaceId: string;
@@ -83,8 +78,6 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
   const unarchiveSession = useSessionUIStore((state) => state.unarchiveSession);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
-  const projects = useProjectsStore((state) => state.projects);
-  const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   // Narrow selections: the cache's entity map changes with every active
   // session update, and the page only depends on which archived sessions are
   // listed and on their parents' titles.
@@ -133,62 +126,12 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   }, [homeDirectory, spaceArchives, t]);
 
   const normalizedQuery = query.trim().toLowerCase();
-<<<<<<< HEAD
-=======
-
-  const openCodeProjects = useGlobalSyncStore((state) => state.projects);
-
-  // Sessions belong to their project the way the sidebar groups them: by
-  // folder, then by OpenCode's project, which is what still places a session
-  // of a worktree that is gone.
-  const ownership = React.useMemo(() => createSessionOwnershipIndex(
-    listedSessions,
-    projects.flatMap((project) => {
-      const normalizedPath = normalizePath(project.path);
-      return normalizedPath ? [{ id: project.id, normalizedPath }] : [];
-    }),
-    worktreesByProject,
-    false,
-    [],
-    openCodeProjects,
-  ), [listedSessions, openCodeProjects, projects, worktreesByProject]);
-
-  // A worktree that is gone matches no project by folder, so its sessions are
-  // listed once the server confirms the folder is missing. A folder that still
-  // exists stays behind admission, whatever project OpenCode files it under.
-  const unadmittedOwnedDirectories = React.useMemo(() => [...new Set(listedSessions.flatMap((session) => {
-    const directory = resolveGlobalSessionDirectory(session);
-    return directory && ownership.bySessionId.has(session.id) && !isSessionDirectoryAdmitted(directory, projects, worktreesByProject) ? [directory] : [];
-  }))].sort().join('\n'), [listedSessions, ownership, projects, worktreesByProject]);
-  const [goneDirectories, setGoneDirectories] = React.useState<ReadonlySet<string>>(() => new Set());
-  React.useEffect(() => {
-    if (!unadmittedOwnedDirectories) return undefined;
-    let current = true;
-    void Promise.all(unadmittedOwnedDirectories.split('\n').map(async (directory) => (
-      await opencodeClient.getDirectoryAvailability(directory) === 'missing' ? [directory] : []
-    ))).then((gone) => {
-      if (current) setGoneDirectories(new Set(gone.flat()));
-    });
-    return () => { current = false; };
-  }, [unadmittedOwnedDirectories]);
-
->>>>>>> bc50ba56a
   // A subsession under an archived parent comes back with that parent and is
   // not listed. One archived while its parent stays active would otherwise
   // show nowhere, so it is listed under its parent's title and restored alone.
   const sortedSessions = React.useMemo(
-<<<<<<< HEAD
     () => [...listedSessions].sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0)),
     [listedSessions],
-=======
-    () => listedSessions.filter((session) => {
-      const directory = resolveGlobalSessionDirectory(session);
-      return isSessionDirectoryAdmitted(directory, projects, worktreesByProject)
-        || Boolean(directory && spaceArchives?.has(directory))
-        || Boolean(directory && goneDirectories.has(directory) && ownership.bySessionId.has(session.id));
-    }).sort((a, b) => (b.time?.archived ?? 0) - (a.time?.archived ?? 0)),
-    [goneDirectories, listedSessions, ownership, projects, spaceArchives, worktreesByProject],
->>>>>>> bc50ba56a
   );
 
   const parentTitles = React.useMemo(() => {
@@ -204,39 +147,8 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
     return parentTitles.get(parentSessionId) || t('sessions.sidebar.session.untitled');
   };
 
-<<<<<<< HEAD
   const buckets = React.useMemo<WorkspaceBucket[]>(() => {
     const byWorkspaceId = new Map<string, WorkspaceBucket>();
-=======
-  const archivesByProject = useWorktreeArchivesByProject();
-  const archiveActions = useWorktreeArchiveActions();
-
-  // Archived worktrees live in each project's repository; read them each time
-  // the page opens, like the spaces above.
-  React.useEffect(() => {
-    for (const project of projects) void loadWorktreeArchives(project.path).catch(() => undefined);
-  }, [projects]);
-
-  const buckets = React.useMemo<ArchiveBucket[]>(() => {
-    const byKey = new Map<string, ArchiveBucket>();
-    const bucketFor = (key: string, create: () => Omit<ArchiveBucket, 'sessions'>): ArchiveBucket => {
-      const existing = byKey.get(key);
-      if (existing) return existing;
-      const bucket = { ...create(), sessions: [] };
-      byKey.set(key, bucket);
-      return bucket;
-    };
-    const projectBucket = (root: string) => {
-      const project = projects.find((entry) => normalizePath(entry.path) === root);
-      return bucketFor(root, () => ({
-        key: root,
-        kind: 'project',
-        label: formatProjectLabel(project?.label?.trim() || root.split('/').filter(Boolean).pop() || root),
-        directory: root,
-        projectId: project?.id,
-      }));
-    };
->>>>>>> bc50ba56a
     for (const session of sortedSessions) {
       const workspaceId = session.workspaceId;
       const directory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
@@ -269,14 +181,8 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
         projectId: project.id,
       });
     }
-<<<<<<< HEAD
     return [...byWorkspaceId.values()].sort((a, b) => b.sessions.length - a.sessions.length);
   }, [archivesByProject, labelOf, projects, sortedSessions, spaceArchives]);
-=======
-    const order = { project: 0, space: 1, other: 2 } as const;
-    return [...byKey.values()].sort((a, b) => order[a.kind] - order[b.kind] || a.label.localeCompare(b.label));
-  }, [archivesByProject, labelOf, ownership, projects, sortedSessions, spaceArchives, t]);
->>>>>>> bc50ba56a
 
   // Search spans every archived session; the workspace filter applies only while not searching.
   const filteredSessions = React.useMemo(() => {
@@ -342,18 +248,6 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
     });
   }, [t, unarchiveSession]);
 
-  const copySessionId = React.useCallback((sessionId: string) => {
-    void copyTextToClipboard(sessionId)
-      .then((result) => {
-        if (result.ok) {
-          toast.success(t('sessions.sidebar.session.copyId.success'));
-          return;
-        }
-        toast.error(t('sessions.sidebar.session.copyId.error'));
-      })
-      .catch(() => toast.error(t('sessions.sidebar.session.copyId.error')));
-  }, [t]);
-
   const searchInput = (
     <SessionSearchInput
       value={query}
@@ -398,95 +292,16 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
   const showMoreButton = remainingCount > 0 ? (
     <button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
       className={cn(
-<<<<<<< HEAD
         'flex items-center justify-start rounded-md text-left text-muted-foreground/70 leading-tight hover:text-foreground hover:underline',
-=======
-        'flex items-center justify-start rounded-md text-start text-muted-foreground leading-tight hover:text-foreground hover:underline',
->>>>>>> bc50ba56a
         layout === 'mobile' ? 'min-h-10 px-3 typography-micro' : 'mt-1 px-2 py-1 text-xs',
       )}>
       {t('sessions.sidebar.group.showMore')}
     </button>
   ) : null;
   if (layout === 'mobile') {
-<<<<<<< HEAD
     // One column: no directory panel, so every row names its project. Touch
     // has no hover, so Restore is always visible. Deleting stays on desktop,
     // whose confirmation dialog the mobile shell does not mount.
-=======
-    // The desktop's page in one column. Its groups (every session, each
-    // project, a deleted space's chats, everything else) become a row of
-    // chips that scrolls sideways; a project's archived worktrees are tiles
-    // holding their sessions above its loose ones. Touch has no hover, so
-    // Restore and a worktree's Delete are always shown. Deleting a session
-    // stays on the desktop, whose confirmation dialog the mobile shell does
-    // not mount.
-    const renderMobileSessionRow = (session: Session, index: number, rows: Session[], inTile: boolean) => {
-      const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
-      const title = session.title || t('sessions.sidebar.session.untitled');
-      // A deleted space's chat has nowhere to be restored to.
-      const restorable = !(spaceArchives?.has(sessionDirectory) ?? false);
-      const parentTitle = parentTitleAbove(rows, index);
-      // Only a list that mixes groups names each row's group.
-      const showGroup = selectedBucket === null || normalizedQuery.length > 0;
-      // In a worktree's tile the titles line up with the worktree's name, past its icon.
-      const indent = inTile ? (session.parentID ? 'ps-[2.875rem]' : 'ps-[2.125rem]') : (session.parentID ? 'ps-7' : 'ps-4');
-      return (
-        <React.Fragment key={session.id}>
-          {parentTitle ? (
-            <p dir="auto" className={cn('truncate oc-ui-start-align pt-2 pe-2 typography-micro text-muted-foreground', inTile ? 'ps-[2.125rem]' : 'ps-4')}>{parentTitle}</p>
-          ) : null}
-          <div className="flex items-center pe-1.5">
-            <button
-              type="button"
-              className={cn('flex min-h-10 min-w-0 flex-1 items-center py-1 pe-2 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset', indent)}
-              style={{ touchAction: 'manipulation' }}
-              onClick={() => openSession(session)}
-            >
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span dir="auto" className="block truncate oc-ui-start-align typography-ui-label text-foreground">{title}</span>
-                <span className="flex items-center gap-2.5 typography-micro text-muted-foreground">
-                  {showGroup ? <span className="block min-w-0 flex-1 truncate">{labelOf(sessionDirectory)}</span> : null}
-                  <span className="shrink-0 tabular-nums">
-                    {formatSessionDateLabel(session.time?.archived ?? session.time?.updated ?? session.time?.created ?? Date.now())}
-                  </span>
-                </span>
-              </span>
-            </button>
-            {restorable ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="lg"
-                className="w-10 shrink-0 px-0 text-muted-foreground"
-                onClick={() => restoreSession(session)}
-                aria-label={t('sessions.archivePage.restoreSessionAria', { title })}
-                style={{ touchAction: 'manipulation' }}
-              >
-                <Icon name="inbox-unarchive" className="size-5" />
-              </Button>
-            ) : null}
-          </div>
-        </React.Fragment>
-      );
-    };
-    const renderChip = (key: string, label: string, count: number, selected: boolean, onSelect: () => void, fromDeletedSpace = false) => (
-      <Button
-        key={key}
-        type="button"
-        variant="chip"
-        size="sm"
-        className="shrink-0"
-        aria-pressed={selected}
-        onClick={onSelect}
-        style={{ touchAction: 'manipulation' }}
-      >
-        {fromDeletedSpace ? <Icon name="instance" className="size-3.5" /> : null}
-        <span dir="auto" className="max-w-40 truncate">{label}</span>
-        <span className="tabular-nums text-muted-foreground">{count}</span>
-      </Button>
-    );
->>>>>>> bc50ba56a
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="shrink-0 space-y-1.5 px-3 pt-3">
@@ -495,11 +310,9 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
             <p className="px-1 typography-micro text-muted-foreground">{countLabel}</p>
           ) : null}
         </div>
-        <ScrollableOverlay
-          outerClassName="min-h-0 flex-1"
-          className="pt-1"
+        <div
+          className="min-h-0 flex-1 overflow-y-auto pt-1"
           style={{ paddingBottom: 'calc(0.5rem + var(--oc-safe-area-bottom, 0px))' }}
-          disableHorizontal
         >
           {allWorktreeArchives.length > 0 ? (
             <div className="pb-1">
@@ -559,7 +372,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
             );
           })}
           {showMoreButton}
-        </ScrollableOverlay>
+        </div>
         {archiveActions.dialog}
       </div>
     );
@@ -588,9 +401,9 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
             : 'text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground',
         )}
       >
-        {fromDeletedSpace ? <Icon name="instance" className="h-3.5 w-3.5 flex-shrink-0" /> : null}
-        <span dir="auto" className="oc-ui-start-align min-w-0 flex-1 truncate">{label}</span>
-        <span className="flex-shrink-0 typography-micro text-muted-foreground">{count}</span>
+        {fromDeletedSpace ? <Icon name="box-3" className="h-3.5 w-3.5 flex-shrink-0" /> : null}
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span className="flex-shrink-0 typography-micro text-muted-foreground/70">{count}</span>
       </button>
       {sessionsForDelete ? (
         <Tooltip>
@@ -610,108 +423,12 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
     </div>
   );
 
-<<<<<<< HEAD
-=======
-  const renderSessionRow = (session: Session, index: number, rows: Session[], indent = false) => {
-              const sessionDirectory = normalizePath(resolveGlobalSessionDirectory(session)) ?? '';
-              const directoryLabel = sessionDirectory ? labelOf(sessionDirectory) : null;
-              // A deleted space's chat has nowhere to be restored to.
-              const restorable = !(spaceArchives?.has(sessionDirectory) ?? false);
-              const parentTitle = parentTitleAbove(rows, index);
-              return (
-                <React.Fragment key={session.id}>
-                  {parentTitle ? (
-                    <p dir="auto" className={cn('truncate oc-ui-start-align pt-2 pe-2 typography-micro text-muted-foreground', indent ? 'ps-[1.875rem]' : 'ps-2')}>{parentTitle}</p>
-                  ) : null}
-                  <ContextMenu>
-                    <ContextMenuTrigger
-                      render={<div
-                        className={cn(
-                          'group relative flex cursor-pointer items-center gap-3 rounded-md py-1 pe-2 transition-[padding] hover:bg-interactive-hover/40 hover:pe-14 focus-within:pe-14',
-                          // In a worktree's tile the titles line up with the worktree's name, past its icon.
-                          indent ? (session.parentID ? 'ps-[2.875rem]' : 'ps-[1.875rem]') : (session.parentID ? 'ps-6' : 'ps-2'),
-                        )}
-                        onClick={() => openSession(session)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            openSession(session);
-                          }
-                        }}
-                      />}
-                    >
-                      <span dir="auto" className="min-w-0 flex-1 truncate oc-ui-start-align typography-ui-label text-foreground">
-                        {session.title || t('sessions.sidebar.session.untitled')}
-                      </span>
-                      {normalizedQuery && directoryLabel ? (
-                        <span className="max-w-40 flex-shrink-0 truncate text-[0.72rem] text-muted-foreground" title={sessionDirectory}>
-                          {directoryLabel}
-                        </span>
-                      ) : null}
-                      <span className="flex-shrink-0 text-[0.72rem] text-muted-foreground">
-                        {formatSessionDateLabel(session.time?.archived ?? session.time?.updated ?? session.time?.created ?? Date.now())}
-                      </span>
-                      {restorable ? <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          restoreSession(session);
-                        }}
-                        className="absolute inset-e-7 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity pointer-events-none hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={t('sessions.archivePage.restoreSessionAria', { title: session.title || t('sessions.sidebar.session.untitled') })}
-                      >
-                        <Icon name="inbox-unarchive" className="h-3.5 w-3.5" />
-                      </button> : null}
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          sessionEvents.requestDelete({ sessions: [session], mode: 'session' });
-                        }}
-                        className="absolute inset-e-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity pointer-events-none hover:text-destructive group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={t('sessions.archivePage.deleteSessionAria', { title: session.title || t('sessions.sidebar.session.untitled') })}
-                      >
-                        <Icon name="delete-bin" className="h-3.5 w-3.5" />
-                      </button>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent className="min-w-[180px]">
-                      <ContextMenuItem className="[&>svg]:me-1" onClick={() => copySessionId(session.id)}>
-                        <Icon name="file-copy" className="me-1 h-4 w-4" />
-                        {t('sessions.sidebar.session.menu.copyId')}
-                      </ContextMenuItem>
-                      {restorable ? (
-                        <ContextMenuItem className="[&>svg]:me-1" onClick={() => restoreSession(session)}>
-                          <Icon name="inbox-unarchive" className="me-1 h-4 w-4" />
-                          {t('sessions.sidebar.bulkActions.restore')}
-                        </ContextMenuItem>
-                      ) : null}
-                      <ContextMenuItem
-                        className="text-destructive focus:text-destructive [&>svg]:me-1"
-                        onClick={() => sessionEvents.requestDelete({ sessions: [session], mode: 'session' })}
-                      >
-                        <Icon name="delete-bin" className="me-1 h-4 w-4" />
-                        {t('sessions.sidebar.bulkActions.delete')}
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                </React.Fragment>
-              );
-  };
-
->>>>>>> bc50ba56a
   return (
     <div className="absolute inset-0 z-10 flex flex-col bg-background">
       <div className="flex min-h-0 flex-1">
         {/* Directory filter panel */}
-<<<<<<< HEAD
         <div className="flex w-64 flex-shrink-0 flex-col border-r border-border/50">
           <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
-=======
-        <div className="flex w-64 flex-shrink-0 flex-col border-e border-edge">
-          <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-0.5 p-2" disableHorizontal>
->>>>>>> bc50ba56a
             {renderDirectoryItem(
               '__all__',
               t('sessions.archivePage.allDirectories'),
@@ -729,7 +446,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
               bucket.sessions,
               bucket.fromDeletedSpace,
             ))}
-          </ScrollableOverlay>
+          </div>
         </div>
 
         {/* Session list */}
@@ -744,7 +461,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
             </span>
           </div>
 
-          <ScrollableOverlay outerClassName="min-h-0 flex-1" className="px-6 py-3" disableHorizontal>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-3">
             <div className="mx-auto w-full max-w-3xl space-y-0.5">
               {selectedWorktreeArchives.length > 0 && selectedProject ? (
                 <div className="pb-1">
@@ -827,7 +544,7 @@ export function ArchiveSessionsView({ layout, onLeave, initialQuery = '' }: {
               })}
               {showMoreButton}
             </div>
-          </ScrollableOverlay>
+          </div>
         </div>
       </div>
       {archiveActions.dialog}
