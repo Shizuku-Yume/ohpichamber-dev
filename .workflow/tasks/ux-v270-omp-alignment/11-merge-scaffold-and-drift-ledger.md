@@ -6,6 +6,8 @@
 **Files:** `scripts/upstream-drift.mjs`; `scripts/upstream-drift.test.mjs`; `.workflow/upstream-deltas.tsv`; `.workflow/research/ux-v270-omp-alignment/merge-lanes.tsv`; root `package.json`; `bun.lock`; `packages/*/package.json`; standing-exclusion paths
 **Read first:** spec "How it is built" (Merge); `decisions.md: 2026-11-10 - Merge upstream OpenChamber with a real git merge`; `specs/upstream-refresh.md` (standing exclusions); `research/ux-v270-systemic-review.md` R1
 **Check:** on the scaffold tip, `bun scripts/upstream-drift.mjs --markers --lane 11` → 0 markers in excluded and manifest paths; `bun install --frozen-lockfile` → exit 0; `bun scripts/upstream-drift.test.mjs` → exit 0; `merge-lanes.tsv` assigns every conflicted path to exactly one of lanes 12-18
+- **Base commit:** d599d1566b332cf1aa8a8c4450424b070506676e
+- **Status:** active
 
 - [ ] Fast-forward `ux-v270-omp-alignment/integration` to `main`. Cut `ux-v270-omp-alignment/merge-scaffold` from it, run `git merge --no-ff bc50ba56a`, and commit the conflicted state with markers. The commit message marks it as scaffold that never lands.
 - [ ] Resolve the standing exclusions to the fork side: `packages/vscode` (deleted), OpenCode-engine paths, folder trust, isolated-spaces code, `.github` collaboration/CI, `changelog/`, `nix/`, `pr-evidence/`, upstream `.agents/.claude/.opencode` guidance.
