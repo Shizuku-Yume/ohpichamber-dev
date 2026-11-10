@@ -160,7 +160,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
   const cancelSessionPrefetch = React.useCallback((session: PrefetchTarget) => {
     const directory = sessionDirectory(session);
     if (!directory) return;
-    const key = getPrefetchRequestKey({ sessionId: session.id, directory });
+    const key = getPrefetchRequestKey({ sessionId: session.sessionId, directory });
     const timer = sessionPrefetchTimersRef.current.get(key);
     if (timer === undefined || !hoverOnlyTimerKeysRef.current.has(key)) return;
     window.clearTimeout(timer);
@@ -188,7 +188,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
       return;
     }
     const timer = window.setTimeout(() => {
-      const currentIndex = sortedSessions.findIndex((session) => session.id === currentSessionId);
+      const currentIndex = sortedSessions.findIndex((session) => session.sessionId === currentSessionId);
       if (currentIndex < 0) return;
       for (const offset of NEIGHBOR_PREFETCH_OFFSETS) scheduleSessionPrefetch(sortedSessions[currentIndex + offset]);
     }, SESSION_PREFETCH_SETTLE_MS);
@@ -200,7 +200,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
       return;
     }
     const timer = window.setTimeout(() => {
-      const currentIndex = workSessions.findIndex((session) => session.id === currentSessionId);
+      const currentIndex = workSessions.findIndex((session) => session.sessionId === currentSessionId);
       if (currentIndex < 0) return;
       for (const offset of NEIGHBOR_PREFETCH_OFFSETS) scheduleSessionPrefetch(workSessions[currentIndex + offset]);
     }, SESSION_PREFETCH_SETTLE_MS);

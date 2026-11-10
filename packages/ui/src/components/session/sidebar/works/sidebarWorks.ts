@@ -86,8 +86,8 @@ export const buildSidebarWorkIndex = (sections: readonly ProjectSection[]): Side
     const stack = [node];
     while (stack.length > 0) {
       const current = stack.pop();
-      if (!current || bySessionId.has(current.session.id)) continue;
-      bySessionId.set(current.session.id, ref);
+      if (!current || bySessionId.has(current.session.sessionId)) continue;
+      bySessionId.set(current.session.sessionId, ref);
       stack.push(...current.children);
     }
   };
@@ -102,7 +102,7 @@ export const buildSidebarWorkIndex = (sections: readonly ProjectSection[]): Side
         continue;
       }
       for (const node of group.sessions) {
-        claim(node, { kind: 'session', key: sessionWorkKey(node.session.id), projectId, rootSessionId: node.session.id });
+        claim(node, { kind: 'session', key: sessionWorkKey(node.session.sessionId), projectId, rootSessionId: node.session.sessionId });
       }
     }
   }
@@ -127,8 +127,8 @@ export const orderSidebarWorks = (
   const rankByKey = new Map<string, { ref: SidebarWorkRef; rank: number }>();
   orderedSessions.forEach((session, position) => {
     if (!include(session)) return;
-    const rootSessionId = rootOf?.get(session.id);
-    const ref = index.bySessionId.get(session.id) ?? (rootSessionId ? index.bySessionId.get(rootSessionId) : undefined);
+    const rootSessionId = rootOf?.get(session.sessionId);
+    const ref = index.bySessionId.get(session.sessionId) ?? (rootSessionId ? index.bySessionId.get(rootSessionId) : undefined);
     if (ref && !rankByKey.has(ref.key)) rankByKey.set(ref.key, { ref, rank: position });
   });
   if (archiveAnchors.size === 0) return [...rankByKey.values()].map((entry) => entry.ref);
@@ -177,7 +177,7 @@ export const orderInWorkWorks = (
 ): SidebarWorkRef[] => orderSidebarWorks(orderedSessions, index, (session) => (
   // A subagent's own work state never puts its run in work: the user works
   // in the sessions they started, as the Done button on a row reads it.
-  !session.parentSessionId && session.archivedAt === undefined && !isChatDirectory(session.directory) && isSessionInWork(session)
+  !session.parentSessionId && session.archivedAt === undefined && !isChatDirectory(session.displayPath) && isSessionInWork(session)
 ), EMPTY_ANCHORS, rootOf);
 
 /**
@@ -211,7 +211,7 @@ export const buildWorktreeArchiveAnchors = ({
   const newestByKey = new Map<string, number>();
   for (const session of archivedSessions) {
     if (session.parentSessionId) continue;
-    const key = keyByDirectory.get(normalizePath(session.directory ?? null) ?? '');
+    const key = keyByDirectory.get(normalizePath(session.displayPath ?? null) ?? '');
     if (!key) continue;
     newestByKey.set(key, Math.max(newestByKey.get(key) ?? Number.NEGATIVE_INFINITY, orderValueOf(session)));
   }

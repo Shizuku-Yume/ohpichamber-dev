@@ -37,7 +37,7 @@ import { MOBILE_ACTIVE_ROW_CLASS, MobileRowChevron, MobileSlotChevron, MobileTwo
 
 type SessionRowModel = Extract<SessionSidebarRow, { kind: 'session' }>;
 
-const collectDescendantIds = (node: SessionNode): string[] => node.children.flatMap((child) => [child.session.id, ...collectDescendantIds(child)]);
+const collectDescendantIds = (node: SessionNode): string[] => node.children.flatMap((child) => [child.session.sessionId, ...collectDescendantIds(child)]);
 
 /**
  * A session in the phone's list: the desktop row's content for a thumb. One
@@ -58,26 +58,26 @@ export const MobileSessionRow: React.FC<{
   const directory = getSessionDirectory(session);
   const { revealed, armed, renaming } = useMobileRowSwipe(row.key);
   const title = session.title?.trim() || t('mobile.sessions.untitled');
-  const aiRename = useSessionAiRenameAction(session.id, session.directory, revealed || renaming);
-  const isCurrent = useSessionUIStore((state) => state.currentSessionId === session.id);
+  const aiRename = useSessionAiRenameAction(session.sessionId, directory, revealed || renaming);
+  const isCurrent = useSessionUIStore((state) => state.currentSessionId === session.sessionId);
   // A run's overview covers the session, and then the run's row is the selected one.
   const runOverviewOpen = useUIStore((state) => state.runOverviewKey !== null);
   const active = isCurrent && !runOverviewOpen;
-  const isUnread = useSessionUnread(session.id);
-  const turnActivity = useSessionTurnActivity(session.id);
+  const isUnread = useSessionUnread(session.sessionId);
+  const turnActivity = useSessionTurnActivity(session.sessionId);
   const isStreaming = turnActivity !== null;
   const showUnread = !isStreaming && isUnread && !active;
-  const hasActivityDuration = useHasSessionTurnDuration(session.id, isStreaming);
+  const hasActivityDuration = useHasSessionTurnDuration(session.sessionId, isStreaming);
   const showActivityDuration = (isStreaming || showUnread) && hasActivityDuration;
   const hasChildren = node.children.length > 0;
   const expanded = row.forceExpanded === true || row.expanded === true;
   // A folded row stands for its subsessions too: their waiting requests count here.
   const familyIds = React.useMemo(
-    () => (hasChildren && !expanded ? [session.id, ...collectDescendantIds(node)] : [session.id]),
-    [expanded, hasChildren, node, session.id],
+    () => (hasChildren && !expanded ? [session.sessionId, ...collectDescendantIds(node)] : [session.sessionId]),
+    [expanded, hasChildren, node, session.sessionId],
   );
   const pendingRequests = usePendingRequests(familyIds);
-  const topLevel = !session.parentID;
+  const topLevel = !session.parentSessionId;
   const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
   // Only a work's own row tracks it, for every session of it: what nests in
   // a work is tracked and finished with it.
@@ -86,7 +86,7 @@ export const MobileSessionRow: React.FC<{
   const work = ownsWork
     ? { inWork: sessionsInWork.length > 0, onToggle: () => { void toggleMobileSessionWork(session, sessionsInWork, t); } }
     : undefined;
-  const pinned = useSessionPinnedStore((state) => isSessionPinned(state.ids, directory || null, session.id));
+  const pinned = useSessionPinnedStore((state) => isSessionPinned(state.ids, directory || null, session.sessionId));
   const pin = topLevel && directory ? { pinned, onToggle: () => toggleMobileSessionPin(session, pinned, t) } : undefined;
   const inZone = row.renderContext === 'timeline-mixed' || row.renderContext === 'mixed-compact';
   // With the Pinned zone shown, the zones need no pin: it says it in its header.
@@ -118,7 +118,7 @@ export const MobileSessionRow: React.FC<{
   ) : null);
   const inSpace = row.secondaryMeta?.inSpace === true;
   const toggle = hasChildren && !row.forceExpanded
-    ? () => toggleParent(sessionExpansionKey(row.renderContext, row.archived, session.id))
+    ? () => toggleParent(sessionExpansionKey(row.renderContext, row.archived, session.sessionId))
     : undefined;
 
   const setRevealed = (next: boolean) => useMobileSidebarRowsStore.getState().setRevealed(row.key, next);
@@ -140,7 +140,7 @@ export const MobileSessionRow: React.FC<{
   // No date, as on the desktop: the list is ordered by recency. A turn's
   // duration shows while it runs and until it is read.
   const timeSlot = showActivityDuration && !waitingOnUser
-    ? <SessionActivityDuration sessionId={session.id} running={isStreaming} className="shrink-0 typography-micro" />
+    ? <SessionActivityDuration sessionId={session.sessionId} running={isStreaming} className="shrink-0 typography-micro" />
     : null;
   const pinMarker = pinned && !pinnedZoneShown
     ? <Icon name="pushpin" className="size-3 shrink-0 text-muted-foreground" aria-label={t('sessions.sidebar.session.status.pinned')} />
@@ -161,7 +161,7 @@ export const MobileSessionRow: React.FC<{
       className={className}
       onSubmit={(next) => {
         stopRename();
-        void renameMobileSession(session.id, next, t);
+        void renameMobileSession(session.sessionId, next, t);
       }}
       onCancel={stopRename}
     />
@@ -241,7 +241,7 @@ export const MobileSessionRow: React.FC<{
       contentClassName={cn('relative flex w-full items-center bg-background transition-colors', active && MOBILE_ACTIVE_ROW_CLASS)}
       actions={(
         <MobileSessionRowActions
-          sessionId={session.id}
+          sessionId={session.sessionId}
           title={title}
           revealed={revealed}
           confirmingDelete={armed}

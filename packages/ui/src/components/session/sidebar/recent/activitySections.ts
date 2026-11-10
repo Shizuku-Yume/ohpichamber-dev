@@ -3,6 +3,7 @@ import { matchesRankQuery, SIDEBAR_SEARCH } from '@/lib/search/fuzzySearch';
 import type { SessionNode } from '../types';
 import { listedChildren } from '../listedChildren';
 import type { SidebarSessionLocation } from './sessionLocation';
+import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 type SidebarActivityItem = {
   node: SessionNode;
@@ -17,7 +18,7 @@ type SidebarActivityItem = {
 const matchesSidebarSessionQuery = (session: Session, query: string): boolean => {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return true;
-  if (normalizedQuery.startsWith('ses_')) return session.id.toLowerCase() === normalizedQuery;
+  if (normalizedQuery.startsWith('ses_')) return session.sessionId.toLowerCase() === normalizedQuery;
   return matchesRankQuery([typeof session.title === 'string' ? session.title : ''], normalizedQuery, SIDEBAR_SEARCH);
 };
 
@@ -59,7 +60,7 @@ export const matchZoneSessionsForSidebarQuery = (
     const matches = scope === 'tree'
       ? countSessionTreeQueryMatches(getTree(session), query)
       : Number(matchesSidebarSessionQuery(session, query));
-    if (matches > 0) matchCountById.set(session.id, matches);
+    if (matches > 0) matchCountById.set(session.sessionId, matches);
     return matches > 0;
   });
   return { sessions, matchCountById };
@@ -80,11 +81,11 @@ export const deriveTimelineActivityItems = ({
   query: string;
 }): SidebarActivityItem[] => sessions.flatMap((session) => {
   if (!matchesSidebarSessionQuery(session, query)) return [];
-  const location = getSessionLocation(session.id);
+  const location = getSessionLocation(session.sessionId);
   return [{
     node: getSessionNode(session),
     projectId: location?.projectId ?? null,
-    groupDirectory: location?.groupDirectory ?? session.directory ?? null,
+    groupDirectory: location?.groupDirectory ?? resolveGlobalSessionDirectory(session),
     secondaryMeta: {
       projectLabel: location?.projectLabel ?? null,
       branchLabel: location?.branchLabel ?? null,

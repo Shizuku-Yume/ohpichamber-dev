@@ -96,14 +96,14 @@ const collectWorkSessions = (ref: SidebarWorkRef, context: FactsContext) => {
     const seen = new Set<string>();
     while (stack.length > 0) {
       const session = stack.pop();
-      if (!session || seen.has(session.id)) continue;
-      seen.add(session.id);
+      if (!session || seen.has(session.sessionId)) continue;
+      seen.add(session.sessionId);
       all.push(session);
-      stack.push(...(context.childrenMap.get(session.id) ?? []));
+      stack.push(...(context.childrenMap.get(session.sessionId) ?? []));
     }
   }
   // A subagent's own state never counts for the work, as in In work.
-  return { all, top: all.filter((session) => !session.parentID) };
+  return { all, top: all.filter((session) => !session.parentSessionId) };
 };
 
 export const buildSidebarWorkFacts = (ref: SidebarWorkRef, context: FactsContext): SidebarWorkFacts => {
@@ -126,17 +126,17 @@ export const buildSidebarWorkFacts = (ref: SidebarWorkRef, context: FactsContext
     pin,
     inWork,
     done: !inWork && topFacts.some((facts) => facts.work === 'done'),
-    running: all.some((session) => context.live.activeIds.has(session.id)),
-    needsAnswer: all.some((session) => context.live.blockingIds.has(session.id)),
-    unread: top.some((session) => context.live.unreadIds.has(session.id)),
-    failed: top.some((session) => context.live.failedIds.has(session.id)),
+    running: all.some((session) => context.live.activeIds.has(session.sessionId)),
+    needsAnswer: all.some((session) => context.live.blockingIds.has(session.sessionId)),
+    unread: top.some((session) => context.live.unreadIds.has(session.sessionId)),
+    failed: top.some((session) => context.live.failedIds.has(session.sessionId)),
     looksDone: topFacts.some((facts) => facts.looksDone),
     hasPr: worktree?.kind === 'pr' || topFacts.some((facts) => facts.hasChange),
     hasIssue: topFacts.some((facts) => facts.hasIssue),
     hasTrackerItem: topFacts.some((facts) => facts.hasTrackerItem),
-    hasPlan: all.some((session) => context.planSessionIds.has(session.id)),
+    hasPlan: all.some((session) => context.planSessionIds.has(session.sessionId)),
     hasGoal: topFacts.some((facts) => facts.openGoal),
-    lastActivityAt: all.reduce((latest, session) => Math.max(latest, session.time.updated), 0),
+    lastActivityAt: all.reduce((latest, session) => Math.max(latest, session.updatedAt), 0),
     texts: [
       ...top.map((session) => session.title ?? ''),
       ...(ref.kind === 'group' ? [ref.group.label, ref.group.branch ?? ''] : []),

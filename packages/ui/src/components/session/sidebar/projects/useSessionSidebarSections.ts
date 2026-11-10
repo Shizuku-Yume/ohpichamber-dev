@@ -59,7 +59,7 @@ const worktreeRanksKeyFor = (
   sessionOrderRanks: ReadonlyMap<string, number>,
 ): string => worktrees.length === 0
   ? ''
-  : sessions.map((session) => sessionOrderRanks.get(session.id) ?? '').join(',');
+  : sessions.map((session) => sessionOrderRanks.get(session.sessionId) ?? '').join(',');
 
 const EMPTY_WORKTREES: WorktreeMetadata[] = [];
 

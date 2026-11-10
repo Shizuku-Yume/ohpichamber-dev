@@ -490,7 +490,7 @@ export const ContextPanelContent: React.FC = () => {
   }, []);
 
   const viewModel = React.useMemo(() => {
-    const currentSession = currentSessionId ? sessions.find((session) => session.id === currentSessionId) ?? null : null;
+    const currentSession = currentSessionId ? sessions.find((session) => session.sessionId === currentSessionId) ?? null : null;
 
     const assistantMessages = sessionMessages.filter((entry) => entry.info.role === 'assistant');
     const userMessages = sessionMessages.filter((entry) => entry.info.role === 'user');

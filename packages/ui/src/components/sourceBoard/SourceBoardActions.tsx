@@ -7,6 +7,7 @@ import { REFERENCE_META_TEXT, referenceNumberLabel } from '@/components/referenc
 import type { IconName } from '@/components/icon/icons';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
+import { ButtonTooltip } from '@/components/ui/action-toolbar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import { usePendingComposerReferences, type ComposerReferenceHandoff } from '@/components/chat/composer/pendingComposerReferences';
@@ -28,6 +29,8 @@ import { usePullRequestSelectionStore } from '@/stores/usePullRequestSelectionSt
 import { useUIStore } from '@/stores/useUIStore';
 import { useWalkthroughStore } from '@/stores/useWalkthroughStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import type { TrackedThread } from '@/lib/trackedItems/model';
+import { useTrackedRecords } from '@/stores/useTrackedItemsStore';
 import { useSession } from '@/sync/sync-context';
 import { resolvePullLinkTarget } from './boardRepository';
 import { landsWithIt, mergeChoiceOf } from './mergeChoice';
@@ -83,13 +86,16 @@ function useCapabilities(context: SourceControlReadContext | null): SourceContro
 const ActionButton: React.FC<{
     icon: IconName;
     label: string;
+    tooltip: string;
     onClick: () => void;
     busy?: boolean;
-}> = ({ icon, label, onClick, busy = false }) => (
-    <Button size="sm" variant="outline" onClick={onClick} disabled={busy}>
-        <Icon name={busy ? 'loader-4' : icon} className={busy ? 'size-3.5 animate-spin' : 'size-3.5'} />
-        {label}
-    </Button>
+}> = ({ icon, label, tooltip, onClick, busy = false }) => (
+    <ButtonTooltip label={tooltip}>
+        <Button size="sm" variant="outline" onClick={onClick} disabled={busy}>
+            <Icon name={busy ? 'loader-4' : icon} className={busy ? 'size-3.5 animate-spin' : 'size-3.5'} />
+            {label}
+        </Button>
+    </ButtonTooltip>
 );
 
 /**
@@ -128,7 +134,9 @@ export const SourceBoardActions: React.FC<{
     submitRequirementsUnreadable?: boolean;
     /** Whether the host would merge or submit the previewed change, from its status; null when it does not say. */
     mergeable?: boolean | null;
-}> = ({ item, project, context, onStartWorktree, onChanged, startIn, onLeave, worktreeAvailable, stack = null, onStartOnTop, submitRequirements, submitRequirementsUnreadable = false, mergeable = null }) => {
+}> = ({ item, project, context: readContext, onStartWorktree, onChanged, startIn, onLeave, worktreeAvailable, stack = null, onStartOnTop, submitRequirements, submitRequirementsUnreadable = false, mergeable = null }) => {
+    // A linked item is only read: it can be attached, and nothing here acts on it.
+    const context = readContext?.linked ? null : readContext;
     const { t } = useI18n();
     const { sourceControl, trackers } = useRuntimeAPIs();
     const confirmation = useConfirmDialog();
@@ -137,6 +145,19 @@ export const SourceBoardActions: React.FC<{
     const pull: RepositoryChangeRequestReference | null = item.source === 'repository' && item.reference.kind === 'pull' ? item.reference : null;
     const descriptor = useSourceControlProvider(pull?.provider);
     const openPull = pull && pull.state === 'open' ? pull : null;
+    const trackedPulls = React.useMemo<TrackedThread<'pull'>[]>(() => openPull && context ? [{
+        provider: context.provider, instance: context.instance, accountId: context.accountId,
+        kind: 'pull', owner: openPull.sourceRepo.owner, repo: openPull.sourceRepo.repo, number: openPull.number,
+    }] : [], [context, openPull]);
+    // The board/branch preview already owns visibility-scoped interest.
+    const [liveRecord] = useTrackedRecords(trackedPulls);
+    const liveMerge = liveRecord?.type === 'pull' ? liveRecord.state : null;
+    const waitingMerge = liveMerge?.state === 'open' && (liveMerge.isInMergeQueue || liveMerge.autoMergeRequest) === true;
+    const waitingLabel = liveMerge?.isInMergeQueue
+        ? liveMerge.mergeQueueEntry?.position != null
+            ? t('sourceBoard.merge.queuePosition', { position: liveMerge.mergeQueueEntry.position })
+            : t('sourceBoard.merge.inQueue')
+        : t('sourceBoard.merge.autoMerge');
     // Asked only while an open PR is previewed: nothing else merges.
     const capabilities = useCapabilities(openPull ? context : null);
 
@@ -259,6 +280,23 @@ export const SourceBoardActions: React.FC<{
         }
     };
 
+    const cancelMerge = async () => {
+        if (!openPull || !context) return;
+        setBusy('merge');
+        try {
+            const receipt = await sourceControl.changeRequestMerge({
+                ...context, idempotencyKey: newMutationKey(), method: chosenMethod, cancel: true,
+                target: { project: { owner: openPull.sourceRepo.owner, name: openPull.sourceRepo.repo }, number: openPull.number, head: openPull.head, base: openPull.base, headSha: openPull.headSha },
+            });
+            toast.success(t(receipt.result.merged ? 'sourceBoard.toast.merged' : 'sourceBoard.toast.mergeCancelled', { reference }));
+        } catch (error) {
+            toast.error(t('sourceBoard.toast.mergeCancelFailed', { reference }), { description: error instanceof Error ? error.message : String(error) });
+        } finally {
+            setBusy(null);
+            onChanged();
+        }
+    };
+
     const markReady = async () => {
         if (!openPull || !context) return;
         setBusy('ready');
@@ -279,7 +317,12 @@ export const SourceBoardActions: React.FC<{
 
     const maintenance = (
         <>
-            {openPull && !openPull.draft && mergeMethod ? (
+            {waitingMerge ? (
+                <>
+                    <span className="text-muted-foreground typography-small">{waitingLabel}</span>
+                    <ActionButton icon="close" label={t('sourceBoard.merge.cancel')} tooltip={t('contextTooltips.tracker.cancelMerge')} onClick={() => void cancelMerge()} busy={busy === 'merge'} />
+                </>
+            ) : openPull && !openPull.draft && mergeMethod ? (
                 // One control, as on the host: the button says how it merges,
                 // the arrow beside it picks another way.
                 <div className="flex shrink-0 items-center">
@@ -337,9 +380,9 @@ export const SourceBoardActions: React.FC<{
                 </span>
             ) : null}
             {openPull?.draft && capabilities?.draftChangeRequests ? (
-                <ActionButton icon="git-pull-request" label={t('sourceBoard.actions.markReady')} busy={busy === 'ready'} onClick={() => void markReady()} />
+                <ActionButton icon="git-pull-request" label={t('sourceBoard.actions.markReady')} tooltip={t('contextTooltips.tracker.markReady')} busy={busy === 'ready'} onClick={() => void markReady()} />
             ) : null}
-            {stackOnTop && !project ? <ActionButton icon="stack" label={stackOnTopLabel} onClick={stackOnTop} /> : null}
+            {stackOnTop && !project ? <ActionButton icon="stack" label={stackOnTopLabel} tooltip={t('contextTooltips.tracker.startOnTop')} onClick={stackOnTop} /> : null}
         </>
     );
 

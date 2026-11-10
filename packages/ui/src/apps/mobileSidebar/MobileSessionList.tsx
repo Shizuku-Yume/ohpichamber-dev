@@ -29,7 +29,7 @@ const FLAT_TEXT_INSET_PX = 12;
 const NO_FIRST_VISIBLE = (): void => undefined;
 
 const nodeHolds = (nodes: readonly SessionNode[], sessionId: string): boolean => nodes.some((node) => (
-  node.session.id === sessionId || nodeHolds(node.children, sessionId)
+  node.session.sessionId === sessionId || nodeHolds(node.children, sessionId)
 ));
 
 /**
@@ -47,7 +47,7 @@ const findCurrentRowIndex = (
   }
   if (sessionId) {
     const index = rows.findIndex((row) => (
-      (row.kind === 'session' && row.node.session.id === sessionId)
+      (row.kind === 'session' && row.node.session.sessionId === sessionId)
       || (row.kind === 'run' && row.run.memberIds.includes(sessionId))
       || (row.kind === 'group-header' && nodeHolds(row.group.sessions, sessionId))
     ));

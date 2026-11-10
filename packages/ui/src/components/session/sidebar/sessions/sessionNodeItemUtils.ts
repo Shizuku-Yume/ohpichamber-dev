@@ -36,7 +36,7 @@ export type SessionNodeRenderExtras<TNode = SessionNode> = SessionNodeChildRende
 };
 
 /**
- * Walk `nodes` and add `node.session.id` to `result` for every node
+ * Walk `nodes` and add `node.session.sessionId` to `result` for every node
  * whose subtree contains `targetId`. This is used to precompute, once
  * per SessionGroupSection render, which rows need to update when
  * `editingId` changes. With M visible rows, this
@@ -51,12 +51,12 @@ export const collectSubtreeContainingId = (
   if (!targetId) return;
 
   const visit = (node: SessionNode): boolean => {
-    let containsTarget = node.session.id === targetId;
+    let containsTarget = node.session.sessionId === targetId;
     for (const child of node.children) {
       containsTarget = visit(child) || containsTarget;
     }
     if (containsTarget) {
-      result.add(node.session.id);
+      result.add(node.session.sessionId);
     }
     return containsTarget;
   };
@@ -71,7 +71,7 @@ export const nodeContainsSessionId = (node: SessionNode, sessionId: string | nul
     return false;
   }
 
-  if (node.session.id === sessionId) {
+  if (node.session.sessionId === sessionId) {
     return true;
   }
 
@@ -133,7 +133,7 @@ export const selectBlockingBadgeSessionScopes = (
       ?? fallbackDirectory;
     if (directory) {
       const sessionIDs = sessionIDsByDirectory.get(directory) ?? [];
-      sessionIDs.push(current.session.id);
+      sessionIDs.push(current.session.sessionId);
       sessionIDsByDirectory.set(directory, sessionIDs);
     }
     for (const child of current.children) {
@@ -157,12 +157,12 @@ export const selectFolderRootNodes = (
       if (!node) return false;
 
       const visited = new Set<string>();
-      let parentID = (node.session as SessionNode['session'] & { parentID?: string | null }).parentID ?? null;
-      while (parentID && !visited.has(parentID)) {
-        if (assignedSessionIds.has(parentID) && nodeBySessionId.has(parentID)) return false;
-        visited.add(parentID);
-        const parentNode = nodeBySessionId.get(parentID);
-        parentID = (parentNode?.session as (SessionNode['session'] & { parentID?: string | null }) | undefined)?.parentID ?? null;
+      let parentSessionId = node.session.parentSessionId ?? null;
+      while (parentSessionId && !visited.has(parentSessionId)) {
+        if (assignedSessionIds.has(parentSessionId) && nodeBySessionId.has(parentSessionId)) return false;
+        visited.add(parentSessionId);
+        const parentNode = nodeBySessionId.get(parentSessionId);
+        parentSessionId = parentNode?.session.parentSessionId ?? null;
       }
       return true;
   });
@@ -304,9 +304,9 @@ export const computeNodeStructureKey = (node: SessionNode): string => {
   const childKeys = node.children.map((child) => {
     const childVersion = getSessionObjectVersion(child.session);
     if (child.children.length === 0) {
-      return `${child.session.id}@${childVersion}`;
+      return `${child.session.sessionId}@${childVersion}`;
     }
-    return `${child.session.id}@${childVersion}:${computeNodeStructureKey(child)}`;
+    return `${child.session.sessionId}@${childVersion}:${computeNodeStructureKey(child)}`;
   });
 
   return childKeys.join('|');
@@ -322,16 +322,14 @@ export const nodeHasPinnedMembershipChange = (
 ): boolean => {
   const runtimeKey = getRuntimeKey();
   const visit = (previous: SessionNode, current: SessionNode): boolean => {
-    if (previous.session.id !== current.session.id || previous.children.length !== current.children.length) {
+    if (previous.session.sessionId !== current.session.sessionId || previous.children.length !== current.children.length) {
       return true;
     }
 
-    const prevDirectory = (previous.session as SessionNode['session'] & { directory?: string | null }).directory
-      ?? prevGroupDirectory;
-    const nextDirectory = (current.session as SessionNode['session'] & { directory?: string | null }).directory
-      ?? nextGroupDirectory;
-    const prevKey = getPinnedSessionKey(runtimeKey, prevDirectory ?? '', previous.session.id);
-    const nextKey = getPinnedSessionKey(runtimeKey, nextDirectory ?? '', current.session.id);
+    const prevDirectory = resolveGlobalSessionDirectory(previous.session) ?? prevGroupDirectory;
+    const nextDirectory = resolveGlobalSessionDirectory(current.session) ?? nextGroupDirectory;
+    const prevKey = getPinnedSessionKey(runtimeKey, prevDirectory ?? '', previous.session.sessionId);
+    const nextKey = getPinnedSessionKey(runtimeKey, nextDirectory ?? '', current.session.sessionId);
     if (
       (prevKey ? prevPinnedSessionIds.has(prevKey) : false)
       !== (nextKey ? nextPinnedSessionIds.has(nextKey) : false)
@@ -390,9 +388,9 @@ export const resolveMenuOpenSessionId = (
   const bucketTag = archivedBucket ? 'archived' : 'active';
   let result: string | null = null;
   const visit = (node: SessionNode): boolean => {
-    const nodeMenuKey = `${renderContext}:${bucketTag}:${node.session.id}`;
+    const nodeMenuKey = `${renderContext}:${bucketTag}:${node.session.sessionId}`;
     if (nodeMenuKey === menuKey) {
-      result = node.session.id;
+      result = node.session.sessionId;
       return true;
     }
     for (const child of node.children) {

@@ -50,8 +50,6 @@ import { markSessionViewed } from '@/sync/notification-store';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
-import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
-import { resumeAutoReviewRun } from '@/lib/reviewFlow';
 import { SyncProvider } from '@/sync/sync-context';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
@@ -247,24 +245,6 @@ function App({ apis }: AppProps) {
       setInitRetryEpoch((epoch) => epoch + 1);
     });
   }, []);
-
-  const autoReviewResumeSignature = useAutoReviewStore((state) => {
-    const runtimeKey = getRuntimeKey();
-    return Object.values(state.runsByOriginalSessionID)
-      .filter((run) => run.status === 'running' && run.runtimeKey === runtimeKey)
-      .map((run) => `${run.originalSessionID}:${run.phase}:${run.lastForwardedMessageID ?? ''}:${run.expectedAssistantParentID ?? ''}`)
-      .sort()
-      .join('|');
-  });
-
-  React.useEffect(() => {
-    const runtimeKey = getRuntimeKey();
-    const runs = Object.values(useAutoReviewStore.getState().runsByOriginalSessionID)
-      .filter((run) => run.status === 'running' && run.runtimeKey === runtimeKey);
-    for (const run of runs) {
-      resumeAutoReviewRun(run.originalSessionID);
-    }
-  }, [autoReviewResumeSignature, runtimeEndpointEpoch]);
 
   React.useEffect(() => {
     document.documentElement.classList.toggle('wide-chat-layout', wideChatLayoutEnabled);

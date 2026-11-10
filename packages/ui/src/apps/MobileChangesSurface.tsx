@@ -1082,12 +1082,13 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
  const sourceLabel = mode === 'branch' && branchComparison.base
   ? branchRefLabel(branchComparison.base)
   : mode === 'commit' ? selectedCommitHash?.slice(0, 8) : mode === 'pr' && selectedPr ? `#${selectedPr.number}` : null;
- if (route.type === 'walkthrough' && currentDirectory) {
+ if (route.type === 'walkthrough' && walkthroughTarget && currentDirectory) {
   return (
    <MobileWalkthroughScreen
     directory={currentDirectory}
-    target={walkthroughTarget ?? undefined}
+    target={walkthroughTarget}
     subtitle={[modeLabel, sourceLabel].filter(Boolean).join(' · ')}
+    revision={JSON.stringify([comparisonRevision, mode === 'pr' ? comparison.revision : 0])}
     visible={visible}
     onBack={() => setRoute(LIST_ROUTE)}
    />

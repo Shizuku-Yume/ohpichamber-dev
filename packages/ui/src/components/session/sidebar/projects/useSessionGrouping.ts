@@ -103,7 +103,7 @@ export const useSessionGrouping = (args: Args) => {
       return nodes.flatMap((node) => {
         if (isIdQuery && isArchivedSession(node.session)) return [];
         const nodeMatches = isIdQuery
-          ? node.session.id.toLowerCase() === normalizedQuery
+          ? node.session.sessionId.toLowerCase() === normalizedQuery
           : matchesRankQuery([buildSessionSearchText(node.session)], query, SIDEBAR_SEARCH);
         if (nodeMatches) {
           return [node];
@@ -146,7 +146,7 @@ export const useSessionGrouping = (args: Args) => {
 
       const getSessionWorktree = (session: Session): WorktreeMetadata | null => {
         const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
-        const sessionWorktreeMeta = args.worktreeMetadata.get(session.id) ?? null;
+        const sessionWorktreeMeta = args.worktreeMetadata.get(session.sessionId) ?? null;
         if (sessionWorktreeMeta) return sessionWorktreeMeta;
         if (sessionDirectory) {
           const worktree = findPrefixWorktreeEntry(sessionDirectory, worktreeByPath);
@@ -159,8 +159,8 @@ export const useSessionGrouping = (args: Args) => {
 
       const claimedSessionIds = new Set<string>();
       const buildProjectNode = (session: Session): SessionNode => {
-        claimedSessionIds.add(session.id);
-        const children = isArchivedSession(session) ? [] : childrenMapRef.current.get(session.id) ?? [];
+        claimedSessionIds.add(session.sessionId);
+        const children = isArchivedSession(session) ? [] : childrenMapRef.current.get(session.sessionId) ?? [];
         const childNodes: SessionNode[] = [];
         for (const child of children) {
           if (isArchivedSession(child) || claimedSessionIds.has(child.id)) continue;
@@ -183,7 +183,7 @@ export const useSessionGrouping = (args: Args) => {
 
       const rootCandidates = sortedProjectSessions.filter((session) => {
         if (isArchivedSession(session)) return !session.parentSessionId;
-        return !nestedSessionIdsRef.current.has(session.id);
+        return !nestedSessionIdsRef.current.has(session.sessionId);
       });
 
       const isInNestingCycle = (session: Session): boolean => {
@@ -202,12 +202,12 @@ export const useSessionGrouping = (args: Args) => {
       // then expose each still-unclaimed component from its first input row.
       const roots: SessionNode[] = [];
       const addRoot = (session: Session): void => {
-        if (claimedSessionIds.has(session.id)) return;
+        if (claimedSessionIds.has(session.sessionId)) return;
         roots.push(buildProjectNode(session));
       };
       rootCandidates.forEach(addRoot);
       sortedProjectSessions.forEach((session) => {
-        if (!claimedSessionIds.has(session.id) && !isHiddenSubsession(session) && isInNestingCycle(session)) addRoot(session);
+        if (!claimedSessionIds.has(session.sessionId) && !isHiddenSubsession(session) && isInNestingCycle(session)) addRoot(session);
       });
 
       const groupedNodes = new Map<string, SessionNode[]>();
@@ -220,15 +220,15 @@ export const useSessionGrouping = (args: Args) => {
         // Worktrees aren't registered in VS Code, so the desktop directory-match
         // below would otherwise dump these sessions into the archived bucket.
         if (args.isVSCode) return normalizedProjectRoot ?? '__project_root__';
-        if (args.runKeyBySessionId?.has(session.id)) return normalizedProjectRoot ?? '__project_root__';
-        const resolvedScope = sessionOwners?.get(session.id)?.scopeDirectory;
+        if (args.runKeyBySessionId?.has(session.sessionId)) return normalizedProjectRoot ?? '__project_root__';
+        const resolvedScope = sessionOwners?.get(session.sessionId)?.scopeDirectory;
         if (resolvedScope) {
           if (resolvedScope === normalizedProjectRoot) return normalizedProjectRoot ?? '__project_root__';
           if (spaceByDirectory.has(resolvedScope)) return resolvedScope;
           const scopeWorktree = findPrefixWorktreeEntry(resolvedScope, worktreeByPath);
           if (scopeWorktree) return normalizePath(scopeWorktree.path) ?? scopeWorktree.path;
         }
-        const metadataPath = normalizePath(args.worktreeMetadata.get(session.id)?.path ?? null);
+        const metadataPath = normalizePath(args.worktreeMetadata.get(session.sessionId)?.path ?? null);
         const normalizedDir = metadataPath ?? resolveGlobalSessionDirectory(session);
         // Active sessions have already passed project ownership. An unavailable
         // worktree directory is still owned by this configured project, not an
@@ -386,21 +386,21 @@ export const useSessionGrouping = (args: Args) => {
     const traversedDescendants = new Set<string>();
     const result: Session[] = [];
     const add = (session: Session): void => {
-      if (included.has(session.id)) return;
-      included.add(session.id);
+      if (included.has(session.sessionId)) return;
+      included.add(session.sessionId);
       result.push(session);
     };
     const visitDescendants = (session: Session): void => {
-      if (traversedDescendants.has(session.id)) return;
-      traversedDescendants.add(session.id);
+      if (traversedDescendants.has(session.sessionId)) return;
+      traversedDescendants.add(session.sessionId);
       add(session);
-      for (const child of childrenMapRef.current.get(session.id) ?? []) {
+      for (const child of childrenMapRef.current.get(session.sessionId) ?? []) {
         visitDescendants(child);
       }
     };
     for (const session of projectSessions) {
       visitDescendants(session);
-      const ancestors = new Set<string>([session.id]);
+      const ancestors = new Set<string>([session.sessionId]);
       let current = session;
       while (true) {
         const parentId = resolveSessionNestingParentId(current, (id) => sessionMap.get(id));

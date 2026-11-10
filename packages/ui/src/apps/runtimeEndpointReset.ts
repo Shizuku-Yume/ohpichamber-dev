@@ -58,9 +58,7 @@ export const reconnectAppForTransportSwitch = (): void => {
 
 export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedDetail): void => {
   useSessionUIStore.getState().prepareForRuntimeSwitch(detail.previousRuntimeKey);
-  if (detail.previousRuntimeKey) {
-    useAutoReviewStore.getState().stopRunningRunsForRuntime(detail.previousRuntimeKey);
-  }
+  useAutoReviewStore.getState().resetForRuntimeSwitch();
   disposeTerminalInputTransport();
   useTerminalStore.getState().clearAll();
   hostFilesystem.resetRequests();
