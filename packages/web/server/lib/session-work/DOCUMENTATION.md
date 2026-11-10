@@ -16,15 +16,8 @@ Small Model is worth waking.
   "Measurement"), the thresholds, and the decisions taken from the answers.
 - `state.js` — `metadata.openchamber.work` and the merge patches that change
   it. Every patch is decided against the record at write time.
-<<<<<<< HEAD
 - `runtime.js` — `createSessionWorkRuntime`: `processCanonicalEvent` (a sent
   message, a turn start), `evaluateTurnEnd` (called by session assist), `stop`.
-=======
-- `membership.js` — which sessions can be in work and which ones the block
-  shows.
-- `runtime.js` — `createSessionWorkRuntime`: `processPayload` (a sent message,
-  a turn start), `evaluateTurnEnd` (called by session assist), `stop`.
->>>>>>> bc50ba56a
 
 ## State
 
@@ -41,7 +34,6 @@ handed over changes the user could look over. It lives outside `work` so it
 needs neither the In work block nor a session in work.
 
 The UI parser is `packages/ui/src/lib/sessionWorkMetadata.ts`; the user's own
-<<<<<<< HEAD
 Track / Done go through the Host metadata route
 (`setSessionWorkState` in `packages/ui/src/sync/session-actions.ts`). Host SQLite
 is the metadata authority; execution session metadata is never a fallback.
@@ -51,24 +43,6 @@ is the metadata authority; execution session metadata is never a fallback.
 - Jev only opens. Nothing here ever writes `done`.
 - Jev reopens a closed session only for a request sent after the user closed
   it (`openByJevPatch` compares the request's `createdAt` with `doneAt`).
-=======
-Track / Done go through the generic metadata route
-(`setSessionWorkState` in `packages/ui/src/sync/session-actions.ts`), which
-also exists in VS Code. An agent does the same on the user's word with the
-`openchamber` tool's `session.markDone` / `session.track`, which write
-`userStatePatch` (`../openchamber-control/DOCUMENTATION.md`).
-
-`membership.js` holds which sessions this feature serves (`canBeInWork`) and
-which ones the sidebar block shows (`isInWork`, `isDoneSuggested`), for this
-runtime and for the agent tool's `session.list`.
-
-## Invariants
-
-- A sent message only opens. This runtime never writes `done`; only the user
-  closes, in the app or through an agent they asked.
-- A message reopens a closed session only when it was sent after the user
-  closed it (`openPatch` compares the message's `time.created` with `doneAt`).
->>>>>>> bc50ba56a
 - Writes go through `updateSessionMetadata`, which decides the patch inside the
   store's per-session write queue, so a user's Done written a moment earlier
   is seen and kept.
@@ -112,19 +86,6 @@ starts one). Each message id is handled once; a session
 already in work reads nothing from OpenCode. No Jev: until 2026-10, Jev judged
 whether a message started work, and every session now counts instead.
 
-The open a message owes stays pending in this runtime until it is settled:
-the session opened or was already open, the user closed it after the message,
-it can never be in work, OpenCode no longer has it, or In work is off. A failed
-metadata read, session read or write is tried again after 2s, 10s and 60s,
-then given up with a warning. A session archived when the message arrived
-waits for OpenCode's `session.unarchived` and is tried again then; sending to
-an archived session restores it right after the send, so this is the usual
-order there. One open is pending per session, the newest message's, and a
-retry never moves the turn counter: the message id is taken once, and only
-taking it starts a turn. Recovery is local because nothing delivers the same
-message again: the hub hands each event to a server subscriber once and does
-not retry a subscriber that failed.
-
 ## When Jev is asked
 
 - A user message was sent (canonical `message.created`, role user): only with
@@ -163,7 +124,6 @@ the wording or thresholds without re-running this measurement.
 
 ## Settings
 
-<<<<<<< HEAD
 - `sessionWorkEnabled`: the block and the actions, default on.
 - `sessionWorkAutoOpen`: Jev opens sessions, default on, and is inert without a classification provider.
 - `sessionReviewOfferEnabled`: the review offer, default off (Settings → Chat → Session Assistance), and inert without a classification provider.
@@ -174,16 +134,6 @@ reads. A second store for sessions OpenCode refuses would have to be merged
 into every read and cleaned up when the folder returns. Archive is already
 OpenChamber's own record, works without the folder, and takes the session out
 of In work, which is what the user wanted from Done.
-=======
-- `sessionWorkEnabled`: the block, the actions, and opening on a sent
-  message, default on.
-- `sessionReviewOfferEnabled`: the review offer, default off (Settings → Chat →
-  Session Assistance); not offered in VS Code, inert without a classification
-  provider, independent of In work.
-
-Both are read at every use. A session in work also stays under its project
-group and folders: In work is an extra view of it, not a move.
->>>>>>> bc50ba56a
 
 ## Runtime parity
 
@@ -193,8 +143,7 @@ group and folders: In work is an extra view of it, not a move.
 
 `state.test.js` (patches, reopen rule, hint lifecycle), `runtime.test.js`
 (open on a sent message without Jev, the reopen rule, one handling per
-message, ineligible sessions, an open recovered after a failed read or write
-and after a restore, the retry bound, a retry that keeps the turn's hint, the combined turn-end
+message, ineligible sessions, the combined turn-end
 call, the review offer with and without In work and looks done winning over
 it, a late answer after the next turn started, never closing, failure as
 unknown), plus the gate cases in

@@ -4,10 +4,6 @@
  * (`/api/routing/classifier/custom`). Normal authenticated
  * OpenChamber routes: do not add them to browser URL-token allowlists.
  *
-<<<<<<< HEAD
- */
-import express from 'express';
-=======
  * The send-path rewrite, registered ahead of the generic OpenCode proxy. In
  * OpenCode 2.x a prompt body carries no model: the client switches the session
  * first (`POST /session/:id/model`) and sends afterwards. So the rewrite is in
@@ -35,7 +31,6 @@ const SEND_PATHS = [
   '/api/session/:sessionId/command',
   '/api/session/:sessionId/form/:formId/reply',
 ];
->>>>>>> bc50ba56a
 
 const sendError = (res, error) => {
   const status = Number.isInteger(error?.status) ? error.status : 500;
@@ -43,9 +38,9 @@ const sendError = (res, error) => {
 };
 
 export function registerRoutingRoutes(app, runtime) {
-  app.get('/api/routing', async (req, res) => {
+  app.get('/api/routing', async (_req, res) => {
     try {
-      const state = await runtime.describe(req.query.workspaceId);
+      const state = await runtime.describe();
       res.json({ ...state, heldPermissions: runtime.heldPermissions() });
     } catch (error) {
       sendError(res, error);
@@ -98,7 +93,7 @@ export function registerRoutingRoutes(app, runtime) {
       const custom = req.body?.custom;
       res.json(await runtime.testClassifier(custom === undefined || custom === null
         ? undefined
-        : { url: custom.url, model: custom.model, key: custom.key }, req.query.workspaceId));
+        : { url: custom.url, model: custom.model, key: custom.key }));
     } catch (error) {
       sendError(res, error);
     }
@@ -113,3 +108,79 @@ export function registerRoutingRoutes(app, runtime) {
   });
 }
 
+export function registerRoutingPromptRewrite(app, runtime) {
+  const parseJson = express.json({ limit: '50mb' });
+
+  /** Parses the body only for JSON requests; anything else stays a stream. */
+  const withParsedBody = (handler) => (req, res, next) => {
+    const contentType = String(req.headers['content-type'] ?? '').toLowerCase();
+    if (!contentType.includes('application/json')) return next();
+    parseJson(req, res, (parseError) => {
+      if (parseError) return next(parseError);
+      handler(req, res, next);
+    });
+  };
+
+  // The UI SDK URI-encodes the directory header on every request and only
+  // marks the values that are not Latin-1, and OpenCode decodes the value once
+  // on its side — so read what OpenCode will read, the way requestedDirectories
+  // does for the space guards (../spaces/dispatcher.js). The runtime's own
+  // OpenCode calls encode once more, so an encoded value here would reach
+  // OpenCode double-encoded and fail its realPath.
+  const PERCENT_ESCAPE = /%[0-9a-fA-F]{2}/;
+  const safeDecode = (value) => {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  };
+
+  const directoryOf = (req) => {
+    const url = new URL(req.url, 'http://localhost');
+    // searchParams values arrive percent-decoded already.
+    const query = url.searchParams.get('directory');
+    if (query) return query;
+    const header = req.get('x-opencode-directory');
+    if (!header) return undefined;
+    const encoded = req.get('x-opencode-directory-encoding') === 'uri' || PERCENT_ESCAPE.test(header);
+    return encoded ? safeDecode(header) : header;
+  };
+
+  // Session creation is the other v2 request that carries a model: flows that
+  // know their first turn's selection create the session on it (btw forks,
+  // auto review, fusion, extension starts). OpenCode accepts the sentinel at
+  // creation and only fails the first prompt with "provider.no-route", so the
+  // model is dropped here and the session starts on OpenCode's default. No
+  // session id exists yet to mark; the first send resends the sentinel through
+  // the model switch below because the session's record never matches Auto.
+  app.post(CREATE_PATH, withParsedBody((req, _res, next) => {
+    if (!isAutoModel(req.body?.model)) return next();
+    delete req.body.model;
+    next();
+  }));
+
+  app.post(MODEL_PATH, withParsedBody((req, res, next) => {
+    const directory = directoryOf(req);
+    // Swallowed, not forwarded: OpenCode has no `openchamber` provider, and the
+    // real model is only known once the request text arrives.
+    if (runtime.noteModelSelection(req.params.sessionId, req.body?.model, directory)) return res.status(204).end();
+    next();
+  }));
+
+  // Whether the session is routed is known from the URL alone, so an ordinary
+  // send is never read: it reaches the proxy as the stream it arrived as, the
+  // way it did before routing existed.
+  const routedSendsOnly = (handler) => {
+    const parsed = withParsedBody(handler);
+    return (req, res, next) => (runtime.isAutoSession(req.params.sessionId) ? parsed(req, res, next) : next());
+  };
+
+  app.post(SEND_PATHS, routedSendsOnly((req, res, next) => {
+    const sessionId = req.params.sessionId;
+    const directory = directoryOf(req);
+    runtime.routeSend({ sessionId, directory, body: req.body })
+      .then(() => next())
+      .catch((error) => sendError(res, error));
+  }));
+}

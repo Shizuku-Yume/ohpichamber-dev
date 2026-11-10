@@ -10,11 +10,7 @@ export {
   attachExtensionQuotaProvider,
   detachExtensionQuotaProvider,
   listConfiguredQuotaProviders,
-<<<<<<< HEAD
-  buildUnconfiguredQuotaResult,
-=======
   listUsagePageProviders,
->>>>>>> bc50ba56a
   fetchQuotaForProvider,
   fetchClaudeQuota,
   fetchOpenaiQuota,

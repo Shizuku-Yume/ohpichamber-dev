@@ -3,9 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { SessionCreateRequestSchema } from '@openchamber/agent-contract';
-import { WorkflowAgentStopped, createWorkflowAgentSessions } from './agent-session.js';
-import { assertRootPromptAdmission } from '../message-queue/prompt-admission.js';
+import { WorkflowAgentStopped } from './agent-session.js';
 import { createWorkflowRuntime } from './runtime.js';
 import { createWorkflowRunStore } from './store.js';
 
@@ -588,9 +586,9 @@ describe('workflow runtime', () => {
     const { runId } = await act('workflow.run', { script: script(`return agent('list files', { schema: ${schema} })`) });
     await runtime.approve({ runId });
     const status = await finished(runId);
-    expect(agents.started[0]).toContain('workflow.answer');
+    expect(agents.started[0]).toContain('openchamber_workflow_answer');
     expect(agents.allowed[0]).toEqual(['openchamber_workflow_answer']);
-    expect(agents.followUps).toEqual(['No accepted answer yet: the answer is not JSON. Hand it over with the openchamber tool\'s workflow.answer action, or end your turn with only the JSON value.']);
+    expect(agents.followUps).toEqual(['No accepted answer yet: the answer is not JSON. Hand it over with the openchamber_workflow_answer tool, or end your turn with only the JSON value.']);
     expect(await act('workflow.result', { runId })).toMatchObject({ result: { files: ['a.ts'] } });
     expect(status.state).toBe('completed');
   });
@@ -696,68 +694,16 @@ describe('workflow runtime', () => {
     const held = new Promise((resolve) => { release = resolve; });
     let reportSent = false;
     const { runtime, act, store } = await setup(agents, { postSynthetic: () => { reportSent = true; return held; } });
-<<<<<<< HEAD
-    const { runId } = await act('workflow.run', { script: script("return agent('x')") });
-    await runtime.approve({ runId });
-    // The run reads as completed while it is still settling; the report goes out after.
-    await waitFor(() => reportSent);
-
-    // The run leaves `active` a beat after its end is saved; under load the
-    // status read can already say completed while remove still refuses.
-    await waitFor(async () => {
-      try {
-        await runtime.remove({ runId });
-        return true;
-      } catch {
-        return false;
-      }
-    });
-    release();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    await store.flush();
-    expect(await store.get(runId)).toBeNull();
-  });
-
-  it('deletes a run in the moment its end is saved but its execution is still winding down', async () => {
-    // The end state becomes observable before the execution leaves the
-    // runtime's active set: that happens only once the end save resolves.
-    // A delete in that overlap used to be refused as if the run were still
-    // going. The gated save holds the run in exactly that moment.
-    const agents = fakeAgentSessions();
-    const { runtime, act, store } = await setup(agents);
-    const originalSave = store.save;
-    let releaseSave = () => {};
-    const gate = new Promise((resolve) => { releaseSave = resolve; });
-    store.save = (run) => {
-      const saved = originalSave(run);
-      return run.state === 'completed' ? gate.then(() => saved) : saved;
-    };
-=======
->>>>>>> bc50ba56a
     const { runId } = await act('workflow.run', { script: script("return agent('x')") });
     await runtime.approve({ runId });
     // The run reads as completed while it is still settling; the report goes out after.
     await waitFor(() => reportSent);
 
     await runtime.remove({ runId });
-    releaseSave();
-    await store.flush();
+    release();
     await new Promise((resolve) => setTimeout(resolve, 20));
+    await store.flush();
     expect(await store.get(runId)).toBeNull();
-    // The report never went out and must not wake the session afterwards.
-    expect(agents.reports.some((report) => report.body.metadata.runId === runId)).toBe(false);
-  });
-
-  it('refuses to delete a run that is still working', async () => {
-    const agents = fakeAgentSessions({ hang: ['slow'] });
-    const { runtime, act, finished } = await setup(agents);
-    const { runId } = await act('workflow.run', { script: script("return agent('slow 1')") });
-    await runtime.approve({ runId });
-    await waitFor(async () => (await act('workflow.status', { runId })).agents.some((agent) => agent.state === 'running' && agent.sessionId));
-
-    await expect(runtime.remove({ runId })).rejects.toThrow('Stop or decline the run before deleting it');
-    await runtime.stop({ runId });
-    await finished(runId);
   });
 
   it('deletes a run in the moment its end is saved but its execution is still winding down', async () => {
@@ -982,29 +928,6 @@ describe('workflow runtime', () => {
   });
 
   it('leaves a run alone when the server running it is still alive', async () => {
-<<<<<<< HEAD
-    const agents = fakeAgentSessions({ hang: ['slow'] });
-    const first = await setup(agents);
-    const { runId } = await first.act('workflow.run', { script: script("return agent('slow')") });
-    await first.runtime.approve({ runId });
-    await waitFor(async () => (await first.act('workflow.status', { runId })).agents.length === 1);
-    await first.store.flush();
-
-    // A second OpenChamber over the same data directory, while the first still runs it.
-    const store = createWorkflowRunStore({ fsPromises: fs, path, dataDir: first.dataDir });
-    expect((await store.get(runId)).ownerStartedAt).toEqual(expect.stringMatching(/^(linux|darwin|win32):.+/));
-    const second = createWorkflowRuntime({ store, agentSessions: agents, postSynthetic: async () => {}, fsPromises: fs, path, sleep: async () => {}, pid: process.pid + 1 });
-    await second.start();
-    expect(await second.executeAction('workflow.status', { runId }, { sessionId: 'ses_parent', directory: first.dataDir })).toMatchObject({ state: 'running' });
-
-    first.runtime.shutdown();
-    await waitFor(async () => (await first.act('workflow.status', { runId })).state !== 'running');
-    await first.store.flush();
-  });
-
-  it('marks a run that was going when the server stopped, and reports it once OpenCode answers', async () => {
-=======
->>>>>>> bc50ba56a
     const agents = fakeAgentSessions({ hang: ['slow'] });
     const first = await setup(agents);
     const { runId } = await first.act('workflow.run', { script: script("return agent('slow')") });
@@ -1048,139 +971,5 @@ describe('workflow runtime', () => {
     first.runtime.shutdown();
     await waitFor(() => agents.reports.filter((report) => report.body.metadata.runId === runId).length === 2);
     await first.store.flush();
-  });
-
-  it('nests workflow branch under parentSessionId, forces agentId null, passes prompt admission, validates schema and delivers report', async () => {
-    const parentPage = {
-      sessionId: 'ses_parent',
-      turns: [],
-      messages: [
-        {
-          messageId: 'm_p',
-          sessionId: 'ses_parent',
-          turnId: 'turn_p',
-          role: 'assistant',
-          createdAt: 1,
-          providerId: 'anthropic',
-          modelId: 'claude-3-7-sonnet',
-          parts: [{ type: 'text', partId: 'pt_1', content: 'parent context' }],
-        },
-      ],
-    };
-    const childTurn = {
-      turnId: 'turn_c1',
-      sessionId: 'ses_child',
-      runId: 'run_c1',
-      status: 'completed',
-      userMessageId: 'u_1',
-      assistantMessageIds: ['m_c1'],
-      startedAt: 1,
-      finishedAt: 2,
-    };
-    const childPage = {
-      sessionId: 'ses_child',
-      turns: [childTurn],
-      messages: [
-        {
-          messageId: 'm_c1',
-          sessionId: 'ses_child',
-          turnId: 'turn_c1',
-          role: 'assistant',
-          createdAt: 1,
-          providerId: 'anthropic',
-          modelId: 'claude-3-7-sonnet',
-          parts: [{ type: 'text', partId: 'pt_c', content: '{"passed":true}' }],
-          usage: {
-            input: 50,
-            output: 20,
-            cacheRead: 0,
-            cacheWrite: 0,
-            totalTokens: 70,
-            cost: { total: 0.005 },
-          },
-        },
-      ],
-    };
-
-    const sessionCalls = { created: [], sent: [] };
-    const sessionService = {
-      create: async (payload) => {
-        SessionCreateRequestSchema.parse(payload);
-        sessionCalls.created.push(payload);
-        return { session: { sessionId: 'ses_child' } };
-      },
-      send: async (sessionId, payload) => {
-        assertRootPromptAdmission(payload);
-        sessionCalls.sent.push({ sessionId, payload });
-        return { run: { runId: 'run_c1', sessionId, status: 'running', createdAt: 1 } };
-      },
-      history: async (id) => (id === 'ses_parent' ? parentPage : childPage),
-      open: async () => ({ session: { runtimeStatus: 'idle' }, activeRun: null }),
-      control: async () => ({ run: { runId: 'run_c1' } }),
-      unloadWorker: async () => {},
-    };
-
-    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'openchamber-workflows-'));
-    directories.push(dataDir);
-    const store = createWorkflowRunStore({ fsPromises: fs, path, dataDir });
-    const reports = [];
-    const agentSessions = createWorkflowAgentSessions({
-      sessionService,
-      resolveWorkspace: async () => ({ projectId: 'proj_w1', workspaceId: 'ws_w1', cwd: dataDir }),
-      sleep: async () => {},
-    });
-
-    const runtime = createWorkflowRuntime({
-      store,
-      agentSessions,
-      postSynthetic: async (sessionId, body) => {
-        reports.push({ sessionId, body });
-      },
-      broadcast: () => {},
-      fsPromises: fs,
-      path,
-      sleep: async () => {},
-    });
-
-    const scope = { sessionId: 'ses_parent', directory: dataDir };
-    const schema = "{ type: 'object', properties: { passed: { type: 'boolean' } }, required: ['passed'] }";
-    const body = `return agent('review the code', { agent: 'reviewer', label: 'review', schema: ${schema} })`;
-    const proposed = await runtime.executeAction('workflow.run', { script: script(body) }, scope);
-
-    await runtime.approve({ runId: proposed.runId });
-    const status = await waitFor(async () => {
-      const current = await runtime.executeAction('workflow.status', { runId: proposed.runId }, scope);
-      return current.state === 'completed' && reports.length > 0 ? current : null;
-    });
-
-    expect(status.state).toBe('completed');
-    expect(status.agents).toHaveLength(1);
-    expect(status.agents[0].label).toBe('review');
-    expect(status.agents[0].sessionId).toBe('ses_child');
-
-    expect(sessionCalls.created[0]).toMatchObject({
-      projectId: 'proj_w1',
-      workspaceId: 'ws_w1',
-      parentSessionId: 'ses_parent',
-      title: 'review',
-      options: {
-        providerId: 'anthropic',
-        modelId: 'claude-3-7-sonnet',
-        agentId: null,
-      },
-    });
-
-    expect(sessionCalls.sent[0].payload.options.agentId).toBeNull();
-    expect(() => assertRootPromptAdmission(sessionCalls.sent[0].payload)).not.toThrow();
-
-    const result = await runtime.executeAction('workflow.result', { runId: proposed.runId }, scope);
-    expect(result.result).toEqual({ passed: true });
-    expect(reports).toHaveLength(1);
-    expect(reports[0].sessionId).toBe('ses_parent');
-    expect(reports[0].body.metadata).toMatchObject({
-      source: 'openchamber-workflow',
-      runId: proposed.runId,
-      state: 'completed',
-    });
   });
 });

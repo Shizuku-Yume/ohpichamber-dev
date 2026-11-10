@@ -45,11 +45,6 @@ export const registerOpenChamberControlRoutes = (app, { controlService }) => {
     }
   });
 
-<<<<<<< HEAD
-  // The user saved or declined a secret an agent asked for (secret.request).
-  // The body carries the secret: it is never logged or echoed back.
-  app.post('/api/openchamber/secret/answer', express.json({ limit: '64kb' }), async (req, res) => {
-=======
   // The fields a waiting secret.run card asks for, without any value.
   app.get('/api/openchamber/secret/fields', (req, res) => {
     try {
@@ -64,7 +59,6 @@ export const registerOpenChamberControlRoutes = (app, { controlService }) => {
   // or gave the secrets of a secret.run (up to 8 values of 16,000 characters).
   // The body carries the secrets: it is never logged or echoed back.
   app.post('/api/openchamber/secret/answer', express.json({ limit: '512kb' }), async (req, res) => {
->>>>>>> bc50ba56a
     try {
       return res.json(await controlService.answerSecret(req.body ?? {}));
     } catch (error) {

@@ -310,19 +310,12 @@ describe('checkForUpdates', () => {
     expect(upToDate.downloadUrl).toBeUndefined();
   });
 
-<<<<<<< HEAD
-  it('reports an unreadable canary pre-release as an error for a Canary Android app', async () => {
-=======
   it('offers the Canary APK from the R2 mirror once the mirror has it', async () => {
->>>>>>> bc50ba56a
     fetchMock
       .when('api.openchamber.dev', {
         ok: true,
         json: async () => ({ latestVersion: '2.5.3', updateAvailable: false }),
       })
-<<<<<<< HEAD
-      .when('api.github.com/repos/openchamber/openchamber/releases/tags/canary', { ok: false, status: 503 });
-=======
       .when('api.github.com/repos/openchamber/openchamber/releases/tags/canary', {
         ok: true,
         json: async () => ({
@@ -330,14 +323,11 @@ describe('checkForUpdates', () => {
         }),
       })
       .when('downloads.openchamber.dev/desktop/canary/OpenChamber-2.5.4-canary.20261031.5-29858440-android.apk', { ok: true });
->>>>>>> bc50ba56a
 
     const result = await checkForUpdates({
       appType: 'mobile-capacitor',
       platform: 'android',
       currentVersion: '2.5.4-canary.20261030.4',
-<<<<<<< HEAD
-=======
     });
     expect(result.downloadUrl).toBe('https://downloads.openchamber.dev/desktop/canary/OpenChamber-2.5.4-canary.20261031.5-29858440-android.apk');
   });
@@ -354,7 +344,6 @@ describe('checkForUpdates', () => {
       appType: 'mobile-capacitor',
       platform: 'android',
       currentVersion: '2.5.4-canary.20261030.4',
->>>>>>> bc50ba56a
     });
 
     expect(result.available).toBe(false);
@@ -560,20 +549,6 @@ describe('checkForUpdates on the update channels', () => {
     expect((await checkForUpdates({ currentVersion: '2.5.4-canary.20261031.7' })).available).toBe(false);
   });
 
-<<<<<<< HEAD
-  it('leaves the desktop app and phones on releases', async () => {
-    pickChannel('canary');
-    serveDistTags({ latest: '2.5.3', canary: '2.5.4-canary.20261031.7' });
-
-    // The npm server's channel is its own; a desktop build and a phone ask
-    // about their own releases even while this server follows Canary.
-    for (const appType of ['desktop-electron', 'mobile-capacitor']) {
-      const result = await checkForUpdates({ currentVersion: '2.5.3', appType, platform: 'ios' });
-
-      expect(result.version).toBe('2.5.3');
-      expect(result.available).toBe(false);
-    }
-=======
   it('leaves the desktop app, VS Code and phones on releases', async () => {
     pickChannel('canary');
     serveDistTags({ latest: '2.5.3', canary: '2.5.4-canary.20261031.7' });
@@ -582,7 +557,6 @@ describe('checkForUpdates on the update channels', () => {
 
     expect(result.version).toBe('2.5.3');
     expect(result.available).toBe(false);
->>>>>>> bc50ba56a
   });
 });
 

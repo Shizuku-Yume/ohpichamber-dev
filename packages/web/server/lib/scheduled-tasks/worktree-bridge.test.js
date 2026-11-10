@@ -11,13 +11,8 @@ import { createScheduledTasksRuntime } from './runtime.js';
 const dependencies = (overrides = {}) => ({
   createWorktree: vi.fn(async () => ({ path: '/repo/.worktrees/scheduled-run-1', branch: 'openchamber/run', name: 'scheduled-run-1' })),
   createWorktreeInstanceDisposer: vi.fn(() => 'disposer'),
-<<<<<<< HEAD
-  removeWorktree: vi.fn(async () => { }),
-  deleteBranch: vi.fn(async () => { }),
-=======
   removeWorktree: vi.fn(async () => {}),
   deleteBranch: vi.fn(async () => {}),
->>>>>>> bc50ba56a
   isGitRepository: vi.fn(async () => true),
   buildOpenCodeUrl: () => 'http://127.0.0.1:1/',
   getOpenCodeAuthHeaders: () => ({ authorization: 'Bearer token' }),
@@ -47,99 +42,6 @@ describe('scheduled task worktree bridge before the git routes register', () => 
 describe('scheduled task worktree bridge', () => {
   it.each(['repository', 'plain folder', 'broken config', 'broken gitfile', 'missing directory',
     ...(process.platform === 'win32' ? [] : ['missing git executable', 'mount boundary', 'permission denied', 'terminated probe'])])(
-<<<<<<< HEAD
-      'dispatches safely through the real repository probe with %s', async (kind) => {
-        const root = await mkdtemp(path.join(os.tmpdir(), 'oc-schedule-probe-'));
-        const directory = path.join(root, 'project');
-        await mkdir(directory);
-        if (kind === 'repository' || kind === 'broken config') {
-          execFileSync('git', ['init', directory], { stdio: 'ignore' });
-        }
-        if (kind === 'broken config') {
-          await writeFile(path.join(directory, '.git/config'), '[invalid');
-        }
-        if (kind === 'broken gitfile') {
-          await writeFile(path.join(directory, '.git'), `gitdir: ${path.join(root, 'missing')}\n`);
-        }
-        if (kind === 'missing directory') await rm(directory, { recursive: true });
-        if (kind === 'missing git executable') {
-          vi.stubEnv('PATH', root);
-        }
-        if (kind === 'mount boundary' || kind === 'permission denied' || kind === 'terminated probe') {
-          const executable = path.join(root, 'git');
-          const message = kind === 'permission denied'
-            ? 'fatal: cannot access project: Permission denied'
-            : 'fatal: not a git repository (or any parent up to mount point /fixture)';
-          const exit = kind === 'terminated probe' ? 'kill -KILL $$' : 'exit 128';
-          await writeFile(executable, `#!/bin/sh\necho "${message}" >&2\n${exit}\n`);
-          await chmod(executable, 0o700);
-          vi.stubEnv('PATH', root);
-        }
-        const createWorktree = vi.fn(async () => ({ path: path.join(root, 'worktree') }));
-        const bridge = fillScheduledWorktreeBridge({}, dependencies({ createWorktree, isGitRepository }));
-        const task = {
-          id: 'task-1', name: 'Probe test', enabled: false, runInWorktree: true, cleanupWorktree: false,
-          schedule: { kind: 'daily', times: ['03:00'], timezone: 'UTC' },
-          execution: { prompt: 'Review', useDefaults: true },
-          state: { createdAt: 1, updatedAt: 1 },
-        };
-        const session = (sessionId, ws) => ({
-          sessionId, projectId: ws.projectId, workspaceId: ws.workspaceId,
-          rootSessionId: sessionId, displayPath: '.', createdAt: Date.now(), updatedAt: Date.now(),
-          epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-          metadata: null, metadataRevision: '0', archiveRevision: '0',
-        });
-        const sessionService = {
-          create: vi.fn(async ({ projectId, workspaceId }) => ({ session: session('ses_1', { projectId, workspaceId }) })),
-          send: vi.fn(async (sessionId) => ({ run: { sessionId, runId: 'run-1', status: 'running', createdAt: Date.now() } })),
-          control: vi.fn(async (_sessionId, op) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: op.objective } })),
-        };
-        const runtime = createScheduledTasksRuntime({
-          projectConfigRuntime: {
-            listScheduledTasks: async () => [task],
-            reconcileLoopTasks: async () => [task],
-            updateScheduledTaskState: async () => ({ task, updated: true }),
-          },
-          listProjects: async () => [{ id: 'proj', path: directory }],
-          listWorkspaceScopes: async () => ({
-            items: [{ workspaceId: 'ws-proj' }, { workspaceId: 'ws-worktree' }],
-            errors: {},
-          }),
-          resolveWorkspaceScope: async (workspaceId) => {
-            if (workspaceId === 'ws-proj') return { workspaceId: 'ws-proj', projectId: 'canonical-project', hostProjectId: 'proj', cwd: directory };
-            if (workspaceId === 'ws-worktree') return { workspaceId: 'ws-worktree', projectId: 'canonical-project', hostProjectId: 'proj', cwd: path.join(root, 'worktree') };
-            return null;
-          },
-          readSessionDefaults: async () => ({ providerId: 'provider', modelId: 'model', agentId: null, variant: null, reasoningEffort: null }),
-          sessionService,
-          createTaskWorktree: bridge.create,
-          removeTaskWorktree: bridge.remove,
-          isGitRepository: bridge.isGitRepository,
-          logger: { info() { }, warn() { }, error() { } },
-        });
-        try {
-          await runtime.start();
-          const result = await runtime.runNow('proj', task.id);
-          if (kind === 'broken config' || kind === 'broken gitfile' || kind === 'missing directory' || kind === 'missing git executable' || kind === 'permission denied' || kind === 'terminated probe') {
-            expect(result.ok).toBe(false);
-            expect(result.error).toContain('failed to check whether the project is a git repository');
-            expect(sessionService.create).not.toHaveBeenCalled();
-            expect(createWorktree).not.toHaveBeenCalled();
-          } else {
-            expect(result.ok).toBe(true);
-            expect(result.directory).toBe(kind === 'repository' ? path.join(root, 'worktree') : directory);
-            expect(createWorktree).toHaveBeenCalledTimes(kind === 'repository' ? 1 : 0);
-            expect(sessionService.create).toHaveBeenCalledTimes(1);
-          }
-        } finally {
-          runtime.stop();
-          vi.unstubAllGlobals();
-          vi.unstubAllEnvs();
-          await rm(root, { recursive: true, force: true });
-        }
-      },
-    );
-=======
     'dispatches safely through the real repository probe with %s', async (kind) => {
       const root = await mkdtemp(path.join(os.tmpdir(), 'oc-schedule-probe-'));
       const directory = path.join(root, 'project');
@@ -216,7 +118,6 @@ describe('scheduled task worktree bridge', () => {
       }
     },
   );
->>>>>>> bc50ba56a
 
   it('removes only the generated branch after the agent switches to an existing branch', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'oc-schedule-switched-branch-'));
@@ -280,11 +181,7 @@ describe('scheduled task worktree bridge', () => {
   });
 
   it('removes the run worktree with its branch and releases its instance by path', async () => {
-<<<<<<< HEAD
-    const removeWorktree = vi.fn(async () => { });
-=======
     const removeWorktree = vi.fn(async () => {});
->>>>>>> bc50ba56a
     const disposer = vi.fn(() => 'disposer');
     const deps = dependencies({
       removeWorktree,
@@ -318,11 +215,7 @@ describe('scheduled task worktree bridge', () => {
   });
 
   it('keeps the branch unless the caller asked for its deletion', async () => {
-<<<<<<< HEAD
-    const removeWorktree = vi.fn(async () => { });
-=======
     const removeWorktree = vi.fn(async () => {});
->>>>>>> bc50ba56a
     const deps = dependencies({ removeWorktree });
     const bridge = fillScheduledWorktreeBridge({}, deps);
 
@@ -333,11 +226,7 @@ describe('scheduled task worktree bridge', () => {
   });
 
   it('removes without a disposer when the creation pipeline has none', async () => {
-<<<<<<< HEAD
-    const removeWorktree = vi.fn(async () => { });
-=======
     const removeWorktree = vi.fn(async () => {});
->>>>>>> bc50ba56a
     const bridge = fillScheduledWorktreeBridge({}, dependencies({
       removeWorktree,
       createWorktreeInstanceDisposer: undefined,
