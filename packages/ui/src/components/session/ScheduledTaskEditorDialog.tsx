@@ -1,4 +1,3 @@
-import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import * as React from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
