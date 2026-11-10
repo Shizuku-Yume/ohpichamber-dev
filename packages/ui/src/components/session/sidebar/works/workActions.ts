@@ -2,7 +2,7 @@ import type { Session } from '@openchamber/agent-contract';
 import { isReviewSession } from '@/lib/sessionReviewMetadata';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
 import { markOverviewSessionsDone } from '@/components/overview/overviewActions';
-import { readWorktreeUse, sessionsInWorktree } from '@/lib/worktrees/worktreeUse';
+import { readWorktreeUse, sessionsInWorktree } from '@/components/overview/overviewActions';
 import { archiveWorktreeWork } from '@/lib/worktrees/worktreeArchive';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { setSessionWorkState } from '@/sync/session-actions';
@@ -21,13 +21,8 @@ import type { SessionNode } from '../types';
  * Leave a worktree's or a space's work: close its sessions' tabs, and move
  * off it when it is on screen, as a session or as a draft in its folder.
  */
-<<<<<<< HEAD
-const leaveWorktree = (sessions: readonly Session[], worktreePath: string, projectId: string): void => {
-  leaveFinishedSessions(sessions.map((session) => session.sessionId), { projectId });
-=======
 const leaveWorkFolder = (sessions: readonly Session[], folder: string, projectId: string): void => {
-  leaveFinishedSessions(sessions.map((session) => session.id), { projectId });
->>>>>>> bc50ba56a
+  leaveFinishedSessions(sessions.map((session) => session.sessionId), { projectId });
   const state = useSessionUIStore.getState();
   if (state.currentSessionId) return;
   const directory = state.newSessionDraft.open ? state.newSessionDraft.directoryOverride : useDirectoryStore.getState().currentDirectory;
@@ -51,7 +46,7 @@ export const collectWorkSessions = (nodes: readonly SessionNode[]): Session[] =>
 };
 
 /** A session that grew out of another one (a review, a fork, a promoted `/btw`), not the work itself. */
-const isOffshoot = (session: Session): boolean => isReviewSession(session) || Boolean(session.parentSessionId);
+const isOffshoot = (session: Session): boolean => isReviewSession(session) || Boolean(session.fork?.sessionID);
 
 /**
  * The session a click on a worktree work opens: the one the user last worked
@@ -68,7 +63,7 @@ export const isWorkInWork = (sessions: readonly Session[]): boolean => sessions.
 
 /** Puts a work back into In work through the session the user last worked in. */
 export const trackWork = async (session: Session): Promise<void> => {
-  await setSessionWorkState(session.sessionId, resolveGlobalSessionDirectory(session) ?? null, 'open');
+  await setSessionWorkState(session.sessionId, resolveGlobalSessionDirectory(session), 'open');
 };
 
 export type FinishWorktreeWorkOutcome =
@@ -113,7 +108,7 @@ export async function finishWorktreeWork(input: {
   if (use !== 'free') return { kind: 'busy' };
   try {
     const sessions = sessionsInWorktree(useGlobalSessionsStore.getState().activeSessions, input.worktree.path);
-    await archiveWorktreeWork({ project: input.project, worktree: input.worktree, sessions });
+    await archiveWorktreeWork({ project: input.project, worktree: input.worktree, sessions, title: input.title });
     return { kind: 'archived' };
   } catch (error) {
     return { kind: 'failed', error: error instanceof Error ? error : new Error(String(error)), doneFailed: 0 };

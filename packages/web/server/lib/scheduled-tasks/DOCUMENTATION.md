@@ -39,6 +39,7 @@ scheduled like one more project, with three differences:
   still unmatched fails as not-found.
 
 The chats root is `OPENCHAMBER_CHATS_DIR` (default `<config root>/chats`). The
+VS Code extension has no chats, so its UI does not offer the scope.
 
 ## Cross-instance occurrence claiming
 
@@ -147,11 +148,9 @@ prompt remains waiting. The card shows the last attempt's status in that case.
 
 Reuse status ends at queue send: `queued` becomes `sent`, `failed` or
 `cancelled`. The existing task state fields hold the result. There is no
-`execution.useDefaults` leaves the target model unchanged unless a native file
-invocation binds a model. A pinned selection supplies the captured model, with
-native file model bindings taking precedence. Root agent selection is retired:
-legacy `execution.agent` values and native file agent bindings are ignored, and
-every scheduled prompt carries `agentId: null`. Tasks without a target keep the
+per-run history or assistant-completion tracking. `execution.useDefaults`
+leaves the target model and agent unchanged. A pinned selection switches the
+requested model and agent before sending. Tasks without a target keep the
 new-session execution path below.
 
 Reuse preserves the target's goal and permission auto-accept policy. Task
@@ -175,49 +174,13 @@ and rejoining tokens would discard line breaks and collapse argument spacing.
 
 ## New-session selection
 
-A task either pins model selection (`execution.providerID`, `modelID`, `variant`)
-or sets `execution.useDefaults: true`. Such a task reads the session model
-defaults when each run starts (`session-defaults.js`: the project's
-`defaultModel` / `defaultVariant`, then the global ones), so changing a default
-reaches it on its next run without editing it. The legacy `execution.agent`
-property may remain in stored task definitions but is ignored by the editor and
-runtime. With nothing set, nullable captured options leave native session model
-selection to its existing owner. A pinned value stored next to `useDefaults` is
-kept only for when the task is pinned again.
-
-## Native file-resource prompts
-
-`file-resource-prompt.js` is the shared Host capture owner for both existing- and
-new-session scheduled execution. It receives the private Agent Service request
-owner and the Host workspace resolver through production composition. Before
-forwarding a leading `/` invocation, it revalidates workspace, project, Host
-project, working directory, and selected agent-directory identity against the
-authorized scope. The Node Host never imports the native SDK.
-
-- One canonical `POST /workspaces/:workspaceId/commands/expand-text` request sends
-  `{ text }` unchanged, including quoted arguments, line breaks and trailing
-  spaces. The worker owns the complete native command-then-template expansion
-  pipeline and reports `kind: command | template | text`; the Host does not
-  duplicate catalog precedence, parse arguments, or substitute Markdown.
-- Captured command/template model bindings override the corresponding captured
-  model fields; root agent bindings are ignored. Variant and reasoning effort are
-  retained. No-match text remains unchanged, with no speculative scheduled skill
-  lookup or expansion.
-- Existing-session tasks expand once before queue capture/append. Queue display
-  content and persisted task definitions keep the original prompt; the durable
-  request contains expanded content and bindings. Queue drain revalidates task
-  and target ownership but never re-expands a mutable file.
-- New-session tasks expand before creating a session, use the captured bindings
-  for creation and send, and use the captured content for a requested goal.
-  Expansion failure creates no session and removes an empty managed-chat
-  directory through the existing cleanup boundary.
-- Scope, worker, schema, and expansion failures fail the scheduled attempt;
-  unexpanded text is not sent as a success fallback.
-
-Web/PWA and Electron use this Host execution owner. Hosted mobile and Capacitor
-schedule through the active authenticated Host and use the same execution path.
-Expansion stays inside the configured Host/Bun boundary and adds no external
-egress, listeners, provider-entry path, or enterprise-mode exception.
+A task either pins them (`execution.providerID`, `modelID`, `variant`, `agent`)
+or sets `execution.useDefaults: true`. Such a task reads the session defaults
+when each run starts (`session-defaults.js`: the project's `defaultModel` /
+`defaultVariant` / `defaultAgent`, then the global ones), so changing a default
+reaches it on its next run without editing it. With nothing set, the session is
+created without a model or agent and OpenCode applies its own. A pinned value
+stored next to `useDefaults` is kept only for when the task is pinned again.
 
 ## Dispatch outcome
 
@@ -339,11 +302,8 @@ fresh before a removal claim.
   - Next-run computation (daily/weekly/cron compatibility)
   - Timer scheduling and queueing
   - Concurrency controls
-  - Canonical session create + prompt execution
+  - Session create + prompt_async execution
   - Emits OpenChamber task-run events
-
-- `packages/web/server/lib/scheduled-tasks/file-resource-prompt.js`
-  - Authorized, worker-owned native file prompt capture shared by new and existing sessions
 
 - `packages/web/server/lib/scheduled-tasks/loops.js`
   - Discovery of `.agents/loops/*.md` (project scope, ancestors up to the worktree root) and `~/.agents/loops/*.md` (user scope)
@@ -366,13 +326,8 @@ Portable, git-commit-able scheduled-task definitions:
 name: daily-digest
 schedule: "0 9 * * *"
 enabled: true
-<<<<<<< HEAD
-model: anthropic/claude-sonnet-4-5
-agent: plan # Legacy; ignored by scheduled execution.
-=======
 model: opencode/big-pickle
 agent: plan
->>>>>>> bc50ba56a
 timezone: Europe/Kyiv
 ---
 Summarize repository changes since yesterday.
@@ -386,7 +341,7 @@ Field mapping (model: `packages/ui/src/lib/scheduledTasksApi.ts`):
 | `schedule` | `schedule.kind: "cron"` + `schedule.cron` (required, cron-only in the portable format) |
 | `enabled` | `enabled` (default `false` — a loop only runs when the file explicitly enables it; add `enabled: true` to activate). For a project-scope loop the file's word is not enough: it runs only once the user enabled it on this machine, see *Local approval* |
 | `model` | split on the first `/` into `execution.providerID` / `execution.modelID` (required) |
-| `agent` | Legacy input-only field, retained for stored tasks but ignored by the editor and runtime. All scheduled root prompts use `agentId: null`. |
+| `agent` | `execution.agent` (optional) |
 | `timezone` | `schedule.timezone` (optional, IANA; defaults to the server zone) |
 | body | `execution.prompt` (required) |
 

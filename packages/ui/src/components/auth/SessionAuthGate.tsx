@@ -586,18 +586,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({
     if (state === 'authenticated' && useAuthSessionStore.getState().state !== 'ok') {
       useAuthSessionStore.getState().markAuthenticated();
     }
-<<<<<<< HEAD
   }, [state]);
-=======
-  }, [skipAuth, state]);
-
-  React.useEffect(() => {
-    if (state === 'locked' && !isSubmitting && passwordInputRef.current) {
-      passwordInputRef.current.focus();
-      passwordInputRef.current.select();
-    }
-  }, [state, isSubmitting]);
->>>>>>> bc50ba56a
 
   React.useEffect(() => {
     if (state === 'locked' && !isSubmitting && passwordInputRef.current) {

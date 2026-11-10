@@ -4,8 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { getPinnedSessionKey } from '@/stores/useSessionPinnedStore';
-import { registerWorkspaceDirectory } from '@/stores/globalSessions';
+import { getPinnedSessionKey } from '@/lib/sessionPins';
 import {
   computeNodeStructureKey,
   canShowSessionWorktreeMenu,
@@ -15,15 +14,14 @@ import {
   resolveTooltipBranchLabel,
   selectFolderRootNodes,
   selectBlockingBadgeSessionScopes,
-  selectRowBadgeVisibilityClass,
 } from './sessionNodeItemUtils';
 import type { SessionNode } from '../types';
 
-const session = (sessionId: string, title: string): Session => ({
-  sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/repo',
-  title: title, metadata: {}, createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-  metadataRevision: '1', archiveRevision: '0',
-});
+const session = (id: string, title: string): Session => ({
+  id,
+  title,
+  time: { created: 1, updated: 1 },
+} as Session);
 
 const rootWithChild = (childSession: Session): SessionNode => ({
   session: session('root', 'Root'),
@@ -40,21 +38,17 @@ describe('computeNodeStructureKey', () => {
 
   test('changes when a descendant session object changes', () => {
     const previous = session('child', 'Before');
-    const next = session('child', 'After');
+    const next = { ...previous, title: 'After' };
 
     expect(computeNodeStructureKey(rootWithChild(previous))).not.toBe(computeNodeStructureKey(rootWithChild(next)));
   });
 });
 
 describe('selectBlockingBadgeSessionScopes', () => {
-  const withDirectory = (node: SessionNode, directory: string): SessionNode => {
-    const workspaceId = `wsp_${directory}`;
-    registerWorkspaceDirectory(workspaceId, directory);
-    return {
-      ...node,
-      session: { ...node.session, workspaceId, displayPath: directory },
-    };
-  };
+  const withDirectory = (node: SessionNode, directory: string | null): SessionNode => ({
+    ...node,
+    session: { ...node.session, directory } as Session,
+  });
 
   test('rolls up the hidden subtree by owning directory when a parent is collapsed', () => {
     const grandchild = withDirectory({ session: session('grandchild', 'Grandchild'), children: [], worktree: null }, '/worktrees/feature');
@@ -79,11 +73,7 @@ describe('selectBlockingBadgeSessionScopes', () => {
   test('an expanded row still counts the workflow agents under it, which have no rows', () => {
     const agentChild = withDirectory({ session: session('agent-child', 'Agent child'), children: [], worktree: null }, '/repo');
     const agent = withDirectory({
-<<<<<<< HEAD
-      session: { ...session('agent', 'Agent'), metadata: { openchamber: { kind: 'workflow-agent' } } as unknown as Session['metadata'] },
-=======
       session: { ...session('agent', 'Agent'), metadata: { openchamber: { kind: 'workflow-agent' } } },
->>>>>>> bc50ba56a
       children: [agentChild],
       worktree: null,
     }, '/repo');
@@ -147,12 +137,12 @@ describe('nodeHasPinnedMembershipChange', () => {
 describe('selectFolderRootNodes', () => {
   test('does not render assigned descendants again beside their assigned parent tree', () => {
     const grandchild: SessionNode = {
-      session: { ...session('grandchild', 'Grandchild'), parentSessionId: 'child' },
+      session: { ...session('grandchild', 'Grandchild'), parentID: 'child' } as Session,
       children: [],
       worktree: null,
     };
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentSessionId: 'root' },
+      session: { ...session('child', 'Child'), parentID: 'root' } as Session,
       children: [grandchild],
       worktree: null,
     };
@@ -172,7 +162,7 @@ describe('selectFolderRootNodes', () => {
 
   test('keeps a child as a folder root when none of its ancestors are assigned', () => {
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentSessionId: 'root' },
+      session: { ...session('child', 'Child'), parentID: 'root' } as Session,
       children: [],
       worktree: null,
     };
@@ -187,50 +177,12 @@ describe('selectFolderRootNodes', () => {
 
   test('keeps a child when an assigned ancestor is not available in the group', () => {
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentSessionId: 'missing-root' },
+      session: { ...session('child', 'Child'), parentID: 'missing-root' } as Session,
       children: [],
       worktree: null,
     };
 
     expect(selectFolderRootNodes(['missing-root', 'child'], new Map([['child', child]]))).toEqual([child]);
-  });
-});
-
-describe('selectRowBadgeVisibilityClass', () => {
-  const hideOnHoverClass = 'group-hover:opacity-0 group-focus-within:opacity-0';
-
-  test('defers to the caller hover rule so the badge fades with the date label (#2284)', () => {
-    const className = selectRowBadgeVisibilityClass({
-      actionsAlwaysVisible: false,
-      menuOpen: false,
-      hideOnHoverClass,
-    });
-
-    expect(className).toContain(hideOnHoverClass);
-  });
-
-  test('hides the badge unconditionally while the row menu keeps the actions visible without hover', () => {
-    const className = selectRowBadgeVisibilityClass({
-      actionsAlwaysVisible: false,
-      menuOpen: true,
-      hideOnHoverClass,
-    });
-
-    expect(className).not.toBe('');
-    expect(className).not.toContain(hideOnHoverClass);
-  });
-
-  test('keeps the badge always visible when actions have reserved permanent padding', () => {
-    expect(selectRowBadgeVisibilityClass({
-      actionsAlwaysVisible: true,
-      menuOpen: false,
-      hideOnHoverClass,
-    })).toBe('');
-    expect(selectRowBadgeVisibilityClass({
-      actionsAlwaysVisible: true,
-      menuOpen: true,
-      hideOnHoverClass,
-    })).toBe('');
   });
 });
 
@@ -267,12 +219,14 @@ describe('canShowSessionWorktreeMenu', () => {
     expect(canShowSessionWorktreeMenu({
       isSubtaskSession: false,
       archivedBucket: false,
+      isVSCode: false,
       sessionDirectory: '/home/test/.config/openchamber/chats/2026-08-25/session-1',
     })).toBe(false);
 
     expect(canShowSessionWorktreeMenu({
       isSubtaskSession: false,
       archivedBucket: false,
+      isVSCode: false,
       sessionDirectory: '/repo',
     })).toBe(true);
   });
@@ -302,13 +256,14 @@ describe('resolveSessionPrLookup', () => {
   });
 
   test('takes the row worktree directory and branch', () => {
-    expect(resolveSessionPrLookup(worktree('/worktrees/feature', 'feature-1')))
+    expect(resolveSessionPrLookup(worktree('/worktrees/feature', 'feature-1'), false))
       .toEqual({ directory: '/worktrees/feature', branch: 'feature-1' });
   });
 
-  test('rejects rows with no worktree or branch', () => {
-    expect(resolveSessionPrLookup(null)).toBeNull();
-    expect(resolveSessionPrLookup(worktree('/worktrees/feature', '   '))).toBeNull();
+  test('rejects rows with no worktree, no branch, or a VS Code runtime', () => {
+    expect(resolveSessionPrLookup(null, false)).toBeNull();
+    expect(resolveSessionPrLookup(worktree('/worktrees/feature', '   '), false)).toBeNull();
+    expect(resolveSessionPrLookup(worktree('/worktrees/feature', 'feature-1'), true)).toBeNull();
   });
 });
 

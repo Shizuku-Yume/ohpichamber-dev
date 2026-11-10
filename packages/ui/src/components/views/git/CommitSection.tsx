@@ -127,55 +127,31 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
         )}
 
         <div className="@container/commit-actions flex items-center gap-2 min-w-0">
-<<<<<<< HEAD
           {generationEnabled ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onGenerateMessage}
-            disabled={
-              isGeneratingMessage ||
-              commitAction !== null ||
-              hasPendingIndexMutation ||
-              stagedCount === 0
-            }
-            type="button"
-            aria-label={t('gitView.commit.generateAria')}
-            className="commit-actions__btn"
-          >
-            {isGeneratingMessage ? (
-              <Icon name="loader-4" className="size-4 animate-spin" />
-            ) : (
-              <Icon name="ai-generate-2" className="size-4 text-primary" />
-            )}
-            <span className="commit-actions__label">{t('gitView.commit.generate')}</span>
-          </Button>
+            <ButtonTooltip sideOffset={8} label={hasStagedFiles ? t('gitView.commit.generateAria') : t('contextTooltips.git.stageFilesFirst')}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onGenerateMessage}
+                disabled={
+                  isGeneratingMessage ||
+                  commitAction !== null ||
+                  hasPendingIndexMutation ||
+                  stagedCount === 0
+                }
+                type="button"
+                aria-label={t('gitView.commit.generateAria')}
+                className="commit-actions__btn"
+              >
+                {isGeneratingMessage ? (
+                  <Icon name="loader-4" className="size-4 animate-spin" />
+                ) : (
+                  <Icon name="ai-generate-2" className="size-4 text-primary" />
+                )}
+                <span className="commit-actions__label">{t('gitView.commit.generate')}</span>
+              </Button>
+            </ButtonTooltip>
           ) : null}
-=======
-          <ButtonTooltip sideOffset={8} label={hasStagedFiles ? t('gitView.commit.generateAria') : t('contextTooltips.git.stageFilesFirst')}>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onGenerateMessage}
-              disabled={
-                isGeneratingMessage ||
-                commitAction !== null ||
-                hasPendingIndexMutation ||
-                stagedCount === 0
-              }
-              type="button"
-              aria-label={t('gitView.commit.generateAria')}
-              className="commit-actions__btn"
-            >
-              {isGeneratingMessage ? (
-                <Icon name="loader-4" className="size-4 animate-spin" />
-              ) : (
-                <Icon name="ai-generate-2" className="size-4 text-primary" />
-              )}
-              <span className="commit-actions__label">{t('gitView.commit.generate')}</span>
-            </Button>
-          </ButtonTooltip>
->>>>>>> bc50ba56a
 
           <div className="flex-1" />
 

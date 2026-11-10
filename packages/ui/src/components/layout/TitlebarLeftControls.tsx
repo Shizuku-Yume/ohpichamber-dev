@@ -34,25 +34,6 @@ export const TitlebarLeftControls: React.FC = () => {
  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
  const clusterRef = React.useRef<HTMLDivElement | null>(null);
 
-<<<<<<< HEAD
- const toggleShortcut = formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_sidebar', shortcutOverrides));
- // Starting a session shares the titlebar row with the sidebar toggle, so it
- // stays in one place whether the sidebar is open or collapsed.
- const handleNewSession = React.useCallback(() => {
-  useUIStore.getState().closeMainSurfaces();
-  useSessionUIStore.getState().openNewSessionDraft();
- }, []);
- // With header tabs on screen their "+" starts a session, in the folder the
- // tabs belong to; the button here would be a second one that starts it in
- // the project root. A full-page surface hides the tabs, so it comes back.
- const tabsShown = useUIStore((state) => state.sessionTabsEnabled && !(
-  state.isScheduledTasksDialogOpen || state.isArchivePageOpen || state.isIntegrationsCatalogOpen
-  || state.isUsageStatsPageOpen || state.isSourceBoardOpen || state.isOverviewOpen
-  || state.worktreesPageProjectId !== null || (state.isolatedSpacesEnabled && state.spacesPageProjectId !== null)
-  || state.runOverviewKey !== null || state.openGuestPageId !== null
- ));
- const { usesFramelessChrome, side: windowControlsSide } = useDesktopWindowControlsLayout();
-=======
   const toggleShortcut = formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_sidebar', shortcutOverrides));
   // Starting a session shares the titlebar row with the sidebar toggle, so it
   // stays in one place whether the sidebar is open or collapsed.
@@ -70,7 +51,6 @@ export const TitlebarLeftControls: React.FC = () => {
     || state.runOverviewKey !== null || state.openGuestPageId !== null
   ));
   const { usesFramelessChrome, side: windowControlsSide } = useDesktopWindowControlsLayout();
->>>>>>> bc50ba56a
 
  const handleOpenWindowsAppMenu = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
   const rect = event.currentTarget.getBoundingClientRect();
@@ -172,37 +152,6 @@ export const TitlebarLeftControls: React.FC = () => {
 
     {/* Labelled while the sidebar is open; collapses to an icon with a
             tooltip so the cluster stays compact over the header otherwise. */}
-<<<<<<< HEAD
-    {tabsShown ? null : isSidebarOpen ? (
-     <button
-      type="button"
-      onClick={handleNewSession}
-      className={cn(ICON_BUTTON_CLASS, '-ms-1 w-auto min-w-0 ps-1 pe-1.5 font-normal')}
-     >
-      <Icon name="chat-new" className="h-[18px] w-[18px] shrink-0" />
-      <span className="truncate">{t('sessions.sidebar.header.actions.newSession')}</span>
-     </button>
-    ) : (
-     <Tooltip>
-      <TooltipTrigger asChild>
-       <button
-        type="button"
-        onClick={handleNewSession}
-        aria-label={t('sessions.sidebar.header.actions.newSession')}
-        className={cn(ICON_BUTTON_CLASS, '-ml-1 shrink-0')}
-       >
-        <Icon name="chat-new" className="h-[18px] w-[18px]" />
-       </button>
-      </TooltipTrigger>
-      <TooltipContent>
-       <TooltipLabelWithShortcut label={t('sessions.sidebar.header.actions.newSession')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('new_chat', shortcutOverrides), '')} />
-      </TooltipContent>
-     </Tooltip>
-    )}
-   </div>
-  </div>
- );
-=======
         {tabsShown ? null : isSidebarOpen ? (
           <button
             type="button"
@@ -234,5 +183,4 @@ export const TitlebarLeftControls: React.FC = () => {
       </div>
     </div>
   );
->>>>>>> bc50ba56a
 };

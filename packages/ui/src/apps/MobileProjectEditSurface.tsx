@@ -7,12 +7,16 @@ import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useI18n } from '@/lib/i18n';
-import { PROJECT_COLORS, PROJECT_COLOR_MAP, PROJECT_ICONS, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
+import { PROJECT_ICONS, PROJECT_ICON_MAP, ProjectIconImage, iconBackgroundForProjectColor, resolveProjectColor } from '@/lib/projectMeta';
+import { COLOR_PRESETS } from '@/lib/colorPresets';
 import { cn } from '@/lib/utils';
+import { normalizePath as normalizePathImpl } from '@/lib/pathNormalization';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { SpaceRow } from '@/components/session/spaces/SpaceRow';
 import { spacesOfProject, useSpacesJourneyRead } from '@/lib/spaces/spaces-store';
+import { useGitStore } from '@/stores/useGitStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { useWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 
@@ -28,21 +32,19 @@ type MobileEditableProject = {
   color?: string | null;
   iconImage?: { mime: string; updatedAt: number; source: 'custom' | 'auto' } | null;
   iconBackground?: string | null;
-  isGitRepo: boolean;
-  worktrees: WorktreeMetadata[];
 };
+
+const NO_WORKTREES: readonly WorktreeMetadata[] = [];
 
 type MobileProjectEditSurfaceProps = {
   open: boolean;
   project: MobileEditableProject | null;
   onClose: () => void;
-  /** Called after a worktree is deleted so the parent can re-list worktrees. */
-  onWorktreesChanged?: () => void;
 };
 
 /**
  * The project's isolated spaces on the phone, where the desktop has the spaces page of the project
- * menu (DESIGN.md, user journey step 9): the same rows, whose actions open the space's sheet. A
+ * menu (journey step 9): the same rows, whose actions open the space's sheet. A
  * space is made from the new-session picker, so there is no create button here.
  */
 const MobileProjectSpaces: React.FC<{ projectPath: string }> = ({ projectPath }) => {
@@ -58,7 +60,9 @@ const MobileProjectSpaces: React.FC<{ projectPath: string }> = ({ projectPath })
   );
 };
 
-/** One of the project's worktrees, with its Delete. */
+const normalizePath = (value: string | null | undefined): string => normalizePathImpl(value) ?? '';
+
+/** One of the project's worktrees, with its Delete. They follow the sidebar's order: by activity, not by hand. */
 const WorktreeRow: React.FC<{
   worktree: WorktreeMetadata;
   onDelete: () => void;
@@ -69,11 +73,7 @@ const WorktreeRow: React.FC<{
   return (
     <div
       className={cn(
-<<<<<<< HEAD
-        'flex items-center gap-1 rounded-2xl border border-border/70 bg-[var(--surface-elevated)] px-1.5 py-1.5 transition-colors',
-=======
         'flex items-center gap-2 rounded-2xl border border-edge bg-[var(--surface-elevated)] py-1.5 ps-3 pe-1.5 transition-colors',
->>>>>>> bc50ba56a
         removing && 'opacity-60',
       )}
       aria-busy={removing || undefined}
@@ -105,7 +105,6 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
   open,
   project,
   onClose,
-  onWorktreesChanged,
 }) => {
   const { t } = useI18n();
   const { currentTheme } = useThemeSystem();
@@ -125,9 +124,6 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
   const [worktreeToDelete, setWorktreeToDelete] = React.useState<WorktreeMetadata | null>(null);
 
   const projectId = project?.id ?? null;
-  // Worktrees follow the project's discovery order; upstream dropped the
-  // mobile-only manual order, so no persisted reorder state remains.
-  const worktrees = project?.worktrees ?? [];
 
   React.useEffect(() => {
     if (!open || !project) return;
@@ -135,17 +131,20 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
     setIcon(project.icon ?? null);
     setColor(project.color ?? null);
     // Re-seed only when the edited project or sheet visibility changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId]);
+
+  const projectPath = normalizePath(project?.path);
+  const worktrees = useSessionUIStore((state) => (projectPath ? state.availableWorktreesByProject.get(projectPath) : undefined)) ?? NO_WORKTREES;
+  const isGitRepo = useGitStore((state) => (projectPath ? state.directories.get(projectPath)?.isGitRepo : undefined)) ?? worktrees.length > 0;
 
   const handleSave = () => {
     if (!project) return;
     const trimmed = name.trim();
-    updateProjectMeta(project.id, {
-      label: trimmed || project.label,
-      icon,
-      color,
-    });
+    const meta: Parameters<typeof updateProjectMeta>[1] = { label: trimmed || project.label, icon, color };
+    // An image icon sits on the project colour, as in Settings.
+    if (color !== (project.color ?? null)) meta.iconBackground = iconBackgroundForProjectColor(color);
+    updateProjectMeta(project.id, meta);
     onClose();
   };
 
@@ -178,7 +177,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
     });
   };
 
-  const currentColorVar = color ? PROJECT_COLOR_MAP[color] ?? null : null;
+  const currentColorVar = resolveProjectColor(color);
   const previewIconName = icon ? PROJECT_ICON_MAP[icon] : null;
   const hasImageIcon = Boolean(currentIconImage);
 
@@ -265,22 +264,18 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
                 >
                   <span className="h-0.5 w-4 rotate-45 rounded-full bg-muted-foreground/40" />
                 </button>
-                {PROJECT_COLORS.map((c) => (
+                {COLOR_PRESETS.map((preset) => (
                   <button
-                    key={c.key}
+                    key={preset}
                     type="button"
-                    onClick={() => setColor(c.key)}
-                    aria-label={c.label}
-                    title={c.label}
+                    onClick={() => setColor(preset)}
+                    aria-label={t('settings.projects.appearance.colorSwatchAria', { color: preset })}
+                    title={preset}
                     className={cn(
                       'size-9 rounded-xl border-2 transition-all',
-<<<<<<< HEAD
-                      color === c.key ? 'border-foreground' : 'border-transparent hover:border-border/70',
-=======
                       color === preset ? 'border-foreground' : 'border-transparent hover:border-edge',
->>>>>>> bc50ba56a
                     )}
-                    style={{ backgroundColor: c.cssVar, touchAction: 'manipulation' }}
+                    style={{ backgroundColor: preset, touchAction: 'manipulation' }}
                   />
                 ))}
               </div>
@@ -335,7 +330,7 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
             </div>
 
             {/* Worktrees */}
-            {project.isGitRepo ? (
+            {isGitRepo ? (
               <div className="flex flex-col gap-2">
                 <label className="typography-ui-label font-medium text-foreground">
                   {t('mobile.projectEdit.worktreesTitle')}
@@ -358,15 +353,9 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
               </div>
             ) : null}
 
-<<<<<<< HEAD
-            {/* Isolated spaces: while the feature's switch is on. */}
-            {project.isGitRepo && isolatedSpacesEnabled ? <MobileProjectSpaces projectPath={project.path} /> : null}
-          </div>
-=======
             {/* Isolated spaces: while the feature's switch is on; the phone is never VS Code. */}
             {isGitRepo && isolatedSpacesEnabled ? <MobileProjectSpaces projectPath={project.path} /> : null}
           </ScrollableOverlay>
->>>>>>> bc50ba56a
         ) : null}
       </MobileFullscreenSurface>
 
@@ -376,9 +365,6 @@ export const MobileProjectEditSurface: React.FC<MobileProjectEditSurfaceProps> =
           project={{ id: project.id, path: project.path }}
           worktree={worktreeToDelete}
           onClose={() => setWorktreeToDelete(null)}
-          onDeleted={() => {
-            onWorktreesChanged?.();
-          }}
         />
       ) : null}
     </>

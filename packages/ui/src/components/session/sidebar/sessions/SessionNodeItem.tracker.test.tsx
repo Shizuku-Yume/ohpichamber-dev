@@ -14,10 +14,6 @@ const syncContext = await import('@/sync/sync-context');
 mock.module('@/sync/sync-context', () => ({
   ...syncContext,
   useSessionBlockingRequests: () => ({ hasPendingPermissions: false, hasPendingQuestions: false }),
-<<<<<<< HEAD
-  useSessionBlockingRequestCounts: () => ({ hasPendingPermissions: false, hasPendingQuestions: false }),
-=======
->>>>>>> bc50ba56a
 }));
 const aiRename = await import('@/sync/use-session-ai-rename');
 mock.module('@/sync/use-session-ai-rename', () => ({
@@ -53,109 +49,6 @@ for (const [kind, ownerProjectId, directory, updateOwner] of [
   ['pull', null, '/project-b/worktree', false],
   ['pull', 'project-b', '/project-b', true],
 ] as const) {
-<<<<<<< HEAD
-  test(`a child displayed in A opens ${kind} with owner ${ownerProjectId} through ${directory}${updateOwner ? ' after ownership updates' : ''}`, async () => {
-    refUrl = `https://github.com/example/b/${kind}/42`;
-    const win = new Window({ url: 'http://localhost/' });
-    const globals = {
-      window: win, document: win.document, navigator: win.navigator,
-      Node: win.Node, Element: win.Element, HTMLElement: win.HTMLElement,
-      HTMLIFrameElement: win.HTMLIFrameElement, Event: win.Event, MouseEvent: win.MouseEvent,
-      getComputedStyle: win.getComputedStyle.bind(win),
-      requestAnimationFrame: win.requestAnimationFrame.bind(win),
-      cancelAnimationFrame: win.cancelAnimationFrame.bind(win),
-      ResizeObserver: win.ResizeObserver, IS_REACT_ACT_ENVIRONMENT: true,
-    };
-    const descriptors = new Map(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
-    Object.assign(globalThis, globals);
-    const originalProjects = useProjectsStore.getState();
-    useProjectsStore.setState({
-      projects: [
-        { id: 'project-a', path: '/project-a' },
-        { id: 'project-b', path: '/project-b' },
-      ]
-    });
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    const noop = () => undefined;
-    const props: SessionNodeItemProps = {
-      node: {
-        session: {
-          sessionId: 'child',
-          parentSessionId: 'parent',
-          projectId: 'project-b',
-          workspaceId: '/project-b/worktree',
-          displayPath: '/project-b/worktree',
-          rootSessionId: 'parent',
-          title: 'Child',
-          createdAt: 1,
-          updatedAt: 1,
-          epoch: '1',
-          headSequence: '0',
-          runtimeStatus: 'idle',
-          activeRunId: null,
-          mode: { kind: 'main' },
-          metadata: null,
-          metadataRevision: '0',
-          archiveRevision: '0',
-        },
-        children: [], worktree: null,
-      },
-      ownsWork: false, projectId: 'project-a', ownerProjectId, renderContext: 'mixed-compact',
-      folderOwnerKey: 'project-b', groupDirectory: '/project-a',
-      pinnedSessionIds: new Set(), expandedParents: new Set(),
-      hasSessionSearchQuery: false, normalizedSessionSearchQuery: '',
-      editingId: null, editingRowKey: null, editTitle: '', openSidebarMenuKey: null,
-      setEditingId: noop, setEditingRowKey: noop, setEditTitle: noop,
-      handleSaveEdit: noop, handleCancelEdit: noop, toggleParent: noop,
-      handleSessionSelect: noop, handleSessionDoubleClick: noop, handleCopySessionId: noop,
-      setOpenSidebarMenuKey: noop, createFolderAndStartRename: () => null,
-      handleDeleteSession: noop, handleRestoreSession: noop,
-      startSessionWorktreeMenuLoad: () => ({ cachedTargets: [], refreshTargets: Promise.resolve([]) }),
-      mobileVariant: false, alwaysShowActions: false,
-      subtreeContainsEditing: new Set(), menuOpenSessionId: null, nodeStructureKey: '',
-    };
-    try {
-      if (updateOwner) {
-        const initialProps = { ...props, ownerProjectId: null, folderOwnerKey: 'project-a', selectionScopeKey: 'project-a' };
-        const render = async (value: SessionNodeItemProps) => {
-          await act(async () => root.render(<I18nProvider><SessionNodeItem {...value} /></I18nProvider>));
-        };
-        await render(initialProps);
-        let renders = rowRenders;
-        await render({ ...initialProps });
-        expect(rowRenders).toBe(renders);
-        const ownedProps = { ...initialProps, ownerProjectId };
-        await render(ownedProps);
-        expect(rowRenders).toBeGreaterThan(renders);
-        renders = rowRenders;
-        const folderProps = { ...ownedProps, folderOwnerKey: 'project-b' };
-        await render(folderProps);
-        expect(rowRenders).toBeGreaterThan(renders);
-        renders = rowRenders;
-        await render({ ...folderProps, selectionScopeKey: 'project-b' });
-        expect(rowRenders).toBeGreaterThan(renders);
-        expect(host.querySelector('[data-session-row]')?.getAttribute('data-session-scope')).toBe('project-b');
-      } else {
-        await act(async () => root.render(<I18nProvider><SessionNodeItem {...props} /></I18nProvider>));
-      }
-      const chip = host.querySelector<HTMLButtonElement>('button[aria-label="#42"]');
-      expect(chip).not.toBeNull();
-      await act(async () => chip?.click());
-      expect(opened).toEqual([{ url: refUrl, directory }]);
-    } finally {
-      await act(async () => root.unmount());
-      useProjectsStore.setState(originalProjects, true);
-      opened.length = 0;
-      await win.happyDOM.close();
-      for (const [key, descriptor] of descriptors) {
-        if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-        else Reflect.deleteProperty(globalThis, key);
-      }
-    }
-  });
-=======
 test(`a child displayed in A opens ${kind} with owner ${ownerProjectId} through ${directory}${updateOwner ? ' after ownership updates' : ''}`, async () => {
   refUrl = `https://github.com/example/b/${kind}/42`;
   const win = new Window({ url: 'http://localhost/' });
@@ -242,5 +135,4 @@ test(`a child displayed in A opens ${kind} with owner ${ownerProjectId} through 
     }
   }
 });
->>>>>>> bc50ba56a
 }

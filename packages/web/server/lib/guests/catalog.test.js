@@ -2,10 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-<<<<<<< HEAD
-=======
 import { GUEST_PROVIDER_LOGO_BYTES_MAX } from '@openchamber/sdk';
->>>>>>> bc50ba56a
 import { guestAssetContentType, hasGuestFrame, inspectGuestPackage, listInstalledGuests, noteGuestPackageChanged, resolveGuestAssetPath, resolveGuestServedFile, toPublicGuest } from './catalog.js';
 import { setCapabilityGrants, writeExtensionPaths } from './persist.js';
 
@@ -409,8 +406,6 @@ describe('actions and commands on the public row', () => {
   });
 });
 
-<<<<<<< HEAD
-=======
 describe('links on the public row', () => {
   test('copies the declaration, asks for links, and serves compiled patterns, not templates', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-guest-'));
@@ -453,7 +448,6 @@ describe('links on the public row', () => {
   });
 });
 
->>>>>>> bc50ba56a
 describe('an OpenCode plugin in the package', () => {
   const writePluginGuest = async (root, plugin) => {
     await fs.mkdir(root, { recursive: true });
@@ -488,8 +482,6 @@ describe('an OpenCode plugin in the package', () => {
   });
 });
 
-<<<<<<< HEAD
-=======
 describe('provider logos in the package', () => {
   const writeLogoGuest = async (root, files) => {
     await fs.rm(root, { recursive: true, force: true });
@@ -530,7 +522,6 @@ describe('provider logos in the package', () => {
   });
 });
 
->>>>>>> bc50ba56a
 describe('grant scopes', () => {
   const writeScopedGuest = async (root, filesystem) => {
     await fs.mkdir(path.join(root, 'panel'), { recursive: true });

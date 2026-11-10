@@ -38,12 +38,8 @@ type Props = {
       of the second line's first icon (the project's, else the space's or the
       row's own) while the row is hovered, so a two-line row needs no column of
       its own for it. It positions itself over that icon (`absolute inset-0`)
-<<<<<<< HEAD
-      and shows on hover; `leadIconClassName` hides the icon in step. */
-=======
       and shows on hover; `leadIconClassName` hides the icon in step. A line
       that opens with a branch name has no icon: see `leadMaskClassName`. */
->>>>>>> bc50ba56a
   leadToggle?: React.ReactNode;
   leadIconClassName?: string;
   /** For a second line that opens with a branch name and no icon: classes
@@ -164,17 +160,7 @@ export const SessionTimelineRowBody: React.FC<Props> = ({
     ? <Icon name="instance" className="h-3 w-3 flex-shrink-0 text-muted-foreground" aria-hidden={false} role="img" aria-label={spaceMark} />
     : null;
   // The second line's first icon: the project's where projects mix, else the
-<<<<<<< HEAD
-  // branch's (or the space's) in front of its name.
-  const branchIcon = spaceMark
-    // `Icon` hides itself from assistive tech; the space's mark is the row's only word for "space", so it speaks.
-    ? <Icon name="instance" className="h-3 w-3 flex-shrink-0 text-muted-foreground" aria-hidden={false} role="img" aria-label={spaceMark} />
-    : <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground" />;
-  const branchText = <span className="min-w-0 truncate typography-micro text-muted-foreground">{branchLabel}</span>;
-  const branchLine = metaLineLead ?? (branchLabel ? <>{branchIcon}{branchText}</> : null);
-=======
   // space's or the row's own (a run's, a draft's).
->>>>>>> bc50ba56a
   const leadIcon = project
     ? <TimelineProjectIcon project={project} label={projectLabel} />
     : leadIconOverride ?? (!metaLineLead && branchLabel ? spaceIcon : null);
@@ -211,18 +197,8 @@ export const SessionTimelineRowBody: React.FC<Props> = ({
       {titleLine}
       {meta}
     </div>
-<<<<<<< HEAD
-    {leadToggle || leadIcon || branchLine || goal || zombieIndicator || prBadge || badges ? <div className="flex h-4 w-full min-w-0 items-center gap-1">
-      {leadToggle ? (
-        <span className="relative inline-flex size-3 flex-shrink-0 items-center justify-center">
-          {leadIcon ? <span className={cn('inline-flex', leadIconClassName)}>{leadIcon}</span> : null}
-          {leadToggle}
-        </span>
-      ) : leadIcon}
-=======
     {leadToggle || leadIcon || branchLine || goal || zombieIndicator || prBadge || badges ? <div className="relative flex h-4 w-full min-w-0 items-center gap-1">
       {leadSlot}
->>>>>>> bc50ba56a
       {project ? branchLine : metaLineLead ?? (branchLabel ? branchText : null)}
       <span className="ms-auto flex flex-shrink-0 items-center gap-1">
         {goal}

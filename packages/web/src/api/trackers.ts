@@ -154,41 +154,15 @@ export const createWebTrackerAPI = ({
       legacyWire ? legacy.authStatus(provider) : call(provider, '/auth/status', GET, authStatusSchema, 'Failed to load tracker status')
     )),
 
-<<<<<<< HEAD
-    authStart: (provider, origin?: TrackerAuthOrigin): Promise<TrackerAuthStart> => onWire((legacyWire) => (
-      legacyWire ? legacy.authStart(provider, origin) : call(provider, '/auth/start', { method: 'POST', body: JSON.stringify({ origin }) }, authStartSchema, 'Failed to start tracker sign-in')
+    authStart: (provider, origin?: TrackerAuthOrigin, options?: { instance?: string }): Promise<TrackerAuthStart> => onWire((legacyWire) => (
+      legacyWire ? legacy.authStart(provider, origin) : call(
+        provider,
+        '/auth/start',
+        { method: 'POST', body: JSON.stringify(options?.instance ? { origin, instance: options.instance } : { origin }) },
+        authStartSchema,
+        'Failed to start tracker sign-in',
+      )
     )),
-=======
-    async authStart(provider, origin?: TrackerAuthOrigin, options?: { instance?: string }): Promise<TrackerAuthStart> {
-      if (await onLegacyWire()) return legacy.authStart(provider, origin);
-      const body = options?.instance ? { origin, instance: options.instance } : { origin };
-      return call(provider, '/auth/start', { method: 'POST', body: JSON.stringify(body) }, authStartSchema, 'Failed to start tracker sign-in');
-    },
-
-    async authConnectToken(provider, input): Promise<TrackerConnectResult> {
-      if (await onLegacyWire()) return legacy.authConnectToken(provider, input);
-      try {
-        const response = await fetch(trackerPath(provider, '/auth/token'), {
-          method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(input),
-        });
-        return await connectResultOf(response);
-      } catch {
-        return { ok: false, code: 'failed', message: null };
-      }
-    },
-
-    async authSaveOAuthClient(provider, input): Promise<TrackerConnectResult> {
-      if (await onLegacyWire()) return legacy.authSaveOAuthClient(provider, input);
-      try {
-        const response = await fetch(trackerPath(provider, '/auth/oauth-client'), {
-          method: 'PUT', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(input),
-        });
-        return await connectResultOf(response);
-      } catch {
-        return { ok: false, code: 'failed', message: null };
-      }
-    },
->>>>>>> bc50ba56a
 
     authConnectToken: (provider, input): Promise<TrackerConnectResult> => onWire(async (legacyWire) => {
       if (legacyWire) return legacy.authConnectToken(provider, input);

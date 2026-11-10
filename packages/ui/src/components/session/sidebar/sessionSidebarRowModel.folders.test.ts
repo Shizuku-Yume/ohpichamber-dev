@@ -1,27 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-<<<<<<< HEAD
 import type { Session } from '@openchamber/agent-contract';
-import { buildSessionSidebarRowModel, type SessionSidebarRowModelArgs, type SessionSidebarWorkEntry } from './sessionSidebarRowModel';
-=======
-import type { Session } from '@/lib/opencode/model';
 import { buildSessionSidebarRowModel, type SessionSidebarBlock, type SessionSidebarRowModelArgs, type SessionSidebarWorkEntry } from './sessionSidebarRowModel';
->>>>>>> bc50ba56a
 import type { ProjectSection } from './projects/sessionProjectRender';
 import type { DirectoryOwner } from './sessions/sessionOwnership';
 import { getWorkFolderOwnerKey } from './sessions/sessionFolderIdentity';
 import type { SessionGroup, SessionNode } from './types';
 
 const session = (id: string, directory: string): Session => ({
-<<<<<<< HEAD
-  sessionId: id, projectId: 'p', workspaceId: directory, displayPath: directory, rootSessionId: id,
-  title: id, createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-  metadata: null, metadataRevision: '0', archiveRevision: '0',
-=======
   id, projectID: 'p', directory, title: id, cost: 0,
   tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   time: { created: 1, updated: 1 },
->>>>>>> bc50ba56a
 });
 const node = (id: string, directory = '/repo'): SessionNode => ({ session: session(id, directory), children: [], worktree: null });
 const rootGroup = (sessions: SessionNode[]): SessionGroup => ({
@@ -61,11 +49,7 @@ const folderRow = (model: ReturnType<typeof build>) => {
   return row;
 };
 const sessionRow = (model: ReturnType<typeof build>, id: string) => {
-<<<<<<< HEAD
   const row = model.rows.find((candidate) => candidate.kind === 'session' && candidate.node.session.sessionId === id);
-=======
-  const row = model.rows.find((candidate) => candidate.kind === 'session' && candidate.node.session.id === id);
->>>>>>> bc50ba56a
   if (row?.kind !== 'session') throw new Error(`No row for ${id}`);
   return row;
 };
@@ -91,11 +75,7 @@ describe('sidebar folders in the list by time', () => {
   const summary = (model: ReturnType<typeof build>) => model.rows.flatMap((row) => {
     if (row.kind === 'activity-header') return [row.activityKey];
     if (row.kind === 'folder-header') return [`folder:${row.displayName}`];
-<<<<<<< HEAD
     return row.kind === 'session' ? [row.node.session.sessionId] : [];
-=======
-    return row.kind === 'session' ? [row.node.session.id] : [];
->>>>>>> bc50ba56a
   });
 
   test('folders lead the list and hold what is filed in them', () => {
@@ -108,13 +88,10 @@ describe('sidebar folders in the list by time', () => {
     expect(summary(build({ timeEntries: [], collapsedActivities: new Set(['timeline']) }))).toEqual(['timeline']);
   });
 
-<<<<<<< HEAD
-=======
   test('a project a group of projects took keeps its folders there', () => {
     const blocks: SessionSidebarBlock[] = [{ kind: 'projects', excludedProjectIds: new Set(['p']) }];
     expect(summary(build({ timeEntries: [entry('other')], blocks }))).toEqual(['timeline', 'other']);
   });
->>>>>>> bc50ba56a
 
   test('a collapsed zone with only folders hides the load statuses too', () => {
     const groupStatusByKey = new Map([['p:main', { state: 'loading' as const, directory: null, canGrantAccess: false }]]);

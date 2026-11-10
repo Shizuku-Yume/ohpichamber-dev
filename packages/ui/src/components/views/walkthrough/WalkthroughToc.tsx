@@ -113,19 +113,12 @@ export const WalkthroughToc = memo(function WalkthroughToc({
     activeRef.current?.scrollIntoView({ block: 'nearest' });
   }, [activeStopId]);
 
-<<<<<<< HEAD
-  return (
-    <nav
-      className="flex shrink-0 flex-col overflow-y-auto border-r border-border/60 p-2"
-      style={{ width }}
-=======
   const contents = (
     <ScrollableOverlay
       as="nav"
       outerClassName="min-h-0 flex-1"
       className={cn('flex flex-col', page ? 'px-3 py-3' : 'p-2')}
       disableHorizontal
->>>>>>> bc50ba56a
     >
       {view.walkthrough.focus && (
         <p className="typography-meta px-2 pb-3 pt-1 text-muted-foreground">{view.walkthrough.focus}</p>

@@ -33,31 +33,7 @@ const PERMISSION_DECISION_TTL_MS = 15 * 60 * 1000;
 
 const errorMessage = (error) => (error instanceof Error ? error.message : String(error));
 
-<<<<<<< HEAD
 
-=======
-// v2's command body (`session.command` in the protocol) names the command in
-// `name` and carries its arguments in `text`; a prompt body has no `name`.
-const commandBodySchema = z.object({ name: z.string().trim().min(1), text: z.string().nullish() });
-// v2 sends one user turn as flat text; the context the composer attached went
-// ahead of it as synthetic messages, which are never the request being routed.
-const promptBodySchema = z.object({ text: z.string().nullish() });
-// A form reply carries the filled-in fields, keyed by ids the agent made up.
-const formReplyBodySchema = z.object({ answer: z.record(z.string(), z.unknown()) });
-
-/** The user's words for this send: the prompt text, the slash command, or a form's answers. */
-export const requestTextOf = (body) => {
-  const formReply = formReplyBodySchema.safeParse(body);
-  if (formReply.success) return Object.values(formReply.data.answer).flat().join('\n').trim();
-  const command = commandBodySchema.safeParse(body);
-  if (command.success) {
-    const args = command.data.text?.trim();
-    return `/${command.data.name}${args ? ` ${args}` : ''}`;
-  }
-  const prompt = promptBodySchema.safeParse(body);
-  return (prompt.success ? prompt.data.text ?? '' : '').trim();
-};
->>>>>>> bc50ba56a
 
 /** Extensions that name an image when its media type is not a `data:` URL. */
 const IMAGE_EXTENSIONS = new Set(['avif', 'bmp', 'gif', 'heic', 'heif', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
@@ -123,33 +99,12 @@ export function createRoutingRuntime({
   readPinnedEndpoint = readPinnedCustomEndpoint,
   listCatalogModels = null,
   readSessionHistory = null,
-<<<<<<< HEAD
-=======
-  readConfigEntries = null,
-  readSessionAgent = null,
-  // Whether OpenChamber keeps this session's cache warm itself (`session-warming`).
-  isSessionWarm = () => false,
->>>>>>> bc50ba56a
   now = Date.now,
 }) {
   if (!service || typeof service.request !== 'function') throw new Error('routing requires the Agent service');
   if (typeof resolveWorkspaceScope !== 'function' || typeof resolveSessionScope !== 'function') throw new Error('routing requires Host scope resolvers');
   if (typeof resolveCredential !== 'function') throw new Error('routing requires the selected credential resolver');
   const permissionDecisions = new Map();
-<<<<<<< HEAD
-=======
-  // Sessions the user put on Auto. The sentinel never reaches OpenCode, so
-  // nothing upstream remembers the choice for us.
-  // TODO(v2): this is process memory. A server restart drops the mark and the
-  // session silently runs on whatever model it was last switched to while the
-  // composer still shows Auto. Either persist it next to `routing.json` or have
-  // the client resend the sentinel with every send.
-  const autoSessions = new Map();
-  const AUTO_SESSION_LIMIT = 1000;
-  // Per session: the agent routing switched it to and the agent it ran as
-  // before (`agentForSend`). Process memory too, so a restart forgets it.
-  const routedAgents = new Map();
->>>>>>> bc50ba56a
 
   const broadcast = (type, properties) => {
     try {
@@ -307,17 +262,12 @@ export function createRoutingRuntime({
 
   // A category without a model of its own means "the fallback pair"; a variant
   // only travels with the model it was chosen for.
-<<<<<<< HEAD
   const chooseSelection = (config, choice, _composerAgent) => {
-=======
-  const chooseSelection = (config, choice) => {
->>>>>>> bc50ba56a
     const own = Boolean(choice?.model);
     const model = own ? choice.model : config.fallback.model;
     const variant = own ? choice.variant : config.fallback.variant;
     return {
       model: toModelRef(model, variant),
-<<<<<<< HEAD
       agent: null,
       decision: { providerID: model.providerID, modelID: model.modelID, variant: variant ?? null, reasoningEffort: variant ?? null, agent: null },
     };
@@ -329,57 +279,6 @@ export function createRoutingRuntime({
     if (catalog.workspaceId !== workspaceId) throw Object.assign(new Error('Model catalog belongs to another workspace'), { status: 403, code: 'UNAUTHORIZED' });
     return catalog.models;
   });
-=======
-      decision: { providerID: model.providerID, modelID: model.modelID, variant: variant ?? null, agent: choice?.agent ?? null },
-    };
-  };
-
-  const readAgent = readSessionAgent ?? (async ({ sessionId, directory }) => (
-    agentBodySchema.safeParse(await openCodeClient(directory).session.get({ sessionID: sessionId })).data?.agent ?? null
-  ));
-
-  /**
-   * The agent a routed send runs as. A category agent replaces the session's
-   * and is remembered with the agent it replaced. A send whose category names
-   * no agent keeps the composer's, except while the session still runs as the
-   * agent routing set: then it goes back to the one before (#6392). In Auto
-   * the composer shows the session's agent, so it cannot ask for that itself.
-   * A session found on any other agent was switched since, so its agent stays.
-   */
-  const agentForSend = async ({ sessionId, directory, categoryAgent, composerAgent }) => {
-    const routed = routedAgents.get(sessionId);
-    if (!sessionId || (!categoryAgent && !routed)) return categoryAgent || composerAgent;
-    let current;
-    try {
-      current = await readAgent({ sessionId, directory });
-    } catch (error) {
-      console.warn('[routing] session agent unavailable, leaving it as it is:', errorMessage(error));
-      return categoryAgent || composerAgent;
-    }
-    const stillRouted = routed?.agent === current;
-    if (categoryAgent) {
-      const previous = stillRouted ? routed.previous : current;
-      routedAgents.delete(sessionId);
-      // A session without an agent of its own has nothing to go back to.
-      if (previous && previous !== categoryAgent) {
-        routedAgents.set(sessionId, { agent: categoryAgent, previous });
-        while (routedAgents.size > AUTO_SESSION_LIMIT) routedAgents.delete(routedAgents.keys().next().value);
-      }
-      return categoryAgent;
-    }
-    // A composer agent other than the routed one is the caller's own choice.
-    if (!stillRouted || (composerAgent && composerAgent !== routed.agent)) {
-      routedAgents.delete(sessionId);
-      return composerAgent;
-    }
-    // Kept until a read finds the session off the routed agent, so a switch
-    // back that fails is tried again on the next send.
-    return routed.previous;
-  };
-
-  const readCatalog = listCatalogModels
-    ?? (async (directory) => catalogResponseSchema.parse(await openCodeClient(directory).model.list()).data);
->>>>>>> bc50ba56a
 
   /**
    * Drops a variant the canonical model catalog does not list. An unreadable
@@ -456,15 +355,7 @@ export function createRoutingRuntime({
         decision.confidence = result.confidence;
         decision.reason = result.reason;
         decision.ms = ms;
-<<<<<<< HEAD
         const held = await cacheHold({ config, chosen: result.category, composerAgent: null, lastAnswer });
-=======
-        // A queued send names the session's agent; while routing set it, a
-        // category without an agent runs as the one before (`agentForSend`).
-        const routed = routedAgents.get(sessionId);
-        const composerAgent = routed && agent === routed.agent ? routed.previous : agent;
-        const held = await cacheHold({ config, chosen: result.category, composerAgent, lastAnswer, sessionId, directory });
->>>>>>> bc50ba56a
         if (held) {
           // The send runs as the category the session is already on;
           // `cacheHold.requested` keeps what Jev asked for.
@@ -480,70 +371,12 @@ export function createRoutingRuntime({
     } else {
       selection = chooseSelection(config, null);
     }
-<<<<<<< HEAD
     selection = await withKnownVariant(selection, workspaceId);
     Object.assign(decision, selection.decision);
     broadcast('openchamber:routing.decision', decision);
     return { model: selection.model, agent: null, decision };
   };
 
-=======
-    selection = await withKnownVariant(selection, directory);
-    const sendAgent = await agentForSend({
-      sessionId, directory, categoryAgent: selection.decision.agent, composerAgent: agent ?? null,
-    });
-    Object.assign(decision, selection.decision);
-    broadcast('openchamber:routing.decision', decision);
-    return { model: selection.model, agent: sendAgent, decision };
-  };
-
-  /**
-   * `POST /session/:id/model` with the sentinel puts the session on Auto;
-   * with any real model it takes it off again.
-   */
-  const noteModelSelection = (sessionId, model, directory) => {
-    if (!sessionId) return false;
-    if (!isAutoModel(model)) {
-      autoSessions.delete(sessionId);
-      // Off Auto the composer shows the session's agent again and the user can
-      // keep or change it, so routing has nothing to put back.
-      routedAgents.delete(sessionId);
-      return false;
-    }
-    autoSessions.delete(sessionId);
-    autoSessions.set(sessionId, { directory: directory ?? null, at: now() });
-    while (autoSessions.size > AUTO_SESSION_LIMIT) autoSessions.delete(autoSessions.keys().next().value);
-    return true;
-  };
-
-  const isAutoSession = (sessionId) => Boolean(sessionId) && autoSessions.has(sessionId);
-
-  /** Switches the session onto a resolved selection, the way a v2 send does. */
-  const applySessionSelection = async (sessionId, directory, selection) => {
-    const client = openCodeClient(directory);
-    await client.session.switchModel({ sessionID: sessionId, model: selection.model });
-    if (selection.agent) await client.session.switchAgent({ sessionID: sessionId, agent: selection.agent });
-  };
-
-  /**
-   * One send in a routed session: asks Jev on the request text, switches the
-   * session onto the answer, and keeps the body in step with it.
-   */
-  const routeSend = async ({ sessionId, directory, body }) => {
-    const resolved = await resolveAutoSelection({
-      sessionId,
-      directory,
-      model: AUTO_MODEL_REF,
-      agent: agentBodySchema.safeParse(body).data?.agent ?? null,
-      requestText: routingRequestTextOf(body),
-    });
-    if (!resolved) return null;
-    // v2 prompt and command bodies carry neither model nor agent: switching
-    // the session is the whole application of the decision.
-    await applySessionSelection(sessionId, directory, resolved);
-    return resolved.decision;
-  };
->>>>>>> bc50ba56a
 
   /**
    * Consulted by permission auto-accept in a `safety` session before it

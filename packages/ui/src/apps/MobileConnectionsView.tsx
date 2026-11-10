@@ -346,13 +346,8 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
       {liveConnection ? null : (
         <span className="pb-1 typography-micro text-muted-foreground">{t('mobile.connect.lastConnected')}</span>
       )}
-<<<<<<< HEAD
-      <h2 className="truncate pe-8 typography-ui-header font-semibold text-foreground">{leadConnection.label}</h2>
-      <p className="truncate pe-8 typography-meta text-muted-foreground">{addressOf(leadConnection)}</p>
-=======
       <h2 dir="auto" className="oc-ui-start-align truncate pe-8 typography-ui-header font-semibold text-foreground">{leadConnection.label}</h2>
       <p dir="ltr" className="oc-ui-start-align truncate pe-8 typography-meta text-muted-foreground">{addressOf(leadConnection)}</p>
->>>>>>> bc50ba56a
       <div className="flex h-9 items-center pt-3">
         {/* Live already: what would be the button says so, in the button's place. */}
         {liveConnection ? (
@@ -383,11 +378,7 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
             onClick={() => connectTo(connection)}
           >
             <span className="block py-1.5">
-<<<<<<< HEAD
-              <span className="block truncate">{connection.label}</span>
-=======
               <span dir="auto" className="oc-ui-start-align block truncate">{connection.label}</span>
->>>>>>> bc50ba56a
               <span className="block truncate typography-micro font-normal text-muted-foreground">
                 {connecting ? t('mobile.connect.connecting') : addressOf(connection)}
               </span>
@@ -427,11 +418,7 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
   const passwordPrompt = pendingConnection ? (
     <form className="flex w-full flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void submitPassword(password); }}>
       <div className="oc-tile rounded-xl p-4">
-<<<<<<< HEAD
-        <p className="truncate typography-ui-header font-semibold text-foreground">{pendingConnection.label}</p>
-=======
         <p dir="auto" className="oc-ui-start-align truncate typography-ui-header font-semibold text-foreground">{pendingConnection.label}</p>
->>>>>>> bc50ba56a
         <p className="truncate typography-meta text-muted-foreground">
           {isRelayOnly(pendingConnection) ? t('mobile.connect.relay.badge') : connectionDisplayUrl(pendingConnection)}
         </p>
@@ -580,9 +567,6 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
   return (
     <>
       {forms}
-<<<<<<< HEAD
-      <main className="oc-keyboard-fill-screen flex min-h-dvh flex-col overflow-y-auto bg-background px-4 pb-[calc(var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px))+16px)] pt-[calc(var(--safe-area-inset-top,env(safe-area-inset-top,0px))+16px)] text-foreground">
-=======
       <main className="oc-keyboard-fill-screen flex min-h-dvh flex-col overflow-y-auto bg-background pb-[calc(var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px))+16px)] pt-[calc(var(--safe-area-inset-top,env(safe-area-inset-top,0px))+16px)] text-foreground"
         // Clear the screen's side insets too: the notch in landscape, the status
         // bar column on the right of iPhone Duo.
@@ -591,7 +575,6 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
           paddingRight: 'calc(var(--oc-safe-area-right, 0px) + 1rem)',
         }}
       >
->>>>>>> bc50ba56a
         <div className="mx-auto flex w-full max-w-[380px] flex-1 flex-col">
           {leadConnection || pendingConnection ? (
             <header className="flex items-center gap-2 px-1 pb-4 pt-2">

@@ -274,8 +274,6 @@ describe('what a service does with nobody asking', () => {
     expect(effectiveGrants(['transcript'], stored, wider)).toEqual([]);
   });
 });
-<<<<<<< HEAD
-=======
 
 describe('links scope', () => {
   const links = (overrides = {}) => ({
@@ -306,4 +304,3 @@ describe('links scope', () => {
     expect(effectiveGrants(['links'], approved, guestGrantScope(guest))).toEqual([]);
   });
 });
->>>>>>> bc50ba56a

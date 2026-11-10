@@ -74,10 +74,7 @@ import {
 } from './cli-output.js';
 import { applyConnectAttemptTimeout } from '../server/lib/network-defaults.js';
 import { bunVersionRunsBunPty } from '../server/lib/terminal/bun-pty-support.js';
-<<<<<<< HEAD
 import { resolveWebAgentRuntime, registerStandaloneLoader } from '../scripts/standalone-loader.mjs';
-=======
->>>>>>> bc50ba56a
 
 // The CLI process performs provider fetches (quota/usage, update notes) under
 // Node/undici, whose happy-eyeballs default aborts each connect attempt after
@@ -184,13 +181,8 @@ function getInstalledBunVersion() {
 // The update restart reruns this CLI with the server's own runtime, which can be that older Bun.
 function getServerRuntimeBinary() {
   if (bunVersionRunsBunPty(getInstalledBunVersion())) return BUN_BIN;
-<<<<<<< HEAD
   if (!isBunRuntime() || bunVersionRunsBunPty(globalThis.Bun?.version)) return process.execPath;
   return process.execPath;
-=======
-  if (!isBunRuntime() || bunVersionRunsBunPty(globalThis.Bun.version)) return process.execPath;
-  return searchPathFor('node') ?? process.execPath;
->>>>>>> bc50ba56a
 }
 
 
@@ -222,10 +214,6 @@ const commands = {
 
 commands.serve = createServeCommand({
   serverPath: path.join(__dirname, '..', 'server', 'index.js'),
-<<<<<<< HEAD
-=======
-  checkOpenCodeCLI,
->>>>>>> bc50ba56a
   getServerRuntimeBinary,
   setForegroundServerActive(value) { foregroundServerActive = value; },
   setForegroundShutdown(handler) { foregroundShutdown = handler; },

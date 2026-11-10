@@ -5,12 +5,6 @@
  * @module quota/providers
  */
 
-<<<<<<< HEAD
-=======
-import { readOpenCodeCredentials } from '../../opencode/auth.js';
-import { extensionQuotaProvider, extensionQuotaProviderEntries } from '../extension-registry.js';
-import { QuotaRouteError } from '../route-error.js';
->>>>>>> bc50ba56a
 import { buildResult } from '../utils/index.js';
 import {
   requireSelectedCredential,
@@ -199,8 +193,7 @@ const registry = {
   zenmux: {
     providerId: zenmux.providerId,
     providerName: zenmux.providerName,
-    // ZenMux reads its own managed credential; the list's OpenCode auth is not for it.
-    isConfigured: () => zenmux.isConfigured(),
+    isConfigured: zenmux.isConfigured,
     fetchQuota: zenmux.fetchQuota
   },
   xai: {
@@ -211,58 +204,22 @@ const registry = {
   }
 };
 
-export { attachExtensionQuotaProvider, detachExtensionQuotaProvider } from '../extension-registry.js';
-
-// `hasOwn`, so an id such as `constructor` never resolves to the object's own prototype members.
-const providerOf = (providerId) => (Object.hasOwn(registry, providerId) ? registry[providerId] : extensionQuotaProvider(providerId));
-const providerEntries = () => [...Object.entries(registry), ...extensionQuotaProviderEntries()];
-
 const pendingFetches = new Map();
-
-// The registry entries Settings > Usage never reads. Its built-in list
-// (`QUOTA_PROVIDERS` in packages/ui/src/lib/quota/providers/index.ts) shows
-// GitHub Copilot once; the add-on entry asks GitHub a second time.
-const NOT_ON_USAGE_PAGE = new Set([copilot.providerIdAddon]);
-
-/**
- * The providers Settings > Usage reads, built-ins first, then the attached
- * extensions: what an agent reading usage may ask, so it never makes a
- * request the page does not make.
- */
-export const listUsagePageProviders = () => providerEntries()
-  .filter(([id]) => !NOT_ON_USAGE_PAGE.has(id))
-  .map(([providerId, provider]) => ({ providerId, providerName: provider.providerName }));
 
 
 /**
  * Provider selections are supplied by the Host's selected workspace catalog.
  * This registry never enumerates or reads a credential store itself.
  */
-<<<<<<< HEAD
 export const listConfiguredQuotaProviders = async ({ selections = [] } = {}) => {
   const providerIds = new Set();
   for (const selection of selections) {
     const providerId = selection?.quotaProviderId ?? selection?.providerId;
     if (Object.hasOwn(registry, providerId)) providerIds.add(providerId);
-=======
-export const listConfiguredQuotaProviders = async () => {
-  const auth = await readOpenCodeCredentials();
-  const configured = [];
-
-  for (const [id, provider] of providerEntries()) {
-    try {
-      if (provider.isConfigured(auth)) {
-        configured.push(id);
-      }
-    } catch {
-      // Ignore provider-specific config errors in list API.
-    }
->>>>>>> bc50ba56a
   }
   return [...providerIds];
 };
 
-<<<<<<< HEAD
 /** A provider outside the registry is unsupported, not unconfigured. */
 export const buildUnconfiguredQuotaResult = (providerId) => {
   const provider = registry[providerId];
@@ -274,10 +231,6 @@ export const buildUnconfiguredQuotaResult = (providerId) => {
     configured: false,
   });
 };
-=======
-const fetchQuotaForProviderUncoalesced = async (providerId) => {
-  const provider = providerOf(providerId);
->>>>>>> bc50ba56a
 
 const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
   const provider = registry[providerId];
@@ -286,7 +239,6 @@ const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
   try {
     credential = await requireSelectedCredential({ ...options, purpose: 'quota' });
   } catch (error) {
-<<<<<<< HEAD
     // No stored credential is an ordinary configuration state. Any other
     // resolution failure belongs to a provider the catalog already reported
     // as connected, so it must stay visible instead of looking unconfigured.
@@ -299,17 +251,6 @@ const fetchQuotaForProviderUncoalesced = async (providerId, options = {}) => {
     return await provider.fetchQuota({ ...options, credential });
   } catch {
     return buildResult({ providerId: provider.providerId, providerName: provider.providerName, ok: false, configured: true, error: 'Request failed' });
-=======
-    // The extension layer's own answer for a service reply OpenChamber cannot use: the route answers its status and code.
-    if (error instanceof QuotaRouteError) throw error;
-    return buildResult({
-      providerId: provider.providerId,
-      providerName: provider.providerName,
-      ok: false,
-      configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
-    });
->>>>>>> bc50ba56a
   }
 };
 
@@ -343,8 +284,4 @@ export const fetchMinimaxCnCodingPlanQuota = minimaxCnCodingPlan.fetchQuota;
 export const fetchOllamaCloudQuota = ollamaCloud.fetchQuota;
 export const fetchWaferQuota = wafer.fetchQuota;
 export const fetchZhipuaiQuota = zhipuaiCodingPlan.fetchQuota;
-<<<<<<< HEAD
 export const fetchAntigravityQuota = antigravity.fetchQuota;
-=======
-export const fetchOpenCodeQuota = opencode.fetchQuota;
->>>>>>> bc50ba56a

@@ -444,11 +444,7 @@ export async function exerciseMobileComparisonContextExpansion() {
   try {
     await act(async () => root.render(<I18nProvider><SyncProvider client={canonicalClient} directory=""><RuntimeAPIContext.Provider value={createWebAPIs()}>
       <MobileChangesPane rootDirectory="/repo" visible initialDiff={null}
-<<<<<<< HEAD
-        repository={{ rootIsGitRepo: true, gitDirectory: '/repo', nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null, repositoriesKnown: true }} />
-=======
         repository={{ rootIsGitRepo: true, gitDirectory: '/repo', nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null, repositoriesKnown: true, unreadable: null }} />
->>>>>>> bc50ba56a
     </RuntimeAPIContext.Provider></SyncProvider></I18nProvider>));
     await click('[aria-label="Select change mode"]');
     const commitMode = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find((element) => element.textContent === 'Commit');

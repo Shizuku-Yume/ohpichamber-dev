@@ -3,7 +3,6 @@ import React from 'react';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
   Dialog,
   DialogContent,
@@ -220,13 +219,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const guests = useGuestsStore((state) => open ? state.guests : EMPTY_GUESTS);
 
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
-<<<<<<< HEAD
-=======
-  /** The entry whose OAuth sign-in starts as soon as its detail page can show it, right after install. */
-  const [pendingSignInId, setPendingSignInId] = React.useState<string | null>(null);
-  /** A sign-in in progress keeps its panel while the server reconnects. */
-  const [mcpSignInActive, setMcpSignInActive] = React.useState(false);
->>>>>>> bc50ba56a
   const showEntry = React.useCallback((id: string | null) => {
     setSelectedId(id);
   }, []);
@@ -805,8 +797,8 @@ export function IntegrationsCatalogView(): React.ReactNode {
 
   /** The rail: back to browsing, then every installed integration with its state. */
   const renderRail = (): React.ReactNode => (
-    <aside className="flex w-56 shrink-0 flex-col border-e border-edge">
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="p-2" disableHorizontal>
+    <aside className="flex w-56 shrink-0 flex-col border-e border-border/50">
+      <div className="flex-1 overflow-y-auto p-2">
         <button
           type="button"
           onClick={() => showEntry(null)}
@@ -822,10 +814,10 @@ export function IntegrationsCatalogView(): React.ReactNode {
 
         <div className="mt-5 flex items-baseline gap-1.5 px-2 pb-1.5 typography-micro font-medium text-muted-foreground">
           {t('integrationsCatalog.filter.installed')}
-          <span className="text-muted-foreground">{installedEntries.length}</span>
+          <span className="text-muted-foreground/70">{installedEntries.length}</span>
         </div>
         {installedEntries.length === 0 ? (
-          <p className="px-2 typography-micro text-muted-foreground">{t('integrationsCatalog.rail.installedEmpty')}</p>
+          <p className="px-2 typography-micro text-muted-foreground/80">{t('integrationsCatalog.rail.installedEmpty')}</p>
         ) : installedEntries.map((entry) => {
           const selected = selectedId === entry.id;
           const status = statusOf(entry);
@@ -848,7 +840,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
             </button>
           );
         })}
-      </ScrollableOverlay>
+      </div>
     </aside>
   );
 
@@ -907,29 +899,11 @@ export function IntegrationsCatalogView(): React.ReactNode {
     );
   };
 
-<<<<<<< HEAD
   /** Where the installed MCP server stands, with the sign-in when it is an OAuth server. */
   const renderConnection = (entry: CatalogEntry, mcp: CatalogMcpComponent): React.ReactNode => {
     const runtime = mcpStatusOf(mcpStatuses[entry.id]);
     const server = mcpServers.find((candidate) => candidate.serverId === entry.id);
     const state: { label: string; tone: IntegrationCatalogStatusTone } = runtime === 'disabled' || (server && !server.enabled)
-=======
-  /**
-   * Where the installed MCP server stands, with the sign-in when it asks for
-   * one. A failed OAuth server offers it too: the service may have rejected
-   * the stored token, and only a fresh sign-in replaces it. A connected one
-   * offers it as well — a live transport does not prove the user authorized
-   * the tools (#5934).
-   */
-  const renderConnection = (entry: CatalogEntry, mcp: CatalogMcpComponent): React.ReactNode => {
-    const runtime = readMcpStatusName(mcpStatuses[entry.id]);
-    const disabled = mcpServers.find((candidate) => candidate.name === entry.id)?.disabled === true;
-    const offersSignIn = !disabled
-      && (mcpSignInActive
-        || runtime === 'needs_auth'
-        || (mcp.auth === 'oauth' && (runtime === 'failed' || runtime === 'connected')));
-    const state: { label: string; tone: IntegrationCatalogStatusTone } = disabled
->>>>>>> bc50ba56a
       ? { label: t('integrationsCatalog.status.disabled'), tone: 'neutral' }
       : runtime === 'connected'
         ? { label: t('integrationsCatalog.connection.connected'), tone: 'success' }
@@ -949,27 +923,13 @@ export function IntegrationsCatalogView(): React.ReactNode {
               {state.label}
             </span>
           </div>
-<<<<<<< HEAD
           {showSignIn ? (
-=======
-          {offersSignIn ? (
->>>>>>> bc50ba56a
             <div className="mt-4 border-t border-[var(--interactive-border)] pt-4">
-              {runtime === 'needs_auth' ? <p className="mb-3 text-sm text-muted-foreground">{t('integrationsCatalog.oauth.waiting')}</p> : null}
+              <p className="mb-3 text-sm text-muted-foreground">{t('integrationsCatalog.oauth.waiting')}</p>
               <McpOAuthSignIn
                 serverId={entry.id}
                 directory={currentDirectory}
-<<<<<<< HEAD
-=======
-                autoStart={runtime === 'needs_auth' && pendingSignInId === entry.id}
-                connectLabel={runtime === 'failed'
-                  ? t('settings.mcp.page.actions.signInAgain')
-                  : runtime === 'connected'
-                    ? t('settings.mcp.page.actions.authorize')
-                    : undefined}
->>>>>>> bc50ba56a
                 onConnected={() => { void useMcpStore.getState().connect(entry.id, currentDirectory); }}
-                onActiveChange={setMcpSignInActive}
               />
             </div>
           ) : null}
@@ -1115,7 +1075,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
           <button type="button" onClick={() => showEntry(null)} className="rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             {t('integrationsCatalog.page.title')}
           </button>
-          <Icon name="arrow-right-s" className="size-4 text-muted-foreground" />
+          <Icon name="arrow-right-s" className="size-4 text-muted-foreground/60" />
           <span className="truncate text-foreground">{entry.name}</span>
         </nav>
 
@@ -1204,17 +1164,15 @@ export function IntegrationsCatalogView(): React.ReactNode {
     <div className="absolute inset-0 z-10 flex bg-background">
       {renderRail()}
 
-      <ScrollableOverlay
-        as="main"
+      <main
         ref={scrollerRef}
-        outerClassName="min-w-0 flex-1"
+        className="min-w-0 flex-1 overflow-y-auto"
         onScroll={(event) => {
           if (!selectedId) browseScrollTopRef.current = event.currentTarget.scrollTop;
         }}
-        disableHorizontal
       >
         {selectedEntry ? renderDetail(selectedEntry) : renderBrowse()}
-      </ScrollableOverlay>
+      </main>
 
       {confirm ? (
         <Dialog open onOpenChange={(next) => { if (!next) setConfirm(null); }}>

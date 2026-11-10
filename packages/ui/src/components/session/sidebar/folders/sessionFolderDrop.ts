@@ -16,11 +16,7 @@ export const resolveCurrentSessionFolderDropSource = (
   claimedSessionId: string,
 ): { sessionId: string; ownerKey: string } | null => {
   const row = rows.find((candidate) => candidate.kind === 'session' && getSessionDragId(candidate.key) === dragId);
-<<<<<<< HEAD
   if (row?.kind !== 'session' || row.node.session.sessionId !== claimedSessionId || row.archived || !row.ownerKey) return null;
-=======
-  if (row?.kind !== 'session' || row.node.session.id !== claimedSessionId || row.archived || !row.ownerKey) return null;
->>>>>>> bc50ba56a
   return { sessionId: claimedSessionId, ownerKey: row.ownerKey };
 };
 

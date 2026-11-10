@@ -102,11 +102,8 @@ export const createWebGitAPI = (): GitAPI => ({
     create: gitApiHttp.createGitWorktree,
     remove: gitApiHttp.deleteGitWorktree,
     teardown: gitApiHttp.teardownGitWorktree,
-<<<<<<< HEAD
-=======
     setTitle: gitApiHttp.setGitWorktreeTitle,
     setPinned: gitApiHttp.setGitWorktreePinned,
->>>>>>> bc50ba56a
     snapshot: gitApiHttp.snapshotGitWorktree,
     archive: gitApiHttp.archiveGitWorktree,
     listArchives: gitApiHttp.listGitWorktreeArchives,

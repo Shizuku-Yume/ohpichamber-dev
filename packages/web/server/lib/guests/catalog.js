@@ -396,11 +396,16 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
     guest.skills = parsed.manifest.contributes.skills;
   }
   // The package's OpenCode plugin folder: a directory with a package.json naming an entry that exists, or the install fails.
-  if (parsed.manifest.contributes.opencodePlugin) {
-    if (!await resolveOpenCodePluginFolder(fs, packageRoot, parsed.manifest.contributes.opencodePlugin)) {
+  // The SDK's manifest schema no longer carries this role, so the raw manifest is read too; a package that declares it still has to ship the folder.
+  let rawParsed;
+  try { rawParsed = JSON.parse(raw); } catch {}
+  const rawPlugin = parsed.manifest.contributes.opencodePlugin
+    ?? (rawParsed?.openchamber?.contributes?.opencodePlugin ?? rawParsed?.contributes?.opencodePlugin);
+  if (rawPlugin) {
+    if (!await resolveOpenCodePluginFolder(fs, packageRoot, rawPlugin)) {
       return { ok: false, code: 'invalid-opencode-plugin' };
     }
-    guest.opencodePlugin = parsed.manifest.contributes.opencodePlugin;
+    guest.opencodePlugin = rawPlugin;
   }
   return { ok: true, guest };
 };
@@ -573,6 +578,10 @@ export const toPublicGuest = (guest) => {
   }
   if (guest.opencodePlugin) {
     row.opencodePlugin = true;
+    // The SDK's declared capability list no longer names this retired role, so the row asks for it itself.
+    if (!row.capabilities.requested.includes('opencodePlugin')) {
+      row.capabilities.requested.push('opencodePlugin');
+    }
   }
   if (guest.mentions) {
     row.mentions = { label: guest.mentions.label };

@@ -11,21 +11,10 @@ This module provides notification message preparation utilities for the web serv
 - `packages/web/server/lib/notifications/apns-runtime.js`: native APNs/FCM token persistence and delivery. Relay mode signs requests through the shared host `relayKeyStore`; it does not create a signing keypair in notification settings. Direct APNs delivery uses ES256 and HTTP/2 when `OPENCHAMBER_PUSH_RELAY_DISABLED=true`. Native delivery is not gated on UI visibility; iOS suppresses foreground banners. A registered device `pushKey` seals notification text, while legacy registrations receive generic text. See `APNS.md`.
 - `packages/web/server/lib/notifications/push-seal.js`: end-to-end sealing of native push text. A phone that registers with a `pushKey` (32 bytes, base64; made by the iOS shell in the App Group, by Android's `PushSealKey`) gets each notification as the generic scenario title, an empty body and `data.enc` = `v1.` + base64(nonce || AES-256-GCM ciphertext || tag) of `{ title, body }`. Each such device is its own relay send. The iOS Notification Service Extension and Android's `SealedPushMessagingService` open it; the relay sends a sealed push to Android as a data message (openchamber-website `apps/api/src/lib/fcm.ts`) so that service runs in the background. The sealed text is richer than the clear one: `runtime.js` passes `sealed` = the session name as title and what happened as body (the agent's reply; `Question:`, `Wants to run:` / `Wants to edit:` / `Wants permission:`, `Error:` or the goal title before the detail). The detail goes through the 250-character message cap before the prefix is added. When there is no such text, the phone opens the generic text. Phones without a key keep getting the generic text in the clear. Enterprise mode sends no `sealed` text and strips the session name, so the phone shows only the scenario title.
 - `packages/web/server/lib/notifications/session-key.js`: the key both push stores group registrations under, a `sha256:` hash of the UI session token, never the token. Files written before the hashing are rewritten with hashed keys on first read. Both stores are written `0600`.
-<<<<<<< HEAD
 - `packages/web/server/lib/notifications/emitter-runtime.js`: desktop/stdout + UI SSE notification emission runtime.
 - `packages/web/server/lib/notifications/runtime.js`: trigger runtime for canonical OMP session events (run completion/failure, approvals, questions) with debouncing, subtask/goal suppression and push fanout.
 - `packages/web/server/lib/notifications/template-runtime.js`: notification template variables and session text/title enrichment over the canonical session service, including the session's project, worktree, branch and Host title.
 - `packages/web/server/lib/notifications/template-locales.js`: the notification text OpenChamber writes itself, per interface language. An empty template field means "no custom text", so the notification uses these defaults. The server keeps its own list because it cannot import `packages/ui`; an unknown tag falls back to English.
-=======
-- `packages/web/server/lib/notifications/client-push-access.js`: keeps push away from revoked and expired paired clients, see *Revoked and expired clients* below.
-- `packages/web/server/lib/notifications/apns-runtime.js`: native iOS APNs device-token persistence + delivery. Two modes: **relay** (default — sign + POST tokens + generic text to the central Cloudflare relay `https://api.openchamber.dev/v1/push/send`, which holds the single project APNs key) and **direct** (fallback — sign ES256 JWT with Node crypto + HTTP/2, when `OPENCHAMBER_PUSH_RELAY_DISABLED=true`). Each server has an auto-generated ECDSA P-256 keypair (`getOrCreateRelayKeypair`, persisted in settings); it binds tokens on the relay (`/v1/push/register-token`) and signs every relay request, so the relay only delivers to tokens bound to that server. APNs is the native app's sole notification channel (no local notifications) and is NOT gated on UI visibility — iOS suppresses the foreground banner instead. Mobile push carries only generic text (scenario title + session name) — see `APNS.md`. In enterprise mode (`../enterprise-mode.js`) `fanoutPush` also drops the session name from APNs and sends web push with the scenario title, an empty body and the deep link only, since web push leaves through the browser vendor's push service. Desktop notifications and in-app toasts stay local and keep the full text.
-- `packages/web/server/lib/notifications/emitter-runtime.js`: desktop/stdout + UI SSE notification emission runtime.
-- `packages/web/server/lib/notifications/emit-route.js`: `POST /api/notifications/emit` for OpenCode plugins.
-- `packages/web/server/lib/notifications/runtime.js`: trigger runtime for OpenCode event-driven notification fanout.
-- `packages/web/server/lib/notifications/template-runtime.js`: notification template variables and session text/title enrichment runtime. Zen-model helpers are retained as compatibility stubs only.
-- `packages/web/server/lib/notifications/template-locales.js`: the notification text OpenChamber writes itself, per interface language. An empty template field means "no custom text", so the notification uses these defaults and the settings page shows them as placeholders. `settings-runtime.js` no longer seeds English template text into an install; it clears the seed older builds wrote. The server keeps its own list because it cannot import `packages/ui`; an unknown tag falls back to English.
-- `packages/web/server/lib/notifications/extension-channels.js`: extension notification channels (`provides: ["notifications"]`), see *Extension notification channels* below. `channel-accounts.js` is their account store, `channel-routes.js` the account card's routes.
->>>>>>> bc50ba56a
 - `packages/web/server/lib/notifications/message.js`: helper implementation module.
 - `packages/web/server/lib/notifications/message.test.js`: unit tests for notification message helpers.
 
@@ -56,10 +45,9 @@ delivery path.
   - `GET /api/sessions/snapshot`
   - `GET /api/sessions/status`
   - `GET /api/sessions/:id/status`
-  - `POST /api/sessions/:id/view` and `POST /api/sessions/:id/message-sent`: only reset the native push badge. Whether a session is unread is OpenCode's own `time.viewed`.
+  - `POST /api/sessions/:id/view` and `POST /api/sessions/:id/message-sent`: only reset the native push badge. Whether a session is unread is the Host session projection's own read state.
 
 ### Trigger runtime API (runtime.js)
-<<<<<<< HEAD
 - `createNotificationTriggerRuntime(dependencies)`: creates runtime-owned debounced trigger handling for canonical session events.
 - Returned API: `processCanonicalEvent(event, scope)`, `setAutoAcceptSession`, `setGetIsWindowFocused`, `setGetIsSessionAutoAccepting`, `clearPendingPushBadge`, `sendGoalSettlePush`, `invalidateSession`, `stop`.
 - Owns:
@@ -70,25 +58,6 @@ delivery path.
   - native notification fanout and web push payload fanout
   - push suppression while any fresh UI visibility heartbeat reports a focused client
   - sealed phone text: the fanout forwards `sealed = { title, body }` (localized event text, redacted like the clear body) to APNs for devices with a `pushKey`; enterprise mode drops it, as it drops the clear body
-=======
-
-`notifyPullRequest({ item, event })` delivers user merge-follow events through the same native, UI, web-push, APNs and extension-channel fanout. `notifyOnPullRequests` is a profile setting, default on, independent of completion/error notifications. It is checked on the server before every delivery. Fixed event titles follow the interface locale (`pull-request-locales.js`); the body names the repository and PR number. Enterprise-mode push and extension deliveries strip that reference through the existing fanout boundary. Notifications have kind `pull-request`, no session id, and never wake an agent. Existing click routing accepts sessions only, so these notifications currently bring the app forward without selecting a PR.
-- `createNotificationTriggerRuntime(dependencies)`: creates runtime-owned debounced trigger handling for OpenCode events.
-- Returned API:
-  - `maybeSendPushForTrigger(payload)`
-- Owns:
-  - completion/error/question/permission trigger routing (a page an agent shows that waits for the user's answer, `openchamber:page-waiting` from this server, notifies exactly like a form, with the page title as the ask); permission suppression consults the authoritative permission-auto-accept runtime
-  - an interrupted step marked `aborted` after Stop, steering, or question dismissal emits no external error notification. Terminal execution failures through `session.error` still notify, including exhausted auto-resume attempts with error type `aborted`. In-app `SessionErrorNotice` diagnostics and VS Code's separate notification path are unchanged.
-  - session parent cache for subtask suppression
-  - no ready notification on a `session.idle` while a subagent of that session is still running (a background-subagent pause; OpenCode runs the parent again with the result and its next idle announces). On OpenCode 2.2.6+ the check also reads the job list, which covers nested subagents and background images; background shells do not hold the notification, since a dev server never ends. Running direct child sessions are asked for in any case: OpenChamber's own child sessions (workflow agents) are no OpenCode jobs, an older OpenCode has no job list, and a space reaches only session routes. The check comes from `../opencode/session-activity.js`; when it cannot be made, the idle announces as before
-  - an MCP elicitation form (session id `global`, owned by no session) notifies without a session: no session title lookup, and the deep link opens the app
-  - template resolution and fallback behavior: an empty field in `settings.notificationTemplates` resolves to the default for `settings.locale` (`template-locales.js`), so notification text follows the interface language unless the user wrote their own
-  - native notification fanout and web push payload fanout
-  - push suppression while any fresh UI visibility heartbeat reports a focused client
-  - no ready notification for a turn that is a step of an auto-review (`isInAutoReview`, answered by `../auto-review`'s `speaksFor`); `notifyAutoReviewEnded` sends the review's one notification when it ends, under the completion toggle, with `review*` texts from `template-locales.js` and APNs type `review`
-  - extension notification channels: `deliverToExtensionChannels({ notification, requireHidden })` is called where push is (`sendToChannels`), with the text push gets and the enterprise stripping push applies; see *Extension notification channels* below
-  - chats of isolated spaces: `maybeSendPushForTrigger(payload, { spaceId })` reads such a chat's record (title, parent, goal), its last reply and its running subagents inside the space, through `spaceFetchFor(spaceId)`, a `fetch` over the spaces dispatcher (`../spaces/space-fetch.js`), and never asks the host's OpenCode or the host's permission policy about it, since neither knows the chat. What comes back is the space's text, shown as it is shown in the sidebar. A space that cannot be asked gives the generic text, as a host chat whose reads fail does. The host's auto-accept is not consulted for a space's permission request, so such a request notifies after the debounce unless its reply arrives first.
->>>>>>> bc50ba56a
 
 ### Extension notification channels (extension-channels.js, channel-accounts.js, channel-routes.js)
 
@@ -185,8 +154,7 @@ The relay has no route for it, and sends only ever start from this server's list
   - `summarizeText(text, targetLength, zenModel)` compatibility stub returning local fallback text
   - `extractLastMessageText(payload, maxLength?)`
   - `fetchLastAssistantMessageText(sessionId, messageId, maxLength?, source?)`
-  - `maybeCacheSessionInfoFromEvent(payload, { spaceId }?)`: caches a host session's title; an event of a space (`spaceId` set) is not cached, and a space's chat is never read from these caches, so a session id a space names cannot set a host chat's title.
-  - `buildTemplateVariables(payload, sessionId, source?)`: `source` (`{ buildOpenCodeUrl, getOpenCodeAuthHeaders, fetchImpl, isSpace? }`, the host's OpenCode by default) is where the session's title and messages are read; `runtime.js` passes the space's, with `isSpace: true`, for a chat of an isolated space. `isSpace` alone tells the two apart: a source without it is the host, whichever object it is, so it uses the title and session caches, matches host projects and runs git on the host. A new kind of source that reads anything but the host's OpenCode must set `isSpace`, or its session ids reach those caches and its paths reach the host filesystem. `{project_name}`, `{worktree}` and `{branch}` come from the event's `directory`, else the session record's `location.directory`; turn-end events carry no location, so they read the record. `{project_name}` is the label of the project the sidebar files that directory under: a directory registered as a project is that project, else its repository's primary worktree (`resolvePrimaryWorktreeRoot`) names it, so a session in a worktree shows its project; a directory under `chatRoots` is `Chats`, since a chat's folder name is a generated id; anything else is its folder name. The project open in the UI is used only when neither names one, as for a form owned by no session, and for a space's chat, whose directory is a path inside the space and is never matched against host projects or run git in on the host.
+  - `buildTemplateVariables(event, sessionId, scope)`: reads the canonical snapshot (title, mode) and its history through `sessionService`, resolves project, worktree and branch names from the Host scope and the project settings. `{project_name}`, `{worktree}` and `{branch}` come from the event's `directory`, else the session record's `location.directory`; turn-end events carry no location, so they read the record. `{project_name}` is the label of the project the sidebar files that directory under: a directory registered as a project is that project, else its repository's primary worktree (`resolvePrimaryWorktreeRoot`) names it, so a session in a worktree shows its project; a directory under `chatRoots` is `Chats`, since a chat's folder name is a generated id; anything else is its folder name. The project open in the UI is used only when neither names one, as for a form owned by no session, and for a space's chat, whose directory is a path inside the space and is never matched against host projects or run git in on the host.
   - `getCachedZenModels()`
 
 ## Constants
@@ -216,7 +184,7 @@ The `settings` parameter for `prepareNotificationLastMessage` supports `maxLastM
 
 ### Why interruption suppression is limited to steps
 
-OpenCode uses `aborted` for both interrupted steps and exhausted auto-resume attempts. Only the step event identifies the interruption this filter suppresses; filtering terminal `session.error` events by that type would hide a failure that requires the user's attention.
+A cancelled run is a `run.cancelled` event, and it clears a pending notification instead of announcing a failure: the user stopped the turn, so no external notice follows. Terminal `run.failed` events still notify, because a failure there requires the user's attention.
 
 ### Adding new notification helpers
 1. Add new helper functions to `packages/web/server/lib/notifications/message.js`.

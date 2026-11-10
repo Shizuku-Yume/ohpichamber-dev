@@ -1,17 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
-import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import {
-<<<<<<< HEAD
-=======
   buildActiveSessionTreeFromCache,
   collectParentIdDescendantIds,
   collectSessionMoveDescendants,
->>>>>>> bc50ba56a
   collectSessionSubtreeIds,
   runSessionSubtreeAction,
   undoArchive,
@@ -19,15 +15,39 @@ import {
 } from './sessionSubtreeActions';
 import type { SessionNode } from '../types';
 
-const session = (sessionId: string): Session => ({
-  sessionId, rootSessionId: sessionId,
-  projectId: 'project', workspaceId: 'workspace', displayPath: '.',
-  createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-  metadata: null, metadataRevision: '0', archiveRevision: '0',
+const session = (id: string): Session => ({
+  id,
+  projectID: 'project',
+  title: id,
+  cost: 0,
+  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  directory: '/workspace',
+  time: { created: 1, updated: 1 },
 });
 
 const t = (key: I18nKey) => key;
+
+const linked = (id: string, parentID: string | null, archived?: number): Session => {
+  // SAFETY: the subtree walks read only id, parentID, and time.archived.
+  return { ...session(id), parentID, time: { created: 1, updated: 1, ...(archived ? { archived } : {}) } } as Session;
+};
+
+const resetGlobalSessions = () => {
+  useGlobalSessionsStore.setState({
+    activeSessions: [],
+    archivedSessions: [],
+    sessionsByDirectory: new Map(),
+    entityById: new Map(),
+    structure: {
+      activeSessionIds: [],
+      activeRootIds: [],
+      activeChildrenByParentId: new Map(),
+      activeIdsByDirectory: new Map(),
+    },
+    hasLoaded: false,
+    status: 'idle',
+  });
+};
 
 type Call = { method: keyof SessionSubtreeStore; ids: string[] };
 
@@ -123,27 +143,7 @@ describe('runSessionSubtreeAction', () => {
 });
 
 describe('collectSessionSubtreeIds', () => {
-  const linked = (id: string, parentSessionId: string | null, archivedAt?: number): Session => ({
-    ...session(id), parentSessionId: parentSessionId ?? undefined,
-    rootSessionId: parentSessionId ? 'root' : id, archivedAt,
-  });
-
-  beforeEach(() => {
-    useGlobalSessionsStore.setState({
-      activeSessions: [],
-      archivedSessions: [],
-      sessionsByDirectory: new Map(),
-      entityById: new Map(),
-      structure: {
-        activeSessionIds: [],
-        activeRootIds: [],
-        activeChildrenByParentId: new Map(),
-        activeIdsByDirectory: new Map(),
-      },
-      hasLoaded: false,
-      status: 'idle',
-    });
-  });
+  beforeEach(resetGlobalSessions);
 
   test('reaches an active session below an archived intermediate and skips the intermediate for archive', () => {
     useGlobalSessionsStore.getState().upsertSessions([
@@ -172,8 +172,6 @@ describe('collectSessionSubtreeIds', () => {
   });
 });
 
-<<<<<<< HEAD
-=======
 describe('collectParentIdDescendantIds', () => {
   beforeEach(resetGlobalSessions);
 
@@ -198,9 +196,9 @@ describe('collectParentIdDescendantIds', () => {
       tree.session, ...tree.children.map((child) => child.session), linked('grandchild', 'subagent'),
     ]);
 
-    expect(collectSessionSubtreeIds(tree.session.id, collectParentIdDescendantIds(tree), false))
+    expect(collectSessionSubtreeIds(tree.session.sessionId, collectParentIdDescendantIds(tree), false))
       .toEqual(['subagent', 'grandchild', 'review']);
-    expect(collectSessionSubtreeIds(tree.session.id, [], true))
+    expect(collectSessionSubtreeIds(tree.session.sessionId, [], true))
       .toEqual(['subagent', 'grandchild', 'review']);
   });
 });
@@ -218,9 +216,9 @@ describe('buildActiveSessionTreeFromCache', () => {
     ]);
 
     const tree = buildActiveSessionTreeFromCache(linked('root', null));
-    expect(tree.session.id).toBe('root');
-    expect(tree.children.map((child) => child.session.id)).toEqual(['child']);
-    expect(tree.children[0].children.map((child) => child.session.id)).toEqual(['grandchild']);
+    expect(tree.session.sessionId).toBe('root');
+    expect(tree.children.map((child) => child.session.sessionId)).toEqual(['child']);
+    expect(tree.children[0].children.map((child) => child.session.sessionId)).toEqual(['grandchild']);
     expect(tree.children[0].children[0].children).toEqual([]);
   });
 });
@@ -296,7 +294,6 @@ describe('the same root from the project tree and from a flat row', () => {
   });
 });
 
->>>>>>> bc50ba56a
 describe('undoArchive', () => {
   const original = useSessionUIStore.getState();
   const restored: string[][] = [];
@@ -305,7 +302,6 @@ describe('undoArchive', () => {
   beforeEach(() => {
     restored.length = 0;
     opened.length = 0;
-    registerWorkspaceDirectory('workspace', '/workspace');
     useGlobalSessionsStore.getState().upsertSessions([session('root')]);
     useSessionUIStore.setState({
       currentSessionId: null,
@@ -320,7 +316,6 @@ describe('undoArchive', () => {
   });
 
   afterEach(() => {
-    resetWorkspaceDirectories();
     useSessionUIStore.setState({
       currentSessionId: original.currentSessionId,
       unarchiveSessions: original.unarchiveSessions,

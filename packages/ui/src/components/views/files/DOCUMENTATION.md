@@ -187,8 +187,8 @@ has no file events (`filesystem.changed` covers the repository HEAD only), so
 carries, fed from `sync-context` and the revert actions:
 
 - a finished `write` or `patch` names its files, so only their parent folders
-  change (`toolListingChanges` in `lib/opencode/tools.ts`; `edit` never
-  creates a file and counts as no change);
+  change (`fileTreeChanges.toolTransition` in `lib/fileTreeChanges.ts`; `edit`
+  never creates a file and counts as no change);
 - a finished `shell`, `execute`, MCP or plugin call could touch anything, so
   its session waits for the step's end: the step's snapshot `files` decide.
   An empty list costs nothing (read-only commands); a non-empty or missing
@@ -346,8 +346,6 @@ server does not allow to the Android app. There is no pinch zoom, and PDFs that
 need pdf.js's CMap, standard font or wasm data (CJK text without embedded
 fonts, JPEG 2000 images) may lose that text or image.
 
-<<<<<<< HEAD
-=======
 ### Why table, data and office previews load on first use
 
 `TableArtifact`, `DataFileArtifact` and `OfficeArtifact` are `React.lazy` in
@@ -367,7 +365,6 @@ fresh `React.lazy` when the import fails made React retry at once and spin in
 the loading state while the file was missing. The VS Code webview inlines
 dynamic imports, so there nothing changes.
 
->>>>>>> bc50ba56a
 ### Office documents
 
 `OfficeArtifact` reads the file's bytes through `runtimeFetch`, so it works on

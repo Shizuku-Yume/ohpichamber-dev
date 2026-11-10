@@ -74,33 +74,7 @@ const withDirectoryQuery = (query: URLSearchParams, directory: string | undefine
   return query;
 };
 
-<<<<<<< HEAD
 export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAPI => ({
-=======
-const contentSearchResponseSchema = z.object({
-  matches: z.array(z.object({
-    path: z.string(),
-    relativePath: z.string(),
-    line: z.number().int().positive(),
-    column: z.number().int().positive(),
-    text: z.string(),
-    ranges: z.array(z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()])),
-    cutStart: z.boolean(),
-  })),
-  stopped: z.enum(['limit', 'deadline']).nullable(),
-});
-
-const contentSearchErrorSchema = z.object({
-  error: z.string().optional(),
-  reason: z.string().optional(),
-});
-
-const fileSearchResponseSchema = z.object({
-  files: z.array(z.object({ path: z.string(), relativePath: z.string() })),
-});
-
-export const createWebFilesAPI = ({ getDirectory, searchFiles = defaultSearchFiles }: WebFilesAPIOptions): FilesAPI => ({
->>>>>>> bc50ba56a
   async listDirectory(path: string, options): Promise<DirectoryListResult> {
     const target = normalizePath(path);
     const params = new URLSearchParams();
@@ -134,52 +108,9 @@ export const createWebFilesAPI = ({ getDirectory, searchFiles = defaultSearchFil
   },
 
   async search(payload: FileSearchQuery): Promise<FileSearchResult[]> {
-<<<<<<< HEAD
     const hits = await hostFilesystem.searchFiles(payload.query, {
       directory: normalizePath(payload.directory),
       limit: payload.maxResults,
-=======
-    const directory = normalizePath(payload.directory);
-    const includeHidden = Boolean(payload.includeHidden);
-    const respectGitignore = payload.respectGitignore !== false;
-
-    if (includeHidden || !respectGitignore) {
-      const params = new URLSearchParams();
-      params.set('query', payload.query);
-      if (directory) params.set('directory', directory);
-      if (typeof payload.maxResults === 'number' && Number.isFinite(payload.maxResults)) {
-        params.set('limit', String(payload.maxResults));
-      }
-      if (includeHidden) params.set('includeHidden', 'true');
-      if (!respectGitignore) params.set('respectGitignore', 'false');
-
-      const response = await runtimeFetch('/api/fs/search', {
-        query: params,
-        signal: payload.signal,
-        headers: directoryHeaders(getDirectory, directory),
-      });
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: response.statusText })) as { error?: string };
-        throw new Error(error.error || 'Failed to search files');
-      }
-      const result = fileSearchResponseSchema.safeParse(await response.json().catch(() => null));
-      if (!result.success) {
-        throw new FilesystemError('File search returned an invalid response', { reason: 'invalid-response' });
-      }
-      return result.data.files.map((file) => ({
-        path: normalizePath(file.path),
-        preview: [normalizePath(file.relativePath)],
-      }));
-    }
-
-    // file.find answers file search on OpenCode 2.x; /api/find/file has no
-    // route there and falls through the generic proxy to a 404.
-    const hits = await searchFiles(payload.query, {
-      directory,
-      limit: typeof payload.maxResults === 'number' && Number.isFinite(payload.maxResults)
-        ? payload.maxResults
-        : undefined,
->>>>>>> bc50ba56a
       type: 'file',
       includeHidden: payload.includeHidden,
       respectGitignore: payload.respectGitignore,

@@ -168,11 +168,7 @@ export function createGiteaFamilyProvider({
   const identityFor = (origin, accountId) => ({ provider: descriptor.id, instance: origin, accountId });
   const accounts = createPatAccountAuth({
     descriptor, store, events, verify, probe, classifyFailure: classifyGiteaFailure, ownerElsewhere,
-<<<<<<< HEAD
-    normalizeSshUrl: (value) => normalizeSshUrl(value, { label }), parseSshUrl,
-=======
     normalizeSshUrl: (value) => normalizeSshUrl(value, { label }), parseSshUrl, cli,
->>>>>>> bc50ba56a
   });
 
   // One resource service per session, so a request's reads, mutation target

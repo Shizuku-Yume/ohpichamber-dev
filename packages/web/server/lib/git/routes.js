@@ -17,10 +17,6 @@ const toGitRemoteSummary = (remote) => ({
   pushUrl: redactRemoteUrl(remote?.pushUrl),
 });
 
-const toLocationKey = (directory) => String(directory || "").replace(/\\/g, "/").replace(/\/+$/, "");
-
-<<<<<<< HEAD
-=======
 /**
  * Builds the best-effort disposal hook handed to `removeWorktree`, also run
  * when a repair completes a failed checkout so OpenCode opens the repaired
@@ -37,8 +33,8 @@ const toLocationKey = (directory) => String(directory || "").replace(/\\/g, "/")
  * list error is rethrown for the removal wrapper to log.
  */
 const toLocationKey = (directory) => String(directory || '').replace(/\\/g, '/').replace(/\/+$/, '');
+const WORKTREE_INSTANCE_DISPOSE_TIMEOUT_MS = 5000;
 
->>>>>>> bc50ba56a
 export const createWorktreeInstanceDisposer = ({ buildOpenCodeUrl, getOpenCodeAuthHeaders }) => {
   return async (worktreeDirectory) => {
     if (!buildOpenCodeUrl || !getOpenCodeAuthHeaders) return;
@@ -80,16 +76,9 @@ export const createWorktreeInstanceDisposer = ({ buildOpenCodeUrl, getOpenCodeAu
 // Actions the user starts here may run a project's environment command, so
 // hooks find the project's tools; reads the UI repeats on its own may not
 // (lib/environment/refresh-scope.js).
-<<<<<<< HEAD
-const GIT_DIFFS_MAX_PATHS = 1000;
-const WORKTREE_INSTANCE_DISPOSE_TIMEOUT_MS = 5000;
-const worktreeTitleBodySchema = z.object({ title: z.string(), by: z.enum(['user', 'agent']).default('user') });
-const worktreePinBodySchema = z.object({ pinned: z.boolean(), list: z.string().nullable().optional() });
-=======
 const worktreeTitleBodySchema = z.object({ title: z.string(), by: z.enum(['user', 'agent']).default('user') });
 const worktreePinBodySchema = z.object({ pinned: z.boolean(), list: z.string().nullable().optional() });
 
->>>>>>> bc50ba56a
 const userAction = (handler) => (req, res, next) => runAsUserAction(() => handler(req, res, next));
 
 export function registerGitRoutes(app, {
@@ -113,6 +102,8 @@ export function registerGitRoutes(app, {
 
   // A path from an earlier status listing that no longer resolves is a stale
   // row or a nested repository, not a server fault.
+  // The client splits a larger changeset into requests of this size.
+  const GIT_DIFFS_MAX_PATHS = 1000;
   const GIT_PATH_ERROR_STATUS = new Map([['path_not_found', 404], ['nested_repository', 422], ['untracked_directory', 422]]);
   const sendGitPathError = (res, error) => {
     const status = GIT_PATH_ERROR_STATUS.get(error?.code);
@@ -148,6 +139,7 @@ export function registerGitRoutes(app, {
   const unreadableRepositoryBody = (error) => ({ error: error.message, code: error.code });
   // Every repository check a client acts on reports a Git that could not answer.
   const probeOptions = { failOnGitError: true };
+  const canDisposeWorktreeInstance = Boolean(buildOpenCodeUrl && getOpenCodeAuthHeaders);
 
   const nonRepoStatusPayload = () => ({
     isGitRepository: false,
@@ -180,6 +172,7 @@ export function registerGitRoutes(app, {
     ? async (worktreeDirectory) => (await contributorProvenance.read(worktreeDirectory)).provenance?.kind === 'contributor-fork'
     : undefined;
   const worktreeTeardownCodeOf = (error) => (error?.code === 'WORKTREE_TEARDOWN_FAILED' ? error.code : undefined);
+
 
   const sendNetworkOperationError = (req, res, error) => {
     const code = isString(error?.code) ? error.code : 'UNKNOWN';
@@ -594,7 +587,7 @@ export function registerGitRoutes(app, {
     const projects = new Array(directories.length);
     let nextIndex = 0;
     const worker = async () => {
-      for (;;) {
+      for (; ;) {
         const index = nextIndex;
         nextIndex += 1;
         if (index >= directories.length) return;
@@ -625,15 +618,8 @@ export function registerGitRoutes(app, {
     };
     return readProjectBatch(req, res, async (directory) => {
       try {
-<<<<<<< HEAD
-        const isRepo = await isGitRepository(directory);
-        if (!isRepo) return nonRepoEntry(directory);
-=======
         const isRepo = await isGitRepository(directory, probeOptions);
-        if (!isRepo) {
-          return nonRepoEntry(directory);
-        }
->>>>>>> bc50ba56a
+        if (!isRepo) return nonRepoEntry(directory);
 
         const entry = { directory, isGitRepository: true };
         const failures = [];
@@ -667,10 +653,6 @@ export function registerGitRoutes(app, {
         if (failures.length > 0) entry.errors = failures;
         return entry;
       } catch (error) {
-<<<<<<< HEAD
-        if (isNonRepoGitError(error)) return nonRepoEntry(directory);
-        console.error('Failed to read git project overview:', error);
-=======
         if (isUnreadableRepositoryError(error)) {
           return { directory, ...unreadableRepositoryBody(error) };
         }
@@ -678,7 +660,6 @@ export function registerGitRoutes(app, {
           return nonRepoEntry(directory);
         }
         console.error('Failed to read git project overview:', directory, error);
->>>>>>> bc50ba56a
         return { directory, error: 'Failed to read project repository' };
       }
     });
@@ -1939,14 +1920,10 @@ export function registerGitRoutes(app, {
         deleteLocalBranch: req.body?.deleteLocalBranch === true,
         teardownCommand: z.string().safeParse(req.body?.teardownCommand).data,
         isContributorCheckout,
-<<<<<<< HEAD
-        disposeInstance: (buildOpenCodeUrl && getOpenCodeAuthHeaders) ? createWorktreeInstanceDisposer({ buildOpenCodeUrl, getOpenCodeAuthHeaders }) : undefined,      }, {
-=======
         disposeInstance: canDisposeWorktreeInstance
           ? createWorktreeInstanceDisposer({ buildOpenCodeUrl, getOpenCodeAuthHeaders })
           : undefined,
       }, {
->>>>>>> bc50ba56a
         bootstrapStore: worktreeBootstrapStore,
       });
       res.json({ success: Boolean(result) });
@@ -2023,9 +2000,15 @@ export function registerGitRoutes(app, {
         const binding = owner?.binding;
         const status = !binding ? 'unbound' : binding.archiveRef !== archive.ref || binding.snapshotCommit !== archive.commit
           ? 'ref-changed' : binding.sessions.length ? 'bound' : 'verified-empty';
-        return { ...archive, sessionIds: [], sessionBinding: { status, ...(binding ? { phase: binding.phase, revision: binding.revision,
-          ...(binding.phase === 'restoring' && binding.targetWorkspaceId && binding.applyAttempted && !binding.sessions.some((item) => ['move_intent', 'restored'].includes(item.progress))
-            ? { recoveryHead: binding.preapplyHead } : {}) } : {}) } };
+        return {
+          ...archive, sessionIds: [], sessionBinding: {
+            status, ...(binding ? {
+              phase: binding.phase, revision: binding.revision,
+              ...(binding.phase === 'restoring' && binding.targetWorkspaceId && binding.applyAttempted && !binding.sessions.some((item) => ['move_intent', 'restored'].includes(item.progress))
+                ? { recoveryHead: binding.preapplyHead } : {})
+            } : {})
+          }
+        };
       }));
       res.json({ archives: joined });
     } catch (error) {
@@ -2046,8 +2029,9 @@ export function registerGitRoutes(app, {
     }
     const { archiveWorktree } = await getGitLibraries();
     try {
-      const canDispose = Boolean(buildOpenCodeUrl && getOpenCodeAuthHeaders);
-      const disposeInstance = canDispose ? createWorktreeInstanceDisposer({ buildOpenCodeUrl, getOpenCodeAuthHeaders }) : undefined;
+      const disposeInstance = canDisposeWorktreeInstance
+        ? createWorktreeInstanceDisposer({ buildOpenCodeUrl, getOpenCodeAuthHeaders })
+        : undefined;
       res.json(await archiveWorktree(directory, {
         directory: worktreeDirectory,
         id: req.body?.id,

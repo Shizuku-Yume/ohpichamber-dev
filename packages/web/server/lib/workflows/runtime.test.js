@@ -53,9 +53,6 @@ const fakeAgentSessions = ({ answer = (prompt) => `done: ${prompt}`, hang = [], 
       try {
         await duringTurn(sessionId, text);
         if (hang.some((prompt) => text.startsWith(prompt))) {
-          // Like the real session: a run stopped while the session was being
-          // made ends the agent before its turn, since no abort event follows.
-          if (signal.aborted) throw new WorkflowAgentStopped();
           await new Promise((_, reject) => signal.addEventListener('abort', () => reject(new WorkflowAgentStopped()), { once: true }));
         }
         await new Promise((resolve) => setTimeout(resolve, 5));
@@ -696,7 +693,6 @@ describe('workflow runtime', () => {
     const held = new Promise((resolve) => { release = resolve; });
     let reportSent = false;
     const { runtime, act, store } = await setup(agents, { postSynthetic: () => { reportSent = true; return held; } });
-<<<<<<< HEAD
     const { runId } = await act('workflow.run', { script: script("return agent('x')") });
     await runtime.approve({ runId });
     // The run reads as completed while it is still settling; the report goes out after.
@@ -716,48 +712,6 @@ describe('workflow runtime', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     await store.flush();
     expect(await store.get(runId)).toBeNull();
-  });
-
-  it('deletes a run in the moment its end is saved but its execution is still winding down', async () => {
-    // The end state becomes observable before the execution leaves the
-    // runtime's active set: that happens only once the end save resolves.
-    // A delete in that overlap used to be refused as if the run were still
-    // going. The gated save holds the run in exactly that moment.
-    const agents = fakeAgentSessions();
-    const { runtime, act, store } = await setup(agents);
-    const originalSave = store.save;
-    let releaseSave = () => {};
-    const gate = new Promise((resolve) => { releaseSave = resolve; });
-    store.save = (run) => {
-      const saved = originalSave(run);
-      return run.state === 'completed' ? gate.then(() => saved) : saved;
-    };
-=======
->>>>>>> bc50ba56a
-    const { runId } = await act('workflow.run', { script: script("return agent('x')") });
-    await runtime.approve({ runId });
-    // The run reads as completed while it is still settling; the report goes out after.
-    await waitFor(() => reportSent);
-
-    await runtime.remove({ runId });
-    releaseSave();
-    await store.flush();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(await store.get(runId)).toBeNull();
-    // The report never went out and must not wake the session afterwards.
-    expect(agents.reports.some((report) => report.body.metadata.runId === runId)).toBe(false);
-  });
-
-  it('refuses to delete a run that is still working', async () => {
-    const agents = fakeAgentSessions({ hang: ['slow'] });
-    const { runtime, act, finished } = await setup(agents);
-    const { runId } = await act('workflow.run', { script: script("return agent('slow 1')") });
-    await runtime.approve({ runId });
-    await waitFor(async () => (await act('workflow.status', { runId })).agents.some((agent) => agent.state === 'running' && agent.sessionId));
-
-    await expect(runtime.remove({ runId })).rejects.toThrow('Stop or decline the run before deleting it');
-    await runtime.stop({ runId });
-    await finished(runId);
   });
 
   it('deletes a run in the moment its end is saved but its execution is still winding down', async () => {
@@ -982,7 +936,6 @@ describe('workflow runtime', () => {
   });
 
   it('leaves a run alone when the server running it is still alive', async () => {
-<<<<<<< HEAD
     const agents = fakeAgentSessions({ hang: ['slow'] });
     const first = await setup(agents);
     const { runId } = await first.act('workflow.run', { script: script("return agent('slow')") });
@@ -1003,36 +956,11 @@ describe('workflow runtime', () => {
   });
 
   it('marks a run that was going when the server stopped, and reports it once OpenCode answers', async () => {
-=======
->>>>>>> bc50ba56a
     const agents = fakeAgentSessions({ hang: ['slow'] });
     const first = await setup(agents);
     const { runId } = await first.act('workflow.run', { script: script("return agent('slow')") });
     await first.runtime.approve({ runId });
     await waitFor(async () => (await first.act('workflow.status', { runId })).agents.length === 1);
-    await first.store.flush();
-
-    // A second OpenChamber over the same data directory, while the first still runs it.
-    const store = createWorkflowRunStore({ fsPromises: fs, path, dataDir: first.dataDir });
-    expect((await store.get(runId)).ownerStartedAt).toEqual(expect.stringMatching(/^(linux|darwin|win32):.+/));
-    const second = createWorkflowRuntime({ store, agentSessions: agents, postSynthetic: async () => {}, fsPromises: fs, path, sleep: async () => {}, pid: process.pid + 1 });
-    await second.start();
-    expect(await second.executeAction('workflow.status', { runId }, { sessionId: 'ses_parent', directory: first.dataDir })).toMatchObject({ state: 'running' });
-
-    first.runtime.shutdown();
-    await waitFor(async () => (await first.act('workflow.status', { runId })).state !== 'running');
-    await first.store.flush();
-  });
-
-  it('marks a run that was going when the server stopped, and reports it once OpenCode answers', async () => {
-    const inTurn = deferred();
-    const agents = fakeAgentSessions({ hang: ['slow'], duringTurn: async () => inTurn.resolve() });
-    const first = await setup(agents);
-    const { runId } = await first.act('workflow.run', { script: script("return agent('slow')") });
-    await first.runtime.approve({ runId });
-    // Its saves end once the agent is in its turn. Both stores live in one
-    // process and share a temp file name, so a later save would collide.
-    await inTurn.promise;
     await first.store.flush();
 
     // A second runtime over the same directory: the first one's worker is gone.

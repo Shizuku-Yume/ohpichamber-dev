@@ -84,14 +84,6 @@ const StopHeader = ({ stopView }: { stopView: WalkthroughStopView }) => {
  * hunks — the path is the main orientation cue in a long stream, and as a plain
  * caption it was easy to scroll straight past.
  */
-<<<<<<< HEAD
-const FileHeader = ({ path }: { path: string }) => (
-  <div className="sticky top-0 z-10 flex items-center gap-1.5 border-b border-[var(--interactive-border)]/35 bg-[var(--surface-elevated)]/90 px-4 py-1.5 backdrop-blur-md supports-[backdrop-filter]:bg-[var(--surface-elevated)]/80">
-    <FileTypeIcon filePath={path} className="size-3.5 shrink-0" />
-    <span className="typography-meta truncate font-mono text-foreground">{path}</span>
-  </div>
-);
-=======
 const FileHeader = ({ path, commentOrigin }: { path: string; commentOrigin?: DiffCommentOrigin }) => {
   const wholeFileComment = useWholeFileComment({ fileLabel: path, origin: commentOrigin });
   return (
@@ -111,7 +103,6 @@ const FileHeader = ({ path, commentOrigin }: { path: string; commentOrigin?: Dif
     </>
   );
 };
->>>>>>> bc50ba56a
 
 const HunkRuns = ({
   hunks,

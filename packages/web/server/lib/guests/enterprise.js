@@ -14,10 +14,10 @@ import { readEnterprisePolicy } from '../enterprise-mode.js';
  * - `sessionAnswers`: that process allowing what the agent asks to do;
  * - `instructions` and `skills`: text every agent reads, which can steer what
  *   it sends where;
- * - `opencodePlugin`: code that runs inside OpenCode itself, with every
- *   provider call and tool result in reach.
- * - `opencode`: that process reading sessions, messages and live events from
- *   OpenCode.
+ * - `opencodePlugin` (retired): a package still declaring the folder is gated
+ *   like code that runs inside the agent runtime.
+ * - `opencode` (retired): a service still declaring the role is gated like one
+ *   reading sessions, messages and live events.
  * Such a package installs and runs only from a Git repository listed in the
  * policy (`allowedExtensions`; an entry ending in `/` allows every
  * repository under it, such as a whole organization), or from a local folder
@@ -70,7 +70,14 @@ const isAllowedRepository = (gitUrl, allowed) => {
  */
 export const enterpriseBlockedCapabilities = (guest, { source, gitUrl } = {}, policy = readEnterprisePolicy()) => {
   if (!policy.enterpriseMode) return [];
-  const gated = requestedGuestCapabilities(guest).filter((capability) => ENTERPRISE_GATED_CAPABILITIES.includes(capability));
+  // The plugin and OpenCode-reader roles left the SDK capability list with the
+  // engine cutover, but a package that still declares them is gated the same.
+  const legacy = [
+    ...(guest?.opencodePlugin ? ['opencodePlugin'] : []),
+    ...(guest?.service?.provides?.includes('opencode') ? ['opencode'] : []),
+  ];
+  const gated = [...requestedGuestCapabilities(guest), ...legacy]
+    .filter((capability) => ENTERPRISE_GATED_CAPABILITIES.includes(capability));
   if (gated.length === 0) return [];
   if (source === 'git' && isAllowedRepository(gitUrl, policy.allowedExtensions)) return [];
   if (source === 'path' && policy.allowLocalExtensions) return [];

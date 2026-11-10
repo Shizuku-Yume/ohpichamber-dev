@@ -105,62 +105,6 @@ export const createGitCheckIgnoreTimeoutMs = () => {
 
 export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinaryForSpawn, workspaceSearch = false }) => {
   const gitCheckIgnoreTimeoutMs = createGitCheckIgnoreTimeoutMs();
-  const readDirectory = (directory) => workspaceSearch
-    ? fsPromises.readdir(directory, { withFileTypes: true })
-    : listDirectoryEntries(directory, fsPromises);
-
-  const readIgnoredPaths = async (directory, names, signal) => {
-    if ((!workspaceSearch && names.length === 0) || signal?.aborted) return new Set();
-    try {
-      const result = await new Promise((resolve) => {
-        const args = workspaceSearch
-          ? ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z']
-          : ['check-ignore', '--stdin', '-z'];
-        const child = spawn(resolveGitBinaryForSpawn(), args, {
-          cwd: directory,
-          windowsHide: true,
-          // Diagnostics are unused here. An unread pipe can block Git forever.
-          stdio: [workspaceSearch ? 'ignore' : 'pipe', 'pipe', 'ignore'],
-        });
-
-        let stdout = '';
-        let settled = false;
-        let timeout = null;
-        const finish = (value) => {
-          if (settled) return;
-          settled = true;
-          if (timeout) clearTimeout(timeout);
-          signal?.removeEventListener('abort', stop);
-          resolve(value);
-        };
-        const stop = () => {
-          try {
-            child.kill('SIGKILL');
-          } catch {
-          }
-          finish('');
-        };
-
-        if (gitCheckIgnoreTimeoutMs > 0) {
-          timeout = setTimeout(stop, gitCheckIgnoreTimeoutMs);
-        }
-        signal?.addEventListener('abort', stop, { once: true });
-
-        child.stdout.setEncoding?.('utf8');
-        child.stdout.on('data', (data) => { stdout += data.toString(); });
-        child.on('close', () => finish(stdout));
-        child.on('error', () => finish(''));
-        if (!workspaceSearch) {
-          child.stdin.on('error', () => {});
-          child.stdin.end(`${names.join('\0')}\0`);
-        }
-      });
-      return new Set(String(result).split('\0').filter(Boolean));
-    } catch {
-      return new Set();
-    }
-  };
-
   const readIgnoredPaths = async (directory, names, signal) => {
     if ((!workspaceSearch && names.length === 0) || signal?.aborted) return new Set();
     try {
@@ -214,11 +158,7 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
   };
 
   const searchFilesystemFiles = async (rootPath, options) => {
-<<<<<<< HEAD
     const { limit, query, includeHidden, respectGitignore, type = 'file', signal, strict = false } = options;
-=======
-    const { limit, query, includeHidden, respectGitignore, signal } = options;
->>>>>>> bc50ba56a
     const includeHiddenEntries = Boolean(includeHidden);
     const normalizedQuery = query.trim().toLowerCase();
     const matchAll = normalizedQuery.length === 0;
@@ -246,16 +186,12 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
       const batch = queue.splice(0, FILE_SEARCH_MAX_CONCURRENCY);
 
       const dirResults = await Promise.all(batch.map(async ({ dir, gitRoot }) => {
-<<<<<<< HEAD
         // The walk's root is the search the caller asked for, not one entry
         // among many: a workspace search that cannot read it must fail
         // rather than answer as if the tree were empty.
         const dirents = dir === rootPath && workspaceSearch
           ? await fsPromises.readdir(dir, { withFileTypes: true })
           : await listDirectoryEntries(dir, fsPromises, strict && dir === rootPath);
-=======
-        const dirents = await readDirectory(dir);
->>>>>>> bc50ba56a
         // A nested checkout has its own index and ignore rules.
         if (!workspaceSearch || dirents.some((entry) => entry.name === '.git')) gitRoot = dir;
         if (workspaceSearch && shouldRespectGitignore && !ignoredByRoot.has(gitRoot)) {

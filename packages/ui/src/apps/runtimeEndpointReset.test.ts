@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { installRuntimeEndpointReset } from './runtimeEndpointReset';
 import { getRuntimeKey, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { useUIStore } from '@/stores/useUIStore';
 
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 const originalFetch = globalThis.fetch;
@@ -43,21 +42,10 @@ describe('installRuntimeEndpointReset', () => {
     const uninstall = installRuntimeEndpointReset();
     try {
       useConfigStore.setState({ isInitialized: true, isConnected: true });
-<<<<<<< HEAD
       switchRuntimeEndpoint({ apiBaseUrl: 'https://remote.example', runtimeKey: 'remote' });
 
       expect(getRuntimeKey()).toBe('remote');
       expect(useConfigStore.getState()).toMatchObject({ isInitialized: false, isConnected: false, connectionPhase: 'connecting' });
-=======
-      useUIStore.setState({ customProviderLogos: { acme: { mime: 'image/png', updatedAt: 1 } } });
-      switchRuntimeEndpoint({ apiBaseUrl: 'http://127.0.0.1:4100', runtimeKey: 'local' });
-
-      expect(opencodeClient.getBaseUrl().startsWith('http://127.0.0.1:4100')).toBe(true);
-      expect(useConfigStore.getState().isInitialized).toBe(false);
-      expect(useConfigStore.getState().isConnected).toBe(false);
-      // Uploaded logos live on the previous server; one that never stored any omits the key.
-      expect(useUIStore.getState().customProviderLogos).toEqual({});
->>>>>>> bc50ba56a
     } finally {
       uninstall();
     }

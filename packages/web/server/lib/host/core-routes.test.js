@@ -257,7 +257,7 @@ describe('core-routes', () => {
     expect(Object.keys(response.body)).toEqual(['present']);
   });
 
-  it('lets only GET html-preview file reads past API auth; the grant in the path is checked by the fs route', async () => {
+  it('lets only GET html-preview and extension-frame file reads past API auth; the owning route checks the grant', async () => {
     const app = express();
     const requireAuth = vi.fn((_req, res) => res.status(401).json({ error: 'Unauthorized' }));
     registerAuthAndAccessRoutes(app, {
@@ -288,12 +288,27 @@ describe('core-routes', () => {
     app.get(/^\/api\/fs\/preview\/.+$/, (_req, res) => res.json({ reached: true }));
     app.post('/api/fs/preview', (_req, res) => res.json({ reached: true }));
     app.get('/api/fs/read', (_req, res) => res.json({ reached: true }));
+    app.get(/^\/api\/guest-files\/.+$/, (_req, res) => res.json({ reached: true }));
+    app.post(/^\/api\/guest-files\/.+$/, (_req, res) => res.json({ reached: true }));
+    app.get('/api/guests/panel/oauth/callback', (_req, res) => res.json({ reached: true }));
+    app.post('/api/guests/panel/frame-grant', (_req, res) => res.json({ reached: true }));
 
     await request(app).get('/api/fs/preview/grant-1/repo/index.html').expect(200, { reached: true });
     await request(app).post('/api/fs/preview').send({ path: '/repo/index.html' }).expect(401);
     await request(app).get('/api/fs/preview/grant-1').expect(401);
     await request(app).get('/api/fs/read?path=/repo/index.html').expect(401);
-    expect(requireAuth).toHaveBeenCalledTimes(3);
+    // An extension frame reads its package by the grant in its path, and nothing more.
+    await request(app).get('/api/guest-files/grant-1/index.html').expect(200, { reached: true });
+    await request(app).get('/api/guest-files/grant-1').expect(401);
+    await request(app).post('/api/guest-files/grant-1/index.html').expect(401);
+    await request(app).post('/api/guests/panel/frame-grant').expect(401);
+    // A guest provider's sign-in callback arrives without a UI session, and only
+    // the exact GET shape is let through.
+    await request(app).get('/api/guests/panel/oauth/callback?code=1&state=2').expect(200, { reached: true });
+    await request(app).get('/api/guests/Panel/oauth/callback?code=1&state=2').expect(401);
+    await request(app).get('/api/guests/panel/oauth/callback/extra').expect(401);
+    await request(app).post('/api/guests/panel/oauth/callback').expect(401);
+    expect(requireAuth).toHaveBeenCalledTimes(9);
   });
 
   it('should probe loopback preview URLs and return ok: true for status codes 200-599', async () => {

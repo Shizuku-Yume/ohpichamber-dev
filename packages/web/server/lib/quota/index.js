@@ -7,14 +7,8 @@
 
 /** @public */
 export {
-  attachExtensionQuotaProvider,
-  detachExtensionQuotaProvider,
   listConfiguredQuotaProviders,
-<<<<<<< HEAD
   buildUnconfiguredQuotaResult,
-=======
-  listUsagePageProviders,
->>>>>>> bc50ba56a
   fetchQuotaForProvider,
   fetchClaudeQuota,
   fetchOpenaiQuota,
@@ -33,6 +27,5 @@ export {
   fetchMinimaxCnCodingPlanQuota,
   fetchOllamaCloudQuota,
   fetchZhipuaiQuota,
-  fetchWaferQuota,
-  fetchOpenCodeQuota
+  fetchWaferQuota
 } from './providers/index.js';

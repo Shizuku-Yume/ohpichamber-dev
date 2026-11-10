@@ -11,14 +11,9 @@ const MAX_DAILY_BARS = 92;
 
 /**
  * Start of the range in epoch ms: local midnight, so "7 days" means today plus
-<<<<<<< HEAD
- * the six calendar days before it, matching the worker's day buckets
- * in the viewer's time zone. `all` begins at the oldest recorded event.
-=======
  * the six calendar days before it and "today" starts at this midnight,
  * matching the day buckets OpenCode builds in the viewer's time zone. `all`
  * has no start; OpenCode begins at the oldest message.
->>>>>>> bc50ba56a
  */
 export function rangeStart(range: UsageRange, now: Date): number | undefined {
   if (range === 'all') return undefined;

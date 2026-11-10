@@ -10,32 +10,11 @@ import {
   MetadataWriteError,
 } from './session-metadata-store.js';
 
-<<<<<<< HEAD
 const roots = [];
 const makeDataDir = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-host-metadata-')); roots.push(dir); return dir; };
 afterEach(() => { while (roots.length > 0) fs.rmSync(roots.pop(), { recursive: true, force: true }); });
 
 const writeJson = (dir, name, value) => fs.writeFileSync(path.join(dir, name), JSON.stringify(value));
-=======
-import { createOpenCodeSessionMetadata, createSessionMetadataStore, mergeMetadataPatch } from './session-metadata-store.js';
-
-const tempDirs = [];
-
-const makeDataDir = () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-metadata-'));
-  tempDirs.push(dir);
-  return dir;
-};
-
-
-afterEach(() => {
-  while (tempDirs.length > 0) {
-    fs.rmSync(tempDirs.pop(), { recursive: true, force: true });
-  }
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
->>>>>>> bc50ba56a
 
 describe('mergeMetadataPatch', () => {
   it('preserves unrelated nested values, replaces arrays, and deletes null keys', () => {
@@ -59,106 +38,10 @@ describe('createSessionMetadataStore Host SQLite persistence', () => {
       .resolves.toMatchObject({ revision: '1' });
     await first.close();
 
-<<<<<<< HEAD
     const reopened = createSessionMetadataStore({ dataDir });
     await expect(reopened.getState('ses_a')).resolves.toEqual({
       metadata: { openchamber: { goal: { status: 'active', turnCount: 2 }, assist: { recap: 'r' } } },
       revision: '2',
-=======
-const notFound = () => Object.assign(new Error('Session not found'), { _tag: 'SessionNotFoundError' });
-
-/**
- * OpenCode's side: records by session id. A `write` replaces the whole object,
- * which is what `PATCH /api/session/{id}` does with `metadata`.
- */
-const createFakeOpenCode = (records = {}) => {
-  const sessions = new Map(Object.entries(records));
-  const fake = {
-    sessions,
-    writes: [],
-    failRead: null,
-    failWrite: null,
-    read: vi.fn(async (id) => {
-      if (fake.failRead) throw fake.failRead;
-      return sessions.has(id) ? structuredClone(sessions.get(id)) : null;
-    }),
-    write: vi.fn(async (id, metadata) => {
-      // Yield first so concurrent writers really overlap.
-      await Promise.resolve();
-      if (fake.failWrite) throw fake.failWrite;
-      if (!sessions.has(id)) throw notFound();
-      fake.writes.push([id, metadata]);
-      sessions.set(id, structuredClone(metadata));
-    }),
-  };
-  return fake;
-};
-
-const makeStore = (openCode, dataDir = makeDataDir()) => ({
-  dataDir,
-  store: createSessionMetadataStore({ dataDir, openCode }),
-});
-
-describe('createSessionMetadataStore', () => {
-  it('cancels one reader while shared legacy loading continues for another', async () => {
-    const load = Promise.withResolvers();
-    const openCode = createFakeOpenCode({ ses_1: { ready: true } });
-    const store = createSessionMetadataStore({
-      dataDir: makeDataDir(), openCode,
-      fsPromises: { ...fs.promises, readFile: async () => load.promise },
-    });
-    const controller = new AbortController();
-    const cancelled = store.get('ses_1', { signal: controller.signal }).catch((error) => error);
-    const other = store.get('ses_1');
-    controller.abort(new DOMException('Cleanup timed out', 'TimeoutError'));
-    expect((await cancelled).name).toBe('TimeoutError');
-    expect(openCode.read).not.toHaveBeenCalled();
-    load.resolve('{}');
-    expect(await other).toEqual({ ready: true });
-  });
-
-  it('cancels a hanging SDK session.get through the metadata store', async () => {
-    const entered = Promise.withResolvers();
-    vi.stubGlobal('fetch', vi.fn(async (_input, init) => {
-      entered.resolve(init.signal);
-      return new Promise((_, reject) => init.signal?.addEventListener('abort', () => reject(init.signal.reason), { once: true }));
-    }));
-    const store = createSessionMetadataStore({
-      dataDir: makeDataDir(),
-      openCode: createOpenCodeSessionMetadata({
-        buildOpenCodeUrl: (pathname) => `http://opencode.test${pathname}`,
-        getOpenCodeAuthHeaders: () => ({}),
-      }),
-    });
-    const controller = new AbortController();
-    const result = store.get('ses_hanging', { signal: controller.signal }).catch((error) => error);
-    const signal = await entered.promise;
-    expect(signal).toBeDefined();
-    controller.abort(new DOMException('Cleanup timed out', 'TimeoutError'));
-    expect(await result).toBeInstanceOf(Error);
-    expect(signal.aborted).toBe(true);
-  });
-
-  it('reads metadata from OpenCode, and a session OpenCode does not know as empty', async () => {
-    const openCode = createFakeOpenCode({ ses_1: { openchamber: { goal: { id: 'g1' } } } });
-    const { store } = makeStore(openCode);
-
-    await expect(store.get('ses_1')).resolves.toEqual({ openchamber: { goal: { id: 'g1' } } });
-    await expect(store.get('ses_missing')).resolves.toEqual({});
-  });
-
-  it('surfaces a failed read instead of answering empty', async () => {
-    const openCode = createFakeOpenCode({ ses_1: { a: 1 } });
-    openCode.failRead = new Error('connection refused');
-    const { store } = makeStore(openCode);
-
-    await expect(store.get('ses_1')).rejects.toThrow('connection refused');
-  });
-
-  it('merges a patch onto the OpenCode record and writes the whole result back', async () => {
-    const openCode = createFakeOpenCode({
-      ses_1: { openchamber: { kind: 'review', assist: { recap: 'r' } } },
->>>>>>> bc50ba56a
     });
     await expect(reopened.get('ses_b')).resolves.toEqual({ openchamber: { linked_issues: [{ id: 'i1' }] } });
     await reopened.close();

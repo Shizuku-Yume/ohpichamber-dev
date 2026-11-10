@@ -15,9 +15,6 @@ const row = (overrides = {}) => ({
 });
 
 const harness = (guest = row(), overrides = {}) => {
-<<<<<<< HEAD
-  const control = { resolveSessionDirectory: vi.fn(async () => '/repo'), execute: vi.fn(async () => ({ sessionId: 'ses_1', directory: '/repo', messages: [{ text: 'last' }], sessionStatus: { type: 'busy' } })) };
-=======
   const control = {
     resolveSessionDirectory: vi.fn(async () => '/repo'),
     execute: vi.fn(async () => ({ sessionId: 'ses_1', directory: '/repo', messages: [{ text: 'last' }], sessionStatus: { type: 'busy' } })),
@@ -26,7 +23,6 @@ const harness = (guest = row(), overrides = {}) => {
     answerForm: vi.fn(async () => {}),
     dismissOpenForms: vi.fn(async () => {}),
   };
->>>>>>> bc50ba56a
   const instructions = { set: vi.fn(async () => {}) };
   const emitToFrames = vi.fn();
   const setConfigurationNote = vi.fn();
@@ -134,11 +130,7 @@ describe('service host calls', () => {
   });
 
   test('a session failure tells the service only what the control service meant for callers', async () => {
-<<<<<<< HEAD
-    const control = { execute: vi.fn(async () => { throw Object.assign(new Error('secret path /x'), { status: 500 }); }) };
-=======
     const control = { dismissOpenForms: async () => {}, execute: vi.fn(async () => { throw Object.assign(new Error('secret path /x'), { status: 500 }); }) };
->>>>>>> bc50ba56a
     const { call } = harness(row(), { control });
     const answer = await call('sessions.send', { sessionId: 'ses_1', prompt: 'hi' });
     expect(answer.status).toBe(500);
@@ -186,8 +178,6 @@ describe('service host calls', () => {
   });
 });
 
-<<<<<<< HEAD
-=======
 describe('acting for the user', () => {
   const answering = (overrides = {}) => row({
     sessionControl: { content: true, answers: true },
@@ -244,7 +234,6 @@ describe('acting for the user', () => {
   });
 });
 
->>>>>>> bc50ba56a
 describe('reading replies', () => {
   test('the transcript grant from session events does not open replies', async () => {
     const guest = row({ sessionControl: {}, sessionEvents: { events: ['turn-finished'], content: true } });
