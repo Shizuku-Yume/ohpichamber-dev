@@ -15,5 +15,4 @@ bun.lock	fork-differs	decision	2026-10-27 - Bump the toolchain before refreshing
 packages/sdk/src/manifest.ts	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Upstream v2.7.0 guest surfaces minus the OpenCode plugin role and capability the fork retired.
 packages/sdk/src/parse.ts	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Parses upstream v2.7.0 manifest shapes without `contributes.opencodePlugin`.
 packages/web/server/lib/guests/routes.js	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Host routes without the OpenCode plugin global-config surface.
-packages/web/server/lib/guests/catalog.js	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Upstream catalog supporting `sessionAnswers` and `links`, without the OpenCode plugin role.
 packages/ui/src/lib/opencode/events.ts	fork-differs	omp-boundary		Canonical Client event names; the OpenCode event payloads it replaced are gone.
