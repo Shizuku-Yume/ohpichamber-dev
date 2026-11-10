@@ -9,7 +9,6 @@ interface AgentSelectorProps {
   agentName: string;
   onChange: (agentName: string) => void;
   className?: string;
-  filter?: (agent: { name: string }) => boolean;
   dropdownPortalToBody?: boolean;
   directory?: string;
 }
@@ -19,7 +18,6 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
   agentName,
   onChange,
   className,
-  filter,
   dropdownPortalToBody = false,
   directory,
 }) => {
@@ -33,24 +31,19 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     void loadAgents(workspaceDirectory);
   }, [loadAgents, workspaceDirectory]);
 
-  const selectable = React.useMemo(
-    () => (filter ? agents.filter((agent) => filter({ name: agent.name })) : agents),
-    [agents, filter],
-  );
-
   return (
     <Select
-      value={selectable.some((agent) => agent.name === agentName) ? agentName : '__none__'}
+      value={agents.some((agent) => agent.name === agentName) ? agentName : '__none__'}
       onValueChange={(value) => onChange(value === '__none__' ? '' : value)}
     >
       <SelectTrigger className={cn('w-full', className)}>
         <SelectValue placeholder={isUnavailable ? t('common.unavailable') : t('settings.commands.agentSelector.notSelected')}>
-          {(value) => selectable.find((agent) => agent.name === value)?.name ?? t('settings.commands.agentSelector.notSelected')}
+          {(value) => agents.find((agent) => agent.name === value)?.name ?? t('settings.commands.agentSelector.notSelected')}
         </SelectValue>
       </SelectTrigger>
       <SelectContent portalToBody={dropdownPortalToBody}>
         <SelectItem value="__none__">{t('settings.commands.agentSelector.notSelected')}</SelectItem>
-        {selectable.map((agent) => (
+        {agents.map((agent) => (
           <SelectItem key={agent.agentId} value={agent.name}>{agent.name}</SelectItem>
         ))}
       </SelectContent>

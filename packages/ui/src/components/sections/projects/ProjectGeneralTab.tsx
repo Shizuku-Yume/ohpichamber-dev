@@ -14,7 +14,6 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
 import { modelVariantNames } from '@/lib/modelVariants';
-import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 import { updateSharedProjectSetup, type ProjectRef } from '@/lib/openchamberConfig';
 import { ensureSharedSetupTrusted, resetSharedSetupTrust } from '@/lib/sharedTrustConfirmation';
 import { useI18n } from '@/lib/i18n';
@@ -58,7 +57,6 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
           directory={form.project.path}
           agentName={form.defaultAgent || ''}
           onChange={(agentName) => form.setDefaultAgent(agentName || undefined)}
-          filter={(agent) => isPrimaryMode(agent.mode)}
           className={SETTINGS_CUSTOM_TRIGGER_CLASS}
         />
       </SettingsFieldRow>
