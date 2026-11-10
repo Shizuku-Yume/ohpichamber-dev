@@ -85,13 +85,7 @@ send never re-resolves mutable UI state:
     { kind: 'instruction', text },                       // derived from the text (skill instruction)
     { kind: 'synthetic', text },                         // handed to the composer by another surface
   ],
-<<<<<<< HEAD
   sendConfig: { providerID, modelID, agent?, variant?, reasoningEffort? } // required; captured at queue time
-=======
-  sendConfig: { providerID, modelID, agent?, variant? },  // required
-  goal?: { objective?, tokenBudget },  // queued with "run as goal" armed
-  syntheticIds?   // minted by the first delivery attempt, one per record admitted ahead of the message
->>>>>>> bc50ba56a
 }
 ```
 
@@ -162,7 +156,6 @@ persisted "sending" flag would strand a message forever.
    will never complete, so a restored queue would wait on it forever. A reply
    with no `created` time still blocks. A failed fetch is unknown, never idle:
    the tick re-arms with backoff.
-<<<<<<< HEAD
 5. The head is marked in flight (broadcast), then sent:
    - text starting with `/` that names a command in OpenCode's `/command`
      list (skills included) and carries no captured context goes to
@@ -180,49 +173,6 @@ persisted "sending" flag would strand a message forever.
      as delivered only after the prompt is accepted), then the agent mention.
    Success removes the item, persists, broadcasts, and marks the user
    message sent for notifications. Failure keeps the item, backs off
-=======
-   The turn must also be over for the session's subagents: a parent idles
-   while a background subagent works and runs again when OpenCode hands the
-   result back. While `../opencode/session-activity.js` finds a running descendant
-   the head waits (the rerun's idle event re-arms it, a 5 s recheck covers a
-   missed one); a failed check is unknown and backs off like the rest.
-   The descendant check follows live active sessions through at most 8 parent
-   links, including idle intermediate subagents; a deeper chain counts as
-   unrelated, as in the UI. Unreadable lineage, cycles and the shared fetch
-   deadline keep the queue held with the existing retry policy. It does not scan historical child pages.
-5. The head is marked in flight (broadcast), then sent. The captured model and
-   agent are switched onto the session first (`POST /session/:id/model`,
-   `/agent`), because v2 holds both on the session rather than in the body; a
-   captured `openchamber/auto` is resolved into a real pair by the routing
-   runtime beforehand. The session's project knowledge is written into its
-   instruction entries (`sessionKnowledgeRuntime.sync`, which never fails the
-   send). Then the captured context goes ahead as synthetic messages
-   (`POST /session/:id/synthetic` with `resume: false`, an attached item's
-   metadata riding along). An item with a `goal` starts it the way a
-   scheduled goal does: `createSessionGoal` (`../session-goal/create.js`)
-   saves the goal through the injected `persistSessionGoal` before anything is
-   admitted, so a failed save leaves nothing for the retry to duplicate, and
-   the goal briefing goes as the last synthetic message. Before the goal save
-   and the first synthetic message, the item's `syntheticIds` are minted and
-   saved, and a revert staged on the session (`revert` on its record) is
-   committed (`POST /session/:id/revert/commit`): OpenCode's commit deletes
-   everything admitted past the revert's boundary, so committing at the prompt
-   would delete the context admitted just before it. An item with nothing to
-   admit ahead of its message mints no ids and reads no record; a failed save
-   or an unreadable record fails the send. Then the message itself:
-   - text starting with `/` that names a command in OpenCode's `/command`
-     list (skills included) goes to `POST /session/:id/command` (body fields
-     `name` and `text` since OpenCode 2.0.8) with its file attachments. The
-     command route takes files only, which is why the context went ahead of
-     it; sending "/name args" as a prompt instead would skip the template
-     OpenCode expands only on that route. The command lookup runs before
-     anything is admitted, so a failed lookup fails the send with nothing in
-     the session;
-   - otherwise `POST /session/:id/prompt` with the user's text, files and
-     agent mention.
-   Success removes the item, persists, broadcasts, and calls `onPromptSent`.
-   Failure keeps the item, backs off
->>>>>>> bc50ba56a
    2 s → 60 s (doubling per consecutive failure of that item), and re-arms.
    A retry, also after a restart, reuses the `syntheticIds`: OpenCode answers a
    second admission of an id with the first one, so a failure between the
@@ -231,13 +181,7 @@ persisted "sending" flag would strand a message forever.
    admission order and ahead of the message, whose id OpenCode assigns.
 6. The next item goes out after the next busy → idle cycle.
 
-<<<<<<< HEAD
 ## Holds
-=======
-A 2xx HTML app-shell response is a failed dispatch, not acceptance. The queued item stays persisted and uses the existing retry backoff.
-
-## Held delivery
->>>>>>> bc50ba56a
 
 An auto-review run (`../auto-review`) bounces the reviewed session through
 idle between its steps, and a queued follow-up must not land in the middle.
