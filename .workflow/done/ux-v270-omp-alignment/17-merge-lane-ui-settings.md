@@ -37,5 +37,14 @@ Not changed here, owned by other lanes: `lib/settings/search.ts` (lane 14) still
 
 ### Review
 
-Reviewer pass on `git diff fd671d069..HEAD -- packages/ui/src/components/sections`: still running when the lane finished; its findings, if any, are handled by the lane owner's follow-up on the landed branch.
+Reviewer pass on `git diff fd671d069..HEAD -- packages/ui/src/components/sections` returned six findings; all were confirmed against the code and closed in `363c63c6c`:
+
+- The routing and default-agent selectors passed `directory ?? null`, which the agent catalog reads as an unavailable workspace, so Routing's category dropdown stayed empty. Both selectors now pass the prop through, and an omitted directory follows the active project as the store resolves it.
+- `chooseProvider` skipped the write whenever the stored selection already matched, so a provider switched off could not be re-enabled; it now skips only when the provider is selected *and* enabled.
+- The mode chip derived `off` from a non-null selection; it now derives from the enabled flag, and a chosen provider presses neither chip (the two describe the default and off modes, and the status line names the provider) as upstream does.
+- The `web-search.keys` registry row had no reachable target after the page rebuilt around provider screens; the provider card grid now carries that anchor, which is the entry point to each key.
+- `chat.mobile-return-key-sends` lost its Composer tab mapping while its control still renders in the Composer tab; restored.
+- The four stale Chat registry ids (`chat.render-mode`, `chat.streaming`, `chat.tools-and-files`, `chat.persist-drafts`) stay with lane 14, which owns `lib/settings/search.ts`: upstream removed those controls and the registry rows remain fork-side rows whose file is still conflicted there.
+
+Re-checked after the fixes: `--markers --lane 17` → no conflict markers; `--check -- packages/ui/src/components/sections` → passed; `tsc -b` → 0 errors in lane paths; `oxlint` on the four touched files → clean. The Web Search and Chat settings tests still cannot run on this branch because `lib/desktop.ts` and `lib/settings/search.ts` carry other lanes' markers; the same tests are to be run once lane 14 lands.
 
