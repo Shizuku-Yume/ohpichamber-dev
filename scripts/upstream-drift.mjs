@@ -49,8 +49,10 @@ export const LANES_FILE = '.workflow/research/ux-v270-omp-alignment/merge-lanes.
 export const DECISIONS_FILE = '.workflow/decisions.md';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const MARKER = /^(<<<<<<< |=======$|>>>>>>> )/u;
-const MARKER_LINE = /^(<<<<<<<|=======|>>>>>>>)/u;
+// A conflict marker line: `<<<<<<< `, an exactly-`=======` line, or `>>>>>>> `.
+// The delimiters are matched strictly, so ordinary text such as `<<<<<<<word`
+// or an `=======` underline is not a marker.
+const MARKER_LINE = /^(?:<<<<<<< |=======$|>>>>>>> )/u;
 
 /**
  * Paths the merge keeps on the fork side regardless of what upstream did.
@@ -86,6 +88,9 @@ export const BOUNDARY_FILES = new Set([
   'flake.lock',
   'AGENTS.md',
   'CLAUDE.md',
+  'CONTRIBUTING.md',
+  'README.md',
+  'CHANGELOG.md',
   'SECURITY.md',
   'Dockerfile',
 ]);
@@ -214,7 +219,8 @@ export const buildLedger = ({ root = REPO_ROOT, upstream = UPSTREAM, forkRef = '
     if (isBoundaryPath(file)) reason = 'omp-boundary';
     else if (state !== 'fork-differs') reason = state === 'upstream-only' ? 'upstream-excluded' : 'fork-added';
     else if (row && headings.has(row.decision)) reason = 'decision';
-    else if (row && row['class'] === 'omp-boundary') reason = 'omp-boundary';
+    // A row's `omp-boundary` label documents the class, it does not create it:
+    // the path itself has to carry the boundary (prefix, name, or content token).
     else if (boundaryToken(root, forkRef, file)) reason = 'omp-boundary';
     ledger.push({
       path: file,
@@ -243,6 +249,13 @@ export const contradictingRows = (ledger, rows, headings) => {
       problems.push({ row, why: `${row.path} is ${entry.state} in git, the row says ${row.state}` });
       continue;
     }
+    if (row['class'] === 'omp-boundary' && entry.class !== 'omp-boundary') {
+      problems.push({
+        row,
+        why: `${row.path} claims omp-boundary, but neither its path, its content nor a decision shows the boundary (class ${entry.class})`,
+      });
+      continue;
+    }
     // A boundary row documents the path's class; only a `decision` row must
     // name the heading it rests on.
     const needsHeading = row.decision || row['class'] === 'decision';
@@ -259,8 +272,8 @@ export const contradictingRows = (ledger, rows, headings) => {
  * this one is fixed because it is the lane that writes that table.
  */
 export const SCAFFOLD_PATHS = [
-  ...BOUNDARY_PREFIXES.filter((prefix) => !prefix.startsWith('packages/')),
-  ...BOUNDARY_PREFIXES.filter((prefix) => prefix.startsWith('packages/')),
+  ...BOUNDARY_FILES,
+  ...BOUNDARY_PREFIXES,
   'package.json',
   'packages/ui/package.json',
   'packages/web/package.json',
@@ -291,7 +304,8 @@ export const findMarkers = ({ root = REPO_ROOT, paths = [] } = {}) => {
     try {
       text = readFileSync(path.join(root, file), 'utf8');
     } catch { continue; }
-    if (!MARKER.test(text) && !text.includes('<<<<<<<') && !text.includes('>>>>>>>')) continue;
+    // Skip the line scan only when the file cannot hold one of the delimiters.
+    if (!text.includes('<<<<<<<') && !text.includes('=======') && !text.includes('>>>>>>>')) continue;
     text.split('\n').forEach((line, index) => {
       if (MARKER_LINE.test(line)) found.push(`${file}:${index + 1}: ${line}`);
     });
