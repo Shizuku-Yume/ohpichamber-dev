@@ -52,9 +52,6 @@ response carries `X-Speech-Model` and `X-Speech-Language`.
     status route reports per-model install/download state.
   - `openai-compatible`: buffered per-segment transcription against any
     OpenAI-compatible `/v1/audio/transcriptions` endpoint
-<<<<<<< HEAD
-    (`openai-compatible-session.js`, reuses `../tts/stt.js`).
-=======
     (`openai-compatible-session.js`, reuses `../tts/stt.js`). `connect()`
     runs the same URL check as every transcription
     (`normalizeCustomOpenAIBaseURL`) and the same endpoint path check
@@ -62,7 +59,6 @@ response carries `X-Speech-Model` and `X-Speech-Language`.
     remote host in enterprise mode — fails before the user dictates. A
     configured `endpointPath` replaces the fixed resource path on each
     committed segment.
->>>>>>> bc50ba56a
 - `local/` — worker process + client (IPC, idle shutdown TTL), sherpa
   recognizer engine and segment session (one decode per committed segment),
   model catalog and downloader. The native `sherpa-onnx-node` addon is only
@@ -118,28 +114,14 @@ user is still speaking, so only the tail is left to transcribe on stop.
 
 ## Decisions
 
-### Why Parakeet Ultra is the default model and not v3 or v2
+### Why Parakeet TDT v3 is the default model and not v2
 
 v2 knows English only and turns any other language into garbage, while v3
-decodes 25 European languages at the same speed. Ultra is Moondream's
-post-trained v3: same architecture, size and speed, fewer errors. On 300
-FLEURS clips per language through our own recognizer (int8, 2 threads), WER
-fell from 9.24% to 8.01% on Ukrainian and from 6.85% to 5.50% on English.
-Nemotron 3.5 ASR Streaming, the other candidate, scored 19.5% and 13.5% on the
-same clips.
-
-k2-fsa publishes no sherpa export of Ultra, so the archive is OpenChamber's
-own, in the `asr-models` pre-release: the sherpa v3 export script run on the
-Ultra `.nemo`. Its transcripts match an independent export word for word on
-all 600 clips. A pre-release keeps the desktop updater, which reads the latest
-full release, away from it.
-
-The default applies only while the user has not picked a model (the client
-sends an empty `localModel`). Someone who already has v2 installed keeps v2:
-v2 was the default before, so an installed copy means they dictate with it,
-and switching would cost them a download and English accuracy. Someone with
-v3 installed, the default before Ultra, keeps dictating with v3 while Ultra
-downloads in the background, so the switch never blocks a dictation.
+decodes 25 European languages at the same speed. The default applies only
+while the user has not picked a model (the client sends an empty
+`localModel`). Someone who already has v2 installed keeps v2: v2 was the
+default before, so an installed copy means they dictate with it, and switching
+would cost them a download and English accuracy.
 
 ### Why misheard words are fixed by the Small Model, after the speech model
 

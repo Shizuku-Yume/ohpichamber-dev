@@ -11,6 +11,8 @@ const harness = (settings = {}, visible = false) => {
     emitDesktopNotification: native, broadcastUiNotification: ui, sendPushToAllUiSessions: push,
     sendApnsToAllUiSessions: apns, isAnyInteractiveClientVisible: () => visible,
     deliverToExtensionChannels: channels,
+    sessionService: { open: async () => null, list: async () => [] },
+    resolveSessionScope: () => ({ kind: 'workspace' }),
     buildOpenCodeUrl: (value) => `http://localhost${value}`, getOpenCodeAuthHeaders: () => ({}),
   });
   return { runtime, native, ui, push, apns, channels };
