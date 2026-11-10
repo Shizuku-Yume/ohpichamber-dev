@@ -50,6 +50,10 @@ import { Icon } from '@/components/icon/Icon';
 import { DiffViewToggle, type DiffViewMode } from '../DiffViewToggle';
 import { MinDurationShineText } from './MinDurationShineText';
 import { getToolIcon } from './toolPresentation';
+import { OpenChamberToolOutput } from './OpenChamberToolOutput';
+import { Field } from './ToolResultParts';
+import { toToolView } from './toolView';
+import { hasOpenChamberView, parseOpenChamberEnvelope } from './openChamberToolEnvelope';
 import { GuestToolTable } from './GuestToolTable';
 import {
     guestToolTableRows,
@@ -664,6 +668,8 @@ const describeTool = (described: ToolDescription | null, currentDirectory: strin
 interface ToolExpandedContentProps {
     part: ToolCallPart | ToolResultPart;
     call: ToolCallPart | undefined;
+    sessionId: string | undefined;
+    isMobile: boolean;
     currentDirectory: string;
     isExpanded: boolean;
     onShowPopup?: (content: ToolPopupContent) => void;
@@ -676,6 +682,8 @@ interface ToolExpandedContentProps {
 const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     part,
     call,
+    sessionId,
+    isMobile,
     currentDirectory,
     isExpanded,
     onShowPopup,
@@ -692,6 +700,13 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     const rawOutput = resultContent.text;
     const hasStringOutput = rawOutput.length > 0;
     const outputString = rawOutput;
+    // OpenChamber's own tools answer an envelope the chat can show in its own
+    // terms; the plain answer stays one click away.
+    const openChamberEnvelope = React.useMemo(
+        () => (part.type === 'tool_result' ? parseOpenChamberEnvelope(rawOutput) : null),
+        [part.type, rawOutput],
+    );
+    const [showRawToolAnswer, setShowRawToolAnswer] = React.useState(false);
 
     React.useEffect(() => {
         setDiffViewMode('unified');
@@ -936,6 +951,44 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                 </div>
             );
             return renderScrollableBlock(findOutput, { className: 'p-1', maxHeightClass: 'max-h-[50vh]' });
+        }
+
+        if (openChamberEnvelope && !showRawToolAnswer && sessionId && call && part.type === 'tool_result' && hasOpenChamberView(openChamberEnvelope)) {
+            const rawToggle = (
+                <Button
+                    variant="ghost"
+                    size="xs"
+                    className="text-muted-foreground hover:text-foreground"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => { event.stopPropagation(); setShowRawToolAnswer(true); }}
+                >
+                    <Icon name="code-box" className="size-3.5" />
+                    {t('chat.toolPart.openchamber.raw.show')}
+                </Button>
+            );
+            return renderScrollableBlock(
+                <div className="space-y-2">
+                    <OpenChamberToolOutput
+                        envelope={openChamberEnvelope}
+                        part={toToolView(call, part, { sessionID: sessionId, messageID: part.partId })}
+                        input={input}
+                        directory={currentDirectory}
+                        isMobile={isMobile}
+                        onShowPopup={onShowPopup}
+                        rawToggle={rawToggle}
+                    />
+                </div>,
+                { className: 'p-1' },
+            );
+        }
+
+        if (openChamberEnvelope && !showRawToolAnswer && !openChamberEnvelope.ok && openChamberEnvelope.errorMessage) {
+            return renderScrollableBlock(
+                <div className="typography-meta whitespace-pre-wrap break-words" style={{ color: 'var(--status-error)' }}>
+                    {openChamberEnvelope.errorMessage}
+                </div>,
+                { className: 'p-1' },
+            );
         }
 
         if (hasStringOutput && outputString.trim()) {
@@ -1411,6 +1464,8 @@ const ToolPart: React.FC<ToolPartProps> = ({
                             <ToolExpandedContent
                                 part={part}
                                 call={call}
+                                sessionId={sessionId}
+                                isMobile={isMobile}
                                 currentDirectory={currentDirectory}
                                 isExpanded={isExpanded}
                                 onShowPopup={onShowPopup}
