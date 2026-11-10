@@ -16,7 +16,7 @@
 
 **Check before:** `bun scripts/upstream-drift.mjs --markers --lane 12` reported conflict markers in 18 files (123 markers) on the scaffold branch.
 
-**Check after:**
+**Check after:** `bun scripts/upstream-drift.mjs --markers --lane 12` → `no conflict markers (lane 12)`, exit 0; `bun scripts/upstream-drift.mjs --check -- packages/web` → `drift check passed`, exit 0; the package-scoped vitest suites for this lane pass, the whole-path suite fails only on `main`-identical dependency and harness breakage (see "Suite caveat").
 
 - `bun scripts/upstream-drift.mjs --markers --lane 12` → `no conflict markers (lane 12)`, exit 0.
 - `bun scripts/upstream-drift.mjs --check -- packages/web` → `drift check passed: no conflict markers, no unexplained path, no contradicting row (base bc50ba5)`, exit 0.
