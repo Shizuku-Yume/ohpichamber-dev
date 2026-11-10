@@ -15,11 +15,7 @@ import {
   stopGuestService,
 } from './service.js';
 import { setCapabilityGrants, writeExtensionStore } from './persist.js';
-<<<<<<< HEAD
-=======
 import { listInstalledGuests, noteGuestPackageChanged } from './catalog.js';
-import { SERVICE_TOKEN_ENV, recordGuestService } from './service-registry.js';
->>>>>>> bc50ba56a
 
 const writeFixture = async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'oc-service-'));

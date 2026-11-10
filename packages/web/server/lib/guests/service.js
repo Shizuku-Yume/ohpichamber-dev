@@ -7,19 +7,15 @@ import path from 'node:path';
 import {
   GUEST_REQUEST_RESPONSE_MAX,
   GUEST_REQUEST_TIMEOUT_MS,
-<<<<<<< HEAD
-=======
+  isGuestRequestPath,
   OPENCHAMBER_HOST_CALLBACK_URL,
   OPENCHAMBER_SERVICE_DATA_DIR,
->>>>>>> bc50ba56a
-  isGuestRequestPath,
-  serviceProvides,
-  OPENCHAMBER_HOST_CALLBACK_URL,
 } from '@openchamber/sdk';
 
 import { isGuestPackageUnloaded } from './catalog.js';
 import { hostCallbackUrl } from './host-callback.js';
 import { readExtensionStore, updateExtensionStore } from './persist.js';
+import { SERVICE_TOKEN_ENV } from './service-registry.js';
 import { readBoundedResponseText } from './response-body.js';
 import { resolveServiceSocketEnv } from './sockets.js';
 import { guestDataDir } from './storage.js';
@@ -55,25 +51,7 @@ const stoppingByGuest = new Map();
 // cannot reopen admission for work that belonged to the previous host.
 let hostLifecycle = { accepting: true };
 
-<<<<<<< HEAD
 export const beginGuestServiceHost = () => {
-=======
-let openCodeProvider = null;
-
-/** One host-owned OpenCode transport for approved local services. */
-export const configureGuestOpenCodeProvider = (provider) => {
-  if (openCodeProvider) throw new Error('Stop the previous OpenCode provider before replacing it.');
-  openCodeProvider = provider;
-};
-
-/**
- * Opens service admission for a new host. With `registryDir` every spawn is
- * recorded there (`service-registry.js`), and the services a host that died
- * without stopping them left running are stopped before this host spawns one.
- * @param {{ registryDir?: string | null }} [options]
- */
-export const beginGuestServiceHost = ({ registryDir = null } = {}) => {
->>>>>>> bc50ba56a
   if (runtimes.size || startingByGuest.size || stoppingByGuest.size) {
     throw new Error('Guest services must finish stopping before a new host starts.');
   }
@@ -83,7 +61,6 @@ export const beginGuestServiceHost = ({ registryDir = null } = {}) => {
 
 export const beginGuestServiceShutdown = () => {
   hostLifecycle.accepting = false;
-  openCodeProvider?.revokeAll();
 };
 
 const assertGuestHostActive = (lifecycle) => {
@@ -212,16 +189,10 @@ export const setServiceSocketOverride = async (guestId, socketId, persistPath, s
 };
 
 /**
- * @param {string} guestId
- */
-<<<<<<< HEAD
-=======
-/**
  * Why a service last stopped working, for the extension's card: the end of its
  * output, in memory only. A service that starts cleanly clears it.
  * @type {Map<string, { at: number, output: string }>}
  */
->>>>>>> bc50ba56a
 const lastFailures = new Map();
 
 export const getServiceFailure = (guestId) => lastFailures.get(guestId) ?? null;
@@ -325,7 +296,6 @@ const trackInflight = (guestId, delta) => {
  */
 export const stopGuestService = async (guestId) => {
   stopEpochs.set(guestId, stopEpochOf(guestId) + 1);
-  openCodeProvider?.revokeGuest(guestId);
   clearIdleStop(guestId);
   await discardRuntime(guestId);
 };
@@ -343,7 +313,6 @@ const discardRuntime = async (guestId) => {
   if (!runtime) {
     return;
   }
-  openCodeProvider?.revokeGuest(guestId);
   runtimes.delete(guestId);
   runtime.status = 'stopped';
   const { child } = runtime;
@@ -391,9 +360,6 @@ export const stopAllGuestServices = async () => {
   // Cancelled starts reject normally. Await their cleanup as well as children
   // already registered when shutdown began.
   await Promise.allSettled([...starts, ...stops]);
-  const provider = openCodeProvider;
-  openCodeProvider = null;
-  await provider?.stop();
 };
 
 /**
@@ -430,11 +396,7 @@ const collectProcessOutput = (child, maxChars = 2_000) => {
  *   entry: string,
  *   socketBindings?: Array<{ id: string, candidatesByPlatform?: Partial<Record<'linux' | 'darwin' | 'win32', string[]>> }>,
  *   socketOverrides?: Record<string, string>,
-<<<<<<< HEAD
- *   hostCallback?: boolean,
-=======
  *   dataDir: string,
->>>>>>> bc50ba56a
  * }} params
  */
 const startGuestService = async ({
@@ -444,7 +406,6 @@ const startGuestService = async ({
   socketBindings = [],
   socketOverrides = {},
   dataDir,
-  openCode = false,
   epoch,
   lifecycle,
 }) => {
@@ -495,12 +456,8 @@ const startGuestService = async ({
   const env = {
     ...inheritedServiceEnv(process.env),
     OPENCHAMBER_SERVICE_PORT: String(port),
-<<<<<<< HEAD
-    OPENCHAMBER_SERVICE_TOKEN: token,
-=======
     [SERVICE_TOKEN_ENV]: token,
     [OPENCHAMBER_SERVICE_DATA_DIR]: dataDir,
->>>>>>> bc50ba56a
     ELECTRON_RUN_AS_NODE: '1',
   };
   if (Object.keys(socketEnv).length > 0) {
@@ -509,12 +466,7 @@ const startGuestService = async ({
   // How the service calls OpenChamber back (`host-callback.js`). The address
   // alone opens nothing: each route asks for a bearer of its own.
   env[OPENCHAMBER_HOST_CALLBACK_URL] = await hostCallbackUrl();
-  if (openCode) {
-    if (!openCodeProvider) throw new GuestServiceError('OpenCode access is unavailable on this host.', 'NO_SERVICE');
-    Object.assign(env, await openCodeProvider.environmentFor({ guestId, token }));
-  }
   if (cancelled()) {
-    openCodeProvider?.revokeGuest(guestId);
     throw stoppedError();
   }
   const child = spawn(process.execPath, [absoluteEntry], {
@@ -545,7 +497,6 @@ const startGuestService = async ({
         lastFailures.set(guestId, { at: Date.now(), output: detail });
       }
       runtime.status = runtime.status === 'starting' ? 'failed' : 'stopped';
-      openCodeProvider?.revokeGuest(guestId);
     }
   });
 
@@ -720,7 +671,6 @@ export const openGuestServiceRequest = async ({
       socketBindings,
       socketOverrides,
       dataDir: guestDataDir(persistPath, guestId),
-      openCode: serviceProvides(service, 'opencode'),
       epoch,
       lifecycle,
     });
